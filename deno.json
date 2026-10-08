@@ -1,10 +1,18 @@
 {
   "nodeModulesDir": "auto",
+  "compilerOptions": {
+    "lib": ["deno.ns", "dom", "dom.iterable", "esnext"],
+    "jsx": "preserve",
+    "jsxImportSource": "@solidjs/web"
+  },
   "tasks": {
     "start": "deno run --allow-net --allow-read --allow-write --allow-env sidecar/main.ts",
     "dev": "deno run --watch --allow-net --allow-read --allow-write --allow-env sidecar/main.ts",
     "test": "deno test --allow-net --allow-read --allow-write --allow-env --allow-run",
-    "check": "deno check sidecar/ protocol/ tests/",
+    "check": "deno check sidecar/ protocol/ tests/ web/src/ web/vite.config.ts",
+    "build:web": "deno run -A npm:vite@8.2.0 build --config web/vite.config.ts",
+    "build:web:watch": "deno run -A npm:vite@8.2.0 build --config web/vite.config.ts --watch",
+    "test:e2e": "deno test --allow-net --allow-read --allow-write --allow-env --allow-run tests/e2e/",
     "lint": "deno lint",
     "fmt": "deno fmt"
   },
@@ -18,7 +26,14 @@
     "otplib": "npm:otplib@12.0.1",
     "marked": "npm:marked@17.0.6",
     "diff": "npm:diff@8.0.4",
-    "ws": "npm:ws@8.21.0"
+    "ws": "npm:ws@8.21.0",
+    "vite": "npm:vite@8.2.0",
+    "@solidjs/vite-plugin": "npm:@solidjs/vite-plugin@3.0.0-next.47",
+    "@solidjs/compiler": "npm:@solidjs/compiler@2.0.0-rc.13",
+    "solid-js": "npm:solid-js@2.0.0-rc.13",
+    "@solidjs/web": "npm:@solidjs/web@2.0.0-rc.13",
+    "@solidjs/signals": "npm:@solidjs/signals@2.0.0-rc.13",
+    "@fontsource/ibm-plex-mono": "npm:@fontsource/ibm-plex-mono@5.3.0"
   },
   "fmt": {
     "exclude": [

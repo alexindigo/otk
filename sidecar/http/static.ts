@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { extname, fromFileUrl, join, normalize } from "@std/path";
-import type { App } from "@pathfinder/pathfinder";
 const types: Record<string, string> = {
   ".html": "text/html; charset=utf-8",
   ".js": "text/javascript; charset=utf-8",
@@ -12,19 +11,18 @@ const types: Record<string, string> = {
 };
 export async function staticResponse(
   path: string,
-  app: App,
+  _app: unknown,
 ): Promise<Response> {
   if (path === "/api" || path.startsWith("/api/")) {
     return Response.json({ code: "not_found" }, { status: 404 });
   }
-  const root = fromFileUrl(new URL("../static/", import.meta.url));
-  const relative = path === "/"
-    ? (app.auth.setupRequired ? "setup.html" : "index.html")
-    : path === "/login"
-    ? "login.html"
-    : path === "/setup"
-    ? "setup.html"
-    : decodeURIComponent(path.slice(1));
+  const root = fromFileUrl(new URL("../../web/dist/", import.meta.url));
+  let relative: string;
+  try {
+    relative = decodeURIComponent(path.slice(1)) || "index.html";
+  } catch {
+    return new Response("Not found", { status: 404 });
+  }
   const safe = normalize(relative);
   if (safe.startsWith("../") || safe === ".." || safe.startsWith("/")) {
     return new Response("Not found", { status: 404 });
@@ -37,7 +35,24 @@ export async function staticResponse(
       },
     });
   } catch (e) {
-    if (!(e instanceof Deno.errors.NotFound)) throw e;
-    return new Response("Not found", { status: 404 });
+    if (
+      !(e instanceof Deno.errors.NotFound) &&
+      !(e instanceof Deno.errors.IsADirectory)
+    ) throw e;
+    try {
+      return new Response(await Deno.readFile(join(root, "index.html")), {
+        headers: {
+          "content-type": types[".html"],
+          "X-Content-Type-Options": "nosniff",
+          "Cache-Control": "no-cache",
+        },
+      });
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) throw error;
+      return new Response(
+        await Deno.readFile(new URL("../static/index.html", import.meta.url)),
+        { headers: { "content-type": types[".html"] } },
+      );
+    }
   }
 }

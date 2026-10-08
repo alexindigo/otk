@@ -4,80 +4,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>OTK</title>
-    <link rel="stylesheet" href="theme.css">
+    <title>OTK / Build required</title>
   </head>
   <body>
-    <h1>OTK / OPEN TERMINAL KIT</h1>
-    <p id="connection">Connecting…</p>
-    <ul id="sessions"></ul>
-    <p id="error" role="alert"></p>
-    <script>
-    // SPDX-License-Identifier: LGPL-3.0-only
-    const entries = new Map();
-    let revision = 0;
-    function render() {
-      const list = document.querySelector("#sessions");
-      list.replaceChildren();
-      for (
-        const entry of [...entries.values()].sort((a, b) =>
-          b.timeUpdated - a.timeUpdated
-        )
-      ) {
-        const row = document.createElement("li");
-        row.textContent = `${entry.title} · ${entry.status} · ${
-          entry.attention.permissions + entry.attention.childPermissions
-        } permissions · ${entry.directory}`;
-        list.append(row);
-      }
-    }
-    async function connect() {
-      const session = await (await fetch("api/session")).json();
-      if (session.setupRequired) {
-        location.href = "setup";
-        return;
-      }
-      if (!session.authenticated) {
-        location.href = "login";
-        return;
-      }
-      const url = new URL("api/ws", location.href);
-      url.protocol = url.protocol === "https:" ? "wss:" : "ws:";
-      const ws = new WebSocket(url);
-      ws.onopen = () => ws.send(JSON.stringify({ t: "hello", protocol: 1 }));
-      ws.onmessage = ({ data }) => {
-        const frame = JSON.parse(data);
-        if (frame.t === "ping") ws.send(JSON.stringify({ t: "pong" }));
-        if (frame.t === "harness") {
-          document.querySelector("#connection").textContent = frame.state;
-        }
-        if (frame.t === "index.snapshot") {
-          entries.clear();
-          for (const entry of frame.entries) entries.set(entry.id, entry);
-          revision = frame.rev;
-          render();
-        }
-        if (frame.t === "index.patch") {
-          if (frame.rev !== revision + frame.ops.length) {
-            ws.send(JSON.stringify({ t: "resnapshot" }));
-            return;
-          }
-          for (const op of frame.ops) {
-            if (op.op === "upsert") entries.set(op.entry.id, op.entry);
-            else entries.delete(op.id);
-          }
-          revision = frame.rev;
-          render();
-        }
-      };
-      ws.onclose = () => {
-        document.querySelector("#connection").textContent = "reconnecting";
-        setTimeout(connect, 1000);
-      };
-    }
-    connect().catch((error) => {
-      document.querySelector("#error").textContent = error.message;
-    });
-    </script>
+    <h1>OTK / Open Terminal Kit</h1>
+    <p>Build the web UI: run <code>deno task build:web</code>.</p>
   </body>
 </html>
