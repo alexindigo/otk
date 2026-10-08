@@ -1,0 +1,61 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+import type { ServiceConfig } from "../../config/schema.ts";
+import { HarnessError } from "../types.ts";
+export class Client {
+  constructor(
+    readonly cfg: ServiceConfig["harness"],
+    readonly fetcher: typeof fetch = fetch,
+  ) {}
+  url(
+    path: string,
+    query: Record<string, string | number | undefined> = {},
+  ): URL {
+    const url = new URL(this.cfg.url.replace(/\/$/, "") + path);
+    for (const [key, value] of Object.entries(query)) {
+      if (value !== undefined) url.searchParams.set(key, String(value));
+    }
+    return url;
+  }
+  async request(
+    path: string,
+    options: {
+      method?: string;
+      body?: unknown;
+      query?: Record<string, string | number | undefined>;
+      signal?: AbortSignal;
+      stream?: boolean;
+    } = {},
+  ): Promise<Response> {
+    const headers = new Headers();
+    if (this.cfg.password) {
+      headers.set(
+        "Authorization",
+        `Basic ${btoa(`${this.cfg.username}:${this.cfg.password}`)}`,
+      );
+    }
+    if (options.body !== undefined) {
+      headers.set("Content-Type", "application/json");
+    }
+    const response = await this.fetcher(this.url(path, options.query), {
+      method: options.method || "GET",
+      headers,
+      body: options.body === undefined
+        ? undefined
+        : JSON.stringify(options.body),
+      signal: options.signal ??
+        (options.stream ? undefined : AbortSignal.timeout(15_000)),
+    });
+    if (!response.ok) {
+      const text = await response.text();
+      throw new HarnessError(`harness_${response.status}`, text.slice(0, 1024));
+    }
+    return response;
+  }
+  async json<T>(
+    path: string,
+    options: Parameters<Client["request"]>[1] = {},
+  ): Promise<T> {
+    const response = await this.request(path, options);
+    return response.status === 204 ? undefined as T : await response.json();
+  }
+}

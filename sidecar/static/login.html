@@ -1,0 +1,32 @@
+<!-- SPDX-License-Identifier: LGPL-3.0-only -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>OTK · Login</title>
+    <link rel="stylesheet" href="theme.css">
+  </head>
+  <body>
+    <h1>OTK / LOGIN</h1>
+    <form><label>Username<input name="username" autocomplete="username" required></label><label>Password<input name="password" type="password" autocomplete="current-password" required></label><button>Log in</button></form>
+    <p id="error" role="alert"></p>
+    <script>
+    // SPDX-License-Identifier: LGPL-3.0-only
+    document.querySelector("form").onsubmit = async (event) => {
+      event.preventDefault();
+      try {
+        const response = await fetch("api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(Object.fromEntries(new FormData(event.target))),
+        });
+        if (!response.ok) throw new Error("Incorrect login credentials");
+        location.href = "./";
+      } catch (error) {
+        document.querySelector("#error").textContent = error.message;
+      }
+    };
+    </script>
+  </body>
+</html>

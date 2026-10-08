@@ -1,0 +1,262 @@
+[
+  {
+    "directory": "/project",
+    "project": "global",
+    "payload": {
+      "id": "evt_fixture_1",
+      "type": "session.created",
+      "properties": {
+        "sessionID": "ses_fixture_1",
+        "info": {
+          "id": "ses_fixture_1",
+          "slug": "calm-nebula",
+          "version": "1.18.34",
+          "projectID": "global",
+          "directory": "/project",
+          "path": "",
+          "title": "Streaming buffer lifecycle fixture",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          },
+          "time": {
+            "created": 1791392328163,
+            "updated": 1791392328163
+          }
+        }
+      }
+    }
+  },
+  {
+    "directory": "/project",
+    "project": "global",
+    "payload": {
+      "id": "evt_fixture_2",
+      "type": "message.part.updated",
+      "properties": {
+        "sessionID": "ses_fixture_1",
+        "part": {
+          "type": "text",
+          "text": "Record lifecycle",
+          "messageID": "msg_fixture_1",
+          "sessionID": "ses_fixture_1",
+          "id": "prt_fixture_1"
+        },
+        "time": 1791392328490
+      }
+    }
+  },
+  {
+    "directory": "/project",
+    "project": "global",
+    "payload": {
+      "id": "evt_fixture_3",
+      "type": "message.updated",
+      "properties": {
+        "sessionID": "ses_fixture_1",
+        "info": {
+          "id": "msg_fixture_2",
+          "parentID": "msg_fixture_1",
+          "role": "assistant",
+          "mode": "build",
+          "agent": "build",
+          "path": {
+            "cwd": "/project",
+            "root": "/project"
+          },
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          },
+          "modelID": "scripted",
+          "providerID": "fake",
+          "time": {
+            "created": 1791392328499
+          },
+          "sessionID": "ses_fixture_1"
+        }
+      }
+    }
+  },
+  {
+    "directory": "/project",
+    "project": "global",
+    "payload": {
+      "id": "evt_fixture_4",
+      "type": "message.part.updated",
+      "properties": {
+        "sessionID": "ses_fixture_1",
+        "part": {
+          "id": "prt_fixture_2",
+          "messageID": "msg_fixture_2",
+          "sessionID": "ses_fixture_1",
+          "type": "text",
+          "text": "",
+          "time": {
+            "start": 1791392329215
+          }
+        },
+        "time": 1791392329215
+      }
+    }
+  },
+  {
+    "directory": "/project",
+    "project": "global",
+    "payload": {
+      "id": "evt_fixture_5",
+      "type": "message.part.delta",
+      "properties": {
+        "sessionID": "ses_fixture_1",
+        "messageID": "msg_fixture_2",
+        "partID": "prt_fixture_2",
+        "field": "text",
+        "delta": "# Fixture\n\n"
+      }
+    }
+  },
+  {
+    "directory": "/project",
+    "project": "global",
+    "payload": {
+      "id": "evt_fixture_6",
+      "type": "message.part.delta",
+      "properties": {
+        "sessionID": "ses_fixture_1",
+        "messageID": "msg_fixture_2",
+        "partID": "prt_fixture_2",
+        "field": "text",
+        "delta": "First"
+      }
+    }
+  },
+  {
+    "directory": "/project",
+    "project": "global",
+    "payload": {
+      "id": "evt_fixture_7",
+      "type": "message.part.delta",
+      "properties": {
+        "sessionID": "ses_fixture_1",
+        "messageID": "msg_fixture_2",
+        "partID": "prt_fixture_2",
+        "field": "text",
+        "delta": " second"
+      }
+    }
+  },
+  {
+    "directory": "/project",
+    "project": "global",
+    "payload": {
+      "id": "evt_fixture_8",
+      "type": "message.part.updated",
+      "properties": {
+        "sessionID": "ses_fixture_1",
+        "part": {
+          "id": "prt_fixture_2",
+          "messageID": "msg_fixture_2",
+          "sessionID": "ses_fixture_1",
+          "type": "text",
+          "text": "# Fixture\n\nFirst second",
+          "time": {
+            "start": 1791392329215,
+            "end": 1791392329408
+          }
+        },
+        "time": 1791392329408
+      }
+    }
+  },
+  {
+    "directory": "/project",
+    "project": "global",
+    "payload": {
+      "id": "evt_fixture_9",
+      "type": "message.updated",
+      "properties": {
+        "sessionID": "ses_fixture_1",
+        "info": {
+          "id": "msg_fixture_2",
+          "parentID": "msg_fixture_1",
+          "role": "assistant",
+          "mode": "build",
+          "agent": "build",
+          "path": {
+            "cwd": "/project",
+            "root": "/project"
+          },
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "write": 0,
+              "read": 0
+            }
+          },
+          "modelID": "scripted",
+          "providerID": "fake",
+          "time": {
+            "created": 1791392328499
+          },
+          "sessionID": "ses_fixture_1",
+          "finish": "stop"
+        }
+      }
+    }
+  },
+  {
+    "directory": "/project",
+    "project": "global",
+    "payload": {
+      "id": "evt_fixture_10",
+      "type": "message.updated",
+      "properties": {
+        "sessionID": "ses_fixture_1",
+        "info": {
+          "id": "msg_fixture_2",
+          "parentID": "msg_fixture_1",
+          "role": "assistant",
+          "mode": "build",
+          "agent": "build",
+          "path": {
+            "cwd": "/project",
+            "root": "/project"
+          },
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "write": 0,
+              "read": 0
+            }
+          },
+          "modelID": "scripted",
+          "providerID": "fake",
+          "time": {
+            "created": 1791392328499,
+            "completed": 1791392329428
+          },
+          "sessionID": "ses_fixture_1",
+          "finish": "stop"
+        }
+      }
+    }
+  }
+]

@@ -1,0 +1,24 @@
+{
+  "directory": "/project",
+  "project": "global",
+  "payload": {
+    "type": "sync",
+    "syncEvent": {
+      "id": "evt_fixture",
+      "type": "session.created.1",
+      "seq": 0,
+      "aggregateID": "ses_fixture",
+      "data": {
+        "sessionID": "ses_fixture",
+        "info": {
+          "id": "ses_fixture",
+          "projectID": "global",
+          "directory": "/project",
+          "title": "Streaming",
+          "time": { "created": 1, "updated": 1 }
+        }
+      }
+    },
+    "id": "evt_fixture"
+  }
+}

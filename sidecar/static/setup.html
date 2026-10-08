@@ -1,0 +1,33 @@
+<!-- SPDX-License-Identifier: LGPL-3.0-only -->
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>OTK · Setup</title>
+    <link rel="stylesheet" href="theme.css">
+  </head>
+  <body>
+    <h1>OTK / SETUP</h1>
+    <form><label>Authentication<select name="type"><option value="password">Password</option><option value="none">None</option></select></label><label>Username<input name="username" autocomplete="username"></label><label>Password<input name="password" type="password" autocomplete="new-password"></label><button>Configure sidecar</button></form>
+    <p id="error" role="alert"></p>
+    <script>
+    // SPDX-License-Identifier: LGPL-3.0-only
+    document.querySelector("form").onsubmit = async (event) => {
+      event.preventDefault();
+      try {
+        const response = await fetch("api/setup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(Object.fromEntries(new FormData(event.target))),
+        });
+        const result = await response.json();
+        if (!response.ok) throw new Error(result.message || result.code);
+        location.href = "./";
+      } catch (error) {
+        document.querySelector("#error").textContent = error.message;
+      }
+    };
+    </script>
+  </body>
+</html>

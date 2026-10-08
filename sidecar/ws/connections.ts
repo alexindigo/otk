@@ -1,0 +1,167 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+import type { ContentOp } from "../../protocol/content.ts";
+import type {
+  ClientFrame,
+  HarnessState,
+  ServerFrame,
+} from "../../protocol/messages.ts";
+import { PROTOCOL_VERSION, SIDECAR_VERSION } from "../../protocol/version.ts";
+import type { HarnessAdapter } from "../adapter/types.ts";
+import { HarnessError } from "../adapter/types.ts";
+import type { IndexStore } from "../index/store.ts";
+import { dispatch, object, text } from "./rpc.ts";
+interface Connection {
+  ws: WebSocket;
+  welcomed: boolean;
+  sessions: Set<string>;
+}
+export class Connections {
+  #connections = new Set<Connection>();
+  #counts = new Map<string, number>();
+  harnessState: HarnessState = "connecting";
+  constructor(
+    readonly adapter: HarnessAdapter,
+    readonly index: IndexStore,
+    readonly url: string,
+  ) {
+    index.listen((frame) => this.broadcast(frame));
+  }
+  #send(connection: Connection, frame: ServerFrame): void {
+    if (connection.ws.readyState === WebSocket.OPEN) {
+      connection.ws.send(JSON.stringify(frame));
+    }
+  }
+  broadcast(frame: ServerFrame): void {
+    for (const connection of this.#connections) {
+      if (connection.welcomed) this.#send(connection, frame);
+    }
+  }
+  connection(state: HarnessState): void {
+    this.harnessState = state;
+    this.broadcast({ t: "harness", state });
+  }
+  content(sessionID: string, event: ContentOp): void {
+    for (const connection of this.#connections) {
+      if (connection.welcomed && connection.sessions.has(sessionID)) {
+        this.#send(connection, { t: "content", sessionID, event });
+      }
+    }
+  }
+  #subscribe(
+    connection: Connection,
+    sessionID: string,
+    subscribe: boolean,
+  ): void {
+    if (subscribe === connection.sessions.has(sessionID)) return;
+    if (subscribe) connection.sessions.add(sessionID);
+    else connection.sessions.delete(sessionID);
+    const count = (this.#counts.get(sessionID) ?? 0) + (subscribe ? 1 : -1);
+    if (count) this.#counts.set(sessionID, count);
+    else this.#counts.delete(sessionID);
+    this.adapter.subscriptions(sessionID, count);
+  }
+  accept(ws: WebSocket): void {
+    const connection: Connection = { ws, welcomed: false, sessions: new Set() };
+    this.#connections.add(connection);
+    const helloDeadline = setTimeout(() => {
+      if (!connection.welcomed) ws.close(1008, "hello required");
+    }, 10_000);
+    const ping = setInterval(
+      () => this.#send(connection, { t: "ping" }),
+      20_000,
+    );
+    const silent = () => ws.close(1001, "heartbeat timeout");
+    let silenceDeadline = setTimeout(silent, 60_000);
+    ws.onclose = () => {
+      clearTimeout(helloDeadline);
+      clearTimeout(silenceDeadline);
+      clearInterval(ping);
+      for (const sessionID of connection.sessions) {
+        this.#subscribe(connection, sessionID, false);
+      }
+      this.#connections.delete(connection);
+    };
+    ws.onmessage = async (event) => {
+      try {
+        if (typeof event.data !== "string" || event.data.length > 4_194_304) {
+          throw new HarnessError("frame", "Invalid frame");
+        }
+        const raw = object(JSON.parse(event.data)),
+          frame = raw as unknown as ClientFrame;
+        if (!connection.welcomed) {
+          if (frame.t !== "hello" || frame.protocol !== PROTOCOL_VERSION) {
+            this.#send(connection, { t: "error", code: "protocol" });
+            ws.close(1002, "protocol mismatch");
+            return;
+          }
+          connection.welcomed = true;
+          clearTimeout(helloDeadline);
+          clearTimeout(silenceDeadline);
+          silenceDeadline = setTimeout(silent, 60_000);
+          this.#send(connection, {
+            t: "welcome",
+            protocol: PROTOCOL_VERSION,
+            sidecar: {
+              version: SIDECAR_VERSION,
+              harness: {
+                kind: this.adapter.kind,
+                version: this.adapter.version,
+                url: this.url,
+              },
+            },
+          });
+          this.#send(connection, { t: "harness", state: this.harnessState });
+          this.#send(connection, this.index.snapshot());
+          return;
+        }
+        if (frame.t === "pong") {
+          clearTimeout(silenceDeadline);
+          silenceDeadline = setTimeout(silent, 60_000);
+          return;
+        }
+        if (frame.t === "subscribe" || frame.t === "unsubscribe") {
+          this.#subscribe(
+            connection,
+            text(raw, "sessionID")!,
+            frame.t === "subscribe",
+          );
+        } else if (frame.t === "resnapshot") {
+          this.#send(connection, this.index.snapshot());
+        } else if (frame.t === "rpc") {
+          const id = text(raw, "id")!;
+          try {
+            const result = await dispatch(
+              this.adapter,
+              text(raw, "method")!,
+              frame.params,
+            );
+            this.#send(connection, { t: "rpc.result", id, ok: true, result });
+          } catch (error) {
+            this.#send(connection, {
+              t: "rpc.result",
+              id,
+              ok: false,
+              error: {
+                code: error instanceof HarnessError ? error.code : "harness",
+                message: (error as Error).message,
+              },
+            });
+          }
+        } else throw new HarnessError("frame", "Unknown frame");
+        clearTimeout(silenceDeadline);
+        silenceDeadline = setTimeout(silent, 60_000);
+      } catch (error) {
+        this.#send(connection, {
+          t: "error",
+          code: error instanceof HarnessError ? error.code : "frame",
+          message: (error as Error).message,
+        });
+      }
+    };
+  }
+  close(): void {
+    for (const connection of this.#connections) {
+      connection.ws.close(1001, "server stopping");
+    }
+  }
+}
