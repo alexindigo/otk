@@ -5,8 +5,10 @@ import { FakeLlm } from "./fake-llm.ts";
 import { OpencodeTest } from "./opencode.ts";
 import { SidecarTest } from "./sidecar.ts";
 import { Cdp } from "./cdp.ts";
-export async function browserFixture() {
-  const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
+export async function browserFixture(
+  permission?: Record<string, "ask" | "allow" | "deny">,
+) {
+  const fake = new FakeLlm(), oc = await OpencodeTest.start(fake, permission);
   const servers: SidecarTest[] = [], browsers: Cdp[] = [];
   return {
     fake,

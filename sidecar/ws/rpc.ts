@@ -75,6 +75,8 @@ export async function dispatch(
     case "session.abort":
       await adapter.abort(sessionID());
       return null;
+    case "permission.list":
+      return adapter.listPermissions(sessionID());
     case "permission.reply": {
       if (!["once", "always", "reject"].includes(String(p.reply))) {
         throw new HarnessError("params", "Invalid permission reply");

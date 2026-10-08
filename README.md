@@ -24,6 +24,11 @@ stream its transcript, send prompts, or press Esc twice to interrupt. Message
 history for the previous session is released on switching. Web assets and fonts
 are bundled locally; no dev server or CDN is used.
 
+Pending permissions for the open session and its descendants appear above the
+prompt. Allow once, confirm the displayed future grant patterns for Allow
+always, or reject with optional feedback. Child requests retain their
+originating title.
+
 | #  | Setting                               | Environment variable                                       | Shipped value                                                                  |
 | -- | ------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | 1  | Listener                              | `OTK_SERVER_HOST`, `OTK_SERVER_PORT`                       | `127.0.0.1`, `1502`                                                            |

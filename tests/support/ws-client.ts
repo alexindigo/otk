@@ -20,10 +20,31 @@ export class WsClient {
     this.ws.on("error", () => {});
   }
   async connect(): Promise<void> {
-    await new Promise<void>((resolve, reject) => {
-      this.ws.once("open", resolve);
-      this.ws.once("error", reject);
-    });
+    if (this.ws.readyState !== WebSocket.OPEN) {
+      await new Promise<void>((resolve, reject) => {
+        if (this.ws.readyState !== WebSocket.CONNECTING) {
+          reject(new Error("Socket closed before hello"));
+          return;
+        }
+        const finish = (error?: Error) => {
+          clearTimeout(timer);
+          this.ws.off("open", opened);
+          this.ws.off("error", failed);
+          this.ws.off("close", closed);
+          error ? reject(error) : resolve();
+        };
+        const opened = () => finish(),
+          failed = (error: Error) => finish(error),
+          closed = () => finish(new Error("Socket closed before hello"));
+        const timer = setTimeout(
+          () => finish(new Error("Socket open timed out")),
+          30_000,
+        );
+        this.ws.once("open", opened);
+        this.ws.once("error", failed);
+        this.ws.once("close", closed);
+      });
+    }
     this.send({ t: "hello", protocol: PROTOCOL_VERSION });
     await this.wait((frame) => frame.t === "welcome");
   }

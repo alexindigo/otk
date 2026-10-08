@@ -37,7 +37,10 @@ export class OpencodeTest {
   process!: ChildProcess;
   log = "";
   #env: Record<string, string> = {};
-  static async start(provider: FakeLlm): Promise<OpencodeTest> {
+  static async start(
+    provider: FakeLlm,
+    permission: Record<string, "ask" | "allow" | "deny"> = { bash: "ask" },
+  ): Promise<OpencodeTest> {
     const test = new OpencodeTest();
     const state = fromFileUrl(new URL("../../.test-state/", import.meta.url));
     await Deno.mkdir(state, { recursive: true });
@@ -79,7 +82,7 @@ export class OpencodeTest {
         autoupdate: false,
         share: "disabled",
         model: "fake/scripted",
-        permission: { bash: "ask" },
+        permission,
         provider: {
           fake: {
             npm: "@ai-sdk/openai-compatible",

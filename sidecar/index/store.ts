@@ -1,12 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { IndexEntry, IndexOp } from "../../protocol/index.ts";
 import type { ServerFrame } from "../../protocol/messages.ts";
+import { sessionAncestors } from "../../protocol/session-tree.ts";
 export class IndexStore {
   #entries = new Map<string, IndexEntry>();
   #listeners = new Set<(frame: ServerFrame) => void>();
   #pending: IndexOp[] = [];
   #scheduled = false;
   rev = 0;
+  ancestors(id: string): string[] {
+    return sessionAncestors(id, (id) => this.#entries.get(id));
+  }
   listen(listener: (frame: ServerFrame) => void): () => void {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);

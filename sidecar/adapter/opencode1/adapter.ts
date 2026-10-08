@@ -3,9 +3,11 @@ import type {
   ContentOp,
   ContentSession,
   Message,
+  PermissionRequest,
   Todo,
 } from "../../../protocol/content.ts";
 import type { IndexEntry } from "../../../protocol/index.ts";
+import { belongsToSession } from "../../../protocol/session-tree.ts";
 import type { PermissionReply, PromptInput } from "../../../protocol/rpc.ts";
 import type { ServiceConfig } from "../../config/schema.ts";
 import { harnessDb } from "../../config/loader.ts";
@@ -52,7 +54,10 @@ export class Opencode1Adapter implements HarnessAdapter {
   readonly client: Client;
   #sink!: HarnessSink;
   #entries = new Map<string, IndexEntry>();
-  #permissions = new Map<string, { sessionID: string; callID?: string }>();
+  #permissions = new Map<
+    string,
+    { sessionID: string; callID?: string; time: number }
+  >();
   #questions = new Map<string, string>();
   #stopped = true;
   #controller?: AbortController;
@@ -173,6 +178,23 @@ export class Opencode1Adapter implements HarnessAdapter {
       },
     );
   }
+  async listPermissions(sessionID: string): Promise<PermissionRequest[]> {
+    const directory = this.#directory(sessionID) ??
+      (await this.getSession(sessionID)).directory;
+    const pending = await this.client.json<RawPermission[]>("/permission", {
+      query: { directory },
+    });
+    return pending.filter((request) =>
+      belongsToSession(
+        request.sessionID,
+        sessionID,
+        (id) => this.#entries.get(id),
+      )
+    )
+      .map((request) =>
+        mapPermission(request, this.#permissions.get(request.id)?.time)
+      );
+  }
   async #loop(): Promise<void> {
     const backoff = new Backoff(this.cfg.harness.reconnectmax);
     while (!this.#stopped) {
@@ -272,6 +294,7 @@ export class Opencode1Adapter implements HarnessAdapter {
       cursor = next;
     } while (cursor);
     this.#entries = entries;
+    const previousPermissions = new Map(this.#permissions);
     this.#permissions.clear();
     this.#questions.clear();
     for (const directory of this.#db.possiblyRunningDirectories(since)) {
@@ -310,6 +333,7 @@ export class Opencode1Adapter implements HarnessAdapter {
         this.#permissions.set(request.id, {
           sessionID: request.sessionID,
           callID: request.tool?.callID,
+          time: previousPermissions.get(request.id)?.time ?? Date.now(),
         });
       }
       for (const request of questions) {
@@ -439,12 +463,27 @@ export class Opencode1Adapter implements HarnessAdapter {
       this.#permissions.set(request.id, {
         sessionID,
         callID: request.tool?.callID,
+        time: this.#permissions.get(request.id)?.time ?? Date.now(),
       });
       this.#attention();
+      this.#sink.content(sessionID, {
+        op: "permission.upsert",
+        request: mapPermission(
+          request,
+          this.#permissions.get(request.id)!.time,
+        ),
+      });
+      return;
     }
     if (type === "permission.replied") {
       this.#permissions.delete(String(p.requestID));
       this.#attention();
+      this.#sink.content(sessionID, {
+        op: "permission.remove",
+        requestID: String(p.requestID),
+        sessionID,
+      });
+      return;
     }
     if (type === "question.asked") {
       this.#questions.set(String(p.id), sessionID);
@@ -524,19 +563,6 @@ export class Opencode1Adapter implements HarnessAdapter {
           op: "part.remove",
           messageID: String(p.messageID),
           partID: String(p.partID),
-        });
-        break;
-      case "permission.asked":
-        content({
-          op: "permission.upsert",
-          request: mapPermission(p as unknown as RawPermission),
-        });
-        break;
-      case "permission.replied":
-        content({
-          op: "permission.remove",
-          requestID: String(p.requestID),
-          sessionID,
         });
         break;
       case "todo.updated":

@@ -479,3 +479,65 @@ p {
     animation: none;
   }
 }
+
+.otk-permission-dock {
+  flex: 0 1 auto;
+  min-height: 0;
+  max-height: 40vh;
+  overflow: auto;
+  border-top: 1px solid var(--accent);
+  background: var(--panel);
+  padding: 1rem 1.8rem;
+  overflow-wrap: anywhere;
+}
+.otk-permission-dock > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.otk-permission-dock h2 {
+  font-size: 1rem;
+  color: var(--accent);
+  margin: 0;
+}
+.otk-permission-child {
+  font-size: .8rem;
+  color: var(--secondary);
+}
+.otk-permission-title {
+  margin: .5rem 0;
+}
+.otk-permission-command {
+  margin: .6rem 0;
+  white-space: pre-wrap;
+  font: inherit;
+}
+.otk-permission-patterns {
+  color: var(--secondary);
+  font-size: .8rem;
+  margin: .7rem 0;
+}
+.otk-permission-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .6rem;
+  padding-top: .5rem;
+}
+.otk-permission-actions > span {
+  font-size: .7rem;
+}
+.otk-permission-dock form label {
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+}
+.otk-permission-dock textarea {
+  min-height: 4rem;
+}
+.otk-permission-confirm {
+  border-left: 2px solid var(--accent);
+  padding-left: 1rem;
+}

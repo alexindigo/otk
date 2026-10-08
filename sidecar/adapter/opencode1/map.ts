@@ -175,6 +175,7 @@ export function mapPermission(
     kind: request.permission,
     title: request.permission,
     patterns: [...request.patterns],
+    alwaysPatterns: [...request.always],
     time: now,
     detail: request.permission === "bash"
       ? {

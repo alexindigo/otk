@@ -144,6 +144,7 @@ export interface PermissionRequest {
   kind: string;
   title: string;
   patterns: string[];
+  alwaysPatterns: string[];
   detail: PermissionDetail;
   time: number;
 }
@@ -172,3 +173,10 @@ export type ContentOp =
   | { op: "permission.remove"; requestID: string; sessionID: string }
   | { op: "todo.set"; items: Todo[] }
   | { op: "diff.set"; files: FileDiff[] };
+export type PermissionOp = Extract<
+  ContentOp,
+  { op: "permission.upsert" | "permission.remove" }
+>;
+export function isPermissionOp(op: ContentOp): op is PermissionOp {
+  return op.op === "permission.upsert" || op.op === "permission.remove";
+}

@@ -10,6 +10,8 @@ import {
 } from "../state/session.ts";
 import { createSidecars, LOCAL_SIDECAR } from "../state/sidecars.ts";
 import { createNavigation } from "../state/navigation.ts";
+import { oldestPermission } from "../state/permissions.ts";
+import PermissionDock from "./PermissionDock.tsx";
 import Sidebar from "./Sidebar.tsx";
 import Settings from "./Settings.tsx";
 import SessionView from "./SessionView.tsx";
@@ -27,10 +29,23 @@ export default function App() {
       session.receive(id, frame);
     },
   );
-  const session = createSession((id) => sidecars.connection(id));
+  const entry = (sidecarId: string, id: string) =>
+    index.state.entries[sessionKey(sidecarId, id)];
+  const session = createSession((id) => sidecars.connection(id), entry);
   const [settings, setSettings] = createSignal(false),
     [draft, setDraft] = createSignal(""),
     [error, setError] = createSignal("");
+  const [permissionDirty, setPermissionDirty] = createSignal(false);
+  const permission = createMemo(() => {
+    const selected = session.state.selection;
+    return selected
+      ? oldestPermission(
+        session.state.content.permissions,
+        selected.sessionID,
+        (id) => entry(selected.sidecarId, id),
+      )
+      : undefined;
+  });
   const local = createMemo(() =>
     sidecars.state.list.find((item) => item.id === LOCAL_SIDECAR)!
   );
@@ -51,8 +66,8 @@ export default function App() {
   });
   let navigationRevision = 0;
   const discardDraft = () =>
-    !draft() ||
-    globalThis.confirm("Discard the unsent prompt before switching sessions?");
+    (!draft() && !permissionDirty()) ||
+    globalThis.confirm("Discard unsent text before switching sessions?");
   const applyRoute = (hash: string) => {
     const target = route(hash);
     const previous = session.state.selection;
@@ -68,7 +83,10 @@ export default function App() {
       setError("");
       session.open(target);
     }
-    if (changes) setDraft("");
+    if (changes) {
+      setDraft("");
+      setPermissionDirty(false);
+    }
   };
   const navigation = createNavigation({
     intent: () => {
@@ -167,6 +185,23 @@ export default function App() {
                   }
                 >
                   <SessionView
+                    permissionDock={
+                      <PermissionDock
+                        request={permission()}
+                        childTitle={permission()?.sessionID !==
+                            session.state.selection?.sessionID
+                          ? entry(
+                            session.state.selection!.sidecarId,
+                            permission()?.sessionID || "",
+                          )?.title || permission()?.sessionID
+                          : undefined}
+                        onDirty={(value) => setPermissionDirty(value)}
+                        onReply={(input) =>
+                          sidecars.connection(
+                            session.state.selection!.sidecarId,
+                          ).rpc.call<void>("permission.reply", input)}
+                      />
+                    }
                     info={info()}
                     label={selectedSidecar()?.label || "Sidecar"}
                     messages={session.state.content.messages}

@@ -18,4 +18,5 @@ export type RpcMethod =
   | "session.create"
   | "session.prompt"
   | "session.abort"
+  | "permission.list"
   | "permission.reply";

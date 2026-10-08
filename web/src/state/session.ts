@@ -4,7 +4,11 @@ import type {
   ContentOp,
   ContentSession,
   Message,
+  PermissionRequest,
 } from "../../../protocol/content.ts";
+import { isPermissionOp } from "../../../protocol/content.ts";
+import { belongsToSession } from "../../../protocol/session-tree.ts";
+import type { IndexEntry } from "../../../protocol/index.ts";
 import type { ServerFrame } from "../../../protocol/messages.ts";
 import type { SidecarConnection } from "../net/sidecar.ts";
 import { type ContentState, emptyContent, reduce } from "./reduce.ts";
@@ -30,7 +34,10 @@ export function hashFor(selection: Selection): string {
     encodeURIComponent(selection.sessionID)
   }`;
 }
-export function createSession(connection: (id: string) => SidecarConnection) {
+export function createSession(
+  connection: (id: string) => SidecarConnection,
+  entry: (sidecarId: string, id: string) => IndexEntry | undefined,
+) {
   const [state, setState] = createStore<
     {
       selection?: Selection;
@@ -66,7 +73,7 @@ export function createSession(connection: (id: string) => SidecarConnection) {
     });
     try {
       const rpc = connection(target.sidecarId).rpc;
-      const [info, messages] = await Promise.all([
+      const [info, messages, permissions] = await Promise.all([
         rpc.call<ContentSession>(
           "session.get",
           { sessionID: target.sessionID },
@@ -76,9 +83,12 @@ export function createSession(connection: (id: string) => SidecarConnection) {
           sessionID: target.sessionID,
           limit: 100,
         }, abort.signal),
+        rpc.call<PermissionRequest[]>("permission.list", {
+          sessionID: target.sessionID,
+        }, abort.signal),
       ]);
       if (!current(id, request)) return;
-      let content = { ...emptyContent(), messages };
+      let content = { ...emptyContent(), messages, permissions };
       for (const op of buffer) content = reduce(content, op);
       buffer = [];
       fetching = false;
@@ -136,9 +146,16 @@ export function createSession(connection: (id: string) => SidecarConnection) {
         void refetch();
         return;
       }
-      if (frame.t !== "content" || frame.sessionID !== selected.sessionID) {
-        return;
-      }
+      if (frame.t !== "content") return;
+      if (isPermissionOp(frame.event)) {
+        if (
+          !belongsToSession(
+            frame.sessionID,
+            selected.sessionID,
+            (id) => entry(sidecarId, id),
+          )
+        ) return;
+      } else if (frame.sessionID !== selected.sessionID) return;
       if (fetching) buffer.push(frame.event);
       else {setState((draft) => {
           draft.content = reduce(draft.content, frame.event);

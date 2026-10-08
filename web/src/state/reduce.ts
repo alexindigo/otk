@@ -17,12 +17,13 @@ export function emptyContent(): ContentState {
 }
 export function reduce(state: ContentState, op: ContentOp): ContentState {
   if (op.op === "permission.upsert") {
+    const permissions = [...state.permissions];
+    const at = permissions.findIndex((request) => request.id === op.request.id);
+    if (at < 0) permissions.push(op.request);
+    else permissions[at] = op.request;
     return {
       ...state,
-      permissions: [
-        ...state.permissions.filter((p) => p.id !== op.request.id),
-        op.request,
-      ].sort((a, b) => a.time - b.time || a.id.localeCompare(b.id)),
+      permissions: permissions.sort((a, b) => a.time - b.time),
     };
   }
   if (op.op === "permission.remove") {

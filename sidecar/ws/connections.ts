@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ContentOp } from "../../protocol/content.ts";
+import { type ContentOp, isPermissionOp } from "../../protocol/content.ts";
 import type {
   ClientFrame,
   HarnessState,
@@ -41,8 +41,14 @@ export class Connections {
     this.broadcast({ t: "harness", state });
   }
   content(sessionID: string, event: ContentOp): void {
+    const recipients = isPermissionOp(event)
+      ? [sessionID, ...this.index.ancestors(sessionID)]
+      : [sessionID];
     for (const connection of this.#connections) {
-      if (connection.welcomed && connection.sessions.has(sessionID)) {
+      if (
+        connection.welcomed &&
+        recipients.some((id) => connection.sessions.has(id))
+      ) {
         this.#send(connection, { t: "content", sessionID, event });
       }
     }
