@@ -2,6 +2,7 @@
 import { For, Match, Show, Switch } from "solid-js";
 import { dynamic } from "@solidjs/web";
 import type { Block, Inline } from "../../../protocol/content.ts";
+import HighlightedCode from "./Code.tsx";
 const blockOf = <K extends Block["b"]>(block: Block, kind: K) =>
   block.b === kind ? block as Block & { b: K } : undefined;
 const inlineOf = <K extends Inline["i"]>(inline: Inline, kind: K) =>
@@ -124,8 +125,14 @@ function Heading(props: { block: Block & { b: "heading" } }) {
     </Tag>
   );
 }
-function Code(props: { block: Block & { b: "code" } }) {
-  return <pre><code>{props.block.text}</code></pre>;
+function Code(props: { block: Block & { b: "code" }; streaming?: boolean }) {
+  return (
+    <HighlightedCode
+      text={props.block.text}
+      lang={props.block.lang}
+      streaming={props.streaming}
+    />
+  );
 }
 function List(props: { block: Block & { b: "list" } }) {
   const Tag = dynamic(() => props.block.ordered ? "ol" : "ul");
@@ -199,7 +206,7 @@ function Table(props: { block: Block & { b: "table" } }) {
 function Rule() {
   return <hr />;
 }
-function BlockView(props: { block: Block }) {
+function BlockView(props: { block: Block; streaming?: boolean }) {
   return (
     <Switch>
       <Match when={blockOf(props.block, "paragraph")}>
@@ -209,7 +216,7 @@ function BlockView(props: { block: Block }) {
         {(block) => <Heading block={block()} />}
       </Match>
       <Match when={blockOf(props.block, "code")}>
-        {(block) => <Code block={block()} />}
+        {(block) => <Code block={block()} streaming={props.streaming} />}
       </Match>
       <Match when={blockOf(props.block, "list")}>
         {(block) => <List block={block()} />}
@@ -226,10 +233,17 @@ function BlockView(props: { block: Block }) {
     </Switch>
   );
 }
-export default function Blocks(props: { blocks: Block[] }) {
+export default function Blocks(
+  props: { blocks: Block[]; streaming?: boolean },
+) {
   return (
     <For each={props.blocks} keyed={false}>
-      {(block) => <BlockView block={block()} />}
+      {(block, index) => (
+        <BlockView
+          block={block()}
+          streaming={props.streaming && index === props.blocks.length - 1}
+        />
+      )}
     </For>
   );
 }

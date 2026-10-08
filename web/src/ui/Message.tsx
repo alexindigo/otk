@@ -9,13 +9,15 @@ const partOf = <K extends Part["kind"]>(part: Part, kind: K) =>
   part.kind === kind ? part as Part & { kind: K } : undefined;
 const duration = (start: number, end: number) =>
   `${Math.max(0, (end - start) / 1000).toFixed(1)}s`;
-function PartView(props: { part: Part; prefs: Preferences }) {
+function PartView(
+  props: { part: Part; prefs: Preferences; streaming: boolean },
+) {
   return (
     <Switch fallback={<p class="otk-muted">{props.part.kind}</p>}>
       <Match when={partOf(props.part, "text")}>
         {(part) => (
           <div class="otk-text">
-            <Blocks blocks={part().blocks} />
+            <Blocks blocks={part().blocks} streaming={props.streaming} />
           </div>
         )}
       </Match>
@@ -66,7 +68,14 @@ export default function Message(
         </Show>
       </header>
       <For each={props.message.parts} keyed={(part) => part.id}>
-        {(part) => <PartView part={part()} prefs={props.prefs} />}
+        {(part) => (
+          <PartView
+            part={part()}
+            prefs={props.prefs}
+            streaming={props.message.role === "assistant" &&
+              props.message.time.completed === undefined}
+          />
+        )}
       </For>
       <Show when={assistant()}>
         {(message) => (

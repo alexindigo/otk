@@ -8,5 +8,6 @@ export default defineConfig({
   root: "web",
   base: "./",
   plugins: [solid({ compiler: "native", hot: false })],
+  worker: { format: "es" },
   build: { outDir: "dist" },
 });

@@ -1,0 +1,67 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+:root {
+  --otk-syntax-foreground: #e0e6ed;
+  --otk-syntax-background: #1a1c1e;
+  --otk-syntax-token-constant: #ffb18f;
+  --otk-syntax-token-string: #e0e6ed;
+  --otk-syntax-token-comment: #525860;
+  --otk-syntax-token-keyword: #ff4d00;
+  --otk-syntax-token-parameter: #a2abb7;
+  --otk-syntax-token-function: #ffb18f;
+  --otk-syntax-token-string-expression: #ff4d00;
+  --otk-syntax-token-punctuation: #a2abb7;
+  --otk-syntax-token-link: #ff4d00;
+}
+.otk-code {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+.otk-code[data-numbered=true] {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.otk-code pre {
+  margin: .7rem 0;
+  white-space: pre;
+  overflow: auto;
+  padding: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--muted);
+  font: inherit;
+  line-height: 1.8;
+}
+.otk-code code {
+  font: inherit;
+}
+.otk-code .otk-code-numbers {
+  color: var(--secondary);
+  border-right: 0;
+  text-align: right;
+  user-select: none;
+}
+.otk-token-bold {
+  font-weight: 600;
+}
+.otk-token-italic {
+  font-style: italic;
+}
+.otk-token-underline {
+  text-decoration: underline;
+}
+.otk-code pre:not(.otk-code-numbers) {
+  white-space: normal;
+}
+.otk-code-line {
+  display: block;
+  white-space: pre;
+  min-height: 1lh;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 1lh;
+}
+.otk-code-newline {
+  display: none;
+}
+.otk-code-plain {
+  white-space: pre;
+  display: block;
+}

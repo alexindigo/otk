@@ -4,4 +4,5 @@ import App from "./ui/App.tsx";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/600.css";
 import "./theme.css";
+import "./highlight/tokens.css";
 render(() => <App />, document.getElementById("app")!);
