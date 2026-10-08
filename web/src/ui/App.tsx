@@ -17,6 +17,8 @@ import Settings from "./Settings.tsx";
 import SessionView from "./SessionView.tsx";
 import Login from "./Login.tsx";
 import Setup from "./Setup.tsx";
+import { createToggles } from "./Toggles.ts";
+import DisplayMenu from "./DisplayMenu.tsx";
 export default function App() {
   const index = createIndex();
   const sidecars: ReturnType<typeof createSidecars> = createSidecars(
@@ -27,11 +29,15 @@ export default function App() {
         }
       }
       session.receive(id, frame);
+      if (id === LOCAL_SIDECAR) toggles.receive(frame);
     },
   );
   const entry = (sidecarId: string, id: string) =>
     index.state.entries[sessionKey(sidecarId, id)];
   const session = createSession((id) => sidecars.connection(id), entry);
+  const toggles = createToggles((key, value) =>
+    sidecars.connection(LOCAL_SIDECAR).rpc.call("prefs.set", { key, value })
+  );
   const [settings, setSettings] = createSignal(false),
     [draft, setDraft] = createSignal(""),
     [error, setError] = createSignal("");
@@ -185,6 +191,15 @@ export default function App() {
                   }
                 >
                   <SessionView
+                    prefs={toggles.state.prefs}
+                    displayMenu={
+                      <DisplayMenu
+                        prefs={toggles.state.prefs}
+                        ready={toggles.state.ready}
+                        error={toggles.state.error}
+                        onSet={(key, value) => toggles.set(key, value)}
+                      />
+                    }
                     permissionDock={
                       <PermissionDock
                         request={permission()}

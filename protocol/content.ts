@@ -77,7 +77,19 @@ export interface GenericCall extends ToolBase {
   summary: string;
   output?: string;
 }
-export type ToolCall = BashCall | GenericCall;
+export interface TodoCall extends ToolBase {
+  tool: "todo";
+  items: Todo[];
+}
+export interface QuestionCall extends ToolBase {
+  tool: "question";
+  questions: {
+    text: string;
+    options: { label: string; description: string }[];
+    answer?: string[];
+  }[];
+}
+export type ToolCall = BashCall | GenericCall | TodoCall | QuestionCall;
 export type Part =
   | { kind: "text"; id: string; blocks: Block[]; synthetic: boolean }
   | {

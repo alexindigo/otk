@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export interface Script {
   chunks?: string[];
+  reasoning?: string[];
   delay?: number;
   tool?: { name: string; input: Record<string, unknown> };
 }
@@ -72,6 +73,11 @@ export class FakeLlm {
               }
             };
             send({ role: "assistant" });
+            for (const chunk of script.reasoning ?? []) {
+              await new Promise((r) => setTimeout(r, script.delay ?? 5));
+              if (cancelled) return;
+              send({ reasoning_content: chunk });
+            }
             if (script.tool) {
               send({
                 tool_calls: [{

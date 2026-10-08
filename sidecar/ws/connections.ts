@@ -10,6 +10,7 @@ import type { HarnessAdapter } from "../adapter/types.ts";
 import { HarnessError } from "../adapter/types.ts";
 import type { IndexStore } from "../index/store.ts";
 import { dispatch, object, text } from "./rpc.ts";
+import type { Prefs } from "../db/prefs.ts";
 interface Connection {
   ws: WebSocket;
   welcomed: boolean;
@@ -19,12 +20,17 @@ export class Connections {
   #connections = new Set<Connection>();
   #counts = new Map<string, number>();
   harnessState: HarnessState = "connecting";
+  #stopPrefs: () => void;
   constructor(
     readonly adapter: HarnessAdapter,
     readonly index: IndexStore,
     readonly url: string,
+    readonly prefs: Prefs,
   ) {
     index.listen((frame) => this.broadcast(frame));
+    this.#stopPrefs = prefs.listen((prefs) =>
+      this.broadcast({ t: "prefs", prefs })
+    );
   }
   #send(connection: Connection, frame: ServerFrame): void {
     if (connection.ws.readyState === WebSocket.OPEN) {
@@ -118,6 +124,7 @@ export class Connections {
           });
           this.#send(connection, { t: "harness", state: this.harnessState });
           this.#send(connection, this.index.snapshot());
+          this.#send(connection, { t: "prefs", prefs: this.prefs.get() });
           return;
         }
         if (frame.t === "pong") {
@@ -140,6 +147,7 @@ export class Connections {
               this.adapter,
               text(raw, "method")!,
               frame.params,
+              this.prefs,
             );
             this.#send(connection, { t: "rpc.result", id, ok: true, result });
           } catch (error) {
@@ -166,6 +174,7 @@ export class Connections {
     };
   }
   close(): void {
+    this.#stopPrefs();
     for (const connection of this.#connections) {
       connection.ws.close(1001, "server stopping");
     }

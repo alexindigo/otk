@@ -318,7 +318,7 @@ Deno.test("E7 add authenticated second sidecar, merged groups, prompt and persis
     assertEquals(stored[0].baseUrl, second.url);
     assertEquals(stored[0].label, "Remote agent");
     await capture(browser, f.oc.root, "e7-two-sidecars");
-    await browser.goto(server.url);
+    await browser.reload();
     await browser.poll(
       "document.querySelectorAll('[data-session]').length === 2",
     );

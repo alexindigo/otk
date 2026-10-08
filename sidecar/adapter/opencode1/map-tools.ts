@@ -1,8 +1,34 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ToolCall } from "../../../protocol/content.ts";
+import type { Todo, ToolCall } from "../../../protocol/content.ts";
 import type { RawPart } from "./types.ts";
 const string = (value: unknown): string | undefined =>
   typeof value === "string" ? value : undefined;
+const record = (value: unknown): Record<string, unknown> =>
+  value && typeof value === "object" && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+const strings = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string")
+    : [];
+export function mapTodos(value: unknown): Todo[] {
+  return Array.isArray(value)
+    ? value.flatMap((item) => {
+      const todo = record(item);
+      if (
+        typeof todo.content !== "string" ||
+        !["pending", "in_progress", "completed", "cancelled"].includes(
+          String(todo.status),
+        )
+      ) return [];
+      return [{
+        content: todo.content,
+        status: todo.status as Todo["status"],
+        priority: string(todo.priority) || "medium",
+      }];
+    })
+    : [];
+}
 export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
   const state = part.state!;
   const base = {
@@ -14,6 +40,42 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
     awaitingPermission,
   };
   const input = state.input, metadata = state.metadata ?? {};
+  if (part.tool === "todowrite") {
+    return {
+      ...base,
+      tool: "todo",
+      items: mapTodos(metadata.todos ?? input.todos),
+    };
+  }
+  if (part.tool === "question") {
+    return {
+      ...base,
+      tool: "question",
+      questions: Array.isArray(input.questions)
+        ? input.questions.flatMap((item, i) => {
+          const question = record(item);
+          if (typeof question.question !== "string") return [];
+          return [{
+            text: question.question,
+            options: Array.isArray(question.options)
+              ? question.options.flatMap((item) => {
+                const option = record(item);
+                return typeof option.label === "string"
+                  ? [{
+                    label: option.label,
+                    description: string(option.description) || "",
+                  }]
+                  : [];
+              })
+              : [],
+            answer: Array.isArray(metadata.answers)
+              ? strings(metadata.answers[i])
+              : undefined,
+          }];
+        })
+        : [],
+    };
+  }
   if (part.tool === "bash") {
     return {
       ...base,

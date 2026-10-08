@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ContentOp } from "./content.ts";
 import type { IndexEntry, IndexOp } from "./index.ts";
+import type { Preferences } from "./prefs.ts";
 export type HarnessState = "connecting" | "connected" | "reconnecting";
 export type ClientFrame =
   | { t: "hello"; protocol: number }
@@ -19,6 +20,7 @@ export type ServerFrame =
   }
   | { t: "harness"; state: HarnessState }
   | { t: "ping" }
+  | { t: "prefs"; prefs: Preferences }
   | { t: "index.snapshot"; rev: number; entries: IndexEntry[] }
   | { t: "index.patch"; rev: number; ops: IndexOp[] }
   | { t: "content"; sessionID: string; event: ContentOp }

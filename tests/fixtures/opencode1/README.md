@@ -7,3 +7,10 @@ ark, 2026-10-07. IDs and project paths are anonymized; the event shapes and
 ordering are retained, including user text without a streaming time,
 authoritative assistant text start, deltas, text completion and message
 completion.
+
+`m3-todo-question.json` contains completed tool parts fetched from real opencode
+1.18.34 after the R4 checklist/question browser scenario in the same VM. All
+four todo states and a question answered through the harness API are recorded.
+Source evidence: `m3-prefs-trial1/.test-state/oc-4b4bb3af5f929f61/` under
+`/home/tester/otk-commit-check/`. JSON formatting is normalized; field values
+are retained.

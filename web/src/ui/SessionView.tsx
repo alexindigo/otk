@@ -13,6 +13,7 @@ import type {
 } from "../../../protocol/content.ts";
 import Message from "./Message.tsx";
 import Prompt from "./Prompt.tsx";
+import type { Preferences } from "../../../protocol/prefs.ts";
 export default function SessionView(props: {
   info?: ContentSession;
   label: string;
@@ -24,6 +25,8 @@ export default function SessionView(props: {
   draft: string;
   connected: boolean;
   permissionDock?: Element;
+  displayMenu?: Element;
+  prefs: Preferences;
   onOlder(): Promise<void>;
   onRetry(): Promise<void>;
   onDraft(value: string): void;
@@ -72,9 +75,12 @@ export default function SessionView(props: {
             {props.info?.directory} · {props.label}
           </p>
         </div>
+        {props.displayMenu}
       </header>
       <div
-        class="otk-messages"
+        class={["otk-messages", {
+          "otk-scrollbar-hidden": !props.prefs.scrollbar,
+        }]}
         ref={(element) => {
           list = element;
         }}
@@ -99,7 +105,7 @@ export default function SessionView(props: {
           </button>
         </Show>
         <For each={props.messages} keyed={(message) => message.id}>
-          {(message) => <Message message={message()} />}
+          {(message) => <Message message={message()} prefs={props.prefs} />}
         </For>
         <Show when={!props.loading && !props.messages.length && !props.error}>
           <p class="otk-muted otk-empty">Start a conversation below.</p>

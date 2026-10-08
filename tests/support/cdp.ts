@@ -94,6 +94,15 @@ export class Cdp {
     await this.send("Page.navigate", { url });
     await this.poll("document.readyState !== 'loading'");
   }
+  async reload(): Promise<void> {
+    const navigations = () =>
+      this.events.filter((event) => event.method === "Page.frameNavigated")
+        .length;
+    const before = navigations();
+    await this.send("Page.reload");
+    await waitFor(navigations, (count) => count > before);
+    await this.poll("document.readyState !== 'loading'");
+  }
   async poll(expression: string, timeout = 30_000): Promise<unknown> {
     return await waitFor(
       () => this.evaluate(expression),

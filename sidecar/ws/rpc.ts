@@ -2,6 +2,7 @@
 import type { HarnessAdapter } from "../adapter/types.ts";
 import { HarnessError } from "../adapter/types.ts";
 import type { PromptInput } from "../../protocol/rpc.ts";
+import type { Prefs } from "../db/prefs.ts";
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new HarnessError("params", "Expected object");
@@ -24,10 +25,15 @@ export async function dispatch(
   adapter: HarnessAdapter,
   method: string,
   value: unknown,
+  prefs: Prefs,
 ): Promise<unknown> {
   const p = object(value);
   const sessionID = () => text(p, "sessionID")!;
   switch (method) {
+    case "prefs.get":
+      return prefs.get();
+    case "prefs.set":
+      return prefs.set(p.key, p.value);
     case "session.get":
       return adapter.getSession(sessionID());
     case "session.messages": {

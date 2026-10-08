@@ -1,0 +1,112 @@
+[
+  {
+    "id": "prt_11a12b80d001V1AyO2sTI4Bxbk",
+    "sessionID": "ses_ee5ed4e9bffep0rgxcIumPKQBv",
+    "messageID": "msg_11a12b6690010c5r4mlPKLO6DR",
+    "type": "tool",
+    "callID": "call_34b5b178-f686-434a-b0cb-d4defd2687f7",
+    "tool": "todowrite",
+    "state": {
+      "status": "completed",
+      "input": {
+        "todos": [
+          {
+            "content": "pending item",
+            "status": "pending",
+            "priority": "medium"
+          },
+          {
+            "content": "in_progress item",
+            "status": "in_progress",
+            "priority": "medium"
+          },
+          {
+            "content": "completed item",
+            "status": "completed",
+            "priority": "medium"
+          },
+          {
+            "content": "cancelled item",
+            "status": "cancelled",
+            "priority": "medium"
+          }
+        ]
+      },
+      "output": "[\n  {\n    \"content\": \"pending item\",\n    \"status\": \"pending\",\n    \"priority\": \"medium\"\n  },\n  {\n    \"content\": \"in_progress item\",\n    \"status\": \"in_progress\",\n    \"priority\": \"medium\"\n  },\n  {\n    \"content\": \"completed item\",\n    \"status\": \"completed\",\n    \"priority\": \"medium\"\n  },\n  {\n    \"content\": \"cancelled item\",\n    \"status\": \"cancelled\",\n    \"priority\": \"medium\"\n  }\n]",
+      "title": "3 todos",
+      "metadata": {
+        "todos": [
+          {
+            "content": "pending item",
+            "status": "pending",
+            "priority": "medium"
+          },
+          {
+            "content": "in_progress item",
+            "status": "in_progress",
+            "priority": "medium"
+          },
+          {
+            "content": "completed item",
+            "status": "completed",
+            "priority": "medium"
+          },
+          {
+            "content": "cancelled item",
+            "status": "cancelled",
+            "priority": "medium"
+          }
+        ],
+        "truncated": false
+      },
+      "time": {
+        "start": 1791438796820,
+        "end": 1791438796823
+      }
+    }
+  },
+  {
+    "id": "prt_11a12b907001HRZTYtT8F5LPmu",
+    "sessionID": "ses_ee5ed4e9bffep0rgxcIumPKQBv",
+    "messageID": "msg_11a12b8e1001mvP6u1bfQEgQGd",
+    "type": "tool",
+    "callID": "call_bb087b4e-fbd7-4977-947a-f5f7ef091320",
+    "tool": "question",
+    "state": {
+      "status": "completed",
+      "input": {
+        "questions": [
+          {
+            "header": "Choice",
+            "question": "Which rendering?",
+            "options": [
+              {
+                "label": "Typed",
+                "description": "OTK shapes"
+              },
+              {
+                "label": "Raw",
+                "description": "Harness types"
+              }
+            ],
+            "multiple": false
+          }
+        ]
+      },
+      "output": "User has answered your questions: \"Which rendering?\"=\"Typed\". You can now continue with the user's answers in mind.",
+      "title": "Asked 1 question",
+      "metadata": {
+        "answers": [
+          [
+            "Typed"
+          ]
+        ],
+        "truncated": false
+      },
+      "time": {
+        "start": 1791438797066,
+        "end": 1791438797165
+      }
+    }
+  }
+]

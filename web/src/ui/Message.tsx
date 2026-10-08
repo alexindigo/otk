@@ -3,11 +3,13 @@ import { For, Match, Show, Switch } from "solid-js";
 import type { Message as OtkMessage, Part } from "../../../protocol/content.ts";
 import Blocks from "./Blocks.tsx";
 import ToolLine from "./ToolLine.tsx";
+import Reasoning from "./Reasoning.tsx";
+import type { Preferences } from "../../../protocol/prefs.ts";
 const partOf = <K extends Part["kind"]>(part: Part, kind: K) =>
   part.kind === kind ? part as Part & { kind: K } : undefined;
 const duration = (start: number, end: number) =>
   `${Math.max(0, (end - start) / 1000).toFixed(1)}s`;
-function PartView(props: { part: Part }) {
+function PartView(props: { part: Part; prefs: Preferences }) {
   return (
     <Switch fallback={<p class="otk-muted">{props.part.kind}</p>}>
       <Match when={partOf(props.part, "text")}>
@@ -18,16 +20,19 @@ function PartView(props: { part: Part }) {
         )}
       </Match>
       <Match when={partOf(props.part, "reasoning")}>
-        {(part) => (
-          <p class="otk-muted">
-            {part().time.end === undefined
-              ? "Thinking…"
-              : `Thought · ${duration(part().time.start, part().time.end!)}`}
-          </p>
-        )}
+        {(part) => <Reasoning part={part()} mode={props.prefs.thinking} />}
       </Match>
       <Match when={partOf(props.part, "tool")}>
-        {(part) => <ToolLine call={part().call} />}
+        {(part) => (
+          <Show
+            when={props.prefs.toolDetails || part().call.status !== "completed"}
+          >
+            <ToolLine
+              call={part().call}
+              genericOutput={props.prefs.genericToolOutput}
+            />
+          </Show>
+        )}
       </Match>
       <Match when={partOf(props.part, "file")}>
         {(part) => <span class="otk-chip">{part().name}</span>}
@@ -38,22 +43,30 @@ function PartView(props: { part: Part }) {
     </Switch>
   );
 }
-export default function Message(props: { message: OtkMessage }) {
+export default function Message(
+  props: { message: OtkMessage; prefs: Preferences },
+) {
   const assistant = () =>
     props.message.role === "assistant" ? props.message : undefined;
   return (
     <article
       class={["otk-message", {
         "otk-user-message": props.message.role === "user",
+        "otk-unconcealed": !props.prefs.conceal,
       }]}
       data-message={props.message.id}
       data-role={props.message.role}
     >
       <header class="otk-message-role">
         {props.message.role === "user" ? "YOU" : "ASSISTANT"}
+        <Show when={props.prefs.timestamps}>
+          <time datetime={new Date(props.message.time.created).toISOString()}>
+            {new Date(props.message.time.created).toLocaleString()}
+          </time>
+        </Show>
       </header>
       <For each={props.message.parts} keyed={(part) => part.id}>
-        {(part) => <PartView part={part()} />}
+        {(part) => <PartView part={part()} prefs={props.prefs} />}
       </For>
       <Show when={assistant()}>
         {(message) => (
