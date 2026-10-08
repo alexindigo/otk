@@ -21,7 +21,13 @@
     "ws": "npm:ws@8.21.0"
   },
   "fmt": {
-    "exclude": ["node_modules", "web/dist", ".test-state", "config", "LICENSE"]
+    "exclude": [
+      "node_modules",
+      "web/dist",
+      ".test-state",
+      "./config",
+      "LICENSE"
+    ]
   },
-  "lint": { "exclude": ["node_modules", "web/dist", ".test-state", "config"] }
+  "lint": { "exclude": ["node_modules", "web/dist", ".test-state", "./config"] }
 }

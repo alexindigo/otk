@@ -1,7 +1,7 @@
 node_modules/
 web/dist/
 .test-state/
-config/
+/config/
 tmp/
 .envrc
 token
