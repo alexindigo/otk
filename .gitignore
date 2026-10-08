@@ -1,0 +1,9 @@
+node_modules/
+web/dist/
+.test-state/
+config/
+tmp/
+.envrc
+token
+*.local.toml
+*.bak

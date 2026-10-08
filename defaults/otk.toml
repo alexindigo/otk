@@ -1,0 +1,31 @@
+# SPDX-License-Identifier: LGPL-3.0-only
+
+[server]
+host = "127.0.0.1" # OTK_SERVER_HOST — listener address
+port = 1502 # OTK_SERVER_PORT — sidecar HTTP port
+origins = [] # OTK_SERVER_ORIGINS — extra browser origins; comma-separated in env
+
+[auth]
+type = "" # OTK_AUTH_TYPE — empty means setup; none/password/totp
+username = "" # OTK_AUTH_USERNAME — single user's login name
+password = "" # OTK_AUTH_PASSWORD — plaintext operator credential; setup stores a hash
+secretkey = "" # OTK_AUTH_SECRETKEY — JWT signing key; generated at setup
+totpkey = "" # OTK_AUTH_TOTPKEY — raw text key, base32 encoded for TOTP
+sessionexpirydays = 30 # OTK_AUTH_SESSIONEXPIRYDAYS — JWT lifetime
+cookiename = "" # OTK_AUTH_COOKIENAME — empty means otk_<port>
+cookiesamesite = "strict" # OTK_AUTH_COOKIESAMESITE — strict/none; none requires HTTPS
+
+[state]
+path = "" # OTK_STATE_PATH — empty means XDG state home/otk/<port>
+
+[harness]
+type = "opencode1" # OTK_HARNESS_TYPE — harness adapter
+url = "http://127.0.0.1:4097" # OTK_HARNESS_URL — opencode server base URL
+username = "opencode" # OTK_HARNESS_USERNAME — Basic auth username
+password = "" # OTK_HARNESS_PASSWORD — empty disables Basic auth
+db = "" # OTK_HARNESS_DB — empty means XDG data home/opencode/opencode.db
+heartbeattimeout = 25 # OTK_HARNESS_HEARTBEATTIMEOUT — seconds without SSE bytes
+reconnectmax = 30 # OTK_HARNESS_RECONNECTMAX — maximum reconnect backoff seconds
+
+[index]
+days = 30 # OTK_INDEX_DAYS — index sessions updated within this window
