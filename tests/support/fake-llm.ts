@@ -21,7 +21,17 @@ export class FakeLlm {
         }
         const body = await request.json();
         this.requests.push(body);
-        const script = this.#queue.shift() ?? { chunks: ["Completed."] };
+        // opencode's ensureTitle also streams, but owns a separate request.
+        // Its explicit instruction identifies it without consuming a main reply.
+        const titleRequest = body.messages?.some((
+          message: { role: string; content: unknown },
+        ) =>
+          message.role === "user" && typeof message.content === "string" &&
+          message.content.startsWith("Generate a title for this conversation:")
+        );
+        const script = body.stream && !titleRequest
+          ? this.#queue.shift() ?? { chunks: ["Completed."] }
+          : { chunks: ["OTK session"] };
         const id = `chatcmpl-${crypto.randomUUID()}`;
         if (!body.stream) {
           return Response.json({

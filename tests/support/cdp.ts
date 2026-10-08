@@ -120,14 +120,64 @@ export class Cdp {
     }
   }
   async key(key: string, modifiers = 0): Promise<void> {
-    const code = key === "Escape" ? "Escape" : key;
+    const special: Record<string, number> = {
+      Enter: 13,
+      Escape: 27,
+      ArrowUp: 38,
+      ArrowDown: 40,
+      Tab: 9,
+    };
+    const code = key.length === 1 && /[a-z]/i.test(key)
+      ? `Key${key.toUpperCase()}`
+      : key;
+    const vk = special[key] ??
+      (key.length === 1 ? key.toUpperCase().charCodeAt(0) : 0);
     for (const type of ["keyDown", "keyUp"]) {
-      await this.send("Input.dispatchKeyEvent", { type, key, code, modifiers });
+      await this.send("Input.dispatchKeyEvent", {
+        type,
+        key,
+        code,
+        modifiers,
+        windowsVirtualKeyCode: vk,
+        nativeVirtualKeyCode: vk,
+      });
     }
   }
   async type(selector: string, text: string): Promise<void> {
     await this.click(selector);
     await this.send("Input.insertText", { text });
+  }
+  async fill(selector: string, text: string): Promise<void> {
+    await this.click(selector);
+    await this.key("a", 2);
+    await this.send("Input.insertText", { text });
+  }
+  async dialog(action: () => Promise<unknown>, accept: boolean): Promise<void> {
+    const before =
+      this.events.filter((event) =>
+        event.method === "Page.javascriptDialogOpening"
+      ).length;
+    // A modal can hold the triggering command's reply. Handle it in parallel.
+    const triggered = action().then(() => undefined, (error: unknown) => error);
+    await waitFor(
+      () =>
+        this.events.filter((event) =>
+          event.method === "Page.javascriptDialogOpening"
+        ).length,
+      (count) => count > before,
+    );
+    await this.send("Page.handleJavaScriptDialog", { accept });
+    const error = await triggered;
+    if (error) throw error;
+  }
+  async dismissDialog(): Promise<void> {
+    const last = this.events.findLast((event) =>
+      event.method === "Page.javascriptDialogOpening" ||
+      event.method === "Page.javascriptDialogClosed"
+    );
+    if (last?.method === "Page.javascriptDialogOpening") {
+      await this.send("Page.handleJavaScriptDialog", { accept: false });
+    }
   }
   async screenshot(path: string): Promise<void> {
     const result = await this.send("Page.captureScreenshot", { format: "png" });

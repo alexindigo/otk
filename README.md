@@ -8,6 +8,7 @@ sidecar reads its database only for queries the API cannot answer cheaply.
 Requires Deno 2.9.6 and opencode 1.18.34. Start opencode separately, then:
 
 ```sh
+deno task build:web
 deno task start
 ```
 
@@ -16,6 +17,12 @@ configuration is layered: `defaults/otk.toml` → generated auth state → optio
 `config/otk.toml` → `OTK_*` environment variables. Every leaf and its
 environment name is documented in the defaults file. `OTK_CONFIG` selects
 another operator overlay. Unknown nodes and invalid types fail loudly.
+
+The production Solid UI lists root sessions by sidecar and project. Add further
+sidecars in Settings; their indexes merge into the sidebar. Open one session to
+stream its transcript, send prompts, or press Esc twice to interrupt. Message
+history for the previous session is released on switching. Web assets and fonts
+are bundled locally; no dev server or CDN is used.
 
 | #  | Setting                               | Environment variable                                       | Shipped value                                                                  |
 | -- | ------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |

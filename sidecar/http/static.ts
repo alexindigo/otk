@@ -7,6 +7,7 @@ const types: Record<string, string> = {
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".woff2": "font/woff2",
+  ".woff": "font/woff",
   ".json": "application/json",
 };
 export async function staticResponse(
@@ -27,8 +28,28 @@ export async function staticResponse(
   if (safe.startsWith("../") || safe === ".." || safe.startsWith("/")) {
     return new Response("Not found", { status: 404 });
   }
+  const html = (bytes: Uint8Array): Response => {
+    // Relative assets are rooted at the sidecar's mount, not at a fallback
+    // route's depth. Relative ascent also retains a stripped proxy prefix.
+    const depth = safe.split("/").filter(Boolean).length -
+      (safe.endsWith("/") ? 0 : 1);
+    const base = depth > 0 ? "../".repeat(depth) : "./";
+    const text = new TextDecoder().decode(bytes).replace(
+      "<head>",
+      `<head><base href="${base}">`,
+    );
+    return new Response(text, {
+      headers: {
+        "content-type": types[".html"],
+        "X-Content-Type-Options": "nosniff",
+        "Cache-Control": "no-cache",
+      },
+    });
+  };
   try {
-    return new Response(await Deno.readFile(join(root, safe)), {
+    const bytes = await Deno.readFile(join(root, safe));
+    if (extname(safe) === ".html") return html(bytes);
+    return new Response(bytes, {
       headers: {
         "content-type": types[extname(safe)] || "application/octet-stream",
         "X-Content-Type-Options": "nosniff",
@@ -40,13 +61,7 @@ export async function staticResponse(
       !(e instanceof Deno.errors.IsADirectory)
     ) throw e;
     try {
-      return new Response(await Deno.readFile(join(root, "index.html")), {
-        headers: {
-          "content-type": types[".html"],
-          "X-Content-Type-Options": "nosniff",
-          "Cache-Control": "no-cache",
-        },
-      });
+      return html(await Deno.readFile(join(root, "index.html")));
     } catch (error) {
       if (!(error instanceof Deno.errors.NotFound)) throw error;
       return new Response(
