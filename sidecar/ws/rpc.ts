@@ -82,6 +82,23 @@ export async function dispatch(
     case "session.abort":
       await adapter.abort(sessionID());
       return null;
+    case "session.shell": {
+      const model = p.model === undefined ? undefined : object(p.model);
+      await adapter.shell({
+        sessionID: sessionID(),
+        command: text(p, "command")!,
+        agent: text(p, "agent", true),
+        ...(model
+          ? {
+            model: {
+              provider: text(model, "provider")!,
+              model: text(model, "model")!,
+            },
+          }
+          : {}),
+      });
+      return null;
+    }
     case "session.revert":
       return adapter.revert(sessionID(), text(p, "messageID")!);
     case "permission.list":

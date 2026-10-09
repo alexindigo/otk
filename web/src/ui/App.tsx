@@ -278,6 +278,7 @@ export default function App() {
                     paging={session.state.paging}
                     exhausted={session.state.exhausted}
                     error={session.state.error}
+                    sessionError={session.state.content.error}
                     draft={draft()}
                     connected={selectedSidecar()?.status === "connected"}
                     onOlder={() => session.older()}
@@ -289,8 +290,17 @@ export default function App() {
                         string[]
                       >("find.files", { sessionID: target.sessionID, query });
                     }}
-                    onPrompt={(parts) => {
+                    onPrompt={(parts, mode) => {
                       const target = session.state.selection!;
+                      if (mode === "shell") {
+                        return sidecars.connection(target.sidecarId).rpc.call<
+                          void
+                        >("session.shell", {
+                          sessionID: target.sessionID,
+                          command: parts.filter((part) => part.kind === "text")
+                            .map((part) => part.text).join("\n"),
+                        });
+                      }
                       return sidecars.connection(target.sidecarId).rpc.call<
                         void
                       >("session.prompt", {

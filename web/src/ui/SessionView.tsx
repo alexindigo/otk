@@ -31,6 +31,7 @@ export default function SessionView(props: {
   paging: boolean;
   exhausted: boolean;
   error?: string;
+  sessionError?: string;
   draft: Draft;
   connected: boolean;
   permissionDock?: Element;
@@ -46,7 +47,7 @@ export default function SessionView(props: {
   onOlder(): Promise<void>;
   onRetry(): Promise<void>;
   onDraft(value: DraftChange): Draft;
-  onPrompt(parts: PromptPart[]): Promise<void>;
+  onPrompt(parts: PromptPart[], mode: Draft["mode"]): Promise<void>;
   onFind(query: string): Promise<string[]>;
   onAbort(): Promise<void>;
 }) {
@@ -151,6 +152,9 @@ export default function SessionView(props: {
               Retry messages
             </button>
           </Show>
+          <Show when={props.sessionError}>
+            <p role="alert" class="otk-error">{props.sessionError}</p>
+          </Show>
           <For each={props.messages} keyed={(message) => message.id}>
             {(message) => (
               <Message
@@ -164,7 +168,10 @@ export default function SessionView(props: {
               />
             )}
           </For>
-          <Show when={!props.loading && !props.messages.length && !props.error}>
+          <Show
+            when={!props.loading && !props.messages.length && !props.error &&
+              !props.sessionError}
+          >
             <p class="otk-muted otk-empty">Start a conversation below.</p>
           </Show>
         </div>
@@ -177,7 +184,7 @@ export default function SessionView(props: {
           connected={props.connected}
           pasteSummary={props.prefs.pasteSummary}
           onChange={(value) => props.onDraft(value)}
-          onSubmit={(text) => props.onPrompt(text)}
+          onSubmit={(parts, mode) => props.onPrompt(parts, mode)}
           onFind={props.onFind}
           onAbort={() => props.onAbort()}
         />

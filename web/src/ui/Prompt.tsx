@@ -22,7 +22,7 @@ export default function Prompt(
     connected: boolean;
     pasteSummary: boolean;
     onChange(value: DraftChange): Draft;
-    onSubmit(parts: PromptPart[]): Promise<void>;
+    onSubmit(parts: PromptPart[], mode: Draft["mode"]): Promise<void>;
     onFind(query: string): Promise<string[]>;
     onAbort(): Promise<void>;
   },
@@ -160,7 +160,7 @@ export default function Prompt(
   };
   const submit = async () => {
     const draft = change((current) => current);
-    if (/^\/editor(?:\s|$)/.test(draft.input)) {
+    if (draft.mode === "normal" && /^\/editor(?:\s|$)/.test(draft.input)) {
       change((current) => {
         if (current !== draft) return current;
         const edited = editDraft(
@@ -178,7 +178,7 @@ export default function Prompt(
     setPending(true);
     setError("");
     try {
-      await props.onSubmit(serialize(draft));
+      await props.onSubmit(serialize(draft), draft.mode);
       if (active) {
         change((current) => current === draft ? emptyDraft() : current);
       }
@@ -237,7 +237,9 @@ export default function Prompt(
         void submit();
       }}
     >
-      <label for="otk-prompt-input">Prompt</label>
+      <label for="otk-prompt-input">
+        {props.value.mode === "shell" ? "Shell" : "Prompt"}
+      </label>
       <Chips
         chips={props.value.chips}
         onOpen={(chip) =>
@@ -270,12 +272,39 @@ export default function Prompt(
         }}
         id="otk-prompt-input"
         name="prompt"
-        placeholder="Message the agent…"
+        placeholder={props.value.mode === "shell"
+          ? "Run a shell command…"
+          : "Message the agent…"}
         value={props.value.input}
         onPaste={(event) => void paste(event)}
-        onInput={(event) =>
-          change((current) => editDraft(current, event.currentTarget.value))}
+        onInput={(event) => {
+          const value = event.currentTarget.value;
+          change((current) => editDraft(current, value));
+        }}
         onKeyDown={(event) => {
+          if (
+            event.key === "!" && !event.isComposing &&
+            props.value.mode === "normal" &&
+            event.currentTarget.selectionStart === 0 &&
+            event.currentTarget.selectionEnd === 0
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            change((current) => ({ ...current, mode: "shell" }));
+            return;
+          }
+          if (
+            props.value.mode === "shell" &&
+            (event.key === "Escape" ||
+              (event.key === "Backspace" &&
+                event.currentTarget.selectionStart === 0 &&
+                event.currentTarget.selectionEnd === 0))
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            change((current) => ({ ...current, mode: "normal" }));
+            return;
+          }
           if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
             event.preventDefault();
             void submit();

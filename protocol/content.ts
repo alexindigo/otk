@@ -229,6 +229,7 @@ export interface ContentSession {
   time: { created: number; updated: number };
   archived: boolean;
   revert?: RevertInfo;
+  error?: string;
 }
 export interface RevertInfo {
   messageID: string;
@@ -256,6 +257,7 @@ export interface Todo {
   priority: string;
 }
 export type ContentOp =
+  | { op: "session.error"; error?: string }
   | { op: "question.upsert"; request: QuestionRequest }
   | { op: "question.remove"; requestID: string; sessionID: string }
   | {

@@ -30,12 +30,19 @@ export interface PermissionReply {
   reply: "once" | "always" | "reject";
   message?: string;
 }
+export interface ShellInput {
+  sessionID: string;
+  command: string;
+  agent?: string;
+  model?: ModelRef;
+}
 export type RpcMethod =
   | "session.get"
   | "session.children"
   | "session.messages"
   | "session.create"
   | "session.prompt"
+  | "session.shell"
   | "find.files"
   | "session.abort"
   | "session.revert"

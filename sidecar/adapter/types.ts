@@ -8,7 +8,11 @@ import type {
 } from "../../protocol/content.ts";
 import type { IndexEntry } from "../../protocol/index.ts";
 import type { HarnessState } from "../../protocol/messages.ts";
-import type { PermissionReply, PromptInput } from "../../protocol/rpc.ts";
+import type {
+  PermissionReply,
+  PromptInput,
+  ShellInput,
+} from "../../protocol/rpc.ts";
 export interface HarnessSink {
   connection(state: HarnessState): void;
   indexReset(entries: IndexEntry[]): void;
@@ -33,6 +37,7 @@ export interface HarnessAdapter {
     input: { directory: string; title?: string; parentID?: string },
   ): Promise<ContentSession>;
   prompt(input: PromptInput): Promise<void>;
+  shell(input: ShellInput): Promise<void>;
   findFiles(sessionID: string, query: string): Promise<string[]>;
   abort(sessionID: string): Promise<void>;
   revert(sessionID: string, messageID: string): Promise<ContentSession>;

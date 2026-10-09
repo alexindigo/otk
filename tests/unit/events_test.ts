@@ -181,6 +181,8 @@ Deno.test("adapter maps legacy event chain while ignoring its captured durable s
       ),
     );
     assertEquals(ops.map((op) => op.op), [
+      "session.error",
+      "session.error",
       "permission.upsert",
       "permission.remove",
       "question.upsert",
@@ -194,6 +196,11 @@ Deno.test("adapter maps legacy event chain while ignoring its captured durable s
       "todo.set",
       "message.remove",
     ]);
+    assertEquals(ops.slice(0, 2), [
+      { op: "session.error", error: undefined },
+      { op: "session.error", error: "fixture error" },
+    ]);
+    assert(entries.some((entry) => entry.attention.error === "fixture error"));
   } finally {
     await adapter.stop();
   }

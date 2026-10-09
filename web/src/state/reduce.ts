@@ -15,6 +15,7 @@ export interface ContentState {
   todos: Todo[];
   diffs: FileDiff[];
   revert: RevertInfo | null;
+  error?: string;
 }
 export function emptyContent(): ContentState {
   return {
@@ -27,6 +28,7 @@ export function emptyContent(): ContentState {
   };
 }
 export function reduce(state: ContentState, op: ContentOp): ContentState {
+  if (op.op === "session.error") return { ...state, error: op.error };
   if (op.op === "question.upsert") {
     return {
       ...state,

@@ -10,7 +10,11 @@ import type {
 } from "../../../protocol/content.ts";
 import type { IndexEntry } from "../../../protocol/index.ts";
 import { belongsToSession } from "../../../protocol/session-tree.ts";
-import type { PermissionReply, PromptInput } from "../../../protocol/rpc.ts";
+import type {
+  PermissionReply,
+  PromptInput,
+  ShellInput,
+} from "../../../protocol/rpc.ts";
 import type { ServiceConfig } from "../../config/schema.ts";
 import { harnessDb } from "../../config/loader.ts";
 import { StreamBuffers } from "../../content/buffers.ts";
@@ -71,6 +75,7 @@ export class Opencode1Adapter implements HarnessAdapter {
   >();
   #questions = new Map<string, string>();
   #stopped = true;
+  #commands = new Map<AbortController, Promise<void>>();
   #controller?: AbortController;
   #run?: Promise<void>;
   #wake?: () => void;
@@ -122,10 +127,12 @@ export class Opencode1Adapter implements HarnessAdapter {
   async stop(): Promise<void> {
     this.#stopped = true;
     this.#controller?.abort();
+    for (const controller of this.#commands.keys()) controller.abort();
     this.#wake?.();
     this.buffers.stop();
     this.#tasks.release();
     await this.#run;
+    await Promise.all(this.#commands.values());
     this.#db.close();
   }
   subscriptions(id: string, count: number): void {
@@ -143,7 +150,11 @@ export class Opencode1Adapter implements HarnessAdapter {
         query: { directory: this.#directory(id) },
       },
     );
-    return { ...mapSession(raw), revert: await this.#revertInfo(raw) };
+    return {
+      ...mapSession(raw),
+      revert: await this.#revertInfo(raw),
+      error: this.#entries.get(id)?.attention.error,
+    };
   }
   async #revertInfo(session: Session): Promise<RevertInfo | undefined> {
     if (!session.revert) {
@@ -290,6 +301,72 @@ export class Opencode1Adapter implements HarnessAdapter {
     return this.client.json<string[]>("/find/file", {
       query: { directory, query, dirs: "true", limit: 100 },
     });
+  }
+  async shell(input: ShellInput): Promise<void> {
+    const directory = this.#directory(input.sessionID) ??
+      (await this.getSession(input.sessionID)).directory;
+    const agent = input.agent ??
+      (await this.client.json<
+        { name: string; hidden?: boolean; mode: string }[]
+      >("/agent", { query: { directory } })).find((agent) =>
+        !agent.hidden && agent.mode !== "subagent"
+      )?.name;
+    if (!agent) {
+      throw new HarnessError("agent", "No visible primary agent available");
+    }
+    this.#launch(
+      input.sessionID,
+      `/session/${encodeURIComponent(input.sessionID)}/shell`,
+      {
+        method: "POST",
+        query: { directory },
+        timeout: null,
+        body: {
+          command: input.command,
+          agent,
+          ...(input.model
+            ? {
+              model: {
+                providerID: input.model.provider,
+                modelID: input.model.model,
+              },
+            }
+            : {}),
+        },
+      },
+    );
+  }
+  #launch(
+    sessionID: string,
+    path: string,
+    options: Parameters<Client["request"]>[1],
+  ): void {
+    if (this.#stopped) throw new HarnessError("stopped", "Harness is stopped");
+    const controller = new AbortController();
+    const request = this.client.json(path, {
+      ...options,
+      signal: controller.signal,
+      timeout: null,
+    }).then(() => {}).catch((error) => {
+      if (!this.#stopped && !controller.signal.aborted) {
+        this.#sessionError(
+          sessionID,
+          (error as Error).message || "Harness error",
+        );
+      }
+    }).finally(() => this.#commands.delete(controller));
+    this.#commands.set(controller, request);
+  }
+  #sessionError(sessionID: string, error?: string): void {
+    const entry = this.#entries.get(sessionID);
+    if (entry) {
+      if (error) entry.attention.error = error;
+      else delete entry.attention.error;
+      this.#sink.indexUpsert(entry);
+    }
+    if (this.buffers.subscribed(sessionID)) {
+      this.#sink.content(sessionID, { op: "session.error", error });
+    }
   }
   async abort(id: string): Promise<void> {
     await this.client.json(`/session/${encodeURIComponent(id)}/abort`, {
@@ -635,7 +712,7 @@ export class Opencode1Adapter implements HarnessAdapter {
       this.buffers.removeSession(id);
       return;
     }
-    if ((type === "session.status" || type === "session.idle") && entry) {
+    if (type === "session.status" || type === "session.idle") {
       const status: {
         type: IndexEntry["status"];
         attempt?: number;
@@ -647,22 +724,25 @@ export class Opencode1Adapter implements HarnessAdapter {
         message?: string;
         next?: number;
       };
-      entry.status = status.type as IndexEntry["status"];
-      entry.retry = entry.status === "retry"
-        ? {
-          attempt: status.attempt!,
-          message: status.message!,
-          next: status.next!,
-        }
-        : undefined;
-      if (entry.status === "busy") delete entry.attention.error;
-      this.#sink.indexUpsert(entry);
+      if (entry) {
+        entry.status = status.type as IndexEntry["status"];
+        entry.retry = entry.status === "retry"
+          ? {
+            attempt: status.attempt!,
+            message: status.message!,
+            next: status.next!,
+          }
+          : undefined;
+      }
+      if (status.type === "busy") this.#sessionError(sessionID);
+      else if (entry) this.#sink.indexUpsert(entry);
       return;
     }
-    if (type === "session.error" && entry) {
-      entry.attention.error = (p.error as Info["error"])?.data.message ||
-        "Harness error";
-      this.#sink.indexUpsert(entry);
+    if (type === "session.error") {
+      this.#sessionError(
+        sessionID,
+        (p.error as Info["error"])?.data?.message || "Harness error",
+      );
       return;
     }
     if (type === "permission.asked") {

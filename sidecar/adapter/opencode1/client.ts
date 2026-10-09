@@ -24,6 +24,7 @@ export class Client {
       query?: Record<string, string | number | undefined>;
       signal?: AbortSignal;
       stream?: boolean;
+      timeout?: number | null;
     } = {},
   ): Promise<Response> {
     const headers = new Headers();
@@ -43,11 +44,27 @@ export class Client {
         ? undefined
         : JSON.stringify(options.body),
       signal: options.signal ??
-        (options.stream ? undefined : AbortSignal.timeout(15_000)),
+        (options.stream || options.timeout === null
+          ? undefined
+          : AbortSignal.timeout(options.timeout ?? 15_000)),
     });
     if (!response.ok) {
       const text = await response.text();
-      throw new HarnessError(`harness_${response.status}`, text.slice(0, 1024));
+      let message = text;
+      try {
+        const value: unknown = JSON.parse(text);
+        if (value && typeof value === "object" && "data" in value) {
+          const data = value.data;
+          if (
+            data && typeof data === "object" && "message" in data &&
+            typeof data.message === "string"
+          ) message = data.message;
+        }
+      } catch { /* Non-JSON errors retain the existing HTTP text. */ }
+      throw new HarnessError(
+        `harness_${response.status}`,
+        message.slice(0, 1024),
+      );
     }
     return response;
   }
