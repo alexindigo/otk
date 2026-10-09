@@ -137,7 +137,7 @@ export default function App() {
         selected={session.state.selection
           ? sessionKey(
             session.state.selection.sidecarId,
-            session.state.selection.sessionID,
+            session.state.selection.rootID || session.state.selection.sessionID,
           )
           : undefined}
         onOpen={(entry) =>
@@ -191,6 +191,27 @@ export default function App() {
                   }
                 >
                   <SessionView
+                    child={!!session.state.selection?.rootID ||
+                      !!info()?.parentID}
+                    siblings={session.state.siblings}
+                    onOpenChild={(id) => {
+                      const selected = session.state.selection!;
+                      let current = entry(selected.sidecarId, id);
+                      let root = current
+                        ? id
+                        : selected.rootID || selected.sessionID;
+                      const seen = new Set<string>();
+                      while (current?.parentID && !seen.has(current.id)) {
+                        seen.add(current.id);
+                        root = current.parentID;
+                        current = entry(selected.sidecarId, root);
+                      }
+                      navigate({
+                        sidecarId: selected.sidecarId,
+                        sessionID: id,
+                        ...(id === root ? {} : { rootID: root }),
+                      });
+                    }}
                     permissions={session.state.content.permissions}
                     prefs={toggles.state.prefs}
                     displayMenu={

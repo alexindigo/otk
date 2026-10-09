@@ -21,6 +21,7 @@ function PartView(
     directory?: string;
     permissions: PermissionRequest[];
     paneWidth: number;
+    onOpenChild(id: string): void;
   },
 ) {
   return (
@@ -44,10 +45,12 @@ function PartView(
               call={part().call}
               prefs={props.prefs}
               paneWidth={props.paneWidth}
+              onOpenChild={props.onOpenChild}
               genericOutput={props.prefs.genericToolOutput}
               directory={props.directory}
               waiting={props.permissions.some((request) =>
-                request.toolCall === part().call.callID
+                request.toolCall === part().call.callID ||
+                request.sessionID === part().call.childSessionID
               )}
             />
           </Show>
@@ -69,6 +72,7 @@ export default function Message(
     directory?: string;
     permissions: PermissionRequest[];
     paneWidth: number;
+    onOpenChild(id: string): void;
   },
 ) {
   const assistant = () =>
@@ -98,6 +102,7 @@ export default function Message(
             directory={props.directory}
             permissions={props.permissions}
             paneWidth={props.paneWidth}
+            onOpenChild={props.onOpenChild}
             streaming={props.message.role === "assistant" &&
               props.message.time.completed === undefined}
           />

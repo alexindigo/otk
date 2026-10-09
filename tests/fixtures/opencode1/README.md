@@ -29,3 +29,9 @@ through stock opencode 1.18.34. Source:
 `/home/tester/otk/.test-state/oc-110e130c1a8a9157/recorded-file-tools.json`. OTK
 diff counts follow actual hunk lines, including the delete case where upstream's
 metadata counts its trailing newline as an extra deleted line.
+
+`m3-tasks.json` records two real task calls and the first child session's
+messages from R5 in opencode 1.18.34. Source:
+`/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/recorded-tasks.json`. The
+fixtures verify normalized task fields and metadata-only live summary ownership,
+including unsubscribe while a snapshot is pending.

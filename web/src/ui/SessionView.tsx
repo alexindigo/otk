@@ -16,6 +16,7 @@ import type {
 import Message from "./Message.tsx";
 import Prompt from "./Prompt.tsx";
 import type { Preferences } from "../../../protocol/prefs.ts";
+import SubagentBar from "./SubagentBar.tsx";
 export default function SessionView(props: {
   info?: ContentSession;
   label: string;
@@ -30,6 +31,9 @@ export default function SessionView(props: {
   displayMenu?: Element;
   prefs: Preferences;
   permissions: PermissionRequest[];
+  siblings: ContentSession[];
+  onOpenChild(id: string): void;
+  child: boolean;
   onOlder(): Promise<void>;
   onRetry(): Promise<void>;
   onDraft(value: string): void;
@@ -95,6 +99,13 @@ export default function SessionView(props: {
         </div>
         {props.displayMenu}
       </header>
+      <Show when={props.info?.parentID}>
+        <SubagentBar
+          info={props.info!}
+          siblings={props.siblings}
+          onOpen={props.onOpenChild}
+        />
+      </Show>
       <div
         class={["otk-messages", {
           "otk-scrollbar-hidden": !props.prefs.scrollbar,
@@ -130,6 +141,7 @@ export default function SessionView(props: {
               directory={props.info?.directory}
               permissions={props.permissions}
               paneWidth={paneWidth()}
+              onOpenChild={props.onOpenChild}
             />
           )}
         </For>
@@ -137,14 +149,16 @@ export default function SessionView(props: {
           <p class="otk-muted otk-empty">Start a conversation below.</p>
         </Show>
       </div>
-      {props.permissionDock}
-      <Prompt
-        value={props.draft}
-        connected={props.connected}
-        onChange={(value) => props.onDraft(value)}
-        onSubmit={(text) => props.onPrompt(text)}
-        onAbort={() => props.onAbort()}
-      />
+      <Show when={!props.child}>
+        {props.permissionDock}
+        <Prompt
+          value={props.draft}
+          connected={props.connected}
+          onChange={(value) => props.onDraft(value)}
+          onSubmit={(text) => props.onPrompt(text)}
+          onAbort={() => props.onAbort()}
+        />
+      </Show>
     </section>
   );
 }

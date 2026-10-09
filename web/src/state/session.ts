@@ -16,14 +16,16 @@ import { type ContentState, emptyContent, reduce } from "./reduce.ts";
 export interface Selection {
   sidecarId: string;
   sessionID: string;
+  rootID?: string;
 }
 export function route(hash: string): Selection | undefined {
-  const parts = hash.match(/^#\/([^/]+)\/([^/]+)$/);
+  const parts = hash.match(/^#\/([^/]+)\/([^/]+)(?:\/([^/]+))?$/);
   if (!parts) return;
   try {
     return {
       sidecarId: decodeURIComponent(parts[1]),
-      sessionID: decodeURIComponent(parts[2]),
+      sessionID: decodeURIComponent(parts[3] || parts[2]),
+      ...(parts[3] ? { rootID: decodeURIComponent(parts[2]) } : {}),
     };
   } catch {
     return;
@@ -31,8 +33,8 @@ export function route(hash: string): Selection | undefined {
 }
 export function hashFor(selection: Selection): string {
   return `#/${encodeURIComponent(selection.sidecarId)}/${
-    encodeURIComponent(selection.sessionID)
-  }`;
+    selection.rootID ? encodeURIComponent(selection.rootID) + "/" : ""
+  }${encodeURIComponent(selection.sessionID)}`;
 }
 export function createSession(
   connection: (id: string) => SidecarConnection,
@@ -42,6 +44,7 @@ export function createSession(
     {
       selection?: Selection;
       info?: ContentSession;
+      siblings: ContentSession[];
       content: ContentState;
       loading: boolean;
       paging: boolean;
@@ -50,6 +53,7 @@ export function createSession(
     }
   >({
     content: emptyContent(),
+    siblings: [],
     loading: false,
     paging: false,
     exhausted: false,
@@ -88,12 +92,19 @@ export function createSession(
         }, abort.signal),
       ]);
       if (!current(id, request)) return;
+      const siblings = info.parentID
+        ? await rpc.call<ContentSession[]>("session.children", {
+          sessionID: info.parentID,
+        }, abort.signal)
+        : [];
+      if (!current(id, request)) return;
       let content = { ...emptyContent(), messages, permissions };
       for (const op of buffer) content = reduce(content, op);
       buffer = [];
       fetching = false;
       setState((draft) => {
         draft.info = info;
+        draft.siblings = siblings;
         draft.content = content;
         draft.loading = false;
         draft.exhausted = messages.length < 100;
@@ -125,6 +136,7 @@ export function createSession(
     setState((draft) => {
       draft.selection = selection;
       draft.info = undefined;
+      draft.siblings = [];
       draft.content = emptyContent();
       draft.loading = !!selection;
       draft.paging = false;

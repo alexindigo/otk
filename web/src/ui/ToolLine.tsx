@@ -14,6 +14,7 @@ import GenericTool from "./tools/GenericTool.tsx";
 import EditTool from "./tools/EditTool.tsx";
 import WriteTool from "./tools/WriteTool.tsx";
 import PatchTool from "./tools/PatchTool.tsx";
+import TaskTool from "./tools/TaskTool.tsx";
 import type { Preferences } from "../../../protocol/prefs.ts";
 const toolOf = <K extends ToolCall["tool"]>(call: ToolCall, kind: K) =>
   call.tool === kind ? call as Extract<ToolCall, { tool: K }> : undefined;
@@ -25,6 +26,7 @@ export default function ToolLine(
     waiting: boolean;
     prefs: Preferences;
     paneWidth: number;
+    onOpenChild(id: string): void;
   },
 ) {
   return (
@@ -33,6 +35,9 @@ export default function ToolLine(
       waiting={props.waiting || props.call.awaitingPermission}
     >
       <Switch>
+        <Match when={toolOf(props.call, "task")}>
+          {(call) => <TaskTool call={call()} onOpen={props.onOpenChild} />}
+        </Match>
         <Match when={toolOf(props.call, "edit")}>
           {(call) => (
             <EditTool

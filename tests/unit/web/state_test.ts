@@ -166,6 +166,9 @@ Deno.test("web sidecar persistence keeps the implicit source and rejects duplica
 Deno.test("web URL round-trips selection and rejects malformed hashes", () => {
   const selection = { sidecarId: "remote id", sessionID: "session/with space" };
   assertEquals(route(hashFor(selection)), selection);
+  const child = { sidecarId: "local", sessionID: "child", rootID: "root" };
+  assertEquals(route(hashFor(child)), child);
+  assertEquals(route("#/local/root/child/extra"), undefined);
   assertEquals(route("#/missing"), undefined);
   assertEquals(route("#/%zz/x"), undefined);
 });

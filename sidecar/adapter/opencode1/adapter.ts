@@ -27,6 +27,7 @@ import type {
   Session,
 } from "./types.ts";
 import { Backoff, Watchdog } from "./watchdog.ts";
+import { TaskProgress } from "./tasks.ts";
 const contentEvents = new Set([
   "session.created",
   "session.updated",
@@ -64,6 +65,7 @@ export class Opencode1Adapter implements HarnessAdapter {
   #run?: Promise<void>;
   #wake?: () => void;
   #db: BootstrapDb;
+  #tasks: TaskProgress;
   constructor(
     readonly cfg: ServiceConfig,
     readonly buffers = new StreamBuffers(),
@@ -71,6 +73,29 @@ export class Opencode1Adapter implements HarnessAdapter {
   ) {
     this.client = new Client(cfg.harness, fetcher);
     this.#db = new BootstrapDb(harnessDb(cfg));
+    this.#tasks = new TaskProgress(
+      async (id, message) => {
+        const options = { query: { directory: this.#directory(id) } };
+        if (message) {
+          return [
+            await this.client.json<{ info: Info; parts: RawPart[] }>(
+              `/session/${encodeURIComponent(id)}/message/${
+                encodeURIComponent(message)
+              }`,
+              options,
+            ),
+          ];
+        }
+        return this.client.json<{ info: Info; parts: RawPart[] }[]>(
+          `/session/${encodeURIComponent(id)}/message`,
+          options,
+        );
+      },
+      (id) => this.buffers.subscribed(id),
+      (parent, messageID, part) =>
+        this.#sink.content(parent, { op: "part.upsert", messageID, part }),
+      () => this.#sink.resync("all"),
+    );
   }
   start(sink: HarnessSink): Promise<void> {
     this.#sink = sink;
@@ -84,11 +109,13 @@ export class Opencode1Adapter implements HarnessAdapter {
     this.#controller?.abort();
     this.#wake?.();
     this.buffers.stop();
+    this.#tasks.release();
     await this.#run;
     this.#db.close();
   }
   subscriptions(id: string, count: number): void {
     this.buffers.subscriptions(id, count);
+    if (!count) this.#tasks.release(id);
   }
   #directory(id: string): string | undefined {
     return this.#entries.get(id)?.directory;
@@ -132,7 +159,26 @@ export class Opencode1Adapter implements HarnessAdapter {
         },
       },
     );
-    return raw.map((message) => mapMessage(message.info, message.parts));
+    return Promise.all(raw.map(async (message) => {
+      const mapped = mapMessage(message.info, message.parts);
+      for (const [i, part] of message.parts.entries()) {
+        if (part.type === "tool" && part.tool === "task") {
+          mapped.parts[i] = {
+            kind: "tool",
+            id: part.id,
+            call: await this.#tasks.shape(part),
+          };
+        }
+      }
+      return mapped;
+    }));
+  }
+  async listChildren(id: string): Promise<ContentSession[]> {
+    const raw = await this.client.json<Session[]>(
+      `/session/${encodeURIComponent(id)}/children`,
+      { query: { directory: this.#directory(id) } },
+    );
+    return raw.map(mapSession).sort((a, b) => a.id.localeCompare(b.id));
   }
   async createSession(
     input: { directory: string; title?: string; parentID?: string },
@@ -274,6 +320,7 @@ export class Opencode1Adapter implements HarnessAdapter {
     }
   }
   async #bootstrap(): Promise<void> {
+    this.#tasks.release();
     // Every authoritative resync starts a new content generation. Keep viewers,
     // but never carry raw streaming seeds or timers across a disposed instance.
     this.buffers.reset();
@@ -501,6 +548,9 @@ export class Opencode1Adapter implements HarnessAdapter {
       this.#sink.indexUpsert(entry);
       this.buffers.complete(info.id, (id, op) => this.#sink.content(id, op));
     }
+    if (type === "message.updated" || type === "message.part.updated") {
+      this.#tasks.observe(sessionID, info, raw);
+    }
     if (!this.buffers.subscribed(sessionID)) return;
     const content = (op: ContentOp) => this.#sink.content(sessionID, op);
     switch (type) {
@@ -516,6 +566,9 @@ export class Opencode1Adapter implements HarnessAdapter {
           request.callID === raw.callID && request.sessionID === sessionID
         );
         const part = mapPart(raw, waiting);
+        if (part.kind === "tool" && raw.tool === "task") {
+          part.call = await this.#tasks.shape(raw);
+        }
         content({ op: "part.upsert", messageID: raw.messageID, part });
         if (
           (part.kind === "text" || part.kind === "reasoning") &&

@@ -46,6 +46,19 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
     awaitingPermission,
   };
   const input = state.input, metadata = state.metadata ?? {};
+  if (part.tool === "task") {
+    return {
+      ...base,
+      tool: "task",
+      agent: string(input.subagent_type) || "general",
+      description: string(input.description) || "",
+      childSessionID: string(metadata.sessionId),
+      toolCount: 0,
+      duration: state.time?.end !== undefined && state.time.start !== undefined
+        ? state.time.end - state.time.start
+        : undefined,
+    };
+  }
   const fileTool = mapFileTool(part, base);
   if (fileTool) return fileTool;
   const number = (value: unknown) =>

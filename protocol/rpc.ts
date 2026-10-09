@@ -14,6 +14,7 @@ export interface PermissionReply {
 }
 export type RpcMethod =
   | "session.get"
+  | "session.children"
   | "session.messages"
   | "session.create"
   | "session.prompt"

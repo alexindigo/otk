@@ -1,0 +1,556 @@
+{
+  "parent": [
+    {
+      "info": {
+        "id": "msg_11ab19dfb0019SwxuWeC0GxJJ9",
+        "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+        "role": "user",
+        "time": {
+          "created": 1791449210370
+        },
+        "summary": {
+          "diffs": []
+        },
+        "agent": "build",
+        "model": {
+          "providerID": "fake",
+          "modelID": "scripted"
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_11ab19e07001sfQ42DeB2A8gZw",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab19dfb0019SwxuWeC0GxJJ9",
+          "type": "text",
+          "text": "Delegate first"
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_11ab19f91001d3W5vOW0MOlcDh",
+        "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+        "role": "assistant",
+        "time": {
+          "created": 1791449210769,
+          "completed": 1791449211848
+        },
+        "parentID": "msg_11ab19dfb0019SwxuWeC0GxJJ9",
+        "modelID": "scripted",
+        "providerID": "fake",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/project",
+          "root": "/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/project"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "tool-calls"
+      },
+      "parts": [
+        {
+          "id": "prt_11ab1a1890011466RLbn1nZPXl",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab19f91001d3W5vOW0MOlcDh",
+          "type": "step-start",
+          "snapshot": "278819cb9c0cd85b23fdd5ea69caa57e478b33aa"
+        },
+        {
+          "id": "prt_11ab1a18c001e6W4pV4nbS4XTj",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab19f91001d3W5vOW0MOlcDh",
+          "type": "tool",
+          "callID": "call_89395b1f-e3c7-4ef1-925c-ea75f19f8d36",
+          "tool": "task",
+          "state": {
+            "status": "completed",
+            "input": {
+              "subagent_type": "general",
+              "description": "First inspection",
+              "prompt": "Run the child probe"
+            },
+            "output": "<task id=\"ses_ee54e5e6effedvVBlRw5uztjzy\" state=\"completed\">\n<task_result>\nFirst child completed.\n</task_result>\n</task>",
+            "title": "First inspection",
+            "metadata": {
+              "parentSessionId": "ses_ee54e655dffeobgrNeFoYxgq2M",
+              "sessionId": "ses_ee54e5e6effedvVBlRw5uztjzy",
+              "model": {
+                "modelID": "scripted",
+                "providerID": "fake"
+              },
+              "truncated": false
+            },
+            "time": {
+              "start": 1791449211283,
+              "end": 1791449211793
+            }
+          }
+        },
+        {
+          "id": "prt_11ab1a3b20016FNgVtcNph6lgt",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab19f91001d3W5vOW0MOlcDh",
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "278819cb9c0cd85b23fdd5ea69caa57e478b33aa",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_11ab1a3cb00144tHe1R7yt26N8",
+        "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+        "role": "assistant",
+        "time": {
+          "created": 1791449211851,
+          "completed": 1791449211953
+        },
+        "parentID": "msg_11ab19dfb0019SwxuWeC0GxJJ9",
+        "modelID": "scripted",
+        "providerID": "fake",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/project",
+          "root": "/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/project"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "stop"
+      },
+      "parts": [
+        {
+          "id": "prt_11ab1a3fc001qvska3wwcSdciO",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab1a3cb00144tHe1R7yt26N8",
+          "type": "step-start",
+          "snapshot": "278819cb9c0cd85b23fdd5ea69caa57e478b33aa"
+        },
+        {
+          "id": "prt_11ab1a3fd001MgQ4m66V25LWrB",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab1a3cb00144tHe1R7yt26N8",
+          "type": "text",
+          "text": "First parent completed.",
+          "time": {
+            "start": 1791449211901,
+            "end": 1791449211902
+          }
+        },
+        {
+          "id": "prt_11ab1a4220010YDEhUBNWwBBYS",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab1a3cb00144tHe1R7yt26N8",
+          "type": "step-finish",
+          "reason": "stop",
+          "snapshot": "278819cb9c0cd85b23fdd5ea69caa57e478b33aa",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_11ab1a450001qUJCy2H01o4lel",
+        "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+        "role": "user",
+        "time": {
+          "created": 1791449211984
+        },
+        "summary": {
+          "diffs": []
+        },
+        "agent": "build",
+        "model": {
+          "providerID": "fake",
+          "modelID": "scripted"
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_11ab1a451001v3Mr47wTmUeLRt",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab1a450001qUJCy2H01o4lel",
+          "type": "text",
+          "text": "Delegate second"
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_11ab1a45600190r1HENqq7HNgZ",
+        "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+        "role": "assistant",
+        "time": {
+          "created": 1791449211990,
+          "completed": 1791449212173
+        },
+        "parentID": "msg_11ab1a450001qUJCy2H01o4lel",
+        "modelID": "scripted",
+        "providerID": "fake",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/project",
+          "root": "/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/project"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "tool-calls"
+      },
+      "parts": [
+        {
+          "id": "prt_11ab1a484001IFyQJtHu4CRBAm",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab1a45600190r1HENqq7HNgZ",
+          "type": "step-start",
+          "snapshot": "278819cb9c0cd85b23fdd5ea69caa57e478b33aa"
+        },
+        {
+          "id": "prt_11ab1a486001WU0HVwmKPYDmb7",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab1a45600190r1HENqq7HNgZ",
+          "type": "tool",
+          "callID": "call_e10092f0-3d13-4d8b-b30d-2d58a1357682",
+          "tool": "task",
+          "state": {
+            "status": "completed",
+            "input": {
+              "subagent_type": "general",
+              "description": "Second inspection",
+              "prompt": "Answer the second child probe"
+            },
+            "output": "<task id=\"ses_ee54e5b77ffeb3vjMX3s7lBAaV\" state=\"completed\">\n<task_result>\nSecond child completed.\n</task_result>\n</task>",
+            "title": "Second inspection",
+            "metadata": {
+              "parentSessionId": "ses_ee54e655dffeobgrNeFoYxgq2M",
+              "sessionId": "ses_ee54e5b77ffeb3vjMX3s7lBAaV",
+              "model": {
+                "modelID": "scripted",
+                "providerID": "fake"
+              },
+              "truncated": false
+            },
+            "time": {
+              "start": 1791449212041,
+              "end": 1791449212138
+            }
+          }
+        },
+        {
+          "id": "prt_11ab1a4fc001Wkn0oaNeW3WWE7",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab1a45600190r1HENqq7HNgZ",
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "278819cb9c0cd85b23fdd5ea69caa57e478b33aa",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_11ab1a50f0010Kp6fcnhdPhR3G",
+        "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+        "role": "assistant",
+        "time": {
+          "created": 1791449212175,
+          "completed": 1791449212257
+        },
+        "parentID": "msg_11ab1a450001qUJCy2H01o4lel",
+        "modelID": "scripted",
+        "providerID": "fake",
+        "mode": "build",
+        "agent": "build",
+        "path": {
+          "cwd": "/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/project",
+          "root": "/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/project"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "stop"
+      },
+      "parts": [
+        {
+          "id": "prt_11ab1a530001oPdChKc6J0B2Vz",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab1a50f0010Kp6fcnhdPhR3G",
+          "type": "step-start",
+          "snapshot": "278819cb9c0cd85b23fdd5ea69caa57e478b33aa"
+        },
+        {
+          "id": "prt_11ab1a532001EfsonlO9sN2iHQ",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab1a50f0010Kp6fcnhdPhR3G",
+          "type": "text",
+          "text": "Second parent completed.",
+          "time": {
+            "start": 1791449212210,
+            "end": 1791449212211
+          }
+        },
+        {
+          "id": "prt_11ab1a550001JwWqJlITNKltW5",
+          "sessionID": "ses_ee54e655dffeobgrNeFoYxgq2M",
+          "messageID": "msg_11ab1a50f0010Kp6fcnhdPhR3G",
+          "type": "step-finish",
+          "reason": "stop",
+          "snapshot": "278819cb9c0cd85b23fdd5ea69caa57e478b33aa",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "child": [
+    {
+      "info": {
+        "id": "msg_11ab1a1950019VrlD4wMuxlKTB",
+        "sessionID": "ses_ee54e5e6effedvVBlRw5uztjzy",
+        "role": "user",
+        "time": {
+          "created": 1791449211286
+        },
+        "summary": {
+          "diffs": []
+        },
+        "agent": "general",
+        "model": {
+          "providerID": "fake",
+          "modelID": "scripted"
+        }
+      },
+      "parts": [
+        {
+          "id": "prt_11ab1a1980013w2Q9cJbTdplNq",
+          "sessionID": "ses_ee54e5e6effedvVBlRw5uztjzy",
+          "messageID": "msg_11ab1a1950019VrlD4wMuxlKTB",
+          "type": "text",
+          "text": "Run the child probe"
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_11ab1a1a4001r0ZxufbxMqx9Xb",
+        "sessionID": "ses_ee54e5e6effedvVBlRw5uztjzy",
+        "role": "assistant",
+        "time": {
+          "created": 1791449211300,
+          "completed": 1791449211689
+        },
+        "parentID": "msg_11ab1a1950019VrlD4wMuxlKTB",
+        "modelID": "scripted",
+        "providerID": "fake",
+        "mode": "general",
+        "agent": "general",
+        "path": {
+          "cwd": "/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/project",
+          "root": "/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/project"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "tool-calls"
+      },
+      "parts": [
+        {
+          "id": "prt_11ab1a1d3001fB9QsoH3P3zZOr",
+          "sessionID": "ses_ee54e5e6effedvVBlRw5uztjzy",
+          "messageID": "msg_11ab1a1a4001r0ZxufbxMqx9Xb",
+          "type": "step-start",
+          "snapshot": "278819cb9c0cd85b23fdd5ea69caa57e478b33aa"
+        },
+        {
+          "id": "prt_11ab1a1d5001P2BbYOdIp0aLs7",
+          "sessionID": "ses_ee54e5e6effedvVBlRw5uztjzy",
+          "messageID": "msg_11ab1a1a4001r0ZxufbxMqx9Xb",
+          "type": "tool",
+          "callID": "call_990e6f55-96a0-4407-997c-6267aae2d170",
+          "tool": "bash",
+          "state": {
+            "status": "completed",
+            "input": {
+              "command": "echo child_one",
+              "description": "Child current command"
+            },
+            "output": "child_one\n",
+            "title": "echo child_one",
+            "metadata": {
+              "output": "child_one\n",
+              "exit": 0,
+              "truncated": false
+            },
+            "time": {
+              "start": 1791449211353,
+              "end": 1791449211500
+            }
+          }
+        },
+        {
+          "id": "prt_11ab1a28e001UEc2LCsHa8e8mw",
+          "sessionID": "ses_ee54e5e6effedvVBlRw5uztjzy",
+          "messageID": "msg_11ab1a1a4001r0ZxufbxMqx9Xb",
+          "type": "step-finish",
+          "reason": "tool-calls",
+          "snapshot": "278819cb9c0cd85b23fdd5ea69caa57e478b33aa",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    },
+    {
+      "info": {
+        "id": "msg_11ab1a32c001uDNDrXIhPGjp3B",
+        "sessionID": "ses_ee54e5e6effedvVBlRw5uztjzy",
+        "role": "assistant",
+        "time": {
+          "created": 1791449211692,
+          "completed": 1791449211788
+        },
+        "parentID": "msg_11ab1a1950019VrlD4wMuxlKTB",
+        "modelID": "scripted",
+        "providerID": "fake",
+        "mode": "general",
+        "agent": "general",
+        "path": {
+          "cwd": "/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/project",
+          "root": "/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/project"
+        },
+        "cost": 0,
+        "tokens": {
+          "input": 0,
+          "output": 0,
+          "reasoning": 0,
+          "cache": {
+            "read": 0,
+            "write": 0
+          }
+        },
+        "finish": "stop"
+      },
+      "parts": [
+        {
+          "id": "prt_11ab1a354001xHPl3S7QUbHZFE",
+          "sessionID": "ses_ee54e5e6effedvVBlRw5uztjzy",
+          "messageID": "msg_11ab1a32c001uDNDrXIhPGjp3B",
+          "type": "step-start",
+          "snapshot": "278819cb9c0cd85b23fdd5ea69caa57e478b33aa"
+        },
+        {
+          "id": "prt_11ab1a362001Jrqt7GBJSqLIzF",
+          "sessionID": "ses_ee54e5e6effedvVBlRw5uztjzy",
+          "messageID": "msg_11ab1a32c001uDNDrXIhPGjp3B",
+          "type": "text",
+          "text": "First child completed.",
+          "time": {
+            "start": 1791449211746,
+            "end": 1791449211750
+          }
+        },
+        {
+          "id": "prt_11ab1a379001bOo6w9NrywCK0M",
+          "sessionID": "ses_ee54e5e6effedvVBlRw5uztjzy",
+          "messageID": "msg_11ab1a32c001uDNDrXIhPGjp3B",
+          "type": "step-finish",
+          "reason": "stop",
+          "snapshot": "278819cb9c0cd85b23fdd5ea69caa57e478b33aa",
+          "cost": 0,
+          "tokens": {
+            "input": 0,
+            "output": 0,
+            "reasoning": 0,
+            "cache": {
+              "read": 0,
+              "write": 0
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

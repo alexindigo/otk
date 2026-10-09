@@ -153,9 +153,18 @@ export type ToolCall =
   | FetchCall
   | WebSearchCall
   | SkillCall
-  | FileToolCall;
+  | FileToolCall
+  | TaskCall;
 // File-writing tools preserve server-built hunks and never expose LSP types.
 export type FileToolCall = EditCall | WriteCall | PatchCall;
+export interface TaskCall extends ToolBase {
+  tool: "task";
+  agent: string;
+  description: string;
+  currentTool?: string;
+  toolCount: number;
+  duration?: number;
+}
 export type Part =
   | { kind: "text"; id: string; blocks: Block[]; synthetic: boolean }
   | {

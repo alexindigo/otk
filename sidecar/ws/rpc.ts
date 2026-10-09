@@ -36,6 +36,8 @@ export async function dispatch(
       return prefs.set(p.key, p.value);
     case "session.get":
       return adapter.getSession(sessionID());
+    case "session.children":
+      return adapter.listChildren(sessionID());
     case "session.messages": {
       if (
         !Number.isInteger(p.limit) || Number(p.limit) < 1 ||

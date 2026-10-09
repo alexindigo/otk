@@ -799,3 +799,29 @@ p {
   padding: 0;
   margin: .5rem 0;
 }
+.otk-task-card {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  border: 0;
+  padding: .5rem;
+}
+.otk-task-card span {
+  color: var(--secondary);
+  font-size: .85rem;
+}
+.otk-subagent-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .7rem;
+  padding: .7rem 1.8rem;
+  border-bottom: 1px solid var(--muted);
+}
+.otk-subagent-bar > div {
+  display: flex;
+  gap: .5rem;
+}
