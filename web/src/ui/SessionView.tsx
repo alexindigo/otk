@@ -10,6 +10,7 @@ import {
 import type {
   ContentSession,
   Message as OtkMessage,
+  PermissionRequest,
 } from "../../../protocol/content.ts";
 import Message from "./Message.tsx";
 import Prompt from "./Prompt.tsx";
@@ -27,6 +28,7 @@ export default function SessionView(props: {
   permissionDock?: Element;
   displayMenu?: Element;
   prefs: Preferences;
+  permissions: PermissionRequest[];
   onOlder(): Promise<void>;
   onRetry(): Promise<void>;
   onDraft(value: string): void;
@@ -105,7 +107,14 @@ export default function SessionView(props: {
           </button>
         </Show>
         <For each={props.messages} keyed={(message) => message.id}>
-          {(message) => <Message message={message()} prefs={props.prefs} />}
+          {(message) => (
+            <Message
+              message={message()}
+              prefs={props.prefs}
+              directory={props.info?.directory}
+              permissions={props.permissions}
+            />
+          )}
         </For>
         <Show when={!props.loading && !props.messages.length && !props.error}>
           <p class="otk-muted otk-empty">Start a conversation below.</p>

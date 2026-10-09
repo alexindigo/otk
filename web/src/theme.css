@@ -691,3 +691,43 @@ p {
 .otk-unconcealed .otk-text h6::before {
   content: "###### ";
 }
+.otk-tool-state {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  margin-bottom: .3rem;
+  font-size: .75rem;
+}
+.otk-tool-summary {
+  color: var(--fg);
+  white-space: pre-wrap;
+}
+.otk-tool-body p {
+  margin: .4rem 0;
+}
+.otk-tool-waiting {
+  border-color: #ffb18f;
+}
+.otk-tool-waiting .otk-tool-state {
+  color: #ffb18f;
+}
+.otk-tool-line[data-tool-status=error] {
+  border-color: #ff7777;
+}
+.otk-tool-line[data-tool-status=error] .otk-tool-state,
+.otk-tool-error {
+  color: #ff7777;
+}
+.otk-tool-line[data-tool-status=denied] .otk-tool-summary {
+  text-decoration: line-through;
+}
+.otk-tool-error {
+  white-space: pre-wrap;
+  font: inherit;
+}
+.otk-output-toggle,
+.otk-tool-error-toggle {
+  align-self: flex-start;
+  font-size: .8rem;
+  padding: .25rem .5rem;
+}

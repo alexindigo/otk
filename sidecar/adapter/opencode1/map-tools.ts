@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Todo, ToolCall } from "../../../protocol/content.ts";
+import type { Todo, ToolBase, ToolCall } from "../../../protocol/content.ts";
+import { stripVTControlCharacters } from "node:util";
 import type { RawPart } from "./types.ts";
 const string = (value: unknown): string | undefined =>
   typeof value === "string" ? value : undefined;
@@ -31,15 +32,78 @@ export function mapTodos(value: unknown): Todo[] {
 }
 export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
   const state = part.state!;
-  const base = {
+  const base: ToolBase = {
     callID: part.callID!,
-    status: state.status,
+    status: state.status === "error" &&
+        /QuestionRejectedError|rejected permission|specified a rule|user dismissed/i
+          .test(state.error || "")
+      ? "denied"
+      : state.status,
     title: state.title,
     error: state.error,
     time: { start: state.time?.start, end: state.time?.end },
     awaitingPermission,
   };
   const input = state.input, metadata = state.metadata ?? {};
+  const number = (value: unknown) =>
+    typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  const display = record(metadata.display);
+  if (part.tool === "read" && display.type !== "directory") {
+    return {
+      ...base,
+      tool: "read",
+      path: string(input.filePath) || "",
+      offset: number(input.offset),
+      limit: number(input.limit),
+      loaded: strings(metadata.loaded),
+    };
+  }
+  if (
+    ["glob", "grep", "list"].includes(part.tool || "") ||
+    (part.tool === "read" && display.type === "directory")
+  ) {
+    const mode = part.tool === "read" || part.tool === "list"
+      ? "list"
+      : part.tool as "glob" | "grep";
+    return {
+      ...base,
+      tool: "search",
+      mode,
+      pattern: string(input.pattern) || "*",
+      path: string(input.path) ||
+        (mode === "list" ? string(input.filePath) : undefined),
+      matches: number(
+        mode === "grep"
+          ? metadata.matches
+          : mode === "list" && display.type === "directory"
+          ? display.totalEntries
+          : metadata.count,
+      ) || 0,
+    };
+  }
+  if (part.tool === "webfetch") {
+    return {
+      ...base,
+      tool: "fetch",
+      url: string(input.url) || "",
+      format: string(input.format),
+    };
+  }
+  if (part.tool === "websearch") {
+    return {
+      ...base,
+      tool: "websearch",
+      query: string(input.query) || "",
+      provider: string(metadata.provider),
+    };
+  }
+  if (part.tool === "skill") {
+    return {
+      ...base,
+      tool: "skill",
+      name: string(input.name) || string(metadata.name) || "",
+    };
+  }
   if (part.tool === "todowrite") {
     return {
       ...base,
@@ -83,10 +147,19 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
       command: string(input.command) || "",
       description: string(input.description),
       cwd: string(input.workdir),
-      output: string(metadata.output) ?? state.output ?? "",
+      output: stripVTControlCharacters(
+        string(metadata.output) ?? state.output ?? "",
+      ),
       exitCode: typeof metadata.exit === "number" ? metadata.exit : undefined,
     };
   }
+  const bytes = state.output === undefined
+    ? undefined
+    : new TextEncoder().encode(state.output);
+  const outputTruncated = (bytes?.length || 0) > 65_536;
+  const output = outputTruncated
+    ? new TextDecoder().decode(bytes!.subarray(0, 65_536), { stream: true })
+    : state.output;
   return {
     ...base,
     tool: "generic",
@@ -94,7 +167,8 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
     summary:
       Object.values(input).map(string).find((v) => v?.trim())?.split("\n")[0]
         .slice(0, 256) || part.tool!,
-    output: state.output?.slice(0, 65_536),
+    output,
+    outputTruncated,
     childSessionID: string(metadata.sessionId),
   };
 }

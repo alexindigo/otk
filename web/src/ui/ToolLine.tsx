@@ -1,32 +1,53 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createSignal, Match, Show, Switch } from "solid-js";
+import { Match, Switch } from "solid-js";
 import type { ToolCall } from "../../../protocol/content.ts";
 import Todo from "./Todo.tsx";
 import QuestionTool from "./tools/QuestionTool.tsx";
+import ToolFrame from "./tools/ToolFrame.tsx";
+import BashTool from "./tools/BashTool.tsx";
+import ReadTool from "./tools/ReadTool.tsx";
+import SearchTool from "./tools/SearchTool.tsx";
+import FetchTool from "./tools/FetchTool.tsx";
+import WebSearchTool from "./tools/WebSearchTool.tsx";
+import SkillTool from "./tools/SkillTool.tsx";
+import GenericTool from "./tools/GenericTool.tsx";
+const toolOf = <K extends ToolCall["tool"]>(call: ToolCall, kind: K) =>
+  call.tool === kind ? call as Extract<ToolCall, { tool: K }> : undefined;
 export default function ToolLine(
-  props: { call: ToolCall; genericOutput: boolean },
+  props: {
+    call: ToolCall;
+    genericOutput: boolean;
+    directory?: string;
+    waiting: boolean;
+  },
 ) {
-  const [expanded, setExpanded] = createSignal(false);
-  const output = () =>
-    props.call.tool === "generic" ? props.call.output || "" : "";
-  const lines = () => output().trimEnd().split("\n");
   return (
-    <div
-      class="otk-tool-line"
-      data-tool={props.call.tool}
-      data-tool-status={props.call.status}
+    <ToolFrame
+      call={props.call}
+      waiting={props.waiting || props.call.awaitingPermission}
     >
-      <span>
-        {props.call.tool === "generic" ? props.call.name : props.call.tool} ·
-        {" "}
-        {props.call.status} ·{" "}
-        {props.call.title || (props.call.tool === "generic"
-          ? props.call.summary
-          : props.call.tool === "bash"
-          ? props.call.description || props.call.command
-          : props.call.tool)}
-      </span>
       <Switch>
+        <Match when={toolOf(props.call, "bash")}>
+          {(call) => <BashTool call={call()} directory={props.directory} />}
+        </Match>
+        <Match when={toolOf(props.call, "read")}>
+          {(call) => <ReadTool call={call()} />}
+        </Match>
+        <Match when={toolOf(props.call, "search")}>
+          {(call) => <SearchTool call={call()} />}
+        </Match>
+        <Match when={toolOf(props.call, "fetch")}>
+          {(call) => <FetchTool call={call()} />}
+        </Match>
+        <Match when={toolOf(props.call, "websearch")}>
+          {(call) => <WebSearchTool call={call()} />}
+        </Match>
+        <Match when={toolOf(props.call, "skill")}>
+          {(call) => <SkillTool call={call()} />}
+        </Match>
+        <Match when={toolOf(props.call, "generic")}>
+          {(call) => <GenericTool call={call()} output={props.genericOutput} />}
+        </Match>
         <Match when={props.call.tool === "todo" ? props.call : undefined}>
           {(call) => <Todo items={call().items} />}
         </Match>
@@ -34,21 +55,6 @@ export default function ToolLine(
           {(call) => <QuestionTool call={call()} />}
         </Match>
       </Switch>
-      <Show when={props.genericOutput && output()}>
-        <pre class="otk-tool-output">{expanded() ? output() : lines().slice(0, 3).join("\n")}</pre>
-        <Show when={lines().length > 3}>
-          <button
-            type="button"
-            aria-expanded={expanded() ? "true" : "false"}
-            onClick={() => setExpanded((value) => !value)}
-          >
-            {expanded() ? "Collapse output" : "Expand output"}
-          </button>
-        </Show>
-      </Show>
-      <Show when={props.call.error}>
-        <span class="otk-error">{props.call.error}</span>
-      </Show>
-    </div>
+    </ToolFrame>
   );
 }

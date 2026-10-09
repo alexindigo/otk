@@ -40,6 +40,10 @@ export class OpencodeTest {
   static async start(
     provider: FakeLlm,
     permission: Record<string, "ask" | "allow" | "deny"> = { bash: "ask" },
+    options: {
+      prepare?(test: OpencodeTest): Promise<void>;
+      env?: Record<string, string>;
+    } = {},
   ): Promise<OpencodeTest> {
     const test = new OpencodeTest();
     const state = fromFileUrl(new URL("../../.test-state/", import.meta.url));
@@ -57,11 +61,13 @@ export class OpencodeTest {
       join(test.directory, "README.md"),
       "# OTK fixture\n",
     );
+    await options.prepare?.(test);
     const env: Record<string, string> = {
       ...Deno.env.toObject(),
       OPENCODE_PURE: "1",
       OPENCODE_DISABLE_EXTERNAL_SKILLS: "1",
       OPENCODE_DISABLE_CLAUDE_CODE_SKILLS: "1",
+      ...options.env,
     };
     for (
       const [variable, directory] of Object.entries({
@@ -90,7 +96,10 @@ export class OpencodeTest {
               baseURL: `http://127.0.0.1:${provider.port}/v1`,
               apiKey: "x",
             },
-            models: { scripted: { name: "scripted" } },
+            models: {
+              scripted: { name: "scripted" },
+              "gpt-scripted": { name: "gpt-scripted" },
+            },
           },
         },
       }),

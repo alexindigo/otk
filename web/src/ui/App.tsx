@@ -191,6 +191,7 @@ export default function App() {
                   }
                 >
                   <SessionView
+                    permissions={session.state.content.permissions}
                     prefs={toggles.state.prefs}
                     displayMenu={
                       <DisplayMenu

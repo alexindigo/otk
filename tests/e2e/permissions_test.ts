@@ -121,7 +121,7 @@ Deno.test("E3 bash permission, real Allow once click, completed output-bearing t
     await capture(browser, f.oc.root, "e3-pending");
     await clickText(browser, "Allow once");
     await browser.poll(
-      `!document.querySelector('.otk-permission-dock') && document.querySelector('[data-tool-status=completed]')?.textContent.includes('bash') && document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle'`,
+      `!document.querySelector('.otk-permission-dock') && document.querySelector('[data-tool=bash][data-tool-status=completed]')?.textContent.includes('otk') && document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle'`,
       60_000,
     );
     const history = await f.oc.request<
@@ -286,7 +286,7 @@ Deno.test("web permission snapshot on reopen, focused keys, always confirmation 
     await capture(browser, f.oc.root, "permission-reject-message");
     await clickText(browser, "Reject request");
     await browser.poll(
-      "!document.querySelector('.otk-permission-dock') && !!document.querySelector('[data-tool-status=error]')",
+      "!document.querySelector('.otk-permission-dock') && !!document.querySelector('[data-tool-status=denied]') && getComputedStyle(document.querySelector('[data-tool-status=denied] .otk-tool-summary')).textDecorationLine.includes('line-through')",
       60_000,
     );
     const replies = sentFrames(browser).filter(({ frame }) =>

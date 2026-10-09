@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For, Match, Show, Switch } from "solid-js";
-import type { Message as OtkMessage, Part } from "../../../protocol/content.ts";
+import type {
+  Message as OtkMessage,
+  Part,
+  PermissionRequest,
+} from "../../../protocol/content.ts";
 import Blocks from "./Blocks.tsx";
 import ToolLine from "./ToolLine.tsx";
 import Reasoning from "./Reasoning.tsx";
@@ -10,7 +14,13 @@ const partOf = <K extends Part["kind"]>(part: Part, kind: K) =>
 const duration = (start: number, end: number) =>
   `${Math.max(0, (end - start) / 1000).toFixed(1)}s`;
 function PartView(
-  props: { part: Part; prefs: Preferences; streaming: boolean },
+  props: {
+    part: Part;
+    prefs: Preferences;
+    streaming: boolean;
+    directory?: string;
+    permissions: PermissionRequest[];
+  },
 ) {
   return (
     <Switch fallback={<p class="otk-muted">{props.part.kind}</p>}>
@@ -32,6 +42,10 @@ function PartView(
             <ToolLine
               call={part().call}
               genericOutput={props.prefs.genericToolOutput}
+              directory={props.directory}
+              waiting={props.permissions.some((request) =>
+                request.toolCall === part().call.callID
+              )}
             />
           </Show>
         )}
@@ -46,7 +60,12 @@ function PartView(
   );
 }
 export default function Message(
-  props: { message: OtkMessage; prefs: Preferences },
+  props: {
+    message: OtkMessage;
+    prefs: Preferences;
+    directory?: string;
+    permissions: PermissionRequest[];
+  },
 ) {
   const assistant = () =>
     props.message.role === "assistant" ? props.message : undefined;
@@ -72,6 +91,8 @@ export default function Message(
           <PartView
             part={part()}
             prefs={props.prefs}
+            directory={props.directory}
+            permissions={props.permissions}
             streaming={props.message.role === "assistant" &&
               props.message.time.completed === undefined}
           />

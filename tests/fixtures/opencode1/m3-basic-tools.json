@@ -1,0 +1,286 @@
+[
+  {
+    "id": "prt_11a78806e001mGwbC3nfY9pupo",
+    "sessionID": "ses_ee58785f7ffeQGt13w8VTfJxZ6",
+    "messageID": "msg_11a787ec5001RbsOm7wlVmROkH",
+    "type": "tool",
+    "callID": "call_17ba94dd-7ed3-4c0c-a02b-b902cd7e70c1",
+    "tool": "bash",
+    "state": {
+      "status": "completed",
+      "input": {
+        "command": "seq 1 30",
+        "description": "Thirty lines",
+        "workdir": "/home/tester/otk/.test-state/oc-857b8186062b78de/project/sub"
+      },
+      "output": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n",
+      "title": "seq 1 30",
+      "metadata": {
+        "output": "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n11\n12\n13\n14\n15\n16\n17\n18\n19\n20\n21\n22\n23\n24\n25\n26\n27\n28\n29\n30\n",
+        "exit": 0,
+        "truncated": false
+      },
+      "time": {
+        "start": 1791445467251,
+        "end": 1791445467314
+      }
+    }
+  },
+  {
+    "id": "prt_11a78aaea001iGC2poJn6O4x7u",
+    "sessionID": "ses_ee5875f47ffe1PBe3pKOzTQkTu",
+    "messageID": "msg_11a78a5c80011Q5TCnyK275Tlj",
+    "type": "tool",
+    "callID": "call_f7517b53-265c-43b1-87b9-009a82f859eb",
+    "tool": "read",
+    "state": {
+      "status": "completed",
+      "input": {
+        "filePath": "/home/tester/otk/.test-state/oc-eb9805f340d0520b/project/src/probe.txt",
+        "offset": 2,
+        "limit": 1
+      },
+      "output": "<path>/home/tester/otk/.test-state/oc-eb9805f340d0520b/project/src/probe.txt</path>\n<type>file</type>\n<content>\n2: otk_marker\n\n(Showing lines 2-2 of 3. Use offset=3 to continue.)\n</content>\n\n<system-reminder>\nInstructions from: /home/tester/otk/.test-state/oc-eb9805f340d0520b/project/src/AGENTS.md\n# Fixture instructions\nRead the fixture only.\n\n</system-reminder>",
+      "title": "src/probe.txt",
+      "metadata": {
+        "preview": "otk_marker",
+        "truncated": true,
+        "loaded": [
+          "/home/tester/otk/.test-state/oc-eb9805f340d0520b/project/src/AGENTS.md"
+        ],
+        "display": {
+          "type": "file",
+          "path": "/home/tester/otk/.test-state/oc-eb9805f340d0520b/project/src/probe.txt",
+          "text": "otk_marker",
+          "lineStart": 2,
+          "lineEnd": 2,
+          "totalLines": 3,
+          "truncated": true
+        }
+      },
+      "time": {
+        "start": 1791445478127,
+        "end": 1791445478147
+      }
+    }
+  },
+  {
+    "id": "prt_11a78abcf001ZIIWBmFXmwd1xn",
+    "sessionID": "ses_ee5875f47ffe1PBe3pKOzTQkTu",
+    "messageID": "msg_11a78aba9001sbo6sL1S0BQnTg",
+    "type": "tool",
+    "callID": "call_5ae83a36-5b39-448e-a81f-e26b5a792b92",
+    "tool": "read",
+    "state": {
+      "status": "completed",
+      "input": {
+        "filePath": "/home/tester/otk/.test-state/oc-eb9805f340d0520b/project/src"
+      },
+      "output": "<path>/home/tester/otk/.test-state/oc-eb9805f340d0520b/project/src</path>\n<type>directory</type>\n<entries>\nAGENTS.md\nprobe.txt\n\n(2 entries)\n</entries>",
+      "title": "src",
+      "metadata": {
+        "preview": "AGENTS.md\nprobe.txt",
+        "truncated": false,
+        "loaded": [],
+        "display": {
+          "type": "directory",
+          "path": "/home/tester/otk/.test-state/oc-eb9805f340d0520b/project/src",
+          "entries": [
+            "AGENTS.md",
+            "probe.txt"
+          ],
+          "offset": 1,
+          "totalEntries": 2,
+          "truncated": false
+        }
+      },
+      "time": {
+        "start": 1791445478353,
+        "end": 1791445478357
+      }
+    }
+  },
+  {
+    "id": "prt_11a78ac88001DjyTXd9vjRnBJY",
+    "sessionID": "ses_ee5875f47ffe1PBe3pKOzTQkTu",
+    "messageID": "msg_11a78ac67001Ml7MvpWQxpfuUb",
+    "type": "tool",
+    "callID": "call_fb14b4c6-e354-4227-97ae-9cf402b562b5",
+    "tool": "glob",
+    "state": {
+      "status": "completed",
+      "input": {
+        "pattern": "*.txt",
+        "path": "/home/tester/otk/.test-state/oc-eb9805f340d0520b/project/src"
+      },
+      "output": "/home/tester/otk/.test-state/oc-eb9805f340d0520b/project/src/probe.txt",
+      "title": "src",
+      "metadata": {
+        "count": 1,
+        "truncated": false
+      },
+      "time": {
+        "start": 1791445478538,
+        "end": 1791445478756
+      }
+    }
+  },
+  {
+    "id": "prt_11a78ae3700101TgoOxO6djVVx",
+    "sessionID": "ses_ee5875f47ffe1PBe3pKOzTQkTu",
+    "messageID": "msg_11a78ae0f001NYR6zjJVdkKGgS",
+    "type": "tool",
+    "callID": "call_23c9025e-5b27-4ee0-a045-443b6dd314ba",
+    "tool": "grep",
+    "state": {
+      "status": "completed",
+      "input": {
+        "pattern": "otk_marker",
+        "path": "/home/tester/otk/.test-state/oc-eb9805f340d0520b/project/src",
+        "include": "*.txt"
+      },
+      "output": "Found 1 matches\n/home/tester/otk/.test-state/oc-eb9805f340d0520b/project/src/probe.txt:\n  Line 2: otk_marker\n",
+      "title": "otk_marker",
+      "metadata": {
+        "matches": 1,
+        "truncated": false
+      },
+      "time": {
+        "start": 1791445478971,
+        "end": 1791445478990
+      }
+    }
+  },
+  {
+    "id": "prt_11a78af25001M6l7wdFTy1nx1G",
+    "sessionID": "ses_ee5875f47ffe1PBe3pKOzTQkTu",
+    "messageID": "msg_11a78af00001bt8BsvszSGQhn6",
+    "type": "tool",
+    "callID": "call_c5ba0c63-3873-4ecd-9f8a-bf34a283e803",
+    "tool": "webfetch",
+    "state": {
+      "status": "completed",
+      "input": {
+        "url": "http://127.0.0.1:36695/fixture",
+        "format": "text"
+      },
+      "output": "OTK fetch fixture",
+      "title": "http://127.0.0.1:36695/fixture (text/plain)",
+      "metadata": {
+        "truncated": false
+      },
+      "time": {
+        "start": 1791445479208,
+        "end": 1791445479210
+      }
+    }
+  },
+  {
+    "id": "prt_11a78aff7001VfdjDXQmNtPgTu",
+    "sessionID": "ses_ee5875f47ffe1PBe3pKOzTQkTu",
+    "messageID": "msg_11a78afd8001OQ0gXNtLsIgLlq",
+    "type": "tool",
+    "callID": "call_b90d969c-590c-4852-bed3-ca906f1d1efa",
+    "tool": "skill",
+    "state": {
+      "status": "completed",
+      "input": {
+        "name": "otk-fixture"
+      },
+      "output": "<skill_content name=\"otk-fixture\">\n# Skill: otk-fixture\n\nRead only this fixture.\n\nBase directory for this skill: /home/tester/otk/.test-state/oc-eb9805f340d0520b/project/.opencode/skills/otk-fixture\nRelative paths in this skill (e.g., scripts/, reference/) are relative to this base directory.\nNote: file list is sampled.\n\n<skill_files>\n\n</skill_files>\n</skill_content>",
+      "title": "Loaded skill: otk-fixture",
+      "metadata": {
+        "name": "otk-fixture",
+        "dir": "/home/tester/otk/.test-state/oc-eb9805f340d0520b/project/.opencode/skills/otk-fixture",
+        "truncated": false
+      },
+      "time": {
+        "start": 1791445479417,
+        "end": 1791445479429
+      }
+    }
+  },
+  {
+    "id": "prt_11a78b0cd001rP2vo7QBYYoY1B",
+    "sessionID": "ses_ee5875f47ffe1PBe3pKOzTQkTu",
+    "messageID": "msg_11a78b09d001JyUExwonvuFJX3",
+    "type": "tool",
+    "callID": "call_883163f2-6ad5-4da3-b1af-ebee70aacf4c",
+    "tool": "echo_fixture",
+    "state": {
+      "status": "completed",
+      "input": {},
+      "output": "first\nsecond\nthird\nfourth\nfifth",
+      "title": "",
+      "metadata": {
+        "truncated": false
+      },
+      "time": {
+        "start": 1791445479632,
+        "end": 1791445479633
+      }
+    }
+  },
+  {
+    "id": "prt_11a78cfe2001qcDjiobHFgGsdY",
+    "sessionID": "ses_ee5873671ffeiilmb6cMZZ0tEz",
+    "messageID": "msg_11a78ce68001bMbMfKjt9jM1J4",
+    "type": "tool",
+    "callID": "call_035f412c-9b68-4176-bbe6-50dd60938d40",
+    "tool": "bash",
+    "state": {
+      "status": "error",
+      "input": {
+        "command": "echo denied",
+        "description": "Denied"
+      },
+      "error": "The user rejected permission to use this specific tool call.",
+      "time": {
+        "start": 1791445487591,
+        "end": 1791445487667
+      }
+    }
+  },
+  {
+    "id": "prt_11a78d0ba0012nlIHh7jU9BjtU",
+    "sessionID": "ses_ee5873671ffeiilmb6cMZZ0tEz",
+    "messageID": "msg_11a78d092001rgUly4WwBwF3Of",
+    "type": "tool",
+    "callID": "call_ffd06633-28bf-4141-92e8-c25bbb97752c",
+    "tool": "websearch",
+    "state": {
+      "status": "error",
+      "input": {
+        "query": "OTK rendering fixture",
+        "numResults": 8
+      },
+      "error": "The user rejected permission to use this specific tool call.",
+      "metadata": {
+        "provider": "exa"
+      },
+      "time": {
+        "start": 1791445487805,
+        "end": 1791445487837
+      }
+    }
+  },
+  {
+    "id": "prt_11a78d141001p8SQKtBoBw9ant",
+    "sessionID": "ses_ee5873671ffeiilmb6cMZZ0tEz",
+    "messageID": "msg_11a78d121001TNHHyDzvS4onMU",
+    "type": "tool",
+    "callID": "call_6fc111b6-29b1-454e-af13-5fe9a99684b7",
+    "tool": "read",
+    "state": {
+      "status": "error",
+      "input": {
+        "filePath": "/home/tester/otk/.test-state/oc-c998a5ad36a33442/project/missing.txt"
+      },
+      "error": "File not found: /home/tester/otk/.test-state/oc-c998a5ad36a33442/project/missing.txt",
+      "time": {
+        "start": 1791445487941,
+        "end": 1791445487943
+      }
+    }
+  }
+]

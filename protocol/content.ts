@@ -56,7 +56,7 @@ export interface FileDiff {
 }
 export interface ToolBase {
   callID: string;
-  status: "pending" | "running" | "completed" | "error";
+  status: "pending" | "running" | "completed" | "error" | "denied";
   title?: string;
   error?: string;
   time: { start?: number; end?: number };
@@ -76,6 +76,36 @@ export interface GenericCall extends ToolBase {
   name: string;
   summary: string;
   output?: string;
+  outputTruncated?: boolean;
+}
+export interface ReadCall extends ToolBase {
+  tool: "read";
+  path: string;
+  offset?: number;
+  limit?: number;
+  loaded: string[];
+}
+export interface SearchCall extends ToolBase {
+  tool: "search";
+  mode: "glob" | "grep" | "list";
+  pattern: string;
+  path?: string;
+  matches: number;
+}
+export interface FetchCall extends ToolBase {
+  tool: "fetch";
+  url: string;
+  format?: string;
+}
+// Actual counts belong to the deferred server-owned search feature.
+export interface WebSearchCall extends ToolBase {
+  tool: "websearch";
+  query: string;
+  provider?: string;
+}
+export interface SkillCall extends ToolBase {
+  tool: "skill";
+  name: string;
 }
 export interface TodoCall extends ToolBase {
   tool: "todo";
@@ -89,7 +119,16 @@ export interface QuestionCall extends ToolBase {
     answer?: string[];
   }[];
 }
-export type ToolCall = BashCall | GenericCall | TodoCall | QuestionCall;
+export type ToolCall =
+  | BashCall
+  | GenericCall
+  | TodoCall
+  | QuestionCall
+  | ReadCall
+  | SearchCall
+  | FetchCall
+  | WebSearchCall
+  | SkillCall;
 export type Part =
   | { kind: "text"; id: string; blocks: Block[]; synthetic: boolean }
   | {
@@ -158,6 +197,7 @@ export interface PermissionRequest {
   patterns: string[];
   alwaysPatterns: string[];
   detail: PermissionDetail;
+  toolCall?: string;
   time: number;
 }
 export type PermissionDetail =

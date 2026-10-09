@@ -7,8 +7,10 @@ import { SidecarTest } from "./sidecar.ts";
 import { Cdp } from "./cdp.ts";
 export async function browserFixture(
   permission?: Record<string, "ask" | "allow" | "deny">,
+  options?: Parameters<typeof OpencodeTest.start>[2],
 ) {
-  const fake = new FakeLlm(), oc = await OpencodeTest.start(fake, permission);
+  const fake = new FakeLlm(),
+    oc = await OpencodeTest.start(fake, permission, options);
   const servers: SidecarTest[] = [], browsers: Cdp[] = [];
   return {
     fake,
