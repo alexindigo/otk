@@ -13,8 +13,10 @@ import type {
   CommandOption,
   PermissionReply,
   PromptInput,
+  PromptPart,
   ShellInput,
 } from "../../protocol/rpc.ts";
+import type { HistoryEntry } from "../../protocol/history.ts";
 import type {
   AgentOption,
   FileMatch,
@@ -47,6 +49,11 @@ export interface HarnessAdapter {
   shell(input: ShellInput): Promise<void>;
   command(input: CommandInput): Promise<void>;
   listCommands(sessionID: string): Promise<CommandOption[]>;
+  listHistory(): HistoryEntry[];
+  historyAttachment(
+    messageID: string,
+    partID: string,
+  ): Extract<PromptPart, { source: "upload" }>;
   findFiles(sessionID: string, query: string): Promise<FileMatch[]>;
   listAgents(sessionID: string): Promise<AgentOption[]>;
   listResources(sessionID: string): Promise<ResourceOption[]>;

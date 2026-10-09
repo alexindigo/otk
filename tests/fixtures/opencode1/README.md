@@ -35,3 +35,15 @@ messages from R5 in opencode 1.18.34. Source:
 `/home/tester/otk/.test-state/oc-d22cfa3689c64ef2/recorded-tasks.json`. The
 fixtures verify normalized task fields and metadata-only live summary ownership,
 including unsubscribe while a snapshot is pending.
+
+`history-1.18.34-v4.db` is a consistent SQLite snapshot generated from stock
+opencode 1.18.34 in `arch-niri-otk-devbase-otk-m1` on ark, 2026-10-08, by
+`tests/support/history-fixture_test.ts`. It contains two sessions, five user
+messages, adjacent duplicate prompts, a valid PNG upload, an agent mention and a
+synthetic-user/shell-assistant pair. Only the isolated scripted provider was
+used. Source:
+`/home/tester/otk/.test-state/oc-28c826c249b11af0/data/opencode/opencode.db`.
+The capture uses SQLite's read-only `VACUUM INTO` snapshot through the installed
+CLI so committed WAL content is included. Re-running the capture test creates a
+fresh snapshot in test state and compares its normalized projection with the
+retained fixture; it never overwrites the fixture.

@@ -115,6 +115,13 @@ export async function dispatch(
     }
     case "commands.list":
       return adapter.listCommands(sessionID());
+    case "history.list":
+      return adapter.listHistory();
+    case "history.attachment":
+      return adapter.historyAttachment(
+        text(p, "messageID")!,
+        text(p, "partID")!,
+      );
     case "session.command": {
       const model = p.model === undefined ? undefined : object(p.model),
         parts = p.parts === undefined ||

@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For } from "solid-js";
 import type { Chip } from "./model.ts";
+function title(chip: Chip): string | undefined {
+  const part = chip.part;
+  return chip.error ||
+    (part.kind === "file" && part.source !== "path" ? part.name : undefined);
+}
 export default function Chips(
   props: {
     chips: Chip[];
@@ -15,7 +20,7 @@ export default function Chips(
           <span class="otk-prompt-chip">
             <button
               type="button"
-              title={chip().error}
+              title={title(chip())}
               onClick={() => props.onOpen(chip())}
             >
               {chip().label}

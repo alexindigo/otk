@@ -27,6 +27,7 @@ import {
 } from "../types.ts";
 import { Client } from "./client.ts";
 import { BootstrapDb } from "./db.ts";
+import { History } from "../../history/history.ts";
 import { consumeEvents } from "./events.ts";
 import { mapDiffs, mapIndex, mapMessage, mapPart, mapSession } from "./map.ts";
 import { mapPermission } from "./map.ts";
@@ -89,6 +90,7 @@ export class Opencode1Adapter implements HarnessAdapter {
   #run?: Promise<void>;
   #wake?: () => void;
   #db: BootstrapDb;
+  #history: History;
   #tasks: TaskProgress;
   #reverts = new Map<string, string>();
   constructor(
@@ -98,6 +100,7 @@ export class Opencode1Adapter implements HarnessAdapter {
   ) {
     this.client = new Client(cfg.harness, fetcher);
     this.#db = new BootstrapDb(harnessDb(cfg));
+    this.#history = new History(harnessDb(cfg));
     this.#tasks = new TaskProgress(
       async (id, message) => {
         const options = { query: { directory: this.#directory(id) } };
@@ -143,6 +146,7 @@ export class Opencode1Adapter implements HarnessAdapter {
     await this.#run;
     await Promise.all(this.#commands.values());
     this.#db.close();
+    this.#history.close();
   }
   subscriptions(id: string, count: number): void {
     this.buffers.subscriptions(id, count);
@@ -164,6 +168,12 @@ export class Opencode1Adapter implements HarnessAdapter {
       revert: await this.#revertInfo(raw),
       error: this.#entries.get(id)?.attention.error,
     };
+  }
+  listHistory() {
+    return this.#history.list();
+  }
+  historyAttachment(messageID: string, partID: string) {
+    return this.#history.attachment(messageID, partID);
   }
   async #revertInfo(session: Session): Promise<RevertInfo | undefined> {
     if (!session.revert) {

@@ -20,6 +20,8 @@ import { serverPath, upload } from "./prompt/attachments.ts";
 import Chips from "./prompt/Chips.tsx";
 import Editor from "./prompt/Editor.tsx";
 import { summarizePaste } from "./prompt/paste.ts";
+import { PromptHistory } from "./prompt/history.ts";
+import type { HistoryEntry } from "../../../protocol/history.ts";
 import Autocomplete from "./prompt/Autocomplete.tsx";
 import {
   commandOptions,
@@ -48,6 +50,7 @@ export default function Prompt(
       parts: Extract<PromptPart, { kind: "file" }>[],
     ): Promise<void>;
     onNew(): Promise<void>;
+    onHistory(): Promise<HistoryEntry[]>;
     onAbort(): Promise<void>;
   },
 ) {
@@ -57,6 +60,28 @@ export default function Prompt(
   let deadline = 0, timer: ReturnType<typeof setTimeout> | undefined;
   let active = true;
   let input!: HTMLTextAreaElement;
+  const history = new PromptHistory();
+  let historyQueue = Promise.resolve();
+  const recall = (direction: -1 | 1) => {
+    historyQueue = historyQueue.then(async () => {
+      const draft = change((current) => current);
+      if (!active || !history.canMove(draft)) return;
+      if (history.empty) {
+        const entries = await props.onHistory();
+        if (!active || change((current) => current) !== draft) return;
+        history.replace(entries);
+      }
+      const next = history.move(direction, draft);
+      if (next) {
+        change(
+          (current) => current === draft ? next : current,
+          direction === -1 ? 0 : next.input.length,
+        );
+      }
+    }).catch((error) => {
+      if (active) setError((error as Error).message);
+    });
+  };
   const [caret, setCaret] = createSignal(0),
     [completion, setCompletion] = createSignal<Completion>(),
     [options, setOptions] = createSignal<CompletionOption[]>([]),
@@ -169,16 +194,16 @@ export default function Prompt(
     setOptions([]);
     input.focus();
   };
+  const placeCaret = (draft: Draft, caret: number) => {
+    if (!active) return;
+    // Input bytes and the requested caret form one native interaction boundary.
+    input.value = draft.input;
+    input.setSelectionRange(caret, caret);
+    setCaret(caret);
+  };
   const change = (update: DraftChange, caret?: number): Draft => {
     const draft = props.onChange(update);
-    if (caret !== undefined) {
-      setCaret(caret);
-      requestAnimationFrame(() => {
-        if (active && input.value === draft.input) {
-          input.setSelectionRange(caret, caret);
-        }
-      });
-    }
+    if (caret !== undefined) placeCaret(draft, caret);
     return draft;
   };
   const files = async (items: File[]) => {
@@ -223,11 +248,7 @@ export default function Prompt(
       }
       return draft;
     });
-    requestAnimationFrame(() => {
-      if (active && input.value === inserted.input) {
-        input.setSelectionRange(caret, caret);
-      }
-    });
+    placeCaret(inserted, caret);
     for (const { file, id } of uploads) {
       if (!active) return;
       const patch = (value: Partial<Chip>) =>
@@ -347,6 +368,7 @@ export default function Prompt(
         );
       } else await props.onSubmit(parts, draft.mode);
       if (active) {
+        history.reset();
         change((current) => current === draft ? emptyDraft() : current);
       }
     } catch (error) {
@@ -503,6 +525,20 @@ export default function Prompt(
             event.stopPropagation();
             change((current) => ({ ...current, mode: "normal" }));
             return;
+          }
+          if (
+            (event.key === "ArrowUp" || event.key === "ArrowDown") &&
+            !event.isComposing &&
+            event.currentTarget.selectionStart ===
+              event.currentTarget.selectionEnd &&
+            history.canMove(props.value)
+          ) {
+            const edge = event.key === "ArrowUp" ? 0 : props.value.input.length;
+            if (event.currentTarget.selectionStart === edge) {
+              event.preventDefault();
+              void recall(event.key === "ArrowUp" ? -1 : 1);
+              return;
+            }
           }
           if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
             event.preventDefault();

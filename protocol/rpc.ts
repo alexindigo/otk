@@ -13,6 +13,7 @@ export type PromptPart =
     kind: "file";
     source: "path";
     path: string;
+    label?: string;
     range?: { start: number; end?: number };
   }
   | { kind: "agent"; name: string }
@@ -23,6 +24,17 @@ export type PromptPart =
     mime: string;
     uri: string;
     server: string;
+    label?: string;
+  }
+  | {
+    kind: "file";
+    source: "history";
+    name: string;
+    mime: string;
+    size: number;
+    messageID: string;
+    partID: string;
+    sidecarID?: string;
   };
 export interface PromptInput {
   sessionID: string;
@@ -88,6 +100,8 @@ export type RpcMethod =
   | "session.shell"
   | "session.command"
   | "commands.list"
+  | "history.list"
+  | "history.attachment"
   | "find.files"
   | "agents.list"
   | "resources.list"

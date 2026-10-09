@@ -2,6 +2,7 @@
 import { relative, resolve, toFileUrl } from "@std/path";
 import type { PromptPart } from "../../../protocol/rpc.ts";
 import { statMatch } from "./files.ts";
+import { HarnessError } from "../types.ts";
 export async function mapPromptParts(parts: PromptPart[], directory: string) {
   return (await Promise.all(parts.map(async (part) => {
     if (part.kind === "text") return { type: "text", text: part.text };
@@ -27,6 +28,12 @@ export async function mapPromptParts(parts: PromptPart[], directory: string) {
           text: { start: 0, end: part.name.length + 1, value: `@${part.name}` },
         },
       };
+    }
+    if (part.source === "history") {
+      throw new HarnessError(
+        "params",
+        "Resolve the recalled attachment before sending",
+      );
     }
     const path = resolve(directory, part.path), url = toFileUrl(path);
     const info = await statMatch(path);

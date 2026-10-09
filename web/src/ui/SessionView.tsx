@@ -28,6 +28,7 @@ import type {
   PromptPart,
 } from "../../../protocol/rpc.ts";
 import type { MentionSources } from "./prompt/autocomplete.ts";
+import type { HistoryEntry } from "../../../protocol/history.ts";
 export default function SessionView(props: {
   info?: ContentSession;
   label: string;
@@ -63,6 +64,7 @@ export default function SessionView(props: {
     parts: Extract<PromptPart, { kind: "file" }>[],
   ): Promise<void>;
   onNew(): Promise<void>;
+  onHistory(): Promise<HistoryEntry[]>;
   onAbort(): Promise<void>;
 }) {
   const queued = () => queuedMessages(props.messages, props.busy);
@@ -205,6 +207,7 @@ export default function SessionView(props: {
           onCommands={props.onCommands}
           onCommand={props.onCommand}
           onNew={props.onNew}
+          onHistory={props.onHistory}
           onAbort={() => props.onAbort()}
         />
       </Show>

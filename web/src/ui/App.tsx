@@ -21,11 +21,13 @@ import Setup from "./Setup.tsx";
 import { createToggles } from "./Toggles.ts";
 import DisplayMenu from "./DisplayMenu.tsx";
 import { emptyDraft } from "./prompt/model.ts";
+import { type HistoryEntry, mergeHistory } from "../../../protocol/history.ts";
 import type {
   AgentOption,
   CommandOption,
   FileMatch,
   FrecencyEntry,
+  PromptPart,
   ResourceOption,
 } from "../../../protocol/rpc.ts";
 export default function App() {
@@ -144,6 +146,22 @@ export default function App() {
       if (revision === navigationRevision) setError((error as Error).message);
     }
   };
+  const attachments = (
+    parts: PromptPart[],
+    sidecarID: string,
+  ): Promise<PromptPart[]> =>
+    Promise.all(
+      parts.map((part) =>
+        part.kind === "file" && part.source === "history"
+          ? sidecars.connection(part.sidecarID || sidecarID).rpc.call<
+            Extract<PromptPart, { source: "upload" }>
+          >("history.attachment", {
+            messageID: part.messageID,
+            partID: part.partID,
+          })
+          : part
+      ),
+    );
   onSettled(() => {
     navigation.start();
     sidecars.start();
@@ -342,7 +360,7 @@ export default function App() {
                         CommandOption[]
                       >("commands.list", { sessionID: target.sessionID });
                     }}
-                    onCommand={(command, args, parts) => {
+                    onCommand={async (command, args, parts) => {
                       const target = session.state.selection!;
                       return sidecars.connection(target.sidecarId).rpc.call<
                         void
@@ -350,7 +368,12 @@ export default function App() {
                         sessionID: target.sessionID,
                         command,
                         arguments: args,
-                        parts,
+                        parts: (await attachments(parts, target.sidecarId))
+                          .filter((
+                            part,
+                          ): part is Extract<PromptPart, { kind: "file" }> =>
+                            part.kind === "file"
+                          ),
                       });
                     }}
                     onNew={async () => {
@@ -358,7 +381,31 @@ export default function App() {
                         directory = await directoryFor(target);
                       await create(target.sidecarId, directory);
                     }}
-                    onPrompt={(parts, mode) => {
+                    onHistory={async () =>
+                      mergeHistory(
+                        (await Promise.allSettled(
+                          sidecars.state.list.filter((sidecar) =>
+                            sidecar.status === "connected"
+                          ).map((sidecar) =>
+                            sidecars.connection(sidecar.id).rpc.call<
+                              HistoryEntry[]
+                            >("history.list", {}).then((entries) =>
+                              entries.map((entry) => ({
+                                ...entry,
+                                parts: entry.parts.map((part) =>
+                                  part.kind === "file" &&
+                                    part.source === "history"
+                                    ? { ...part, sidecarID: sidecar.id }
+                                    : part
+                                ),
+                              }))
+                            )
+                          ),
+                        )).flatMap((result) =>
+                          result.status === "fulfilled" ? [result.value] : []
+                        ),
+                      )}
+                    onPrompt={async (parts, mode) => {
                       const target = session.state.selection!;
                       if (mode === "shell") {
                         return sidecars.connection(target.sidecarId).rpc.call<
@@ -374,7 +421,7 @@ export default function App() {
                       >("session.prompt", {
                         sessionID: target.sessionID,
                         mode: "normal",
-                        parts,
+                        parts: await attachments(parts, target.sidecarId),
                       });
                     }}
                     onAbort={() => {
