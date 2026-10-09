@@ -86,6 +86,25 @@ export async function dispatch(
       return adapter.revert(sessionID(), text(p, "messageID")!);
     case "permission.list":
       return adapter.listPermissions(sessionID());
+    case "question.list":
+      return adapter.listQuestions(sessionID());
+    case "question.reply": {
+      if (
+        !Array.isArray(p.answers) ||
+        p.answers.some((values) =>
+          !Array.isArray(values) ||
+          values.some((value) => typeof value !== "string")
+        )
+      ) throw new HarnessError("params", "Expected question answer arrays");
+      await adapter.answerQuestion(
+        text(p, "requestID")!,
+        p.answers as string[][],
+      );
+      return null;
+    }
+    case "question.reject":
+      await adapter.answerQuestion(text(p, "requestID")!);
+      return null;
     case "permission.reply": {
       if (!["once", "always", "reject"].includes(String(p.reply))) {
         throw new HarnessError("params", "Invalid permission reply");

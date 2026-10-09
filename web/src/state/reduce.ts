@@ -4,20 +4,44 @@ import type {
   FileDiff,
   Message,
   PermissionRequest,
+  QuestionRequest,
   RevertInfo,
   Todo,
 } from "../../../protocol/content.ts";
 export interface ContentState {
   messages: Message[];
   permissions: PermissionRequest[];
+  questions: QuestionRequest[];
   todos: Todo[];
   diffs: FileDiff[];
   revert: RevertInfo | null;
 }
 export function emptyContent(): ContentState {
-  return { messages: [], permissions: [], todos: [], diffs: [], revert: null };
+  return {
+    messages: [],
+    permissions: [],
+    questions: [],
+    todos: [],
+    diffs: [],
+    revert: null,
+  };
 }
 export function reduce(state: ContentState, op: ContentOp): ContentState {
+  if (op.op === "question.upsert") {
+    return {
+      ...state,
+      questions: [
+        ...state.questions.filter((q) => q.id !== op.request.id),
+        op.request,
+      ].sort((a, b) => a.id.localeCompare(b.id)),
+    };
+  }
+  if (op.op === "question.remove") {
+    return {
+      ...state,
+      questions: state.questions.filter((q) => q.id !== op.requestID),
+    };
+  }
   if (op.op === "session.revert") {
     return {
       ...state,

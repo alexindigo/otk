@@ -908,3 +908,47 @@ p {
   font-family: inherit;
   padding: 1rem;
 }
+.otk-question-dock {
+  border-left: 2px solid var(--accent);
+  background: var(--panel);
+  padding: 1rem 1.8rem;
+  max-height: 45vh;
+  overflow: auto;
+}
+.otk-question-dock header,
+.otk-question-tabs {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  flex-wrap: wrap;
+}
+.otk-question-dock h2 {
+  margin: 0 0 .7rem;
+  font-size: 1rem;
+}
+.otk-question-tabs [aria-selected=true],
+.otk-question-options [aria-pressed=true] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.otk-question-options {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: .4rem;
+  margin-bottom: .5rem;
+}
+.otk-question-options button {
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+}
+.otk-question-options [data-active=true] {
+  background: var(--bg);
+}
+.otk-question-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .5rem;
+}

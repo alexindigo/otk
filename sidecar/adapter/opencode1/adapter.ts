@@ -4,6 +4,7 @@ import type {
   ContentSession,
   Message,
   PermissionRequest,
+  QuestionRequest,
   RevertInfo,
   Todo,
 } from "../../../protocol/content.ts";
@@ -13,7 +14,11 @@ import type { PermissionReply, PromptInput } from "../../../protocol/rpc.ts";
 import type { ServiceConfig } from "../../config/schema.ts";
 import { harnessDb } from "../../config/loader.ts";
 import { StreamBuffers } from "../../content/buffers.ts";
-import type { HarnessAdapter, HarnessSink } from "../types.ts";
+import {
+  type HarnessAdapter,
+  HarnessError,
+  type HarnessSink,
+} from "../types.ts";
 import { Client } from "./client.ts";
 import { BootstrapDb } from "./db.ts";
 import { consumeEvents } from "./events.ts";
@@ -25,12 +30,14 @@ import type {
   RawDiff,
   RawPart,
   RawPermission,
+  RawQuestion,
   Session,
 } from "./types.ts";
 import { Backoff, Watchdog } from "./watchdog.ts";
 import { TaskProgress } from "./tasks.ts";
 import { parseDiff } from "../../content/diff.ts";
 import { mapPromptParts } from "./prompt.ts";
+import { mapQuestion } from "./questions.ts";
 const contentEvents = new Set([
   "session.created",
   "session.updated",
@@ -403,6 +410,61 @@ export class Opencode1Adapter implements HarnessAdapter {
       this.#wake = undefined;
     }
   }
+  async listQuestions(sessionID: string): Promise<QuestionRequest[]> {
+    const directory = this.#directory(sessionID) ??
+      (await this.getSession(sessionID)).directory;
+    const pending = await this.client.json<RawQuestion[]>("/question", {
+      query: { directory },
+    });
+    for (const request of pending) {
+      this.#questions.set(request.id, request.sessionID);
+    }
+    return pending.filter((request) =>
+      belongsToSession(
+        request.sessionID,
+        sessionID,
+        (id) => this.#entries.get(id),
+      )
+    ).map(mapQuestion).sort((a, b) => a.id.localeCompare(b.id));
+  }
+  async answerQuestion(requestID: string, answers?: string[][]): Promise<void> {
+    const owner = this.#questions.get(requestID);
+    if (!owner) {
+      throw new HarnessError("question", "Question is no longer pending");
+    }
+    const directory = this.#directory(owner) ??
+      (await this.getSession(owner)).directory;
+    if (answers) {
+      const request = (await this.client.json<RawQuestion[]>("/question", {
+        query: { directory },
+      })).find((q) => q.id === requestID);
+      if (!request) {
+        throw new HarnessError("question", "Question is no longer pending");
+      }
+      if (
+        answers.length !== request.questions.length ||
+        answers.some((values, i) =>
+          (!request.questions[i].multiple && values.length > 1) ||
+          (request.questions[i].custom === false &&
+            values.some((value) =>
+              !request.questions[i].options.some((option) =>
+                option.label === value
+              )
+            ))
+        )
+      ) throw new HarnessError("params", "Invalid question answers");
+    }
+    await this.client.json(
+      `/question/${encodeURIComponent(requestID)}/${
+        answers ? "reply" : "reject"
+      }`,
+      {
+        method: "POST",
+        query: { directory },
+        ...(answers ? { body: { answers } } : {}),
+      },
+    );
+  }
   async #bootstrap(): Promise<void> {
     this.#reverts.clear();
     this.#tasks.release();
@@ -633,10 +695,21 @@ export class Opencode1Adapter implements HarnessAdapter {
     if (type === "question.asked") {
       this.#questions.set(String(p.id), sessionID);
       this.#attention();
+      this.#sink.content(sessionID, {
+        op: "question.upsert",
+        request: mapQuestion(p as unknown as RawQuestion),
+      });
+      return;
     }
     if (type === "question.replied" || type === "question.rejected") {
       this.#questions.delete(String(p.requestID));
       this.#attention();
+      this.#sink.content(sessionID, {
+        op: "question.remove",
+        requestID: String(p.requestID),
+        sessionID,
+      });
+      return;
     }
     if (
       type === "message.updated" && info?.role === "assistant" &&

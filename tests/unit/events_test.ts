@@ -69,12 +69,28 @@ Deno.test("adapter maps legacy event chain while ignoring its captured durable s
       sessionID: session.id,
       reply: "once",
     }),
-    event("question.asked", { id: "que_fixture", sessionID: session.id }),
+    event("question.asked", {
+      id: "que_fixture",
+      sessionID: session.id,
+      questions: [{
+        header: "Choice",
+        question: "Choose",
+        options: [{ label: "Yes" }],
+      }],
+    }),
     event("question.replied", {
       requestID: "que_fixture",
       sessionID: session.id,
     }),
-    event("question.asked", { id: "que_second", sessionID: session.id }),
+    event("question.asked", {
+      id: "que_second",
+      sessionID: session.id,
+      questions: [{
+        header: "Choice",
+        question: "Choose",
+        options: [{ label: "Yes" }],
+      }],
+    }),
     event("question.rejected", {
       requestID: "que_second",
       sessionID: session.id,
@@ -167,6 +183,10 @@ Deno.test("adapter maps legacy event chain while ignoring its captured durable s
     assertEquals(ops.map((op) => op.op), [
       "permission.upsert",
       "permission.remove",
+      "question.upsert",
+      "question.remove",
+      "question.upsert",
+      "question.remove",
       "message.upsert",
       "part.upsert",
       "part.remove",

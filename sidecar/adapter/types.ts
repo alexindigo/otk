@@ -4,6 +4,7 @@ import type {
   ContentSession,
   Message,
   PermissionRequest,
+  QuestionRequest,
 } from "../../protocol/content.ts";
 import type { IndexEntry } from "../../protocol/index.ts";
 import type { HarnessState } from "../../protocol/messages.ts";
@@ -37,6 +38,8 @@ export interface HarnessAdapter {
   revert(sessionID: string, messageID: string): Promise<ContentSession>;
   replyPermission(input: PermissionReply): Promise<void>;
   listPermissions(sessionID: string): Promise<PermissionRequest[]>;
+  listQuestions(sessionID: string): Promise<QuestionRequest[]>;
+  answerQuestion(requestID: string, answers?: string[][]): Promise<void>;
 }
 export class HarnessError extends Error {
   constructor(readonly code: string, message: string) {

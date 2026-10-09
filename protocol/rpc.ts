@@ -40,6 +40,9 @@ export type RpcMethod =
   | "session.abort"
   | "session.revert"
   | "permission.list"
+  | "question.list"
+  | "question.reply"
+  | "question.reject"
   | "permission.reply"
   | "prefs.get"
   | "prefs.set";

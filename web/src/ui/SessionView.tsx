@@ -34,6 +34,7 @@ export default function SessionView(props: {
   draft: Draft;
   connected: boolean;
   permissionDock?: Element;
+  questionDock?: Element;
   displayMenu?: Element;
   prefs: Preferences;
   permissions: PermissionRequest[];
@@ -170,6 +171,7 @@ export default function SessionView(props: {
       </div>
       <Show when={!props.child}>
         {props.permissionDock}
+        {props.questionDock}
         <Prompt
           value={props.draft}
           connected={props.connected}

@@ -76,6 +76,17 @@ export interface RawDiff {
   deletions: number;
   status?: "added" | "deleted" | "modified";
 }
+export interface RawQuestion {
+  id: string;
+  sessionID: string;
+  questions: {
+    header?: string;
+    question: string;
+    options: { label: string; description?: string }[];
+    multiple?: boolean;
+    custom?: boolean;
+  }[];
+}
 export interface Envelope {
   directory?: string;
   payload: { type: string; properties?: Record<string, unknown> };

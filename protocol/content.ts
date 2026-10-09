@@ -256,6 +256,8 @@ export interface Todo {
   priority: string;
 }
 export type ContentOp =
+  | { op: "question.upsert"; request: QuestionRequest }
+  | { op: "question.remove"; requestID: string; sessionID: string }
   | {
     op: "session.revert";
     messageID?: string;
@@ -283,4 +285,19 @@ export type PermissionOp = Extract<
 >;
 export function isPermissionOp(op: ContentOp): op is PermissionOp {
   return op.op === "permission.upsert" || op.op === "permission.remove";
+}
+export interface QuestionRequest {
+  id: string;
+  sessionID: string;
+  questions: {
+    header?: string;
+    text: string;
+    options: { label: string; description?: string }[];
+    multiple: boolean;
+    custom: boolean;
+  }[];
+}
+export function isAttentionOp(op: ContentOp): boolean {
+  return isPermissionOp(op) || op.op === "question.upsert" ||
+    op.op === "question.remove";
 }

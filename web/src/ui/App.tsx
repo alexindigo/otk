@@ -12,6 +12,7 @@ import { createSidecars, LOCAL_SIDECAR } from "../state/sidecars.ts";
 import { createNavigation } from "../state/navigation.ts";
 import { oldestPermission } from "../state/permissions.ts";
 import PermissionDock from "./PermissionDock.tsx";
+import QuestionDock from "./QuestionDock.tsx";
 import Sidebar from "./Sidebar.tsx";
 import Settings from "./Settings.tsx";
 import SessionView from "./SessionView.tsx";
@@ -43,6 +44,8 @@ export default function App() {
     [draft, setDraft] = createSignal(emptyDraft()),
     [error, setError] = createSignal("");
   const [permissionDirty, setPermissionDirty] = createSignal(false);
+  const [questionDirty, setQuestionDirty] = createSignal(false);
+  const question = () => session.state.content.questions[0];
   const permission = createMemo(() => {
     const selected = session.state.selection;
     return selected
@@ -74,7 +77,7 @@ export default function App() {
   let navigationRevision = 0;
   const discardDraft = () =>
     (!draft().input && !draft().chips.length && !draft().editor &&
-      !permissionDirty()) ||
+      !permissionDirty() && !questionDirty()) ||
     globalThis.confirm("Discard unsent text before switching sessions?");
   const applyRoute = (hash: string) => {
     const target = route(hash);
@@ -94,6 +97,7 @@ export default function App() {
     if (changes) {
       setDraft(emptyDraft());
       setPermissionDirty(false);
+      setQuestionDirty(false);
     }
   };
   const navigation = createNavigation({
@@ -245,6 +249,26 @@ export default function App() {
                           sidecars.connection(
                             session.state.selection!.sidecarId,
                           ).rpc.call<void>("permission.reply", input)}
+                      />
+                    }
+                    questionDock={
+                      <QuestionDock
+                        request={question()}
+                        childTitle={question()?.sessionID !==
+                            session.state.selection?.sessionID
+                          ? entry(
+                            session.state.selection!.sidecarId,
+                            question()?.sessionID || "",
+                          )?.title
+                          : undefined}
+                        onDirty={setQuestionDirty}
+                        onReply={(requestID, answers) =>
+                          sidecars.connection(
+                            session.state.selection!.sidecarId,
+                          ).rpc.call<void>(
+                            answers ? "question.reply" : "question.reject",
+                            { requestID, ...(answers ? { answers } : {}) },
+                          )}
                       />
                     }
                     info={info()}

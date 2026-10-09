@@ -5,8 +5,9 @@ import type {
   ContentSession,
   Message,
   PermissionRequest,
+  QuestionRequest,
 } from "../../../protocol/content.ts";
-import { isPermissionOp } from "../../../protocol/content.ts";
+import { isAttentionOp } from "../../../protocol/content.ts";
 import { belongsToSession } from "../../../protocol/session-tree.ts";
 import type { IndexEntry } from "../../../protocol/index.ts";
 import type { ServerFrame } from "../../../protocol/messages.ts";
@@ -77,7 +78,7 @@ export function createSession(
     });
     try {
       const rpc = connection(target.sidecarId).rpc;
-      const [info, messages, permissions] = await Promise.all([
+      const [info, messages, permissions, questions] = await Promise.all([
         rpc.call<ContentSession>(
           "session.get",
           { sessionID: target.sessionID },
@@ -88,6 +89,9 @@ export function createSession(
           limit: 100,
         }, abort.signal),
         rpc.call<PermissionRequest[]>("permission.list", {
+          sessionID: target.sessionID,
+        }, abort.signal),
+        rpc.call<QuestionRequest[]>("question.list", {
           sessionID: target.sessionID,
         }, abort.signal),
       ]);
@@ -102,6 +106,7 @@ export function createSession(
         ...emptyContent(),
         messages,
         permissions,
+        questions,
         revert: info.revert || null,
       };
       for (const op of buffer) content = reduce(content, op);
@@ -164,7 +169,7 @@ export function createSession(
         return;
       }
       if (frame.t !== "content") return;
-      if (isPermissionOp(frame.event)) {
+      if (isAttentionOp(frame.event)) {
         if (
           !belongsToSession(
             frame.sessionID,

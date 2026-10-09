@@ -10,7 +10,13 @@ export default function QuestionTool(props: { call: QuestionCall }) {
             <dt>{question().text}</dt>
             <dd>
               {question().answer === undefined
-                ? "Awaiting answer"
+                ? props.call.status === "denied"
+                  ? "Dismissed"
+                  : props.call.status === "error"
+                  ? "Question failed"
+                  : props.call.status === "completed"
+                  ? "(no answer)"
+                  : "Awaiting answer"
                 : question().answer?.join(", ") || "(no answer)"}
             </dd>
           </div>
