@@ -73,7 +73,8 @@ export default function App() {
   });
   let navigationRevision = 0;
   const discardDraft = () =>
-    (!draft().input && !draft().chips.length && !permissionDirty()) ||
+    (!draft().input && !draft().chips.length && !draft().editor &&
+      !permissionDirty()) ||
     globalThis.confirm("Discard unsent text before switching sessions?");
   const applyRoute = (hash: string) => {
     const target = route(hash);

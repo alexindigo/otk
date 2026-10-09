@@ -8,6 +8,7 @@ export interface Preferences {
   diffWrap: boolean;
   diffStyle: "auto" | "split" | "unified";
   scrollbar: boolean;
+  pasteSummary: boolean;
 }
 export const DEFAULT_PREFS: Readonly<Preferences> = {
   timestamps: false,
@@ -18,6 +19,7 @@ export const DEFAULT_PREFS: Readonly<Preferences> = {
   diffWrap: true,
   diffStyle: "auto",
   scrollbar: false,
+  pasteSummary: true,
 };
 export type PreferenceKey = keyof Preferences;
 export function isPreference(

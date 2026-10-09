@@ -8,6 +8,7 @@ const booleans = [
   ["genericToolOutput", "Generic tool output"],
   ["diffWrap", "Wrap diffs"],
   ["scrollbar", "Scrollbar"],
+  ["pasteSummary", "Paste summaries"],
 ] as const;
 export default function DisplayMenu(props: {
   prefs: Preferences;

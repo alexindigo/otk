@@ -6,16 +6,21 @@ import {
   type Draft,
   type DraftChange,
   editDraft,
+  editorSave,
   emptyDraft,
   insertChip,
+  pasteLabel,
   serialize,
 } from "./prompt/model.ts";
 import { serverPath, upload } from "./prompt/attachments.ts";
 import Chips from "./prompt/Chips.tsx";
+import Editor from "./prompt/Editor.tsx";
+import { summarizePaste } from "./prompt/paste.ts";
 export default function Prompt(
   props: {
     value: Draft;
     connected: boolean;
+    pasteSummary: boolean;
     onChange(value: DraftChange): Draft;
     onSubmit(parts: PromptPart[]): Promise<void>;
     onFind(query: string): Promise<string[]>;
@@ -116,11 +121,20 @@ export default function Prompt(
     const text = data.getData("text/plain").replace(/\r\n?/g, "\n"),
       start = input.selectionStart,
       end = input.selectionEnd;
-    const draft = change((current) =>
-      editDraft(
-        current,
-        current.input.slice(0, start) + text + current.input.slice(end),
-      ), start + text.length);
+    const summarized = summarizePaste(text, props.pasteSummary);
+    const draft = change(
+      (current) =>
+        summarized
+          ? insertChip(current, start, end, pasteLabel(text.trim()), {
+            kind: "text",
+            text: text.trim(),
+          })
+          : editDraft(
+            current,
+            current.input.slice(0, start) + text + current.input.slice(end),
+          ),
+      start + (summarized ? pasteLabel(text.trim()).length + 1 : text.length),
+    );
     try {
       const path = serverPath(text),
         matches = path ? await props.onFind(path) : [];
@@ -146,6 +160,17 @@ export default function Prompt(
   };
   const submit = async () => {
     const draft = change((current) => current);
+    if (/^\/editor(?:\s|$)/.test(draft.input)) {
+      change((current) => {
+        if (current !== draft) return current;
+        const edited = editDraft(
+          current,
+          current.input.replace(/^\/editor\s?/, ""),
+        );
+        return { ...edited, editor: { text: edited.input } };
+      });
+      return;
+    }
     if (
       !draft.input.trim() || !props.connected || pending() ||
       draft.chips.some((chip) => chip.pending || chip.error)
@@ -166,7 +191,10 @@ export default function Prompt(
     }
   };
   const escape = async (event: KeyboardEvent) => {
-    if (event.key !== "Escape" || event.defaultPrevented || !props.connected) {
+    if (
+      event.key !== "Escape" || event.defaultPrevented || props.value.editor ||
+      !props.connected
+    ) {
       return;
     }
     event.preventDefault();
@@ -212,7 +240,18 @@ export default function Prompt(
       <label for="otk-prompt-input">Prompt</label>
       <Chips
         chips={props.value.chips}
-        onOpen={() => input.focus()}
+        onOpen={(chip) =>
+          chip.part.kind === "text"
+            ? change((current) => {
+              const found = current.chips.find((value) => value.id === chip.id);
+              return found?.part.kind === "text"
+                ? {
+                  ...current,
+                  editor: { chipID: found.id, text: found.part.text },
+                }
+                : current;
+            })
+            : input.focus()}
         onRemove={(chip) =>
           change((current) => {
             const found = current.chips.find((item) => item.id === chip.id);
@@ -244,6 +283,16 @@ export default function Prompt(
         }}
       />
       <div class="otk-prompt-actions">
+        <button
+          type="button"
+          onClick={() =>
+            change((current) => ({
+              ...current,
+              editor: { text: current.input },
+            }))}
+        >
+          Edit prompt
+        </button>
         <span class="otk-muted">
           {armed()
             ? "esc again to interrupt"
@@ -260,6 +309,28 @@ export default function Prompt(
       </div>
       <Show when={error()}>
         <p class="otk-error" role="alert">{error()}</p>
+      </Show>
+      <Show when={props.value.editor}>
+        {(editor) => (
+          <Editor
+            title={editor().chipID ? "Edit pasted text" : "Edit prompt"}
+            value={editor().text}
+            onChange={(text) =>
+              change((current) =>
+                current.editor
+                  ? ({ ...current, editor: { ...current.editor, text } })
+                  : current
+              )}
+            onSave={() => {
+              change(editorSave);
+              input.focus();
+            }}
+            onCancel={() => {
+              change((current) => ({ ...current, editor: undefined }));
+              input.focus();
+            }}
+          />
+        )}
       </Show>
     </form>
   );

@@ -13,6 +13,7 @@ export interface Draft {
   input: string;
   chips: Chip[];
   mode: "normal" | "shell";
+  editor?: { text: string; chipID?: string };
 }
 // The owner applies transforms synchronously to its latest proposed draft and
 // returns that draft, even when rendered inputs still show a committed snapshot.
@@ -83,3 +84,36 @@ export function serialize(draft: Draft): PromptPart[] {
     ),
   ];
 }
+export function editorSave(draft: Draft): Draft {
+  const editor = draft.editor;
+  if (!editor) return draft;
+  if (editor.chipID) {
+    const chip = draft.chips.find((chip) => chip.id === editor.chipID);
+    if (!chip) throw new Error("Edited paste was removed from the prompt");
+    const label = pasteLabel(editor.text),
+      next = editDraft(
+        draft,
+        draft.input.slice(0, chip.start) + label + draft.input.slice(chip.end),
+      );
+    return {
+      ...next,
+      editor: undefined,
+      chips: [...next.chips, {
+        ...chip,
+        label,
+        end: chip.start + label.length,
+        part: { kind: "text" as const, text: editor.text },
+      }].sort((a, b) => a.start - b.start),
+    };
+  }
+  let cursor = 0;
+  const chips = draft.chips.flatMap((chip) => {
+    const start = editor.text.indexOf(chip.label, cursor);
+    if (start < 0) return [];
+    cursor = start + chip.label.length;
+    return [{ ...chip, start, end: cursor }];
+  });
+  return { ...draft, input: editor.text, chips, editor: undefined };
+}
+export const pasteLabel = (text: string) =>
+  `[Pasted ~${text.split("\n").length} lines]`;

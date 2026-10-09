@@ -173,6 +173,7 @@ export default function SessionView(props: {
         <Prompt
           value={props.draft}
           connected={props.connected}
+          pasteSummary={props.prefs.pasteSummary}
           onChange={(value) => props.onDraft(value)}
           onSubmit={(text) => props.onPrompt(text)}
           onFind={props.onFind}
