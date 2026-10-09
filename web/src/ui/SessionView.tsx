@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   createEffect,
+  createSignal,
   deep,
   type Element,
   For,
@@ -35,6 +36,8 @@ export default function SessionView(props: {
   onPrompt(text: string): Promise<void>;
   onAbort(): Promise<void>;
 }) {
+  const [paneWidth, setPaneWidth] = createSignal(0);
+  let view!: HTMLElement;
   let list!: HTMLDivElement,
     atBottom = true,
     previousHeight = 0,
@@ -64,12 +67,25 @@ export default function SessionView(props: {
     },
   );
   onSettled(() => {
+    const observer = new ResizeObserver((entries) =>
+      setPaneWidth(entries[0].contentRect.width)
+    );
+    observer.observe(view);
     list.scrollTop = list.scrollHeight;
     list.addEventListener("scroll", scroll);
-    return () => list.removeEventListener("scroll", scroll);
+    return () => {
+      observer.disconnect();
+      list.removeEventListener("scroll", scroll);
+    };
   });
   return (
-    <section class="otk-session-view" aria-label="Session">
+    <section
+      class="otk-session-view"
+      aria-label="Session"
+      ref={(element) => {
+        view = element;
+      }}
+    >
       <header class="otk-view-header">
         <div>
           <h1>{props.info?.title || "Loading session…"}</h1>
@@ -113,6 +129,7 @@ export default function SessionView(props: {
               prefs={props.prefs}
               directory={props.info?.directory}
               permissions={props.permissions}
+              paneWidth={paneWidth()}
             />
           )}
         </For>

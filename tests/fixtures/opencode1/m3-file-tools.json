@@ -1,0 +1,221 @@
+[
+  {
+    "id": "prt_11a929c990010fHPGV60XPYUhj",
+    "sessionID": "ses_ee56d6974ffepVsBcOsj391Hin",
+    "messageID": "msg_11a929ae6001Zd4TZCM9WCb1OM",
+    "type": "tool",
+    "callID": "call_70695a70-08c0-4cbf-82df-f916ed893de4",
+    "tool": "edit",
+    "state": {
+      "status": "completed",
+      "input": {
+        "filePath": "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/edit.ts",
+        "oldString": "oldValue",
+        "newString": "newValue"
+      },
+      "output": "Edit applied successfully.\n\nLSP errors detected in this file, please fix:\n<diagnostics file=\"/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/edit.ts\">\nERROR [1:3] fixture diagnostic\n</diagnostics>",
+      "title": "edit.ts",
+      "metadata": {
+        "diagnostics": {
+          "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/edit.ts": [
+            {
+              "severity": 1,
+              "message": "fixture diagnostic",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 2
+                },
+                "end": {
+                  "line": 0,
+                  "character": 5
+                }
+              }
+            }
+          ]
+        },
+        "diff": "Index: /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/edit.ts\n===================================================================\n--- /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/edit.ts\n+++ /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/edit.ts\n@@ -1,1 +1,1 @@\n-const oldValue: number = 1;\n+const newValue: number = 1;\n",
+        "filediff": {
+          "file": "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/edit.ts",
+          "patch": "Index: /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/edit.ts\n===================================================================\n--- /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/edit.ts\n+++ /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/edit.ts\n@@ -1,1 +1,1 @@\n-const oldValue: number = 1;\n+const newValue: number = 1;\n",
+          "additions": 1,
+          "deletions": 1
+        },
+        "truncated": false
+      },
+      "time": {
+        "start": 1791447178398,
+        "end": 1791447178560
+      }
+    }
+  },
+  {
+    "id": "prt_11a92a060001a7O74zTZvwVR1Q",
+    "sessionID": "ses_ee56d6974ffepVsBcOsj391Hin",
+    "messageID": "msg_11a929f8c0014dQyAF2tY02rD5",
+    "type": "tool",
+    "callID": "call_5bf7a2a3-a3a5-434f-99a8-34c10ef39347",
+    "tool": "write",
+    "state": {
+      "status": "completed",
+      "input": {
+        "filePath": "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/write.ts",
+        "content": "const written: number = 2;\n"
+      },
+      "output": "Wrote file successfully.\n\nLSP errors detected in other files:\n<diagnostics file=\"/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/edit.ts\">\nERROR [1:3] fixture diagnostic\n</diagnostics>\n\nLSP errors detected in this file, please fix:\n<diagnostics file=\"/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/write.ts\">\nERROR [1:3] fixture diagnostic\n</diagnostics>",
+      "title": "write.ts",
+      "metadata": {
+        "diagnostics": {
+          "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/edit.ts": [
+            {
+              "severity": 1,
+              "message": "fixture diagnostic",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 2
+                },
+                "end": {
+                  "line": 0,
+                  "character": 5
+                }
+              }
+            }
+          ],
+          "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/write.ts": [
+            {
+              "severity": 1,
+              "message": "fixture diagnostic",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 2
+                },
+                "end": {
+                  "line": 0,
+                  "character": 5
+                }
+              }
+            }
+          ]
+        },
+        "filepath": "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/write.ts",
+        "exists": false,
+        "truncated": false
+      },
+      "time": {
+        "start": 1791447179363,
+        "end": 1791447179395
+      }
+    }
+  },
+  {
+    "id": "prt_11a92a1910017GEhhu7tkl76Sy",
+    "sessionID": "ses_ee56d6974ffepVsBcOsj391Hin",
+    "messageID": "msg_11a92a166001C40ICJG36obZ4E",
+    "type": "tool",
+    "callID": "call_a0e757bd-43cf-4544-9589-d151d3c64205",
+    "tool": "apply_patch",
+    "state": {
+      "status": "completed",
+      "input": {
+        "patchText": "*** Begin Patch\n*** Add File: created.ts\n+const created: number = 3;\n*** Update File: modify.txt\n@@\n-before\n+after\n*** Delete File: delete.txt\n*** Update File: move.txt\n*** Move to: moved.txt\n@@\n-move me\n+moved\n*** End Patch"
+      },
+      "output": "Success. Updated the following files:\nA created.ts\nM modify.txt\nD delete.txt\nM moved.txt\n\nLSP errors detected in created.ts, please fix:\n<diagnostics file=\"/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/created.ts\">\nERROR [1:3] fixture diagnostic\n</diagnostics>",
+      "title": "Success. Updated the following files:\nA created.ts\nM modify.txt\nD delete.txt\nM moved.txt\n\nLSP errors detected in created.ts, please fix:\n<diagnostics file=\"/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/created.ts\">\nERROR [1:3] fixture diagnostic\n</diagnostics>",
+      "metadata": {
+        "diff": "Index: /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/created.ts\n===================================================================\n--- /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/created.ts\n+++ /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/created.ts\n@@ -0,0 +1,1 @@\n+const created: number = 3;\n\nIndex: /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/modify.txt\n===================================================================\n--- /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/modify.txt\n+++ /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/modify.txt\n@@ -1,1 +1,1 @@\n-before\n+after\n\nIndex: /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/delete.txt\n===================================================================\n--- /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/delete.txt\n+++ /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/delete.txt\n@@ -1,1 +0,0 @@\n-delete me\n\nIndex: /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/move.txt\n===================================================================\n--- /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/move.txt\n+++ /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/move.txt\n@@ -1,1 +1,1 @@\n-move me\n+moved\n\n",
+        "files": [
+          {
+            "filePath": "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/created.ts",
+            "relativePath": "created.ts",
+            "type": "add",
+            "patch": "Index: /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/created.ts\n===================================================================\n--- /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/created.ts\n+++ /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/created.ts\n@@ -0,0 +1,1 @@\n+const created: number = 3;\n",
+            "additions": 1,
+            "deletions": 0
+          },
+          {
+            "filePath": "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/modify.txt",
+            "relativePath": "modify.txt",
+            "type": "update",
+            "patch": "Index: /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/modify.txt\n===================================================================\n--- /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/modify.txt\n+++ /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/modify.txt\n@@ -1,1 +1,1 @@\n-before\n+after\n",
+            "additions": 1,
+            "deletions": 1
+          },
+          {
+            "filePath": "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/delete.txt",
+            "relativePath": "delete.txt",
+            "type": "delete",
+            "patch": "Index: /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/delete.txt\n===================================================================\n--- /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/delete.txt\n+++ /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/delete.txt\n@@ -1,1 +0,0 @@\n-delete me\n",
+            "additions": 0,
+            "deletions": 2
+          },
+          {
+            "filePath": "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/move.txt",
+            "relativePath": "moved.txt",
+            "type": "move",
+            "patch": "Index: /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/move.txt\n===================================================================\n--- /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/move.txt\n+++ /home/tester/otk/.test-state/oc-110e130c1a8a9157/project/move.txt\n@@ -1,1 +1,1 @@\n-move me\n+moved\n",
+            "additions": 1,
+            "deletions": 1,
+            "movePath": "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/moved.txt"
+          }
+        ],
+        "diagnostics": {
+          "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/edit.ts": [
+            {
+              "severity": 1,
+              "message": "fixture diagnostic",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 2
+                },
+                "end": {
+                  "line": 0,
+                  "character": 5
+                }
+              }
+            }
+          ],
+          "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/write.ts": [
+            {
+              "severity": 1,
+              "message": "fixture diagnostic",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 2
+                },
+                "end": {
+                  "line": 0,
+                  "character": 5
+                }
+              }
+            }
+          ],
+          "/home/tester/otk/.test-state/oc-110e130c1a8a9157/project/created.ts": [
+            {
+              "severity": 1,
+              "message": "fixture diagnostic",
+              "range": {
+                "start": {
+                  "line": 0,
+                  "character": 2
+                },
+                "end": {
+                  "line": 0,
+                  "character": 5
+                }
+              }
+            }
+          ]
+        },
+        "truncated": false
+      },
+      "time": {
+        "start": 1791447179669,
+        "end": 1791447179685
+      }
+    }
+  }
+]

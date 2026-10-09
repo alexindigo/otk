@@ -2,6 +2,7 @@
 import type { Todo, ToolBase, ToolCall } from "../../../protocol/content.ts";
 import { stripVTControlCharacters } from "node:util";
 import type { RawPart } from "./types.ts";
+import { mapFileTool } from "./file-tools.ts";
 const string = (value: unknown): string | undefined =>
   typeof value === "string" ? value : undefined;
 const record = (value: unknown): Record<string, unknown> =>
@@ -45,6 +46,8 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
     awaitingPermission,
   };
   const input = state.input, metadata = state.metadata ?? {};
+  const fileTool = mapFileTool(part, base);
+  if (fileTool) return fileTool;
   const number = (value: unknown) =>
     typeof value === "number" && Number.isFinite(value) ? value : undefined;
   const display = record(metadata.display);

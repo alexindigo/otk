@@ -20,6 +20,7 @@ function PartView(
     streaming: boolean;
     directory?: string;
     permissions: PermissionRequest[];
+    paneWidth: number;
   },
 ) {
   return (
@@ -41,6 +42,8 @@ function PartView(
           >
             <ToolLine
               call={part().call}
+              prefs={props.prefs}
+              paneWidth={props.paneWidth}
               genericOutput={props.prefs.genericToolOutput}
               directory={props.directory}
               waiting={props.permissions.some((request) =>
@@ -65,6 +68,7 @@ export default function Message(
     prefs: Preferences;
     directory?: string;
     permissions: PermissionRequest[];
+    paneWidth: number;
   },
 ) {
   const assistant = () =>
@@ -93,6 +97,7 @@ export default function Message(
             prefs={props.prefs}
             directory={props.directory}
             permissions={props.permissions}
+            paneWidth={props.paneWidth}
             streaming={props.message.role === "assistant" &&
               props.message.time.completed === undefined}
           />

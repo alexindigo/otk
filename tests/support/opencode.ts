@@ -43,6 +43,7 @@ export class OpencodeTest {
     options: {
       prepare?(test: OpencodeTest): Promise<void>;
       env?: Record<string, string>;
+      config?: Record<string, unknown>;
     } = {},
   ): Promise<OpencodeTest> {
     const test = new OpencodeTest();
@@ -89,6 +90,7 @@ export class OpencodeTest {
         share: "disabled",
         model: "fake/scripted",
         permission,
+        ...options.config,
         provider: {
           fake: {
             npm: "@ai-sdk/openai-compatible",

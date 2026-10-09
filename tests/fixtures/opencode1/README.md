@@ -22,3 +22,10 @@ search mode. Web-search permission was rejected before its provider call; no
 external search was executed. Field values are retained. Source directories:
 `/home/tester/otk/.test-state/oc-857b8186062b78de`, `oc-eb9805f340d0520b`,
 `oc-c998a5ad36a33442`.
+
+`m3-file-tools.json` records real edit/write/apply_patch parts, including all
+four file statuses and LSP diagnostics supplied by the framed-stdio fixture
+through stock opencode 1.18.34. Source:
+`/home/tester/otk/.test-state/oc-110e130c1a8a9157/recorded-file-tools.json`. OTK
+diff counts follow actual hunk lines, including the delete case where upstream's
+metadata counts its trailing newline as an extra deleted line.

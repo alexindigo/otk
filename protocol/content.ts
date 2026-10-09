@@ -53,6 +53,7 @@ export interface FileDiff {
   additions: number;
   deletions: number;
   hunks: Hunk[];
+  diagnostics?: Diagnostic[];
 }
 export interface ToolBase {
   callID: string;
@@ -107,6 +108,29 @@ export interface SkillCall extends ToolBase {
   tool: "skill";
   name: string;
 }
+export interface Diagnostic {
+  severity: "error" | "warning" | "info" | "hint";
+  line: number;
+  col: number;
+  message: string;
+}
+export interface EditCall extends ToolBase {
+  tool: "edit";
+  path: string;
+  files: FileDiff[];
+  diagnostics: Diagnostic[];
+}
+export interface WriteCall extends ToolBase {
+  tool: "write";
+  path: string;
+  content: string;
+  lang?: string;
+  diagnostics: Diagnostic[];
+}
+export interface PatchCall extends ToolBase {
+  tool: "patch";
+  files: FileDiff[];
+}
 export interface TodoCall extends ToolBase {
   tool: "todo";
   items: Todo[];
@@ -128,7 +152,10 @@ export type ToolCall =
   | SearchCall
   | FetchCall
   | WebSearchCall
-  | SkillCall;
+  | SkillCall
+  | FileToolCall;
+// File-writing tools preserve server-built hunks and never expose LSP types.
+export type FileToolCall = EditCall | WriteCall | PatchCall;
 export type Part =
   | { kind: "text"; id: string; blocks: Block[]; synthetic: boolean }
   | {
