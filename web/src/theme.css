@@ -952,3 +952,31 @@ p {
   flex-wrap: wrap;
   gap: .5rem;
 }
+.otk-autocomplete {
+  display: flex;
+  flex-direction: column;
+  max-height: 30vh;
+  overflow: auto;
+  border: 1px solid var(--muted);
+  background: var(--panel);
+  margin-bottom: .5rem;
+}
+.otk-autocomplete button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  text-align: left;
+  gap: 1rem;
+  border: 0;
+}
+.otk-autocomplete [aria-selected=true] {
+  background: var(--bg);
+  color: var(--accent);
+}
+.otk-prompt-chip {
+  max-width: 100%;
+}
+.otk-prompt-chip button {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

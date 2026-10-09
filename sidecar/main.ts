@@ -9,6 +9,7 @@ import { serve } from "./http/server.ts";
 import type { ServiceConfig } from "./config/schema.ts";
 import { OtkDb } from "./db/db.ts";
 import { Prefs } from "./db/prefs.ts";
+import { Frecency } from "./db/frecency.ts";
 export async function start(cfg: ServiceConfig) {
   if (cfg.harness.type !== "opencode1") {
     throw new Error(`Unsupported harness: ${cfg.harness.type}`);
@@ -17,7 +18,13 @@ export async function start(cfg: ServiceConfig) {
     adapter = new Opencode1Adapter(cfg, new StreamBuffers()),
     index = new IndexStore();
   const db = new OtkDb(cfg.state.path), prefs = new Prefs(db);
-  const connections = new Connections(adapter, index, cfg.harness.url, prefs);
+  const connections = new Connections(
+    adapter,
+    index,
+    cfg.harness.url,
+    prefs,
+    new Frecency(db),
+  );
   await adapter.start({
     connection: (state) => connections.connection(state),
     indexReset: (entries) => index.reset(entries),

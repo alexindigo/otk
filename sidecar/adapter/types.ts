@@ -13,6 +13,11 @@ import type {
   PromptInput,
   ShellInput,
 } from "../../protocol/rpc.ts";
+import type {
+  AgentOption,
+  FileMatch,
+  ResourceOption,
+} from "../../protocol/rpc.ts";
 export interface HarnessSink {
   connection(state: HarnessState): void;
   indexReset(entries: IndexEntry[]): void;
@@ -38,7 +43,9 @@ export interface HarnessAdapter {
   ): Promise<ContentSession>;
   prompt(input: PromptInput): Promise<void>;
   shell(input: ShellInput): Promise<void>;
-  findFiles(sessionID: string, query: string): Promise<string[]>;
+  findFiles(sessionID: string, query: string): Promise<FileMatch[]>;
+  listAgents(sessionID: string): Promise<AgentOption[]>;
+  listResources(sessionID: string): Promise<ResourceOption[]>;
   abort(sessionID: string): Promise<void>;
   revert(sessionID: string, messageID: string): Promise<ContentSession>;
   replyPermission(input: PermissionReply): Promise<void>;

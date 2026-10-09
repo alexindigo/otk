@@ -4,6 +4,7 @@ import { HarnessError } from "../adapter/types.ts";
 import type { PromptInput } from "../../protocol/rpc.ts";
 import type { Prefs } from "../db/prefs.ts";
 import { promptParts } from "./prompt.ts";
+import type { Frecency } from "../db/frecency.ts";
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new HarnessError("params", "Expected object");
@@ -27,12 +28,25 @@ export async function dispatch(
   method: string,
   value: unknown,
   prefs: Prefs,
+  frecency: Frecency,
 ): Promise<unknown> {
   const p = object(value);
   const sessionID = () => text(p, "sessionID")!;
   switch (method) {
     case "prefs.get":
       return prefs.get();
+    case "frecency.list":
+      return frecency.list((await adapter.getSession(sessionID())).directory);
+    case "frecency.bump":
+      frecency.bump(
+        (await adapter.getSession(sessionID())).directory,
+        text(p, "path")!,
+      );
+      return null;
+    case "agents.list":
+      return adapter.listAgents(sessionID());
+    case "resources.list":
+      return adapter.listResources(sessionID());
     case "prefs.set":
       return prefs.set(p.key, p.value);
     case "session.get":

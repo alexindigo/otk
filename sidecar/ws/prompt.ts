@@ -37,20 +37,34 @@ export function promptParts(value: unknown): PromptPart[] {
       };
     }
     if (p.kind === "file" && p.source === "path") {
-      let range: { start: number; end: number } | undefined;
+      let range: { start: number; end?: number } | undefined;
       if (p.range !== undefined) {
         const r = object(p.range);
         if (
-          !Number.isInteger(r.start) || !Number.isInteger(r.end) ||
-          Number(r.start) < 1 || Number(r.end) < Number(r.start)
+          !Number.isInteger(r.start) || Number(r.start) < 1 ||
+          (r.end !== undefined &&
+            (!Number.isInteger(r.end) || Number(r.end) < Number(r.start)))
         ) throw new HarnessError("params", "Invalid file line range");
-        range = { start: Number(r.start), end: Number(r.end) };
+        range = {
+          start: Number(r.start),
+          ...(r.end === undefined ? {} : { end: Number(r.end) }),
+        };
       }
       return {
         kind: "file",
         source: "path",
         path: text(p, "path")!,
         ...(range ? { range } : {}),
+      };
+    }
+    if (p.kind === "file" && p.source === "resource") {
+      return {
+        kind: "file",
+        source: "resource",
+        name: text(p, "name")!,
+        mime: text(p, "mime")!,
+        uri: text(p, "uri")!,
+        server: text(p, "server")!,
       };
     }
     throw new HarnessError("params", "Invalid prompt part");

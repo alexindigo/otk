@@ -21,6 +21,12 @@ import Setup from "./Setup.tsx";
 import { createToggles } from "./Toggles.ts";
 import DisplayMenu from "./DisplayMenu.tsx";
 import { emptyDraft } from "./prompt/model.ts";
+import type {
+  AgentOption,
+  FileMatch,
+  FrecencyEntry,
+  ResourceOption,
+} from "../../../protocol/rpc.ts";
 export default function App() {
   const index = createIndex();
   const sidecars: ReturnType<typeof createSidecars> = createSidecars(
@@ -75,6 +81,16 @@ export default function App() {
     );
   });
   let navigationRevision = 0;
+  const directoryFor = async (target: Selection): Promise<string> => {
+    const current = info();
+    if (
+      current?.id === target.sessionID &&
+      session.state.selection?.sidecarId === target.sidecarId
+    ) return current.directory;
+    return (await sidecars.connection(target.sidecarId).rpc.call<
+      ContentSession
+    >("session.get", { sessionID: target.sessionID })).directory;
+  };
   const discardDraft = () =>
     (!draft().input && !draft().chips.length && !draft().editor &&
       !permissionDirty() && !questionDirty()) ||
@@ -287,8 +303,36 @@ export default function App() {
                     onFind={(query) => {
                       const target = session.state.selection!;
                       return sidecars.connection(target.sidecarId).rpc.call<
-                        string[]
+                        FileMatch[]
                       >("find.files", { sessionID: target.sessionID, query });
+                    }}
+                    onMentions={async (query) => {
+                      const target = session.state.selection!,
+                        rpc = sidecars.connection(target.sidecarId).rpc,
+                        directory = await directoryFor(target);
+                      const [files, agents, resources, frecency] = await Promise
+                        .all([
+                          rpc.call<FileMatch[]>("find.files", {
+                            sessionID: target.sessionID,
+                            query,
+                          }),
+                          rpc.call<AgentOption[]>("agents.list", {
+                            sessionID: target.sessionID,
+                          }),
+                          rpc.call<ResourceOption[]>("resources.list", {
+                            sessionID: target.sessionID,
+                          }),
+                          rpc.call<FrecencyEntry[]>("frecency.list", {
+                            sessionID: target.sessionID,
+                          }),
+                        ]);
+                      return { files, agents, resources, frecency, directory };
+                    }}
+                    onBump={async (path) => {
+                      const target = session.state.selection!;
+                      await sidecars.connection(target.sidecarId).rpc.call<
+                        void
+                      >("frecency.bump", { sessionID: target.sessionID, path });
                     }}
                     onPrompt={(parts, mode) => {
                       const target = session.state.selection!;

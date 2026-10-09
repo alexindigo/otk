@@ -41,7 +41,14 @@ import { Backoff, Watchdog } from "./watchdog.ts";
 import { TaskProgress } from "./tasks.ts";
 import { parseDiff } from "../../content/diff.ts";
 import { mapPromptParts } from "./prompt.ts";
+import { statMatch } from "./files.ts";
 import { mapQuestion } from "./questions.ts";
+import { isAbsolute, relative, resolve } from "@std/path";
+import type {
+  AgentOption,
+  FileMatch,
+  ResourceOption,
+} from "../../../protocol/rpc.ts";
 const contentEvents = new Set([
   "session.created",
   "session.updated",
@@ -295,12 +302,61 @@ export class Opencode1Adapter implements HarnessAdapter {
       },
     );
   }
-  async findFiles(sessionID: string, query: string): Promise<string[]> {
+  async findFiles(sessionID: string, query: string): Promise<FileMatch[]> {
     const directory = this.#directory(sessionID) ??
       (await this.getSession(sessionID)).directory;
-    return this.client.json<string[]>("/find/file", {
-      query: { directory, query, dirs: "true", limit: 100 },
-    });
+    const search = isAbsolute(query) ? relative(directory, query) : query;
+    const paths = await Promise.all(
+      ["file", "directory"].map((type) =>
+        this.client.json<string[]>("/find/file", {
+          query: { directory, query: search, type, limit: 100 },
+        })
+      ),
+    );
+    const candidates = [
+      ...new Set([
+        ...(query ? [query === "/" ? query : query.replace(/\/+$/, "")] : []),
+        ...paths.flat().map((path) =>
+          path === "/" ? "." : path.replace(/\/+$/, "")
+        ),
+      ]),
+    ];
+    return (await Promise.all(candidates.map(async (path) => {
+      const info = await statMatch(resolve(directory, path));
+      return info ? { path, directory: info.isDirectory } : undefined;
+    }))).filter((file): file is FileMatch => !!file);
+  }
+  async listAgents(sessionID: string): Promise<AgentOption[]> {
+    const directory = this.#directory(sessionID) ??
+      (await this.getSession(sessionID)).directory;
+    const agents = await this.client.json<
+      { name: string; description?: string; mode: string; hidden?: boolean }[]
+    >("/agent", { query: { directory } });
+    return agents.filter((agent) => !agent.hidden && agent.mode !== "primary")
+      .map(({ name, description }) => ({ name, description }));
+  }
+  async listResources(sessionID: string): Promise<ResourceOption[]> {
+    const directory = this.#directory(sessionID) ??
+      (await this.getSession(sessionID)).directory;
+    const resources = await this.client.json<
+      Record<
+        string,
+        {
+          name: string;
+          description?: string;
+          mimeType?: string;
+          uri: string;
+          client: string;
+        }
+      >
+    >("/experimental/resource", { query: { directory } });
+    return Object.values(resources).map((resource) => ({
+      name: resource.name,
+      description: resource.description,
+      mime: resource.mimeType || "text/plain",
+      uri: resource.uri,
+      server: resource.client,
+    }));
   }
   async shell(input: ShellInput): Promise<void> {
     const directory = this.#directory(input.sessionID) ??

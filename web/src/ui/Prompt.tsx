@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createSignal, onSettled, Show } from "solid-js";
-import type { PromptPart } from "../../../protocol/rpc.ts";
+import { createEffect, createSignal, onSettled, Show } from "solid-js";
+import type { FileMatch, PromptPart } from "../../../protocol/rpc.ts";
 import {
   type Chip,
   type Draft,
@@ -16,6 +16,14 @@ import { serverPath, upload } from "./prompt/attachments.ts";
 import Chips from "./prompt/Chips.tsx";
 import Editor from "./prompt/Editor.tsx";
 import { summarizePaste } from "./prompt/paste.ts";
+import Autocomplete from "./prompt/Autocomplete.tsx";
+import {
+  type CompletionOption,
+  mention,
+  mentionOptions,
+  mentionQuery,
+  type MentionSources,
+} from "./prompt/autocomplete.ts";
 export default function Prompt(
   props: {
     value: Draft;
@@ -23,7 +31,9 @@ export default function Prompt(
     pasteSummary: boolean;
     onChange(value: DraftChange): Draft;
     onSubmit(parts: PromptPart[], mode: Draft["mode"]): Promise<void>;
-    onFind(query: string): Promise<string[]>;
+    onFind(query: string): Promise<FileMatch[]>;
+    onMentions(query: string): Promise<MentionSources>;
+    onBump(path: string): Promise<void>;
     onAbort(): Promise<void>;
   },
 ) {
@@ -33,9 +43,96 @@ export default function Prompt(
   let deadline = 0, timer: ReturnType<typeof setTimeout> | undefined;
   let active = true;
   let input!: HTMLTextAreaElement;
+  const [caret, setCaret] = createSignal(0),
+    [completion, setCompletion] = createSignal<ReturnType<typeof mention>>(),
+    [options, setOptions] = createSignal<CompletionOption[]>([]),
+    [choice, setChoice] = createSignal(0);
+  let searchGeneration = 0;
+  const completionVisible = () => !!completion() && options().length > 0;
+  createEffect(
+    () => ({
+      value: props.value.input,
+      mode: props.value.mode,
+      caret: caret(),
+      connected: props.connected,
+    }),
+    ({ value, mode, caret, connected }) => {
+      const token = connected && mode === "normal" &&
+          !props.value.chips.some((chip) =>
+            caret >= chip.start && caret <= chip.end
+          )
+        ? mention(value, caret)
+        : undefined;
+      const generation = ++searchGeneration;
+      setCompletion(token);
+      setOptions([]);
+      setChoice(0);
+      if (token) {
+        void (async () => {
+          try {
+            const source = await props.onMentions(
+              mentionQuery(token.query).query,
+            );
+            if (active && generation === searchGeneration) {
+              setOptions(
+                mentionOptions(source, token.query),
+              );
+            }
+          } catch (error) {
+            if (active && generation === searchGeneration) {
+              setError(
+                (error as Error).message,
+              );
+            }
+          }
+        })();
+      }
+    },
+  );
+  const select = (index: number, expand = false) => {
+    const token = completion(), option = options()[index];
+    if (!token || !option) return;
+    if (expand && option.directory) {
+      change(
+        (current) =>
+          editDraft(
+            current,
+            current.input.slice(0, token.start) +
+              `@${option.path!.replace(/\/$/, "")}/` +
+              current.input.slice(token.end),
+          ),
+        token.start + option.path!.replace(/\/$/, "").length + 2,
+      );
+      return;
+    }
+    const part = option.part;
+    if (part) {
+      change(
+        (current) =>
+          insertChip(
+            current,
+            token.start,
+            token.end,
+            `@${option.label}`,
+            part,
+          ),
+        token.start + option.label.length + 2,
+      );
+      if (option.path) {
+        void props.onBump(option.path).catch((error) => {
+          if (active) setError((error as Error).message);
+        });
+      }
+    }
+    searchGeneration++;
+    setCompletion(undefined);
+    setOptions([]);
+    input.focus();
+  };
   const change = (update: DraftChange, caret?: number): Draft => {
     const draft = props.onChange(update);
     if (caret !== undefined) {
+      setCaret(caret);
       requestAnimationFrame(() => {
         if (active && input.value === draft.input) {
           input.setSelectionRange(caret, caret);
@@ -139,7 +236,7 @@ export default function Prompt(
       const path = serverPath(text),
         matches = path ? await props.onFind(path) : [];
       if (!active) return;
-      if (path && matches.includes(path)) {
+      if (path && matches.some((file) => file.path === path)) {
         change(
           (current) =>
             current === draft
@@ -240,6 +337,13 @@ export default function Prompt(
       <label for="otk-prompt-input">
         {props.value.mode === "shell" ? "Shell" : "Prompt"}
       </label>
+      <Show when={completionVisible()}>
+        <Autocomplete
+          options={options()}
+          selected={choice()}
+          onSelect={(index) => select(index)}
+        />
+      </Show>
       <Chips
         chips={props.value.chips}
         onOpen={(chip) =>
@@ -277,13 +381,38 @@ export default function Prompt(
           : "Message the agent…"}
         value={props.value.input}
         onPaste={(event) => void paste(event)}
+        onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+        onClick={(event) => setCaret(event.currentTarget.selectionStart)}
         onInput={(event) => {
+          setCaret(event.currentTarget.selectionStart);
           const value = event.currentTarget.value;
           change((current) => editDraft(current, value));
         }}
         onKeyDown={(event) => {
           if (
-            event.key === "!" && !event.isComposing &&
+            completionVisible() &&
+            ["ArrowUp", "ArrowDown", "Enter", "Tab", "Escape"].includes(
+              event.key,
+            )
+          ) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (event.key === "Escape") {
+              searchGeneration++;
+              setCompletion(undefined);
+              setOptions([]);
+            } else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+              if (options().length) {
+                setChoice(
+                  (choice() + (event.key === "ArrowUp" ? -1 : 1) +
+                    options().length) % options().length,
+                );
+              }
+            } else select(choice(), event.key === "Tab");
+            return;
+          }
+          if (
+            event.key === "!" && !event.isComposing && !completionVisible() &&
             props.value.mode === "normal" &&
             event.currentTarget.selectionStart === 0 &&
             event.currentTarget.selectionEnd === 0

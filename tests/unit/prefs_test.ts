@@ -37,7 +37,7 @@ Deno.test("otk.db migrates transactionally, uses WAL and preserves prefs on reop
   );
   assertEquals(
     db.connection.prepare("PRAGMA user_version").get()!.user_version,
-    1,
+    2,
   );
   assertEquals(prefs.get(), DEFAULT_PREFS);
   const changes: unknown[] = [],
@@ -56,7 +56,7 @@ Deno.test("otk.db migrates transactionally, uses WAL and preserves prefs on reop
   });
   reopened.close();
   const future = new DatabaseSync(join(root, "otk.db"));
-  future.exec("PRAGMA user_version=2");
+  future.exec("PRAGMA user_version=3");
   future.close();
   assertThrows(() => new OtkDb(root), Error, "Unsupported otk.db schema");
   const untouched = new DatabaseSync(join(root, "otk.db"), { readOnly: true });

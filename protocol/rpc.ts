@@ -13,9 +13,17 @@ export type PromptPart =
     kind: "file";
     source: "path";
     path: string;
-    range?: { start: number; end: number };
+    range?: { start: number; end?: number };
   }
-  | { kind: "agent"; name: string };
+  | { kind: "agent"; name: string }
+  | {
+    kind: "file";
+    source: "resource";
+    name: string;
+    mime: string;
+    uri: string;
+    server: string;
+  };
 export interface PromptInput {
   sessionID: string;
   parts: PromptPart[];
@@ -23,6 +31,26 @@ export interface PromptInput {
   agent?: string;
   model?: ModelRef;
   variant?: string;
+}
+export interface FileMatch {
+  path: string;
+  directory: boolean;
+}
+export interface AgentOption {
+  name: string;
+  description?: string;
+}
+export interface ResourceOption {
+  name: string;
+  description?: string;
+  mime: string;
+  uri: string;
+  server: string;
+}
+export interface FrecencyEntry {
+  path: string;
+  score: number;
+  last: number;
 }
 export interface PermissionReply {
   requestID: string;
@@ -44,6 +72,10 @@ export type RpcMethod =
   | "session.prompt"
   | "session.shell"
   | "find.files"
+  | "agents.list"
+  | "resources.list"
+  | "frecency.list"
+  | "frecency.bump"
   | "session.abort"
   | "session.revert"
   | "permission.list"

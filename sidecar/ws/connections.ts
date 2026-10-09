@@ -12,6 +12,7 @@ import { HarnessError } from "../adapter/types.ts";
 import type { IndexStore } from "../index/store.ts";
 import { dispatch, object, text } from "./rpc.ts";
 import type { Prefs } from "../db/prefs.ts";
+import type { Frecency } from "../db/frecency.ts";
 interface Connection {
   ws: WebSocket;
   welcomed: boolean;
@@ -27,6 +28,7 @@ export class Connections {
     readonly index: IndexStore,
     readonly url: string,
     readonly prefs: Prefs,
+    readonly frecency: Frecency,
   ) {
     index.listen((frame) => this.broadcast(frame));
     this.#stopPrefs = prefs.listen((prefs) =>
@@ -156,6 +158,7 @@ export class Connections {
               text(raw, "method")!,
               frame.params,
               this.prefs,
+              this.frecency,
             );
             this.#send(connection, { t: "rpc.result", id, ok: true, result });
           } catch (error) {

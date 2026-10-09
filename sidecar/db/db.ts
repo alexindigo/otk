@@ -13,6 +13,7 @@ export class OtkDb {
       );
       const migrations = [
         new URL("./migrations/001_prefs.sql", import.meta.url),
+        new URL("./migrations/002_frecency.sql", import.meta.url),
       ];
       if (version > migrations.length) {
         throw new Error(`Unsupported otk.db schema ${version}`);

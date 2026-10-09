@@ -18,6 +18,7 @@
     "npm:@solidjs/web@2.0.0-rc.13": "2.0.0-rc.13_solid-js@2.0.0-rc.13",
     "npm:@types/ws@8.18.1": "8.18.1",
     "npm:diff@8.0.4": "8.0.4",
+    "npm:fuzzysort@3.1.0": "3.1.0",
     "npm:jose@6.1.3": "6.1.3",
     "npm:marked@17.0.6": "17.0.6",
     "npm:otplib@12.0.1": "12.0.1",
@@ -669,6 +670,9 @@
       "os": ["darwin"],
       "scripts": true
     },
+    "fuzzysort@3.1.0": {
+      "integrity": "sha512-sR9BNCjBg6LNgwvxlBd0sBABvQitkLzoVY9MYYROQVX/FvfJ4Mai9LsGhDgd8qYdds0bY77VzYd5iuB+v5rwQQ=="
+    },
     "gensync@1.0.0-beta.2": {
       "integrity": "sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg=="
     },
@@ -1107,6 +1111,7 @@
       "npm:@solidjs/vite-plugin@3.0.0-next.47",
       "npm:@solidjs/web@2.0.0-rc.13",
       "npm:diff@8.0.4",
+      "npm:fuzzysort@3.1.0",
       "npm:jose@6.1.3",
       "npm:marked@17.0.6",
       "npm:otplib@12.0.1",
