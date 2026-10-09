@@ -120,7 +120,8 @@ async function prompt(
   client.send({ t: "subscribe", sessionID: session.id });
   await client.rpc("session.prompt", {
     sessionID: session.id,
-    parts: [{ type: "text", text }],
+    mode: "normal",
+    parts: [{ kind: "text", text }],
   });
 }
 async function completed(client: WsClient, id: string): Promise<Message[]> {

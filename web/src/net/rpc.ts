@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ClientFrame, ServerFrame } from "../../../protocol/messages.ts";
+import { checkClientFrameSize } from "../../../protocol/messages.ts";
 import type { RpcMethod } from "../../../protocol/rpc.ts";
 
 export class Rpc {
@@ -46,7 +47,9 @@ export class Rpc {
       });
       signal?.addEventListener("abort", abort, { once: true });
       try {
-        this.send({ t: "rpc", id, method, params });
+        const frame: ClientFrame = { t: "rpc", id, method, params };
+        checkClientFrameSize(JSON.stringify(frame));
+        this.send(frame);
       } catch (error) {
         fail(error as Error);
       }

@@ -30,6 +30,7 @@ import type {
 import { Backoff, Watchdog } from "./watchdog.ts";
 import { TaskProgress } from "./tasks.ts";
 import { parseDiff } from "../../content/diff.ts";
+import { mapPromptParts } from "./prompt.ts";
 const contentEvents = new Set([
   "session.created",
   "session.updated",
@@ -258,13 +259,16 @@ export class Opencode1Adapter implements HarnessAdapter {
     );
   }
   async prompt(input: PromptInput): Promise<void> {
+    const directory = this.#directory(input.sessionID) ??
+      (await this.getSession(input.sessionID)).directory;
     await this.client.request(
       `/session/${encodeURIComponent(input.sessionID)}/prompt_async`,
       {
         method: "POST",
-        query: { directory: this.#directory(input.sessionID) },
+        query: { directory },
         body: {
-          parts: input.parts.map((part) => ({ type: "text", text: part.text })),
+          parts: await mapPromptParts(input.parts, directory),
+          variant: input.variant,
           agent: input.agent,
           model: input.model
             ? { providerID: input.model.provider, modelID: input.model.model }
@@ -272,6 +276,13 @@ export class Opencode1Adapter implements HarnessAdapter {
         },
       },
     );
+  }
+  async findFiles(sessionID: string, query: string): Promise<string[]> {
+    const directory = this.#directory(sessionID) ??
+      (await this.getSession(sessionID)).directory;
+    return this.client.json<string[]>("/find/file", {
+      query: { directory, query, dirs: "true", limit: 100 },
+    });
   }
   async abort(id: string): Promise<void> {
     await this.client.json(`/session/${encodeURIComponent(id)}/abort`, {

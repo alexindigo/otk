@@ -2,6 +2,17 @@
 import type { ContentOp } from "./content.ts";
 import type { IndexEntry, IndexOp } from "./index.ts";
 import type { Preferences } from "./prefs.ts";
+export const MAX_CLIENT_FRAME_BYTES = 64 * 1024 * 1024;
+export function checkClientFrameSize(serialized: string): void {
+  if (
+    serialized.length >= MAX_CLIENT_FRAME_BYTES ||
+    new TextEncoder().encode(serialized).byteLength >= MAX_CLIENT_FRAME_BYTES
+  ) {
+    throw new Error(
+      "Combined request exceeds 64 MiB; remove attachments or shorten the prompt",
+    );
+  }
+}
 export type HarnessState = "connecting" | "connected" | "reconnecting";
 export type ClientFrame =
   | { t: "hello"; protocol: number }

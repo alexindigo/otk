@@ -21,6 +21,8 @@ import RevertBanner from "./RevertBanner.tsx";
 import { queuedMessages } from "../state/messages.ts";
 import { followViewport } from "./viewport.ts";
 import { highlightingScope } from "../highlight/client.ts";
+import type { Draft, DraftChange } from "./prompt/model.ts";
+import type { PromptPart } from "../../../protocol/rpc.ts";
 export default function SessionView(props: {
   info?: ContentSession;
   label: string;
@@ -29,7 +31,7 @@ export default function SessionView(props: {
   paging: boolean;
   exhausted: boolean;
   error?: string;
-  draft: string;
+  draft: Draft;
   connected: boolean;
   permissionDock?: Element;
   displayMenu?: Element;
@@ -42,8 +44,9 @@ export default function SessionView(props: {
   busy: boolean;
   onOlder(): Promise<void>;
   onRetry(): Promise<void>;
-  onDraft(value: string): void;
-  onPrompt(text: string): Promise<void>;
+  onDraft(value: DraftChange): Draft;
+  onPrompt(parts: PromptPart[]): Promise<void>;
+  onFind(query: string): Promise<string[]>;
   onAbort(): Promise<void>;
 }) {
   const queued = () => queuedMessages(props.messages, props.busy);
@@ -172,6 +175,7 @@ export default function SessionView(props: {
           connected={props.connected}
           onChange={(value) => props.onDraft(value)}
           onSubmit={(text) => props.onPrompt(text)}
+          onFind={props.onFind}
           onAbort={() => props.onAbort()}
         />
       </Show>

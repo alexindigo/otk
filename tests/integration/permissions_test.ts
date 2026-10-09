@@ -52,7 +52,8 @@ Deno.test("I13 permission list and originating child events reach parent subscri
     );
     await rootClient.rpc("session.prompt", {
       sessionID: root.id,
-      parts: [{ type: "text", text: "Delegate the probe" }],
+      mode: "normal",
+      parts: [{ kind: "text", text: "Delegate the probe" }],
     });
     const children = await waitFor(
       () => oc.request<{ id: string }[]>(`/session/${root.id}/children`),

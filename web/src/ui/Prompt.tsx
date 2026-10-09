@@ -1,11 +1,24 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, onSettled, Show } from "solid-js";
+import type { PromptPart } from "../../../protocol/rpc.ts";
+import {
+  type Chip,
+  type Draft,
+  type DraftChange,
+  editDraft,
+  emptyDraft,
+  insertChip,
+  serialize,
+} from "./prompt/model.ts";
+import { serverPath, upload } from "./prompt/attachments.ts";
+import Chips from "./prompt/Chips.tsx";
 export default function Prompt(
   props: {
-    value: string;
+    value: Draft;
     connected: boolean;
-    onChange(value: string): void;
-    onSubmit(text: string): Promise<void>;
+    onChange(value: DraftChange): Draft;
+    onSubmit(parts: PromptPart[]): Promise<void>;
+    onFind(query: string): Promise<string[]>;
     onAbort(): Promise<void>;
   },
 ) {
@@ -14,18 +27,142 @@ export default function Prompt(
     [armed, setArmed] = createSignal(false);
   let deadline = 0, timer: ReturnType<typeof setTimeout> | undefined;
   let active = true;
+  let input!: HTMLTextAreaElement;
+  const change = (update: DraftChange, caret?: number): Draft => {
+    const draft = props.onChange(update);
+    if (caret !== undefined) {
+      requestAnimationFrame(() => {
+        if (active && input.value === draft.input) {
+          input.setSelectionRange(caret, caret);
+        }
+      });
+    }
+    return draft;
+  };
+  const files = async (items: File[]) => {
+    if (!items.length) return;
+    const uploads: { file: File; id: string }[] = [];
+    let caret = input.selectionStart;
+    const end = input.selectionEnd;
+    const inserted = change((current) => {
+      let draft = current;
+      for (const [index, file] of items.entries()) {
+        const label = file.type === "application/pdf"
+          ? "PDF"
+          : file.type.startsWith("image/")
+          ? "Image"
+          : "File";
+        const count = draft.chips.filter((chip) =>
+          chip.label.startsWith(`[${label} `)
+        ).length + 1;
+        const before = new Set(draft.chips.map((chip) => chip.id));
+        draft = insertChip(
+          draft,
+          caret,
+          index ? caret : end,
+          `[${label} ${count}]`,
+          {
+            kind: "file",
+            source: "upload",
+            name: file.name,
+            mime: file.type || "application/octet-stream",
+            dataBase64: "",
+          },
+        );
+        const chip = draft.chips.find((chip) => !before.has(chip.id))!;
+        draft = {
+          ...draft,
+          chips: draft.chips.map((item) =>
+            item.id === chip.id ? { ...item, pending: true } : item
+          ),
+        };
+        uploads.push({ file, id: chip.id });
+        caret = chip.end + 1;
+      }
+      return draft;
+    });
+    requestAnimationFrame(() => {
+      if (active && input.value === inserted.input) {
+        input.setSelectionRange(caret, caret);
+      }
+    });
+    for (const { file, id } of uploads) {
+      if (!active) return;
+      const patch = (value: Partial<Chip>) =>
+        change((current) =>
+          current.chips.some((chip) => chip.id === id)
+            ? {
+              ...current,
+              chips: current.chips.map((chip) =>
+                chip.id === id ? { ...chip, ...value } : chip
+              ),
+            }
+            : current
+        );
+      try {
+        const part = await upload(file);
+        if (!active) return;
+        patch({ part, pending: false });
+      } catch (error) {
+        if (active) patch({ pending: false, error: (error as Error).message });
+      }
+    }
+  };
+  const paste = async (event: ClipboardEvent) => {
+    const data = event.clipboardData;
+    if (!data) return;
+    event.preventDefault();
+    if (data.files.length) return files(Array.from(data.files));
+    const text = data.getData("text/plain").replace(/\r\n?/g, "\n"),
+      start = input.selectionStart,
+      end = input.selectionEnd;
+    const draft = change((current) =>
+      editDraft(
+        current,
+        current.input.slice(0, start) + text + current.input.slice(end),
+      ), start + text.length);
+    try {
+      const path = serverPath(text),
+        matches = path ? await props.onFind(path) : [];
+      if (!active) return;
+      if (path && matches.includes(path)) {
+        change(
+          (current) =>
+            current === draft
+              ? insertChip(current, start, start + text.length, `@${path}`, {
+                kind: "file",
+                source: "path",
+                path,
+              })
+              : current,
+          start + path.length + 2,
+        );
+      }
+    } catch (error) {
+      if (active && change((current) => current) === draft) {
+        setError((error as Error).message);
+      }
+    }
+  };
   const submit = async () => {
-    if (!props.value.trim() || !props.connected || pending()) return;
-    const text = props.value;
+    const draft = change((current) => current);
+    if (
+      !draft.input.trim() || !props.connected || pending() ||
+      draft.chips.some((chip) => chip.pending || chip.error)
+    ) return;
     setPending(true);
     setError("");
     try {
-      await props.onSubmit(text);
-      if (active && props.value === text) props.onChange("");
+      await props.onSubmit(serialize(draft));
+      if (active) {
+        change((current) => current === draft ? emptyDraft() : current);
+      }
     } catch (error) {
-      setError((error as Error).message);
+      if (active && change((current) => current) === draft) {
+        setError((error as Error).message);
+      }
     } finally {
-      setPending(false);
+      if (active) setPending(false);
     }
   };
   const escape = async (event: KeyboardEvent) => {
@@ -62,18 +199,43 @@ export default function Prompt(
   return (
     <form
       class="otk-prompt"
+      onDragOver={(event) => event.preventDefault()}
+      onDrop={(event) => {
+        event.preventDefault();
+        void files(Array.from(event.dataTransfer?.files || []));
+      }}
       onSubmit={(event) => {
         event.preventDefault();
         void submit();
       }}
     >
       <label for="otk-prompt-input">Prompt</label>
+      <Chips
+        chips={props.value.chips}
+        onOpen={() => input.focus()}
+        onRemove={(chip) =>
+          change((current) => {
+            const found = current.chips.find((item) => item.id === chip.id);
+            return found
+              ? editDraft(
+                current,
+                current.input.slice(0, found.start) +
+                  current.input.slice(found.end),
+              )
+              : current;
+          })}
+      />
       <textarea
+        ref={(element) => {
+          input = element;
+        }}
         id="otk-prompt-input"
         name="prompt"
         placeholder="Message the agent…"
-        value={props.value}
-        onInput={(event) => props.onChange(event.currentTarget.value)}
+        value={props.value.input}
+        onPaste={(event) => void paste(event)}
+        onInput={(event) =>
+          change((current) => editDraft(current, event.currentTarget.value))}
         onKeyDown={(event) => {
           if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
             event.preventDefault();
@@ -89,7 +251,9 @@ export default function Prompt(
         </span>
         <button
           type="submit"
-          disabled={pending() || !props.connected || !props.value.trim()}
+          disabled={pending() ||
+            props.value.chips.some((chip) => chip.pending || chip.error) ||
+            !props.connected || !props.value.input.trim()}
         >
           Send
         </button>

@@ -32,6 +32,7 @@ export interface HarnessAdapter {
     input: { directory: string; title?: string; parentID?: string },
   ): Promise<ContentSession>;
   prompt(input: PromptInput): Promise<void>;
+  findFiles(sessionID: string, query: string): Promise<string[]>;
   abort(sessionID: string): Promise<void>;
   revert(sessionID: string, messageID: string): Promise<ContentSession>;
   replyPermission(input: PermissionReply): Promise<void>;

@@ -1,10 +1,28 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ModelRef } from "./content.ts";
+export type PromptPart =
+  | { kind: "text"; text: string }
+  | {
+    kind: "file";
+    source: "upload";
+    name: string;
+    mime: string;
+    dataBase64: string;
+  }
+  | {
+    kind: "file";
+    source: "path";
+    path: string;
+    range?: { start: number; end: number };
+  }
+  | { kind: "agent"; name: string };
 export interface PromptInput {
   sessionID: string;
-  parts: { type: "text"; text: string }[];
+  parts: PromptPart[];
+  mode: "normal" | "shell";
   agent?: string;
   model?: ModelRef;
+  variant?: string;
 }
 export interface PermissionReply {
   requestID: string;
@@ -18,6 +36,7 @@ export type RpcMethod =
   | "session.messages"
   | "session.create"
   | "session.prompt"
+  | "find.files"
   | "session.abort"
   | "session.revert"
   | "permission.list"

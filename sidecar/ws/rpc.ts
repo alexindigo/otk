@@ -3,6 +3,7 @@ import type { HarnessAdapter } from "../adapter/types.ts";
 import { HarnessError } from "../adapter/types.ts";
 import type { PromptInput } from "../../protocol/rpc.ts";
 import type { Prefs } from "../db/prefs.ts";
+import { promptParts } from "./prompt.ts";
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new HarnessError("params", "Expected object");
@@ -55,20 +56,16 @@ export async function dispatch(
         parentID: text(p, "parentID", true),
       });
     case "session.prompt": {
-      if (!Array.isArray(p.parts) || p.parts.length === 0) {
-        throw new HarnessError("params", "parts required");
+      const parts = promptParts(p.parts);
+      if (p.mode !== "normal") {
+        throw new HarnessError("params", "Expected normal prompt mode");
       }
-      const parts = p.parts.map((part) => {
-        const item = object(part);
-        if (item.type !== "text") {
-          throw new HarnessError("params", "M1 accepts text parts only");
-        }
-        return { type: "text" as const, text: text(item, "text")! };
-      });
       const input: PromptInput = {
         sessionID: sessionID(),
         parts,
+        mode: "normal",
         agent: text(p, "agent", true),
+        variant: text(p, "variant", true),
       };
       if (p.model !== undefined) {
         const model = object(p.model);
@@ -80,6 +77,8 @@ export async function dispatch(
       await adapter.prompt(input);
       return null;
     }
+    case "find.files":
+      return adapter.findFiles(sessionID(), text(p, "query", true) ?? "");
     case "session.abort":
       await adapter.abort(sessionID());
       return null;

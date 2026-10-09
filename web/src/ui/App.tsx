@@ -19,6 +19,7 @@ import Login from "./Login.tsx";
 import Setup from "./Setup.tsx";
 import { createToggles } from "./Toggles.ts";
 import DisplayMenu from "./DisplayMenu.tsx";
+import { emptyDraft } from "./prompt/model.ts";
 export default function App() {
   const index = createIndex();
   const sidecars: ReturnType<typeof createSidecars> = createSidecars(
@@ -39,7 +40,7 @@ export default function App() {
     sidecars.connection(LOCAL_SIDECAR).rpc.call("prefs.set", { key, value })
   );
   const [settings, setSettings] = createSignal(false),
-    [draft, setDraft] = createSignal(""),
+    [draft, setDraft] = createSignal(emptyDraft()),
     [error, setError] = createSignal("");
   const [permissionDirty, setPermissionDirty] = createSignal(false);
   const permission = createMemo(() => {
@@ -72,7 +73,7 @@ export default function App() {
   });
   let navigationRevision = 0;
   const discardDraft = () =>
-    (!draft() && !permissionDirty()) ||
+    (!draft().input && !draft().chips.length && !permissionDirty()) ||
     globalThis.confirm("Discard unsent text before switching sessions?");
   const applyRoute = (hash: string) => {
     const target = route(hash);
@@ -90,7 +91,7 @@ export default function App() {
       session.open(target);
     }
     if (changes) {
-      setDraft("");
+      setDraft(emptyDraft());
       setPermissionDirty(false);
     }
   };
@@ -257,13 +258,20 @@ export default function App() {
                     onOlder={() => session.older()}
                     onRetry={() => session.refetch()}
                     onDraft={(value) => setDraft(value)}
-                    onPrompt={(text) => {
+                    onFind={(query) => {
+                      const target = session.state.selection!;
+                      return sidecars.connection(target.sidecarId).rpc.call<
+                        string[]
+                      >("find.files", { sessionID: target.sessionID, query });
+                    }}
+                    onPrompt={(parts) => {
                       const target = session.state.selection!;
                       return sidecars.connection(target.sidecarId).rpc.call<
                         void
                       >("session.prompt", {
                         sessionID: target.sessionID,
-                        parts: [{ type: "text", text }],
+                        mode: "normal",
+                        parts,
                       });
                     }}
                     onAbort={() => {

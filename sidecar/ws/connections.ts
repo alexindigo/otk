@@ -5,6 +5,7 @@ import type {
   HarnessState,
   ServerFrame,
 } from "../../protocol/messages.ts";
+import { checkClientFrameSize } from "../../protocol/messages.ts";
 import { PROTOCOL_VERSION, SIDECAR_VERSION } from "../../protocol/version.ts";
 import type { HarnessAdapter } from "../adapter/types.ts";
 import { HarnessError } from "../adapter/types.ts";
@@ -94,12 +95,19 @@ export class Connections {
       this.#connections.delete(connection);
     };
     ws.onmessage = async (event) => {
+      let rpcID: string | undefined;
       try {
-        if (typeof event.data !== "string" || event.data.length > 4_194_304) {
+        if (typeof event.data !== "string") {
           throw new HarnessError("frame", "Invalid frame");
         }
         const raw = object(JSON.parse(event.data)),
           frame = raw as unknown as ClientFrame;
+        if (connection.welcomed && frame.t === "rpc") rpcID = text(raw, "id")!;
+        try {
+          checkClientFrameSize(event.data);
+        } catch (error) {
+          throw new HarnessError("frame", (error as Error).message);
+        }
         if (!connection.welcomed) {
           if (frame.t !== "hello" || frame.protocol !== PROTOCOL_VERSION) {
             this.#send(connection, { t: "error", code: "protocol" });
@@ -165,11 +173,16 @@ export class Connections {
         clearTimeout(silenceDeadline);
         silenceDeadline = setTimeout(silent, 60_000);
       } catch (error) {
-        this.#send(connection, {
-          t: "error",
+        const detail = {
           code: error instanceof HarnessError ? error.code : "frame",
           message: (error as Error).message,
-        });
+        };
+        this.#send(
+          connection,
+          rpcID
+            ? { t: "rpc.result", id: rpcID, ok: false, error: detail }
+            : { t: "error", ...detail },
+        );
       }
     };
   }
