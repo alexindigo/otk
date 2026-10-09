@@ -77,6 +77,7 @@ export function mapMessage(info: Info, parts: RawPart[] = []): Message {
   return {
     ...common,
     role: "assistant",
+    replyTo: info.parentID,
     time: { created: info.time.created, completed: info.time.completed },
     model: { provider: info.providerID!, model: info.modelID! },
     tokens: tokens(info.tokens),
@@ -130,6 +131,9 @@ export function mapPart(part: RawPart, awaitingPermission = false): Part {
       return { kind: "agent", id, name: part.name! };
     case "compaction":
       return { kind: "compaction", id };
+    case "snapshot":
+    case "patch":
+      return { kind: "meta", id };
     case "step-start":
       return { kind: "step", id, phase: "start" };
     case "step-finish":

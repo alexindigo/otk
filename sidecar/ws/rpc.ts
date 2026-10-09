@@ -83,6 +83,8 @@ export async function dispatch(
     case "session.abort":
       await adapter.abort(sessionID());
       return null;
+    case "session.revert":
+      return adapter.revert(sessionID(), text(p, "messageID")!);
     case "permission.list":
       return adapter.listPermissions(sessionID());
     case "permission.reply": {

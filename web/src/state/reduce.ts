@@ -4,6 +4,7 @@ import type {
   FileDiff,
   Message,
   PermissionRequest,
+  RevertInfo,
   Todo,
 } from "../../../protocol/content.ts";
 export interface ContentState {
@@ -11,11 +12,24 @@ export interface ContentState {
   permissions: PermissionRequest[];
   todos: Todo[];
   diffs: FileDiff[];
+  revert: RevertInfo | null;
 }
 export function emptyContent(): ContentState {
-  return { messages: [], permissions: [], todos: [], diffs: [] };
+  return { messages: [], permissions: [], todos: [], diffs: [], revert: null };
 }
 export function reduce(state: ContentState, op: ContentOp): ContentState {
+  if (op.op === "session.revert") {
+    return {
+      ...state,
+      revert: op.messageID && op.messageCount
+        ? {
+          messageID: op.messageID,
+          messageCount: op.messageCount,
+          files: op.files,
+        }
+        : null,
+    };
+  }
   if (op.op === "permission.upsert") {
     const permissions = [...state.permissions];
     const at = permissions.findIndex((request) => request.id === op.request.id);

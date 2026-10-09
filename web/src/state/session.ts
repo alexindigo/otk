@@ -98,7 +98,12 @@ export function createSession(
         }, abort.signal)
         : [];
       if (!current(id, request)) return;
-      let content = { ...emptyContent(), messages, permissions };
+      let content = {
+        ...emptyContent(),
+        messages,
+        permissions,
+        revert: info.revert || null,
+      };
       for (const op of buffer) content = reduce(content, op);
       buffer = [];
       fetching = false;

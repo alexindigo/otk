@@ -166,6 +166,7 @@ export interface TaskCall extends ToolBase {
   duration?: number;
 }
 export type Part =
+  | { kind: "meta"; id: string }
   | { kind: "text"; id: string; blocks: Block[]; synthetic: boolean }
   | {
     kind: "reasoning";
@@ -199,6 +200,7 @@ export interface UserMessage {
   role: "user";
   time: { created: number };
   agent?: string;
+  agentColor?: string;
   model?: ModelRef;
   parts: Part[];
 }
@@ -208,6 +210,8 @@ export interface AssistantMessage {
   role: "assistant";
   time: { created: number; completed?: number };
   agent: string;
+  agentColor?: string;
+  replyTo?: string;
   model: ModelRef;
   tokens: Tokens;
   cost: number;
@@ -224,6 +228,12 @@ export interface ContentSession {
   projectID: string;
   time: { created: number; updated: number };
   archived: boolean;
+  revert?: RevertInfo;
+}
+export interface RevertInfo {
+  messageID: string;
+  messageCount: number;
+  files: { path: string; additions: number; deletions: number }[];
 }
 export interface PermissionRequest {
   id: string;
@@ -246,6 +256,12 @@ export interface Todo {
   priority: string;
 }
 export type ContentOp =
+  | {
+    op: "session.revert";
+    messageID?: string;
+    messageCount: number;
+    files: RevertInfo["files"];
+  }
   | { op: "message.upsert"; message: Message }
   | { op: "message.remove"; messageID: string }
   | { op: "part.upsert"; messageID: string; part: Part }

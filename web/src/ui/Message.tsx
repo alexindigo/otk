@@ -22,14 +22,17 @@ function PartView(
     permissions: PermissionRequest[];
     paneWidth: number;
     onOpenChild(id: string): void;
+    user: boolean;
   },
 ) {
   return (
-    <Switch fallback={<p class="otk-muted">{props.part.kind}</p>}>
+    <Switch>
       <Match when={partOf(props.part, "text")}>
         {(part) => (
           <div class="otk-text">
-            <Blocks blocks={part().blocks} streaming={props.streaming} />
+            <Show when={!props.user || !part().synthetic}>
+              <Blocks blocks={part().blocks} streaming={props.streaming} />
+            </Show>
           </div>
         )}
       </Match>
@@ -57,10 +60,22 @@ function PartView(
         )}
       </Match>
       <Match when={partOf(props.part, "file")}>
-        {(part) => <span class="otk-chip">{part().name}</span>}
+        {(part) => (
+          <span class="otk-chip" title={part().path}>
+            {part().mime === "application/x-directory" ? "Directory" : "File"}:
+            {" "}
+            {part().name}
+          </span>
+        )}
       </Match>
       <Match when={partOf(props.part, "agent")}>
-        {(part) => <span class="otk-chip">{part().name}</span>}
+        {(part) => <span class="otk-chip">Agent: {part().name}</span>}
+      </Match>
+      <Match when={partOf(props.part, "compaction")}>
+        <div class="otk-compaction-divider">Compaction</div>
+      </Match>
+      <Match when={partOf(props.part, "unknown")}>
+        {(part) => <p class="otk-muted">Unsupported part: {part().label}</p>}
       </Match>
     </Switch>
   );
@@ -73,6 +88,7 @@ export default function Message(
     permissions: PermissionRequest[];
     paneWidth: number;
     onOpenChild(id: string): void;
+    queued: boolean;
   },
 ) {
   const assistant = () =>
@@ -85,9 +101,15 @@ export default function Message(
       }]}
       data-message={props.message.id}
       data-role={props.message.role}
+      style={{
+        "border-left-color": props.message.agentColor || "var(--accent)",
+      }}
     >
       <header class="otk-message-role">
         {props.message.role === "user" ? "YOU" : "ASSISTANT"}
+        <Show when={props.queued}>
+          <span class="otk-queued">QUEUED</span>
+        </Show>
         <Show when={props.prefs.timestamps}>
           <time datetime={new Date(props.message.time.created).toISOString()}>
             {new Date(props.message.time.created).toLocaleString()}
@@ -103,6 +125,7 @@ export default function Message(
             permissions={props.permissions}
             paneWidth={props.paneWidth}
             onOpenChild={props.onOpenChild}
+            user={props.message.role === "user"}
             streaming={props.message.role === "assistant" &&
               props.message.time.completed === undefined}
           />
@@ -112,6 +135,9 @@ export default function Message(
         {(message) => (
           <>
             <footer class="otk-message-footer">
+              <span style={{ color: message().agentColor || "var(--accent)" }}>
+                ▣
+              </span>{" "}
               {message().agent} ·{" "}
               {message().model.provider}/{message().model.model} ·{" "}
               {message().time.completed === undefined

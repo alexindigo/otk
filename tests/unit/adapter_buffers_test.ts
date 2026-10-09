@@ -51,7 +51,9 @@ for (
       if (url.pathname === "/global/health") {
         return Promise.resolve(Response.json({ version: "1.18.34" }));
       }
-      if (url.pathname === "/experimental/session") {
+      if (
+        url.pathname === "/experimental/session" || url.pathname === "/agent"
+      ) {
         return Promise.resolve(Response.json([]));
       }
       assertEquals(url.pathname, "/global/event");

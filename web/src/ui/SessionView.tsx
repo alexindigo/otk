@@ -12,11 +12,14 @@ import type {
   ContentSession,
   Message as OtkMessage,
   PermissionRequest,
+  RevertInfo,
 } from "../../../protocol/content.ts";
 import Message from "./Message.tsx";
 import Prompt from "./Prompt.tsx";
 import type { Preferences } from "../../../protocol/prefs.ts";
 import SubagentBar from "./SubagentBar.tsx";
+import RevertBanner from "./RevertBanner.tsx";
+import { queuedMessages } from "../state/messages.ts";
 export default function SessionView(props: {
   info?: ContentSession;
   label: string;
@@ -34,12 +37,15 @@ export default function SessionView(props: {
   siblings: ContentSession[];
   onOpenChild(id: string): void;
   child: boolean;
+  revert: RevertInfo | null;
+  busy: boolean;
   onOlder(): Promise<void>;
   onRetry(): Promise<void>;
   onDraft(value: string): void;
   onPrompt(text: string): Promise<void>;
   onAbort(): Promise<void>;
 }) {
+  const queued = () => queuedMessages(props.messages, props.busy);
   const [paneWidth, setPaneWidth] = createSignal(0);
   let view!: HTMLElement;
   let list!: HTMLDivElement,
@@ -114,6 +120,9 @@ export default function SessionView(props: {
           list = element;
         }}
       >
+        <Show when={props.revert}>
+          {(revert) => <RevertBanner revert={revert()} />}
+        </Show>
         <Show when={!props.exhausted && props.messages.length}>
           <button
             type="button"
@@ -142,6 +151,7 @@ export default function SessionView(props: {
               permissions={props.permissions}
               paneWidth={paneWidth()}
               onOpenChild={props.onOpenChild}
+              queued={queued().has(message().id)}
             />
           )}
         </For>

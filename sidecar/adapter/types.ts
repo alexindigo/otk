@@ -33,6 +33,7 @@ export interface HarnessAdapter {
   ): Promise<ContentSession>;
   prompt(input: PromptInput): Promise<void>;
   abort(sessionID: string): Promise<void>;
+  revert(sessionID: string, messageID: string): Promise<ContentSession>;
   replyPermission(input: PermissionReply): Promise<void>;
   listPermissions(sessionID: string): Promise<PermissionRequest[]>;
 }

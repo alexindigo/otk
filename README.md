@@ -29,6 +29,14 @@ prompt. Allow once, confirm the displayed future grant patterns for Allow
 always, or reject with optional feedback. Child requests retain their
 originating title.
 
+Typed tool cards show bash output, read/search/fetch/skill operations, file
+diffs and diagnostics, todos, read-only questions and subagent progress. Click a
+task to open its child; the subagent bar returns to the parent or cycles
+siblings. Child sessions are read-only. Code highlighting runs in a shared Shiki
+worker with on-demand grammars; session changes release it. The Display menu
+persists preferences in the serving sidecar's `otk.db` and updates other
+connected tabs. Reverted turns show a file-summary banner.
+
 | #  | Setting                               | Environment variable                                       | Shipped value                                                                  |
 | -- | ------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | 1  | Listener                              | `OTK_SERVER_HOST`, `OTK_SERVER_PORT`                       | `127.0.0.1`, `1502`                                                            |

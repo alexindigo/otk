@@ -7,6 +7,8 @@ export interface Session {
   directory: string;
   title: string;
   time: { created: number; updated: number; archived?: number };
+  revert?: { messageID: string; diff?: string };
+  summary?: { diffs?: RawDiff[] };
 }
 export interface Info {
   id: string;
@@ -14,6 +16,7 @@ export interface Info {
   role: "user" | "assistant";
   time: { created: number; completed?: number };
   agent: string;
+  parentID?: string;
   model?: { providerID: string; modelID: string };
   providerID?: string;
   modelID?: string;

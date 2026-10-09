@@ -825,3 +825,30 @@ p {
   display: flex;
   gap: .5rem;
 }
+.otk-revert-banner {
+  border-left: 2px solid var(--accent);
+  padding: .8rem 1rem;
+  margin-bottom: 1rem;
+  background: var(--panel);
+  overflow-wrap: anywhere;
+}
+.otk-queued {
+  background: var(--accent);
+  color: var(--bg);
+  padding: .1rem .4rem;
+  letter-spacing: normal;
+}
+.otk-compaction-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: var(--secondary);
+  margin: 1rem 0;
+}
+.otk-compaction-divider::before,
+.otk-compaction-divider::after {
+  content: "";
+  height: 1px;
+  background: var(--muted);
+  flex: 1;
+}

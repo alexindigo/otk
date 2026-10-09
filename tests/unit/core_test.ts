@@ -257,7 +257,7 @@ Deno.test("mapping strips harness metadata, handles all part kinds and interrupt
     "step",
     "step",
     "compaction",
-    "unknown",
+    "meta",
   ]);
   const message = mapMessage({
     id: "message",

@@ -117,7 +117,7 @@ Deno.test("adapter maps legacy event chain while ignoring its captured durable s
     if (url.pathname === "/global/health") {
       return Promise.resolve(Response.json({ version: "1.18.34" }));
     }
-    if (url.pathname === "/experimental/session") {
+    if (url.pathname === "/experimental/session" || url.pathname === "/agent") {
       return Promise.resolve(Response.json([]));
     }
     const stream = new ReadableStream<Uint8Array>({

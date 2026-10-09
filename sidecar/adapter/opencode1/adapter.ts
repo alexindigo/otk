@@ -4,6 +4,7 @@ import type {
   ContentSession,
   Message,
   PermissionRequest,
+  RevertInfo,
   Todo,
 } from "../../../protocol/content.ts";
 import type { IndexEntry } from "../../../protocol/index.ts";
@@ -28,6 +29,7 @@ import type {
 } from "./types.ts";
 import { Backoff, Watchdog } from "./watchdog.ts";
 import { TaskProgress } from "./tasks.ts";
+import { parseDiff } from "../../content/diff.ts";
 const contentEvents = new Set([
   "session.created",
   "session.updated",
@@ -66,6 +68,7 @@ export class Opencode1Adapter implements HarnessAdapter {
   #wake?: () => void;
   #db: BootstrapDb;
   #tasks: TaskProgress;
+  #reverts = new Map<string, string>();
   constructor(
     readonly cfg: ServiceConfig,
     readonly buffers = new StreamBuffers(),
@@ -92,8 +95,12 @@ export class Opencode1Adapter implements HarnessAdapter {
         );
       },
       (id) => this.buffers.subscribed(id),
-      (parent, messageID, part) =>
-        this.#sink.content(parent, { op: "part.upsert", messageID, part }),
+      (parent, messageID, part) => {
+        const cutoff = this.#reverts.get(parent);
+        if (!cutoff || messageID < cutoff) {
+          this.#sink.content(parent, { op: "part.upsert", messageID, part });
+        }
+      },
       () => this.#sink.resync("all"),
     );
   }
@@ -116,16 +123,64 @@ export class Opencode1Adapter implements HarnessAdapter {
   subscriptions(id: string, count: number): void {
     this.buffers.subscriptions(id, count);
     if (!count) this.#tasks.release(id);
+    if (!count) this.#reverts.delete(id);
   }
   #directory(id: string): string | undefined {
     return this.#entries.get(id)?.directory;
   }
   async getSession(id: string): Promise<ContentSession> {
-    return mapSession(
-      await this.client.json<Session>(`/session/${encodeURIComponent(id)}`, {
+    const raw = await this.client.json<Session>(
+      `/session/${encodeURIComponent(id)}`,
+      {
         query: { directory: this.#directory(id) },
-      }),
+      },
     );
+    return { ...mapSession(raw), revert: await this.#revertInfo(raw) };
+  }
+  async #revertInfo(session: Session): Promise<RevertInfo | undefined> {
+    if (!session.revert) {
+      this.#reverts.delete(session.id);
+      return;
+    }
+    if (this.buffers.subscribed(session.id)) {
+      this.#reverts.set(session.id, session.revert.messageID);
+    }
+    const messages = await this.client.json<{ info: Info }[]>(
+      `/session/${encodeURIComponent(session.id)}/message`,
+      { query: { directory: session.directory } },
+    );
+    const files = session.revert.diff
+      ? parseDiff(session.revert.diff)
+      : mapDiffs(session.summary?.diffs || []);
+    return {
+      messageID: session.revert.messageID,
+      messageCount: messages.filter((message) =>
+        message.info.role === "user" &&
+        message.info.id >= session.revert!.messageID
+      ).length,
+      files: files.map(({ path, additions, deletions }) => ({
+        path,
+        additions,
+        deletions,
+      })),
+    };
+  }
+  async #agentColors(directory?: string): Promise<Map<string, string>> {
+    const agents = await this.client.json<{ name: string; color?: string }[]>(
+      "/agent",
+      { query: { directory } },
+    );
+    return new Map(agents.flatMap((agent) => {
+      const color = agent.color &&
+          /^#(?:[a-f\d]{3}|[a-f\d]{6}|[a-f\d]{8})$/i.test(agent.color)
+        ? agent.color
+        : agent.color === "primary"
+        ? "var(--accent)"
+        : agent.color === "secondary"
+        ? "var(--secondary)"
+        : undefined;
+      return color ? [[agent.name, color]] : [];
+    }));
   }
   async listMessages(
     id: string,
@@ -133,11 +188,19 @@ export class Opencode1Adapter implements HarnessAdapter {
   ): Promise<Message[]> {
     // OTK's before is the oldest displayed message ID (M2). Resolve its time
     // per request and keep opencode's encoded cursor entirely in this adapter.
+    const session = await this.client.json<Session>(
+      `/session/${encodeURIComponent(id)}`,
+      { query: { directory: this.#directory(id) } },
+    );
+    const cursor = session.revert &&
+        (!opts.before || opts.before >= session.revert.messageID)
+      ? session.revert.messageID
+      : opts.before;
     let before: string | undefined;
-    if (opts.before) {
+    if (cursor) {
       const message = await this.client.json<{ info: Info; parts: RawPart[] }>(
         `/session/${encodeURIComponent(id)}/message/${
-          encodeURIComponent(opts.before)
+          encodeURIComponent(cursor)
         }`,
         { query: { directory: this.#directory(id) } },
       );
@@ -159,8 +222,10 @@ export class Opencode1Adapter implements HarnessAdapter {
         },
       },
     );
+    const colors = await this.#agentColors(session.directory);
     return Promise.all(raw.map(async (message) => {
       const mapped = mapMessage(message.info, message.parts);
+      mapped.agentColor = colors.get(message.info.agent);
       for (const [i, part] of message.parts.entries()) {
         if (part.type === "tool" && part.tool === "task") {
           mapped.parts[i] = {
@@ -213,6 +278,14 @@ export class Opencode1Adapter implements HarnessAdapter {
       method: "POST",
       query: { directory: this.#directory(id) },
     });
+  }
+  async revert(id: string, messageID: string): Promise<ContentSession> {
+    await this.client.json(`/session/${encodeURIComponent(id)}/revert`, {
+      method: "POST",
+      query: { directory: this.#directory(id) },
+      body: { messageID },
+    });
+    return this.getSession(id);
   }
   async replyPermission(input: PermissionReply): Promise<void> {
     await this.client.json(
@@ -320,6 +393,7 @@ export class Opencode1Adapter implements HarnessAdapter {
     }
   }
   async #bootstrap(): Promise<void> {
+    this.#reverts.clear();
     this.#tasks.release();
     // Every authoritative resync starts a new content generation. Keep viewers,
     // but never carry raw streaming seeds or timers across a disposed instance.
@@ -465,6 +539,19 @@ export class Opencode1Adapter implements HarnessAdapter {
       this.#entries.set(mapped.id, mapped);
       this.#sink.indexUpsert(mapped);
       this.#attention();
+      if (
+        this.buffers.subscribed(session.id) &&
+        (session.revert || this.#reverts.has(session.id))
+      ) {
+        const revert = await this.#revertInfo(session);
+        this.#sink.content(session.id, {
+          op: "session.revert",
+          messageID: revert?.messageID,
+          messageCount: revert?.messageCount || 0,
+          files: revert?.files || [],
+        });
+        this.#sink.resync("all");
+      }
       return;
     }
     if (type === "session.deleted") {
@@ -552,10 +639,18 @@ export class Opencode1Adapter implements HarnessAdapter {
       this.#tasks.observe(sessionID, info, raw);
     }
     if (!this.buffers.subscribed(sessionID)) return;
+    const cutoff = this.#reverts.get(sessionID),
+      messageID = info?.id || raw?.messageID || String(p.messageID || "");
+    if (cutoff && messageID && messageID >= cutoff) return;
     const content = (op: ContentOp) => this.#sink.content(sessionID, op);
     switch (type) {
       case "message.updated":
-        content({ op: "message.upsert", message: mapMessage(info!) });
+        {
+          const message = mapMessage(info!),
+            colors = await this.#agentColors(this.#directory(sessionID));
+          message.agentColor = colors.get(info!.agent);
+          content({ op: "message.upsert", message });
+        }
         break;
       case "message.removed":
         content({ op: "message.remove", messageID: String(p.messageID) });

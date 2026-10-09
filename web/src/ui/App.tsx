@@ -191,6 +191,12 @@ export default function App() {
                   }
                 >
                   <SessionView
+                    revert={session.state.content.revert}
+                    busy={!!session.state.selection &&
+                      entry(
+                          session.state.selection.sidecarId,
+                          session.state.selection.sessionID,
+                        )?.status !== "idle"}
                     child={!!session.state.selection?.rootID ||
                       !!info()?.parentID}
                     siblings={session.state.siblings}
