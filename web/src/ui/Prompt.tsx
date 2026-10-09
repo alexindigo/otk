@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createEffect, createSignal, onSettled, Show } from "solid-js";
-import type { FileMatch, PromptPart } from "../../../protocol/rpc.ts";
+import type {
+  CommandOption,
+  FileMatch,
+  PromptPart,
+} from "../../../protocol/rpc.ts";
 import {
   type Chip,
   type Draft,
@@ -18,11 +22,14 @@ import Editor from "./prompt/Editor.tsx";
 import { summarizePaste } from "./prompt/paste.ts";
 import Autocomplete from "./prompt/Autocomplete.tsx";
 import {
+  commandOptions,
+  type Completion,
   type CompletionOption,
-  mention,
   mentionOptions,
   mentionQuery,
   type MentionSources,
+  parseCommand,
+  trigger,
 } from "./prompt/autocomplete.ts";
 export default function Prompt(
   props: {
@@ -34,6 +41,13 @@ export default function Prompt(
     onFind(query: string): Promise<FileMatch[]>;
     onMentions(query: string): Promise<MentionSources>;
     onBump(path: string): Promise<void>;
+    onCommands(): Promise<CommandOption[]>;
+    onCommand(
+      command: string,
+      args: string,
+      parts: Extract<PromptPart, { kind: "file" }>[],
+    ): Promise<void>;
+    onNew(): Promise<void>;
     onAbort(): Promise<void>;
   },
 ) {
@@ -44,7 +58,7 @@ export default function Prompt(
   let active = true;
   let input!: HTMLTextAreaElement;
   const [caret, setCaret] = createSignal(0),
-    [completion, setCompletion] = createSignal<ReturnType<typeof mention>>(),
+    [completion, setCompletion] = createSignal<Completion>(),
     [options, setOptions] = createSignal<CompletionOption[]>([]),
     [choice, setChoice] = createSignal(0);
   let searchGeneration = 0;
@@ -61,7 +75,7 @@ export default function Prompt(
           !props.value.chips.some((chip) =>
             caret >= chip.start && caret <= chip.end
           )
-        ? mention(value, caret)
+        ? trigger(value, caret)
         : undefined;
       const generation = ++searchGeneration;
       setCompletion(token);
@@ -70,12 +84,15 @@ export default function Prompt(
       if (token) {
         void (async () => {
           try {
-            const source = await props.onMentions(
-              mentionQuery(token.query).query,
-            );
+            const found = token.kind === "slash"
+              ? commandOptions(await props.onCommands(), token.query)
+              : mentionOptions(
+                await props.onMentions(mentionQuery(token.query).query),
+                token.query,
+              );
             if (active && generation === searchGeneration) {
               setOptions(
-                mentionOptions(source, token.query),
+                found,
               );
             }
           } catch (error) {
@@ -92,6 +109,29 @@ export default function Prompt(
   const select = (index: number, expand = false) => {
     const token = completion(), option = options()[index];
     if (!token || !option) return;
+    if (option.command) {
+      const command = option.command;
+      change((current) => {
+        const next = editDraft(
+          current,
+          current.input.slice(0, token.start) +
+            (command.source === "builtin" ? "" : `/${command.name} `) +
+            current.input.slice(token.end),
+        );
+        return command.source === "builtin" && command.name === "editor"
+          ? { ...next, editor: { text: next.input } }
+          : next;
+      }, command.source === "builtin" ? 0 : command.name.length + 2);
+      if (command.source === "builtin" && command.name === "new") {
+        void props.onNew().catch((error) => {
+          if (active) setError((error as Error).message);
+        });
+      }
+      searchGeneration++;
+      setCompletion(undefined);
+      setOptions([]);
+      return;
+    }
     if (expand && option.directory) {
       change(
         (current) =>
@@ -257,6 +297,22 @@ export default function Prompt(
   };
   const submit = async () => {
     const draft = change((current) => current);
+    const parsed = draft.mode === "normal"
+      ? parseCommand(draft.input)
+      : undefined;
+    if (parsed?.command === "new") {
+      change((current) =>
+        current === draft
+          ? editDraft(current, current.input.replace(/^\/new\s?/, ""))
+          : current
+      );
+      try {
+        await props.onNew();
+      } catch (error) {
+        if (active) setError((error as Error).message);
+      }
+      return;
+    }
     if (draft.mode === "normal" && /^\/editor(?:\s|$)/.test(draft.input)) {
       change((current) => {
         if (current !== draft) return current;
@@ -275,7 +331,21 @@ export default function Prompt(
     setPending(true);
     setError("");
     try {
-      await props.onSubmit(serialize(draft), draft.mode);
+      const parts = serialize(draft),
+        command = parsed &&
+          (await props.onCommands()).find((command) =>
+            command.name === parsed.command
+          );
+      if (command) {
+        await props.onCommand(
+          command.name,
+          parseCommand(parts.find((part) => part.kind === "text")!.text)!
+            .arguments,
+          parts.filter((part): part is Extract<PromptPart, { kind: "file" }> =>
+            part.kind === "file"
+          ),
+        );
+      } else await props.onSubmit(parts, draft.mode);
       if (active) {
         change((current) => current === draft ? emptyDraft() : current);
       }

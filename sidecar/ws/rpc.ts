@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { HarnessAdapter } from "../adapter/types.ts";
 import { HarnessError } from "../adapter/types.ts";
-import type { PromptInput } from "../../protocol/rpc.ts";
+import type { PromptInput, PromptPart } from "../../protocol/rpc.ts";
 import type { Prefs } from "../db/prefs.ts";
 import { promptParts } from "./prompt.ts";
 import type { Frecency } from "../db/frecency.ts";
@@ -102,6 +102,38 @@ export async function dispatch(
         sessionID: sessionID(),
         command: text(p, "command")!,
         agent: text(p, "agent", true),
+        ...(model
+          ? {
+            model: {
+              provider: text(model, "provider")!,
+              model: text(model, "model")!,
+            },
+          }
+          : {}),
+      });
+      return null;
+    }
+    case "commands.list":
+      return adapter.listCommands(sessionID());
+    case "session.command": {
+      const model = p.model === undefined ? undefined : object(p.model),
+        parts = p.parts === undefined ||
+            (Array.isArray(p.parts) && p.parts.length === 0)
+          ? []
+          : promptParts(p.parts);
+      if (parts.some((part) => part.kind !== "file")) {
+        throw new HarnessError(
+          "params",
+          "Commands accept file attachments only",
+        );
+      }
+      await adapter.command({
+        sessionID: sessionID(),
+        command: text(p, "command")!,
+        arguments: text(p, "arguments", true) ?? "",
+        agent: text(p, "agent", true),
+        variant: text(p, "variant", true),
+        parts: parts as Extract<PromptPart, { kind: "file" }>[],
         ...(model
           ? {
             model: {

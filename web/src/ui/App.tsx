@@ -23,6 +23,7 @@ import DisplayMenu from "./DisplayMenu.tsx";
 import { emptyDraft } from "./prompt/model.ts";
 import type {
   AgentOption,
+  CommandOption,
   FileMatch,
   FrecencyEntry,
   ResourceOption,
@@ -131,6 +132,7 @@ export default function App() {
     if (navigation.open(hashFor(selection))) setSettings(false);
   };
   const create = async (sidecarId: string, directory: string) => {
+    if (!discardDraft()) return;
     const revision = ++navigationRevision;
     try {
       const info = await sidecars.connection(sidecarId).rpc.call<
@@ -333,6 +335,28 @@ export default function App() {
                       await sidecars.connection(target.sidecarId).rpc.call<
                         void
                       >("frecency.bump", { sessionID: target.sessionID, path });
+                    }}
+                    onCommands={() => {
+                      const target = session.state.selection!;
+                      return sidecars.connection(target.sidecarId).rpc.call<
+                        CommandOption[]
+                      >("commands.list", { sessionID: target.sessionID });
+                    }}
+                    onCommand={(command, args, parts) => {
+                      const target = session.state.selection!;
+                      return sidecars.connection(target.sidecarId).rpc.call<
+                        void
+                      >("session.command", {
+                        sessionID: target.sessionID,
+                        command,
+                        arguments: args,
+                        parts,
+                      });
+                    }}
+                    onNew={async () => {
+                      const target = session.state.selection!,
+                        directory = await directoryFor(target);
+                      await create(target.sidecarId, directory);
                     }}
                     onPrompt={(parts, mode) => {
                       const target = session.state.selection!;

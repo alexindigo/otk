@@ -3,6 +3,7 @@ import fuzzysort from "fuzzysort";
 import { frecency } from "../../../../protocol/frecency.ts";
 import type {
   AgentOption,
+  CommandOption,
   FileMatch,
   FrecencyEntry,
   PromptPart,
@@ -16,6 +17,7 @@ export interface CompletionOption {
   directory?: boolean;
   part?: PromptPart;
   aliases?: string[];
+  command?: CommandOption;
 }
 export interface MentionSources {
   files: FileMatch[];
@@ -23,6 +25,67 @@ export interface MentionSources {
   resources: ResourceOption[];
   frecency: FrecencyEntry[];
   directory: string;
+}
+export interface Completion {
+  kind: "mention" | "slash";
+  start: number;
+  end: number;
+  query: string;
+}
+export function trigger(input: string, caret: number): Completion | undefined {
+  const before = input.slice(0, caret);
+  if (/^\/[^\s]*$/.test(before)) {
+    return { kind: "slash", start: 0, end: caret, query: before.slice(1) };
+  }
+  const token = mention(input, caret);
+  return token ? { ...token, kind: "mention" } : undefined;
+}
+export const BUILTIN_COMMANDS: CommandOption[] = [{
+  name: "new",
+  description: "Create a new session",
+  aliases: [],
+  source: "builtin",
+}, {
+  name: "editor",
+  description: "Edit the prompt in-page",
+  aliases: [],
+  source: "builtin",
+}];
+export function commandOptions(
+  commands: CommandOption[],
+  query: string,
+): CompletionOption[] {
+  return rank(
+    [
+      ...BUILTIN_COMMANDS,
+      ...commands.filter((command) =>
+        !BUILTIN_COMMANDS.some((builtin) => builtin.name === command.name)
+      ),
+    ].map((command) => ({
+      id: `command:${command.name}`,
+      label: `/${command.name}${command.source === "mcp" ? ":mcp" : ""}`,
+      description: command.description,
+      aliases: command.aliases,
+      command,
+    })),
+    query,
+    [],
+    "",
+    true,
+  );
+}
+export function parseCommand(
+  input: string,
+): { command: string; arguments: string } | undefined {
+  if (!input.startsWith("/")) return;
+  const end = input.indexOf("\n"),
+    first = end < 0 ? input : input.slice(0, end),
+    [name, ...args] = first.split(" "),
+    rest = end < 0 ? "" : input.slice(end + 1);
+  return {
+    command: name.slice(1),
+    arguments: args.join(" ") + (rest ? "\n" + rest : ""),
+  };
 }
 export function mention(
   input: string,
@@ -79,7 +142,10 @@ export function rank(
     threshold: descriptions ? 0 : .5,
     limit: 10,
     scoreFn: (result) =>
-      result.score * (result[0]?.target.startsWith(query) ? 2 : 1) *
+      result.score *
+      (result[0]?.target.startsWith(result.obj.command ? `/${query}` : query)
+        ? 2
+        : 1) *
       (1 + score(result.obj.path)),
   }).map((result) => result.obj);
 }

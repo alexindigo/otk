@@ -22,7 +22,11 @@ import { queuedMessages } from "../state/messages.ts";
 import { followViewport } from "./viewport.ts";
 import { highlightingScope } from "../highlight/client.ts";
 import type { Draft, DraftChange } from "./prompt/model.ts";
-import type { FileMatch, PromptPart } from "../../../protocol/rpc.ts";
+import type {
+  CommandOption,
+  FileMatch,
+  PromptPart,
+} from "../../../protocol/rpc.ts";
 import type { MentionSources } from "./prompt/autocomplete.ts";
 export default function SessionView(props: {
   info?: ContentSession;
@@ -52,6 +56,13 @@ export default function SessionView(props: {
   onFind(query: string): Promise<FileMatch[]>;
   onMentions(query: string): Promise<MentionSources>;
   onBump(path: string): Promise<void>;
+  onCommands(): Promise<CommandOption[]>;
+  onCommand(
+    command: string,
+    args: string,
+    parts: Extract<PromptPart, { kind: "file" }>[],
+  ): Promise<void>;
+  onNew(): Promise<void>;
   onAbort(): Promise<void>;
 }) {
   const queued = () => queuedMessages(props.messages, props.busy);
@@ -191,6 +202,9 @@ export default function SessionView(props: {
           onFind={props.onFind}
           onMentions={props.onMentions}
           onBump={props.onBump}
+          onCommands={props.onCommands}
+          onCommand={props.onCommand}
+          onNew={props.onNew}
           onAbort={() => props.onAbort()}
         />
       </Show>

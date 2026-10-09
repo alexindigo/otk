@@ -64,6 +64,21 @@ export interface ShellInput {
   agent?: string;
   model?: ModelRef;
 }
+export interface CommandOption {
+  name: string;
+  description?: string;
+  aliases: string[];
+  source: "server" | "mcp" | "skill" | "builtin";
+}
+export interface CommandInput {
+  sessionID: string;
+  command: string;
+  arguments: string;
+  agent?: string;
+  model?: ModelRef;
+  variant?: string;
+  parts?: Extract<PromptPart, { kind: "file" }>[];
+}
 export type RpcMethod =
   | "session.get"
   | "session.children"
@@ -71,6 +86,8 @@ export type RpcMethod =
   | "session.create"
   | "session.prompt"
   | "session.shell"
+  | "session.command"
+  | "commands.list"
   | "find.files"
   | "agents.list"
   | "resources.list"

@@ -9,6 +9,8 @@ import type {
 import type { IndexEntry } from "../../protocol/index.ts";
 import type { HarnessState } from "../../protocol/messages.ts";
 import type {
+  CommandInput,
+  CommandOption,
   PermissionReply,
   PromptInput,
   ShellInput,
@@ -43,6 +45,8 @@ export interface HarnessAdapter {
   ): Promise<ContentSession>;
   prompt(input: PromptInput): Promise<void>;
   shell(input: ShellInput): Promise<void>;
+  command(input: CommandInput): Promise<void>;
+  listCommands(sessionID: string): Promise<CommandOption[]>;
   findFiles(sessionID: string, query: string): Promise<FileMatch[]>;
   listAgents(sessionID: string): Promise<AgentOption[]>;
   listResources(sessionID: string): Promise<ResourceOption[]>;

@@ -11,6 +11,8 @@ import type {
 import type { IndexEntry } from "../../../protocol/index.ts";
 import { belongsToSession } from "../../../protocol/session-tree.ts";
 import type {
+  CommandInput,
+  CommandOption,
   PermissionReply,
   PromptInput,
   ShellInput,
@@ -423,6 +425,65 @@ export class Opencode1Adapter implements HarnessAdapter {
     if (this.buffers.subscribed(sessionID)) {
       this.#sink.content(sessionID, { op: "session.error", error });
     }
+  }
+  async listCommands(sessionID: string): Promise<CommandOption[]> {
+    const directory = this.#directory(sessionID) ??
+      (await this.getSession(sessionID)).directory;
+    const [commands, skills] = await Promise.all([
+      this.client.json<
+        { name: string; description?: string; source?: string }[]
+      >("/command", { query: { directory } }),
+      this.client.json<{ name: string; description?: string }[]>("/skill", {
+        query: { directory },
+      }),
+    ]);
+    const result = new Map<string, CommandOption>();
+    for (const command of commands) {
+      result.set(command.name, {
+        name: command.name,
+        description: command.description,
+        aliases: [],
+        source: command.source === "mcp"
+          ? "mcp"
+          : command.source === "skill"
+          ? "skill"
+          : "server",
+      });
+    }
+    for (const skill of skills) {
+      if (!result.has(skill.name)) {
+        result.set(skill.name, {
+          name: skill.name,
+          description: skill.description,
+          aliases: [],
+          source: "skill",
+        });
+      }
+    }
+    return [...result.values()];
+  }
+  async command(input: CommandInput): Promise<void> {
+    const directory = this.#directory(input.sessionID) ??
+      (await this.getSession(input.sessionID)).directory;
+    this.#launch(
+      input.sessionID,
+      `/session/${encodeURIComponent(input.sessionID)}/command`,
+      {
+        method: "POST",
+        query: { directory },
+        timeout: null,
+        body: {
+          command: input.command,
+          arguments: input.arguments,
+          agent: input.agent,
+          variant: input.variant,
+          model: input.model
+            ? `${input.model.provider}/${input.model.model}`
+            : undefined,
+          parts: await mapPromptParts(input.parts || [], directory),
+        },
+      },
+    );
   }
   async abort(id: string): Promise<void> {
     await this.client.json(`/session/${encodeURIComponent(id)}/abort`, {
