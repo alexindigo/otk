@@ -243,6 +243,9 @@ p {
   padding: 1.8rem;
   overflow-anchor: none;
 }
+.otk-message-flow {
+  display: flow-root;
+}
 .otk-message {
   margin-bottom: 2rem;
   line-height: 1.8;
@@ -851,4 +854,18 @@ p {
   height: 1px;
   background: var(--muted);
   flex: 1;
+}
+.otk-prompt-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem;
+}
+.otk-prompt-chip {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--border);
+}
+.otk-prompt-chip button {
+  border: 0;
+  padding: .25rem .5rem;
 }

@@ -1,42 +1,132 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   createEffect,
+  createMemo,
   createSignal,
   createStore,
   For,
   onSettled,
   Show,
+  untrack,
 } from "solid-js";
 import { highlightBlock } from "../highlight/client.ts";
+import {
+  CodeProjection,
+  type SourceGroup,
+  sourceRange,
+} from "../highlight/lines.ts";
 import type { HighlightToken } from "../highlight/types.ts";
-import { type CodeLine, codeLines } from "../highlight/lines.ts";
-interface LineGroup {
-  lines: CodeLine[];
+import CodeGroup from "./CodeGroup.tsx";
+interface SourcePiece {
+  key: number;
+  start: number;
   end: number;
+  group?: SourceGroup;
 }
-const NEWLINE = "\n";
-function TokenLine(props: { line: CodeLine; tail: string }) {
+function RawSource(props: {
+  text: string;
+  source: string;
+  start: number;
+  terminal: boolean;
+  mount(selected: () => boolean): () => void;
+  onDemand(range?: { start: number; end: number }): void;
+  onSelection(): void;
+}) {
+  let element!: HTMLSpanElement;
+  let previous = "", fragments: readonly { text: string }[] = [];
+  const parts = createMemo(() => {
+    const text = props.text;
+    if (!text.startsWith(previous) || !fragments.length) {
+      fragments = Object.freeze([Object.freeze({ text })]);
+    } else if (text.length > previous.length) {
+      fragments = Object.freeze([
+        ...fragments,
+        Object.freeze({ text: text.slice(previous.length) }),
+      ]);
+    }
+    previous = text;
+    return fragments;
+  });
+  onSettled(() => {
+    const selected = () => {
+      const selection = document.getSelection();
+      return element.contains(selection?.anchorNode || null) ||
+        element.contains(selection?.focusNode || null);
+    };
+    const release = props.mount(selected);
+    let pinned = selected(), disposed = false;
+    const select = () => {
+      const next = selected();
+      if (next === pinned) return;
+      pinned = next;
+      props.onSelection();
+    };
+    const demand = (rect: DOMRectReadOnly) => {
+      if (disposed) return;
+      const left = rect.left, right = rect.right;
+      const top = rect.top, bottom = rect.bottom;
+      if (right <= left || bottom <= top || !document.caretPositionFromPoint) {
+        props.onDemand();
+        return;
+      }
+      const position = document.caretPositionFromPoint(
+        (left + right) / 2,
+        (top + bottom) / 2,
+      );
+      if (
+        !position || position.offsetNode.nodeType !== Node.TEXT_NODE ||
+        !element.contains(position.offsetNode)
+      ) return;
+      const before = document.createRange();
+      before.setStart(element, 0);
+      before.setEnd(position.offsetNode, position.offset);
+      props.onDemand(
+        sourceRange(props.source, props.start + before.toString().length),
+      );
+    };
+    const intersection = new IntersectionObserver((entries) => {
+      for (const entry of entries) {
+        if (entry.target === element) demand(entry.intersectionRect);
+      }
+    });
+    const refresh = () => {
+      if (disposed) return;
+      intersection.unobserve(element);
+      intersection.observe(element);
+    };
+    const observer = new ResizeObserver(refresh);
+    observer.observe(element);
+    intersection.observe(element);
+    document.addEventListener("scroll", refresh, {
+      capture: true,
+      passive: true,
+    });
+    document.addEventListener("selectionchange", select);
+    return () => {
+      disposed = true;
+      observer.disconnect();
+      intersection.disconnect();
+      document.removeEventListener("scroll", refresh, true);
+      document.removeEventListener("selectionchange", select);
+      release();
+    };
+  });
   return (
-    <span class="otk-code-line">
-      <For each={props.line.tokens} keyed={false}>
-        {(token) => (
-          <span
-            class={["otk-token", {
-              "otk-token-bold": !!((token().fontStyle || 0) & 2),
-              "otk-token-italic": !!((token().fontStyle || 0) & 1),
-              "otk-token-underline": !!((token().fontStyle || 0) & 4),
-            }]}
-            style={{ color: token().color }}
-          >
-            {token().content}
-          </span>
-        )}
-      </For>
-      {props.tail}
-      <Show when={props.line.newline}>
-        <span class="otk-code-newline">{NEWLINE}</span>
+    <>
+      <span
+        class="otk-code-plain"
+        ref={(el) => {
+          element = el;
+        }}
+      >
+        <For each={parts()} keyed={(fragment) => fragment}>
+          {(fragment) => <>{untrack(fragment).text}</>}
+        </For>
+      </span>
+      <Show when={props.terminal && /[\r\n]$/.test(props.text)}>
+        <span class="otk-code-line" />
       </Show>
-    </span>
+    </>
   );
 }
 export default function Code(
@@ -47,118 +137,302 @@ export default function Code(
     lineNumbers?: boolean;
   },
 ) {
-  const block = highlightBlock();
-  const [state, setState] = createStore({
-    groups: [] as LineGroup[],
-    text: "",
-    lang: "",
-    length: 0,
-  });
+  const block = highlightBlock(
+    untrack(() => (props.lang || "text").toLowerCase()),
+    untrack(() => props.text),
+  );
+  const [rawTick, setRawTick] = createSignal(0);
+  const [selectionTick, setSelectionTick] = createSignal(0);
+  const [styles, setStyles] = createStore<
+    Record<number, { owner: number; tokens: HighlightToken[][] } | undefined>
+  >({});
   const [error, setError] = createSignal("");
-  let disposed = false, busy = false, revision = 0, rendered = 0;
-  let timer: ReturnType<typeof setTimeout> | undefined,
-    paint: number | undefined;
-  let target: HighlightToken[] = [], targetText = "", targetLang = "";
-  let lines: CodeLine[] = [], groups: LineGroup[] = [];
-  const publish = () => {
-    paint = undefined;
-    if (disposed) return;
-    const end = Math.min(rendered + 32, lines.length);
-    const next: LineGroup[] = [];
-    for (let start = 0; start < end; start += 32) {
-      const rows = lines.slice(start, Math.min(start + 32, end));
-      const old = groups[next.length];
-      if (
-        old && old.lines.length === rows.length &&
-        rows.every((row, i) => row === old.lines[i])
-      ) next.push(old);
-      else {
-        Object.freeze(rows);
-        next.push(Object.freeze({ lines: rows, end: rows.at(-1)!.end }));
+  const input = createMemo(() =>
+    Object.freeze({
+      text: props.text,
+      lang: (props.lang || "text").toLowerCase(),
+      streaming: props.streaming ?? false,
+    })
+  );
+  const tails = new Map<number, () => boolean>();
+  const tailFocus = new Map<
+    number,
+    { owner: number; start: number; end: number }
+  >();
+  let requested: { owner: number; start: number } | undefined;
+  let model = new CodeProjection("", "text");
+  let displayedGroups: readonly SourceGroup[] = [];
+  let displayedSource = "";
+  const tailSelected = () => [...tails.values()].some((selected) => selected());
+  // This computation participates in the same render frame as new sibling
+  // blocks. It performs one bounded source operation; no post-commit setter can
+  // leave an appended suffix missing while the sibling paragraph is visible.
+  const frame = createMemo(() => {
+    const value = input();
+    rawTick();
+    selectionTick();
+    const compatible = value.text.startsWith(displayedSource);
+    if (value.lang !== model.lang || !model.append(value.text)) {
+      model = new CodeProjection(value.text, value.lang, model);
+    }
+    if (!compatible) displayedGroups = [];
+    const pinned = compatible && tailSelected();
+    let group: SourceGroup | undefined;
+    if (requested?.owner === model.id && !pinned) {
+      group = model.reserve(requested.start);
+      requested = undefined;
+    } else if (!model.complete) {
+      const built = model.build();
+      if (!displayedGroups.length) group = built?.group;
+    }
+    const next = displayedGroups.map((shown) =>
+      model.groups.find((candidate) => candidate.key === shown.key) ?? shown
+    );
+    if (!pinned) {
+      if (group) {
+        const index = next.findIndex((shown) => shown.key === group!.key);
+        if (index < 0) next.push(group);
+        else next[index] = group;
       }
     }
-    groups = next;
-    rendered = end;
-    setState((draft) => {
-      draft.groups = next;
-      draft.length = next.at(-1)?.end || 0;
-      draft.text = targetText;
-      draft.lang = targetLang;
+    displayedGroups = Object.freeze(next.sort((a, b) => a.start - b.start));
+    displayedSource = value.text;
+    return Object.freeze({
+      model,
+      source: value.text,
+      complete: model.complete,
+      groups: displayedGroups,
     });
-    if (end < lines.length) paint = requestAnimationFrame(publish);
-  };
-  const flush = async () => {
-    timer = undefined;
-    if (busy || disposed) return;
-    busy = true;
-    const generation = revision,
-      source = props.text,
-      lang = (props.lang || "text").toLowerCase();
-    // Bound each job, including a snapshot or a large append, so the shared
-    // worker can serve other code views before processing this whole block.
-    let end = targetLang === lang && source.startsWith(targetText)
-      ? targetText.length
-      : 0;
-    for (let line = 0; line < 32 && end < source.length; line++) {
-      const newline = source.indexOf("\n", end);
-      end = newline < 0 ? source.length : newline + 1;
-    }
-    const text = source.slice(0, end);
-    let continuing = end < source.length;
-    try {
-      const result = await block.update(
-        lang,
-        text,
-        continuing || (props.streaming ?? false),
-      );
-      if (disposed) return;
+  });
+  let disposed = false,
+    scheduled = false,
+    timer: ReturnType<typeof setTimeout> | undefined;
+  let generation = 0, deadline = 0;
+  let desired:
+    | { value: ReturnType<typeof input>; model: CodeProjection }
+    | undefined;
+  const warm = new Set<number>();
+  const projections = new Map<
+    number,
+    { owner: number; tokens: HighlightToken[] }
+  >();
+  const updateFocus = () => {
+    if (disposed) return;
+    const current = frame(), owner = current.model;
+    const ranges = current.groups.filter((group) => warm.has(group.key)).map((
+      group,
+    ) => ({
+      start: group.start,
+      end: group.end,
+    }));
+    for (const focus of tailFocus.values()) {
       if (
-        props.text.startsWith(text) &&
-        (props.lang || "text").toLowerCase() === lang
+        focus.owner === owner.id &&
+        !ranges.some((range) => range.start === focus.start)
       ) {
-        if (paint !== undefined) cancelAnimationFrame(paint);
-        target.splice(
-          result.from,
-          target.length - result.from,
-          ...result.tokens,
-        );
-        if (result.plain || result.error) continuing = false;
-        targetText = result.plain || result.error ? source : text;
-        targetLang = lang;
-        lines = codeLines(target, lines);
-        rendered = Math.min(rendered, lines.length);
-        setError(result.error ? "Highlighting unavailable" : "");
-        publish();
-      }
-    } catch (error) {
-      continuing = false;
-      if (!disposed) setError((error as Error).message);
-    } finally {
-      busy = false;
-      if (!disposed && (revision !== generation || continuing)) {
-        timer = setTimeout(() => void flush(), 50);
+        ranges.push({ start: focus.start, end: focus.end });
       }
     }
+    ranges.sort((a, b) => a.start - b.start);
+    block.focus(ranges);
+  };
+  const mountTail = (key: number, selected: () => boolean) => {
+    tails.set(key, selected);
+    return () => {
+      tails.delete(key);
+      tailFocus.delete(key);
+      updateFocus();
+    };
+  };
+  const demandTail = (key: number, range?: { start: number; end: number }) => {
+    if (disposed) return;
+    if (range) {
+      const current = frame(), owner = current.model.id;
+      tailFocus.set(key, { owner, ...range });
+      if (!current.groups.some((group) => group.start === range.start)) {
+        requested = { owner, start: range.start };
+        enqueue();
+      }
+    } else tailFocus.delete(key);
+    updateFocus();
+  };
+  const channel = new MessageChannel();
+  const enqueue = () => {
+    if (!disposed && !scheduled) {
+      scheduled = true;
+      channel.port2.postMessage(null);
+    }
+  };
+  channel.port1.onmessage = () => {
+    scheduled = false;
+    if (disposed) return;
+    const current = frame(), owner = current.model;
+    for (const [start, projection] of projections) {
+      if (projection.owner !== owner.id) {
+        projections.delete(start);
+        continue;
+      }
+      const group = current.groups.find((group) => group.start === start);
+      if (!group || !warm.has(group.key)) continue;
+      projections.delete(start);
+      const tokens = owner.projectSource(group, start, projection.tokens);
+      if (!tokens) continue;
+      setStyles((draft) => {
+        draft[group.key] = { owner: owner.id, tokens };
+      });
+      enqueue();
+      return;
+    }
+    // Styles are a group projection, not a prerequisite for source layout.
+    for (const group of current.groups) {
+      const index = owner.groups.findIndex((candidate) =>
+        candidate.key === group.key
+      );
+      if (
+        !warm.has(group.key) ||
+        (index >= 0
+          ? !owner.dirty.has(index)
+          : styles[group.key]?.owner === owner.id)
+      ) continue;
+      if (index >= 0) owner.dirty.delete(index);
+      const tokens = owner.project(group);
+      if (tokens) {
+        setStyles((draft) => {
+          draft[group.key] = { owner: owner.id, tokens };
+        });
+        enqueue();
+        return;
+      }
+    }
+    if (!owner.complete || (requested?.owner === owner.id && !tailSelected())) {
+      setRawTick((value) => value + 1);
+      enqueue();
+    }
+  };
+  const capture = () => {
+    timer = undefined;
+    if (disposed || !desired) return;
+    if (Date.now() < deadline) {
+      schedule();
+      return;
+    }
+    const { value, model: owner } = desired;
+    desired = undefined;
+    const id = ++generation;
+    updateFocus();
+    void block.capture({
+      generation: id,
+      lang: value.lang,
+      text: value.text,
+      streaming: value.streaming,
+    }, (chunk) => {
+      if (
+        disposed || frame().model !== owner ||
+        !owner.source.startsWith(value.text)
+      ) return;
+      // Worker and cached progress are bounded; there is no per-prefix ack.
+      for (
+        const _ of owner.accept(
+          value.lang,
+          value.text,
+          chunk.from,
+          chunk.tokens,
+        )
+      ) { /* one bounded result */ }
+      enqueue();
+    }, (chunk) => {
+      if (
+        disposed || frame().model !== owner ||
+        !owner.source.startsWith(value.text)
+      ) return;
+      projections.set(chunk.start, { owner: owner.id, tokens: chunk.tokens });
+      enqueue();
+    }).then(() => {
+      if (!disposed && id === generation && frame().model === owner) {
+        setError("");
+      }
+    }).catch((error) => {
+      if (
+        !disposed && id === generation && frame().model === owner &&
+        error.name !== "AbortError"
+      ) setError(error.message || "Highlighting unavailable");
+    });
+  };
+  const schedule = () => {
+    if (disposed || !desired || timer !== undefined) return;
+    timer = setTimeout(capture, Math.max(0, deadline - Date.now()));
   };
   createEffect(
-    () => ({ text: props.text, lang: props.lang, streaming: props.streaming }),
-    () => {
-      revision++;
-      if (timer === undefined) timer = setTimeout(() => void flush(), 50);
+    () => ({ value: input(), owner: frame().model }),
+    ({ value, owner }, previous) => {
+      if (previous?.value === value && previous.owner === owner) return;
+      if (previous && previous.owner !== owner) block.cancel();
+      if (!previous || previous.value.lang !== value.lang) {
+        void block.prepare(value.lang, value.text).catch((error) => {
+          if (
+            !disposed && frame().model === owner && error.name !== "AbortError"
+          ) setError(error.message);
+        });
+      }
+      enqueue();
+      if (!desired) deadline = Date.now() + 50;
+      desired = { value, model: owner };
+      schedule();
     },
   );
-  onSettled(() => () => {
-    disposed = true;
-    clearTimeout(timer);
-    if (paint !== undefined) cancelAnimationFrame(paint);
-    block.dispose();
-    target = [];
-    lines = [];
-    groups = [];
+  const demand = (key: number, visible: boolean) => {
+    if (disposed) return;
+    if (visible) {
+      warm.add(key);
+      const owner = frame().model,
+        index = owner.groups.findIndex((group) => group.key === key);
+      if (index >= 0) owner.dirty.add(index);
+      enqueue();
+    } else {
+      warm.delete(key);
+      setStyles((draft) => {
+        delete draft[key];
+      });
+    }
+    updateFocus();
+  };
+  onSettled(() => {
+    return () => {
+      disposed = true;
+      clearTimeout(timer);
+      channel.port1.close();
+      channel.port2.close();
+      block.dispose();
+      desired = undefined;
+      warm.clear();
+      projections.clear();
+      tails.clear();
+      tailFocus.clear();
+      requested = undefined;
+    };
   });
-  const valid = () =>
-    (props.lang || "text").toLowerCase() === state.lang &&
-    props.text.startsWith(state.text);
+  const pieces = createMemo(() => {
+    const current = frame();
+    const result: SourcePiece[] = [];
+    let start = 0;
+    for (const group of current.groups) {
+      if (group.start > start) {
+        result.push({ key: -start - 1, start, end: group.start });
+      }
+      result.push({
+        key: group.key,
+        start: group.start,
+        end: group.end,
+        group,
+      });
+      start = group.end;
+    }
+    if (
+      start < current.source.length ||
+      (!current.complete && current.groups.at(-1)?.rows.at(-1)?.newline)
+    ) result.push({ key: -start - 1, start, end: current.source.length });
+    return result;
+  });
   return (
     <div
       class="otk-code"
@@ -169,12 +443,15 @@ export default function Code(
         <pre
           class="otk-code-numbers"
           aria-hidden="true"
-        >{props.text.split("\n").map((_, i) => i + 1).join("\n")}</pre>
+        >{props.text.split(/\r\n|\n|\r/).map((_, i) => i + 1).join("\n")}</pre>
       </Show>
-      <pre><code><Show when={valid()} fallback={<span class="otk-code-plain">{props.text}</span>}>
-        <For each={state.groups} keyed={false}>{(group) => <For each={group().lines} keyed={false}>{(line) => <TokenLine line={line()} tail={!line().newline && line().end === state.length ? props.text.slice(state.length) : ""} />}</For>}</For>
-        <Show when={!state.groups.length || state.groups.at(-1)!.lines.at(-1)!.newline}><span class="otk-code-plain">{props.text.slice(state.length)}</span></Show>
-      </Show></code></pre>
+      <pre><code>
+      <For each={pieces()} keyed={piece => piece.key}>{piece => (
+        <Show when={piece().group} fallback={<RawSource text={frame().source.slice(piece().start, piece().end)} source={frame().source} start={piece().start} terminal={piece().end === frame().source.length} mount={selected => mountTail(piece().key, selected)} onDemand={range => demandTail(piece().key, range)} onSelection={() => { setSelectionTick(value => value + 1); enqueue(); }} />}>
+          {group => <CodeGroup rows={group().rows} tokens={styles[group().key]?.owner === frame().model.id ? styles[group().key]?.tokens : undefined} onDemand={visible => demand(group().key, visible)} />}
+        </Show>
+      )}</For>
+    </code></pre>
       <Show when={error()}>
         <small class="otk-muted">{error()}</small>
       </Show>

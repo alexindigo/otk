@@ -55,8 +55,6 @@
   display: block;
   white-space: pre;
   min-height: 1lh;
-  content-visibility: auto;
-  contain-intrinsic-size: auto 1lh;
 }
 .otk-code-newline {
   display: none;
@@ -64,4 +62,12 @@
 .otk-code-plain {
   white-space: pre;
   display: block;
+  min-height: 1lh;
+}
+.otk-code-group {
+  display: block;
+}
+.otk-code-raw {
+  display: block;
+  white-space: pre;
 }

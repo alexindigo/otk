@@ -2,7 +2,6 @@
 import {
   createEffect,
   createSignal,
-  deep,
   type Element,
   For,
   onSettled,
@@ -20,6 +19,8 @@ import type { Preferences } from "../../../protocol/prefs.ts";
 import SubagentBar from "./SubagentBar.tsx";
 import RevertBanner from "./RevertBanner.tsx";
 import { queuedMessages } from "../state/messages.ts";
+import { followViewport } from "./viewport.ts";
+import { highlightingScope } from "../highlight/client.ts";
 export default function SessionView(props: {
   info?: ContentSession;
   label: string;
@@ -48,32 +49,24 @@ export default function SessionView(props: {
   const queued = () => queuedMessages(props.messages, props.busy);
   const [paneWidth, setPaneWidth] = createSignal(0);
   let view!: HTMLElement;
-  let list!: HTMLDivElement,
-    atBottom = true,
-    previousHeight = 0,
-    paging = false;
-  const scroll = () => {
-    atBottom = list.scrollHeight - list.clientHeight - list.scrollTop < 24;
-    if (
-      list.scrollTop < 24 && !props.loading && !props.paging && !props.exhausted
-    ) {
-      paging = true;
-      previousHeight = list.scrollHeight;
-      void props.onOlder();
+  let list!: HTMLDivElement, flow!: HTMLDivElement;
+  let following: ReturnType<typeof followViewport> | undefined;
+  let releaseHighlighting: (() => void) | undefined;
+  createEffect(() => props.busy, (busy) => {
+    if (busy) releaseHighlighting ||= highlightingScope();
+    else {
+      releaseHighlighting?.();
+      releaseHighlighting = undefined;
     }
-  };
+  });
   createEffect(
     () => ({
-      messages: deep(props.messages),
-      loading: props.loading,
       paging: props.paging,
+      id: props.info?.id,
     }),
-    (value) => {
-      if (!list) return;
-      if (paging && !value.paging) {
-        list.scrollTop += list.scrollHeight - previousHeight;
-        paging = false;
-      } else if (atBottom && !paging) list.scrollTop = list.scrollHeight;
+    (value, previous) => {
+      if (value.id && value.id !== previous?.id) following?.reset();
+      following?.update(value.paging);
     },
   );
   onSettled(() => {
@@ -81,11 +74,17 @@ export default function SessionView(props: {
       setPaneWidth(entries[0].contentRect.width)
     );
     observer.observe(view);
-    list.scrollTop = list.scrollHeight;
-    list.addEventListener("scroll", scroll);
+    following = followViewport(list, flow, () => {
+      if (!props.loading && !props.paging && !props.exhausted) {
+        void props.onOlder();
+      }
+    });
     return () => {
       observer.disconnect();
-      list.removeEventListener("scroll", scroll);
+      following?.dispose();
+      following = undefined;
+      releaseHighlighting?.();
+      releaseHighlighting = undefined;
     };
   });
   return (
@@ -120,44 +119,51 @@ export default function SessionView(props: {
           list = element;
         }}
       >
-        <Show when={props.revert}>
-          {(revert) => <RevertBanner revert={revert()} />}
-        </Show>
-        <Show when={!props.exhausted && props.messages.length}>
-          <button
-            type="button"
-            class="otk-load-older"
-            disabled={props.paging || props.loading}
-            onClick={() => void props.onOlder()}
-          >
-            {props.paging ? "Loading…" : "Load older messages"}
-          </button>
-        </Show>
         <Show when={props.loading}>
           <p class="otk-muted">Loading messages…</p>
         </Show>
-        <Show when={props.error}>
-          <p role="alert" class="otk-error">{props.error}</p>
-          <button type="button" onClick={() => void props.onRetry()}>
-            Retry messages
-          </button>
-        </Show>
-        <For each={props.messages} keyed={(message) => message.id}>
-          {(message) => (
-            <Message
-              message={message()}
-              prefs={props.prefs}
-              directory={props.info?.directory}
-              permissions={props.permissions}
-              paneWidth={paneWidth()}
-              onOpenChild={props.onOpenChild}
-              queued={queued().has(message().id)}
-            />
-          )}
-        </For>
-        <Show when={!props.loading && !props.messages.length && !props.error}>
-          <p class="otk-muted otk-empty">Start a conversation below.</p>
-        </Show>
+        <div
+          class="otk-message-flow"
+          ref={(element) => {
+            flow = element;
+          }}
+        >
+          <Show when={props.revert}>
+            {(revert) => <RevertBanner revert={revert()} />}
+          </Show>
+          <Show when={!props.exhausted && props.messages.length}>
+            <button
+              type="button"
+              class="otk-load-older"
+              disabled={props.paging || props.loading}
+              onClick={() => void props.onOlder()}
+            >
+              {props.paging ? "Loading…" : "Load older messages"}
+            </button>
+          </Show>
+          <Show when={props.error}>
+            <p role="alert" class="otk-error">{props.error}</p>
+            <button type="button" onClick={() => void props.onRetry()}>
+              Retry messages
+            </button>
+          </Show>
+          <For each={props.messages} keyed={(message) => message.id}>
+            {(message) => (
+              <Message
+                message={message()}
+                prefs={props.prefs}
+                directory={props.info?.directory}
+                permissions={props.permissions}
+                paneWidth={paneWidth()}
+                onOpenChild={props.onOpenChild}
+                queued={queued().has(message().id)}
+              />
+            )}
+          </For>
+          <Show when={!props.loading && !props.messages.length && !props.error}>
+            <p class="otk-muted otk-empty">Start a conversation below.</p>
+          </Show>
+        </div>
       </div>
       <Show when={!props.child}>
         {props.permissionDock}
