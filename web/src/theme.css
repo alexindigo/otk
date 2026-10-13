@@ -1024,3 +1024,36 @@ p {
 .otk-output-time-group:has(.otk-last-output-time:focus-visible) .otk-last-output-date {
   visibility: visible;
 }
+.otk-session-error {
+  overflow-wrap: anywhere;
+  margin-block: 1rem;
+}
+.otk-session-error-message {
+  margin-block: 0 .5rem;
+}
+.otk-session-error-details {
+  color: var(--secondary);
+  font-size: .85rem;
+}
+.otk-session-error-details summary {
+  cursor: pointer;
+}
+.otk-session-error-details ul {
+  display: flex;
+  flex-direction: column;
+  gap: .8rem;
+  padding-inline-start: 1.2rem;
+}
+.otk-error-observation p {
+  margin-block: .25rem;
+}
+.otk-error-observation-message {
+  color: var(--fg);
+  white-space: pre-wrap;
+}
+.otk-error-observation-origin {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .7rem;
+}

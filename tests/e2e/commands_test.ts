@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { McpFixture } from "../support/mcp.ts";
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
+import {
+  assertErrorConsumer,
+  reloadErrorConsumer,
+} from "../support/error-consumer.ts";
 Deno.test("P5 project, MCP and skill slash commands run with multiline arguments; builtins preserve dirty navigation", async () => {
   const mcp = new McpFixture(),
     f = await browserFixture(undefined, {
@@ -175,16 +179,23 @@ Deno.test("deferred slash failure reaches the session consumer and reload while 
     await browser.type("textarea[name=prompt]", "keep this draft");
     client = new WsClient(server.url);
     await client.connect();
+    client.send({ t: "subscribe", sessionID: session.id });
     await client.rpc("session.command", {
       sessionID: session.id,
       command: "missing-otk-command",
       arguments: "",
     });
     await browser.poll(
-      "!!document.querySelector('.otk-messages [role=alert]')?.textContent.trim()",
+      "document.querySelector('.otk-error-observation[data-source=event] .otk-error-observation-message')?.textContent.startsWith('Command not found:') && !!document.querySelector('.otk-error-observation[data-source=http]')",
     );
-    const error = await browser.evaluate<string>(
-      "document.querySelector('.otk-messages [role=alert]').textContent",
+    const snapshot = await assertErrorConsumer(browser, client, session.id);
+    assert(
+      snapshot.errorState?.observations.some((item) =>
+        item.source === "http" && item.status === 500 && item.ref
+      ),
+    );
+    assert(
+      snapshot.error?.startsWith('Command not found: "missing-otk-command".'),
     );
     assertEquals(
       await browser.evaluate(
@@ -192,18 +203,7 @@ Deno.test("deferred slash failure reaches the session consumer and reload while 
       ),
       "keep this draft",
     );
-    assertEquals(
-      (await client.rpc<{ error?: string }>("session.get", {
-        sessionID: session.id,
-      })).error,
-      error,
-    );
-    await browser.goto(await browser.evaluate<string>("location.href"));
-    await browser.poll(
-      `document.querySelector('.otk-messages [role=alert]')?.textContent===${
-        JSON.stringify(error)
-      }`,
-    );
+    await reloadErrorConsumer(browser, client, session.id, snapshot);
     assertEquals(f.fake.requests.length, 0);
   } finally {
     await client?.close();

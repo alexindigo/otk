@@ -1,6 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ServiceConfig } from "../../config/schema.ts";
 import { HarnessError } from "../types.ts";
+export class HttpFailure extends HarnessError {
+  constructor(
+    readonly status: number,
+    readonly detail: { message: string; kind?: string; ref?: string },
+  ) {
+    super(`harness_${status}`, detail.message.slice(0, 1024));
+  }
+}
 export class Client {
   constructor(
     readonly cfg: ServiceConfig["harness"],
@@ -51,20 +59,29 @@ export class Client {
     if (!response.ok) {
       const text = await response.text();
       let message = text;
+      let kind: string | undefined, ref: string | undefined;
       try {
         const value: unknown = JSON.parse(text);
         if (value && typeof value === "object" && "data" in value) {
+          if ("name" in value && typeof value.name === "string") {
+            kind = value.name;
+          }
           const data = value.data;
           if (
             data && typeof data === "object" && "message" in data &&
             typeof data.message === "string"
           ) message = data.message;
+          if (
+            data && typeof data === "object" && "ref" in data &&
+            typeof data.ref === "string"
+          ) ref = data.ref;
         }
       } catch { /* Non-JSON errors retain the existing HTTP text. */ }
-      throw new HarnessError(
-        `harness_${response.status}`,
-        message.slice(0, 1024),
-      );
+      throw new HttpFailure(response.status, {
+        message,
+        ...(kind ? { kind } : {}),
+        ...(ref ? { ref } : {}),
+      });
     }
     return response;
   }

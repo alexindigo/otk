@@ -18,6 +18,8 @@ import Prompt from "./Prompt.tsx";
 import type { Preferences } from "../../../protocol/prefs.ts";
 import SubagentBar from "./SubagentBar.tsx";
 import RevertBanner from "./RevertBanner.tsx";
+import SessionError from "./SessionError.tsx";
+import type { SessionErrorState } from "../../../protocol/errors.ts";
 import { queuedMessages } from "../state/messages.ts";
 import { followViewport } from "./viewport.ts";
 import { highlightingScope } from "../highlight/client.ts";
@@ -38,6 +40,7 @@ export default function SessionView(props: {
   exhausted: boolean;
   error?: string;
   sessionError?: string;
+  errorState?: SessionErrorState;
   draft: Draft;
   connected: boolean;
   permissionDock?: Element;
@@ -168,9 +171,7 @@ export default function SessionView(props: {
               Retry messages
             </button>
           </Show>
-          <Show when={props.sessionError}>
-            <p role="alert" class="otk-error">{props.sessionError}</p>
-          </Show>
+          <SessionError state={props.errorState} error={props.sessionError} />
           <For each={props.messages} keyed={(message) => message.id}>
             {(message) => (
               <Message

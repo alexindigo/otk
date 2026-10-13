@@ -25,7 +25,12 @@ import {
   HarnessError,
   type HarnessSink,
 } from "../types.ts";
-import { Client } from "./client.ts";
+import { Client, HttpFailure } from "./client.ts";
+import { SessionErrors } from "./errors.ts";
+import {
+  sessionErrorMessage,
+  type SessionErrorState,
+} from "../../../protocol/errors.ts";
 import { BootstrapDb } from "./db.ts";
 import { History } from "../../history/history.ts";
 import { consumeEvents } from "./events.ts";
@@ -85,7 +90,11 @@ export class Opencode1Adapter implements HarnessAdapter {
   >();
   #questions = new Map<string, string>();
   #stopped = true;
-  #commands = new Map<AbortController, Promise<void>>();
+  #commands = new Map<
+    AbortController,
+    { sessionID: string; task: Promise<void> }
+  >();
+  #errors = new SessionErrors((id, state) => this.#publishErrors(id, state));
   #controller?: AbortController;
   #run?: Promise<void>;
   #wake?: () => void;
@@ -151,12 +160,15 @@ export class Opencode1Adapter implements HarnessAdapter {
   async stop(): Promise<void> {
     this.#stopped = true;
     this.#controller?.abort();
-    for (const controller of this.#commands.keys()) controller.abort();
+    this.#abortCommands();
+    this.#errors.reset();
     this.#wake?.();
     this.buffers.stop();
     this.#tasks.release();
     await this.#run;
-    await Promise.all(this.#commands.values());
+    await Promise.all(
+      [...this.#commands.values()].map((request) => request.task),
+    );
     this.#db.close();
     this.#history.close();
   }
@@ -181,10 +193,13 @@ export class Opencode1Adapter implements HarnessAdapter {
         query: { directory: this.#directory(id) },
       },
     );
+    const revert = await this.#revertInfo(raw);
+    const errorState = this.#errors.snapshot(id);
     return {
       ...mapSession(raw),
-      revert: await this.#revertInfo(raw),
-      error: this.#entries.get(id)?.attention.error,
+      revert,
+      error: sessionErrorMessage(errorState),
+      errorState,
     };
   }
   listHistory() {
@@ -403,6 +418,7 @@ export class Opencode1Adapter implements HarnessAdapter {
     }
     this.#launch(
       input.sessionID,
+      "shell",
       `/session/${encodeURIComponent(input.sessionID)}/shell`,
       {
         method: "POST",
@@ -425,35 +441,62 @@ export class Opencode1Adapter implements HarnessAdapter {
   }
   #launch(
     sessionID: string,
+    operation: "shell" | "command",
     path: string,
     options: Parameters<Client["request"]>[1],
   ): void {
     if (this.#stopped) throw new HarnessError("stopped", "Harness is stopped");
     const controller = new AbortController();
+    const token = this.#errors.begin(sessionID, operation);
     const request = this.client.json(path, {
       ...options,
       signal: controller.signal,
       timeout: null,
-    }).then(() => {}).catch((error) => {
+    }).then(() => this.#errors.settled(token)).catch((error) => {
       if (!this.#stopped && !controller.signal.aborted) {
-        this.#sessionError(
-          sessionID,
-          (error as Error).message || "Harness error",
+        this.#errors.http(
+          token,
+          error instanceof HttpFailure
+            ? { ...error.detail, status: error.status }
+            : {
+              message: (error as Error).message || "Harness error",
+              kind: (error as Error).name,
+            },
         );
       }
-    }).finally(() => this.#commands.delete(controller));
-    this.#commands.set(controller, request);
+    }).finally(() => {
+      this.#errors.settled(token);
+      this.#commands.delete(controller);
+    });
+    this.#commands.set(controller, { sessionID, task: request });
   }
-  #sessionError(sessionID: string, error?: string): void {
+  #abortCommands(sessionID?: string): void {
+    for (const [controller, request] of this.#commands) {
+      if (sessionID === undefined || request.sessionID === sessionID) {
+        controller.abort();
+      }
+    }
+  }
+  #publishErrors(sessionID: string, errorState: SessionErrorState): void {
+    if (this.#stopped) return;
+    const error = sessionErrorMessage(errorState);
     const entry = this.#entries.get(sessionID);
     if (entry) {
-      if (error) entry.attention.error = error;
-      else delete entry.attention.error;
+      this.#errorEntry(entry, errorState);
       this.#sink.indexUpsert(entry);
     }
     if (this.buffers.subscribed(sessionID)) {
-      this.#sink.content(sessionID, { op: "session.error", error });
+      this.#sink.content(sessionID, { op: "session.error", error, errorState });
     }
+  }
+  #errorEntry(
+    entry: IndexEntry,
+    errorState = this.#errors.snapshot(entry.id),
+  ): void {
+    entry.attention.errorState = errorState;
+    const error = sessionErrorMessage(errorState);
+    if (error) entry.attention.error = error;
+    else delete entry.attention.error;
   }
   async listCommands(sessionID: string): Promise<CommandOption[]> {
     const directory = this.#directory(sessionID) ??
@@ -496,6 +539,7 @@ export class Opencode1Adapter implements HarnessAdapter {
       (await this.getSession(input.sessionID)).directory;
     this.#launch(
       input.sessionID,
+      "command",
       `/session/${encodeURIComponent(input.sessionID)}/command`,
       {
         method: "POST",
@@ -519,6 +563,8 @@ export class Opencode1Adapter implements HarnessAdapter {
       method: "POST",
       query: { directory: this.#directory(id) },
     });
+    this.#abortCommands(id);
+    this.#errors.cancel(id);
   }
   async revert(id: string, messageID: string): Promise<ContentSession> {
     await this.client.json(`/session/${encodeURIComponent(id)}/revert`, {
@@ -702,7 +748,10 @@ export class Opencode1Adapter implements HarnessAdapter {
         query: { start: since, limit: 200, cursor },
       });
       for (const session of await response.json() as Session[]) {
-        entries.set(session.id, mapIndex(session));
+        this.#errors.register(session.id);
+        const entry = mapIndex(session);
+        this.#errorEntry(entry);
+        entries.set(session.id, entry);
       }
       const next = response.headers.get("x-next-cursor") ?? undefined;
       if (next && next === cursor) {
@@ -814,6 +863,8 @@ export class Opencode1Adapter implements HarnessAdapter {
     }
     if (!p) throw new Error(`Malformed ${type} event: properties missing`);
     if (type === "server.instance.disposed") {
+      this.#abortCommands();
+      this.#errors.reset();
       await this.#bootstrap();
       this.#sink.resync("all");
       return;
@@ -828,11 +879,13 @@ export class Opencode1Adapter implements HarnessAdapter {
       const session = p.info as Session,
         old = this.#entries.get(session.id),
         mapped = mapIndex(session);
+      this.#errors.register(session.id);
       if (old) {
         mapped.status = old.status;
         mapped.retry = old.retry;
         mapped.attention = old.attention;
       }
+      this.#errorEntry(mapped);
       this.#entries.set(mapped.id, mapped);
       this.#sink.indexUpsert(mapped);
       this.#attention();
@@ -853,6 +906,8 @@ export class Opencode1Adapter implements HarnessAdapter {
     }
     if (type === "session.deleted") {
       const id = (p.info as Session).id;
+      this.#abortCommands(id);
+      this.#errors.remove(id);
       this.#entries.delete(id);
       this.#sink.indexRemove(id);
       this.#attention();
@@ -881,15 +936,17 @@ export class Opencode1Adapter implements HarnessAdapter {
           }
           : undefined;
       }
-      if (status.type === "busy") this.#sessionError(sessionID);
+      if (status.type === "busy") this.#errors.clear(sessionID);
       else if (entry) this.#sink.indexUpsert(entry);
       return;
     }
     if (type === "session.error") {
-      this.#sessionError(
-        sessionID,
-        (p.error as Info["error"])?.data?.message || "Harness error",
-      );
+      const error = p.error as Info["error"];
+      this.#errors.native(sessionID, {
+        message: error?.data?.message || "Harness error",
+        ...(error?.name ? { kind: error.name } : {}),
+        ...(error?.data?.ref ? { ref: error.data.ref } : {}),
+      }, event.payload.id);
       return;
     }
     if (type === "permission.asked") {

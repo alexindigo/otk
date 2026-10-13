@@ -1,8 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
+import {
+  assertErrorConsumer,
+  reloadErrorConsumer,
+} from "../support/error-consumer.ts";
 Deno.test("a pasted literal bang remains prompt text when subsequent ordinary characters are typed", async () => {
   const f = await browserFixture();
   try {
@@ -116,36 +120,29 @@ Deno.test("deferred shell failure reaches the session consumer and reload withou
     await browser.type("textarea[name=prompt]", "keep this draft");
     client = new WsClient(server.url);
     await client.connect();
+    client.send({ t: "subscribe", sessionID: session.id });
     await client.rpc("session.shell", {
       sessionID: session.id,
       command: "echo should-not-run",
       agent: "missing-otk-agent",
     });
     await browser.poll(
-      "!!document.querySelector('.otk-messages [role=alert]')?.textContent.trim()",
+      "document.querySelector('.otk-error-observation[data-source=event] .otk-error-observation-message')?.textContent.startsWith('Agent not found:') && !!document.querySelector('.otk-error-observation[data-source=http]')",
     );
-    const error = await browser.evaluate<string>(
-      "document.querySelector('.otk-messages [role=alert]').textContent",
+    const snapshot = await assertErrorConsumer(browser, client, session.id);
+    assert(
+      snapshot.errorState?.observations.some((item) =>
+        item.source === "http" && item.status === 500 && item.ref
+      ),
     );
+    assert(snapshot.error?.startsWith('Agent not found: "missing-otk-agent".'));
     assertEquals(
       await browser.evaluate(
         "document.querySelector('textarea[name=prompt]').value",
       ),
       "keep this draft",
     );
-    assertEquals(
-      (await client.rpc<{ error?: string }>("session.get", {
-        sessionID: session.id,
-      })).error,
-      error,
-    );
-    const url = await browser.evaluate<string>("location.href");
-    await browser.goto(url);
-    await browser.poll(
-      `document.querySelector('.otk-messages [role=alert]')?.textContent===${
-        JSON.stringify(error)
-      }`,
-    );
+    await reloadErrorConsumer(browser, client, session.id, snapshot);
     assertEquals(f.fake.requests.length, 0);
   } finally {
     await client?.close();

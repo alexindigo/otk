@@ -27,7 +27,7 @@ export interface Info {
     reasoning: number;
     cache: { read: number; write: number };
   };
-  error?: { name: string; data: { message?: string } };
+  error?: { name: string; data: { message?: string; ref?: string } };
 }
 export interface RawPart {
   id: string;
@@ -89,5 +89,5 @@ export interface RawQuestion {
 }
 export interface Envelope {
   directory?: string;
-  payload: { type: string; properties?: Record<string, unknown> };
+  payload: { type: string; id?: string; properties?: Record<string, unknown> };
 }

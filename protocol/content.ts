@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { SessionErrorState } from "./errors.ts";
 export interface ModelRef {
   provider: string;
   model: string;
@@ -237,6 +238,7 @@ export interface ContentSession {
   archived: boolean;
   revert?: RevertInfo;
   error?: string;
+  errorState?: SessionErrorState;
 }
 export interface RevertInfo {
   messageID: string;
@@ -264,7 +266,7 @@ export interface Todo {
   priority: string;
 }
 export type ContentOp =
-  | { op: "session.error"; error?: string }
+  | { op: "session.error"; error?: string; errorState?: SessionErrorState }
   | { op: "question.upsert"; request: QuestionRequest }
   | { op: "question.remove"; requestID: string; sessionID: string }
   | {

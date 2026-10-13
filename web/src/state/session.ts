@@ -109,6 +109,7 @@ export function createSession(
         questions,
         revert: info.revert || null,
         error: info.error,
+        errorState: info.errorState,
       };
       for (const op of buffer) content = reduce(content, op);
       buffer = [];

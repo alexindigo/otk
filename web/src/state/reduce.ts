@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  sessionErrorMessage,
+  type SessionErrorState,
+} from "../../../protocol/errors.ts";
 import type {
   ContentOp,
   FileDiff,
@@ -16,6 +20,7 @@ export interface ContentState {
   diffs: FileDiff[];
   revert: RevertInfo | null;
   error?: string;
+  errorState?: SessionErrorState;
 }
 export function emptyContent(): ContentState {
   return {
@@ -40,7 +45,19 @@ function output(message: Message, lastOutput?: number): Message {
     : message;
 }
 export function reduce(state: ContentState, op: ContentOp): ContentState {
-  if (op.op === "session.error") return { ...state, error: op.error };
+  if (op.op === "session.error") {
+    if (op.errorState) {
+      if (op.errorState.revision <= (state.errorState?.revision ?? -1)) {
+        return state;
+      }
+      return {
+        ...state,
+        errorState: op.errorState,
+        error: sessionErrorMessage(op.errorState),
+      };
+    }
+    return state.errorState ? state : { ...state, error: op.error };
+  }
   if (op.op === "question.upsert") {
     return {
       ...state,

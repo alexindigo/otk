@@ -315,6 +315,7 @@ export default function App() {
                     exhausted={session.state.exhausted}
                     error={session.state.error}
                     sessionError={session.state.content.error}
+                    errorState={session.state.content.errorState}
                     draft={draft()}
                     connected={selectedSidecar()?.status === "connected"}
                     onOlder={() => session.older()}

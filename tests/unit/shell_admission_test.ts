@@ -208,12 +208,22 @@ for (const method of ["shell", "command"] as const) {
           arguments: "owned arguments",
         });
         if (outcome === "stop") {
+          assertEquals(ops, [{
+            op: "session.error",
+            error: undefined,
+            errorState: {
+              revision: 1,
+              currentRequestID: "request-1",
+              observations: [],
+            },
+          }], "Admission did not establish a clean identified request state");
+          const admittedOps = structuredClone(ops);
           await adapter.stop();
           stopped = true;
           assert(aborted, "Adapter stop left the actual HTTP watcher alive");
           assertEquals(
             ops,
-            [],
+            admittedOps,
             "Stopped watcher published a stale session failure",
           );
         } else {

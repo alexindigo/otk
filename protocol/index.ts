@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { SessionErrorState } from "./errors.ts";
 export interface IndexEntry {
   id: string;
   parentID?: string;
@@ -16,6 +17,7 @@ export interface IndexEntry {
     childPermissions: number;
     childQuestions: number;
     error?: string;
+    errorState?: SessionErrorState;
   };
 }
 export type IndexOp = { op: "upsert"; entry: IndexEntry } | {

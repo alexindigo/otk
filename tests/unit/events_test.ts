@@ -217,11 +217,33 @@ Deno.test("adapter maps legacy event chain while ignoring its captured durable s
       "diff.set",
       "todo.set",
       "message.remove",
+      "session.error",
     ]);
     assertEquals(ops.slice(0, 2), [
-      { op: "session.error", error: undefined },
-      { op: "session.error", error: "fixture error" },
+      {
+        op: "session.error",
+        error: undefined,
+        errorState: { revision: 1, observations: [] },
+      },
+      {
+        op: "session.error",
+        error: "fixture error",
+        errorState: {
+          revision: 2,
+          observations: [{
+            id: "observation-2",
+            source: "event",
+            message: "fixture error",
+            kind: "UnknownError",
+          }],
+        },
+      },
     ]);
+    assertEquals(ops.at(-1), {
+      op: "session.error",
+      error: undefined,
+      errorState: { revision: 3, observations: [] },
+    });
     assert(entries.some((entry) => entry.attention.error === "fixture error"));
   } finally {
     await adapter.stop();
