@@ -419,6 +419,133 @@ Deno.test("completed worker batches preserve multiline grammar and recalled unfi
   }
 });
 
+Deno.test("real downward wheel retains follow intent when transcript growth precedes its scroll notification", async () => {
+  const f = await browserFixture();
+  try {
+    const server = await f.sidecar(), browser = await f.browser(server.url);
+    for (const numbered of [false, true]) {
+      const session = await f.oc.request<{ id: string }>("/session", {
+        method: "POST",
+        body: { title: "Wheel/layout ordering " + numbered },
+      });
+      if (numbered) {
+        f.fake.queue({
+          tool: {
+            name: "write",
+            input: {
+              filePath: join(f.oc.directory, "wheel.ts"),
+              content: source,
+            },
+          },
+        }, { chunks: ["Written."] });
+      } else f.fake.queue({ chunks: ["```ts\n" + source + "\n```\n"] });
+      await f.oc.request(`/session/${session.id}/prompt_async`, {
+        method: "POST",
+        body: { parts: [{ type: "text", text: "Prepare wheel source" }] },
+      });
+      await waitFor(
+        () =>
+          f.oc.request<{ info: { time: { completed?: number } } }[]>(
+            `/session/${session.id}/message`,
+          ),
+        (messages) => messages.some((message) => !!message.info.time.completed),
+      );
+      await openSession(browser, session.id);
+      await browser.poll(
+        `document.querySelector('.otk-code code')?.textContent===${
+          JSON.stringify(source)
+        } && document.querySelector('[aria-current=page]')?.dataset.status==='idle' && [...document.querySelectorAll('.otk-message-details')].every(el=>!el.textContent.includes('streaming')) && ${
+          numbered
+            ? "[...document.querySelectorAll('.otk-text p')].some(el=>el.textContent==='Written.')"
+            : "true"
+        } && (()=>{const p=document.querySelector('.otk-messages');return p.scrollHeight-p.clientHeight-p.scrollTop<2})()`,
+      );
+      const point = await browser.evaluate<{ x: number; y: number }>(
+        `(async()=>{
+          const pane=document.querySelector('.otk-messages');
+          await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+          await new Promise(resolve=>{pane.addEventListener('scrollend',resolve,{once:true});pane.scrollTop=pane.scrollHeight-pane.clientHeight-8});
+          if(Math.abs(pane.scrollHeight-pane.clientHeight-pane.scrollTop-8)>.5)throw new Error('Wheel setup did not retain its reader position');
+          globalThis.wheelLayoutEvidence=null;
+          let armed=false;
+          pane.addEventListener('wheel',()=>armed=true,{once:true,passive:true});
+          const grow=()=>{
+            if(!armed)return;
+            pane.removeEventListener('scroll',grow,true);
+            const before={top:pane.scrollTop,height:pane.scrollHeight,gap:pane.scrollHeight-pane.clientHeight-pane.scrollTop};
+            const growth=document.createElement('div');growth.style.height='80px';growth.textContent='Late transcript layout';
+            pane.querySelector('.otk-message-flow').append(growth);
+            wheelLayoutEvidence={before,after:pane.scrollHeight};
+          };
+          pane.addEventListener('scroll',grow,true);
+          const rect=pane.getBoundingClientRect();return {x:rect.left+8,y:rect.top+rect.height/2};
+        })()`,
+      );
+      await browser.send("Input.dispatchMouseEvent", {
+        type: "mouseWheel",
+        ...point,
+        deltaX: 0,
+        deltaY: 100000,
+      });
+      await browser.poll("!!globalThis.wheelLayoutEvidence");
+      const ordering = await browser.evaluate<
+        { before: { gap: number; height: number }; after: number }
+      >("wheelLayoutEvidence");
+      assert(ordering.before.gap < 2, JSON.stringify(ordering));
+      assert(ordering.after - ordering.before.height >= 80);
+      await browser.poll(
+        "(()=>{const p=document.querySelector('.otk-messages');return p.scrollHeight-p.clientHeight-p.scrollTop<2})()",
+        3000,
+      );
+      assertEquals(
+        await browser.evaluate(
+          "document.querySelector('.otk-code code').textContent",
+        ),
+        source,
+      );
+      await browser.evaluate(
+        `(()=>{const pane=document.querySelector('.otk-messages');pane.tabIndex=0;pane.focus();
+          pane.addEventListener('keydown',()=>{
+            globalThis.keyScrollEnded=false;
+            const scroll=()=>keyScrollEnded=false,end=()=>keyScrollEnded=true;
+            pane.addEventListener('scroll',scroll);pane.addEventListener('scrollend',end);
+            globalThis.releaseKeyScroll=()=>{pane.removeEventListener('scroll',scroll);pane.removeEventListener('scrollend',end)};
+          },{once:true});})()`,
+      );
+      // Space's native page-scroll default needs its character event as well
+      // as keydown; observe actual scrollend rather than an animation frame.
+      for (const type of ["keyDown", "keyUp"]) {
+        await browser.send("Input.dispatchKeyEvent", {
+          type,
+          key: " ",
+          code: "Space",
+          modifiers: 8,
+          windowsVirtualKeyCode: 32,
+          nativeVirtualKeyCode: 32,
+          ...(type === "keyDown" ? { text: " ", unmodifiedText: " " } : {}),
+        });
+      }
+      await browser.poll(
+        "globalThis.keyScrollEnded && (()=>{const p=document.querySelector('.otk-messages');return p.scrollHeight-p.clientHeight-p.scrollTop>100})()",
+        3000,
+      );
+      await browser.evaluate("releaseKeyScroll()");
+      const reader = await browser.evaluate<{ before: number; after: number }>(
+        `(async()=>{const p=document.querySelector('.otk-messages'),before=p.scrollTop;
+          const flow=p.querySelector('.otk-message-flow'),growth=document.createElement('div');growth.style.height='80px';
+          await new Promise(resolve=>{const observer=new ResizeObserver(()=>{observer.disconnect();requestAnimationFrame(()=>requestAnimationFrame(resolve))});observer.observe(flow);flow.append(growth)});
+          return {before,after:p.scrollTop};})()`,
+      );
+      assert(
+        Math.abs(reader.before - reader.after) < 2,
+        JSON.stringify(reader),
+      );
+    }
+  } finally {
+    await f.stop();
+  }
+});
+
 async function scroll(browser: Cdp, bottom: boolean) {
   const point = await browser.evaluate<
     { x: number; y: number; distance: number }

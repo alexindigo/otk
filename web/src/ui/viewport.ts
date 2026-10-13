@@ -5,7 +5,8 @@ export function followViewport(
   flow: HTMLElement,
   older: () => void,
 ) {
-  let following = true, gesture = false, dragging = false, internal = false;
+  let following = true, dragging = false, internal = false;
+  let gesture: "toward" | "away" | undefined;
   let pressed = false, startX = 0, startY = 0;
   let disposed = false, paging = false, previousHeight = 0, pageTop = 0;
   let frame: number | undefined;
@@ -30,14 +31,19 @@ export function followViewport(
     const own = internal;
     internal = false;
     if (gesture || dragging) {
-      following = bottom();
+      // Input owns direction: a delayed notification can still describe the
+      // previous programmatic position or an older layout. Neither can revoke
+      // downward follow or undo upward intent. Direct dragging owns position.
+      following = dragging
+        ? bottom()
+        : gesture === "toward" && (following || bottom());
       if (following) schedule();
     } else if (own) { /* Layout/programmatic movement preserves intent. */ }
     if (viewport.scrollTop < 24 && !paging) older();
   };
   const wheel = (event: WheelEvent) => {
-    gesture = true;
-    if (event.deltaY < 0) following = false;
+    gesture = event.deltaY < 0 ? "away" : "toward";
+    if (gesture === "away") following = false;
   };
   const down = (event: PointerEvent) => {
     pressed = true;
@@ -46,12 +52,12 @@ export function followViewport(
     const rect = viewport.getBoundingClientRect();
     dragging = event.target === viewport &&
       event.clientX >= rect.left + viewport.clientLeft + viewport.clientWidth;
-    if (dragging) gesture = true;
+    if (dragging) gesture = undefined;
   };
   const move = (event: PointerEvent) => {
     if (pressed && (event.clientX !== startX || event.clientY !== startY)) {
       dragging = true;
-      gesture = true;
+      gesture = undefined;
     }
   };
   const touch = () => {
@@ -60,7 +66,7 @@ export function followViewport(
   const touchMove = () => {
     if (pressed) {
       dragging = true;
-      gesture = true;
+      gesture = undefined;
     }
   };
   const up = () => {
@@ -72,7 +78,7 @@ export function followViewport(
     }
   };
   const end = () => {
-    if (!dragging) gesture = false;
+    if (!dragging) gesture = undefined;
     internal = false;
   };
   const key = (event: KeyboardEvent) => {
@@ -85,8 +91,11 @@ export function followViewport(
       ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]
         .includes(event.key)
     ) {
-      gesture = true;
-      if (["ArrowUp", "PageUp", "Home"].includes(event.key)) following = false;
+      gesture = ["ArrowUp", "PageUp", "Home"].includes(event.key) ||
+          (event.key === " " && event.shiftKey)
+        ? "away"
+        : "toward";
+      if (gesture === "away") following = false;
     }
   };
   const observer = new ResizeObserver(schedule);
@@ -108,8 +117,8 @@ export function followViewport(
   return {
     reset() {
       following = true;
-      gesture =
-        dragging =
+      gesture = undefined;
+      dragging =
         pressed =
         internal =
         paging =
