@@ -1110,15 +1110,21 @@
       "npm:@solidjs/signals@2.0.0-rc.13",
       "npm:@solidjs/vite-plugin@3.0.0-next.47",
       "npm:@solidjs/web@2.0.0-rc.13",
-      "npm:diff@8.0.4",
       "npm:fuzzysort@3.1.0",
       "npm:jose@6.1.3",
-      "npm:marked@17.0.6",
       "npm:otplib@12.0.1",
       "npm:shiki@4.5.0",
       "npm:solid-js@2.0.0-rc.13",
       "npm:vite@8.2.0",
       "npm:ws@8.21.0"
-    ]
+    ],
+    "members": {
+      "packages/content": {
+        "dependencies": [
+          "npm:diff@8.0.4",
+          "npm:marked@17.0.6"
+        ]
+      }
+    }
   }
 }

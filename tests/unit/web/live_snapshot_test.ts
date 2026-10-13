@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import { mapMessage } from "../../../sidecar/adapter/opencode1/map.ts";
-import { markdown } from "../../../sidecar/content/markdown.ts";
+import { markdown } from "@otk/content";
 import { emptyContent, reduce } from "../../../web/src/state/reduce.ts";
 const header = (completed?: number) =>
   mapMessage({

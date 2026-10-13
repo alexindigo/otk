@@ -112,4 +112,5 @@ export function lex(
   lexer.tokens.links = { ...links };
   return { tokens: lexer.lex(text), links: lexer.tokens.links };
 }
-export const markdown = (text: string): Block[] => blocks(lex(text).tokens);
+export const markdown: (text: string) => Block[] = (text) =>
+  blocks(lex(text).tokens);

@@ -5,7 +5,7 @@ import type { ContentOp } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
 import { loadServiceConfig } from "../../sidecar/config/loader.ts";
 import { Opencode1Adapter } from "../../sidecar/adapter/opencode1/adapter.ts";
-import { StreamBuffers } from "../../sidecar/content/buffers.ts";
+import { StreamBuffers } from "@otk/content";
 import type { Envelope } from "../../sidecar/adapter/opencode1/types.ts";
 import { cfg, fixture } from "../support/config.ts";
 

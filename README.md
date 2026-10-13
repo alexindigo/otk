@@ -74,10 +74,12 @@ License: LGPL-3.0-only.
 
 ## Workspace packages
 
-OTK is being extracted into reusable Deno workspace packages. The first is
-[`@otk/protocol`](./packages/protocol/README.md), the dependency-free wire
-contracts and helpers. Consumers import its public `mod.ts` via `@otk/protocol`.
-The sidecar and web app retain their current entry points during extraction.
+OTK is being extracted into reusable Deno workspace packages.
+[`@otk/protocol`](./packages/protocol/README.md) provides dependency-free wire
+contracts and helpers; [`@otk/content`](./packages/content/README.md) converts
+markdown and patches and owns streaming reply buffers. Consumers use public bare
+imports `@otk/protocol` and `@otk/content` through each package's `mod.ts`. The
+sidecar and web app retain their current entry points during extraction.
 
 `deno task test:unit` runs remaining app units and extracted package units;
 `deno task test:integration` and `deno task test:e2e` run app-level checks.

@@ -3,7 +3,7 @@ import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import type { ContentOp } from "@otk/protocol";
 import { loadServiceConfig } from "../../sidecar/config/loader.ts";
-import { StreamBuffers } from "../../sidecar/content/buffers.ts";
+import { StreamBuffers } from "@otk/content";
 import { Opencode1Adapter } from "../../sidecar/adapter/opencode1/adapter.ts";
 import type {
   Envelope,

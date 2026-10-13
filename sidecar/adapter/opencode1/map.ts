@@ -8,8 +8,7 @@ import type {
   Tokens,
 } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
-import { parseDiff } from "../../content/diff.ts";
-import { markdown } from "../../content/markdown.ts";
+import { markdown, parseDiff } from "@otk/content";
 import { mapTool } from "./map-tools.ts";
 import type {
   Info,

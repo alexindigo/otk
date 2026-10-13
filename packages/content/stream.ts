@@ -4,11 +4,11 @@ import type { Block } from "@otk/protocol";
 import { blocks, lex } from "./markdown.ts";
 /** An unfinished part owns its raw source. Stable prefixes are never re-lexed. */
 export class StreamingMarkdown {
-  text = "";
+  text: string = "";
   #offset = 0;
   #stable = 0;
   #links: Links = {};
-  constructor(text = "") {
+  constructor(text: string = "") {
     this.text = text;
   }
   append(delta: string): void {

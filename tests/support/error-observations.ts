@@ -3,7 +3,7 @@ import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { loadServiceConfig } from "../../sidecar/config/loader.ts";
 import { Opencode1Adapter } from "../../sidecar/adapter/opencode1/adapter.ts";
-import { StreamBuffers } from "../../sidecar/content/buffers.ts";
+import { StreamBuffers } from "@otk/content";
 import type { IndexEntry } from "@otk/protocol";
 import type { ContentOp } from "@otk/protocol";
 import type { Session } from "../../sidecar/adapter/opencode1/types.ts";

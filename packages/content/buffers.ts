@@ -33,7 +33,7 @@ export class StreamBuffers {
   observeOutput(
     sessionID: string,
     messageID: string,
-    now = Date.now(),
+    now: number = Date.now(),
     end?: number,
     partID?: string,
   ): number | undefined {

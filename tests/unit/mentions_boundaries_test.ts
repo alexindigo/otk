@@ -7,7 +7,7 @@ import { Prefs } from "../../sidecar/db/prefs.ts";
 import { Frecency } from "../../sidecar/db/frecency.ts";
 import { dispatch } from "../../sidecar/ws/rpc.ts";
 import { Opencode1Adapter } from "../../sidecar/adapter/opencode1/adapter.ts";
-import { StreamBuffers } from "../../sidecar/content/buffers.ts";
+import { StreamBuffers } from "@otk/content";
 import { mapPromptParts } from "../../sidecar/adapter/opencode1/prompt.ts";
 
 Deno.test("frecency persists at most 1000 canonical entries across projects", async () => {

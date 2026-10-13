@@ -19,7 +19,7 @@ import type {
 } from "@otk/protocol";
 import type { ServiceConfig } from "../../config/schema.ts";
 import { harnessDb } from "../../config/loader.ts";
-import { StreamBuffers } from "../../content/buffers.ts";
+import { parseDiff, StreamBuffers } from "@otk/content";
 import {
   type HarnessAdapter,
   HarnessError,
@@ -44,7 +44,6 @@ import type {
 } from "./types.ts";
 import { Backoff, Watchdog } from "./watchdog.ts";
 import { TaskProgress } from "./tasks.ts";
-import { parseDiff } from "../../content/diff.ts";
 import { mapPromptParts } from "./prompt.ts";
 import { statMatch } from "./files.ts";
 import { mapQuestion } from "./questions.ts";

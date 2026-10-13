@@ -2,7 +2,7 @@
 import { config } from "./config/loader.ts";
 import { AuthState } from "./auth/state.ts";
 import { Opencode1Adapter } from "./adapter/opencode1/adapter.ts";
-import { StreamBuffers } from "./content/buffers.ts";
+import { StreamBuffers } from "@otk/content";
 import { IndexStore } from "./index/store.ts";
 import { Connections } from "./ws/connections.ts";
 import { serve } from "./http/server.ts";

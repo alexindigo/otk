@@ -1,9 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import type { ContentOp } from "@otk/protocol";
-import { StreamBuffers } from "../../sidecar/content/buffers.ts";
-import { markdown } from "../../sidecar/content/markdown.ts";
-import { mapMessage } from "../../sidecar/adapter/opencode1/map.ts";
+import type { AssistantMessage, ContentOp } from "@otk/protocol";
+import { markdown, StreamBuffers } from "@otk/content";
 
 const part = {
   kind: "text" as const,
@@ -55,15 +53,23 @@ Deno.test("unwatched snapshots and late replay include unflushed text, RAM time 
       part: current.part,
       lastOutput: current.lastChunk,
     }]);
-    const message = mapMessage({
+    const message: AssistantMessage = {
       id: "message",
       sessionID: "session",
       role: "assistant",
       agent: "build",
       time: { created: 1 },
-      providerID: "fixture",
-      modelID: "model",
-    });
+      model: { provider: "fixture", model: "model" },
+      tokens: {
+        input: 0,
+        output: 0,
+        reasoning: 0,
+        cache: { read: 0, write: 0 },
+      },
+      cost: 0,
+      interrupted: false,
+      parts: [],
+    };
     assert(message.role === "assistant");
     assertEquals(buffers.overlay(message).parts, [current.part]);
     assertEquals(buffers.overlay({ ...message, id: "another" }).parts, []);

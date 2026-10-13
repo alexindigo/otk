@@ -6,7 +6,7 @@ import type {
   FileToolCall,
   ToolBase,
 } from "@otk/protocol";
-import { parseDiff } from "../../content/diff.ts";
+import { parseDiff } from "@otk/content";
 import type { RawPart } from "./types.ts";
 const record = (value: unknown): Record<string, unknown> =>
   value && typeof value === "object" && !Array.isArray(value)

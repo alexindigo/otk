@@ -3,7 +3,7 @@ import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type { ContentSession, Message } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
-import { markdown } from "../../sidecar/content/markdown.ts";
+import { markdown } from "@otk/content";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
