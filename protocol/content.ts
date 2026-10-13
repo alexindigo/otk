@@ -215,7 +215,7 @@ export interface AssistantMessage {
   id: string;
   sessionID: string;
   role: "assistant";
-  time: { created: number; completed?: number };
+  time: { created: number; completed?: number; lastOutput?: number };
   agent: string;
   agentColor?: string;
   replyTo?: string;
@@ -275,7 +275,7 @@ export type ContentOp =
   }
   | { op: "message.upsert"; message: Message }
   | { op: "message.remove"; messageID: string }
-  | { op: "part.upsert"; messageID: string; part: Part }
+  | { op: "part.upsert"; messageID: string; part: Part; lastOutput?: number }
   | {
     op: "part.blocks";
     messageID: string;
@@ -283,6 +283,7 @@ export type ContentOp =
     from: number;
     blocks: Block[];
     streamVersion?: number;
+    lastOutput?: number;
   }
   | { op: "part.remove"; messageID: string; partID: string }
   | { op: "permission.upsert"; request: PermissionRequest }

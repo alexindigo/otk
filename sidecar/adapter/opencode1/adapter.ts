@@ -122,8 +122,20 @@ export class Opencode1Adapter implements HarnessAdapter {
       (id) => this.buffers.subscribed(id),
       (parent, messageID, part) => {
         const cutoff = this.#reverts.get(parent);
-        if (!cutoff || messageID < cutoff) {
-          this.#sink.content(parent, { op: "part.upsert", messageID, part });
+        if (!this.#stopped && (!cutoff || messageID < cutoff)) {
+          const lastOutput = this.buffers.observeOutput(
+            parent,
+            messageID,
+            Date.now(),
+            part.kind === "tool" ? part.call.time.end : undefined,
+            part.id,
+          );
+          this.#sink.content(parent, {
+            op: "part.upsert",
+            messageID,
+            part,
+            ...(lastOutput === undefined ? {} : { lastOutput }),
+          });
         }
       },
       () => this.#sink.resync("all"),
@@ -928,19 +940,63 @@ export class Opencode1Adapter implements HarnessAdapter {
     }
     if (
       type === "message.updated" && info?.role === "assistant" &&
+      info.time.completed === undefined
+    ) this.buffers.beginReply(sessionID, info.id);
+    let completedOutput =
+      type === "message.updated" && info?.role === "assistant" &&
+        info.time.completed !== undefined
+        ? this.buffers.outputEnd(info.id)
+        : undefined;
+    if (
+      type === "message.updated" && info?.role === "assistant" &&
+      info.time.completed !== undefined
+    ) this.buffers.complete(info.id, (id, op) => this.#sink.content(id, op));
+    if (
+      type === "message.updated" && info?.role === "assistant" &&
+      info.time.completed !== undefined && completedOutput === undefined &&
+      this.buffers.subscribed(sessionID)
+    ) {
+      const finished = await this.client.json<{ info: Info; parts: RawPart[] }>(
+        `/session/${encodeURIComponent(sessionID)}/message/${
+          encodeURIComponent(info.id)
+        }`,
+        { query: { directory: this.#directory(sessionID) } },
+      );
+      const message = mapMessage(info, finished.parts);
+      if (message.role === "assistant") {
+        completedOutput = message.time.lastOutput;
+      }
+      if (this.#stopped) return;
+    }
+    if (
+      type === "message.updated" && info?.role === "assistant" &&
       info.time.completed
     ) {
       if (entry) {
         entry.timeUpdated = Math.max(entry.timeUpdated, info.time.completed);
         this.#sink.indexUpsert(entry);
       }
-      this.buffers.complete(info.id, (id, op) => this.#sink.content(id, op));
     }
     if (type === "message.removed") {
       this.buffers.removeMessage(String(p.messageID));
     }
-    if (type === "message.part.removed") this.buffers.remove(String(p.partID));
+    if (type === "message.part.removed") {
+      this.buffers.forgetPart(String(p.messageID), String(p.partID));
+    }
     if (type === "message.part.updated" && raw) {
+      if (
+        raw.type === "tool" ||
+        ((raw.type === "text" || raw.type === "reasoning") &&
+          raw.time?.start !== undefined)
+      ) {
+        this.buffers.observeOutput(
+          sessionID,
+          raw.messageID,
+          Date.now(),
+          raw.type === "tool" ? raw.state?.time?.end : raw.time?.end,
+          raw.id,
+        );
+      }
       if (
         (raw.type === "text" || raw.type === "reasoning") &&
         raw.time?.start !== undefined && raw.time.end === undefined
@@ -974,7 +1030,11 @@ export class Opencode1Adapter implements HarnessAdapter {
     switch (type) {
       case "message.updated":
         {
-          const message = mapMessage(info!),
+          const message = mapMessage(
+              info!,
+              [],
+              completedOutput ?? this.buffers.outputTime(info!.id),
+            ),
             colors = await this.#agentColors(this.#directory(sessionID));
           message.agentColor = colors.get(info!.agent);
           content({ op: "message.upsert", message });
@@ -993,7 +1053,13 @@ export class Opencode1Adapter implements HarnessAdapter {
         if (part.kind === "tool" && raw.tool === "task") {
           part.call = await this.#tasks.shape(raw);
         }
-        content({ op: "part.upsert", messageID: raw.messageID, part });
+        const lastOutput = this.buffers.outputTime(raw.messageID);
+        content({
+          op: "part.upsert",
+          messageID: raw.messageID,
+          part,
+          ...(lastOutput === undefined ? {} : { lastOutput }),
+        });
         break;
       }
       case "message.part.delta": {
@@ -1018,10 +1084,22 @@ export class Opencode1Adapter implements HarnessAdapter {
           );
           const current = message.parts.find((item) => item.id === id);
           if (current && this.buffers.subscribed(sessionID)) {
+            if (
+              message.info.role === "assistant" &&
+              message.info.time.completed === undefined
+            ) this.buffers.beginReply(sessionID, message.info.id);
+            const lastOutput = this.buffers.observeOutput(
+              sessionID,
+              String(p.messageID),
+              Date.now(),
+              current.time?.end,
+              current.id,
+            );
             content({
               op: "part.upsert",
               messageID: String(p.messageID),
               part: mapPart(current),
+              ...(lastOutput === undefined ? {} : { lastOutput }),
             });
           }
         }

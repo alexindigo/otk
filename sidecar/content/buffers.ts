@@ -20,6 +20,43 @@ export class StreamBuffers {
   #parts = new Map<string, ActivePart>();
   #subscriptions = new Map<string, number>();
   #version = 0;
+  #replies = new Map<
+    string,
+    { sessionID: string; observed?: number; ends: Map<string, number> }
+  >();
+
+  beginReply(sessionID: string, messageID: string): void {
+    if (!this.#replies.has(messageID)) {
+      this.#replies.set(messageID, { sessionID, ends: new Map() });
+    }
+  }
+  observeOutput(
+    sessionID: string,
+    messageID: string,
+    now = Date.now(),
+    end?: number,
+    partID?: string,
+  ): number | undefined {
+    const reply = this.#replies.get(messageID);
+    if (!reply || reply.sessionID !== sessionID) return;
+    reply.observed = now;
+    if (end !== undefined && partID !== undefined) reply.ends.set(partID, end);
+    return now;
+  }
+  outputTime(messageID: string): number | undefined {
+    return this.#replies.get(messageID)?.observed;
+  }
+  outputEnd(messageID: string): number | undefined {
+    let end: number | undefined;
+    for (const value of this.#replies.get(messageID)?.ends.values() || []) {
+      end = Math.max(end || 0, value);
+    }
+    return end;
+  }
+  forgetPart(messageID: string, partID: string): void {
+    this.remove(partID);
+    this.#replies.get(messageID)?.ends.delete(partID);
+  }
 
   get size(): number {
     return this.#parts.size;
@@ -44,6 +81,9 @@ export class StreamBuffers {
     part: StreamingPart,
     text: string,
   ): void {
+    const now = Date.now();
+    this.beginReply(sessionID, messageID);
+    this.observeOutput(sessionID, messageID, now);
     let active = this.#parts.get(part.id);
     if (
       active &&
@@ -57,7 +97,7 @@ export class StreamBuffers {
       active.stream.replace(text);
       active.shell = shell;
       active.version = ++this.#version;
-      active.lastChunk = Date.now();
+      active.lastChunk = now;
     } else {
       this.#parts.set(part.id, {
         stream: new StreamingMarkdown(text),
@@ -65,7 +105,7 @@ export class StreamBuffers {
         sessionID,
         messageID,
         version: ++this.#version,
-        lastChunk: Date.now(),
+        lastChunk: now,
       });
     }
   }
@@ -75,15 +115,19 @@ export class StreamBuffers {
     part.stream.append(delta);
     part.version = ++this.#version;
     part.lastChunk = Date.now();
+    this.observeOutput(part.sessionID, part.messageID, part.lastChunk);
     if (this.subscribed(part.sessionID) && part.timer === undefined) {
       part.timer = setTimeout(() => {
         part.timer = undefined;
+        part.lastChunk = Date.now();
+        this.observeOutput(part.sessionID, part.messageID, part.lastChunk);
         emit(part.sessionID, {
           op: "part.blocks",
           messageID: part.messageID,
           partID,
           ...part.stream.flush(),
           streamVersion: part.version,
+          lastOutput: part.lastChunk,
         });
       }, 50);
     }
@@ -96,10 +140,12 @@ export class StreamBuffers {
         op: "part.upsert",
         messageID,
         part: { ...active.shell, blocks: markdown(active.stream.text) },
+        lastOutput: this.outputTime(messageID),
       };
       this.remove(id);
       if (this.subscribed(active.sessionID)) emit(active.sessionID, event);
     }
+    this.#replies.delete(messageID);
   }
   snapshot(
     partID: string,
@@ -123,6 +169,7 @@ export class StreamBuffers {
           op: "part.upsert",
           messageID: active.messageID,
           part: this.snapshot(id)!.part,
+          lastOutput: this.outputTime(active.messageID),
         });
       }
     }
@@ -142,9 +189,21 @@ export class StreamBuffers {
       if (index < 0) parts.push(part);
       else parts[index] = part;
     }
-    return { ...message, parts };
+    const reply = this.#replies.get(message.id);
+    return {
+      ...message,
+      parts,
+      time: {
+        ...message.time,
+        ...(reply?.sessionID === message.sessionID &&
+            reply.observed !== undefined
+          ? { lastOutput: reply.observed }
+          : {}),
+      },
+    };
   }
   removeMessage(messageID: string): void {
+    this.#replies.delete(messageID);
     for (const [id, active] of this.#parts) {
       if (active.messageID === messageID) this.remove(id);
     }
@@ -155,11 +214,15 @@ export class StreamBuffers {
     this.#parts.delete(partID);
   }
   removeSession(sessionID: string): void {
+    for (const [id, reply] of this.#replies) {
+      if (reply.sessionID === sessionID) this.#replies.delete(id);
+    }
     for (const [id, part] of this.#parts) {
       if (part.sessionID === sessionID) this.remove(id);
     }
   }
   reset(): void {
+    this.#replies.clear();
     for (const id of this.#parts.keys()) this.remove(id);
   }
   stop(): void {

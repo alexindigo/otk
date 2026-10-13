@@ -128,6 +128,7 @@ Deno.test("adapter maps legacy event chain while ignoring its captured durable s
     event("session.updated", { info: { ...session, title: "Updated" } }),
     event("session.deleted", { info: session }),
   ];
+  let nativeReads = 0;
   const fetcher: typeof fetch = (input, options) => {
     const url = new URL(String(input));
     if (url.pathname === "/global/health") {
@@ -136,6 +137,20 @@ Deno.test("adapter maps legacy event chain while ignoring its captured durable s
     if (url.pathname === "/experimental/session" || url.pathname === "/agent") {
       return Promise.resolve(Response.json([]));
     }
+    if (url.pathname === `/session/${session.id}/message/${message.id}`) {
+      nativeReads++;
+      return Promise.resolve(
+        Response.json({
+          info: message,
+          parts: frames.flatMap((frame) =>
+            frame.payload.type === "message.part.updated"
+              ? [frame.payload.properties!.part]
+              : []
+          ),
+        }),
+      );
+    }
+    assertEquals(url.pathname, "/global/event");
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
         for (const frame of frames) {
@@ -173,6 +188,13 @@ Deno.test("adapter maps legacy event chain while ignoring its captured durable s
     }
     assert(removed, "Event chain stalled on sync companion");
     assertEquals(reconnects, 0);
+    assertEquals(nativeReads, 1);
+    const finished = ops.find((op) => op.op === "message.upsert");
+    assert(
+      finished?.op === "message.upsert" &&
+        finished.message.role === "assistant",
+    );
+    assertEquals(finished.message.time.lastOutput, 3);
     assert(entries.some((entry) => entry.attention.permissions === 1));
     assert(entries.some((entry) => entry.attention.questions === 1));
     assert(

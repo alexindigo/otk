@@ -2,7 +2,7 @@
 import { For, Show } from "solid-js";
 import type { PreferenceKey, Preferences } from "../../../protocol/prefs.ts";
 const booleans = [
-  ["timestamps", "Timestamps"],
+  ["timestamps", "Always show timestamps"],
   ["toolDetails", "Tool details"],
   ["conceal", "Conceal markup"],
   ["genericToolOutput", "Generic tool output"],

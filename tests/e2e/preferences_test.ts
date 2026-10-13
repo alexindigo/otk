@@ -44,7 +44,9 @@ Deno.test("R7 host preferences control real reasoning, persist on reload and pro
       "document.querySelector('select[name=thinking]').value === 'show'",
     );
     await browser.click("input[name=timestamps]");
-    await browser.poll("!!document.querySelector('.otk-message-role time')");
+    await browser.poll(
+      "getComputedStyle(document.querySelector('.otk-message-role time')).visibility==='visible'",
+    );
     await browser.reload();
     await browser.poll(
       "!!document.querySelector('.otk-reasoning-body') && document.querySelector('select[name=thinking]').value === 'show'",

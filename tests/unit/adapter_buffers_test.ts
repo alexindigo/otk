@@ -7,6 +7,7 @@ import { StreamBuffers } from "../../sidecar/content/buffers.ts";
 import { Opencode1Adapter } from "../../sidecar/adapter/opencode1/adapter.ts";
 import type {
   Envelope,
+  Info,
   RawPart,
   Session,
 } from "../../sidecar/adapter/opencode1/types.ts";
@@ -59,6 +60,25 @@ for (
         url.pathname === "/experimental/session" || url.pathname === "/agent"
       ) {
         return Promise.resolve(Response.json([]));
+      }
+      if (url.pathname.includes("/message/")) {
+        const info = frames.findLast((frame) =>
+          frame.payload.type === "message.updated" &&
+          (frame.payload.properties?.info as Info | undefined)?.role ===
+            "assistant"
+        )!.payload.properties!.info as Info;
+        const parts = [
+          ...new Map(
+            frames.flatMap((frame) =>
+              frame.payload.properties?.part
+                ? [frame.payload.properties.part as RawPart]
+                : []
+            ).filter((part) => part.messageID === info.id).map(
+              (part) => [part.id, part],
+            ),
+          ).values(),
+        ];
+        return Promise.resolve(Response.json({ info, parts }));
       }
       assertEquals(url.pathname, "/global/event");
       const body = new ReadableStream<Uint8Array>({

@@ -57,7 +57,11 @@ const tokens = (value?: Tokens): Tokens =>
       cache: { read: value.cache.read, write: value.cache.write },
     }
     : { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } };
-export function mapMessage(info: Info, parts: RawPart[] = []): Message {
+export function mapMessage(
+  info: Info,
+  parts: RawPart[] = [],
+  observed?: number,
+): Message {
   const common = {
     id: info.id,
     sessionID: info.sessionID,
@@ -74,11 +78,27 @@ export function mapMessage(info: Info, parts: RawPart[] = []): Message {
         : undefined,
     };
   }
+  const ends = parts.flatMap((part) =>
+    part.type === "text" || part.type === "reasoning"
+      ? [part.time?.end || 0]
+      : part.type === "tool"
+      ? [part.state?.time?.end || 0]
+      : []
+  ).filter((end) => end > 0);
+  const recorded = ends.length
+    ? ends.reduce((latest, end) => Math.max(latest, end), 0)
+    : undefined;
   return {
     ...common,
     role: "assistant",
     replyTo: info.parentID,
-    time: { created: info.time.created, completed: info.time.completed },
+    time: {
+      created: info.time.created,
+      completed: info.time.completed,
+      lastOutput: info.time.completed !== undefined
+        ? recorded ?? observed ?? info.time.completed
+        : observed ?? recorded ?? info.time.created,
+    },
     model: { provider: info.providerID!, model: info.modelID! },
     tokens: tokens(info.tokens),
     cost: info.cost ?? 0,

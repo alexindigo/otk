@@ -27,6 +27,18 @@ export function emptyContent(): ContentState {
     revert: null,
   };
 }
+function output(message: Message, lastOutput?: number): Message {
+  return message.role === "assistant" && message.time.completed === undefined &&
+      lastOutput !== undefined
+    ? {
+      ...message,
+      time: {
+        ...message.time,
+        lastOutput: Math.max(message.time.lastOutput || 0, lastOutput),
+      },
+    }
+    : message;
+}
 export function reduce(state: ContentState, op: ContentOp): ContentState {
   if (op.op === "session.error") return { ...state, error: op.error };
   if (op.op === "question.upsert") {
@@ -90,6 +102,21 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
     const message = {
       ...op.message,
       parts: op.message.parts.length ? op.message.parts : previous?.parts ?? [],
+      ...(op.message.role === "assistant"
+        ? {
+          time: {
+            ...op.message.time,
+            lastOutput: op.message.time.completed !== undefined
+              ? op.message.time.lastOutput
+              : Math.max(
+                op.message.time.lastOutput || op.message.time.created,
+                previous?.role === "assistant"
+                  ? previous.time.lastOutput || 0
+                  : 0,
+              ),
+          },
+        }
+        : {}),
     };
     return {
       ...state,
@@ -118,7 +145,7 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
         const parts = [...message.parts];
         if (index < 0) parts.push(op.part);
         else parts[index] = op.part;
-        return { ...message, parts };
+        return output({ ...message, parts }, op.lastOutput);
       }
       if (op.op === "part.remove") {
         return {
@@ -126,26 +153,29 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
           parts: message.parts.filter((p) => p.id !== op.partID),
         };
       }
-      return {
+      const target = message.parts.find((part) => part.id === op.partID);
+      if (
+        (target?.kind === "text" || target?.kind === "reasoning") &&
+        op.streamVersion !== undefined &&
+        ((message.role === "assistant" &&
+          message.time.completed !== undefined) ||
+          (target.streamVersion || 0) > op.streamVersion)
+      ) return message;
+      return output({
         ...message,
         parts: message.parts.map((part) =>
           part.id === op.partID &&
             (part.kind === "text" || part.kind === "reasoning")
-            ? (op.streamVersion !== undefined &&
-                ((message.role === "assistant" &&
-                  message.time.completed !== undefined) ||
-                  (part.streamVersion || 0) > op.streamVersion))
-              ? part
-              : {
-                ...part,
-                blocks: [...part.blocks.slice(0, op.from), ...op.blocks],
-                ...(op.streamVersion === undefined
-                  ? {}
-                  : { streamVersion: op.streamVersion }),
-              }
+            ? {
+              ...part,
+              blocks: [...part.blocks.slice(0, op.from), ...op.blocks],
+              ...(op.streamVersion === undefined
+                ? {}
+                : { streamVersion: op.streamVersion }),
+            }
             : part
         ),
-      };
+      }, op.lastOutput);
     }),
   };
 }

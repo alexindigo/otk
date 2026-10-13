@@ -53,6 +53,7 @@ Deno.test("unwatched snapshots and late replay include unflushed text, RAM time 
       op: "part.upsert",
       messageID: "message",
       part: current.part,
+      lastOutput: current.lastChunk,
     }]);
     const message = mapMessage({
       id: "message",

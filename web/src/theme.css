@@ -980,3 +980,47 @@ p {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+.otk-role-and-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.otk-created-time {
+  color: color-mix(in srgb, var(--secondary) 65%, var(--bg));
+  visibility: hidden;
+}
+.otk-time-always .otk-created-time,
+.otk-role-label:hover + .otk-created-time,
+.otk-role-label:focus-visible + .otk-created-time {
+  visibility: visible;
+}
+.otk-message-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--secondary) 12%, var(--bg));
+  padding-block-start: .45rem;
+}
+.otk-message-details {
+  min-width: 0;
+}
+.otk-output-time-group {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  margin-inline-start: auto;
+  white-space: nowrap;
+}
+.otk-last-output-time {
+  white-space: nowrap;
+}
+.otk-last-output-date {
+  visibility: hidden;
+}
+.otk-output-time-group:has(.otk-last-output-time:hover) .otk-last-output-date,
+.otk-output-time-group:has(.otk-last-output-time:focus-visible) .otk-last-output-date {
+  visibility: visible;
+}
