@@ -150,6 +150,12 @@ export class Opencode1Adapter implements HarnessAdapter {
   }
   subscriptions(id: string, count: number): void {
     this.buffers.subscriptions(id, count);
+    if (count && !this.#stopped) {
+      this.buffers.replay(
+        id,
+        (sessionID, op) => this.#sink.content(sessionID, op),
+      );
+    }
     if (!count) this.#tasks.release(id);
     if (!count) this.#reverts.delete(id);
   }
@@ -261,7 +267,7 @@ export class Opencode1Adapter implements HarnessAdapter {
       },
     );
     const colors = await this.#agentColors(session.directory);
-    return Promise.all(raw.map(async (message) => {
+    const messages = await Promise.all(raw.map(async (message) => {
       const mapped = mapMessage(message.info, message.parts);
       mapped.agentColor = colors.get(message.info.agent);
       for (const [i, part] of message.parts.entries()) {
@@ -275,6 +281,7 @@ export class Opencode1Adapter implements HarnessAdapter {
       }
       return mapped;
     }));
+    return messages.map((message) => this.buffers.overlay(message));
   }
   async listChildren(id: string): Promise<ContentSession[]> {
     const raw = await this.client.json<Session[]>(
@@ -785,6 +792,7 @@ export class Opencode1Adapter implements HarnessAdapter {
     }
   }
   async #event(event: Envelope): Promise<void> {
+    if (this.#stopped) return;
     const { type, properties: p } = event.payload;
     // The 1.x bridge emits both the legacy event and its durable "sync"
     // companion. The latter has syncEvent, not properties; do not apply twice.
@@ -920,12 +928,37 @@ export class Opencode1Adapter implements HarnessAdapter {
     }
     if (
       type === "message.updated" && info?.role === "assistant" &&
-      info.time.completed && entry
+      info.time.completed
     ) {
-      entry.timeUpdated = Math.max(entry.timeUpdated, info.time.completed);
-      this.#sink.indexUpsert(entry);
+      if (entry) {
+        entry.timeUpdated = Math.max(entry.timeUpdated, info.time.completed);
+        this.#sink.indexUpsert(entry);
+      }
       this.buffers.complete(info.id, (id, op) => this.#sink.content(id, op));
     }
+    if (type === "message.removed") {
+      this.buffers.removeMessage(String(p.messageID));
+    }
+    if (type === "message.part.removed") this.buffers.remove(String(p.partID));
+    if (type === "message.part.updated" && raw) {
+      if (
+        (raw.type === "text" || raw.type === "reasoning") &&
+        raw.time?.start !== undefined && raw.time.end === undefined
+      ) {
+        const part = mapPart(raw);
+        if (part.kind === "text" || part.kind === "reasoning") {
+          this.buffers.upsert(sessionID, raw.messageID, part, raw.text || "");
+        }
+      } else this.buffers.remove(raw.id);
+    }
+    if (
+      type === "message.part.delta" && p.field === "text" &&
+      this.buffers.append(
+        String(p.partID),
+        String(p.delta),
+        (id, op) => this.#sink.content(id, op),
+      )
+    ) return;
     if (type === "message.updated" || type === "message.part.updated") {
       this.#tasks.observe(sessionID, info, raw);
     }
@@ -933,7 +966,11 @@ export class Opencode1Adapter implements HarnessAdapter {
     const cutoff = this.#reverts.get(sessionID),
       messageID = info?.id || raw?.messageID || String(p.messageID || "");
     if (cutoff && messageID && messageID >= cutoff) return;
-    const content = (op: ContentOp) => this.#sink.content(sessionID, op);
+    const content = (op: ContentOp) => {
+      if (!this.#stopped && this.buffers.subscribed(sessionID)) {
+        this.#sink.content(sessionID, op);
+      }
+    };
     switch (type) {
       case "message.updated":
         {
@@ -951,18 +988,12 @@ export class Opencode1Adapter implements HarnessAdapter {
         const waiting = [...this.#permissions.values()].some((request) =>
           request.callID === raw.callID && request.sessionID === sessionID
         );
-        const part = mapPart(raw, waiting);
+        const part = this.buffers.snapshot(raw.id)?.part ||
+          mapPart(raw, waiting);
         if (part.kind === "tool" && raw.tool === "task") {
           part.call = await this.#tasks.shape(raw);
         }
         content({ op: "part.upsert", messageID: raw.messageID, part });
-        if (
-          (part.kind === "text" || part.kind === "reasoning") &&
-          raw.time?.start !== undefined &&
-          raw.time?.end === undefined
-        ) {
-          this.buffers.upsert(sessionID, raw.messageID, part, raw.text || "");
-        } else this.buffers.remove(raw.id);
         break;
       }
       case "message.part.delta": {

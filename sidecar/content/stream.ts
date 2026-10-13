@@ -2,7 +2,7 @@
 import type { Links, Tokens } from "marked";
 import type { Block } from "../../protocol/content.ts";
 import { blocks, lex } from "./markdown.ts";
-/** Only open subscribed parts own this buffer. Stable prefixes are never re-lexed. */
+/** An unfinished part owns its raw source. Stable prefixes are never re-lexed. */
 export class StreamingMarkdown {
   text = "";
   #offset = 0;

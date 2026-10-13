@@ -82,6 +82,10 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
   }
   if (op.op === "message.upsert") {
     const previous = state.messages.find((m) => m.id === op.message.id);
+    if (
+      previous?.role === "assistant" && previous.time.completed !== undefined &&
+      op.message.role === "assistant" && op.message.time.completed === undefined
+    ) return state;
     // Live message.upsert is a header update; parts are delivered independently.
     const message = {
       ...op.message,
@@ -101,6 +105,16 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
       if (message.id !== op.messageID) return message;
       if (op.op === "part.upsert") {
         const index = message.parts.findIndex((part) => part.id === op.part.id);
+        if (op.part.kind === "text" || op.part.kind === "reasoning") {
+          const previous = message.parts[index];
+          if (
+            op.part.streamVersion !== undefined &&
+            ((message.role === "assistant" &&
+              message.time.completed !== undefined) ||
+              ((previous?.kind === "text" || previous?.kind === "reasoning") &&
+                (previous.streamVersion || 0) > op.part.streamVersion))
+          ) return message;
+        }
         const parts = [...message.parts];
         if (index < 0) parts.push(op.part);
         else parts[index] = op.part;
@@ -117,10 +131,18 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
         parts: message.parts.map((part) =>
           part.id === op.partID &&
             (part.kind === "text" || part.kind === "reasoning")
-            ? {
-              ...part,
-              blocks: [...part.blocks.slice(0, op.from), ...op.blocks],
-            }
+            ? (op.streamVersion !== undefined &&
+                ((message.role === "assistant" &&
+                  message.time.completed !== undefined) ||
+                  (part.streamVersion || 0) > op.streamVersion))
+              ? part
+              : {
+                ...part,
+                blocks: [...part.blocks.slice(0, op.from), ...op.blocks],
+                ...(op.streamVersion === undefined
+                  ? {}
+                  : { streamVersion: op.streamVersion }),
+              }
             : part
         ),
       };

@@ -167,12 +167,19 @@ export interface TaskCall extends ToolBase {
 }
 export type Part =
   | { kind: "meta"; id: string }
-  | { kind: "text"; id: string; blocks: Block[]; synthetic: boolean }
+  | {
+    kind: "text";
+    id: string;
+    blocks: Block[];
+    synthetic: boolean;
+    streamVersion?: number;
+  }
   | {
     kind: "reasoning";
     id: string;
     title?: string;
     blocks: Block[];
+    streamVersion?: number;
     time: { start: number; end?: number };
   }
   | { kind: "tool"; id: string; call: ToolCall }
@@ -275,6 +282,7 @@ export type ContentOp =
     partID: string;
     from: number;
     blocks: Block[];
+    streamVersion?: number;
   }
   | { op: "part.remove"; messageID: string; partID: string }
   | { op: "permission.upsert"; request: PermissionRequest }

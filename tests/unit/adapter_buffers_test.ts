@@ -26,6 +26,10 @@ for (
     "last unsubscribe",
     "unsubscribed",
     "stop",
+    "message removed",
+    "part removed",
+    "session deleted",
+    "generation reset",
   ] as const
 ) {
   Deno.test(`adapter recorded stream buffers: ${outcome}`, async () => {
@@ -132,17 +136,67 @@ for (
         }
         if (part?.time?.start !== undefined && part.time.end === undefined) {
           seeded = true;
-          assertEquals(buffers.size, outcome === "unsubscribed" ? 0 : 1);
+          assertEquals(buffers.size, 1);
           if (outcome === "last unsubscribe") {
             adapter.subscriptions(session.id, 1);
             assertEquals(buffers.size, 1);
             adapter.subscriptions(session.id, 0);
-            assertEquals(buffers.size, 0);
+            assertEquals(buffers.size, 1);
           }
           if (outcome === "stop") {
             await adapter.stop();
             stopped = true;
             assertEquals(buffers.size, 0);
+            break;
+          }
+          if (
+            [
+              "message removed",
+              "part removed",
+              "session deleted",
+              "generation reset",
+            ].includes(outcome)
+          ) {
+            const before = ops.length;
+            send({
+              directory: "/project",
+              payload: {
+                type: "message.part.delta",
+                properties: {
+                  sessionID: session.id,
+                  messageID: part.messageID,
+                  partID: part.id,
+                  field: "text",
+                  delta: " pending tail",
+                },
+              },
+            });
+            const type = outcome === "message removed"
+              ? "message.removed"
+              : outcome === "part removed"
+              ? "message.part.removed"
+              : outcome === "session deleted"
+              ? "session.deleted"
+              : "server.instance.disposed";
+            send({
+              directory: "/project",
+              payload: {
+                type,
+                properties: {
+                  sessionID: session.id,
+                  messageID: part.messageID,
+                  partID: part.id,
+                  info: session,
+                },
+              },
+            });
+            await waitFor(() => buffers.size === 0);
+            await new Promise((resolve) => setTimeout(resolve, 75));
+            assertEquals(
+              ops.slice(before).some((op) => op.op === "part.blocks"),
+              false,
+              "Removed generation published a delayed tail",
+            );
             break;
           }
         }
