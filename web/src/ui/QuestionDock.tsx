@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, For, onSettled, Show } from "solid-js";
-import type { QuestionRequest } from "../../../protocol/content.ts";
+import type { QuestionRequest } from "@otk/protocol";
 function Request(
   props: {
     request: QuestionRequest;

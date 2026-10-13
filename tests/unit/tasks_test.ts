@@ -3,7 +3,7 @@ import { assert, assertEquals } from "@std/assert";
 import { TaskProgress } from "../../sidecar/adapter/opencode1/tasks.ts";
 import { mapTool } from "../../sidecar/adapter/opencode1/map-tools.ts";
 import type { Info, RawPart } from "../../sidecar/adapter/opencode1/types.ts";
-import type { Part } from "../../protocol/content.ts";
+import type { Part } from "@otk/protocol";
 const load = async () =>
   JSON.parse(
     await Deno.readTextFile(

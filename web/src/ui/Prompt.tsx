@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createEffect, createSignal, onSettled, Show } from "solid-js";
-import type {
-  CommandOption,
-  FileMatch,
-  PromptPart,
-} from "../../../protocol/rpc.ts";
+import type { CommandOption, FileMatch, PromptPart } from "@otk/protocol";
 import {
   type Chip,
   type Draft,
@@ -21,7 +17,7 @@ import Chips from "./prompt/Chips.tsx";
 import Editor from "./prompt/Editor.tsx";
 import { summarizePaste } from "./prompt/paste.ts";
 import { PromptHistory } from "./prompt/history.ts";
-import type { HistoryEntry } from "../../../protocol/history.ts";
+import type { HistoryEntry } from "@otk/protocol";
 import Autocomplete from "./prompt/Autocomplete.tsx";
 import {
   commandOptions,

@@ -1,27 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
-import { DEFAULT_PREFS, isPreference } from "../../protocol/prefs.ts";
+import { DEFAULT_PREFS } from "@otk/protocol";
 import { OtkDb } from "../../sidecar/db/db.ts";
 import { Prefs } from "../../sidecar/db/prefs.ts";
-Deno.test("prefs validates the entire whitelist without coercion or inherited keys", () => {
-  for (const [key, value] of Object.entries(DEFAULT_PREFS)) {
-    assert(isPreference(key, value));
-  }
-  for (
-    const [key, value] of [
-      ["constructor", true],
-      ["unknown", true],
-      ["timestamps", "true"],
-      ["thinking", true],
-      ["diffStyle", { toString: () => "auto" }],
-      ["diffStyle", "stacked"],
-    ]
-  ) {
-    assertEquals(isPreference(key, value), false);
-  }
-});
 Deno.test("otk.db migrates transactionally, uses WAL and preserves prefs on reopen", async () => {
   // Keep this suite's evidence on the project disk, not /tmp.
   const state = new URL("../../.test-state/", import.meta.url);

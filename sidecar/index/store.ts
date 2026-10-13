@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { IndexEntry, IndexOp } from "../../protocol/index.ts";
-import type { ServerFrame } from "../../protocol/messages.ts";
-import { sessionAncestors } from "../../protocol/session-tree.ts";
+import type { IndexEntry, IndexOp } from "@otk/protocol";
+import type { ServerFrame } from "@otk/protocol";
+import { sessionAncestors } from "@otk/protocol";
 export class IndexStore {
   #entries = new Map<string, IndexEntry>();
   #listeners = new Set<(frame: ServerFrame) => void>();

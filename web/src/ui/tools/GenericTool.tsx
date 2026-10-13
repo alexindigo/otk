@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { Show } from "solid-js";
-import type { GenericCall } from "../../../../protocol/content.ts";
+import type { GenericCall } from "@otk/protocol";
 import ToolOutput from "./ToolOutput.tsx";
 export default function GenericTool(
   props: { call: GenericCall; output: boolean },

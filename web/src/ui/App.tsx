@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createMemo, createSignal, onSettled, Show } from "solid-js";
-import type { ContentSession } from "../../../protocol/content.ts";
+import type { ContentSession } from "@otk/protocol";
 import { createIndex, liveSessionInfo, sessionKey } from "../state/index.ts";
 import {
   createSession,
@@ -21,7 +21,7 @@ import Setup from "./Setup.tsx";
 import { createToggles } from "./Toggles.ts";
 import DisplayMenu from "./DisplayMenu.tsx";
 import { emptyDraft } from "./prompt/model.ts";
-import { type HistoryEntry, mergeHistory } from "../../../protocol/history.ts";
+import { type HistoryEntry, mergeHistory } from "@otk/protocol";
 import type {
   AgentOption,
   CommandOption,
@@ -29,7 +29,7 @@ import type {
   FrecencyEntry,
   PromptPart,
   ResourceOption,
-} from "../../../protocol/rpc.ts";
+} from "@otk/protocol";
 export default function App() {
   const index = createIndex();
   const sidecars: ReturnType<typeof createSidecars> = createSidecars(

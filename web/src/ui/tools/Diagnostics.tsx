@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For } from "solid-js";
-import type { Diagnostic } from "../../../../protocol/content.ts";
+import type { Diagnostic } from "@otk/protocol";
 export default function Diagnostics(props: { items: Diagnostic[] }) {
   return (
     <ul class="otk-diagnostics">

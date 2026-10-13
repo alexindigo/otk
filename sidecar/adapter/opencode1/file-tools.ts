@@ -5,7 +5,7 @@ import type {
   FileDiff,
   FileToolCall,
   ToolBase,
-} from "../../../protocol/content.ts";
+} from "@otk/protocol";
 import { parseDiff } from "../../content/diff.ts";
 import type { RawPart } from "./types.ts";
 const record = (value: unknown): Record<string, unknown> =>

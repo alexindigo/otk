@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { QuestionRequest } from "../../../protocol/content.ts";
+import type { QuestionRequest } from "@otk/protocol";
 import type { RawQuestion } from "./types.ts";
 export function mapQuestion(raw: RawQuestion): QuestionRequest {
   return {

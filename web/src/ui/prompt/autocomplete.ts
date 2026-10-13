@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import fuzzysort from "fuzzysort";
-import { frecency } from "../../../../protocol/frecency.ts";
+import { frecency } from "@otk/protocol";
 import type {
   AgentOption,
   CommandOption,
@@ -8,7 +8,7 @@ import type {
   FrecencyEntry,
   PromptPart,
   ResourceOption,
-} from "../../../../protocol/rpc.ts";
+} from "@otk/protocol";
 export interface CompletionOption {
   id: string;
   label: string;

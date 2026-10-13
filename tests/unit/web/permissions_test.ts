@@ -1,10 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
-import {
-  belongsToSession,
-  sessionAncestors,
-} from "../../../protocol/session-tree.ts";
-import type { PermissionRequest } from "../../../protocol/content.ts";
+import { assertEquals } from "@std/assert";
+import type { PermissionRequest } from "@otk/protocol";
 import { oldestPermission } from "../../../web/src/state/permissions.ts";
 import { emptyContent, reduce } from "../../../web/src/state/reduce.ts";
 const nodes: Record<string, { parentID?: string }> = {
@@ -29,15 +25,6 @@ const request = (
   patterns: ["echo otk"],
   alwaysPatterns: ["echo *"],
   detail: { kind: "bash", command: "echo otk" },
-});
-Deno.test("permission family follows every ancestor, isolates siblings and terminates cycles", () => {
-  assertEquals(sessionAncestors("grandchild", lookup), ["child", "root"]);
-  assert(belongsToSession("root", "root", lookup));
-  assert(belongsToSession("grandchild", "root", lookup));
-  assert(!belongsToSession("other", "root", lookup));
-  assert(!belongsToSession("root", "child", lookup));
-  assertEquals(sessionAncestors("cycleA", lookup), ["cycleB"]);
-  assertEquals(sessionAncestors("missing", lookup), []);
 });
 Deno.test("permission selector shows oldest descendant and ignores an earlier unrelated request", () => {
   const old = request("old", "grandchild", 2),

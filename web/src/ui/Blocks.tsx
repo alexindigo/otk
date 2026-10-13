@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For, Match, Show, Switch } from "solid-js";
 import { dynamic } from "@solidjs/web";
-import type { Block, Inline } from "../../../protocol/content.ts";
+import type { Block, Inline } from "@otk/protocol";
 import HighlightedCode from "./Code.tsx";
 const blockOf = <K extends Block["b"]>(block: Block, kind: K) =>
   block.b === kind ? block as Block & { b: K } : undefined;

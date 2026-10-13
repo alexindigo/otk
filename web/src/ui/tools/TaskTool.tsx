@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { Show } from "solid-js";
-import type { TaskCall } from "../../../../protocol/content.ts";
+import type { TaskCall } from "@otk/protocol";
 export default function TaskTool(
   props: { call: TaskCall; onOpen(id: string): void },
 ) {

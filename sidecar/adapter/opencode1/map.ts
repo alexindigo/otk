@@ -6,8 +6,8 @@ import type {
   Part,
   PermissionRequest,
   Tokens,
-} from "../../../protocol/content.ts";
-import type { IndexEntry } from "../../../protocol/index.ts";
+} from "@otk/protocol";
+import type { IndexEntry } from "@otk/protocol";
 import { parseDiff } from "../../content/diff.ts";
 import { markdown } from "../../content/markdown.ts";
 import { mapTool } from "./map-tools.ts";

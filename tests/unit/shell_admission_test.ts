@@ -5,7 +5,7 @@ import { loadServiceConfig } from "../../sidecar/config/loader.ts";
 import { Opencode1Adapter } from "../../sidecar/adapter/opencode1/adapter.ts";
 import { StreamBuffers } from "../../sidecar/content/buffers.ts";
 import type { Session } from "../../sidecar/adapter/opencode1/types.ts";
-import type { ContentOp } from "../../protocol/content.ts";
+import type { ContentOp } from "@otk/protocol";
 
 async function wait(read: () => boolean) {
   const deadline = Date.now() + 2000;

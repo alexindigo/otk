@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Links, Tokens } from "marked";
-import type { Block } from "../../protocol/content.ts";
+import type { Block } from "@otk/protocol";
 import { blocks, lex } from "./markdown.ts";
 /** An unfinished part owns its raw source. Stable prefixes are never re-lexed. */
 export class StreamingMarkdown {

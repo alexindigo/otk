@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ContentOp, Message, Part } from "../../protocol/content.ts";
+import type { ContentOp, Message, Part } from "@otk/protocol";
 import { markdown } from "./markdown.ts";
 import { StreamingMarkdown } from "./stream.ts";
 

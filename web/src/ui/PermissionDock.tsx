@@ -1,10 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, For, Match, onSettled, Show, Switch } from "solid-js";
-import type {
-  PermissionDetail,
-  PermissionRequest,
-} from "../../../protocol/content.ts";
-import type { PermissionReply } from "../../../protocol/rpc.ts";
+import type { PermissionDetail, PermissionRequest } from "@otk/protocol";
+import type { PermissionReply } from "@otk/protocol";
 const detailOf = <K extends PermissionDetail["kind"]>(
   detail: PermissionDetail,
   kind: K,

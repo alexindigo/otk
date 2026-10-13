@@ -1,12 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { type ContentOp, isAttentionOp } from "../../protocol/content.ts";
-import type {
-  ClientFrame,
-  HarnessState,
-  ServerFrame,
-} from "../../protocol/messages.ts";
-import { checkClientFrameSize } from "../../protocol/messages.ts";
-import { PROTOCOL_VERSION, SIDECAR_VERSION } from "../../protocol/version.ts";
+import { type ContentOp, isAttentionOp } from "@otk/protocol";
+import type { ClientFrame, HarnessState, ServerFrame } from "@otk/protocol";
+import { checkClientFrameSize } from "@otk/protocol";
+import { PROTOCOL_VERSION, SIDECAR_VERSION } from "@otk/protocol";
 import type { HarnessAdapter } from "../adapter/types.ts";
 import { HarnessError } from "../adapter/types.ts";
 import type { IndexStore } from "../index/store.ts";

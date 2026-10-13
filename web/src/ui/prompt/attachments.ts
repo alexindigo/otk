@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { PromptPart } from "../../../../protocol/rpc.ts";
+import type { PromptPart } from "@otk/protocol";
 export async function upload(
   file: File,
 ): Promise<Extract<PromptPart, { source: "upload" }>> {

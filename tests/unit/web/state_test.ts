@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { createRoot, flush } from "solid-js";
-import type { Message, Part } from "../../../protocol/content.ts";
-import type { IndexEntry } from "../../../protocol/index.ts";
-import type { ClientFrame } from "../../../protocol/messages.ts";
+import type { Message, Part } from "@otk/protocol";
+import type { IndexEntry } from "@otk/protocol";
+import type { ClientFrame } from "@otk/protocol";
 import {
   acceptsPatch,
   createIndex,

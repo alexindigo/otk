@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { Match, Switch } from "solid-js";
-import type { ToolCall } from "../../../protocol/content.ts";
+import type { ToolCall } from "@otk/protocol";
 import Todo from "./Todo.tsx";
 import QuestionTool from "./tools/QuestionTool.tsx";
 import ToolFrame from "./tools/ToolFrame.tsx";
@@ -15,7 +15,7 @@ import EditTool from "./tools/EditTool.tsx";
 import WriteTool from "./tools/WriteTool.tsx";
 import PatchTool from "./tools/PatchTool.tsx";
 import TaskTool from "./tools/TaskTool.tsx";
-import type { Preferences } from "../../../protocol/prefs.ts";
+import type { Preferences } from "@otk/protocol";
 const toolOf = <K extends ToolCall["tool"]>(call: ToolCall, kind: K) =>
   call.tool === kind ? call as Extract<ToolCall, { tool: K }> : undefined;
 export default function ToolLine(

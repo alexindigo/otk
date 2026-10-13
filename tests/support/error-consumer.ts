@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import type { ContentSession } from "../../protocol/content.ts";
-import type { ServerFrame } from "../../protocol/messages.ts";
+import type { ContentSession } from "@otk/protocol";
+import type { ServerFrame } from "@otk/protocol";
 import type { Cdp } from "./cdp.ts";
 import type { WsClient } from "./ws-client.ts";
 

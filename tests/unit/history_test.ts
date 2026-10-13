@@ -12,7 +12,7 @@ import {
   emptyDraft,
   serialize,
 } from "../../web/src/ui/prompt/model.ts";
-import { mergeHistory } from "../../protocol/history.ts";
+import { mergeHistory } from "@otk/protocol";
 import { fixture } from "../support/config.ts";
 const file = fromFileUrl(
   new URL("../fixtures/opencode1/history-1.18.34-v4.db", import.meta.url),

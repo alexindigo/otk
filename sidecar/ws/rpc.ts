@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { HarnessAdapter } from "../adapter/types.ts";
 import { HarnessError } from "../adapter/types.ts";
-import type { PromptInput, PromptPart } from "../../protocol/rpc.ts";
+import type { PromptInput, PromptPart } from "@otk/protocol";
 import type { Prefs } from "../db/prefs.ts";
 import { promptParts } from "./prompt.ts";
 import type { Frecency } from "../db/frecency.ts";

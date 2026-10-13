@@ -2,7 +2,7 @@
 import type { FrecencyEntry } from "./rpc.ts";
 export function frecency(
   entry: FrecencyEntry | undefined,
-  now = Date.now(),
+  now: number = Date.now(),
 ): number {
   return entry
     ? entry.score / (1 + Math.max(0, now - entry.last) / 86_400_000)

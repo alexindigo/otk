@@ -25,8 +25,8 @@ import {
 import { blocks, markdown } from "../../sidecar/content/markdown.ts";
 import { parseDiff } from "../../sidecar/content/diff.ts";
 import { StreamingMarkdown } from "../../sidecar/content/stream.ts";
-import type { Block } from "../../protocol/content.ts";
-import type { ServerFrame } from "../../protocol/messages.ts";
+import type { Block } from "@otk/protocol";
+import type { ServerFrame } from "@otk/protocol";
 const session = {
   id: "ses_root",
   projectID: "project",

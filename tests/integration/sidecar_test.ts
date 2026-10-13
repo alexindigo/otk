@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import type { ContentSession, Message } from "../../protocol/content.ts";
-import type { IndexEntry } from "../../protocol/index.ts";
+import type { ContentSession, Message } from "@otk/protocol";
+import type { IndexEntry } from "@otk/protocol";
 import { markdown } from "../../sidecar/content/markdown.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
@@ -11,7 +11,7 @@ import { WsClient } from "../support/ws-client.ts";
 import { FreezeProxy } from "../support/freeze-proxy.ts";
 // @deno-types="npm:@types/ws@8.18.1"
 import WebSocket from "ws";
-import { PROTOCOL_VERSION } from "../../protocol/version.ts";
+import { PROTOCOL_VERSION } from "@otk/protocol";
 
 Deno.test("I11 message paging accepts OTK message IDs without leaking harness cursors", async () => {
   const f = await fixture();

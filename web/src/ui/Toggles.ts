@@ -4,8 +4,8 @@ import {
   DEFAULT_PREFS,
   type PreferenceKey,
   type Preferences,
-} from "../../../protocol/prefs.ts";
-import type { ServerFrame } from "../../../protocol/messages.ts";
+} from "@otk/protocol";
+import type { ServerFrame } from "@otk/protocol";
 export function createToggles(
   save: (
     key: PreferenceKey,

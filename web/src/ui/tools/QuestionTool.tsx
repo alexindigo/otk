@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For } from "solid-js";
-import type { QuestionCall } from "../../../../protocol/content.ts";
+import type { QuestionCall } from "@otk/protocol";
 export default function QuestionTool(props: { call: QuestionCall }) {
   return (
     <dl class="otk-questions">

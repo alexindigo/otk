@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { Lexer, type Links, type Token, Tokenizer, type Tokens } from "marked";
-import type { Block, Inline } from "../../protocol/content.ts";
+import type { Block, Inline } from "@otk/protocol";
 class MarkdownTokenizer extends Tokenizer {
   override lheading(src: string): Tokens.Heading | undefined {
     // Marked's GFM setext regex backtracks over every character before failing,

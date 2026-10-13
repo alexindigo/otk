@@ -7,16 +7,16 @@ import type {
   QuestionRequest,
   RevertInfo,
   Todo,
-} from "../../../protocol/content.ts";
-import type { IndexEntry } from "../../../protocol/index.ts";
-import { belongsToSession } from "../../../protocol/session-tree.ts";
+} from "@otk/protocol";
+import type { IndexEntry } from "@otk/protocol";
+import { belongsToSession } from "@otk/protocol";
 import type {
   CommandInput,
   CommandOption,
   PermissionReply,
   PromptInput,
   ShellInput,
-} from "../../../protocol/rpc.ts";
+} from "@otk/protocol";
 import type { ServiceConfig } from "../../config/schema.ts";
 import { harnessDb } from "../../config/loader.ts";
 import { StreamBuffers } from "../../content/buffers.ts";
@@ -27,10 +27,7 @@ import {
 } from "../types.ts";
 import { Client, HttpFailure } from "./client.ts";
 import { SessionErrors } from "./errors.ts";
-import {
-  sessionErrorMessage,
-  type SessionErrorState,
-} from "../../../protocol/errors.ts";
+import { sessionErrorMessage, type SessionErrorState } from "@otk/protocol";
 import { BootstrapDb } from "./db.ts";
 import { History } from "../../history/history.ts";
 import { consumeEvents } from "./events.ts";
@@ -52,11 +49,7 @@ import { mapPromptParts } from "./prompt.ts";
 import { statMatch } from "./files.ts";
 import { mapQuestion } from "./questions.ts";
 import { isAbsolute, relative, resolve } from "@std/path";
-import type {
-  AgentOption,
-  FileMatch,
-  ResourceOption,
-} from "../../../protocol/rpc.ts";
+import type { AgentOption, FileMatch, ResourceOption } from "@otk/protocol";
 const contentEvents = new Set([
   "session.created",
   "session.updated",

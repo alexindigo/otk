@@ -3,8 +3,8 @@ import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
-import type { CommandOption } from "../../protocol/rpc.ts";
-import type { Message } from "../../protocol/content.ts";
+import type { CommandOption } from "@otk/protocol";
+import type { Message } from "@otk/protocol";
 import { waitFor } from "../support/opencode.ts";
 Deno.test("custom command RPC returns normalized catalog and records expanded multiline content", async () => {
   const f = await browserFixture(undefined, {

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import type { Message } from "../../../protocol/content.ts";
+import type { Message } from "@otk/protocol";
 import { queuedMessages } from "../../../web/src/state/messages.ts";
 import { emptyContent, reduce } from "../../../web/src/state/reduce.ts";
 Deno.test("queued messages exclude their answering assistant and disappear after idle", () => {

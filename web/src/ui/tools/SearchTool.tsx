@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { SearchCall } from "../../../../protocol/content.ts";
+import type { SearchCall } from "@otk/protocol";
 export default function SearchTool(props: { call: SearchCall }) {
   return (
     <div class="otk-tool-summary" data-search-mode={props.call.mode}>

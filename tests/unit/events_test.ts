@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
-import type { ContentOp } from "../../protocol/content.ts";
-import type { IndexEntry } from "../../protocol/index.ts";
+import type { ContentOp } from "@otk/protocol";
+import type { IndexEntry } from "@otk/protocol";
 import { loadServiceConfig } from "../../sidecar/config/loader.ts";
 import { Opencode1Adapter } from "../../sidecar/adapter/opencode1/adapter.ts";
 import { StreamBuffers } from "../../sidecar/content/buffers.ts";

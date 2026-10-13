@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { DatabaseSync } from "node:sqlite";
 import { fromFileUrl } from "@std/path";
-import { type HistoryEntry, sameHistory } from "../../protocol/history.ts";
-import type { PromptPart } from "../../protocol/rpc.ts";
+import { type HistoryEntry, sameHistory } from "@otk/protocol";
+import type { PromptPart } from "@otk/protocol";
 interface StoredPart {
   type: string;
   text?: string;

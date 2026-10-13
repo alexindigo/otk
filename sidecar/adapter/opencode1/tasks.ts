@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Part, TaskCall } from "../../../protocol/content.ts";
+import type { Part, TaskCall } from "@otk/protocol";
 import { mapTool } from "./map-tools.ts";
 import type { Info, RawPart } from "./types.ts";
 interface Link {

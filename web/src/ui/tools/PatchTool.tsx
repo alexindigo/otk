@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For } from "solid-js";
-import type { PatchCall } from "../../../../protocol/content.ts";
-import type { Preferences } from "../../../../protocol/prefs.ts";
+import type { PatchCall } from "@otk/protocol";
+import type { Preferences } from "@otk/protocol";
 import Diff from "../Diff.tsx";
 export default function PatchTool(
   props: { call: PatchCall; prefs: Preferences; paneWidth: number },

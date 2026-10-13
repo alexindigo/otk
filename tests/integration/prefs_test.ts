@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
-import { DEFAULT_PREFS, type Preferences } from "../../protocol/prefs.ts";
+import { DEFAULT_PREFS, type Preferences } from "@otk/protocol";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";

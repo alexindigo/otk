@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For } from "solid-js";
-import type { Todo as OtkTodo } from "../../../protocol/content.ts";
+import type { Todo as OtkTodo } from "@otk/protocol";
 export default function Todo(props: { items: OtkTodo[] }) {
   return (
     <ul class="otk-todos" aria-label="Todos">

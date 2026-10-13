@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { WebSearchCall } from "../../../../protocol/content.ts";
+import type { WebSearchCall } from "@otk/protocol";
 export default function WebSearchTool(props: { call: WebSearchCall }) {
   return (
     <div class="otk-tool-summary">

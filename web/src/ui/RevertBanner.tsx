@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For } from "solid-js";
-import type { RevertInfo } from "../../../protocol/content.ts";
+import type { RevertInfo } from "@otk/protocol";
 export default function RevertBanner(props: { revert: RevertInfo }) {
   return (
     <aside class="otk-revert-banner" aria-label="Reverted messages">

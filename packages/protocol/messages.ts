@@ -2,7 +2,7 @@
 import type { ContentOp } from "./content.ts";
 import type { IndexEntry, IndexOp } from "./index.ts";
 import type { Preferences } from "./prefs.ts";
-export const MAX_CLIENT_FRAME_BYTES = 64 * 1024 * 1024;
+export const MAX_CLIENT_FRAME_BYTES: number = 64 * 1024 * 1024;
 export function checkClientFrameSize(serialized: string): void {
   if (
     serialized.length >= MAX_CLIENT_FRAME_BYTES ||

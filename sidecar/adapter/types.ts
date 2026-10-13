@@ -5,9 +5,9 @@ import type {
   Message,
   PermissionRequest,
   QuestionRequest,
-} from "../../protocol/content.ts";
-import type { IndexEntry } from "../../protocol/index.ts";
-import type { HarnessState } from "../../protocol/messages.ts";
+} from "@otk/protocol";
+import type { IndexEntry } from "@otk/protocol";
+import type { HarnessState } from "@otk/protocol";
 import type {
   CommandInput,
   CommandOption,
@@ -15,13 +15,9 @@ import type {
   PromptInput,
   PromptPart,
   ShellInput,
-} from "../../protocol/rpc.ts";
-import type { HistoryEntry } from "../../protocol/history.ts";
-import type {
-  AgentOption,
-  FileMatch,
-  ResourceOption,
-} from "../../protocol/rpc.ts";
+} from "@otk/protocol";
+import type { HistoryEntry } from "@otk/protocol";
+import type { AgentOption, FileMatch, ResourceOption } from "@otk/protocol";
 export interface HarnessSink {
   connection(state: HarnessState): void;
   indexReset(entries: IndexEntry[]): void;

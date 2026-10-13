@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { resolve } from "@std/path";
-import type { FrecencyEntry } from "../../protocol/rpc.ts";
+import type { FrecencyEntry } from "@otk/protocol";
 import type { OtkDb } from "./db.ts";
 import { HarnessError } from "../adapter/types.ts";
 function key(value: string): string {

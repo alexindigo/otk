@@ -6,11 +6,11 @@ import type {
   Message,
   PermissionRequest,
   QuestionRequest,
-} from "../../../protocol/content.ts";
-import { isAttentionOp } from "../../../protocol/content.ts";
-import { belongsToSession } from "../../../protocol/session-tree.ts";
-import type { IndexEntry } from "../../../protocol/index.ts";
-import type { ServerFrame } from "../../../protocol/messages.ts";
+} from "@otk/protocol";
+import { isAttentionOp } from "@otk/protocol";
+import { belongsToSession } from "@otk/protocol";
+import type { IndexEntry } from "@otk/protocol";
+import type { ServerFrame } from "@otk/protocol";
 import type { SidecarConnection } from "../net/sidecar.ts";
 import { type ContentState, emptyContent, reduce } from "./reduce.ts";
 

@@ -7,6 +7,12 @@ import solid from "@solidjs/vite-plugin";
 export default defineConfig({
   root: "web",
   base: "./",
+  resolve: {
+    alias: {
+      "@otk/protocol": new URL("../packages/protocol/mod.ts", import.meta.url)
+        .pathname,
+    },
+  },
   plugins: [solid({ compiler: "native", hot: false })],
   worker: { format: "es" },
   build: { outDir: "dist" },

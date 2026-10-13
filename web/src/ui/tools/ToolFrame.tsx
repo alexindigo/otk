@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, type Element, Show } from "solid-js";
-import type { ToolCall } from "../../../../protocol/content.ts";
+import type { ToolCall } from "@otk/protocol";
 export default function ToolFrame(
   props: { call: ToolCall; waiting: boolean; children: Element },
 ) {

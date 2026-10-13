@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Todo, ToolBase, ToolCall } from "../../../protocol/content.ts";
+import type { Todo, ToolBase, ToolCall } from "@otk/protocol";
 import { stripVTControlCharacters } from "node:util";
 import type { RawPart } from "./types.ts";
 import { mapFileTool } from "./file-tools.ts";

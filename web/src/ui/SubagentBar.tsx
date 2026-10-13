@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ContentSession } from "../../../protocol/content.ts";
+import type { ContentSession } from "@otk/protocol";
 export default function SubagentBar(
   props: {
     info: ContentSession;

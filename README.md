@@ -71,3 +71,15 @@ Development verification runs in the dedicated OTK VM on ark, in
 plans. The test provider is scripted and uses no real model credentials.
 
 License: LGPL-3.0-only.
+
+## Workspace packages
+
+OTK is being extracted into reusable Deno workspace packages. The first is
+[`@otk/protocol`](./packages/protocol/README.md), the dependency-free wire
+contracts and helpers. Consumers import its public `mod.ts` via `@otk/protocol`.
+The sidecar and web app retain their current entry points during extraction.
+
+`deno task test:unit` runs remaining app units and extracted package units;
+`deno task test:integration` and `deno task test:e2e` run app-level checks.
+`deno task test:arch` enforces extracted package boundaries and
+`deno task test:reuse` runs standalone public API consumers.

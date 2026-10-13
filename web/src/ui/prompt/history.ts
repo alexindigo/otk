@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import {
-  type HistoryEntry,
-  sameHistory,
-} from "../../../../protocol/history.ts";
-import type { PromptPart } from "../../../../protocol/rpc.ts";
+import { type HistoryEntry, sameHistory } from "@otk/protocol";
+import type { PromptPart } from "@otk/protocol";
 import { type Draft, emptyDraft, serialize } from "./model.ts";
 function label(part: PromptPart, count: number): string {
   if (part.kind === "agent") return `@${part.name}`;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { Show } from "solid-js";
-import type { BashCall } from "../../../../protocol/content.ts";
+import type { BashCall } from "@otk/protocol";
 import ToolOutput from "./ToolOutput.tsx";
 export default function BashTool(
   props: { call: BashCall; directory?: string },

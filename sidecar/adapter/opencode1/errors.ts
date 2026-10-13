@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type {
-  ErrorObservation,
-  SessionErrorState,
-} from "../../../protocol/errors.ts";
+import type { ErrorObservation, SessionErrorState } from "@otk/protocol";
 
 export interface ErrorRequest {
   id: string;

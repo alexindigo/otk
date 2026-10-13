@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { relative, resolve, toFileUrl } from "@std/path";
-import type { PromptPart } from "../../../protocol/rpc.ts";
+import type { PromptPart } from "@otk/protocol";
 import { statMatch } from "./files.ts";
 import { HarnessError } from "../types.ts";
 export async function mapPromptParts(parts: PromptPart[], directory: string) {

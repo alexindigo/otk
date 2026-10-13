@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For } from "solid-js";
-import type { ReadCall } from "../../../../protocol/content.ts";
+import type { ReadCall } from "@otk/protocol";
 export default function ReadTool(props: { call: ReadCall }) {
   return (
     <>

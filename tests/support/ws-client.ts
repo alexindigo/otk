@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 // @deno-types="npm:@types/ws@8.18.1"
 import WebSocket from "ws";
-import type { ServerFrame } from "../../protocol/messages.ts";
-import { PROTOCOL_VERSION } from "../../protocol/version.ts";
+import type { ServerFrame } from "@otk/protocol";
+import { PROTOCOL_VERSION } from "@otk/protocol";
 import { waitFor } from "./opencode.ts";
 export class WsClient {
   frames: ServerFrame[] = [];

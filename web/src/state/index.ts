@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createStore, reconcile } from "solid-js";
-import type { IndexEntry } from "../../../protocol/index.ts";
-import type { ContentSession } from "../../../protocol/content.ts";
-import type { ServerFrame } from "../../../protocol/messages.ts";
+import type { IndexEntry } from "@otk/protocol";
+import type { ContentSession } from "@otk/protocol";
+import type { ServerFrame } from "@otk/protocol";
 
 export interface MergedEntry extends IndexEntry {
   sidecarId: string;

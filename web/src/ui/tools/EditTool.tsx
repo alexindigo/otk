@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For } from "solid-js";
-import type { EditCall } from "../../../../protocol/content.ts";
-import type { Preferences } from "../../../../protocol/prefs.ts";
+import type { EditCall } from "@otk/protocol";
+import type { Preferences } from "@otk/protocol";
 import Diff from "../Diff.tsx";
 import Diagnostics from "./Diagnostics.tsx";
 export default function EditTool(

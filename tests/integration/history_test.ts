@@ -2,7 +2,7 @@
 import { assertEquals } from "@std/assert";
 import { browserFixture } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
-import type { HistoryEntry } from "../../protocol/history.ts";
+import type { HistoryEntry } from "@otk/protocol";
 import { waitFor } from "../support/opencode.ts";
 Deno.test("history RPC includes prompts across sessions and user shell entries directly from the live WAL database", async () => {
   const f = await browserFixture();

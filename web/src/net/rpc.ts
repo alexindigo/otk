@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ClientFrame, ServerFrame } from "../../../protocol/messages.ts";
-import { checkClientFrameSize } from "../../../protocol/messages.ts";
-import type { RpcMethod } from "../../../protocol/rpc.ts";
+import type { ClientFrame, ServerFrame } from "@otk/protocol";
+import { checkClientFrameSize } from "@otk/protocol";
+import type { RpcMethod } from "@otk/protocol";
 
 export class Rpc {
   #next = 0;

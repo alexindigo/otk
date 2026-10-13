@@ -8,7 +8,7 @@ import {
 } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
-import type { HistoryEntry } from "../../protocol/history.ts";
+import type { HistoryEntry } from "@otk/protocol";
 Deno.test("P6 history merges connected sidecars by time, recalls shell mode and protects edited recalled drafts", async () => {
   const a = await browserFixture(), b = await browserFixture();
   try {

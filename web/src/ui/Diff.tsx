@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For, Show } from "solid-js";
-import type { FileDiff, Hunk } from "../../../protocol/content.ts";
+import type { FileDiff, Hunk } from "@otk/protocol";
 import Diagnostics from "./tools/Diagnostics.tsx";
 type Line = Hunk["lines"][number];
 export function splitRows(lines: Line[]): { left?: Line; right?: Line }[] {

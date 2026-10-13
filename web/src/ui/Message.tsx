@@ -4,11 +4,11 @@ import type {
   Message as OtkMessage,
   Part,
   PermissionRequest,
-} from "../../../protocol/content.ts";
+} from "@otk/protocol";
 import Blocks from "./Blocks.tsx";
 import ToolLine from "./ToolLine.tsx";
 import Reasoning from "./Reasoning.tsx";
-import type { Preferences } from "../../../protocol/prefs.ts";
+import type { Preferences } from "@otk/protocol";
 const partOf = <K extends Part["kind"]>(part: Part, kind: K) =>
   part.kind === kind ? part as Part & { kind: K } : undefined;
 const duration = (start: number, end: number) =>

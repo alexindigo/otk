@@ -2,7 +2,7 @@
 import { assertEquals } from "@std/assert";
 import { OtkDb } from "../../sidecar/db/db.ts";
 import { Frecency } from "../../sidecar/db/frecency.ts";
-import { frecency } from "../../protocol/frecency.ts";
+import { frecency } from "@otk/protocol";
 import {
   mention,
   mentionQuery,

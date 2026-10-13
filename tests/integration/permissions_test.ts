@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import type {
-  ContentSession,
-  PermissionRequest,
-} from "../../protocol/content.ts";
+import type { ContentSession, PermissionRequest } from "@otk/protocol";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";

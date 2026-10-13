@@ -1,9 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For, Show } from "solid-js";
-import {
-  sessionErrorMessage,
-  type SessionErrorState,
-} from "../../../protocol/errors.ts";
+import { sessionErrorMessage, type SessionErrorState } from "@otk/protocol";
 
 export default function SessionError(
   props: { state?: SessionErrorState; error?: string },

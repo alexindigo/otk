@@ -1,8 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import {
-  sessionErrorMessage,
-  type SessionErrorState,
-} from "../../../protocol/errors.ts";
+import { sessionErrorMessage, type SessionErrorState } from "@otk/protocol";
 import type {
   ContentOp,
   FileDiff,
@@ -11,7 +8,7 @@ import type {
   QuestionRequest,
   RevertInfo,
   Todo,
-} from "../../../protocol/content.ts";
+} from "@otk/protocol";
 export interface ContentState {
   messages: Message[];
   permissions: PermissionRequest[];

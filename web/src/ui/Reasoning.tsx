@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, Show } from "solid-js";
-import type { Part } from "../../../protocol/content.ts";
+import type { Part } from "@otk/protocol";
 import Blocks from "./Blocks.tsx";
 export default function Reasoning(
   props: { part: Extract<Part, { kind: "reasoning" }>; mode: "show" | "hide" },

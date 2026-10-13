@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ClientFrame, ServerFrame } from "../../../protocol/messages.ts";
-import { PROTOCOL_VERSION } from "../../../protocol/version.ts";
+import type { ClientFrame, ServerFrame } from "@otk/protocol";
+import { PROTOCOL_VERSION } from "@otk/protocol";
 import { apiBase, type AuthStatus, request } from "./auth.ts";
 import { Rpc } from "./rpc.ts";
 

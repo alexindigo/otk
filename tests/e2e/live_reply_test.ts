@@ -3,7 +3,7 @@ import { assertEquals } from "@std/assert";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
-import type { Message } from "../../protocol/content.ts";
+import type { Message } from "@otk/protocol";
 Deno.test("reload, switching and an initially unwatched reply retain all current text and its future suffix", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For, Show } from "solid-js";
-import type { PreferenceKey, Preferences } from "../../../protocol/prefs.ts";
+import type { PreferenceKey, Preferences } from "@otk/protocol";
 const booleans = [
   ["timestamps", "Always show timestamps"],
   ["toolDetails", "Tool details"],

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { parsePatch } from "diff";
-import type { FileDiff, Hunk } from "../../protocol/content.ts";
+import type { FileDiff, Hunk } from "@otk/protocol";
 const path = (name: string) => name.replace(/^[ab]\//, "");
 export function parseDiff(text: string): FileDiff[] {
   return parsePatch(text).map((patch): FileDiff => {

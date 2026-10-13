@@ -12,25 +12,21 @@ import type {
   Message as OtkMessage,
   PermissionRequest,
   RevertInfo,
-} from "../../../protocol/content.ts";
+} from "@otk/protocol";
 import Message from "./Message.tsx";
 import Prompt from "./Prompt.tsx";
-import type { Preferences } from "../../../protocol/prefs.ts";
+import type { Preferences } from "@otk/protocol";
 import SubagentBar from "./SubagentBar.tsx";
 import RevertBanner from "./RevertBanner.tsx";
 import SessionError from "./SessionError.tsx";
-import type { SessionErrorState } from "../../../protocol/errors.ts";
+import type { SessionErrorState } from "@otk/protocol";
 import { queuedMessages } from "../state/messages.ts";
 import { followViewport } from "./viewport.ts";
 import { highlightingScope } from "../highlight/client.ts";
 import type { Draft, DraftChange } from "./prompt/model.ts";
-import type {
-  CommandOption,
-  FileMatch,
-  PromptPart,
-} from "../../../protocol/rpc.ts";
+import type { CommandOption, FileMatch, PromptPart } from "@otk/protocol";
 import type { MentionSources } from "./prompt/autocomplete.ts";
-import type { HistoryEntry } from "../../../protocol/history.ts";
+import type { HistoryEntry } from "@otk/protocol";
 export default function SessionView(props: {
   info?: ContentSession;
   label: string;

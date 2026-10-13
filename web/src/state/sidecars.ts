@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createStore } from "solid-js";
-import type { HarnessState, ServerFrame } from "../../../protocol/messages.ts";
+import type { HarnessState, ServerFrame } from "@otk/protocol";
 import { apiBase, normalizeBase, request } from "../net/auth.ts";
 import { type ConnectionState, SidecarConnection } from "../net/sidecar.ts";
 
