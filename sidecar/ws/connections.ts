@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { type ContentOp, isAttentionOp } from "@otk/protocol";
+import { type ContentOp, isAttentionOp, type Preferences } from "@otk/protocol";
 import type { ClientFrame, HarnessState, ServerFrame } from "@otk/protocol";
 import { checkClientFrameSize } from "@otk/protocol";
 import { PROTOCOL_VERSION, SIDECAR_VERSION } from "@otk/protocol";
 import { type Harness, HarnessError } from "@otk/harness";
 import type { IndexStore } from "../index/store.ts";
 import { dispatch, object, text } from "./rpc.ts";
-import type { Prefs } from "../db/prefs.ts";
-import type { Frecency } from "../db/frecency.ts";
+import type { Frecency, Prefs } from "@otk/store";
 interface Connection {
   ws: WebSocket;
   welcomed: boolean;
@@ -22,7 +21,7 @@ export class Connections {
     readonly adapter: Harness,
     readonly index: IndexStore,
     readonly url: string,
-    readonly prefs: Prefs,
+    readonly prefs: Prefs<Preferences>,
     readonly frecency: Frecency,
   ) {
     index.listen((frame) => this.broadcast(frame));

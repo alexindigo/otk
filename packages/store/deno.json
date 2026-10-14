@@ -1,0 +1,15 @@
+{
+  "name": "@otk/store",
+  "version": "0.1.0",
+  "license": "LGPL-3.0-only",
+  "exports": "./mod.ts",
+  "imports": { "@std/path": "jsr:@std/path@1.1.5" },
+  "publish": {
+    "include": ["*.ts", "features/", "deno.json", "README.md", "LICENSE"],
+    "exclude": ["tests/"]
+  },
+  "tasks": {
+    "check": "deno check mod.ts",
+    "test": "deno test --allow-read --allow-write tests/"
+  }
+}

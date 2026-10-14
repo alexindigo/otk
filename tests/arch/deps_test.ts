@@ -108,6 +108,9 @@ function dependencyError(
     ) {
       return "old harness paths are retired";
     }
+    if (targetPath?.startsWith("sidecar/db/")) {
+      return "old store paths are retired";
+    }
     return;
   }
   if (production && from === "protocol") {
@@ -143,14 +146,19 @@ function sourceErrors(path: string, source: string): string[] {
     errors.push("native database schema belongs to harness-opencode1");
   }
   if (
-    /(?:^|\/)(?:registries\/|registry(?:\.ts|\/)|[^/]+-registry\.ts)/.test(path)
+    /(?:^|\/)(?:registries\/|registry(?:\.ts|\/)|[^/]+-registry\.ts)/.test(
+      path,
+    ) ||
+    /^packages\/store\/(?:db|migrations)\.ts$/.test(path)
   ) {
     if (
       imports(source).some((specifier) =>
         specifier && /(?:^|\/)features\//.test(specifier)
       )
     ) {
-      errors.push("registries must not import their feature implementations");
+      errors.push(
+        "registries and migration runners must not import their feature implementations",
+      );
     }
   }
   return errors;
@@ -273,6 +281,9 @@ Deno.test("dependency checks reject private paths, upward edges and legacy escap
       ["tests/unit/example.ts", "../../protocol/content.ts"],
       ["tests/unit/example.ts", "../../sidecar/adapter/opencode1/map.ts"],
       ["tests/unit/example.ts", "../../sidecar/history/history.ts"],
+      ["tests/unit/example.ts", "../../sidecar/db/db.ts"],
+      ["sidecar/ws/rpc.ts", "../db/prefs.ts"],
+      ["packages/store/features/prefs.ts", "@otk/harness"],
     ]
   ) assert(dependencyError(path, specifier, present), `${path}: ${specifier}`);
   assert(dependencyError("packages/protocol/mod.ts", undefined, present));
@@ -286,6 +297,8 @@ Deno.test("dependency checks reject private paths, upward edges and legacy escap
       ["packages/protocol/mod.ts", "./messages.ts"],
       ["packages/protocol/tests/example.ts", "@std/assert"],
       ["sidecar/ws/rpc.ts", "@otk/protocol"],
+      ["sidecar/main.ts", "@otk/store"],
+      ["packages/store/features/prefs.ts", "../db.ts"],
     ]
   ) assertEquals(dependencyError(path, specifier, present), undefined);
 });
@@ -347,6 +360,8 @@ Deno.test("native endpoints and feature imports cannot leak into extracted share
     1,
   );
   assertEquals(sourceErrors("packages/app/mod.ts", feature), []);
+  assertEquals(sourceErrors("packages/store/db.ts", feature).length, 1);
+  assertEquals(sourceErrors("packages/store/migrations.ts", feature).length, 1);
   assertEquals(
     sourceErrors(
       "packages/sidecar/registry.ts",

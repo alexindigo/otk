@@ -1129,6 +1129,11 @@
         "dependencies": [
           "jsr:@std/path@1.1.5"
         ]
+      },
+      "packages/store": {
+        "dependencies": [
+          "jsr:@std/path@1.1.5"
+        ]
       }
     }
   }

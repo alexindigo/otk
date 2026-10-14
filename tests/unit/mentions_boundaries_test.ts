@@ -2,51 +2,20 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { join } from "@std/path";
 import { cfg, fixture } from "../support/config.ts";
-import { OtkDb } from "../../sidecar/db/db.ts";
-import { Prefs } from "../../sidecar/db/prefs.ts";
-import { Frecency } from "../../sidecar/db/frecency.ts";
+import {
+  Frecency,
+  frecencyMigrations,
+  OtkDb,
+  Prefs,
+  prefsMigrations,
+} from "@otk/store";
+import { prefsOptions } from "../../sidecar/features/prefs.ts";
+import { frecencyOptions } from "../../sidecar/features/frecency.ts";
+import { HarnessError } from "@otk/harness";
 import { dispatch } from "../../sidecar/ws/rpc.ts";
 import { Opencode1Adapter } from "@otk/harness-opencode1";
 import { StreamBuffers } from "@otk/content";
 import { mapPromptParts } from "@otk/harness-opencode1";
-
-Deno.test("frecency persists at most 1000 canonical entries across projects", async () => {
-  const root = await fixture(), db = new OtkDb(root), store = new Frecency(db);
-  try {
-    for (let i = 0; i < 1005; i++) {
-      store.bump(i % 2 ? "/project-a" : "/project-b", `file-${i}`);
-    }
-    assertEquals(
-      Number(
-        db.connection.prepare("SELECT count(*) AS n FROM frecency").get()!.n,
-      ),
-      1000,
-    );
-    assert(
-      store.list("/project-b").some((row) =>
-        row.path === "/project-b/file-1004"
-      ),
-    );
-  } finally {
-    db.close();
-  }
-});
-
-Deno.test("frecency rejects oversized keys before persisting them", async () => {
-  const root = await fixture(), db = new OtkDb(root), store = new Frecency(db);
-  try {
-    assertThrows(() => store.bump("/project", "x".repeat(4097)), Error);
-    assertThrows(() => store.list("x".repeat(4097)), Error);
-    assertEquals(
-      Number(
-        db.connection.prepare("SELECT count(*) AS n FROM frecency").get()!.n,
-      ),
-      0,
-    );
-  } finally {
-    db.close();
-  }
-});
 
 function adapterFor(root: string) {
   const settings = cfg();
@@ -70,11 +39,17 @@ function adapterFor(root: string) {
 
 Deno.test("frecency RPC uses authoritative session directory instead of a client-claimed project", async () => {
   const root = await fixture(),
-    db = new OtkDb(root),
-    store = new Frecency(db),
-    prefs = new Prefs(db),
+    db = new OtkDb(root, [...prefsMigrations, ...frecencyMigrations]),
+    store = new Frecency(db, frecencyOptions),
+    prefs = new Prefs(db, prefsOptions),
     adapter = adapterFor(root);
   try {
+    const error = assertThrows(
+      () => store.bump(root, "x".repeat(4097)),
+      HarnessError,
+      "Invalid frecency path length or value",
+    );
+    assertEquals(error.code, "params");
     await dispatch(
       adapter,
       "frecency.bump",

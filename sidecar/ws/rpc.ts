@@ -5,10 +5,9 @@ import {
   HarnessError,
   requireCapability,
 } from "@otk/harness";
-import type { PromptInput, PromptPart } from "@otk/protocol";
-import type { Prefs } from "../db/prefs.ts";
+import type { Preferences, PromptInput, PromptPart } from "@otk/protocol";
+import type { Frecency, Prefs } from "@otk/store";
 import { promptParts } from "./prompt.ts";
-import type { Frecency } from "../db/frecency.ts";
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new HarnessError("params", "Expected object");
@@ -31,7 +30,7 @@ export async function dispatch(
   adapter: Harness,
   method: string,
   value: unknown,
-  prefs: Prefs,
+  prefs: Prefs<Preferences>,
   frecency: Frecency,
 ): Promise<unknown> {
   const p = object(value);
