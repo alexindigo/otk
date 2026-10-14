@@ -1,0 +1,54 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+/** Semantic paint contract. Components consume slots, never palette literals. */
+export const THEME_SLOTS = [
+  "bg",
+  "bg-elevated",
+  "fg",
+  "fg-muted",
+  "fg-faint",
+  "border",
+  "accent",
+  "accent-text",
+  "accent-bg",
+  "overlay",
+  "overlay-editor",
+  "status-busy",
+  "status-retry",
+  "status-error",
+  "warning",
+  "success",
+  "diff-add",
+  "diff-add-bg",
+  "diff-del",
+  "diff-del-bg",
+  "attention",
+  "agent-1",
+  "agent-2",
+  "agent-3",
+  "agent-4",
+  "agent-5",
+  "agent-6",
+  "agent-7",
+  "agent-8",
+  "code-keyword",
+  "code-string",
+  "code-number",
+  "code-comment",
+  "code-function",
+  "code-type",
+  "code-variable",
+  "code-constant",
+  "code-operator",
+  "code-punctuation",
+  "code-tag",
+  "code-attr",
+] as const;
+export type ThemeSlot = typeof THEME_SLOTS[number];
+export type ThemeColors = Readonly<Record<ThemeSlot, string>>;
+export type ThemeMode = "dark" | "light";
+export interface Theme {
+  readonly id: string;
+  readonly label: string;
+  readonly mode: ThemeMode;
+  readonly colors: Readonly<Partial<Record<ThemeSlot, string>>>;
+}

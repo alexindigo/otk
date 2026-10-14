@@ -13,7 +13,7 @@ Deno.test("standalone protocol consumer builds and receives wire frames without 
   const hello: ClientFrame = { t: "hello", protocol: PROTOCOL_VERSION };
   const serialized = JSON.stringify(hello);
   checkClientFrameSize(serialized);
-  assertEquals(serialized, '{"t":"hello","protocol":11}');
+  assertEquals(serialized, `{"t":"hello","protocol":${PROTOCOL_VERSION}}`);
   const event: ContentOp = {
     op: "permission.remove",
     requestID: "request",
@@ -25,4 +25,8 @@ Deno.test("standalone protocol consumer builds and receives wire frames without 
   if (received.t === "content") {
     assertEquals(isAttentionOp(received.event), true);
   }
+  console.info("Standalone protocol consumer wire/receipt", {
+    serialized,
+    received,
+  });
 });

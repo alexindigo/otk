@@ -73,3 +73,8 @@ export * from "./keyboard/dispatcher.ts";
 export * from "./keyboard/context.tsx";
 export { default as Palette } from "./components/Palette.tsx";
 export { default as KeysHelp } from "./components/KeysHelp.tsx";
+export { default as ThemePicker } from "./components/ThemePicker.tsx";
+export * from "./theme/slots.ts";
+export * from "./theme/registry.ts";
+export * from "./theme/engine.ts";
+export { registerOtkThemes } from "./features/theme/otk.ts";

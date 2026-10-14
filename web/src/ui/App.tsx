@@ -8,7 +8,7 @@ import {
   onSettled,
   Show,
 } from "solid-js";
-import type { ContentSession } from "@otk/protocol";
+import { type ContentSession, DEFAULT_PREFS } from "@otk/protocol";
 import { apiBase, CommandHub } from "@otk/client";
 import { registerSessionCommands } from "../commands/sessions.ts";
 import { registerPreferenceCommands } from "../commands/preferences.ts";
@@ -43,6 +43,8 @@ import {
   Settings,
   Setup,
   Sidebar,
+  type ThemeEngine,
+  ThemePicker,
 } from "@otk/ui";
 import type {
   AgentOption,
@@ -52,7 +54,7 @@ import type {
   PromptPart,
   ResourceOption,
 } from "@otk/protocol";
-export default function App() {
+export default function App(props: { theme: ThemeEngine }) {
   const index = createIndex();
   const sidecars: ReturnType<typeof createSidecars> = createSidecars(
     (id, frame) => {
@@ -80,7 +82,9 @@ export default function App() {
     [draft, setDraft] = createSignal(emptyDraft()),
     [error, setError] = createSignal("");
   const [permissionDirty, setPermissionDirty] = createSignal(false);
-  const [dialog, setDialog] = createSignal<"" | "palette" | "keys">("");
+  const [dialog, setDialog] = createSignal<"" | "palette" | "keys" | "theme">(
+    "",
+  );
   const commands = new CommandHub(
     () => ({
       sidecar: session.state.selection?.sidecarId,
@@ -113,6 +117,17 @@ export default function App() {
       category: "Commands",
       run: () => setDialog("keys"),
     }),
+  );
+  onCleanup(commands.register({
+    id: "theme.open",
+    title: "Choose theme",
+    category: "Display",
+    slash: ["theme"],
+    run: () => setDialog("theme"),
+  }));
+  createEffect(
+    () => toggles.state.prefs.theme,
+    (id) => props.theme.commit(id ?? DEFAULT_PREFS.theme),
   );
   onCleanup(
     commands.register({
@@ -648,6 +663,19 @@ export default function App() {
             onSave={async (value) => {
               await sidecars.connection(LOCAL_SIDECAR).rpc.call("prefs.set", {
                 key: "keymap",
+                value,
+              });
+            }}
+            onClose={() => setDialog("")}
+          />
+        </Show>
+        <Show when={dialog() === "theme"}>
+          <ThemePicker
+            theme={props.theme}
+            ready={toggles.state.ready}
+            onSave={async (value) => {
+              await sidecars.connection(LOCAL_SIDECAR).rpc.call("prefs.set", {
+                key: "theme",
                 value,
               });
             }}

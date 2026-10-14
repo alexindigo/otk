@@ -1,0 +1,18 @@
+.otk-theme-choices {
+  display: grid;
+  gap: .5rem;
+  margin: 1rem 0;
+}
+.otk-theme-choices button {
+  text-align: left;
+}
+.otk-theme-choices button[aria-pressed=true] {
+  border-color: var(--otk-accent);
+  background: var(--otk-accent-bg);
+}
+.otk-theme-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: .5rem;
+}

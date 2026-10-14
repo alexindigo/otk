@@ -32,6 +32,13 @@ Deno.test("prefs RPC persists across sidecar restart and broadcasts to other con
     await b.wait((frame) =>
       frame.t === "prefs" && frame.prefs.keymap["palette.open"] === "Ctrl+j"
     );
+    await assertRejects(() =>
+      a.rpc("prefs.set", { key: "theme", value: "extra-theme" })
+    );
+    await a.rpc("prefs.set", { key: "theme", value: "otk-light" });
+    await b.wait((frame) =>
+      frame.t === "prefs" && frame.prefs.theme === "otk-light"
+    );
     await a.close();
     await b.close();
     await server.stop();
@@ -45,6 +52,10 @@ Deno.test("prefs RPC persists across sidecar restart and broadcasts to other con
     await c.connect();
     assertEquals((await c.rpc<Preferences>("prefs.get", {})).thinking, "show");
     assertEquals((await c.rpc<Preferences>("prefs.get", {})).keymap, keymap);
+    assertEquals(
+      (await c.rpc<Preferences>("prefs.get", {})).theme,
+      "otk-light",
+    );
     const other = await SidecarTest.start(oc);
     servers.push(other);
     const d = new WsClient(other.url);

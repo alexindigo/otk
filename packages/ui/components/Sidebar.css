@@ -23,7 +23,7 @@
 .otk-brand strong {
   font-size: 2rem;
   letter-spacing: -.1rem;
-  color: var(--accent);
+  color: var(--otk-accent);
 }
 .otk-brand span {
   font-size: .7rem;
@@ -74,8 +74,8 @@
   padding: .85rem .65rem;
 }
 .otk-selected {
-  border-left-color: var(--accent);
-  background: #ff4d000c;
+  border-left-color: var(--otk-accent);
+  background: var(--otk-accent-bg);
 }
 .otk-row-title {
   overflow: hidden;

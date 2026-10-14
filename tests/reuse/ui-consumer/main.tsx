@@ -3,6 +3,7 @@ import { createSignal, type Element } from "solid-js";
 import { render } from "@solidjs/web";
 import { DEFAULT_PREFS, type GenericCall } from "@otk/protocol";
 import {
+  browserThemeEnvironment,
   Code,
   createUiRegistries,
   Docks,
@@ -10,13 +11,21 @@ import {
   Message,
   Prompt,
   registerGenericTool,
+  registerOtkThemes,
   registerToolPart,
+  ThemeEngine,
+  ThemeRegistry,
   ToolLine,
   ToolOutput,
   type ToolProps,
   UiProvider,
 } from "@otk/ui";
 import "@fontsource/ibm-plex-mono/400.css";
+
+const themes = new ThemeRegistry();
+registerOtkThemes(themes);
+const theme = new ThemeEngine(themes, browserThemeEnvironment(), "otk-dark");
+theme.start();
 
 function ExternalTool(props: ToolProps): Element {
   return (
@@ -94,6 +103,20 @@ function Consumer(): Element {
       <UiProvider registries={ui}>
         <section id="registered" style={{ padding: "1rem" }}>
           <h1>Independent UI registration</h1>
+          <button
+            type="button"
+            data-light
+            onClick={() => theme.commit("otk-light")}
+          >
+            Light
+          </button>
+          <button
+            type="button"
+            data-dark
+            onClick={() => theme.commit("otk-dark")}
+          >
+            Dark
+          </button>
           <div data-library-code>
             <Code text="const externalResult: number = 7;" lang="ts" />
           </div>

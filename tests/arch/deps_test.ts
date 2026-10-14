@@ -556,3 +556,42 @@ Deno.test("final application entries compose public kit modules and keep reflect
     }
   }
 });
+
+Deno.test("theme registry and paint engine stay independent of concrete palette data, host persistence and highlight work", async () => {
+  for (
+    const path of [
+      "packages/ui/theme/registry.ts",
+      "packages/ui/theme/engine.ts",
+    ]
+  ) {
+    const source = await Deno.readTextFile(new URL(path, root));
+    assert(
+      imports(source).every((specifier) =>
+        specifier && /^\.\/\w+\.ts$/.test(specifier)
+      ),
+      path,
+    );
+    assert(!/localStorage|otk\.db|Worker|highlight\//.test(source), path);
+  }
+  const css = await Deno.readTextFile(new URL("packages/ui/theme.css", root));
+  assert(
+    !/#[0-9a-f]{3,8}\b/i.test(css),
+    "Palette literals belong only to registered theme data",
+  );
+  for (
+    const category of [
+      "foreground",
+      "token-keyword",
+      "token-string",
+      "token-comment",
+      "token-function",
+      "token-constant",
+      "token-punctuation",
+    ]
+  ) {
+    assert(
+      new RegExp(`--otk-syntax-${category}: var\\(--otk-code-`).test(css),
+      category,
+    );
+  }
+});

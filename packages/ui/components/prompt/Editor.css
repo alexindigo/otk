@@ -17,7 +17,7 @@
   gap: 1rem;
 }
 .otk-editor::backdrop {
-  background: #000b;
+  background: var(--otk-overlay-editor);
 }
 .otk-editor header,
 .otk-editor footer {

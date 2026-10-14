@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export interface Preferences {
+  theme: "otk-dark" | "otk-light" | "system";
   keymap: Record<string, string>;
   timestamps: boolean;
   thinking: "show" | "hide";
@@ -12,6 +13,7 @@ export interface Preferences {
   pasteSummary: boolean;
 }
 export const DEFAULT_PREFS: Readonly<Preferences> = {
+  theme: "otk-dark",
   keymap: {},
   timestamps: false,
   thinking: "hide",
@@ -32,6 +34,9 @@ export function isPreference(
     return false;
   }
   if (key === "thinking") return value === "show" || value === "hide";
+  if (key === "theme") {
+    return value === "otk-dark" || value === "otk-light" || value === "system";
+  }
   if (key === "keymap") {
     return !!value && typeof value === "object" && !Array.isArray(value) &&
       Object.keys(value).length <= 100 &&

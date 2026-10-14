@@ -23,17 +23,17 @@
   margin: .4rem 0;
 }
 .otk-tool-waiting {
-  border-color: #ffb18f;
+  border-color: var(--otk-warning);
 }
 .otk-tool-waiting .otk-tool-state {
-  color: #ffb18f;
+  color: var(--otk-warning);
 }
 .otk-tool-line[data-tool-status=error] {
-  border-color: #ff7777;
+  border-color: var(--otk-status-error);
 }
 .otk-tool-line[data-tool-status=error] .otk-tool-state,
 .otk-tool-error {
-  color: #ff7777;
+  color: var(--otk-status-error);
 }
 .otk-tool-line[data-tool-status=denied] .otk-tool-summary {
   text-decoration: line-through;

@@ -9,7 +9,7 @@
   gap: .6rem;
   border: 0;
   padding: .3rem 0;
-  color: #ffb18f;
+  color: var(--otk-warning);
 }
 .otk-reasoning > button:disabled {
   opacity: 1;

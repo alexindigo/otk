@@ -58,6 +58,19 @@ Deno.test("independent public UI consumer renders external tools twice, updates 
       ),
       "const externalResult: number = 7;",
     );
+    const tokenColor =
+      "getComputedStyle(document.querySelector('[data-library-code] .otk-token')).color";
+    const dark = await browser.evaluate(tokenColor);
+    await browser.click("[data-light]");
+    await browser.poll(
+      "document.documentElement.dataset.otkTheme==='otk-light'",
+    );
+    assertEquals(await browser.evaluate(tokenColor) === dark, false);
+    await browser.click("[data-dark]");
+    await browser.poll(
+      "document.documentElement.dataset.otkTheme==='otk-dark'",
+    );
+    assertEquals(await browser.evaluate(tokenColor), dark);
     assertEquals(
       await browser.evaluate(
         "document.querySelectorAll('#isolated [data-external-tool]').length",

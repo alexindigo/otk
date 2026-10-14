@@ -10,7 +10,7 @@
   gap: .6rem;
 }
 .otk-todos li[data-todo-status=in_progress] {
-  color: #ffb18f;
+  color: var(--otk-warning);
 }
 .otk-todos li[data-todo-status=cancelled] {
   text-decoration: line-through;

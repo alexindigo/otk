@@ -7,7 +7,7 @@
   border: 1px solid var(--muted);
 }
 .otk-command-dialog::backdrop {
-  background: #0009;
+  background: var(--otk-overlay);
 }
 .otk-command-dialog > header {
   display: flex;
@@ -24,5 +24,5 @@
   width: 100%;
 }
 .otk-command-dialog [role=alert] {
-  color: #ff9971;
+  color: var(--otk-attention);
 }

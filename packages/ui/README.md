@@ -100,3 +100,32 @@ not optimistically change bindings. Components own dialog focus and styles. The
 essential shipped bindings are Tab/reverse agent cycle, Enter submission, Mod+K
 palette, outside-text `?` help and top-layer Esc before double-Esc interrupt.
 Shift+Enter inserts a newline through the prompt-owned input port.
+
+## Semantic themes
+
+`ThemeRegistry` owns immutable data registrations; it imports no themes. A
+consumer calls `registerOtkThemes(themes)` to select the shipped complete Dark
+and Light bases, or supplies its own complete mode bases with
+`themes.register(data, { base: true })`. Partial registrations inherit missing
+slots from their own mode's base. `system` resolves the registered OS-mode base.
+No custom palette ships in OTK.
+
+`ThemeEngine(themes, browserThemeEnvironment(), committedId)` is the single
+document paint owner. Call `start()` before mounting and release its returned
+listener cleanup on application teardown. It applies semantic `--otk-*` slots,
+native `color-scheme` and browser `theme-color`; System follows media changes
+live. The consumer calls `commit(id)` only from authoritative preference state.
+`preview()` returns an owner-scoped select/close port; close always restores the
+latest commit, including a concurrent host broadcast. The engine owns no
+storage. `ThemePicker` injects this engine, readiness, async save and close
+callbacks, owns dialog CSS and registers its actions in the public command hub.
+
+OTK preserves its existing Dark default, font, geometry and Phosphor Orange
+identity. Light uses cool white surfaces and dark ink; orange marks remain
+`#ff4d00`, while small accent text uses a contrast-safe orange ink slot.
+Existing CSS names are aliases, not another palette. Shiki's genuine
+css-variable token categories alias semantic code slots; categories shared by
+Shiki retain their shared mapping (constant includes numbers/types; foreground
+covers variables). Switching only changes paint, never source, grammar, worker
+lifecycle or cache. Hosts must select/apply a theme; the UI provider does not
+install concrete data.

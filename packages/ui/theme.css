@@ -1,23 +1,23 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 :root {
-  --bg: #1a1c1e;
-  --fg: #e0e6ed;
-  --accent: #ff4d00;
-  --muted: #525860;
-  --panel: #202326;
-  --secondary: #a2abb7;
-  --otk-syntax-foreground: #e0e6ed;
-  --otk-syntax-background: #1a1c1e;
-  --otk-syntax-token-constant: #ffb18f;
-  --otk-syntax-token-string: #e0e6ed;
-  --otk-syntax-token-comment: #525860;
-  --otk-syntax-token-keyword: #ff4d00;
-  --otk-syntax-token-parameter: #a2abb7;
-  --otk-syntax-token-function: #ffb18f;
-  --otk-syntax-token-string-expression: #ff4d00;
-  --otk-syntax-token-punctuation: #a2abb7;
-  --otk-syntax-token-link: #ff4d00;
-  color-scheme: dark;
+  --bg: var(--otk-bg);
+  --fg: var(--otk-fg);
+  --accent: var(--otk-accent-text);
+  --muted: var(--otk-border);
+  --panel: var(--otk-bg-elevated);
+  --secondary: var(--otk-fg-faint);
+  /* Genuine Shiki css-variables categories. No tokens or worker work change. */
+  --otk-syntax-foreground: var(--otk-code-variable);
+  --otk-syntax-background: var(--otk-bg);
+  --otk-syntax-token-constant: var(--otk-code-constant);
+  --otk-syntax-token-string: var(--otk-code-string);
+  --otk-syntax-token-comment: var(--otk-code-comment);
+  --otk-syntax-token-keyword: var(--otk-code-keyword);
+  --otk-syntax-token-parameter: var(--otk-code-punctuation);
+  --otk-syntax-token-function: var(--otk-code-function);
+  --otk-syntax-token-string-expression: var(--otk-code-operator);
+  --otk-syntax-token-punctuation: var(--otk-code-punctuation);
+  --otk-syntax-token-link: var(--otk-code-keyword);
   font-family: "IBM Plex Mono", monospace;
   color: var(--fg);
   background: var(--bg);
@@ -43,15 +43,15 @@ button {
   cursor: pointer;
 }
 button:hover {
-  border-color: var(--accent);
-  background: #ff4d000c;
+  border-color: var(--otk-accent);
+  background: var(--otk-accent-bg);
 }
 button:disabled {
   opacity: .5;
   cursor: default;
 }
 :focus-visible {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--otk-accent);
   outline-offset: 2px;
 }
 input,
@@ -75,7 +75,7 @@ p {
   color: var(--secondary);
 }
 .otk-error {
-  color: #ff9971;
+  color: var(--otk-attention);
   overflow-wrap: anywhere;
 }
 .otk-chip {
@@ -92,20 +92,23 @@ p {
   background: var(--muted);
 }
 .otk-dot-connected {
-  background: var(--accent);
+  background: var(--otk-accent);
 }
 .otk-busy {
   background: transparent;
-  border: 1px solid var(--accent);
+  border: 1px solid var(--otk-status-busy);
   border-top-color: transparent;
   width: .65rem;
   height: .65rem;
   animation: otk-spin .8s linear infinite;
 }
-.otk-retry,
+.otk-retry {
+  color: var(--otk-status-retry);
+  background: var(--otk-status-retry);
+}
 .otk-error-dot {
-  color: var(--accent);
-  background: var(--accent);
+  color: var(--otk-accent);
+  background: var(--otk-accent);
 }
 @keyframes otk-spin {
   to {

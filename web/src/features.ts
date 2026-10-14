@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  browserThemeEnvironment,
   createUiRegistries,
   registerAgentCyclePrompt,
   registerAgentPart,
@@ -14,6 +15,7 @@ import {
   registerHistoryPrompt,
   registerMentionsPrompt,
   registerMetadataParts,
+  registerOtkThemes,
   registerPastePrompt,
   registerPatchTool,
   registerPermissionDock,
@@ -32,6 +34,8 @@ import {
   registerUnknownPart,
   registerWebSearchTool,
   registerWriteTool,
+  ThemeEngine,
+  ThemeRegistry,
   type UiRegistries,
 } from "@otk/ui";
 
@@ -70,4 +74,11 @@ export function applicationUi(): UiRegistries {
   registerPermissionDock(ui.docks);
   registerQuestionDock(ui.docks);
   return ui;
+}
+
+/** Themes, like renderers, are explicitly selected at application composition. */
+export function applicationTheme(committed: string): ThemeEngine {
+  const themes = new ThemeRegistry();
+  registerOtkThemes(themes);
+  return new ThemeEngine(themes, browserThemeEnvironment(), committed);
 }

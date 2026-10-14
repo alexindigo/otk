@@ -41,3 +41,12 @@ Deno.test("keymap prefs retain extensible string overrides and reject malformed 
   assertEquals(DEFAULT_PREFS.thinking, "hide");
   assertEquals(DEFAULT_PREFS.pasteSummary, true);
 });
+Deno.test("theme preference allows only shipped choices and preserves the existing Dark default", () => {
+  for (const id of ["otk-dark", "otk-light", "system"]) {
+    assert(isPreference("theme", id));
+  }
+  for (const id of ["dark", "light", "custom", null, true, {}, []]) {
+    assertEquals(isPreference("theme", id), false);
+  }
+  assertEquals(DEFAULT_PREFS.theme, "otk-dark");
+});

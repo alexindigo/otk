@@ -2,12 +2,15 @@
 import { render } from "@solidjs/web";
 import App from "./ui/App.tsx";
 import { UiProvider } from "@otk/ui";
-import { applicationUi } from "./features.ts";
+import { DEFAULT_PREFS } from "@otk/protocol";
+import { applicationTheme, applicationUi } from "./features.ts";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-mono/600.css";
 const registries = applicationUi();
+const theme = applicationTheme(DEFAULT_PREFS.theme);
+theme.start();
 render(() => (
   <UiProvider registries={registries}>
-    <App />
+    <App theme={theme} />
   </UiProvider>
 ), document.getElementById("app")!);

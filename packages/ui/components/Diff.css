@@ -50,14 +50,14 @@
   overflow-wrap: anywhere;
 }
 .otk-diff [data-line-kind=add] {
-  background: #56865a25;
+  background: var(--otk-diff-add-bg);
 }
 .otk-diff [data-line-kind=del] {
-  background: #aa555525;
+  background: var(--otk-diff-del-bg);
 }
 .otk-diff-add {
-  color: #a7d8a9;
+  color: var(--otk-diff-add);
 }
 .otk-diff-del {
-  color: #ff7777;
+  color: var(--otk-diff-del);
 }
