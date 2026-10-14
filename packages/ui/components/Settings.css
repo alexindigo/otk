@@ -1,0 +1,34 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-settings {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+.otk-settings-content {
+  overflow: auto;
+  padding: 1.8rem;
+}
+.otk-sidecar-card {
+  border: 1px solid var(--muted);
+  padding: 1.2rem;
+  margin: 1.5rem 0;
+}
+.otk-sidecar-card > header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.otk-sidecar-card h2 {
+  font-size: 1rem;
+  margin: 0;
+}
+.otk-sidecar-card > p {
+  color: var(--secondary);
+  margin: .75rem 0;
+  overflow-wrap: anywhere;
+}
+.otk-sidecar-card .otk-form {
+  margin-top: 1.5rem;
+}

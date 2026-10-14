@@ -1,0 +1,40 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-editor {
+  position: fixed;
+  inset: 1rem;
+  margin: auto;
+  width: min(90vw, 100rem);
+  height: auto;
+  max-height: none;
+  padding: 1rem;
+  background: var(--bg);
+  color: var(--fg);
+  border: 1px solid var(--accent);
+}
+.otk-editor[open] {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+.otk-editor::backdrop {
+  background: #000b;
+}
+.otk-editor header,
+.otk-editor footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.otk-editor h2 {
+  margin: 0;
+}
+.otk-editor textarea {
+  flex: 1;
+  min-height: 0;
+  resize: none;
+  background: var(--panel);
+  color: var(--fg);
+  font-family: inherit;
+  padding: 1rem;
+}

@@ -1,0 +1,11 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-questions {
+  margin: .5rem 0;
+}
+.otk-questions dt {
+  color: var(--secondary);
+}
+.otk-questions dd {
+  margin: .2rem 0 .7rem;
+  color: var(--fg);
+}

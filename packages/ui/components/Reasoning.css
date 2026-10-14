@@ -1,0 +1,20 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-reasoning {
+  color: var(--secondary);
+  margin: .7rem 0;
+}
+.otk-reasoning > button {
+  display: flex;
+  align-items: center;
+  gap: .6rem;
+  border: 0;
+  padding: .3rem 0;
+  color: #ffb18f;
+}
+.otk-reasoning > button:disabled {
+  opacity: 1;
+}
+.otk-reasoning-body {
+  padding: .6rem 1rem;
+  border-left: 1px solid var(--muted);
+}

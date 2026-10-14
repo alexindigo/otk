@@ -1,0 +1,15 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-compaction-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: var(--secondary);
+  margin: 1rem 0;
+}
+.otk-compaction-divider::before,
+.otk-compaction-divider::after {
+  content: "";
+  height: 1px;
+  background: var(--muted);
+  flex: 1;
+}

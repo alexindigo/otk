@@ -1,0 +1,14 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-task-card {
+  width: 100%;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: .5rem;
+  border: 0;
+  padding: .5rem;
+}
+.otk-task-card span {
+  color: var(--secondary);
+  font-size: .85rem;
+}

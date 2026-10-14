@@ -1,0 +1,76 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-message {
+  margin-bottom: 2rem;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+.otk-user-message {
+  border-left: 2px solid var(--accent);
+  padding-left: 1rem;
+}
+.otk-message-role {
+  color: var(--secondary);
+  font-size: .7rem;
+  letter-spacing: .13rem;
+  margin-bottom: .6rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.otk-message-role time {
+  letter-spacing: normal;
+}
+.otk-message-footer {
+  color: var(--secondary);
+  font-size: .7rem;
+  margin-top: .9rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .5rem 1rem;
+  border-top: 1px solid color-mix(in srgb, var(--secondary) 12%, var(--bg));
+  padding-block-start: .45rem;
+}
+.otk-queued {
+  background: var(--accent);
+  color: var(--bg);
+  padding: .1rem .4rem;
+  letter-spacing: normal;
+}
+.otk-role-and-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.otk-created-time {
+  color: color-mix(in srgb, var(--secondary) 65%, var(--bg));
+  visibility: hidden;
+}
+.otk-time-always .otk-created-time,
+.otk-role-label:hover + .otk-created-time,
+.otk-role-label:focus-visible + .otk-created-time {
+  visibility: visible;
+}
+.otk-message-details {
+  min-width: 0;
+}
+.otk-output-time-group {
+  display: inline-flex;
+  align-items: center;
+  gap: .5rem;
+  margin-inline-start: auto;
+  white-space: nowrap;
+}
+.otk-last-output-time {
+  white-space: nowrap;
+}
+.otk-last-output-date {
+  visibility: hidden;
+}
+.otk-output-time-group:has(.otk-last-output-time:hover) .otk-last-output-date,
+.otk-output-time-group:has(.otk-last-output-time:focus-visible) .otk-last-output-date {
+  visibility: visible;
+}

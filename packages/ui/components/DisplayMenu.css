@@ -1,0 +1,37 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-display-menu {
+  position: relative;
+  flex: 0 0 auto;
+}
+.otk-display-menu summary {
+  cursor: pointer;
+  padding: .5rem;
+}
+.otk-display-menu fieldset {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 2;
+  width: 21rem;
+  max-height: 65vh;
+  overflow: auto;
+  margin: 0;
+  padding: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--muted);
+  display: flex;
+  flex-direction: column;
+  gap: .8rem;
+}
+.otk-display-menu label {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+}
+.otk-display-menu input {
+  width: auto;
+}
+.otk-display-menu select {
+  width: auto;
+  flex: 1;
+}

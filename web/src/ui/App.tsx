@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import "./App.css";
 import { createMemo, createSignal, onSettled, Show } from "solid-js";
 import type { ContentSession } from "@otk/protocol";
-import { createIndex } from "../state/index.ts";
+import { apiBase } from "@otk/client";
 import {
   createCurrentClient,
   createNavigation,
@@ -14,18 +15,21 @@ import {
   type Selection,
   sessionKey,
 } from "@otk/client";
-import { createSession } from "../state/session.ts";
-import { createSidecars } from "../state/sidecars.ts";
-import PermissionDock from "./PermissionDock.tsx";
-import QuestionDock from "./QuestionDock.tsx";
-import Sidebar from "./Sidebar.tsx";
-import Settings from "./Settings.tsx";
-import SessionView from "./SessionView.tsx";
-import Login from "./Login.tsx";
-import Setup from "./Setup.tsx";
-import { createToggles } from "./Toggles.ts";
-import DisplayMenu from "./DisplayMenu.tsx";
-import { emptyDraft } from "./prompt/model.ts";
+import {
+  createIndex,
+  createSession,
+  createSidecars,
+  createToggles,
+  DisplayMenu,
+  emptyDraft,
+  Login,
+  PermissionDock,
+  QuestionDock,
+  SessionView,
+  Settings,
+  Setup,
+  Sidebar,
+} from "@otk/ui";
 import type {
   AgentOption,
   CommandOption,
@@ -46,6 +50,7 @@ export default function App() {
       session.receive(id, frame);
       if (id === LOCAL_SIDECAR) toggles.receive(frame);
     },
+    { connection: { api: apiBase("", import.meta.url) } },
   );
   const entry = (sidecarId: string, id: string) =>
     index.state.entries[sessionKey(sidecarId, id)];
@@ -283,54 +288,65 @@ export default function App() {
                         onSet={(key, value) => toggles.set(key, value)}
                       />
                     }
-                    permissionDock={
-                      <Show
-                        when={selectedSidecar()?.capabilities.includes(
-                          "permissions",
-                        )}
-                      >
-                        <PermissionDock
-                          request={permission()}
-                          childTitle={permission()?.sessionID !==
-                              session.state.selection?.sessionID
-                            ? entry(
-                              session.state.selection!.sidecarId,
-                              permission()?.sessionID || "",
-                            )?.title || permission()?.sessionID
-                            : undefined}
-                          onDirty={(value) => setPermissionDirty(value)}
-                          onReply={(input) =>
-                            current.context().rpc.call<void>(
-                              "permission.reply",
-                              input,
+                    docks={{
+                      get permissions() {
+                        return (
+                          <Show
+                            when={selectedSidecar()?.capabilities.includes(
+                              "permissions",
                             )}
-                        />
-                      </Show>
-                    }
-                    questionDock={
-                      <Show
-                        when={selectedSidecar()?.capabilities.includes(
-                          "questions",
-                        )}
-                      >
-                        <QuestionDock
-                          request={question()}
-                          childTitle={question()?.sessionID !==
-                              session.state.selection?.sessionID
-                            ? entry(
-                              session.state.selection!.sidecarId,
-                              question()?.sessionID || "",
-                            )?.title
-                            : undefined}
-                          onDirty={setQuestionDirty}
-                          onReply={(requestID, answers) =>
-                            current.context().rpc.call<void>(
-                              answers ? "question.reply" : "question.reject",
-                              { requestID, ...(answers ? { answers } : {}) },
+                          >
+                            <PermissionDock
+                              request={permission()}
+                              childTitle={permission()?.sessionID !==
+                                  session.state.selection?.sessionID
+                                ? entry(
+                                  session.state.selection!.sidecarId,
+                                  permission()?.sessionID || "",
+                                )?.title || permission()?.sessionID
+                                : undefined}
+                              onDirty={(value) => setPermissionDirty(value)}
+                              onReply={(input) =>
+                                current.context().rpc.call<void>(
+                                  "permission.reply",
+                                  input,
+                                )}
+                            />
+                          </Show>
+                        );
+                      },
+                      get questions() {
+                        return (
+                          <Show
+                            when={selectedSidecar()?.capabilities.includes(
+                              "questions",
                             )}
-                        />
-                      </Show>
-                    }
+                          >
+                            <QuestionDock
+                              request={question()}
+                              childTitle={question()?.sessionID !==
+                                  session.state.selection?.sessionID
+                                ? entry(
+                                  session.state.selection!.sidecarId,
+                                  question()?.sessionID || "",
+                                )?.title
+                                : undefined}
+                              onDirty={setQuestionDirty}
+                              onReply={(requestID, answers) =>
+                                current.context().rpc.call<void>(
+                                  answers
+                                    ? "question.reply"
+                                    : "question.reject",
+                                  {
+                                    requestID,
+                                    ...(answers ? { answers } : {}),
+                                  },
+                                )}
+                            />
+                          </Show>
+                        );
+                      },
+                    }}
                     info={info()}
                     label={selectedSidecar()?.label || "Sidecar"}
                     messages={session.state.content.messages}

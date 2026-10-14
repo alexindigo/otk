@@ -1,0 +1,119 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+import { assertEquals } from "@std/assert";
+import { join } from "@std/path";
+import { fixture } from "../support/config.ts";
+import { Cdp } from "../support/cdp.ts";
+
+Deno.test("independent public UI consumer renders external tools twice, updates live, routes callbacks and retains isolated fallback", async () => {
+  const root = await fixture(), dist = join(root, "dist");
+  const build = await new Deno.Command(Deno.execPath(), {
+    args: [
+      "run",
+      "-A",
+      "npm:vite@8.2.0",
+      "build",
+      "--config",
+      "tests/reuse/ui-consumer/vite.config.ts",
+      "--outDir",
+      dist,
+      "--logLevel",
+      "warn",
+    ],
+    stdout: "piped",
+    stderr: "piped",
+  }).output();
+  assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
+  const server = Deno.serve(
+    { hostname: "127.0.0.1", port: 0, onListen() {} },
+    async (request) => {
+      const pathname = new URL(request.url).pathname;
+      const file = join(dist, pathname === "/" ? "index.html" : pathname);
+      const mime = file.endsWith(".js")
+        ? "text/javascript"
+        : file.endsWith(".css")
+        ? "text/css"
+        : "text/html";
+      try {
+        return new Response(await Deno.readFile(file), {
+          headers: { "content-type": mime },
+        });
+      } catch {
+        return new Response("Not found", { status: 404 });
+      }
+    },
+  );
+  let browser: Cdp | undefined;
+  try {
+    browser = await Cdp.launch(root);
+    await browser.goto(`http://127.0.0.1:${server.addr.port}/`);
+    await browser.poll(
+      "document.querySelectorAll('#registered [data-external-tool]').length === 2",
+    );
+    await browser.poll(
+      "!!document.querySelector('[data-library-code] .otk-token')",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector('[data-library-code] code').textContent",
+      ),
+      "const externalResult: number = 7;",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelectorAll('#isolated [data-external-tool]').length",
+      ),
+      0,
+    );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector('#isolated').textContent.includes('external-probe Initial result')",
+      ),
+      true,
+    );
+    await browser.click("[data-update]");
+    await browser.poll(
+      "[...document.querySelectorAll('[data-external-tool] .otk-tool-summary')].every(el=>el.textContent.includes('Updated result'))",
+    );
+    await browser.click("[data-open]");
+    await browser.poll(
+      "document.querySelector('#opened').textContent === 'child-probe'",
+    );
+    await browser.poll(
+      "document.querySelector('[data-external-part]').textContent === 'Injected part: agent'",
+    );
+    await browser.click("[data-inject]");
+    await browser.poll(
+      "document.querySelector('textarea[name=prompt]').value === 'Injected draft'",
+    );
+    await browser.click(".otk-prompt button[type=submit]");
+    await browser.poll(
+      "document.querySelector('#submitted').textContent.includes('external transform') && document.querySelector('textarea[name=prompt]').value === ''",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "JSON.parse(document.querySelector('#submitted').textContent)",
+      ),
+      [
+        { kind: "text", text: "Injected draft" },
+        { kind: "text", text: "external transform" },
+      ],
+    );
+    assertEquals(browser.errors, []);
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector('[data-external-dock]') === null",
+      ),
+      true,
+    );
+    await browser.click("[data-capability]");
+    await browser.poll("!!document.querySelector('[data-external-dock]')");
+    await browser.click("[data-external-dock]");
+    await browser.poll(
+      "document.querySelector('[data-external-dock]').textContent === 'Injected dock 1'",
+    );
+    console.info("Independent UI consumer evidence:", root);
+  } finally {
+    await browser?.close();
+    await server.shutdown();
+  }
+});

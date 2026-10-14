@@ -1,0 +1,109 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-text h1,
+.otk-text h2,
+.otk-text h3,
+.otk-text h4,
+.otk-text h5,
+.otk-text h6 {
+  line-height: 1.4;
+  margin: 1rem 0;
+}
+.otk-text h1 {
+  font-size: 1.5rem;
+}
+.otk-text h2 {
+  font-size: 1.3rem;
+}
+.otk-text p {
+  margin: .75rem 0;
+}
+.otk-text pre {
+  background: var(--panel);
+  border: 1px solid var(--muted);
+  padding: 1rem;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.otk-text code {
+  font-family: inherit;
+}
+.otk-text :not(pre) > code {
+  background: var(--panel);
+  padding: .1rem .3rem;
+}
+.otk-text blockquote {
+  border-left: 2px solid var(--muted);
+  margin: 1rem 0;
+  padding-left: 1rem;
+  color: var(--secondary);
+}
+.otk-text li > input {
+  width: auto;
+  margin-right: .5rem;
+}
+.otk-text img {
+  max-width: 100%;
+}
+.otk-text hr {
+  border: 0;
+  border-top: 1px solid var(--muted);
+}
+.otk-table-scroll {
+  overflow: auto;
+}
+.otk-table-scroll table {
+  border-collapse: collapse;
+}
+.otk-table-scroll th,
+.otk-table-scroll td {
+  border: 1px solid var(--muted);
+  padding: .5rem .8rem;
+}
+.otk-unconcealed .otk-text strong::before,
+.otk-unconcealed .otk-text strong::after {
+  content: "**";
+  color: var(--secondary);
+}
+.otk-unconcealed .otk-text em::before,
+.otk-unconcealed .otk-text em::after {
+  content: "*";
+  color: var(--secondary);
+}
+.otk-unconcealed .otk-text del::before,
+.otk-unconcealed .otk-text del::after {
+  content: "~~";
+  color: var(--secondary);
+}
+.otk-unconcealed .otk-text :not(pre) > code::before,
+.otk-unconcealed .otk-text :not(pre) > code::after {
+  content: "`";
+  color: var(--secondary);
+}
+.otk-unconcealed .otk-text pre::before,
+.otk-unconcealed .otk-text pre::after {
+  content: "```";
+  display: block;
+  color: var(--secondary);
+}
+.otk-unconcealed .otk-text a::after {
+  content: " (" attr(href) ")";
+  color: var(--secondary);
+}
+.otk-unconcealed .otk-text h1::before {
+  content: "# ";
+}
+.otk-unconcealed .otk-text h2::before {
+  content: "## ";
+}
+.otk-unconcealed .otk-text h3::before {
+  content: "### ";
+}
+.otk-unconcealed .otk-text h4::before {
+  content: "#### ";
+}
+.otk-unconcealed .otk-text h5::before {
+  content: "##### ";
+}
+.otk-unconcealed .otk-text h6::before {
+  content: "###### ";
+}

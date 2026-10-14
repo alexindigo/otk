@@ -1,0 +1,12 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-connection {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  flex-wrap: wrap;
+  font-size: .75rem;
+  color: var(--secondary);
+}
+.otk-connection small {
+  flex-basis: 100%;
+}

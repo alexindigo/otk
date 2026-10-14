@@ -1,0 +1,63 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-diff {
+  margin: .7rem 0;
+  border: 1px solid var(--muted);
+}
+.otk-diff > header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: .6rem;
+  padding: .5rem;
+}
+.otk-diff-content {
+  overflow: auto;
+}
+.otk-hunk-header {
+  color: var(--secondary);
+  padding: .3rem .5rem;
+  background: var(--panel);
+}
+.otk-diff-split-row {
+  display: grid;
+  grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+}
+.otk-diff-cell {
+  display: grid;
+  grid-template-columns: 4ch 2ch minmax(0,1fr);
+  min-width: 0;
+}
+.otk-diff-unified {
+  display: grid;
+  grid-template-columns: 4ch 4ch 2ch minmax(0,1fr);
+}
+.otk-diff-number {
+  text-align: right;
+  color: var(--secondary);
+  padding-right: .5ch;
+  user-select: none;
+}
+.otk-diff-sign {
+  text-align: center;
+  user-select: none;
+}
+.otk-diff-text {
+  white-space: pre;
+  min-width: 0;
+}
+.otk-diff-wrap .otk-diff-text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.otk-diff [data-line-kind=add] {
+  background: #56865a25;
+}
+.otk-diff [data-line-kind=del] {
+  background: #aa555525;
+}
+.otk-diff-add {
+  color: #a7d8a9;
+}
+.otk-diff-del {
+  color: #ff7777;
+}

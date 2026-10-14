@@ -3,15 +3,6 @@ import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import { History } from "../history.ts";
-import {
-  historyDraft,
-  PromptHistory,
-} from "../../../web/src/ui/prompt/history.ts";
-import {
-  editDraft,
-  emptyDraft,
-  serialize,
-} from "../../../web/src/ui/prompt/model.ts";
 import { mergeHistory } from "@otk/protocol";
 import { fixture } from "../../../tests/support/config.ts";
 const file = fromFileUrl(
@@ -36,14 +27,7 @@ Deno.test("history reads captured 1.18.34 DB, restores shell/file/agent, drops a
     "agent",
     "file",
   ]);
-  assertEquals(serialize(historyDraft(entries[2])), entries[2].parts);
   assertEquals(await Deno.readFile(file), before);
-  const cursor = new PromptHistory();
-  cursor.replace(entries);
-  const newest = cursor.move(-1, emptyDraft())!;
-  assertEquals(newest.input, "history newest");
-  assertEquals(cursor.move(-1, editDraft(newest, "changed draft")), undefined);
-  assertEquals(cursor.move(-1, newest)?.mode, "shell");
   assertEquals(mergeHistory([entries, entries]).length, 4);
 });
 Deno.test("history degrades missing schema without creation and enforces newest fifty user messages", async () => {

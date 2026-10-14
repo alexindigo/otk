@@ -1,0 +1,9 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-diagnostics [data-severity=error] {
+  color: #ff7777;
+}
+.otk-diagnostics {
+  list-style: none;
+  padding: 0;
+  margin: .5rem 0;
+}

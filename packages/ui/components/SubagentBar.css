@@ -1,0 +1,14 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-subagent-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: .7rem;
+  padding: .7rem 1.8rem;
+  border-bottom: 1px solid var(--muted);
+}
+.otk-subagent-bar > div {
+  display: flex;
+  gap: .5rem;
+}

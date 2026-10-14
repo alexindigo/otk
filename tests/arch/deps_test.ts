@@ -109,6 +109,14 @@ function dependencyError(
     }
     if (
       targetPath &&
+      /^web\/src\/(?:highlight\/|state\/|ui\/(?!App\.(?:tsx|css)$))/.test(
+        targetPath,
+      )
+    ) {
+      return "UI components, highlighting and bindings are owned by @otk/ui";
+    }
+    if (
+      targetPath &&
       /^sidecar\/(?:auth|config|features|http|index|static|ws)\//.test(
         targetPath,
       )
@@ -136,6 +144,20 @@ function sourceErrors(path: string, source: string): string[] {
   if (isTest(path)) return [];
   if (!from && !/^(?:main\.ts$|core\/|web\/src\/)/.test(path)) return [];
   const errors: string[] = [];
+  if (from) {
+    for (
+      const match of source.matchAll(
+        /new URL\(\s*["']([^"']+)["']\s*,\s*import\.meta\.url\s*\)/g,
+      )
+    ) {
+      const error = dependencyError(
+        path,
+        match[1],
+        new Set(Object.keys(allowed)),
+      );
+      if (error) errors.push(`static asset ${match[1]}: ${error}`);
+    }
+  }
   if (
     from !== "harness-opencode1" &&
     /["'`]\/(?:global\/(?:event|health)|experimental\/(?:session|resource)|session(?:\/|["'`])|permission(?:\/|["'`])|question(?:\/|["'`])|find\/file|agent["'`]|command["'`]|skill["'`]|mcp["'`])/
@@ -158,13 +180,20 @@ function sourceErrors(path: string, source: string): string[] {
   ) {
     if (
       imports(source).some((specifier) =>
-        specifier && /(?:^|\/)features\//.test(specifier)
+        specifier &&
+        /(?:^|\/)(?:features\/|components\/(?:tools|parts)\/)/.test(specifier)
       )
     ) {
       errors.push(
         "registries and migration runners must not import their feature implementations",
       );
     }
+  }
+  if (
+    /^packages\/ui\/components\/(?:Message|ToolLine)\.tsx$/.test(path) &&
+    /\b(?:Switch|Match)\b/.test(source)
+  ) {
+    errors.push("UI part/tool dispatch must use consumer-owned registries");
   }
   return errors;
 }
@@ -301,6 +330,9 @@ Deno.test("dependency checks reject private paths, upward edges and legacy escap
       ["tests/unit/example.ts", "../../sidecar/auth/state.ts"],
       ["packages/client/rpc.ts", "npm:ws"],
       ["tests/unit/example.ts", "../../web/src/state/reduce.ts"],
+      ["packages/ui/mod.ts", "../../web/src/ui/App.tsx"],
+      ["packages/ui/mod.ts", "@otk/harness-opencode1"],
+      ["web/src/ui/App.tsx", "../state/session.ts"],
     ]
   ) assert(dependencyError(path, specifier, present), `${path}: ${specifier}`);
   assert(dependencyError("packages/protocol/mod.ts", undefined, present));
@@ -383,6 +415,39 @@ Deno.test("native endpoints and feature imports cannot leak into extracted share
   assertEquals(sourceErrors("packages/store/migrations.ts", feature).length, 1);
   assertEquals(
     sourceErrors(
+      "packages/ui/highlight/worker.ts",
+      'new URL("../../../node_modules/shiki/dist/onig.wasm", import.meta.url)',
+    ).length,
+    1,
+  );
+  assertEquals(
+    sourceErrors(
+      "packages/ui/highlight/worker.ts",
+      'new URL("shiki/onig.wasm", import.meta.url)',
+    ),
+    [],
+  );
+  assertEquals(
+    sourceErrors(
+      "packages/ui/registries/tools.ts",
+      'import "../components/tools/BashTool.tsx";',
+    ).length,
+    1,
+  );
+  assertEquals(
+    sourceErrors(
+      "packages/ui/registries/parts.ts",
+      'import "../components/parts/TextPart.tsx";',
+    ).length,
+    1,
+  );
+  assertEquals(
+    sourceErrors("packages/ui/components/ToolLine.tsx", "return Switch(call);")
+      .length,
+    1,
+  );
+  assertEquals(
+    sourceErrors(
       "core/ws/registry.ts",
       'import type { RpcMethod } from "@otk/protocol";',
     ),
@@ -402,4 +467,17 @@ Deno.test("standalone client consumer imports only its public framework-free ent
     new URL("tests/reuse/client-consumer.ts", root),
   );
   assertEquals(imports(consumer), ["@otk/client"]);
+});
+
+Deno.test("independent UI consumer imports public kit entries without application or backend source", async () => {
+  const consumer = await Deno.readTextFile(
+    new URL("tests/reuse/ui-consumer/main.tsx", root),
+  );
+  assertEquals(imports(consumer), [
+    "solid-js",
+    "@solidjs/web",
+    "@otk/protocol",
+    "@otk/ui",
+    "@fontsource/ibm-plex-mono/400.css",
+  ]);
 });

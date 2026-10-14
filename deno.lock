@@ -1134,6 +1134,16 @@
         "dependencies": [
           "jsr:@std/path@1.1.5"
         ]
+      },
+      "packages/ui": {
+        "dependencies": [
+          "npm:@shikijs/stream@4.5.0",
+          "npm:@solidjs/signals@2.0.0-rc.13",
+          "npm:@solidjs/web@2.0.0-rc.13",
+          "npm:fuzzysort@3.1.0",
+          "npm:shiki@4.5.0",
+          "npm:solid-js@2.0.0-rc.13"
+        ]
       }
     }
   }

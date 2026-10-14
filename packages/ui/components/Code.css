@@ -1,0 +1,60 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-code {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
+}
+.otk-code[data-numbered=true] {
+  grid-template-columns: auto minmax(0, 1fr);
+}
+.otk-code pre {
+  margin: .7rem 0;
+  white-space: pre;
+  overflow: auto;
+  padding: 1rem;
+  background: var(--panel);
+  border: 1px solid var(--muted);
+  font: inherit;
+  line-height: 1.8;
+}
+.otk-code code {
+  font: inherit;
+}
+.otk-code .otk-code-numbers {
+  color: var(--secondary);
+  border-right: 0;
+  text-align: right;
+  user-select: none;
+}
+.otk-token-bold {
+  font-weight: 600;
+}
+.otk-token-italic {
+  font-style: italic;
+}
+.otk-token-underline {
+  text-decoration: underline;
+}
+.otk-code pre:not(.otk-code-numbers) {
+  white-space: normal;
+}
+.otk-code-line {
+  display: block;
+  white-space: pre;
+  min-height: 1lh;
+}
+.otk-code-newline {
+  display: none;
+}
+.otk-code-plain {
+  white-space: pre;
+  display: block;
+  min-height: 1lh;
+}
+.otk-code-group {
+  display: block;
+}
+.otk-code-raw {
+  display: block;
+  white-space: pre;
+}

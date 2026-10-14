@@ -89,7 +89,10 @@ backend, registered RPC features and web assets. HTTP routes remain reflective
 application files; core is not another reusable server/app package.
 [`@otk/client`](./packages/client/README.md) supplies framework-free networking,
 RPC, observable session/index state, history and navigation. Solid bindings stay
-at the browser UI boundary.
+at the browser UI boundary. [`@otk/ui`](./packages/ui/README.md) provides Solid
+components, consumer-owned tool/part/prompt/dock registrations, component styles
+and the client bindings. The web application selects its modules in
+`web/src/features.ts`.
 
 `deno task test:unit` runs remaining app units and extracted package units;
 `deno task test:integration` and `deno task test:e2e` run app-level checks.

@@ -1,0 +1,17 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-todos {
+  list-style: none;
+  padding: 0;
+  margin: .5rem 0;
+}
+.otk-todos li {
+  display: flex;
+  align-items: baseline;
+  gap: .6rem;
+}
+.otk-todos li[data-todo-status=in_progress] {
+  color: #ffb18f;
+}
+.otk-todos li[data-todo-status=cancelled] {
+  text-decoration: line-through;
+}

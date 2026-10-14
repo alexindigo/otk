@@ -1,0 +1,47 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-app {
+  display: flex;
+  height: 100dvh;
+  min-width: 600px;
+}
+.otk-main {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.otk-global-error {
+  padding: .8rem 1.8rem;
+  margin: 0;
+  background: var(--panel);
+}
+.otk-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  flex: 1;
+  padding: 4rem;
+}
+.otk-wordmark {
+  font-size: 5rem;
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: -.35rem;
+}
+.otk-welcome h1 {
+  font-size: 1.3rem;
+  margin-top: 1rem;
+}
+.otk-welcome p {
+  color: var(--secondary);
+}
+.otk-auth-view {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  overflow: auto;
+  padding: 2rem;
+}
