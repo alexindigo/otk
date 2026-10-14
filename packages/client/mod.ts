@@ -13,6 +13,7 @@ export * from "./permissions.ts";
 export * from "./history.ts";
 export * from "./navigation.ts";
 export * from "./current.ts";
+export * from "./commands.ts";
 export {
   belongsToSession,
   isAttentionOp,

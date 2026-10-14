@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PromptRegistry } from "../../registries/prompt.ts";
 import { PromptHistory } from "../../components/prompt/history.ts";
+import { ownedCommand } from "../../keyboard/context.tsx";
 export function registerHistoryPrompt(prompt: PromptRegistry): void {
   prompt.register({
     id: "history",
@@ -24,12 +25,27 @@ export function registerHistoryPrompt(prompt: PromptRegistry): void {
           const next = history.move(direction, draft);
           if (next) {
             ctx.change(
-              (current) => current === draft ? next : current,
+              (current) =>
+                current === draft ? { ...next, agent: current.agent } : current,
               direction === -1 ? 0 : next.input.length,
             );
           }
         }).catch(ctx.fail);
       };
+      const previous = ownedCommand(ctx, {
+        id: "prompt.history.previous",
+        title: "Previous prompt",
+        category: "Prompt",
+        hidden: true,
+        run: () => recall(-1),
+      });
+      const next = ownedCommand(ctx, {
+        id: "prompt.history.next",
+        title: "Next prompt",
+        category: "Prompt",
+        hidden: true,
+        run: () => recall(1),
+      });
       return {
         submitted: () => history.reset(),
         key(event) {
@@ -44,7 +60,7 @@ export function registerHistoryPrompt(prompt: PromptRegistry): void {
             : ctx.props.value.input.length;
           if (start !== edge) return false;
           event.preventDefault();
-          recall(event.key === "ArrowUp" ? -1 : 1);
+          void (event.key === "ArrowUp" ? previous() : next()).catch(ctx.fail);
           return true;
         },
       };

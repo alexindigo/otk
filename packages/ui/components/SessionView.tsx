@@ -29,6 +29,7 @@ import type { Draft, DraftChange } from "./prompt/model.ts";
 import type { CommandOption, FileMatch, PromptPart } from "@otk/protocol";
 import type { MentionSources } from "./prompt/autocomplete.ts";
 import type { HistoryEntry } from "@otk/protocol";
+import { ownedAction } from "../keyboard/context.tsx";
 export default function SessionView(props: {
   info?: ContentSession;
   label: string;
@@ -55,7 +56,11 @@ export default function SessionView(props: {
   onOlder(): Promise<void>;
   onRetry(): Promise<void>;
   onDraft(value: DraftChange): Draft;
-  onPrompt(parts: PromptPart[], mode: Draft["mode"]): Promise<void>;
+  onPrompt(
+    parts: PromptPart[],
+    mode: Draft["mode"],
+    agent?: string,
+  ): Promise<void>;
   onFind(query: string): Promise<FileMatch[]>;
   onMentions(query: string): Promise<MentionSources>;
   onBump(path: string): Promise<void>;
@@ -64,12 +69,16 @@ export default function SessionView(props: {
     command: string,
     args: string,
     parts: Extract<PromptPart, { kind: "file" }>[],
+    agent?: string,
   ): Promise<void>;
   onNew(): Promise<void>;
   onHistory(): Promise<HistoryEntry[]>;
   onAbort(): Promise<void>;
+  onAgents?(): Promise<import("@otk/protocol").AgentOption[]>;
 }): Element {
   const queued = () => queuedMessages(props.messages, props.busy);
+  const older = ownedAction("session.page", () => props.onOlder());
+  const retry = ownedAction("session.refetch", () => props.onRetry());
   const [paneWidth, setPaneWidth] = createSignal(0);
   let view!: HTMLElement;
   let list!: HTMLDivElement, flow!: HTMLDivElement;
@@ -159,14 +168,14 @@ export default function SessionView(props: {
               type="button"
               class="otk-load-older"
               disabled={props.paging || props.loading}
-              onClick={() => void props.onOlder()}
+              onClick={() => void older()}
             >
               {props.paging ? "Loading…" : "Load older messages"}
             </button>
           </Show>
           <Show when={props.error}>
             <p role="alert" class="otk-error">{props.error}</p>
-            <button type="button" onClick={() => void props.onRetry()}>
+            <button type="button" onClick={() => void retry()}>
               Retry messages
             </button>
           </Show>
@@ -198,11 +207,15 @@ export default function SessionView(props: {
           promptEnabled={props.capabilities.includes("prompt")}
           shellEnabled={props.capabilities.includes("shell")}
           historyEnabled={props.historyEnabled}
+          busy={props.busy}
+          agentsEnabled={props.capabilities.includes("agents")}
+          commandsEnabled={props.capabilities.includes("commands")}
+          onAgents={props.onAgents}
           value={props.draft}
           connected={props.connected}
           pasteSummary={props.prefs.pasteSummary}
           onChange={(value) => props.onDraft(value)}
-          onSubmit={(parts, mode) => props.onPrompt(parts, mode)}
+          onSubmit={(parts, mode, agent) => props.onPrompt(parts, mode, agent)}
           onFind={props.onFind}
           onMentions={props.onMentions}
           onBump={props.onBump}

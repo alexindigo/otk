@@ -6,6 +6,7 @@ import Form from "./Form.tsx";
 import Login from "./Login.tsx";
 import Setup from "./Setup.tsx";
 import ConnectionBadge from "./ConnectionBadge.tsx";
+import { ownedAction } from "../keyboard/context.tsx";
 export default function Settings(props: {
   sidecars: SidecarState[];
   onAdd(url: string, label: string): Promise<void>;
@@ -19,11 +20,16 @@ export default function Settings(props: {
   ): Promise<void>;
   onClose(): void;
 }): import("solid-js").Element {
+  const close = ownedAction("settings.close", () => props.onClose());
+  const remove = ownedAction(
+    "sidecar.remove",
+    (id: string) => props.onRemove(id),
+  );
   return (
     <section class="otk-settings" aria-label="Settings">
       <header class="otk-view-header">
         <h1>Settings / sidecars</h1>
-        <button type="button" onClick={() => props.onClose()}>
+        <button type="button" onClick={() => void close()}>
           Close settings
         </button>
       </header>
@@ -43,7 +49,7 @@ export default function Settings(props: {
                 <Show when={sidecar().id !== LOCAL_SIDECAR}>
                   <button
                     type="button"
-                    onClick={() => props.onRemove(sidecar().id)}
+                    onClick={() => void remove(sidecar().id)}
                   >
                     Remove sidecar
                   </button>

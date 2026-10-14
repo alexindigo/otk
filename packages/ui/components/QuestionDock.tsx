@@ -10,6 +10,11 @@ export function registerQuestionDock(docks: DockRegistry): void {
 }
 import { createSignal, For, onSettled, Show } from "solid-js";
 import type { QuestionRequest } from "@otk/protocol";
+import {
+  ownedAction,
+  ownedCommand,
+  useCommandPorts,
+} from "../keyboard/context.tsx";
 function Request(
   props: {
     request: QuestionRequest;
@@ -91,8 +96,46 @@ function Request(
     setEditing(false);
     dock.focus();
   };
+  const ports = useCommandPorts();
+  const reject = ownedCommand(ports, {
+    id: "question.reject",
+    title: "Reject question",
+    category: "Attention",
+    enabled: () => !pending(),
+    run: () => reply(true),
+  });
+  const answerCommand = ownedAction(
+    "question.answer",
+    (reject: boolean = false) => reply(reject),
+  );
+  const tabCommand = ownedAction("question.tab", moveTab);
+  const chooseCommand = ownedAction("question.choose", choose);
+  const customCommand = ownedAction("question.custom", saveCustom);
+  const moveChoice = ownedAction(
+    "question.move",
+    (input: { delta: number; total: number }) =>
+      setSelected((selected() + input.delta + input.total) % input.total),
+  );
+  const close = ownedCommand(ports, {
+    id: "question.close",
+    title: "Close question layer",
+    category: "Attention",
+    hidden: true,
+    run: () => {
+      if (editing()) {
+        setEditing(false);
+        dock.focus();
+      } else return reject();
+    },
+  });
   onSettled(() => {
+    const release = ports.keyboard?.layer(
+      "question.close",
+      () => editing() || dock.contains(document.activeElement),
+      20,
+    );
     return () => {
+      release?.();
       active = false;
       props.onDirty(false);
     };
@@ -112,12 +155,11 @@ function Request(
           if (event.key === "Escape") {
             event.preventDefault();
             event.stopPropagation();
-            setEditing(false);
-            dock.focus();
+            void close();
           } else if (event.key === "Enter" && !event.shiftKey) {
             event.preventDefault();
             event.stopPropagation();
-            saveCustom();
+            void customCommand();
           }
           return;
         }
@@ -140,21 +182,21 @@ function Request(
         ) return;
         event.preventDefault();
         event.stopPropagation();
-        if (key === "Escape") void reply(true);
-        else if (["h", "ArrowLeft"].includes(key)) moveTab(tab() - 1);
+        if (key === "Escape") void close();
+        else if (["h", "ArrowLeft"].includes(key)) void tabCommand(tab() - 1);
         else if (["l", "ArrowRight"].includes(key)) {
-          moveTab(tab() + 1);
+          void tabCommand(tab() + 1);
         } else if (key === "Enter") {
-          if (confirm()) void reply();
-          else choose(selected());
+          if (confirm()) void answerCommand(false);
+          else void chooseCommand(selected());
         } else if (!confirm() && total) {
           if (["j", "ArrowDown", "k", "ArrowUp"].includes(key)) {
-            setSelected(
-              (selected() + (["k", "ArrowUp"].includes(key) ? -1 : 1) + total) %
-                total,
-            );
+            void moveChoice({
+              delta: ["k", "ArrowUp"].includes(key) ? -1 : 1,
+              total,
+            });
           } else if (Number(key) >= 1 && Number(key) <= total) {
-            choose(
+            void chooseCommand(
               Number(key) - 1,
             );
           }
@@ -174,7 +216,7 @@ function Request(
               type="button"
               role="tab"
               aria-selected={tab() === i ? "true" : "false"}
-              onClick={() => moveTab(i)}
+              onClick={() => void tabCommand(i)}
             >
               {q().header || `Question ${i + 1}`}
             </button>
@@ -184,7 +226,7 @@ function Request(
           type="button"
           role="tab"
           aria-selected={confirm() ? "true" : "false"}
-          onClick={() => moveTab(props.request.questions.length)}
+          onClick={() => void tabCommand(props.request.questions.length)}
         >
           Confirm
         </button>
@@ -203,7 +245,7 @@ function Request(
                   ? "true"
                   : "false"}
                 data-active={selected() === i}
-                onClick={() => choose(i)}
+                onClick={() => void chooseCommand(i)}
               >
                 <span>{i + 1}. {option().label}</span>
                 <span class="otk-muted">{option().description}</span>
@@ -213,7 +255,7 @@ function Request(
           <Show when={question()?.custom}>
             <button
               type="button"
-              onClick={() => choose(question().options.length)}
+              onClick={() => void chooseCommand(question().options.length)}
             >
               Type your own answer
             </button>
@@ -223,7 +265,7 @@ function Request(
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              saveCustom();
+              void customCommand();
             }}
           >
             <label>
@@ -245,7 +287,7 @@ function Request(
           </form>
         </Show>
         <Show when={question()?.multiple}>
-          <button type="button" onClick={() => moveTab(tab() + 1)}>
+          <button type="button" onClick={() => void tabCommand(tab() + 1)}>
             Next question
           </button>
         </Show>
@@ -267,7 +309,7 @@ function Request(
           <button
             type="button"
             disabled={pending()}
-            onClick={() => void reply()}
+            onClick={() => void answerCommand(false)}
           >
             Confirm answers
           </button>
@@ -275,7 +317,7 @@ function Request(
         <button
           type="button"
           disabled={pending()}
-          onClick={() => void reply(true)}
+          onClick={() => void reject()}
         >
           Reject question
         </button>

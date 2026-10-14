@@ -13,6 +13,7 @@ export interface Draft {
   input: string;
   chips: Chip[];
   mode: "normal" | "shell";
+  agent?: string;
   editor?: { text: string; chipID?: string };
 }
 // The owner applies transforms synchronously to its latest proposed draft and

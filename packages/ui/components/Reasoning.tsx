@@ -3,10 +3,15 @@ import "./Reasoning.css" with { type: "text" };
 import { createSignal, Show } from "solid-js";
 import type { Part } from "@otk/protocol";
 import Blocks from "./Blocks.tsx";
+import { ownedAction } from "../keyboard/context.tsx";
 export default function Reasoning(
   props: { part: Extract<Part, { kind: "reasoning" }>; mode: "show" | "hide" },
 ) {
   const [expanded, setExpanded] = createSignal(false);
+  const toggle = ownedAction(
+    "reasoning.toggle",
+    () => setExpanded((value) => !value),
+  );
   const open = () => props.mode === "show" || expanded();
   const heading = () => {
     const first = props.part.blocks[0];
@@ -24,7 +29,7 @@ export default function Reasoning(
         type="button"
         aria-expanded={open() ? "true" : "false"}
         disabled={props.mode === "show"}
-        onClick={() => setExpanded((value) => !value)}
+        onClick={() => void toggle()}
       >
         <Show when={props.part.time.end === undefined}>
           <span class="otk-dot otk-busy" />

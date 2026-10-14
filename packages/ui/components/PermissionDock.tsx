@@ -11,6 +11,7 @@ export function registerPermissionDock(docks: DockRegistry): void {
 import { createSignal, For, Match, onSettled, Show, Switch } from "solid-js";
 import type { PermissionDetail, PermissionRequest } from "@otk/protocol";
 import type { PermissionReply } from "@otk/protocol";
+import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 const detailOf = <K extends PermissionDetail["kind"]>(
   detail: PermissionDetail,
   kind: K,
@@ -92,6 +93,45 @@ function RequestDock(
       if (active) setPending(false);
     }
   };
+  const ports = useCommandPorts();
+  const once = ownedCommand(ports, {
+    id: "permission.once",
+    title: "Allow permission once",
+    category: "Attention",
+    enabled: () => !pending(),
+    run: () => answer("once"),
+  });
+  const always = ownedCommand(ports, {
+    id: "permission.always",
+    title: "Review future permission grant",
+    category: "Attention",
+    enabled: () => !pending(),
+    run: () => setMode("always"),
+  });
+  const reject = ownedCommand(ports, {
+    id: "permission.reject",
+    title: "Review permission rejection",
+    category: "Attention",
+    enabled: () => !pending(),
+    run: () => setMode("reject"),
+  });
+  const answerCommand = ownedCommand(ports, {
+    id: "permission.answer",
+    title: "Answer permission",
+    category: "Attention",
+    hidden: true,
+    run: (_ctx, reply: PermissionReply["reply"]) => answer(reply),
+  });
+  const close = ownedCommand(ports, {
+    id: "permission.close",
+    title: "Close permission confirmation",
+    category: "Attention",
+    hidden: true,
+    run: () => setMode("normal"),
+  });
+  onSettled(() =>
+    ports.keyboard?.layer("permission.close", () => mode() !== "normal", 20)
+  );
   return (
     <section
       class="otk-permission-dock"
@@ -100,7 +140,7 @@ function RequestDock(
       onKeyDown={(event) => {
         if (event.key === "Escape" && mode() !== "normal") {
           event.preventDefault();
-          setMode("normal");
+          void close();
           return;
         }
         if (
@@ -110,8 +150,8 @@ function RequestDock(
         ) return;
         if (["1", "2", "3"].includes(event.key)) {
           event.preventDefault();
-          if (event.key === "1") void answer("once");
-          else setMode(event.key === "2" ? "always" : "reject");
+          if (event.key === "1") void once();
+          else void (event.key === "2" ? always() : reject());
         }
       }}
     >
@@ -137,21 +177,21 @@ function RequestDock(
             <button
               type="button"
               disabled={pending()}
-              onClick={() => void answer("once")}
+              onClick={() => void once()}
             >
               Allow once
             </button>
             <button
               type="button"
               disabled={pending()}
-              onClick={() => setMode("always")}
+              onClick={() => void always()}
             >
               Allow always
             </button>
             <button
               type="button"
               disabled={pending()}
-              onClick={() => setMode("reject")}
+              onClick={() => void reject()}
             >
               Reject
             </button>
@@ -170,14 +210,14 @@ function RequestDock(
               <button
                 type="button"
                 disabled={pending()}
-                onClick={() => void answer("always")}
+                onClick={() => void answerCommand("always")}
               >
                 Confirm allow always
               </button>
               <button
                 type="button"
                 disabled={pending()}
-                onClick={() => setMode("normal")}
+                onClick={() => void close()}
               >
                 Cancel
               </button>
@@ -188,7 +228,7 @@ function RequestDock(
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              void answer("reject");
+              void answerCommand("reject");
             }}
           >
             <label>
@@ -207,7 +247,7 @@ function RequestDock(
               <button
                 type="button"
                 disabled={pending()}
-                onClick={() => setMode("normal")}
+                onClick={() => void close()}
               >
                 Cancel
               </button>

@@ -59,3 +59,25 @@ The standalone consumer in `tests/reuse/client-consumer.ts` imports only
 reduced streaming content and a finished assistant clock. Application
 integration/e2e tests stay at root; client units live in `tests/`. Run project
 checks in the assigned OTK VM.
+
+## Commands
+
+`new CommandHub(context, keys)` creates an empty, framework-free registry. A
+feature registers `{ id, title, category, slash?, enabled?, run }` through
+`register`; the returned release function is identity-bound and idempotent.
+`unregister(id)` removes an explicit registration. `run(id, args)` snapshots
+consumer-supplied context at invocation, checks availability and returns the
+handler's value or error. Unknown and disabled IDs reject. `list(context?)`
+reports title/category, enabled state and injected key labels; `resolveSlash`
+resolves declared aliases. `subscribe` observes registration changes.
+`metadata(id)` returns frozen, data-only owner metadata even for hidden
+commands; `list` uses the same read-only projection but keeps hidden commands
+undiscoverable. Neither metadata surface exposes execution handlers or
+availability callbacks; invocation and its availability check remain owned by
+`run`.
+
+Features own registration and execution; the hub contains no shipped feature
+list, browser globals or UI runtime. Inputs and callbacks stay with the
+consumer. The plain Deno consumer in `tests/reuse/commands_test.ts` uses this
+public entry to update independent selected counters, resolve aliases and
+release ownership.

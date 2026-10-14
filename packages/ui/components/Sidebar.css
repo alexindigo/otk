@@ -7,6 +7,12 @@
   border-right: 1px solid var(--muted);
   background: var(--panel);
 }
+.otk-sidebar-commands {
+  display: flex;
+  align-items: center;
+  gap: .5rem;
+  padding: .5rem 1rem;
+}
 .otk-brand {
   display: flex;
   align-items: center;

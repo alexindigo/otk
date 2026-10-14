@@ -24,7 +24,8 @@ Import only `@otk/protocol`; `mod.ts` is the single public entry point.
 | `PROTOCOL_VERSION`, `SIDECAR_VERSION`                          | Existing wire and sidecar versions      |
 | `MAX_CLIENT_FRAME_BYTES`, `checkClientFrameSize`               | Combined UTF-8 client frame budget      |
 
-The package version is `0.1.0`; the unchanged wire protocol version is `10`.
+The package version is `0.1.0`; the wire protocol version is `11`, including
+host-persisted keymap preferences.
 
 ## Example
 
@@ -40,7 +41,7 @@ import {
 const hello: ClientFrame = { t: "hello", protocol: PROTOCOL_VERSION };
 const serialized = JSON.stringify(hello);
 checkClientFrameSize(serialized);
-console.log(serialized); // {"t":"hello","protocol":10}
+console.log(serialized); // {"t":"hello","protocol":11}
 ```
 
 Outside this workspace, map `@otk/protocol` to a local checkout's `mod.ts` in

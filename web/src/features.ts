@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   createUiRegistries,
+  registerAgentCyclePrompt,
   registerAgentPart,
   registerAttachmentsPrompt,
   registerBashTool,
@@ -65,6 +66,7 @@ export function applicationUi(): UiRegistries {
   registerPastePrompt(ui.prompt);
   registerAttachmentsPrompt(ui.prompt);
   registerEditorPrompt(ui.prompt);
+  registerAgentCyclePrompt(ui.prompt);
   registerPermissionDock(ui.docks);
   registerQuestionDock(ui.docks);
   return ui;

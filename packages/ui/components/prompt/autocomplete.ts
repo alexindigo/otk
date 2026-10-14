@@ -40,27 +40,13 @@ export function trigger(input: string, caret: number): Completion | undefined {
   const token = mention(input, caret);
   return token ? { ...token, kind: "mention" } : undefined;
 }
-export const BUILTIN_COMMANDS: CommandOption[] = [{
-  name: "new",
-  description: "Create a new session",
-  aliases: [],
-  source: "builtin",
-}, {
-  name: "editor",
-  description: "Edit the prompt in-page",
-  aliases: [],
-  source: "builtin",
-}];
 export function commandOptions(
   commands: CommandOption[],
   query: string,
 ): CompletionOption[] {
   return rank(
     [
-      ...BUILTIN_COMMANDS,
-      ...commands.filter((command) =>
-        !BUILTIN_COMMANDS.some((builtin) => builtin.name === command.name)
-      ),
+      ...commands,
     ].map((command) => ({
       id: `command:${command.name}`,
       label: `/${command.name}${command.source === "mcp" ? ":mcp" : ""}`,

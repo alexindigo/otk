@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export interface Preferences {
+  keymap: Record<string, string>;
   timestamps: boolean;
   thinking: "show" | "hide";
   toolDetails: boolean;
@@ -11,6 +12,7 @@ export interface Preferences {
   pasteSummary: boolean;
 }
 export const DEFAULT_PREFS: Readonly<Preferences> = {
+  keymap: {},
   timestamps: false,
   thinking: "hide",
   toolDetails: true,
@@ -30,6 +32,14 @@ export function isPreference(
     return false;
   }
   if (key === "thinking") return value === "show" || value === "hide";
+  if (key === "keymap") {
+    return !!value && typeof value === "object" && !Array.isArray(value) &&
+      Object.keys(value).length <= 100 &&
+      Object.entries(value).every(([id, combo]) =>
+        /^[\w.:-]{1,120}$/.test(id) && typeof combo === "string" &&
+        combo.length <= 100
+      );
+  }
   if (key === "diffStyle") {
     return typeof value === "string" &&
       ["auto", "split", "unified"].includes(value);

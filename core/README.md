@@ -31,7 +31,11 @@ store features; prefs/frecency take their store as a third argument. Optional
 `registerQuestions` and `registerRevert` register only when their backend
 capability exists. Registry machinery never composes those features;
 `application.ts` does. `prefsOptions` and `frecencyOptions` retain OTK
-preference/path validation.
+preference/path validation. `agents.list` keeps mention-list behavior by default
+and accepts optional boolean `primary` for the essential agent-cycle command.
+The neutral agents capability receives that optional selection; the native
+backend excludes hidden agents and selects primary/all agents for cycling, or
+subagent/all agents for mentions.
 
 The existing `welcome.sidecar.harness` wire shape gains a `capabilities` array
 advertising present backend capabilities. Consumers gate optional features on

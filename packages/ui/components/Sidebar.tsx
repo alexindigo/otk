@@ -8,6 +8,7 @@ import {
   type SidecarState,
 } from "@otk/client";
 import ConnectionBadge from "./ConnectionBadge.tsx";
+import { ownedAction } from "../keyboard/context.tsx";
 export function shortDirectory(directory: string): string {
   return directory.split(/[\\/]/).filter(Boolean).slice(-2).join("/") ||
     directory;
@@ -30,9 +31,20 @@ export default function Sidebar(
     onOpen(entry: MergedEntry): void;
     onCreate(sidecarId: string, directory: string): void;
     onSettings(): void;
+    actions?: import("solid-js").Element;
   },
 ): import("solid-js").Element {
   const [now, setNow] = createSignal(Date.now());
+  const open = ownedAction(
+    "sidebar.session.open",
+    (entry: MergedEntry) => props.onOpen(entry),
+  );
+  const create = ownedAction(
+    "sidebar.session.new",
+    (input: { id: string; directory: string }) =>
+      props.onCreate(input.id, input.directory),
+  );
+  const settings = ownedAction("sidebar.settings", () => props.onSettings());
   onSettled(() => {
     const timer = setInterval(() => setNow(Date.now()), 60_000);
     return () => clearInterval(timer);
@@ -43,6 +55,11 @@ export default function Sidebar(
         <strong>OTK</strong>
         <span>OPEN TERMINAL KIT</span>
       </header>
+      <Show when={props.actions}>
+        <nav class="otk-sidebar-commands" aria-label="Commands">
+          {props.actions}
+        </nav>
+      </Show>
       <div class="otk-sidebar-scroll">
         <For each={props.sidecars} keyed={(item) => item.id}>
           {(sidecar) => (
@@ -59,7 +76,7 @@ export default function Sidebar(
                 <button
                   type="button"
                   onClick={() =>
-                    props.onSettings()}
+                    void settings()}
                 >
                   Configure connection
                 </button>
@@ -81,7 +98,10 @@ export default function Sidebar(
                         aria-label={`New session in ${group().directory}`}
                         disabled={sidecar().status !== "connected"}
                         onClick={() =>
-                          props.onCreate(sidecar().id, group().directory)}
+                          void create({
+                            id: sidecar().id,
+                            directory: group().directory,
+                          })}
                       >
                         +
                       </button>
@@ -104,7 +124,7 @@ export default function Sidebar(
                               sessionKey(entry().sidecarId, entry().id)
                             ? "page"
                             : undefined}
-                          onClick={() => props.onOpen(entry())}
+                          onClick={() => void open(entry())}
                         >
                           <span class="otk-row-title">{entry().title}</span>
                           <time
@@ -171,7 +191,7 @@ export default function Sidebar(
       <button
         type="button"
         class="otk-settings-entry"
-        onClick={() => props.onSettings()}
+        onClick={() => void settings()}
       >
         Settings / sidecars
       </button>

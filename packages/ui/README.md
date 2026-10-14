@@ -75,3 +75,28 @@ No visual redesign is included.
 Package units live in `tests/`; real browser/app tests remain at repository
 level. Builds/tests run inside the project's assigned VM. License: LGPL-3.0-only
 (see `LICENSE`).
+
+## Command input and keyboard
+
+`CommandProvider` supplies a public client `CommandHub` and optional
+`createKeyboard` dispatcher. Components own their registrations through
+`ownedCommand` / isolated `ownedAction`; registration starts at Solid's settled
+mount and releases on unmount, so speculative replacement does not overlap a
+previous session's actions. Consumers continue to supply data and callbacks.
+
+`makeKeymap` ports kosmozoo's data bindings, canonical modifiers, bare-letter
+matching, overrides, conflicts and resets. Bindings contain a command ID, never
+an execution callback. `bind(descriptor, when?)` returns an unregister function.
+Text fields are protected unless `inPrompt` opts in; `Mod` is Ctrl or Meta on
+macOS. `createKeyboard(...).start(document)` owns listeners until the returned
+stop function runs. Layers contain close-command IDs, a predicate and priority,
+with latest registration breaking ties. Composition and repeat events do not
+invoke commands.
+
+`Palette` lists the injected registry; `KeysHelp` lists the injected keymap,
+checks overlap conflicts and supplies proposed overrides to `onSave`. Production
+OTK uses the host core's ordered `keymap` preference broadcast; failed saves do
+not optimistically change bindings. Components own dialog focus and styles. The
+essential shipped bindings are Tab/reverse agent cycle, Enter submission, Mod+K
+palette, outside-text `?` help and top-layer Esc before double-Esc interrupt.
+Shift+Enter inserts a newline through the prompt-owned input port.

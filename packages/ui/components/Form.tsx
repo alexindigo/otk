@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Form.css" with { type: "text" };
 import { createSignal, type Element, Show } from "solid-js";
+import { ownedAction } from "../keyboard/context.tsx";
 export default function Form(
   props: {
     title: string;
@@ -11,6 +12,10 @@ export default function Form(
 ) {
   const [pending, setPending] = createSignal(false),
     [error, setError] = createSignal("");
+  const send = ownedAction(
+    "form.submit",
+    (data: FormData) => props.onSubmit(data),
+  );
   const submit = async (event: SubmitEvent) => {
     event.preventDefault();
     if (pending()) return;
@@ -18,7 +23,7 @@ export default function Form(
     setPending(true);
     setError("");
     try {
-      await props.onSubmit(data);
+      await send(data);
     } catch (error) {
       setError((error as Error).message);
     } finally {

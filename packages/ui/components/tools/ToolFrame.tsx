@@ -2,10 +2,15 @@
 import "./ToolFrame.css" with { type: "text" };
 import { createSignal, type Element, Show } from "solid-js";
 import type { ToolCall } from "@otk/protocol";
+import { ownedAction } from "../../keyboard/context.tsx";
 export default function ToolFrame(
   props: { call: ToolCall; waiting: boolean; children: Element },
 ): Element {
   const [errorOpen, setErrorOpen] = createSignal(false);
+  const toggle = ownedAction(
+    "tool.error.toggle",
+    () => setErrorOpen((value) => !value),
+  );
   return (
     <section
       class={["otk-tool-line", { "otk-tool-waiting": props.waiting }]}
@@ -22,7 +27,7 @@ export default function ToolFrame(
             type="button"
             class="otk-tool-error-toggle"
             aria-expanded={errorOpen() ? "true" : "false"}
-            onClick={() => setErrorOpen((value) => !value)}
+            onClick={() => void toggle()}
           >
             Error details
           </button>

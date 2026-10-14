@@ -67,7 +67,7 @@ export interface FilesCapability {
   findFiles(sessionID: string, query: string): Promise<FileMatch[]>;
 }
 export interface AgentsCapability {
-  listAgents(sessionID: string): Promise<AgentOption[]>;
+  listAgents(sessionID: string, primary?: boolean): Promise<AgentOption[]>;
 }
 export interface ResourcesCapability {
   listResources(sessionID: string): Promise<ResourceOption[]>;

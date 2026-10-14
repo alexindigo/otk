@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Element } from "solid-js";
+import type { CommandHub } from "@otk/client";
+import type { Keyboard } from "../keyboard/dispatcher.ts";
 import type {
   CommandOption,
   FileMatch,
@@ -19,9 +21,17 @@ export interface PromptProps {
   promptEnabled?: boolean;
   shellEnabled?: boolean;
   historyEnabled?: boolean;
+  busy?: boolean;
+  agentsEnabled?: boolean;
+  commandsEnabled?: boolean;
+  onAgents?(): Promise<import("@otk/protocol").AgentOption[]>;
   pasteSummary: boolean;
   onChange(value: DraftChange): Draft;
-  onSubmit(parts: PromptPart[], mode: Draft["mode"]): Promise<void>;
+  onSubmit(
+    parts: PromptPart[],
+    mode: Draft["mode"],
+    agent?: string,
+  ): Promise<void>;
   onFind(query: string): Promise<FileMatch[]>;
   onMentions(query: string): Promise<MentionSources>;
   onBump(path: string): Promise<void>;
@@ -30,6 +40,7 @@ export interface PromptProps {
     command: string,
     args: string,
     parts: Extract<PromptPart, { kind: "file" }>[],
+    agent?: string,
   ): Promise<void>;
   onNew(): Promise<void>;
   onHistory(): Promise<HistoryEntry[]>;
@@ -37,12 +48,16 @@ export interface PromptProps {
 }
 /** An input port keeps native selection/focus owned by the prompt component. */
 export interface PromptContext {
+  commands: CommandHub;
+  keyboard: Keyboard;
+  own(release: () => void): void;
   props: PromptProps;
   active(): boolean;
   change(update: DraftChange, caret?: number): Draft;
   selection(): { start: number; end: number };
   caret(): number;
   focus(): void;
+  focused(): boolean;
   acceptFiles(files: File[]): Promise<void>;
   fail(error: unknown): void;
 }

@@ -4,11 +4,14 @@ import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
 export function agents(client: Client, directory: Directory): AgentsCapability {
   return {
-    async listAgents(sessionID) {
+    async listAgents(sessionID, primary = false) {
       const agents = await client.json<
         { name: string; description?: string; mode: string; hidden?: boolean }[]
       >("/agent", { query: { directory: await directory.resolve(sessionID) } });
-      return agents.filter((agent) => !agent.hidden && agent.mode !== "primary")
+      return agents.filter((agent) =>
+        !agent.hidden &&
+        (primary ? agent.mode !== "subagent" : agent.mode !== "primary")
+      )
         .map(({ name, description }) => ({ name, description }));
     },
   };

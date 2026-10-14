@@ -3,6 +3,7 @@ import "./TaskTool.css" with { type: "text" };
 import { Show } from "solid-js";
 import type { TaskCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
+import { ownedAction } from "../../keyboard/context.tsx";
 export function registerTaskTool(tools: ToolRegistry): void {
   tools.register(
     "task",
@@ -13,13 +14,15 @@ export function registerTaskTool(tools: ToolRegistry): void {
 export default function TaskTool(
   props: { call: TaskCall; onOpen(id: string): void },
 ) {
+  const open = ownedAction("task.open", () => {
+    if (props.call.childSessionID) props.onOpen(props.call.childSessionID);
+  });
   return (
     <button
       type="button"
       class="otk-task-card"
       disabled={!props.call.childSessionID}
-      onClick={() =>
-        props.call.childSessionID && props.onOpen(props.call.childSessionID)}
+      onClick={() => void open()}
     >
       <strong>
         {props.call.agent[0]?.toUpperCase() + props.call.agent.slice(1)} Task —

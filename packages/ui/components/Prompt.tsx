@@ -10,6 +10,8 @@ import {
 import { createCompletion } from "./prompt/Completion.tsx";
 import { useUiRegistries } from "../registries/context.tsx";
 import type { PromptContext, PromptProps } from "../registries/prompt.ts";
+import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
+import { createKeyboard } from "../keyboard/dispatcher.ts";
 
 /** Input and submission lifetime; concrete prompt concepts are injected features. */
 export default function Prompt(props: PromptProps): import("solid-js").Element {
@@ -19,6 +21,10 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     [caret, setCaret] = createSignal(0);
   let active = true, input!: HTMLTextAreaElement;
   let deadline = 0, timer: ReturnType<typeof setTimeout> | undefined;
+  const ports = useCommandPorts();
+  const keyboard = ports.keyboard ??
+    createKeyboard(ports.commands, (error) => ctx.fail(error));
+  const releases: (() => void)[] = [];
   const change = (update: DraftChange, caret?: number) => {
     const draft = props.onChange(update);
     if (caret !== undefined && active) {
@@ -29,12 +35,16 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     return draft;
   };
   const ctx: PromptContext = {
+    commands: ports.commands,
+    keyboard,
+    own: (release) => releases.push(release),
     props,
     change,
     caret,
     active: () => active,
     selection: () => ({ start: input.selectionStart, end: input.selectionEnd }),
     focus: () => input.focus(),
+    focused: () => document.activeElement === input && !props.value.editor,
     fail: (error) => {
       if (active) setError((error as Error).message);
     },
@@ -69,10 +79,12 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
           break;
         }
       }
-      if (!handled) await props.onSubmit(parts, draft.mode);
+      if (!handled) await send({ parts, mode: draft.mode, agent: draft.agent });
       if (active) {
         for (const feature of features) feature.submitted?.();
-        change((current) => current === draft ? emptyDraft() : current);
+        change((current) =>
+          current === draft ? { ...emptyDraft(), agent: draft.agent } : current
+        );
       }
     } catch (error) {
       if (active && change((current) => current) === draft) ctx.fail(error);
@@ -80,35 +92,117 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       if (active) setPending(false);
     }
   };
-  const escape = async (event: KeyboardEvent) => {
-    if (
-      event.key !== "Escape" || event.defaultPrevented || props.value.editor ||
-      !props.connected || props.promptEnabled === false
-    ) return;
-    event.preventDefault();
-    if (Date.now() < deadline) {
+  const send = ownedCommand(ports, {
+    id: "prompt.send",
+    title: "Send prompt",
+    category: "Prompt",
+    hidden: true,
+    enabled: canSubmit,
+    run: (
+      _ctx,
+      args: {
+        parts: import("@otk/protocol").PromptPart[];
+        mode: PromptProps["value"]["mode"];
+        agent?: string;
+      },
+    ) => props.onSubmit(args.parts, args.mode, args.agent),
+  });
+  const submitCommand = ownedCommand(ports, {
+    id: "prompt.submit",
+    title: "Send prompt",
+    category: "Prompt",
+    hidden: true,
+    run: submit,
+  });
+  ownedCommand(ports, {
+    id: "prompt.newline",
+    title: "Insert newline",
+    category: "Prompt",
+    hidden: true,
+    run: () => {
+      const { start, end } = ctx.selection();
+      change((current) =>
+        editDraft(
+          current,
+          current.input.slice(0, start) + "\n" + current.input.slice(end),
+        ), start + 1);
+    },
+  });
+  ownedCommand(ports, {
+    id: "session.interrupt",
+    title: "Interrupt session",
+    category: "Session",
+    enabled: () =>
+      props.connected && props.promptEnabled !== false && props.busy !== false,
+    run: async (_context, args?: { confirm?: boolean }) => {
+      if (!args?.confirm) return await props.onAbort();
+      if (Date.now() < deadline) {
+        deadline = 0;
+        clearTimeout(timer);
+        setArmed(false);
+        try {
+          await props.onAbort();
+        } catch (error) {
+          ctx.fail(error);
+        }
+      } else {
+        deadline = Date.now() + 5000;
+        setArmed(true);
+        timer = setTimeout(() => {
+          deadline = 0;
+          setArmed(false);
+        }, 5000);
+      }
+    },
+  });
+  ownedCommand(ports, {
+    id: "session.escape.reset",
+    title: "Reset interrupt sequence",
+    category: "Session",
+    hidden: true,
+    run: () => {
       deadline = 0;
       clearTimeout(timer);
       setArmed(false);
-      try {
-        await props.onAbort();
-      } catch (error) {
-        ctx.fail(error);
-      }
-    } else {
-      deadline = Date.now() + 5000;
-      setArmed(true);
-      timer = setTimeout(() => {
-        deadline = 0;
-        setArmed(false);
-      }, 5000);
-    }
-  };
+    },
+  });
   onSettled(() => {
-    document.addEventListener("keydown", escape);
+    releases.push(keyboard.onLayerClose("session.escape.reset"));
+    const focused = () =>
+      document.activeElement === input && !props.value.editor;
+    releases.push(
+      keyboard.keymap.bind({
+        id: "prompt.newline",
+        command: "prompt.newline",
+        key: "Shift+Enter",
+        inPrompt: true,
+        ctx: "prompt",
+      }, focused),
+    );
+    releases.push(
+      keyboard.keymap.bind({
+        id: "prompt.submit",
+        command: "prompt.submit",
+        key: "Enter",
+        inPrompt: true,
+        ctx: "prompt",
+      }, focused),
+    );
+    releases.push(
+      keyboard.keymap.bind({
+        id: "session.interrupt",
+        command: "session.interrupt",
+        args: { confirm: true },
+        key: "Escape",
+        inPrompt: true,
+        ctx: "prompt",
+        desc: "Esc twice to interrupt",
+      }),
+    );
+    if (!ports.keyboard) releases.push(keyboard.start());
     return () => {
       active = false;
-      document.removeEventListener("keydown", escape);
+      for (const release of releases) release();
       clearTimeout(timer);
     };
   });
@@ -122,7 +216,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       }}
       onSubmit={(event) => {
         event.preventDefault();
-        void submit();
+        void submitCommand().catch(ctx.fail);
       }}
     >
       <label for="otk-prompt-input">
@@ -157,10 +251,6 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         onKeyDown={(event) => {
           if (completion.key?.(event)) return;
           for (const feature of features) if (feature.key?.(event)) return;
-          if (event.key === "Enter" && !event.shiftKey && !event.isComposing) {
-            event.preventDefault();
-            void submit();
-          }
         }}
       />
       <div class="otk-prompt-actions">

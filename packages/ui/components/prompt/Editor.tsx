@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Editor.css" with { type: "text" };
 import { onSettled } from "solid-js";
+import { ownedAction } from "../../keyboard/context.tsx";
 export default function Editor(
   props: {
     value: string;
@@ -11,6 +12,8 @@ export default function Editor(
   },
 ) {
   let dialog!: HTMLDialogElement, input!: HTMLTextAreaElement;
+  const cancel = ownedAction("editor.cancel", () => props.onCancel());
+  const save = ownedAction("editor.save", () => props.onSave());
   onSettled(() => {
     dialog.showModal();
     input.focus();
@@ -25,13 +28,13 @@ export default function Editor(
       aria-label={props.title}
       onCancel={(event) => {
         event.preventDefault();
-        props.onCancel();
+        void cancel();
       }}
       onKeyDown={(event) => {
         event.stopPropagation();
         if (event.key === "Escape") {
           event.preventDefault();
-          props.onCancel();
+          void cancel();
         }
       }}
     >
@@ -49,8 +52,8 @@ export default function Editor(
         onInput={(event) => props.onChange(event.currentTarget.value)}
       />
       <footer>
-        <button type="button" onClick={props.onCancel}>Cancel</button>
-        <button type="button" onClick={props.onSave}>Save</button>
+        <button type="button" onClick={() => void cancel()}>Cancel</button>
+        <button type="button" onClick={() => void save()}>Save</button>
       </footer>
     </dialog>
   );

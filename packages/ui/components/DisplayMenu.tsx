@@ -2,6 +2,7 @@
 import "./DisplayMenu.css" with { type: "text" };
 import { For, Show } from "solid-js";
 import type { PreferenceKey, Preferences } from "@otk/protocol";
+import { ownedAction } from "../keyboard/context.tsx";
 const booleans = [
   ["timestamps", "Always show timestamps"],
   ["toolDetails", "Tool details"],
@@ -17,6 +18,11 @@ export default function DisplayMenu(props: {
   error: string;
   onSet(key: PreferenceKey, value: Preferences[PreferenceKey]): Promise<void>;
 }): import("solid-js").Element {
+  const set = ownedAction(
+    "display.set",
+    (input: { key: PreferenceKey; value: Preferences[PreferenceKey] }) =>
+      props.onSet(input.key, input.value),
+  );
   return (
     <details class="otk-display-menu">
       <summary>Display</summary>
@@ -30,7 +36,10 @@ export default function DisplayMenu(props: {
                 name={item()[0]}
                 checked={props.prefs[item()[0]]}
                 onChange={(event) =>
-                  void props.onSet(item()[0], event.currentTarget.checked)}
+                  void set({
+                    key: item()[0],
+                    value: event.currentTarget.checked,
+                  })}
               />
               {item()[1]}
             </label>
@@ -41,10 +50,10 @@ export default function DisplayMenu(props: {
             name="thinking"
             value={props.prefs.thinking}
             onChange={(event) =>
-              void props.onSet(
-                "thinking",
-                event.currentTarget.value as Preferences["thinking"],
-              )}
+              void set({
+                key: "thinking",
+                value: event.currentTarget.value as Preferences["thinking"],
+              })}
           >
             <option value="hide">Hide</option>
             <option value="show">Show</option>
@@ -55,10 +64,10 @@ export default function DisplayMenu(props: {
             name="diffStyle"
             value={props.prefs.diffStyle}
             onChange={(event) =>
-              void props.onSet(
-                "diffStyle",
-                event.currentTarget.value as Preferences["diffStyle"],
-              )}
+              void set({
+                key: "diffStyle",
+                value: event.currentTarget.value as Preferences["diffStyle"],
+              })}
           >
             <option value="auto">Auto</option>
             <option value="split">Split</option>
