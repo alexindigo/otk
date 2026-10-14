@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PromptPart } from "@otk/protocol";
-import { HarnessError } from "../adapter/types.ts";
+import { HarnessError } from "@otk/harness";
 import { object, text } from "./rpc.ts";
 export const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;
 export function promptParts(value: unknown): PromptPart[] {

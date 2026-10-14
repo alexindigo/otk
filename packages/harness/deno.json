@@ -1,0 +1,11 @@
+{
+  "name": "@otk/harness",
+  "version": "0.1.0",
+  "license": "LGPL-3.0-only",
+  "exports": "./mod.ts",
+  "publish": {
+    "include": ["*.ts", "deno.json", "README.md", "LICENSE"],
+    "exclude": ["tests/"]
+  },
+  "tasks": { "check": "deno check mod.ts", "test": "deno test tests/" }
+}

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { mapQuestion } from "../../sidecar/adapter/opencode1/questions.ts";
+import { mapQuestion } from "@otk/harness-opencode1";
 import { emptyContent, reduce } from "../../web/src/state/reduce.ts";
 Deno.test("questions normalize defaults and replace/remove requests without leaking raw fields", () => {
   const request = mapQuestion({

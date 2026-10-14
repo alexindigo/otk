@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import { mapMessage } from "../../sidecar/adapter/opencode1/map.ts";
-import type { Info, RawPart } from "../../sidecar/adapter/opencode1/types.ts";
+import { mapMessage } from "@otk/harness-opencode1";
+import type { Info, RawPart } from "@otk/harness-opencode1";
 import { emptyContent, reduce } from "../../web/src/state/reduce.ts";
 const info: Info = {
   id: "reply",

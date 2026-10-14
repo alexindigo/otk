@@ -4,7 +4,7 @@ import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { recordTools, runTool } from "../support/rendering.ts";
 import { waitFor } from "../support/opencode.ts";
-import type { RawPart } from "../../sidecar/adapter/opencode1/types.ts";
+import type { RawPart } from "@otk/harness-opencode1";
 Deno.test("R1 bash output is ten lines, expands to thirty, and displays differing cwd", async () => {
   const f = await browserFixture({ bash: "allow" }, {
     prepare: async (oc) => {

@@ -6,9 +6,9 @@ import { OtkDb } from "../../sidecar/db/db.ts";
 import { Prefs } from "../../sidecar/db/prefs.ts";
 import { Frecency } from "../../sidecar/db/frecency.ts";
 import { dispatch } from "../../sidecar/ws/rpc.ts";
-import { Opencode1Adapter } from "../../sidecar/adapter/opencode1/adapter.ts";
+import { Opencode1Adapter } from "@otk/harness-opencode1";
 import { StreamBuffers } from "@otk/content";
-import { mapPromptParts } from "../../sidecar/adapter/opencode1/prompt.ts";
+import { mapPromptParts } from "@otk/harness-opencode1";
 
 Deno.test("frecency persists at most 1000 canonical entries across projects", async () => {
   const root = await fixture(), db = new OtkDb(root), store = new Frecency(db);
@@ -99,7 +99,7 @@ Deno.test("frecency RPC uses authoritative session directory instead of a client
       store.list(root),
     );
   } finally {
-    await adapter.stop();
+    await adapter.core.stop();
     db.close();
   }
 });
@@ -120,7 +120,10 @@ Deno.test("permission-denied stat candidates are no-match in both find and promp
         "./src/../src/file.ts",
       ]
     ) {
-      const files = await adapter.findFiles("ses_files", query);
+      const files = await adapter.capabilities.files.findFiles(
+        "ses_files",
+        query,
+      );
       assert(files.some((file) => file.path === query && !file.directory));
       assert(!files.some((file) => file.path === "blocked/file.ts"));
     }
@@ -134,7 +137,7 @@ Deno.test("permission-denied stat candidates are no-match in both find and promp
     );
   } finally {
     await Deno.chmod(join(root, "blocked"), 0o700);
-    await adapter.stop();
+    await adapter.core.stop();
   }
 });
 

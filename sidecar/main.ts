@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { config } from "./config/loader.ts";
 import { AuthState } from "./auth/state.ts";
-import { Opencode1Adapter } from "./adapter/opencode1/adapter.ts";
+import { Opencode1Adapter } from "@otk/harness-opencode1";
 import { StreamBuffers } from "@otk/content";
 import { IndexStore } from "./index/store.ts";
 import { Connections } from "./ws/connections.ts";
@@ -25,7 +25,7 @@ export async function start(cfg: ServiceConfig) {
     prefs,
     new Frecency(db),
   );
-  await adapter.start({
+  await adapter.core.start({
     connection: (state) => connections.connection(state),
     indexReset: (entries) => index.reset(entries),
     indexUpsert: (entry) => index.upsert(entry),
@@ -41,7 +41,7 @@ export async function start(cfg: ServiceConfig) {
     connections,
     async stop() {
       connections.close();
-      await adapter.stop();
+      await adapter.core.stop();
       await server.shutdown();
       db.close();
     },

@@ -191,16 +191,6 @@ export function statePath(
       String(cfg.server.port),
     );
 }
-export function harnessDb(
-  cfg: ServiceConfig,
-  env = Deno.env.toObject(),
-): string {
-  return cfg.harness.db ||
-    join(
-      env.XDG_DATA_HOME || join(env.HOME!, ".local/share"),
-      "opencode/opencode.db",
-    );
-}
 let memo: ServiceConfig | null = null;
 export function config(): ServiceConfig {
   if (memo) return memo;

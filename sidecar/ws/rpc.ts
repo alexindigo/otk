@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { HarnessAdapter } from "../adapter/types.ts";
-import { HarnessError } from "../adapter/types.ts";
+import {
+  type CapabilityName,
+  type Harness,
+  HarnessError,
+  requireCapability,
+} from "@otk/harness";
 import type { PromptInput, PromptPart } from "@otk/protocol";
 import type { Prefs } from "../db/prefs.ts";
 import { promptParts } from "./prompt.ts";
@@ -24,47 +28,51 @@ export function text(
   return value as string;
 }
 export async function dispatch(
-  adapter: HarnessAdapter,
+  adapter: Harness,
   method: string,
   value: unknown,
   prefs: Prefs,
   frecency: Frecency,
 ): Promise<unknown> {
   const p = object(value);
+  const cap = <K extends CapabilityName>(name: K) =>
+    requireCapability(adapter.capabilities, name);
   const sessionID = () => text(p, "sessionID")!;
   switch (method) {
     case "prefs.get":
       return prefs.get();
     case "frecency.list":
-      return frecency.list((await adapter.getSession(sessionID())).directory);
+      return frecency.list(
+        (await adapter.core.getSession(sessionID())).directory,
+      );
     case "frecency.bump":
       frecency.bump(
-        (await adapter.getSession(sessionID())).directory,
+        (await adapter.core.getSession(sessionID())).directory,
         text(p, "path")!,
       );
       return null;
     case "agents.list":
-      return adapter.listAgents(sessionID());
+      return cap("agents").listAgents(sessionID());
     case "resources.list":
-      return adapter.listResources(sessionID());
+      return cap("resources").listResources(sessionID());
     case "prefs.set":
       return prefs.set(p.key, p.value);
     case "session.get":
-      return adapter.getSession(sessionID());
+      return adapter.core.getSession(sessionID());
     case "session.children":
-      return adapter.listChildren(sessionID());
+      return adapter.core.listChildren(sessionID());
     case "session.messages": {
       if (
         !Number.isInteger(p.limit) || Number(p.limit) < 1 ||
         Number(p.limit) > 200
       ) throw new HarnessError("params", "limit must be 1..200");
-      return adapter.listMessages(sessionID(), {
+      return adapter.core.listMessages(sessionID(), {
         limit: Number(p.limit),
         before: text(p, "before", true),
       });
     }
     case "session.create":
-      return adapter.createSession({
+      return adapter.core.createSession({
         directory: text(p, "directory")!,
         title: text(p, "title", true),
         parentID: text(p, "parentID", true),
@@ -88,17 +96,17 @@ export async function dispatch(
           model: text(model, "model")!,
         };
       }
-      await adapter.prompt(input);
+      await cap("prompt").prompt(input);
       return null;
     }
     case "find.files":
-      return adapter.findFiles(sessionID(), text(p, "query", true) ?? "");
+      return cap("files").findFiles(sessionID(), text(p, "query", true) ?? "");
     case "session.abort":
-      await adapter.abort(sessionID());
+      await cap("prompt").abort(sessionID());
       return null;
     case "session.shell": {
       const model = p.model === undefined ? undefined : object(p.model);
-      await adapter.shell({
+      await cap("shell").shell({
         sessionID: sessionID(),
         command: text(p, "command")!,
         agent: text(p, "agent", true),
@@ -114,14 +122,14 @@ export async function dispatch(
       return null;
     }
     case "commands.list":
-      return adapter.listCommands(sessionID());
+      return cap("commands").listCommands(sessionID());
     case "history.list":
-      return adapter.listHistory();
+      return await cap("history").listHistory();
     case "history.attachment":
-      return adapter.historyAttachment(
-        text(p, "messageID")!,
-        text(p, "partID")!,
-      );
+      return await cap("history").attachment({
+        messageID: text(p, "messageID")!,
+        partID: text(p, "partID")!,
+      });
     case "session.command": {
       const model = p.model === undefined ? undefined : object(p.model),
         parts = p.parts === undefined ||
@@ -134,7 +142,7 @@ export async function dispatch(
           "Commands accept file attachments only",
         );
       }
-      await adapter.command({
+      await cap("commands").command({
         sessionID: sessionID(),
         command: text(p, "command")!,
         arguments: text(p, "arguments", true) ?? "",
@@ -153,11 +161,11 @@ export async function dispatch(
       return null;
     }
     case "session.revert":
-      return adapter.revert(sessionID(), text(p, "messageID")!);
+      return cap("revert").revert(sessionID(), text(p, "messageID")!);
     case "permission.list":
-      return adapter.listPermissions(sessionID());
+      return cap("permissions").listPermissions(sessionID());
     case "question.list":
-      return adapter.listQuestions(sessionID());
+      return cap("questions").listQuestions(sessionID());
     case "question.reply": {
       if (
         !Array.isArray(p.answers) ||
@@ -166,20 +174,20 @@ export async function dispatch(
           values.some((value) => typeof value !== "string")
         )
       ) throw new HarnessError("params", "Expected question answer arrays");
-      await adapter.answerQuestion(
+      await cap("questions").answerQuestion(
         text(p, "requestID")!,
         p.answers as string[][],
       );
       return null;
     }
     case "question.reject":
-      await adapter.answerQuestion(text(p, "requestID")!);
+      await cap("questions").answerQuestion(text(p, "requestID")!);
       return null;
     case "permission.reply": {
       if (!["once", "always", "reject"].includes(String(p.reply))) {
         throw new HarnessError("params", "Invalid permission reply");
       }
-      await adapter.replyPermission({
+      await cap("permissions").replyPermission({
         sessionID: sessionID(),
         requestID: text(p, "requestID")!,
         reply: p.reply as "once" | "always" | "reject",

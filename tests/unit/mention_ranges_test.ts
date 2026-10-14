@@ -6,7 +6,7 @@ import {
   mentionQuery,
 } from "../../web/src/ui/prompt/autocomplete.ts";
 import { promptParts } from "../../sidecar/ws/prompt.ts";
-import { mapPromptParts } from "../../sidecar/adapter/opencode1/prompt.ts";
+import { mapPromptParts } from "@otk/harness-opencode1";
 import { fixture } from "../support/config.ts";
 
 Deno.test("TUI start-only, open and reversed mention ranges retain an optional end", () => {

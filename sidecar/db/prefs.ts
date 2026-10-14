@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { DEFAULT_PREFS, isPreference, type Preferences } from "@otk/protocol";
-import { HarnessError } from "../adapter/types.ts";
+import { HarnessError } from "@otk/harness";
 import type { OtkDb } from "./db.ts";
 export class Prefs {
   #listeners = new Set<(prefs: Preferences) => void>();

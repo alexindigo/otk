@@ -102,6 +102,12 @@ function dependencyError(
     if (targetPath?.startsWith("protocol/")) {
       return "old protocol path is retired";
     }
+    if (
+      targetPath &&
+      /^(?:sidecar\/adapter\/|sidecar\/history\/)/.test(targetPath)
+    ) {
+      return "old harness paths are retired";
+    }
     return;
   }
   if (production && from === "protocol") {
@@ -119,14 +125,22 @@ function dependencyError(
 
 function sourceErrors(path: string, source: string): string[] {
   const from = owner(path);
-  if (!from || isTest(path)) return [];
+  if (isTest(path)) return [];
+  if (!from && !/^(?:sidecar\/|web\/src\/)/.test(path)) return [];
   const errors: string[] = [];
   if (
     from !== "harness-opencode1" &&
-    /["'`]\/(?:global\/event|session(?:\/|["'`])|permission(?:\/|["'`])|question(?:\/|["'`])|find\/file|agent["'`]|command["'`]|mcp["'`])/
+    /["'`]\/(?:global\/(?:event|health)|experimental\/(?:session|resource)|session(?:\/|["'`])|permission(?:\/|["'`])|question(?:\/|["'`])|find\/file|agent["'`]|command["'`]|skill["'`]|mcp["'`])/
       .test(source)
   ) {
     errors.push("native opencode endpoints belong to harness-opencode1");
+  }
+  if (
+    from !== "harness-opencode1" &&
+    /(?:FROM|JOIN|CREATE TABLE|PRAGMA table_info\()\s*(?:message|part|session)\b/i
+      .test(source)
+  ) {
+    errors.push("native database schema belongs to harness-opencode1");
   }
   if (
     /(?:^|\/)(?:registries\/|registry(?:\.ts|\/)|[^/]+-registry\.ts)/.test(path)
@@ -257,6 +271,8 @@ Deno.test("dependency checks reject private paths, upward edges and legacy escap
       ["packages/client/mod.ts", "solid-js"],
       ["packages/content/mod.ts", "npm:@opencode-ai/sdk"],
       ["tests/unit/example.ts", "../../protocol/content.ts"],
+      ["tests/unit/example.ts", "../../sidecar/adapter/opencode1/map.ts"],
+      ["tests/unit/example.ts", "../../sidecar/history/history.ts"],
     ]
   ) assert(dependencyError(path, specifier, present), `${path}: ${specifier}`);
   assert(dependencyError("packages/protocol/mod.ts", undefined, present));
@@ -309,6 +325,21 @@ Deno.test("native endpoints and feature imports cannot leak into extracted share
     [],
   );
   assertEquals(sourceErrors("packages/app/tests/example.ts", endpoint), []);
+  assertEquals(sourceErrors("sidecar/ws/rpc.ts", endpoint).length, 1);
+  assertEquals(
+    sourceErrors(
+      "packages/harness/history.ts",
+      'db.prepare("SELECT data FROM message")',
+    ).length,
+    1,
+  );
+  assertEquals(
+    sourceErrors(
+      "packages/harness-opencode1/history.ts",
+      'db.prepare("SELECT data FROM message")',
+    ),
+    [],
+  );
   const feature = 'import { register } from "./features/sessions.ts";';
   assertEquals(sourceErrors("packages/sidecar/registry.ts", feature).length, 1);
   assertEquals(
@@ -323,4 +354,11 @@ Deno.test("native endpoints and feature imports cannot leak into extracted share
     ),
     [],
   );
+});
+
+Deno.test("standalone sessions consumer imports only the harness public entries", async () => {
+  const consumer = await Deno.readTextFile(
+    new URL("tests/reuse/harness-consumer.ts", root),
+  );
+  assertEquals(imports(consumer), ["@otk/harness", "@otk/harness-opencode1"]);
 });

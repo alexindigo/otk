@@ -77,9 +77,13 @@ License: LGPL-3.0-only.
 OTK is being extracted into reusable Deno workspace packages.
 [`@otk/protocol`](./packages/protocol/README.md) provides dependency-free wire
 contracts and helpers; [`@otk/content`](./packages/content/README.md) converts
-markdown and patches and owns streaming reply buffers. Consumers use public bare
-imports `@otk/protocol` and `@otk/content` through each package's `mod.ts`. The
-sidecar and web app retain their current entry points during extraction.
+markdown and patches and owns streaming reply buffers.
+[`@otk/harness`](./packages/harness/README.md) provides harness-neutral core and
+optional capabilities;
+[`@otk/harness-opencode1`](./packages/harness-opencode1/README.md) owns the
+stock native adapter and read-only history. Consumers use public bare imports
+through each package's `mod.ts`. The sidecar and web app retain their current
+entry points during extraction.
 
 `deno task test:unit` runs remaining app units and extracted package units;
 `deno task test:integration` and `deno task test:e2e` run app-level checks.

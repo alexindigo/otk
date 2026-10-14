@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { join } from "@std/path";
-import type { RawPart } from "../../sidecar/adapter/opencode1/types.ts";
+import type { RawPart } from "@otk/harness-opencode1";
 import type { Cdp } from "./cdp.ts";
 import type { Script } from "./fake-llm.ts";
 import { waitFor } from "./opencode.ts";

@@ -3,8 +3,7 @@ import { type ContentOp, isAttentionOp } from "@otk/protocol";
 import type { ClientFrame, HarnessState, ServerFrame } from "@otk/protocol";
 import { checkClientFrameSize } from "@otk/protocol";
 import { PROTOCOL_VERSION, SIDECAR_VERSION } from "@otk/protocol";
-import type { HarnessAdapter } from "../adapter/types.ts";
-import { HarnessError } from "../adapter/types.ts";
+import { type Harness, HarnessError } from "@otk/harness";
 import type { IndexStore } from "../index/store.ts";
 import { dispatch, object, text } from "./rpc.ts";
 import type { Prefs } from "../db/prefs.ts";
@@ -20,7 +19,7 @@ export class Connections {
   harnessState: HarnessState = "connecting";
   #stopPrefs: () => void;
   constructor(
-    readonly adapter: HarnessAdapter,
+    readonly adapter: Harness,
     readonly index: IndexStore,
     readonly url: string,
     readonly prefs: Prefs,
@@ -69,7 +68,7 @@ export class Connections {
     const count = (this.#counts.get(sessionID) ?? 0) + (subscribe ? 1 : -1);
     if (count) this.#counts.set(sessionID, count);
     else this.#counts.delete(sessionID);
-    this.adapter.subscriptions(sessionID, count);
+    this.adapter.core.subscriptions(sessionID, count);
   }
   accept(ws: WebSocket): void {
     const connection: Connection = { ws, welcomed: false, sessions: new Set() };
@@ -122,8 +121,8 @@ export class Connections {
             sidecar: {
               version: SIDECAR_VERSION,
               harness: {
-                kind: this.adapter.kind,
-                version: this.adapter.version,
+                kind: this.adapter.core.kind,
+                version: this.adapter.core.version,
                 url: this.url,
               },
             },

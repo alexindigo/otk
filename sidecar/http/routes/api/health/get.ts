@@ -6,6 +6,6 @@ const handler: Handler = (_request, { app }) => ({
   ok: true,
   version: SIDECAR_VERSION,
   protocol: PROTOCOL_VERSION,
-  harness: { kind: app.adapter.kind, version: app.adapter.version },
+  harness: { kind: app.adapter.core.kind, version: app.adapter.core.version },
 });
 export default handler;

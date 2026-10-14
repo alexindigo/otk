@@ -1,0 +1,61 @@
+# @otk/harness-opencode1
+
+Stock opencode 1.x implementation of `@otk/harness`, verified against 1.18.34.
+All native endpoints, raw shapes, cursor encoding and read-only database
+projections live here. Depends only on `@otk/protocol`, `@otk/content` and
+`@otk/harness` plus the existing pinned standard path library and Node SQLite.
+
+```ts
+import type { Harness } from "@otk/harness";
+import { Opencode1Adapter } from "@otk/harness-opencode1";
+
+const harness: Harness = new Opencode1Adapter({
+  harness: {
+    url: "http://127.0.0.1:4097",
+    username: "opencode",
+    password: "",
+    db: "/home/tester/.local/share/opencode/opencode.db",
+    heartbeattimeout: 25,
+    reconnectmax: 30,
+  },
+  index: { days: 30 },
+});
+try {
+  await harness.core.start({
+    connection: (state) => console.log(state),
+    indexReset: (sessions) => console.table(sessions),
+    indexUpsert: (session) => console.log(session),
+    indexRemove: (id) => console.log("removed", id),
+    content: () => {},
+    resync: () => {},
+  });
+  // Keep the consumer alive while observing the index stream.
+  await new Promise((resolve) => setTimeout(resolve, 5000));
+} finally {
+  await harness.core.stop();
+}
+```
+
+Run a consumer with Deno's network/read/environment permissions. No OTK sidecar
+is required; start a stock server separately. Empty `db` resolves through
+`XDG_DATA_HOME`/`HOME` using the native default. There are no sidecar auth/state
+inputs. All ten optional capabilities are implemented in separate modules and
+share one session-directory resolver. Use `core` for lifecycle/session queries
+and `capabilities.<name>` for optional operations.
+
+The adapter retains ownership of events, stream buffers, task watchers, admitted
+shell/command requests and reconciled HTTP/SSE errors. Stop aborts and joins
+owned requests and releases readers. History lists contain metadata, not upload
+bytes; `capabilities.history.attachment({ messageID, partID })` retrieves those
+bytes asynchronously. Missing/incompatible databases degrade to empty history
+without creating or writing them.
+
+The public entry also exposes native raw types, mapping utilities, `Client`,
+`HttpFailure`, `History`, `BootstrapDb`, SSE/watchdog utilities and
+`TaskProgress` for native integrations. Cross-package imports always use this
+entry.
+
+The standalone sessions consumer and stock-server test are in `tests/reuse/` at
+the workspace root. Run `deno task test:reuse` in the dedicated OTK guest.
+Native unit tests live in this package; mixed app-consumer checks retain their
+shared app fixtures. License: LGPL-3.0-only.

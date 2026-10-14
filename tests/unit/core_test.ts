@@ -12,15 +12,15 @@ import {
 import { allowedOrigin } from "../../sidecar/auth/middleware.ts";
 import { AuthState } from "../../sidecar/auth/state.ts";
 import { IndexStore } from "../../sidecar/index/store.ts";
-import { Backoff, Watchdog } from "../../sidecar/adapter/opencode1/watchdog.ts";
-import { consumeEvents } from "../../sidecar/adapter/opencode1/events.ts";
+import { Backoff, Watchdog } from "@otk/harness-opencode1";
+import { consumeEvents } from "@otk/harness-opencode1";
 import {
   mapDiffs,
   mapIndex,
   mapMessage,
   mapPart,
   mapPermission,
-} from "../../sidecar/adapter/opencode1/map.ts";
+} from "@otk/harness-opencode1";
 import type { ServerFrame } from "@otk/protocol";
 const session = {
   id: "ses_root",

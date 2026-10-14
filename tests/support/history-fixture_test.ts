@@ -5,7 +5,7 @@ import { FakeLlm } from "./fake-llm.ts";
 import { OpencodeTest } from "./opencode.ts";
 import { DatabaseSync } from "node:sqlite";
 import { fromFileUrl } from "@std/path";
-import { History } from "../../sidecar/history/history.ts";
+import { History } from "@otk/harness-opencode1";
 const pixel =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
 Deno.test("capture prompt history fixture from real opencode 1.18.34", async () => {
@@ -89,14 +89,18 @@ Deno.test("capture prompt history fixture from real opencode 1.18.34", async () 
     await oc.stop();
     stopped = true;
     const newReader = new History(fresh),
-      projection = newReader.list().map(({ time: _time, ...entry }) => entry);
+      projection = (await newReader.listHistory()).map((
+        { time: _time, ...entry },
+      ) => entry);
     newReader.close();
     try {
       await Deno.stat(destination);
       const existing = new History(fromFileUrl(destination));
       try {
         assertEquals(
-          existing.list().map(({ time: _time, ...entry }) => entry),
+          (await existing.listHistory()).map(({ time: _time, ...entry }) =>
+            entry
+          ),
           projection,
         );
       } finally {

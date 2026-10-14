@@ -2,11 +2,11 @@
 import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { loadServiceConfig } from "../../sidecar/config/loader.ts";
-import { Opencode1Adapter } from "../../sidecar/adapter/opencode1/adapter.ts";
+import { Opencode1Adapter } from "@otk/harness-opencode1";
 import { StreamBuffers } from "@otk/content";
 import type { IndexEntry } from "@otk/protocol";
 import type { ContentOp } from "@otk/protocol";
-import type { Session } from "../../sidecar/adapter/opencode1/types.ts";
+import type { Session } from "@otk/harness-opencode1";
 
 export interface Observation {
   id: string;
@@ -142,7 +142,7 @@ export async function observationFixture() {
       await new Promise((resolve) => setTimeout(resolve, 5));
     }
   };
-  await adapter.start({
+  await adapter.core.start({
     connection: () => {},
     indexReset: (values) => {
       resets++;
@@ -156,8 +156,8 @@ export async function observationFixture() {
     resync: () => {},
   });
   await wait(() => resets > 0);
-  adapter.subscriptions("case-a", 1);
-  adapter.subscriptions("case-b", 1);
+  adapter.core.subscriptions("case-a", 1);
+  adapter.core.subscriptions("case-b", 1);
   const send = (
     type: string,
     properties: Record<string, unknown>,
@@ -180,16 +180,19 @@ export async function observationFixture() {
     wait,
     sessions,
     async submit(method: "shell" | "command", sessionID = "case-a") {
-      const invoke = Reflect.get(adapter, method);
+      const invoke = method === "shell"
+        ? adapter.capabilities.shell.shell
+        : adapter.capabilities.commands.command;
       assert(
         typeof invoke === "function",
         `Feature has no ${method} operation`,
       );
-      await invoke.call(adapter, {
+      const input = {
         sessionID,
         command: "owned operation",
         arguments: "",
-      });
+      };
+      await invoke(input);
     },
     fail(index: number, message: string, ref = "http-reference") {
       requests[index].release(
@@ -240,13 +243,13 @@ export async function observationFixture() {
       ignoreAbort = true;
     },
     async stop() {
-      const stopped = adapter.stop();
+      const stopped = adapter.core.stop();
       for (const request of requests) request.release(Response.json({}));
       releaseGet?.();
       await stopped;
     },
     async coherent(sessionID = "case-a") {
-      const query = await adapter.getSession(sessionID);
+      const query = await adapter.core.getSession(sessionID);
       const state = observed(query);
       const index = entries.get(sessionID)!;
       assert(index);
@@ -281,7 +284,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.wait(() =>
         f.ops.some((item) => Reflect.get(item.event, "error") === "Aborted")
       );
-      await f.adapter.abort("case-a");
+      await f.adapter.capabilities.prompt.abort("case-a");
       assert(f.requests[0].signal.aborted);
       f.fail(0, "Cancelled HTTP watcher late failure");
       const current = await f.coherent();
@@ -478,7 +481,7 @@ export function errorObservationCases(method: "shell" | "command") {
     const f = await observationFixture();
     try {
       f.holdQuery();
-      const query = f.adapter.getSession("case-a");
+      const query = f.adapter.core.getSession("case-a");
       await f.wait(() => f.queryHeld());
       f.native("New observation during query");
       await f.wait(() =>
@@ -536,7 +539,7 @@ export function errorObservationCases(method: "shell" | "command") {
       f.allowLateResponse();
       await f.submit(method, "case-a");
       await f.submit(method, "case-b");
-      await f.adapter.abort("case-a");
+      await f.adapter.capabilities.prompt.abort("case-a");
       assert(
         f.requests[0].signal.aborted,
         "Cancellation left its HTTP watcher alive",
@@ -628,7 +631,7 @@ export function errorObservationCases(method: "shell" | "command") {
         false,
       );
       await f.submit(method);
-      const stopping = f.adapter.stop();
+      const stopping = f.adapter.core.stop();
       const stopCount = f.ops.length;
       f.fail(1, "Stopped late failure");
       await stopping;

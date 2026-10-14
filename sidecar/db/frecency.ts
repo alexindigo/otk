@@ -2,7 +2,7 @@
 import { resolve } from "@std/path";
 import type { FrecencyEntry } from "@otk/protocol";
 import type { OtkDb } from "./db.ts";
-import { HarnessError } from "../adapter/types.ts";
+import { HarnessError } from "@otk/harness";
 function key(value: string): string {
   if (!value.length || value.length > 4096 || value.includes("\0")) {
     throw new HarnessError("params", "Invalid frecency path length or value");

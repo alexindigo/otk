@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertThrows } from "@std/assert";
 import { promptParts } from "../../sidecar/ws/prompt.ts";
-import { mapPromptParts } from "../../sidecar/adapter/opencode1/prompt.ts";
+import { mapPromptParts } from "@otk/harness-opencode1";
 import { editorSave } from "../../web/src/ui/prompt/model.ts";
 import { summarizePaste } from "../../web/src/ui/prompt/paste.ts";
 import {

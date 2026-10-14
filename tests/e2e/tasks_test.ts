@@ -2,7 +2,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
-import type { Info, RawPart } from "../../sidecar/adapter/opencode1/types.ts";
+import type { Info, RawPart } from "@otk/harness-opencode1";
 Deno.test("R5 task progress, real child navigation, parent/history and sibling cycle preserve navigation ownership", async () => {
   const f = await browserFixture({ bash: "ask", task: "allow" });
   try {
