@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { For, Show } from "solid-js";
-import type { SidecarState } from "../state/sidecars.ts";
-import { LOCAL_SIDECAR } from "../state/sidecars.ts";
+import { LOCAL_SIDECAR, type SidecarState } from "@otk/client";
 import Form from "./Form.tsx";
 import Login from "./Login.tsx";
 import Setup from "./Setup.tsx";

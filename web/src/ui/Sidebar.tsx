@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, For, onSettled, Show } from "solid-js";
-import { type MergedEntry, projectGroups, sessionKey } from "../state/index.ts";
-import type { SidecarState } from "../state/sidecars.ts";
+import {
+  type MergedEntry,
+  projectGroups,
+  sessionKey,
+  type SidecarState,
+} from "@otk/client";
 import ConnectionBadge from "./ConnectionBadge.tsx";
 export function shortDirectory(directory: string): string {
   return directory.split(/[\\/]/).filter(Boolean).slice(-2).join("/") ||

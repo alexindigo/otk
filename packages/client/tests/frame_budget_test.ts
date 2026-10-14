@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertRejects } from "@std/assert";
-import { Rpc } from "../../web/src/net/rpc.ts";
+import { Rpc } from "@otk/client";
 
 Deno.test("RPC rejects an oversized total before sending and releases the pending request", async () => {
   let sent = 0;

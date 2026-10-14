@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import type { PermissionRequest } from "@otk/protocol";
-import { oldestPermission } from "../../../web/src/state/permissions.ts";
-import { emptyContent, reduce } from "../../../web/src/state/reduce.ts";
+import { emptyContent, oldestPermission, reduce } from "@otk/client";
 const nodes: Record<string, { parentID?: string }> = {
   root: {},
   child: { parentID: "root" },

@@ -2,7 +2,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { mapMessage } from "@otk/harness-opencode1";
 import type { Info, RawPart } from "@otk/harness-opencode1";
-import { emptyContent, reduce } from "../../web/src/state/reduce.ts";
+import { emptyContent, reduce } from "@otk/client";
 const info: Info = {
   id: "reply",
   sessionID: "session",

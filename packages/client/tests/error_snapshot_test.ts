@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { emptyContent, reduce } from "../../../web/src/state/reduce.ts";
+import { emptyContent, reduce } from "@otk/client";
 
 Deno.test("buffered older error observations cannot regress an identified current snapshot", () => {
   const current = {

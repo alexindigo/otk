@@ -1,16 +1,21 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createMemo, createSignal, onSettled, Show } from "solid-js";
 import type { ContentSession } from "@otk/protocol";
-import { createIndex, liveSessionInfo, sessionKey } from "../state/index.ts";
+import { createIndex } from "../state/index.ts";
 import {
-  createSession,
+  createCurrentClient,
+  createNavigation,
   hashFor,
+  liveSessionInfo,
+  loadHistory,
+  LOCAL_SIDECAR,
+  oldestPermission,
   route,
   type Selection,
-} from "../state/session.ts";
-import { createSidecars, LOCAL_SIDECAR } from "../state/sidecars.ts";
-import { createNavigation } from "../state/navigation.ts";
-import { oldestPermission } from "../state/permissions.ts";
+  sessionKey,
+} from "@otk/client";
+import { createSession } from "../state/session.ts";
+import { createSidecars } from "../state/sidecars.ts";
 import PermissionDock from "./PermissionDock.tsx";
 import QuestionDock from "./QuestionDock.tsx";
 import Sidebar from "./Sidebar.tsx";
@@ -21,7 +26,6 @@ import Setup from "./Setup.tsx";
 import { createToggles } from "./Toggles.ts";
 import DisplayMenu from "./DisplayMenu.tsx";
 import { emptyDraft } from "./prompt/model.ts";
-import { type HistoryEntry, mergeHistory } from "@otk/protocol";
 import type {
   AgentOption,
   CommandOption,
@@ -46,6 +50,10 @@ export default function App() {
   const entry = (sidecarId: string, id: string) =>
     index.state.entries[sessionKey(sidecarId, id)];
   const session = createSession((id) => sidecars.connection(id), entry);
+  const current = createCurrentClient(
+    () => session.state.selection,
+    (id) => sidecars.connection(id),
+  );
   const toggles = createToggles((key, value) =>
     sidecars.connection(LOCAL_SIDECAR).rpc.call("prefs.set", { key, value })
   );
@@ -292,9 +300,10 @@ export default function App() {
                             : undefined}
                           onDirty={(value) => setPermissionDirty(value)}
                           onReply={(input) =>
-                            sidecars.connection(
-                              session.state.selection!.sidecarId,
-                            ).rpc.call<void>("permission.reply", input)}
+                            current.context().rpc.call<void>(
+                              "permission.reply",
+                              input,
+                            )}
                         />
                       </Show>
                     }
@@ -315,9 +324,7 @@ export default function App() {
                             : undefined}
                           onDirty={setQuestionDirty}
                           onReply={(requestID, answers) =>
-                            sidecars.connection(
-                              session.state.selection!.sidecarId,
-                            ).rpc.call<void>(
+                            current.context().rpc.call<void>(
                               answers ? "question.reply" : "question.reject",
                               { requestID, ...(answers ? { answers } : {}) },
                             )}
@@ -339,19 +346,19 @@ export default function App() {
                     onRetry={() => session.refetch()}
                     onDraft={(value) => setDraft(value)}
                     onFind={(query) => {
-                      const target = session.state.selection!;
+                      const { selection: target, connection } = current
+                        .context();
                       if (
-                        !sidecars.connection(target.sidecarId).supports("files")
+                        !connection.supports("files")
                       ) return Promise.resolve([]);
-                      return sidecars.connection(target.sidecarId).rpc.call<
+                      return connection.rpc.call<
                         FileMatch[]
                       >("find.files", { sessionID: target.sessionID, query });
                     }}
                     onMentions={async (query) => {
-                      const target = session.state.selection!,
-                        connection = sidecars.connection(target.sidecarId),
-                        rpc = connection.rpc,
-                        directory = await directoryFor(target);
+                      const { selection: target, connection, rpc } = current
+                        .context();
+                      const directory = await directoryFor(target);
                       const [files, agents, resources, frecency] = await Promise
                         .all([
                           connection.supports("files")
@@ -377,25 +384,23 @@ export default function App() {
                       return { files, agents, resources, frecency, directory };
                     }}
                     onBump={async (path) => {
-                      const target = session.state.selection!;
-                      await sidecars.connection(target.sidecarId).rpc.call<
-                        void
-                      >("frecency.bump", { sessionID: target.sessionID, path });
+                      await current.call<void>("frecency.bump", { path });
                     }}
                     onCommands={() => {
-                      const target = session.state.selection!;
+                      const { selection: target, connection } = current
+                        .context();
                       if (
-                        !sidecars.connection(target.sidecarId).supports(
+                        !connection.supports(
                           "commands",
                         )
                       ) return Promise.resolve([]);
-                      return sidecars.connection(target.sidecarId).rpc.call<
+                      return connection.rpc.call<
                         CommandOption[]
                       >("commands.list", { sessionID: target.sessionID });
                     }}
                     onCommand={async (command, args, parts) => {
-                      const target = session.state.selection!;
-                      return sidecars.connection(target.sidecarId).rpc.call<
+                      const { selection: target, rpc } = current.context();
+                      return rpc.call<
                         void
                       >("session.command", {
                         sessionID: target.sessionID,
@@ -410,39 +415,24 @@ export default function App() {
                       });
                     }}
                     onNew={async () => {
-                      const target = session.state.selection!,
-                        directory = await directoryFor(target);
+                      const { selection: target } = current.context();
+                      const directory = await directoryFor(target);
                       await create(target.sidecarId, directory);
                     }}
                     onHistory={async () =>
-                      mergeHistory(
-                        (await Promise.allSettled(
-                          sidecars.state.list.filter((sidecar) =>
-                            sidecar.status === "connected" &&
-                            sidecar.capabilities.includes("history")
-                          ).map((sidecar) =>
-                            sidecars.connection(sidecar.id).rpc.call<
-                              HistoryEntry[]
-                            >("history.list", {}).then((entries) =>
-                              entries.map((entry) => ({
-                                ...entry,
-                                parts: entry.parts.map((part) =>
-                                  part.kind === "file" &&
-                                    part.source === "history"
-                                    ? { ...part, sidecarID: sidecar.id }
-                                    : part
-                                ),
-                              }))
-                            )
-                          ),
-                        )).flatMap((result) =>
-                          result.status === "fulfilled" ? [result.value] : []
-                        ),
+                      await loadHistory(
+                        sidecars.state.list.filter((sidecar) =>
+                          sidecar.status === "connected" &&
+                          sidecar.capabilities.includes("history")
+                        ).map((sidecar) => ({
+                          id: sidecar.id,
+                          connection: sidecars.connection(sidecar.id),
+                        })),
                       )}
                     onPrompt={async (parts, mode) => {
-                      const target = session.state.selection!;
+                      const { selection: target, rpc } = current.context();
                       if (mode === "shell") {
-                        return sidecars.connection(target.sidecarId).rpc.call<
+                        return rpc.call<
                           void
                         >("session.shell", {
                           sessionID: target.sessionID,
@@ -450,7 +440,7 @@ export default function App() {
                             .map((part) => part.text).join("\n"),
                         });
                       }
-                      return sidecars.connection(target.sidecarId).rpc.call<
+                      return rpc.call<
                         void
                       >("session.prompt", {
                         sessionID: target.sessionID,
@@ -458,12 +448,7 @@ export default function App() {
                         parts: await attachments(parts, target.sidecarId),
                       });
                     }}
-                    onAbort={() => {
-                      const target = session.state.selection!;
-                      return sidecars.connection(target.sidecarId).rpc.call<
-                        void
-                      >("session.abort", { sessionID: target.sessionID });
-                    }}
+                    onAbort={() => current.call<void>("session.abort", {})}
                   />
                 </Show>
               </Show>

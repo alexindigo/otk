@@ -2,7 +2,7 @@
 import { assertEquals } from "@std/assert";
 import { mapMessage } from "@otk/harness-opencode1";
 import { markdown } from "@otk/content";
-import { emptyContent, reduce } from "../../../web/src/state/reduce.ts";
+import { emptyContent, reduce } from "@otk/client";
 const header = (completed?: number) =>
   mapMessage({
     id: "reply",

@@ -87,6 +87,9 @@ provides feature-contributed persistence migrations. Root `main.ts` and the
 [`application core`](./core/README.md) compose these libraries, the selected
 backend, registered RPC features and web assets. HTTP routes remain reflective
 application files; core is not another reusable server/app package.
+[`@otk/client`](./packages/client/README.md) supplies framework-free networking,
+RPC, observable session/index state, history and navigation. Solid bindings stay
+at the browser UI boundary.
 
 `deno task test:unit` runs remaining app units and extracted package units;
 `deno task test:integration` and `deno task test:e2e` run app-level checks.

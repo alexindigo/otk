@@ -11,6 +11,8 @@ export default defineConfig({
     alias: {
       "@otk/protocol": new URL("../packages/protocol/mod.ts", import.meta.url)
         .pathname,
+      "@otk/client":
+        new URL("../packages/client/mod.ts", import.meta.url).pathname,
     },
   },
   plugins: [solid({ compiler: "native", hot: false })],

@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { createRoot, flush } from "solid-js";
 import { PROTOCOL_VERSION } from "@otk/protocol";
-import { createSidecars } from "../../../web/src/state/sidecars.ts";
+import { createSidecars } from "@otk/client";
 
 Deno.test("welcome consumers retain legacy capabilities while honoring explicit empty/subset advertisements", async () => {
   const keys = ["fetch", "location", "localStorage", "WebSocket"];
@@ -16,10 +15,13 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
     onopen?: () => void;
     onclose?: () => void;
     onmessage?: (event: { data: string }) => void;
+    sent: string[] = [];
     constructor() {
       Socket.current = this;
     }
-    send() {}
+    send(value: string) {
+      this.sent.push(value);
+    }
     close() {
       this.readyState = 3;
       this.onclose?.();
@@ -59,13 +61,12 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
   ];
   try {
     for (const capabilities of [undefined, [], ["prompt"]]) {
-      let sidecars!: ReturnType<typeof createSidecars>, dispose!: () => void;
-      createRoot((stop) => {
-        dispose = stop;
-        sidecars = createSidecars(() => {});
+      const sidecars = createSidecars(() => {}, {
+        connection: { api: new URL("http://example.test/api/") },
       });
       try {
         const connection = sidecars.connection("local");
+        connection.subscribe("open", true);
         await connection.connect();
         Socket.current.onopen?.();
         Socket.current.onmessage?.({
@@ -83,7 +84,6 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
             },
           }),
         });
-        flush();
         const expected = capabilities ?? legacy;
         assertEquals(sidecars.state.list[0].capabilities, expected);
         assertEquals(
@@ -94,9 +94,44 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
           connection.supports("prompt"),
           expected.includes("prompt"),
         );
+        assertEquals(Socket.current.sent.map((value) => JSON.parse(value).t), [
+          "hello",
+          "subscribe",
+        ]);
+        Socket.current.onmessage?.({ data: JSON.stringify({ t: "ping" }) });
+        assertEquals(JSON.parse(Socket.current.sent.at(-1)!), { t: "pong" });
+        const pending = connection.rpc.call("session.get", {
+          sessionID: "open",
+        }).catch((error) => error.message);
+        Socket.current.close();
+        assertEquals(await pending, "Sidecar disconnected");
+        assertEquals(sidecars.state.list[0].status, "reconnecting");
+        assertEquals(sidecars.state.list[0].capabilities, expected);
+        assertEquals(connection.supports("prompt"), false);
+        await connection.connect();
+        Socket.current.onopen?.();
+        Socket.current.onmessage?.({
+          data: JSON.stringify({
+            t: "welcome",
+            protocol: PROTOCOL_VERSION,
+            sidecar: {
+              version: "reconnected",
+              harness: {
+                kind: "backend",
+                version: "1",
+                url: "http://backend.test",
+                capabilities: expected,
+              },
+            },
+          }),
+        });
+        assertEquals(Socket.current.sent.map((value) => JSON.parse(value).t), [
+          "hello",
+          "subscribe",
+        ]);
+        assertEquals(sidecars.state.list[0].status, "connected");
       } finally {
         sidecars.stop();
-        dispose();
       }
     }
   } finally {

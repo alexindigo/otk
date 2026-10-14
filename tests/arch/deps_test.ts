@@ -102,6 +102,13 @@ function dependencyError(
     }
     if (
       targetPath &&
+      /^web\/src\/(?:net\/|state\/(?:reduce|messages|permissions|navigation)\.ts)/
+        .test(targetPath)
+    ) {
+      return "framework-free client paths are retired into @otk/client";
+    }
+    if (
+      targetPath &&
       /^sidecar\/(?:auth|config|features|http|index|static|ws)\//.test(
         targetPath,
       )
@@ -116,6 +123,7 @@ function dependencyError(
   if (production && from === "client" && /solid/i.test(specifier)) {
     return "client must remain framework-free";
   }
+  if (production && from === "client") return "client depends only on protocol";
   if (
     production && from !== "harness-opencode1" && /opencode/i.test(specifier)
   ) {
@@ -291,6 +299,8 @@ Deno.test("dependency checks reject private paths, upward edges and legacy escap
       ["packages/harness-opencode1/adapter.ts", "../../core/mod.ts"],
       ["packages/client/mod.ts", "../../main.ts"],
       ["tests/unit/example.ts", "../../sidecar/auth/state.ts"],
+      ["packages/client/rpc.ts", "npm:ws"],
+      ["tests/unit/example.ts", "../../web/src/state/reduce.ts"],
     ]
   ) assert(dependencyError(path, specifier, present), `${path}: ${specifier}`);
   assert(dependencyError("packages/protocol/mod.ts", undefined, present));
@@ -385,4 +395,11 @@ Deno.test("standalone sessions consumer imports only the harness public entries"
     new URL("tests/reuse/harness-consumer.ts", root),
   );
   assertEquals(imports(consumer), ["@otk/harness", "@otk/harness-opencode1"]);
+});
+
+Deno.test("standalone client consumer imports only its public framework-free entry", async () => {
+  const consumer = await Deno.readTextFile(
+    new URL("tests/reuse/client-consumer.ts", root),
+  );
+  assertEquals(imports(consumer), ["@otk/client"]);
 });

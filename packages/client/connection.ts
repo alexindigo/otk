@@ -15,6 +15,11 @@ export interface ConnectionSink {
   status(state: ConnectionState, error?: string, authType?: string): void;
   frame(frame: ServerFrame): void;
 }
+/** Non-browser callers inject their authenticated/Origin-aware transport. */
+export interface ConnectionOptions {
+  api?: URL;
+  socket?: (url: URL) => WebSocket;
+}
 export class SidecarConnection {
   readonly base: URL;
   readonly rpc: Rpc;
@@ -26,8 +31,12 @@ export class SidecarConnection {
   #welcomed = false;
   #subscriptions = new Set<string>();
   #capabilities = new Set<string>();
-  constructor(baseUrl: string, readonly sink: ConnectionSink) {
-    this.base = apiBase(baseUrl);
+  constructor(
+    baseUrl: string,
+    readonly sink: ConnectionSink,
+    readonly options: ConnectionOptions = {},
+  ) {
+    this.base = options.api ?? apiBase(baseUrl);
     this.rpc = new Rpc((frame) => this.send(frame));
   }
   send(frame: ClientFrame): void {
@@ -71,10 +80,12 @@ export class SidecarConnection {
         return;
       }
       const url = new URL("ws", this.base);
-      url.protocol = location.protocol === "https:" || url.protocol === "https:"
-        ? "wss:"
-        : "ws:";
-      const socket = this.#socket = new WebSocket(url);
+      url.protocol =
+        globalThis.location?.protocol === "https:" || url.protocol === "https:"
+          ? "wss:"
+          : "ws:";
+      const socket = this.#socket = this.options.socket?.(url) ??
+        new WebSocket(url);
       socket.onopen = () =>
         socket.send(JSON.stringify({ t: "hello", protocol: PROTOCOL_VERSION }));
       socket.onmessage = ({ data }) => {

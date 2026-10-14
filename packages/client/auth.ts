@@ -37,11 +37,11 @@ export function normalizeBase(value: string): string {
   }
   return url.href.replace(/\/+$/, "");
 }
-export function apiBase(baseUrl: string): URL {
+export function apiBase(baseUrl: string, assetUrl?: string): URL {
   // Resolve from the shipped assets/ entry to retain reverse-proxy prefixes,
   // including when the SPA is opened at /login or another fallback route.
   const relative = "../api/";
   return baseUrl
     ? new URL(baseUrl + "/api/")
-    : new URL(relative, import.meta.url);
+    : new URL(relative, assetUrl ?? import.meta.url);
 }

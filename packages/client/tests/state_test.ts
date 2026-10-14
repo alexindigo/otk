@@ -1,18 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import { createRoot, flush } from "solid-js";
 import type { Message, Part } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
 import type { ClientFrame } from "@otk/protocol";
+import { acceptsPatch, createIndex, projectGroups } from "@otk/client";
 import {
-  acceptsPatch,
-  createIndex,
-  projectGroups,
-} from "../../../web/src/state/index.ts";
-import { emptyContent, reduce } from "../../../web/src/state/reduce.ts";
-import { hashFor, route } from "../../../web/src/state/session.ts";
-import { readSidecars } from "../../../web/src/state/sidecars.ts";
-import { Rpc } from "../../../web/src/net/rpc.ts";
+  emptyContent,
+  hashFor,
+  readSidecars,
+  reduce,
+  route,
+  Rpc,
+} from "@otk/client";
 const entry = (id: string, parentID?: string): IndexEntry => ({
   id,
   parentID,
@@ -96,56 +95,48 @@ Deno.test("web reducer replays independent headers/parts and replaces streaming 
   assertEquals(empty.messages, []);
 });
 Deno.test("web merged index isolates sidecar snapshots, refuses revision gaps and hides descendants", () => {
-  createRoot((dispose) => {
-    const index = createIndex();
-    index.receive("one", {
-      t: "index.snapshot",
-      rev: 3,
-      entries: [entry("root"), entry("child", "root")],
-    });
-    index.receive("two", {
-      t: "index.snapshot",
-      rev: 9,
-      entries: [entry("root")],
-    });
-    flush();
-    assertEquals(Object.keys(index.state.entries).sort(), [
-      "one/child",
-      "one/root",
-      "two/root",
-    ]);
-    assertEquals(
-      projectGroups(Object.values(index.state.entries), "one")[0].entries.map((
-        e,
-      ) => e.id),
-      ["root"],
-    );
-    assert(
-      !index.receive("one", {
-        t: "index.patch",
-        rev: 10,
-        ops: [{ op: "remove", id: "root" }],
-      }),
-    );
-    flush();
-    assert(index.state.entries["one/root"]);
-    assert(
-      index.receive("one", {
-        t: "index.patch",
-        rev: 4,
-        ops: [{ op: "remove", id: "child" }],
-      }),
-    );
-    flush();
-    index.receive("one", { t: "index.snapshot", rev: 20, entries: [] });
-    flush();
-    assertEquals(Object.keys(index.state.entries), ["two/root"]);
-    assert(!acceptsPatch(undefined, { t: "index.patch", rev: 1, ops: [] }));
-    index.remove("two");
-    flush();
-    assertEquals(Object.keys(index.state.entries), []);
-    dispose();
+  const index = createIndex();
+  index.receive("one", {
+    t: "index.snapshot",
+    rev: 3,
+    entries: [entry("root"), entry("child", "root")],
   });
+  index.receive("two", {
+    t: "index.snapshot",
+    rev: 9,
+    entries: [entry("root")],
+  });
+  assertEquals(Object.keys(index.state.entries).sort(), [
+    "one/child",
+    "one/root",
+    "two/root",
+  ]);
+  assertEquals(
+    projectGroups(Object.values(index.state.entries), "one")[0].entries.map((
+      e,
+    ) => e.id),
+    ["root"],
+  );
+  assert(
+    !index.receive("one", {
+      t: "index.patch",
+      rev: 10,
+      ops: [{ op: "remove", id: "root" }],
+    }),
+  );
+  assert(index.state.entries["one/root"]);
+  assert(
+    index.receive("one", {
+      t: "index.patch",
+      rev: 4,
+      ops: [{ op: "remove", id: "child" }],
+    }),
+  );
+  index.receive("one", { t: "index.snapshot", rev: 20, entries: [] });
+  assertEquals(Object.keys(index.state.entries), ["two/root"]);
+  assert(!acceptsPatch(undefined, { t: "index.patch", rev: 1, ops: [] }));
+  index.remove("two");
+  assertEquals(Object.keys(index.state.entries), []);
 });
 Deno.test("web sidecar persistence keeps the implicit source and rejects duplicate identities/URLs", () => {
   const read = (value: unknown) =>

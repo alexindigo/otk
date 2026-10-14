@@ -5,7 +5,10 @@ kit-repackaging dependency table. It also checks remaining sidecar/web/test
 consumers for private paths into extracted packages and retired protocol,
 harness, store and sidecar application paths. Package metadata must expose only
 `mod.ts`; import maps cannot bypass workspace resolution. Protocol production
-code cannot acquire external dependencies.
+code cannot acquire external dependencies. Client production code depends only
+on protocol, with no Solid imports or legacy networking/reducer escapes; the
+standalone consumer imports only `@otk/client`. Solid state storage remains in
+the application's thin web binding until UI extraction.
 
 The checks cover static imports, type imports, re-exports, side-effect imports
 and literal dynamic imports. Uncheckable computed or escaped dependencies are

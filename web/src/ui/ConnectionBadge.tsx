@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { SidecarState } from "../state/sidecars.ts";
+import type { SidecarState } from "@otk/client";
 export default function ConnectionBadge(props: { sidecar: SidecarState }) {
   return (
     <div class="otk-connection" aria-live="polite">
