@@ -66,15 +66,16 @@ heartbeat every 20 seconds. Connections close after 60 seconds without an
 incoming response or other valid client frame. This is an application-level
 heartbeat, not a WebSocket control-frame ping.
 
-Development verification runs in the dedicated OTK VM on ark, in
-`/home/tester/otk`; see the user-level `otk-vm` access skill and milestone
-plans. The test provider is scripted and uses no real model credentials.
+Development verification runs inside virtual machine
+`arch-niri-otk-devbase-otk-m1` on `ark.home`, as `tester` in `/home/tester/otk`,
+through the strict `otk-vm` / `otk-m1` access profile and milestone plans. The
+test provider is scripted and uses no real model credentials.
 
 License: LGPL-3.0-only.
 
 ## Workspace packages
 
-OTK is being extracted into reusable Deno workspace packages.
+OTK composes seven reusable Deno workspace libraries and one root application.
 [`@otk/protocol`](./packages/protocol/README.md) provides dependency-free wire
 contracts and helpers; [`@otk/content`](./packages/content/README.md) converts
 markdown and patches and owns streaming reply buffers.
@@ -83,18 +84,50 @@ optional capabilities;
 [`@otk/harness-opencode1`](./packages/harness-opencode1/README.md) owns the
 stock native adapter and read-only history. Consumers use public bare imports
 through each package's `mod.ts`. [`@otk/store`](./packages/store/README.md)
-provides feature-contributed persistence migrations. Root `main.ts` and the
-[`application core`](./core/README.md) compose these libraries, the selected
-backend, registered RPC features and web assets. HTTP routes remain reflective
-application files; core is not another reusable server/app package.
-[`@otk/client`](./packages/client/README.md) supplies framework-free networking,
-RPC, observable session/index state, history and navigation. Solid bindings stay
-at the browser UI boundary. [`@otk/ui`](./packages/ui/README.md) provides Solid
-components, consumer-owned tool/part/prompt/dock registrations, component styles
-and the client bindings. The web application selects its modules in
-`web/src/features.ts`.
+provides feature-contributed persistence migrations. Root `main.ts`,
+`application.ts` and the [`application core`](./core/README.md) compose these
+libraries, the selected backend, registered RPC features and web assets. HTTP
+routes remain reflective application files; core is not another reusable
+server/app package. [`@otk/client`](./packages/client/README.md) supplies
+framework-free networking, RPC, observable session/index state, history and
+navigation. Solid bindings stay at the browser UI boundary.
+[`@otk/ui`](./packages/ui/README.md) provides Solid components, consumer-owned
+tool/part/prompt/dock registrations, component styles and the client bindings.
+The web application selects its modules in `web/src/features.ts`.
+
+## Application ownership
+
+| # | Entry or area                                               | Responsibility                                                                                                               |
+| - | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| 1 | `main.ts`, `defaults/otk.toml`                              | Layered operator/auth-state config, selected native backend and content buffers, bundled asset path, process signal lifetime |
+| 2 | `application.ts`                                            | Backend-neutral shipped composition: public store migrations/services and feature-owned core RPC registrations               |
+| 3 | `core/`                                                     | Config/auth, reflective HTTP adapters, WS/RPC transport, session index and backend-neutral service lifetime                  |
+| 4 | `web/index.html`, `web/src/main.tsx`, `web/src/features.ts` | Browser bootstrap, fonts/provider and public UI feature selection                                                            |
+| 5 | `web/src/ui/App.tsx`, `App.css`                             | Application chrome, draft/navigation ownership and injected RPC/data callbacks                                               |
+| 6 | `tests/`                                                    | Application units, integration/e2e, shared fixtures, architectural boundaries and standalone reuse consumers                 |
+| 7 | `packages/*/tests/`                                         | Library-owned units; application support stays at root                                                                       |
+
+Application fixtures use the same composition as production: subprocesses launch
+`main.ts`; external-backend fixtures call `startApplication`. Config, wire names
+and sidecar browser terminology remain compatible. Core routes stay in
+`core/http/routes/`; Pathfinder discovers named handler exports and middleware
+without a generated mirror or handwritten route table. Registry machinery
+imports no concrete features. Libraries never import the application;
+cross-package source imports use only their public `@otk/<library>` entry.
+
+For an alternate backend, implement the public `@otk/harness` contract and
+supply it to `startApplication`; optional RPCs follow the capabilities actually
+supplied. For a smaller custom application, use `startCore` with selected
+feature-owned registrations, as illustrated in the core documentation. Reuse of
+a library does not require the OTK application. The browser bundler maps bare
+kit names to the declared public entries; UI resources resolve from pinned
+library exports.
 
 `deno task test:unit` runs remaining app units and extracted package units;
 `deno task test:integration` and `deno task test:e2e` run app-level checks.
 `deno task test:arch` enforces extracted package boundaries and
-`deno task test:reuse` runs standalone public API consumers.
+`deno task test:reuse` runs standalone public API consumers. The final kit sweep
+adds `deno check packages/<library>/mod.ts` and
+`deno publish --dry-run --allow-dirty --config packages/<library>/deno.json` for
+all seven actual libraries. The root application is not a separate `@otk/app`,
+`@otk/server` or `@otk/sidecar` publication target.

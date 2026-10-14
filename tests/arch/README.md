@@ -1,14 +1,14 @@
-# Staged dependency architecture
+# Kit dependency architecture
 
-`deno task test:arch` checks all existing workspace packages against the
-kit-repackaging dependency table. It also checks remaining sidecar/web/test
+`deno task test:arch` checks the exact seven workspace libraries against the
+kit-repackaging dependency table. It also checks root application/core/web/test
 consumers for private paths into extracted packages and retired protocol,
 harness, store and sidecar application paths. Package metadata must expose only
 `mod.ts`; import maps cannot bypass workspace resolution. Protocol production
 code cannot acquire external dependencies. Client production code depends only
 on protocol, with no Solid imports or legacy networking/reducer escapes; the
-standalone consumer imports only `@otk/client`. Solid state storage remains in
-the application's thin web binding until UI extraction.
+standalone consumer imports only `@otk/client`. Solid state storage lives in the
+UI library's thin bindings over that client.
 
 The checks cover static imports, type imports, re-exports, side-effect imports
 and literal dynamic imports. Uncheckable computed or escaped dependencies are
@@ -23,7 +23,15 @@ Negative fixtures exercise that separation alongside registry-to-feature checks.
 OTK's root application/core composes backend, feature registrations and assets;
 it is not a separate sidecar/server/app library. Core RPC registry machinery is
 implementation-free. HTTP routes remain reflective application files. Package
-imports cannot escape into core or root bootstrap. Existing UI dispatch remains
-until its planned extraction chunk. Package tests may use test dependencies,
-while cross-package imports still use public names. App-level test support may
-use native endpoints for stock-server proofs.
+imports cannot escape into core or root bootstrap. UI part/tool dispatch uses
+consumer-selected registries, whose machinery imports no features. Package tests
+may use test dependencies, while cross-package imports still use public names.
+App-level test support may use native endpoints for stock-server proofs.
+
+The final composition check covers root server and browser entries, shared
+production composition in fixtures, retirement of old extraction directories and
+the duplicate subprocess launcher, and the application-owned reflective
+catch-all. Both shipped and standalone browser consumers must resolve bare kit
+names to the packages' declared public entries, rather than private bundler
+seams. Negative fixtures retain checks for all retired paths and forbidden
+app/server/sidecar package assumptions.

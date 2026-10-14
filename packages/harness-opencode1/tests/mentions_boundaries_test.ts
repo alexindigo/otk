@@ -1,22 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertThrows } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { cfg, fixture } from "../support/config.ts";
-import {
-  Frecency,
-  frecencyMigrations,
-  OtkDb,
-  prefsMigrations,
-} from "@otk/store";
-import {
-  frecencyOptions,
-  registerFrecency,
-  RpcRegistry,
-} from "../../core/mod.ts";
-import { HarnessError } from "@otk/harness";
-import { Opencode1Adapter } from "@otk/harness-opencode1";
+import { cfg, fixture } from "../../../tests/support/config.ts";
+import { Opencode1Adapter } from "../mod.ts";
 import { StreamBuffers } from "@otk/content";
-import { mapPromptParts } from "@otk/harness-opencode1";
+import { mapPromptParts } from "../mod.ts";
 
 function adapterFor(root: string) {
   const settings = cfg();
@@ -37,43 +25,6 @@ function adapterFor(root: string) {
     return Promise.resolve(Response.json(["src/file.ts", "blocked/file.ts"]));
   });
 }
-
-Deno.test("frecency RPC uses authoritative session directory instead of a client-claimed project", async () => {
-  const root = await fixture(),
-    db = new OtkDb(root, [...prefsMigrations, ...frecencyMigrations]),
-    store = new Frecency(db, frecencyOptions),
-    adapter = adapterFor(root);
-  const rpc = new RpcRegistry(adapter, db);
-  registerFrecency(rpc, adapter, store);
-  try {
-    const error = assertThrows(
-      () => store.bump(root, "x".repeat(4097)),
-      HarnessError,
-      "Invalid frecency path length or value",
-    );
-    assertEquals(error.code, "params");
-    await rpc.dispatch(
-      "frecency.bump",
-      {
-        sessionID: "ses_files",
-        directory: "/forged-project",
-        path: "src/file.ts",
-      },
-    );
-    assertEquals(store.list("/forged-project"), []);
-    assertEquals(store.list(root)[0].path, join(root, "src/file.ts"));
-    assertEquals(
-      await rpc.dispatch(
-        "frecency.list",
-        { sessionID: "ses_files", directory: "/forged-project" },
-      ),
-      store.list(root),
-    );
-  } finally {
-    await adapter.core.stop();
-    db.close();
-  }
-});
 
 Deno.test("permission-denied stat candidates are no-match in both find and prompt mapping", async () => {
   const root = await fixture();

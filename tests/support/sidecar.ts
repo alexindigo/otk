@@ -69,7 +69,7 @@ export class SidecarTest {
       "--allow-read",
       "--allow-write",
       "--allow-env",
-      "tests/support/sidecar-child.ts",
+      "main.ts",
     ], { cwd: root, env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
     instance.process.stdout!.on("data", (chunk) => {
       instance.log += chunk.toString();

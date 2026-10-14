@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 
-// kit-repackaging §2.1. Check every package that exists, without pretending
-// legacy directories have already undergone the later extraction chunks.
+// Final seven-library dependency table; the application remains at root.
 const allowed: Record<string, readonly string[]> = {
   protocol: [],
   content: ["protocol"],
@@ -142,7 +141,9 @@ function dependencyError(
 function sourceErrors(path: string, source: string): string[] {
   const from = owner(path);
   if (isTest(path)) return [];
-  if (!from && !/^(?:main\.ts$|core\/|web\/src\/)/.test(path)) return [];
+  if (!from && !/^(?:(?:main|application)\.ts$|core\/|web\/src\/)/.test(path)) {
+    return [];
+  }
   const errors: string[] = [];
   if (from) {
     for (
@@ -253,7 +254,7 @@ Deno.test("extracted package metadata and imports follow public downward depende
       await Deno.readTextFile(new URL("LICENSE", root)),
     );
   }
-  assert(present.has("protocol"));
+  assertEquals([...present].sort(), Object.keys(allowed).sort());
   const config = JSON.parse(
     await Deno.readTextFile(new URL("deno.json", root)),
   );
@@ -270,7 +271,7 @@ Deno.test("extracted package metadata and imports follow public downward depende
   }
   let files = 0, edges = 0;
   const errors: string[] = [];
-  const urls = [new URL("main.ts", root)];
+  const urls = [new URL("main.ts", root), new URL("application.ts", root)];
   for (const directory of ["packages/", "core/", "web/src/", "tests/"]) {
     for await (const url of sources(new URL(directory, root))) {
       urls.push(url);
@@ -480,4 +481,78 @@ Deno.test("independent UI consumer imports public kit entries without applicatio
     "@otk/ui",
     "@fontsource/ibm-plex-mono/400.css",
   ]);
+});
+
+Deno.test("final application entries compose public kit modules and keep reflective routes outside library publication", async () => {
+  const read = (path: string) => Deno.readTextFile(new URL(path, root));
+  assertEquals(
+    imports(await read("application.ts")).filter((name) =>
+      name?.startsWith("@otk/")
+    ),
+    ["@otk/harness", "@otk/store"],
+  );
+  assertEquals(
+    imports(await read("main.ts")).filter((name) => name?.startsWith("@otk/")),
+    ["@otk/harness-opencode1", "@otk/content"],
+  );
+  assertEquals(imports(await read("web/src/features.ts")), ["@otk/ui"]);
+  assertEquals(
+    imports(await read("tests/support/core-backend.ts")).filter((name) =>
+      name?.endsWith("application.ts")
+    ),
+    ["../../application.ts"],
+  );
+  assert((await read("tests/support/sidecar.ts")).includes('"main.ts"'));
+  for (
+    const path of [
+      "sidecar/",
+      "protocol/",
+      "packages/app/",
+      "packages/server/",
+      "packages/sidecar/",
+      "core/deno.json",
+      "tests/support/sidecar-child.ts",
+    ]
+  ) {
+    let exists = true;
+    try {
+      await Deno.stat(new URL(path, root));
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) throw error;
+      exists = false;
+    }
+    assert(!exists, `Obsolete extraction scaffolding: ${path}`);
+  }
+  const routes = await read("core/http/server.ts");
+  assert(routes.includes('new URL("./routes/", import.meta.url)'));
+  await Deno.stat(new URL("core/http/routes/%23...path/get.ts", root));
+  for (
+    const config of [
+      "web/vite.config.ts",
+      "tests/reuse/ui-consumer/vite.config.ts",
+    ]
+  ) {
+    const source = await read(config);
+    const mappings = [
+      ...source.matchAll(
+        /"(@otk\/([\w-]+))":\s*new URL\("([^"]+)"\s*,\s*import\.meta\.url\)/g,
+      ),
+    ];
+    assertEquals(mappings.map((match) => match[2]).sort(), [
+      "client",
+      "protocol",
+      "ui",
+    ]);
+    for (const match of mappings) {
+      const entry = new URL(match[3], new URL(config, root));
+      const metadata = JSON.parse(await read(`packages/${match[2]}/deno.json`));
+      assertEquals(
+        entry.href,
+        new URL(
+          `packages/${match[2]}/${metadata.exports.replace(/^\.\//, "")}`,
+          root,
+        ).href,
+      );
+    }
+  }
 });

@@ -1,13 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import { Backoff, Watchdog } from "@otk/harness-opencode1";
-import { consumeEvents } from "@otk/harness-opencode1";
-import {
-  mapDiffs,
-  mapMessage,
-  mapPart,
-  mapPermission,
-} from "@otk/harness-opencode1";
+import { Backoff, Watchdog } from "../mod.ts";
+import { consumeEvents } from "../mod.ts";
+import { mapDiffs, mapMessage, mapPart, mapPermission } from "../mod.ts";
 
 Deno.test("watchdog detects silence and backoff resets on connected", async () => {
   let fired = 0;

@@ -1,24 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { fromFileUrl, join } from "@std/path";
 import type { Capabilities, Harness } from "@otk/harness";
-import {
-  Frecency,
-  frecencyMigrations,
-  OtkDb,
-  Prefs,
-  prefsMigrations,
-} from "@otk/store";
-import {
-  frecencyOptions,
-  prefsOptions,
-  registerFrecency,
-  registerPermissions,
-  registerPrefs,
-  registerQuestions,
-  registerSessions,
-  RpcRegistry,
-  startCore,
-} from "../../core/mod.ts";
+import { startApplication } from "../../application.ts";
 import { cfg } from "./config.ts";
 
 /** Real core composition with caller-supplied optional backend capabilities. */
@@ -86,24 +69,10 @@ export async function coreBackendFixture(
     },
     capabilities,
   };
-  const store = new OtkDb(settings.state.path, [
-    ...prefsMigrations,
-    ...frecencyMigrations,
-  ]);
-  const prefs = new Prefs(store, prefsOptions),
-    rpc = new RpcRegistry(backend, store);
-  registerSessions(rpc, backend);
-  registerPrefs(rpc, backend, prefs);
-  registerFrecency(rpc, backend, new Frecency(store, frecencyOptions));
-  registerPermissions(rpc, backend);
-  registerQuestions(rpc, backend);
-  const app = await startCore({
-    cfg: settings,
+  const app = await startApplication(
+    settings,
     backend,
-    store,
-    prefs,
-    rpc,
-    staticRoot: fromFileUrl(new URL("../../web/dist/", import.meta.url)),
-  });
+    fromFileUrl(new URL("../../web/dist/", import.meta.url)),
+  );
   return { app, session, url: `http://127.0.0.1:${app.server.addr.port}` };
 }
