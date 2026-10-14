@@ -12,6 +12,7 @@ import { ShikiStreamTokenizer } from "@shikijs/stream";
 import { EncodedTokenMetadata } from "../../../node_modules/shiki/dist/textmate.mjs";
 import { sourceLine } from "./lines.ts";
 import { sharedNativeScanners } from "./scanners.ts";
+import { instantiateOniguruma } from "./engine.ts";
 import type {
   HighlightRange,
   HighlightRequest,
@@ -25,25 +26,12 @@ const theme = createCssVariablesTheme({
 const highlighter = createHighlighterCore({
   langs: [],
   themes: [theme],
-  // The same pinned Shiki package ships the engine binary. Loading bytes avoids
-  // evaluating its 622 KiB base64/Uint8Array module on every worker acquisition.
-  // Response is a documented Oniguruma loader input. Its existing native
-  // instantiateStreaming path overlaps binary delivery and compilation rather
-  // than waiting for an entire ArrayBuffer. File fetches have no MIME header,
-  // so supply the binary's known media type for both guest and bundled assets.
-  engine: createOnigurumaEngine(
-    fetch(
-      new URL("../../../node_modules/shiki/dist/onig.wasm", import.meta.url),
-    )
-      .then((response) => {
-        if (!response.ok) {
-          throw new Error(`Highlight engine asset: ${response.status}`);
-        }
-        return new Response(response.body, {
-          headers: { "Content-Type": "application/wasm" },
-        });
-      }),
-  ).then(sharedNativeScanners),
+  // Shiki supplies the imports to our worker-owned native instantiator. The
+  // pinned binary stays local and ephemeral, without a base64 module or a
+  // persistent compilation cache.
+  engine: createOnigurumaEngine(instantiateOniguruma).then(
+    sharedNativeScanners,
+  ),
 });
 interface Stream {
   lang: string;
