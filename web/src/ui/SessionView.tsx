@@ -39,6 +39,8 @@ export default function SessionView(props: {
   errorState?: SessionErrorState;
   draft: Draft;
   connected: boolean;
+  capabilities: readonly string[];
+  historyEnabled: boolean;
   permissionDock?: Element;
   questionDock?: Element;
   displayMenu?: Element;
@@ -193,6 +195,9 @@ export default function SessionView(props: {
         {props.permissionDock}
         {props.questionDock}
         <Prompt
+          promptEnabled={props.capabilities.includes("prompt")}
+          shellEnabled={props.capabilities.includes("shell")}
+          historyEnabled={props.historyEnabled}
           value={props.draft}
           connected={props.connected}
           pasteSummary={props.prefs.pasteSummary}

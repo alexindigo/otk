@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
-import { loadServiceConfig } from "../../../sidecar/config/loader.ts";
+import { loadServiceConfig } from "../../../core/config/loader.ts";
 import { Opencode1Adapter } from "../adapter.ts";
 import { StreamBuffers } from "@otk/content";
 import type { Session } from "../types.ts";

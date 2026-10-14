@@ -1,9 +1,9 @@
 # OTK — Open Terminal Kit
 
-A lightweight browser client for multiple coding-agent servers. One Deno sidecar
-sits beside each opencode 1.x server, converts its content into OTK shapes, and
-distributes a small live session index. Message history remains in opencode; the
-sidecar reads its database only for queries the API cannot answer cheaply.
+A lightweight application for coding-agent backends. OTK's Deno core composes
+reusable kit modules, serves the browser UI and distributes a small live session
+index. Opencode 1.x is the current backend; its native implementation converts
+content into OTK shapes and owns history/database queries.
 
 Requires Deno 2.9.6 and opencode 1.18.34. Start opencode separately, then:
 
@@ -82,8 +82,11 @@ markdown and patches and owns streaming reply buffers.
 optional capabilities;
 [`@otk/harness-opencode1`](./packages/harness-opencode1/README.md) owns the
 stock native adapter and read-only history. Consumers use public bare imports
-through each package's `mod.ts`. The sidecar and web app retain their current
-entry points during extraction.
+through each package's `mod.ts`. [`@otk/store`](./packages/store/README.md)
+provides feature-contributed persistence migrations. Root `main.ts` and the
+[`application core`](./core/README.md) compose these libraries, the selected
+backend, registered RPC features and web assets. HTTP routes remain reflective
+application files; core is not another reusable server/app package.
 
 `deno task test:unit` runs remaining app units and extracted package units;
 `deno task test:integration` and `deno task test:e2e` run app-level checks.

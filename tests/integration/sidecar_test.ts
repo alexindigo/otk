@@ -17,6 +17,21 @@ Deno.test("I11 message paging accepts OTK message IDs without leaking harness cu
   const f = await fixture();
   try {
     const server = await f.sidecar(), client = await f.client(server);
+    const welcome = await client.wait((frame) => frame.t === "welcome");
+    assert(welcome.t === "welcome");
+    assert(welcome.sidecar.harness.capabilities);
+    assertEquals([...welcome.sidecar.harness.capabilities].sort(), [
+      "agents",
+      "commands",
+      "files",
+      "history",
+      "permissions",
+      "prompt",
+      "questions",
+      "resources",
+      "revert",
+      "shell",
+    ]);
     const session = await client.rpc<ContentSession>("session.create", {
       directory: f.oc.directory,
       title: "Paging",

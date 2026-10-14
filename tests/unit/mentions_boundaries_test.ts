@@ -6,13 +6,14 @@ import {
   Frecency,
   frecencyMigrations,
   OtkDb,
-  Prefs,
   prefsMigrations,
 } from "@otk/store";
-import { prefsOptions } from "../../sidecar/features/prefs.ts";
-import { frecencyOptions } from "../../sidecar/features/frecency.ts";
+import {
+  frecencyOptions,
+  registerFrecency,
+  RpcRegistry,
+} from "../../core/mod.ts";
 import { HarnessError } from "@otk/harness";
-import { dispatch } from "../../sidecar/ws/rpc.ts";
 import { Opencode1Adapter } from "@otk/harness-opencode1";
 import { StreamBuffers } from "@otk/content";
 import { mapPromptParts } from "@otk/harness-opencode1";
@@ -41,8 +42,9 @@ Deno.test("frecency RPC uses authoritative session directory instead of a client
   const root = await fixture(),
     db = new OtkDb(root, [...prefsMigrations, ...frecencyMigrations]),
     store = new Frecency(db, frecencyOptions),
-    prefs = new Prefs(db, prefsOptions),
     adapter = adapterFor(root);
+  const rpc = new RpcRegistry(adapter, db);
+  registerFrecency(rpc, adapter, store);
   try {
     const error = assertThrows(
       () => store.bump(root, "x".repeat(4097)),
@@ -50,26 +52,20 @@ Deno.test("frecency RPC uses authoritative session directory instead of a client
       "Invalid frecency path length or value",
     );
     assertEquals(error.code, "params");
-    await dispatch(
-      adapter,
+    await rpc.dispatch(
       "frecency.bump",
       {
         sessionID: "ses_files",
         directory: "/forged-project",
         path: "src/file.ts",
       },
-      prefs,
-      store,
     );
     assertEquals(store.list("/forged-project"), []);
     assertEquals(store.list(root)[0].path, join(root, "src/file.ts"));
     assertEquals(
-      await dispatch(
-        adapter,
+      await rpc.dispatch(
         "frecency.list",
         { sessionID: "ses_files", directory: "/forged-project" },
-        prefs,
-        store,
       ),
       store.list(root),
     );

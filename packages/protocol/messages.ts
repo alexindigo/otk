@@ -26,7 +26,12 @@ export type ServerFrame =
     protocol: number;
     sidecar: {
       version: string;
-      harness: { kind: string; version: string; url: string };
+      harness: {
+        kind: string;
+        version: string;
+        url: string;
+        capabilities?: string[];
+      };
     };
   }
   | { t: "harness"; state: HarnessState }
@@ -44,3 +49,23 @@ export type ServerFrame =
     error: { code: string; message: string };
   }
   | { t: "error"; code: string; message?: string };
+
+// Before capability advertisement, these RPC families were always exposed by
+// the wire contract. A missing field is legacy; an explicit [] advertises none.
+const legacyCapabilities: readonly string[] = Object.freeze([
+  "prompt",
+  "shell",
+  "commands",
+  "history",
+  "files",
+  "agents",
+  "resources",
+  "permissions",
+  "questions",
+  "revert",
+]);
+export function welcomeCapabilities(
+  frame: Extract<ServerFrame, { t: "welcome" }>,
+): readonly string[] {
+  return frame.sidecar.harness.capabilities ?? legacyCapabilities;
+}

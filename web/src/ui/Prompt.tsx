@@ -33,6 +33,9 @@ export default function Prompt(
   props: {
     value: Draft;
     connected: boolean;
+    promptEnabled?: boolean;
+    shellEnabled?: boolean;
+    historyEnabled?: boolean;
     pasteSummary: boolean;
     onChange(value: DraftChange): Draft;
     onSubmit(parts: PromptPart[], mode: Draft["mode"]): Promise<void>;
@@ -57,11 +60,18 @@ export default function Prompt(
   let active = true;
   let input!: HTMLTextAreaElement;
   const history = new PromptHistory();
+  const canSubmit = () =>
+    props.connected &&
+    (props.value.mode === "shell"
+      ? props.shellEnabled !== false
+      : props.promptEnabled !== false);
   let historyQueue = Promise.resolve();
   const recall = (direction: -1 | 1) => {
     historyQueue = historyQueue.then(async () => {
       const draft = change((current) => current);
-      if (!active || !history.canMove(draft)) return;
+      if (
+        !active || props.historyEnabled === false || !history.canMove(draft)
+      ) return;
       if (history.empty) {
         const entries = await props.onHistory();
         if (!active || change((current) => current) !== draft) return;
@@ -89,7 +99,7 @@ export default function Prompt(
       value: props.value.input,
       mode: props.value.mode,
       caret: caret(),
-      connected: props.connected,
+      connected: props.connected && props.promptEnabled !== false,
     }),
     ({ value, mode, caret, connected }) => {
       const token = connected && mode === "normal" &&
@@ -342,7 +352,7 @@ export default function Prompt(
       return;
     }
     if (
-      !draft.input.trim() || !props.connected || pending() ||
+      !draft.input.trim() || !canSubmit() || pending() ||
       draft.chips.some((chip) => chip.pending || chip.error)
     ) return;
     setPending(true);
@@ -378,7 +388,7 @@ export default function Prompt(
   const escape = async (event: KeyboardEvent) => {
     if (
       event.key !== "Escape" || event.defaultPrevented || props.value.editor ||
-      !props.connected
+      !props.connected || props.promptEnabled === false
     ) {
       return;
     }
@@ -502,6 +512,7 @@ export default function Prompt(
           if (
             event.key === "!" && !event.isComposing && !completionVisible() &&
             props.value.mode === "normal" &&
+            props.shellEnabled !== false &&
             event.currentTarget.selectionStart === 0 &&
             event.currentTarget.selectionEnd === 0
           ) {
@@ -562,7 +573,7 @@ export default function Prompt(
           type="submit"
           disabled={pending() ||
             props.value.chips.some((chip) => chip.pending || chip.error) ||
-            !props.connected || !props.value.input.trim()}
+            !canSubmit() || !props.value.input.trim()}
         >
           Send
         </button>

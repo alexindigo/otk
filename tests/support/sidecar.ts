@@ -3,8 +3,7 @@ import { type ChildProcess, spawn } from "node:child_process";
 import process from "node:process";
 import { fromFileUrl, join } from "@std/path";
 import { stringify } from "@std/toml";
-import { loadServiceConfig } from "../../sidecar/config/loader.ts";
-import type { ServiceConfig } from "../../sidecar/config/schema.ts";
+import { loadServiceConfig, type ServiceConfig } from "../../core/mod.ts";
 import { freePort, type OpencodeTest, waitFor } from "./opencode.ts";
 type DeepPartial<T> = {
   [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K];

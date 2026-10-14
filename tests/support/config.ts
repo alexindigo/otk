@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { fromFileUrl } from "@std/path";
-import { loadServiceConfig } from "../../sidecar/config/loader.ts";
+import { loadServiceConfig } from "../../core/mod.ts";
 
 export const defaultsPath = fromFileUrl(
   new URL("../../defaults/otk.toml", import.meta.url),

@@ -5,7 +5,7 @@ import {
   mentionOptions,
   mentionQuery,
 } from "../../web/src/ui/prompt/autocomplete.ts";
-import { promptParts } from "../../sidecar/ws/prompt.ts";
+import { promptParts } from "../../core/mod.ts";
 import { mapPromptParts } from "@otk/harness-opencode1";
 import { fixture } from "../support/config.ts";
 

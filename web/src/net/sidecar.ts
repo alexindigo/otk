@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ClientFrame, ServerFrame } from "@otk/protocol";
-import { PROTOCOL_VERSION } from "@otk/protocol";
+import { PROTOCOL_VERSION, welcomeCapabilities } from "@otk/protocol";
 import { apiBase, type AuthStatus, request } from "./auth.ts";
 import { Rpc } from "./rpc.ts";
 
@@ -25,6 +25,7 @@ export class SidecarConnection {
   #stopped = false;
   #welcomed = false;
   #subscriptions = new Set<string>();
+  #capabilities = new Set<string>();
   constructor(baseUrl: string, readonly sink: ConnectionSink) {
     this.base = apiBase(baseUrl);
     this.rpc = new Rpc((frame) => this.send(frame));
@@ -34,6 +35,9 @@ export class SidecarConnection {
       throw new Error("Sidecar is not connected");
     }
     this.#socket.send(JSON.stringify(frame));
+  }
+  supports(capability: string): boolean {
+    return this.#welcomed && this.#capabilities.has(capability);
   }
   subscribe(sessionID: string, enabled: boolean): void {
     if (enabled) this.#subscriptions.add(sessionID);
@@ -86,6 +90,7 @@ export class SidecarConnection {
             return;
           }
           this.#welcomed = true;
+          this.#capabilities = new Set(welcomeCapabilities(frame));
           this.#backoff = 1000;
           this.sink.status("connected");
           for (const sessionID of this.#subscriptions) {
@@ -102,6 +107,7 @@ export class SidecarConnection {
       socket.onclose = () => {
         if (socket !== this.#socket) return;
         this.#welcomed = false;
+        this.#capabilities.clear();
         this.rpc.close();
         if (!this.#stopped) this.#schedule();
       };
@@ -139,6 +145,7 @@ export class SidecarConnection {
     this.#controller?.abort();
     clearTimeout(this.#retry);
     this.#welcomed = false;
+    this.#capabilities.clear();
     this.rpc.close();
     this.#socket?.close();
     this.#subscriptions.clear();

@@ -233,6 +233,11 @@ export default function App() {
                   }
                 >
                   <SessionView
+                    capabilities={selectedSidecar()?.capabilities || []}
+                    historyEnabled={sidecars.state.list.some((sidecar) =>
+                      sidecar.status === "connected" &&
+                      sidecar.capabilities.includes("history")
+                    )}
                     revert={session.state.content.revert}
                     busy={!!session.state.selection &&
                       entry(
@@ -271,41 +276,53 @@ export default function App() {
                       />
                     }
                     permissionDock={
-                      <PermissionDock
-                        request={permission()}
-                        childTitle={permission()?.sessionID !==
-                            session.state.selection?.sessionID
-                          ? entry(
-                            session.state.selection!.sidecarId,
-                            permission()?.sessionID || "",
-                          )?.title || permission()?.sessionID
-                          : undefined}
-                        onDirty={(value) => setPermissionDirty(value)}
-                        onReply={(input) =>
-                          sidecars.connection(
-                            session.state.selection!.sidecarId,
-                          ).rpc.call<void>("permission.reply", input)}
-                      />
+                      <Show
+                        when={selectedSidecar()?.capabilities.includes(
+                          "permissions",
+                        )}
+                      >
+                        <PermissionDock
+                          request={permission()}
+                          childTitle={permission()?.sessionID !==
+                              session.state.selection?.sessionID
+                            ? entry(
+                              session.state.selection!.sidecarId,
+                              permission()?.sessionID || "",
+                            )?.title || permission()?.sessionID
+                            : undefined}
+                          onDirty={(value) => setPermissionDirty(value)}
+                          onReply={(input) =>
+                            sidecars.connection(
+                              session.state.selection!.sidecarId,
+                            ).rpc.call<void>("permission.reply", input)}
+                        />
+                      </Show>
                     }
                     questionDock={
-                      <QuestionDock
-                        request={question()}
-                        childTitle={question()?.sessionID !==
-                            session.state.selection?.sessionID
-                          ? entry(
-                            session.state.selection!.sidecarId,
-                            question()?.sessionID || "",
-                          )?.title
-                          : undefined}
-                        onDirty={setQuestionDirty}
-                        onReply={(requestID, answers) =>
-                          sidecars.connection(
-                            session.state.selection!.sidecarId,
-                          ).rpc.call<void>(
-                            answers ? "question.reply" : "question.reject",
-                            { requestID, ...(answers ? { answers } : {}) },
-                          )}
-                      />
+                      <Show
+                        when={selectedSidecar()?.capabilities.includes(
+                          "questions",
+                        )}
+                      >
+                        <QuestionDock
+                          request={question()}
+                          childTitle={question()?.sessionID !==
+                              session.state.selection?.sessionID
+                            ? entry(
+                              session.state.selection!.sidecarId,
+                              question()?.sessionID || "",
+                            )?.title
+                            : undefined}
+                          onDirty={setQuestionDirty}
+                          onReply={(requestID, answers) =>
+                            sidecars.connection(
+                              session.state.selection!.sidecarId,
+                            ).rpc.call<void>(
+                              answers ? "question.reply" : "question.reject",
+                              { requestID, ...(answers ? { answers } : {}) },
+                            )}
+                        />
+                      </Show>
                     }
                     info={info()}
                     label={selectedSidecar()?.label || "Sidecar"}
@@ -323,26 +340,36 @@ export default function App() {
                     onDraft={(value) => setDraft(value)}
                     onFind={(query) => {
                       const target = session.state.selection!;
+                      if (
+                        !sidecars.connection(target.sidecarId).supports("files")
+                      ) return Promise.resolve([]);
                       return sidecars.connection(target.sidecarId).rpc.call<
                         FileMatch[]
                       >("find.files", { sessionID: target.sessionID, query });
                     }}
                     onMentions={async (query) => {
                       const target = session.state.selection!,
-                        rpc = sidecars.connection(target.sidecarId).rpc,
+                        connection = sidecars.connection(target.sidecarId),
+                        rpc = connection.rpc,
                         directory = await directoryFor(target);
                       const [files, agents, resources, frecency] = await Promise
                         .all([
-                          rpc.call<FileMatch[]>("find.files", {
-                            sessionID: target.sessionID,
-                            query,
-                          }),
-                          rpc.call<AgentOption[]>("agents.list", {
-                            sessionID: target.sessionID,
-                          }),
-                          rpc.call<ResourceOption[]>("resources.list", {
-                            sessionID: target.sessionID,
-                          }),
+                          connection.supports("files")
+                            ? rpc.call<FileMatch[]>("find.files", {
+                              sessionID: target.sessionID,
+                              query,
+                            })
+                            : [],
+                          connection.supports("agents")
+                            ? rpc.call<AgentOption[]>("agents.list", {
+                              sessionID: target.sessionID,
+                            })
+                            : [],
+                          connection.supports("resources")
+                            ? rpc.call<ResourceOption[]>("resources.list", {
+                              sessionID: target.sessionID,
+                            })
+                            : [],
                           rpc.call<FrecencyEntry[]>("frecency.list", {
                             sessionID: target.sessionID,
                           }),
@@ -357,6 +384,11 @@ export default function App() {
                     }}
                     onCommands={() => {
                       const target = session.state.selection!;
+                      if (
+                        !sidecars.connection(target.sidecarId).supports(
+                          "commands",
+                        )
+                      ) return Promise.resolve([]);
                       return sidecars.connection(target.sidecarId).rpc.call<
                         CommandOption[]
                       >("commands.list", { sessionID: target.sessionID });
@@ -386,7 +418,8 @@ export default function App() {
                       mergeHistory(
                         (await Promise.allSettled(
                           sidecars.state.list.filter((sidecar) =>
-                            sidecar.status === "connected"
+                            sidecar.status === "connected" &&
+                            sidecar.capabilities.includes("history")
                           ).map((sidecar) =>
                             sidecars.connection(sidecar.id).rpc.call<
                               HistoryEntry[]

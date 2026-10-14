@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { fromFileUrl } from "@std/path";
-import { loadServiceConfig } from "../../sidecar/config/loader.ts";
-import { start } from "../../sidecar/main.ts";
+import { loadServiceConfig } from "../../core/mod.ts";
+import { start } from "../../main.ts";
 if (import.meta.main) {
   const config = loadServiceConfig({
     defaultsPath: fromFileUrl(

@@ -2,7 +2,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import type { ContentOp } from "@otk/protocol";
-import { loadServiceConfig } from "../../../sidecar/config/loader.ts";
+import { loadServiceConfig } from "../../../core/config/loader.ts";
 import { StreamBuffers } from "@otk/content";
 import { Opencode1Adapter } from "../adapter.ts";
 import type { Envelope, Info, RawPart, Session } from "../types.ts";

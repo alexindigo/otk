@@ -9,19 +9,8 @@ const allowed: Record<string, readonly string[]> = {
   harness: ["protocol"],
   "harness-opencode1": ["protocol", "content", "harness"],
   store: [],
-  sidecar: ["protocol", "harness", "store", "content"],
   client: ["protocol"],
   ui: ["protocol", "client"],
-  app: [
-    "protocol",
-    "content",
-    "harness",
-    "harness-opencode1",
-    "store",
-    "sidecar",
-    "client",
-    "ui",
-  ],
 };
 const root = new URL("../../", import.meta.url);
 const owner = (path: string) => /^packages\/([^/]+)\//.exec(path)?.[1];
@@ -111,6 +100,14 @@ function dependencyError(
     if (targetPath?.startsWith("sidecar/db/")) {
       return "old store paths are retired";
     }
+    if (
+      targetPath &&
+      /^sidecar\/(?:auth|config|features|http|index|static|ws)\//.test(
+        targetPath,
+      )
+    ) {
+      return "old sidecar application paths are retired into core";
+    }
     return;
   }
   if (production && from === "protocol") {
@@ -129,7 +126,7 @@ function dependencyError(
 function sourceErrors(path: string, source: string): string[] {
   const from = owner(path);
   if (isTest(path)) return [];
-  if (!from && !/^(?:sidecar\/|web\/src\/)/.test(path)) return [];
+  if (!from && !/^(?:main\.ts$|core\/|web\/src\/)/.test(path)) return [];
   const errors: string[] = [];
   if (
     from !== "harness-opencode1" &&
@@ -236,20 +233,24 @@ Deno.test("extracted package metadata and imports follow public downward depende
   }
   let files = 0, edges = 0;
   const errors: string[] = [];
-  for (const directory of ["packages/", "sidecar/", "web/src/", "tests/"]) {
+  const urls = [new URL("main.ts", root)];
+  for (const directory of ["packages/", "core/", "web/src/", "tests/"]) {
     for await (const url of sources(new URL(directory, root))) {
-      const path = decodeURIComponent(url.href.slice(root.href.length));
-      const source = await Deno.readTextFile(url);
-      files++;
-      for (const specifier of imports(source)) {
-        edges++;
-        const error = dependencyError(path, specifier, present);
-        if (error) errors.push(`${path}: ${specifier}: ${error}`);
-      }
-      errors.push(
-        ...sourceErrors(path, source).map((error) => `${path}: ${error}`),
-      );
+      urls.push(url);
     }
+  }
+  for (const url of urls) {
+    const path = decodeURIComponent(url.href.slice(root.href.length));
+    const source = await Deno.readTextFile(url);
+    files++;
+    for (const specifier of imports(source)) {
+      edges++;
+      const error = dependencyError(path, specifier, present);
+      if (error) errors.push(`${path}: ${specifier}: ${error}`);
+    }
+    errors.push(
+      ...sourceErrors(path, source).map((error) => `${path}: ${error}`),
+    );
   }
   console.info("Dependency architecture", {
     packages: [...present],
@@ -284,6 +285,12 @@ Deno.test("dependency checks reject private paths, upward edges and legacy escap
       ["tests/unit/example.ts", "../../sidecar/db/db.ts"],
       ["sidecar/ws/rpc.ts", "../db/prefs.ts"],
       ["packages/store/features/prefs.ts", "@otk/harness"],
+      ["main.ts", "@otk/sidecar"],
+      ["main.ts", "@otk/server"],
+      ["main.ts", "@otk/app"],
+      ["packages/harness-opencode1/adapter.ts", "../../core/mod.ts"],
+      ["packages/client/mod.ts", "../../main.ts"],
+      ["tests/unit/example.ts", "../../sidecar/auth/state.ts"],
     ]
   ) assert(dependencyError(path, specifier, present), `${path}: ${specifier}`);
   assert(dependencyError("packages/protocol/mod.ts", undefined, present));
@@ -293,12 +300,14 @@ Deno.test("dependency checks reject private paths, upward edges and legacy escap
       ["packages/content/mod.ts", "@otk/protocol"],
       ["packages/harness-opencode1/mod.ts", "@otk/content"],
       ["packages/ui/mod.ts", "@otk/client"],
-      ["packages/app/mod.ts", "@otk/ui"],
+      ["main.ts", "@otk/ui"],
       ["packages/protocol/mod.ts", "./messages.ts"],
       ["packages/protocol/tests/example.ts", "@std/assert"],
-      ["sidecar/ws/rpc.ts", "@otk/protocol"],
-      ["sidecar/main.ts", "@otk/store"],
+      ["core/ws/registry.ts", "@otk/protocol"],
+      ["main.ts", "@otk/store"],
       ["packages/store/features/prefs.ts", "../db.ts"],
+      ["main.ts", "@otk/harness-opencode1"],
+      ["core/service.ts", "@otk/store"],
     ]
   ) assertEquals(dependencyError(path, specifier, present), undefined);
 });
@@ -337,8 +346,8 @@ Deno.test("native endpoints and feature imports cannot leak into extracted share
     sourceErrors("packages/harness-opencode1/sessions.ts", endpoint),
     [],
   );
-  assertEquals(sourceErrors("packages/app/tests/example.ts", endpoint), []);
-  assertEquals(sourceErrors("sidecar/ws/rpc.ts", endpoint).length, 1);
+  assertEquals(sourceErrors("tests/integration/example.ts", endpoint), []);
+  assertEquals(sourceErrors("core/ws/registry.ts", endpoint).length, 1);
   assertEquals(
     sourceErrors(
       "packages/harness/history.ts",
@@ -354,17 +363,17 @@ Deno.test("native endpoints and feature imports cannot leak into extracted share
     [],
   );
   const feature = 'import { register } from "./features/sessions.ts";';
-  assertEquals(sourceErrors("packages/sidecar/registry.ts", feature).length, 1);
+  assertEquals(sourceErrors("core/ws/registry.ts", feature).length, 1);
   assertEquals(
-    sourceErrors("packages/sidecar/rpc-registry.ts", feature).length,
+    sourceErrors("core/rpc-registry.ts", feature).length,
     1,
   );
-  assertEquals(sourceErrors("packages/app/mod.ts", feature), []);
+  assertEquals(sourceErrors("main.ts", feature), []);
   assertEquals(sourceErrors("packages/store/db.ts", feature).length, 1);
   assertEquals(sourceErrors("packages/store/migrations.ts", feature).length, 1);
   assertEquals(
     sourceErrors(
-      "packages/sidecar/registry.ts",
+      "core/ws/registry.ts",
       'import type { RpcMethod } from "@otk/protocol";',
     ),
     [],

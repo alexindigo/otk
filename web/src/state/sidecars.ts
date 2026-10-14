@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createStore } from "solid-js";
-import type { HarnessState, ServerFrame } from "@otk/protocol";
+import {
+  type HarnessState,
+  type ServerFrame,
+  welcomeCapabilities,
+} from "@otk/protocol";
 import { apiBase, normalizeBase, request } from "../net/auth.ts";
 import { type ConnectionState, SidecarConnection } from "../net/sidecar.ts";
 
@@ -14,6 +18,7 @@ export interface SidecarState extends SidecarSpec {
   harness: HarnessState;
   error?: string;
   authType?: string;
+  capabilities: string[];
 }
 export const LOCAL_SIDECAR = "local";
 export function readSidecars(storage: Pick<Storage, "getItem">): SidecarSpec[] {
@@ -49,6 +54,7 @@ export function createSidecars(
       ...item,
       status: "connecting",
       harness: "connecting",
+      capabilities: [],
     })),
   });
   const connections = new Map<string, SidecarConnection>();
@@ -71,12 +77,22 @@ export function createSidecars(
           const item = draft.list.find((item) => item.id === spec.id);
           if (item) {
             item.status = status;
+            // Capabilities describe the backend, not transport liveness. Keep
+            // feature owners (and their unsent input) mounted while reconnecting.
             item.error = error;
             if (authType !== undefined) item.authType = authType;
           }
         });
       },
       frame(frame) {
+        if (frame.t === "welcome") {
+          setState((draft) => {
+            const item = draft.list.find((item) => item.id === spec.id);
+            if (item) {
+              item.capabilities = [...welcomeCapabilities(frame)];
+            }
+          });
+        }
         if (frame.t === "harness") {
           setState((draft) => {
             const item = draft.list.find((item) => item.id === spec.id);
@@ -119,6 +135,7 @@ export function createSidecars(
           ...spec,
           status: "connecting",
           harness: "connecting",
+          capabilities: [],
         });
       });
       install(spec);

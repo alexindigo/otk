@@ -77,7 +77,7 @@ export function createSession(
       draft.exhausted = false;
     });
     try {
-      const rpc = connection(target.sidecarId).rpc;
+      const sidecar = connection(target.sidecarId), rpc = sidecar.rpc;
       const [info, messages, permissions, questions] = await Promise.all([
         rpc.call<ContentSession>(
           "session.get",
@@ -88,12 +88,16 @@ export function createSession(
           sessionID: target.sessionID,
           limit: 100,
         }, abort.signal),
-        rpc.call<PermissionRequest[]>("permission.list", {
-          sessionID: target.sessionID,
-        }, abort.signal),
-        rpc.call<QuestionRequest[]>("question.list", {
-          sessionID: target.sessionID,
-        }, abort.signal),
+        sidecar.supports("permissions")
+          ? rpc.call<PermissionRequest[]>("permission.list", {
+            sessionID: target.sessionID,
+          }, abort.signal)
+          : [],
+        sidecar.supports("questions")
+          ? rpc.call<QuestionRequest[]>("question.list", {
+            sessionID: target.sessionID,
+          }, abort.signal)
+          : [],
       ]);
       if (!current(id, request)) return;
       const siblings = info.parentID

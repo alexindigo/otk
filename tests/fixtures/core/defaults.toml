@@ -1,0 +1,26 @@
+# SPDX-License-Identifier: LGPL-3.0-only
+[server]
+host = "127.0.0.1"
+port = 1502
+origins = []
+[auth]
+type = ""
+username = ""
+password = ""
+secretkey = ""
+totpkey = ""
+sessionexpirydays = 30
+cookiename = ""
+cookiesamesite = "strict"
+[state]
+path = ""
+[harness]
+type = "test"
+url = "http://127.0.0.1:4097"
+username = ""
+password = ""
+db = ""
+heartbeattimeout = 25
+reconnectmax = 30
+[index]
+days = 30
