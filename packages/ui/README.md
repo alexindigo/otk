@@ -129,3 +129,25 @@ Shiki retain their shared mapping (constant includes numbers/types; foreground
 covers variables). Switching only changes paint, never source, grammar, worker
 lifecycle or cache. Hosts must select/apply a theme; the UI provider does not
 install concrete data.
+
+## Notification channels
+
+Consumers select `registerToastChannel`, `registerOsChannel`,
+`registerSoundChannel` and `registerBadgeChannel` against their injected public
+client hub. Registrations own their presentation and teardown; they import no
+application, RPC implementation or native backend. `Toasts` renders the returned
+toast model: information/done chips expire after six seconds, keyed input chips
+are active and errors sticky. Message buttons dismiss presentation; action
+buttons use delivery-scoped public command IDs. Attention is cleared by actual
+viewing/resolution, not by dismissal or command promise completion.
+
+The OS channel uses secure-context browser `Notification`, tag replacement,
+silent OS presentation and a focus/default-command click handler. `request`
+invokes actual browser permission from the opt-in gesture; denied and
+unavailable states are exposed separately from host preferences.
+Construction/presentation failure reports unavailable to the hub's injected
+fallback. `NotificationSettings` injects prefs, readiness, permission status and
+async setters; no storage is owned here. The sound channel unlocks on trusted
+input and schedules distinct done/input Web Audio tones without assets or
+deferred queues. Badge owns a theme-aware SVG favicon counting attention roots,
+restores the original on teardown and repaints with semantic theme changes.

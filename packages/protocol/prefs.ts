@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export interface Preferences {
+  "notify.toast": boolean;
+  "notify.os": boolean;
+  "notify.sound": boolean;
+  "notify.badge": boolean;
   theme: "otk-dark" | "otk-light" | "system";
   keymap: Record<string, string>;
   timestamps: boolean;
@@ -13,6 +17,10 @@ export interface Preferences {
   pasteSummary: boolean;
 }
 export const DEFAULT_PREFS: Readonly<Preferences> = {
+  "notify.toast": true,
+  "notify.os": false,
+  "notify.sound": false,
+  "notify.badge": true,
   theme: "otk-dark",
   keymap: {},
   timestamps: false,

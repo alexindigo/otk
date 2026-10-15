@@ -13,6 +13,7 @@ import { apiBase, CommandHub } from "@otk/client";
 import { registerSessionCommands } from "../commands/sessions.ts";
 import { registerPreferenceCommands } from "../commands/preferences.ts";
 import { registerAttentionCommands } from "../commands/attention.ts";
+import { applicationNotifications } from "../notifications.ts";
 import {
   createCurrentClient,
   createNavigation,
@@ -36,6 +37,7 @@ import {
   emptyDraft,
   KeysHelp,
   Login,
+  NotificationSettings,
   Palette,
   PermissionDock,
   QuestionDock,
@@ -45,6 +47,7 @@ import {
   Sidebar,
   type ThemeEngine,
   ThemePicker,
+  Toasts,
 } from "@otk/ui";
 import type {
   AgentOption,
@@ -61,8 +64,8 @@ export default function App(props: { theme: ThemeEngine }) {
       if (frame.t === "index.snapshot" || frame.t === "index.patch") {
         if (!index.receive(id, frame)) {
           sidecars.connection(id).send({ t: "resnapshot" });
-        }
-      }
+        } else notifications.receive(id, frame);
+      } else notifications.receive(id, frame);
       session.receive(id, frame);
       if (id === LOCAL_SIDECAR) toggles.receive(frame);
     },
@@ -102,6 +105,22 @@ export default function App(props: { theme: ThemeEngine }) {
     (error) => setError((error as Error).message),
     /Mac|iPhone|iPad/.test(navigator.platform),
   );
+  const notifications = applicationNotifications({
+    commands,
+    prefs: () => toggles.state.prefs,
+    selection: () => session.state.selection,
+    viewing: () => !settings(),
+    connection: (id) => sidecars.connection(id),
+    entry,
+  });
+  onCleanup(() => notifications.stop());
+  createEffect(
+    () => [toggles.state.prefs, session.state.selection, settings()] as const,
+    () => notifications.update(),
+  );
+  createEffect(() => error(), (text) => {
+    if (text) notifications.error(new Error(text));
+  });
   onCleanup(
     commands.register({
       id: "palette.open",
@@ -153,12 +172,26 @@ export default function App(props: { theme: ThemeEngine }) {
     registerPreferenceCommands(commands, {
       ready: () => toggles.state.ready,
       prefs: () => toggles.state.prefs,
-      set: (key, value) => toggles.set(key, value),
+      set: async (key, value) => {
+        // Start permission request synchronously inside the opt-in gesture.
+        const permission = key === "notify.os" && value
+          ? notifications.os.request()
+          : undefined;
+        await toggles.set(key, value);
+        await permission;
+      },
     }),
   );
   onCleanup(registerAttentionCommands(commands, {
-    permission: (input) =>
-      current.context().rpc.call<void>("permission.reply", input),
+    permission: (input) => {
+      const { sidecarId, ...reply } = input;
+      return (sidecarId
+        ? sidecars.connection(sidecarId)
+        : current.context().connection).rpc.call<void>(
+          "permission.reply",
+          reply,
+        );
+    },
     question: (input) =>
       current.context().rpc.call<void>(
         input.answers ? "question.reply" : "question.reject",
@@ -316,6 +349,7 @@ export default function App(props: { theme: ThemeEngine }) {
     retry: () => session.refetch(),
   }));
   onSettled(() => {
+    const stopNotifications = notifications.start();
     const stopKeyboard = keyboard.start();
     const unbindPalette = keyboard.keymap.bind({
       id: "palette.open",
@@ -331,6 +365,7 @@ export default function App(props: { theme: ThemeEngine }) {
     navigation.start();
     sidecars.start();
     return () => {
+      stopNotifications();
       stopKeyboard();
       unbindPalette();
       unbindHelp();
@@ -635,15 +670,26 @@ export default function App(props: { theme: ThemeEngine }) {
             }
           >
             <Settings
+              notifications={
+                <NotificationSettings
+                  prefs={toggles.state.prefs}
+                  ready={toggles.state.ready}
+                  browser={notifications.os}
+                  onSet={(key, value) =>
+                    commands.run("prefs.set", { key, value })}
+                />
+              }
               sidecars={sidecars.state.list}
               onAdd={async (url, label) => {
                 await sidecars.add(url, label);
+                notifications.info("Sidecar added");
               }}
               onRemove={(id) => {
                 if (session.state.selection?.sidecarId === id) {
                   if (!navigation.open("")) return;
                 }
                 index.remove(id);
+                notifications.remove(id);
                 sidecars.remove(id);
               }}
               onLogin={(id, input) => sidecars.connection(id).login(input)}
@@ -653,6 +699,7 @@ export default function App(props: { theme: ThemeEngine }) {
             />
           </Show>
         </main>
+        <Toasts model={notifications.toast} />
         <Show when={dialog() === "palette"}>
           <Palette onClose={() => setDialog("")} />
         </Show>

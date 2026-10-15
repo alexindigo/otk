@@ -14,6 +14,9 @@ export * from "./history.ts";
 export * from "./navigation.ts";
 export * from "./current.ts";
 export * from "./commands.ts";
+export * from "./notifications.ts";
+export * from "./notification-policy.ts";
+export * from "./notification-triggers.ts";
 export {
   belongsToSession,
   isAttentionOp,

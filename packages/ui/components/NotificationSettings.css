@@ -1,0 +1,24 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-notification-settings {
+  border: 1px solid var(--otk-border);
+  padding: 1.2rem;
+  margin-bottom: 1.5rem;
+}
+.otk-notification-settings h2 {
+  font-size: 1rem;
+  font-weight: 500;
+  margin: 0 0 1rem;
+}
+.otk-notification-settings label {
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+  margin: .75rem 0;
+}
+.otk-notification-settings p {
+  margin: .75rem 0 0;
+  line-height: 1.5;
+}
+.otk-notification-browser {
+  color: var(--otk-fg-faint);
+}

@@ -298,12 +298,41 @@ Deno.test("Display and Markdown consumers retain native checkbox bounds and fiel
       "!!document.querySelector('.otk-settings input[name=url]')",
     );
     const fields = await browser.evaluate<
-      { width: number; parentWidth: number; padding: number }[]
-    >(`[...document.querySelectorAll('.otk-settings input')].map(el=>({width:el.getBoundingClientRect().width,parentWidth:el.parentElement.getBoundingClientRect().width,padding:parseFloat(getComputedStyle(el).paddingLeft)}))`);
+      { name: string; width: number; parentWidth: number; padding: number }[]
+    >(`[...document.querySelectorAll('.otk-settings input')].filter(el=>el.type==='text' || el.type==='url').map(el=>({name:el.name,width:el.getBoundingClientRect().width,parentWidth:el.parentElement.getBoundingClientRect().width,padding:parseFloat(getComputedStyle(el).paddingLeft)}))`);
     assertEquals(fields.length, 2);
+    assertEquals(fields.map((field) => field.name), ["url", "label"]);
     for (const field of fields) {
       assertEquals(field.width, field.parentWidth);
       assert(Math.abs(field.padding - 9.1) < .05);
+    }
+    const notificationControls = await browser.evaluate<
+      {
+        name: string;
+        width: number;
+        height: number;
+        padding: number;
+        gap: number;
+        centers: number;
+        right: number;
+        parentRight: number;
+      }[]
+    >(`[...document.querySelectorAll('.otk-notification-settings input[type=checkbox]')].map(el=>{const r=el.getBoundingClientRect(),s=el.nextElementSibling.getBoundingClientRect(),p=el.parentElement.getBoundingClientRect();return {name:el.name,width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),gap:s.left-r.right,centers:Math.abs(r.y+r.height/2-s.y-s.height/2),right:s.right,parentRight:p.right}})`);
+    assertEquals(notificationControls.map((control) => control.name), [
+      "notify.toast",
+      "notify.os",
+      "notify.sound",
+      "notify.badge",
+    ]);
+    for (const control of notificationControls) {
+      assert(
+        control.width > 0 && control.width <= 18 && control.height > 0 &&
+          control.height <= 18,
+      );
+      assertEquals(control.padding, 0);
+      assert(control.gap >= 9.7 && control.gap <= 15);
+      assert(control.centers <= .5);
+      assert(control.right <= control.parentRight + .5);
     }
   } finally {
     await f.stop();

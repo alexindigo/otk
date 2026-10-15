@@ -81,3 +81,30 @@ list, browser globals or UI runtime. Inputs and callbacks stay with the
 consumer. The plain Deno consumer in `tests/reuse/commands_test.ts` uses this
 public entry to update independent selected counters, resolve aliases and
 release ownership.
+
+## Notifications
+
+`NotificationHub(policy, run, error)` is an empty framework-free registry.
+Owners register a `NotificationChannel` through `registerChannel`, returning an
+identity-bound release. A data-only `Note` has an ID, kind, optional
+sidecar/root reference and command-ID actions. `publish` replaces the ID;
+`replace(previous,
+input)` enriches only the current identity without replaying
+sound. Delivery ports scope `current`, `dismiss`, `invoke` and `unavailable` to
+the exact note and channel registration. `currentNote` and `invokeDefault`
+retain a live logical note's default action across focus-triggered presentation
+retraction, including a native click queued after focus. Viewing, replacement
+and channel release invalidate that port. Stale timers, clicks and async lookups
+cannot consume a newer note. Invocation never assumes that a resolved command
+actually selected the session. Consumers call `viewed` after real guarded
+selection and focus.
+
+`NotificationTriggers` observes accepted index frames, using the first snapshot
+after each connection's `reset` as a silent baseline. Root attention roll-ups
+already include children; roots produce one keyed done/input/error note per
+sidecar. Error observations remain genuine independent backend observations.
+`notificationPolicy` is separately selected, injecting host preferences, focus,
+visibility and viewed root. General messages use the in-page surface. The hub
+itself knows no concrete channel, application, backend, browser or UI framework.
+The standalone Deno notification consumer routes external job acceptance through
+the public command hub and proves stale-note isolation.

@@ -95,6 +95,17 @@ navigation. Solid bindings stay at the browser UI boundary.
 tool/part/prompt/dock registrations, component styles and the client bindings.
 The web application selects its modules in `web/src/features.ts`.
 
+The browser application selects public notification channels and injects live
+focus, viewed root, host preferences and command/RPC callbacks. Background root
+completion, errors and family input edges use one replaceable note per sidecar
+and root; each connection's first index snapshot is silent. Settings saves
+in-page messages and favicon attention badges on by default, browser OS
+notifications and sound off. OS opt-in requests actual browser permission;
+blocked/unavailable status remains visible and in-page fallback continues.
+Notification actions share guarded session navigation and background-family
+permission commands, preserving draft and URL/state ownership. No service worker
+or Web Push is required.
+
 ## Application ownership
 
 | # | Entry or area                                               | Responsibility                                                                                                               |

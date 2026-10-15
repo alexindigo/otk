@@ -19,6 +19,7 @@ export default function Settings(props: {
     input: { type: string; username: string; password: string },
   ): Promise<void>;
   onClose(): void;
+  notifications?: import("solid-js").Element;
 }): import("solid-js").Element {
   const close = ownedAction("settings.close", () => props.onClose());
   const remove = ownedAction(
@@ -34,6 +35,7 @@ export default function Settings(props: {
         </button>
       </header>
       <div class="otk-settings-content">
+        {props.notifications}
         <p class="otk-muted">
           A remote sidecar must list this page’s origin,{" "}
           <code>{location.origin}</code>, in <code>server.origins</code>.

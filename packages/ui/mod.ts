@@ -78,3 +78,19 @@ export * from "./theme/slots.ts";
 export * from "./theme/registry.ts";
 export * from "./theme/engine.ts";
 export { registerOtkThemes } from "./features/theme/otk.ts";
+export {
+  registerToastChannel,
+  type ToastItem,
+  type ToastsModel,
+} from "./features/notify/toast.ts";
+export {
+  type BrowserNotificationStatus,
+  registerOsChannel,
+} from "./features/notify/os.ts";
+export { registerSoundChannel } from "./features/notify/sound.ts";
+export { registerBadgeChannel } from "./features/notify/badge.ts";
+export { default as Toasts } from "./components/Toasts.tsx";
+export {
+  default as NotificationSettings,
+  type NotificationPreference,
+} from "./components/NotificationSettings.tsx";

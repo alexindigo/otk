@@ -595,3 +595,30 @@ Deno.test("theme registry and paint engine stay independent of concrete palette 
     );
   }
 });
+Deno.test("notification registry is feature/channel agnostic and notification actions cross only public injected ports", async () => {
+  const hub = await Deno.readTextFile(
+    new URL("packages/client/notifications.ts", root),
+  );
+  assertEquals(imports(hub), []);
+  assert(
+    !/Notification\b|AudioContext|document\b|window\b|solid-js|localStorage|\"(?:toast|os|sound|badge)\"/
+      .test(hub),
+  );
+  const application = await Deno.readTextFile(
+    new URL("web/src/notifications.ts", root),
+  );
+  assertEquals(imports(application), [
+    "@otk/client",
+    "@otk/protocol",
+    "@otk/ui",
+  ]);
+  assert(application.includes('command: "permission.reply"'));
+  assert(application.includes("candidates.get(incoming.id) !== incoming"));
+  for (const id of ["toast", "os", "sound", "badge"]) {
+    const source = await Deno.readTextFile(
+      new URL(`packages/ui/features/notify/${id}.ts`, root),
+    );
+    assert(imports(source).every((name) => name === "@otk/client"), id);
+    assert(!/rpc\.call|core\/|harness|otk\.db|localStorage/.test(source), id);
+  }
+});

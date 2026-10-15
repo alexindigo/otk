@@ -39,6 +39,20 @@ Deno.test("prefs RPC persists across sidecar restart and broadcasts to other con
     await b.wait((frame) =>
       frame.t === "prefs" && frame.prefs.theme === "otk-light"
     );
+    for (
+      const key of [
+        "notify.toast",
+        "notify.os",
+        "notify.sound",
+        "notify.badge",
+      ] as const
+    ) {
+      await assertRejects(() => a.rpc("prefs.set", { key, value: "true" }));
+      await a.rpc("prefs.set", { key, value: !DEFAULT_PREFS[key] });
+      await b.wait((frame) =>
+        frame.t === "prefs" && frame.prefs[key] === !DEFAULT_PREFS[key]
+      );
+    }
     await a.close();
     await b.close();
     await server.stop();
@@ -56,6 +70,15 @@ Deno.test("prefs RPC persists across sidecar restart and broadcasts to other con
       (await c.rpc<Preferences>("prefs.get", {})).theme,
       "otk-light",
     );
+    const notificationPrefs = await c.rpc<Preferences>("prefs.get", {});
+    for (
+      const key of [
+        "notify.toast",
+        "notify.os",
+        "notify.sound",
+        "notify.badge",
+      ] as const
+    ) assertEquals(notificationPrefs[key], !DEFAULT_PREFS[key]);
     const other = await SidecarTest.start(oc);
     servers.push(other);
     const d = new WsClient(other.url);

@@ -260,6 +260,9 @@ Deno.test("theme save rejection stays visible, retains preview and never replace
     await browser.poll(
       "document.querySelector('dialog[aria-label=Theme] [role=alert]')?.textContent.includes('Invalid preference key or value') && !document.querySelector('.otk-theme-actions button:last-child').disabled",
     );
+    await browser.poll(
+      "document.querySelector('.otk-toast[data-kind=error]')?.textContent.includes('Invalid preference key or value')",
+    );
     assertEquals(
       await browser.evaluate("document.documentElement.dataset.otkTheme"),
       "otk-light",

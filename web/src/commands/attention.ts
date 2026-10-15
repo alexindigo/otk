@@ -2,7 +2,7 @@
 import type { CommandHub } from "@otk/client";
 import type { PermissionReply } from "@otk/protocol";
 export function registerAttentionCommands(commands: CommandHub, actions: {
-  permission(input: PermissionReply): Promise<void>;
+  permission(input: PermissionReply & { sidecarId?: string }): Promise<void>;
   question(input: { requestID: string; answers?: string[][] }): Promise<void>;
 }): () => void {
   const releases = [
@@ -11,7 +11,8 @@ export function registerAttentionCommands(commands: CommandHub, actions: {
       title: "Reply to permission",
       category: "Attention",
       hidden: true,
-      run: (_ctx, input: PermissionReply) => actions.permission(input),
+      run: (_ctx, input: PermissionReply & { sidecarId?: string }) =>
+        actions.permission(input),
     }),
     commands.register({
       id: "question.reply",

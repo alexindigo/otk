@@ -50,3 +50,21 @@ Deno.test("theme preference allows only shipped choices and preserves the existi
   }
   assertEquals(DEFAULT_PREFS.theme, "otk-dark");
 });
+Deno.test("notification channel prefs preserve host defaults and reject coercion and extra channels", () => {
+  assertEquals([
+    DEFAULT_PREFS["notify.toast"],
+    DEFAULT_PREFS["notify.os"],
+    DEFAULT_PREFS["notify.sound"],
+    DEFAULT_PREFS["notify.badge"],
+  ], [true, false, false, true]);
+  for (
+    const key of ["notify.toast", "notify.os", "notify.sound", "notify.badge"]
+  ) {
+    assert(isPreference(key, true));
+    assert(isPreference(key, false));
+    for (const value of ["true", 1, null, {}, []]) {
+      assertEquals(isPreference(key, value), false);
+    }
+  }
+  assertEquals(isPreference("notify.push", true), false);
+});
