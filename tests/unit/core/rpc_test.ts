@@ -346,8 +346,8 @@ Deno.test("feature validators retain limits, optional strings, model/attachment,
     },
   }, calls);
   const db = new OtkDb(await fixture(), [
-    ...prefsMigrations,
-    ...frecencyMigrations,
+    prefsMigrations,
+    frecencyMigrations,
   ]);
   const rpc = new RpcRegistry(harness, db);
   registerSessions(rpc, harness);

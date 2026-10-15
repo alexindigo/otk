@@ -209,7 +209,12 @@ Deno.test("creation-time hover and persistent visibility, structural footer date
         ).all(),
         [],
       );
-      assertEquals(db.prepare("PRAGMA user_version").get()!.user_version, 2);
+      assertEquals(
+        db.prepare(
+          "SELECT feature,version FROM otk_migrations ORDER BY feature",
+        ).all(),
+        [{ feature: "frecency", version: 1 }, { feature: "prefs", version: 1 }],
+      );
     } finally {
       db.close();
     }

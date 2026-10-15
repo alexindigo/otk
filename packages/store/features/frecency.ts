@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { resolve } from "@std/path";
 import type { OtkDb } from "../db.ts";
-import type { Migration } from "../migrations.ts";
+import type { FeatureMigrations } from "../migrations.ts";
 
-/** The frecency feature contributes the original version 2 schema. */
-export const frecencyMigrations: readonly Migration[] = [
-  { id: 2, sql: new URL("./migrations/002_frecency.sql", import.meta.url) },
-];
+/** The frecency feature owns its schema versions independently of preferences. */
+export const frecencyMigrations: FeatureMigrations = {
+  feature: "frecency",
+  migrations: [
+    {
+      version: 1,
+      sql: new URL("./migrations/frecency/001.sql", import.meta.url),
+    },
+  ],
+};
 
 /** Stored frequency score and last-use time; decay belongs to the consumer. */
 export interface FrecencyEntry {

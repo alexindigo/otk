@@ -1,15 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { fromFileUrl } from "@std/path";
 import {
+  type FeatureMigrations,
   frecencyMigrations,
-  type Migration,
   prefsMigrations,
   type PrefsOptions,
 } from "@otk/store";
 
-export const migrations: readonly Migration[] = [
-  ...prefsMigrations,
-  ...frecencyMigrations,
+export const migrations: readonly FeatureMigrations[] = [
+  prefsMigrations,
+  frecencyMigrations,
 ];
 export interface TestPrefs {
   thinking: "show" | "hide";

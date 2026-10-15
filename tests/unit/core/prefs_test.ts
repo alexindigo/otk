@@ -8,7 +8,7 @@ import { fixture } from "./support.ts";
 
 Deno.test("app storage retains every preference default, validator and params error", async () => {
   const root = await fixture(),
-    migrations = [...prefsMigrations, ...frecencyMigrations];
+    migrations = [prefsMigrations, frecencyMigrations];
   const db = new OtkDb(root, migrations), prefs = new Prefs(db, prefsOptions);
   const expected = {
     ...DEFAULT_PREFS,

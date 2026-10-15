@@ -40,7 +40,7 @@ function contribute(registry: PreferenceRegistry): void {
 Deno.test("feature contribution owns default, validation, display metadata and executable preference commands", async () => {
   const registry = createPreferences();
   contribute(registry);
-  const root = await fixture(), db = new OtkDb(root, prefsMigrations);
+  const root = await fixture(), db = new OtkDb(root, [prefsMigrations]);
   const options = {
     ...prefsOptions,
     defaults: registry.defaults(),
@@ -113,7 +113,7 @@ Deno.test("feature contribution owns default, validation, display metadata and e
     release();
     db.close();
   }
-  const reopened = new OtkDb(root, prefsMigrations);
+  const reopened = new OtkDb(root, [prefsMigrations]);
   try {
     assertEquals(
       new Prefs(reopened, options).get()["extension.density"],

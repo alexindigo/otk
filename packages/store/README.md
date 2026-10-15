@@ -15,7 +15,7 @@ import {
 } from "@otk/store";
 
 const defaults = { compact: false };
-const db = new OtkDb("./state", [...prefsMigrations, ...frecencyMigrations]);
+const db = new OtkDb("./state", [prefsMigrations, frecencyMigrations]);
 try {
   const prefs = new Prefs(db, {
     defaults,
@@ -37,15 +37,31 @@ try {
 
 `OtkDb(statePath, migrations)` creates a private state directory and opens
 `otk.db` with WAL and a 5000 ms busy timeout. The caller composes feature
-contributions in ascending contiguous `Migration.id` order, starting at 1. The
-runner never imports features. Each pending migration (`sql` text or a file URL)
-is applied in its own immediate transaction with its `PRAGMA user_version`
-advance. Invalid composition and newer unsupported schemas are rejected; failed
-SQL rolls back and the connection is closed. Already-applied SQL is not read or
-replayed. Keep IDs stable: prefs is 1 (`001_prefs.sql`), frecency is 2
-(`002_frecency.sql`). Databases from the original app open without a schema or
-data rewrite. A frecency-only consumer still includes the preceding prefs
-migration; IDs are database-global, not renumbered per feature.
+contributions as `FeatureMigrations` objects: a stable `feature` name plus its
+own `migrations` list of `{ version, sql }`. Names are 1–120 ASCII identifier
+characters (letters, digits, underscore, dot, colon, hyphen), starting with a
+letter or digit. Versions are contiguous within each feature, starting at 1;
+feature order is unrestricted. The runner never imports features. A
+frecency-only consumer supplies `[frecencyMigrations]`, without prefs.
+
+The `otk_migrations` table records each applied `(feature, version)`. Each
+feature's pending upgrades and their records commit together in an immediate
+transaction; SQL failure rolls back that feature and closes the connection.
+Earlier committed features remain applied for retry. Already-applied SQL (text
+or a packaged file URL) is not read or replayed. Invalid contribution lists and
+unknown/noncontiguous applied versions of selected features are rejected before
+any pending SQL. Unselected features and their records remain untouched, so a
+smaller composition can reopen the database safely.
+
+On first open without the tracking table, a frozen compatibility bridge maps
+legacy `PRAGMA user_version` 1 to prefs v1, or 2 to prefs v1 + frecency v1,
+without reading or replaying that SQL. Version 0 is a fresh database; all other
+legacy versions fail clearly. The mapping and tracking-table creation commit
+atomically, including records for legacy features not selected by this caller.
+Afterward `user_version` is ignored and never advanced. The bridge is historical
+compatibility, not a list to extend for new features: each new feature owns its
+upgrades, selected only by application composition. Prefs and frecency both
+start at v1, with SQL files in their own feature-named directories.
 
 `Prefs<P>` merges validated persisted JSON into a fresh copy of supplied
 defaults. It rejects invalid writes before persistence or notification, then
@@ -56,8 +72,9 @@ parse-error behavior. `listen` returns an unsubscribe callback.
 `Frecency` resolves project/path keys exactly as the app did, rejects empty,
 NUL-containing or over-4096-character keys before writing, increments scores,
 and retains at most 1000 entries globally. Lists are project-scoped and ordered
-by last use. Decay/ranking are consumer concerns. There is no output-times
-persistence or any schema beyond prefs/frecency in this package.
+by last use. Decay/ranking are consumer concerns. Apart from upgrade tracking,
+this package supplies only prefs/frecency schemas, with no output-times
+persistence.
 
 Use Deno read/write permissions for the state directory and packaged SQL.
 License: LGPL-3.0-only. Validate with `deno task test:unit` and

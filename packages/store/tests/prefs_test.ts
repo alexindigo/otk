@@ -12,8 +12,10 @@ Deno.test("otk.db migrates transactionally, uses WAL and preserves prefs on reop
     "wal",
   );
   assertEquals(
-    db.connection.prepare("PRAGMA user_version").get()!.user_version,
-    2,
+    db.connection.prepare(
+      "SELECT feature,version FROM otk_migrations ORDER BY feature",
+    ).all(),
+    [{ feature: "frecency", version: 1 }, { feature: "prefs", version: 1 }],
   );
   assertEquals(prefs.get(), defaults);
   const changes: unknown[] = [],
@@ -32,12 +34,12 @@ Deno.test("otk.db migrates transactionally, uses WAL and preserves prefs on reop
   });
   reopened.close();
   const future = new DatabaseSync(join(root, "otk.db"));
-  future.exec("PRAGMA user_version=3");
+  future.exec("INSERT INTO otk_migrations VALUES('prefs',2)");
   future.close();
   assertThrows(
     () => new OtkDb(root, migrations),
     Error,
-    "Unsupported otk.db schema",
+    "Unsupported otk.db feature prefs version 2",
   );
   const untouched = new DatabaseSync(join(root, "otk.db"), { readOnly: true });
   assertEquals(

@@ -18,7 +18,7 @@ export function serveBackend(
   cfg: ServiceConfig,
   staticRoot: string,
 ): Promise<CoreServer> {
-  const store = new OtkDb(cfg.state.path, prefsMigrations);
+  const store = new OtkDb(cfg.state.path, [prefsMigrations]);
   const prefs = new Prefs(store, prefsOptions),
     rpc = new RpcRegistry(backend, store);
   registerSessions(rpc, backend);

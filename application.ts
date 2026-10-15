@@ -36,8 +36,8 @@ export function startApplication(
   staticRoot: string,
 ): Promise<CoreServer> {
   const store = new OtkDb(cfg.state.path, [
-    ...prefsMigrations,
-    ...frecencyMigrations,
+    prefsMigrations,
+    frecencyMigrations,
   ]);
   const prefs = new Prefs(store, prefsOptions);
   const rpc = new RpcRegistry(backend, store);

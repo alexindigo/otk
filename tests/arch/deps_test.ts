@@ -146,6 +146,26 @@ function sourceErrors(path: string, source: string): string[] {
   }
   const errors: string[] = [];
   if (
+    /\bPRAGMA\s+user_version\b/i.test(source) &&
+    path !== "packages/store/legacy.ts"
+  ) {
+    errors.push(
+      "global database versions belong only to the frozen legacy bridge",
+    );
+  }
+  if (
+    from === "store" &&
+    (/\bmigration\.id\b|\breadonly\s+id\s*:\s*number\b/.test(source) ||
+      (/^packages\/store\/(?:db|migrations)\.ts$/.test(path) &&
+        /\bfeature\s*:\s*["']|\bmigrations\s*:\s*readonly\s+Migration\[\]/.test(
+          source.replace(/export interface FeatureMigrations\s*\{[^}]+\}/, ""),
+        )))
+  ) {
+    errors.push(
+      "database upgrades must be caller-composed feature-owned lists",
+    );
+  }
+  if (
     /\btype\s+CapabilityName\s*=/.test(source) &&
     (path !== "packages/protocol/capabilities.ts" ||
       !/\btype\s+CapabilityName\s*=\s*Extract<keyof CapabilityContracts, string>\s*;/
@@ -582,6 +602,72 @@ Deno.test("standalone sessions consumer imports only the harness public entries"
     new URL("tests/reuse/harness-consumer.ts", root),
   );
   assertEquals(imports(consumer), ["@otk/harness", "@otk/harness-opencode1"]);
+});
+
+Deno.test("database upgrades stay feature-owned and the global sequence is frozen compatibility only", async () => {
+  const read = (path: string) => Deno.readTextFile(new URL(path, root));
+  const runner = await read("packages/store/migrations.ts");
+  assert(
+    /export interface FeatureMigrations\s*\{\s*readonly feature: string;\s*readonly migrations: readonly Migration\[\];\s*\}/
+      .test(runner),
+  );
+  assert(/readonly version: number;/.test(runner));
+  assert(/PRIMARY KEY \(feature, version\)/.test(runner));
+  const db = await read("packages/store/db.ts");
+  assert(/migrations: readonly FeatureMigrations\[\]/.test(db));
+  for (const path of ["packages/store/db.ts", "packages/store/migrations.ts"]) {
+    assertEquals(sourceErrors(path, await read(path)), []);
+  }
+  for (
+    const [path, invalid] of [
+      [
+        "packages/store/migrations.ts",
+        'db.prepare("PRAGMA user_version").get();',
+      ],
+      ["packages/store/features/notes.ts", 'db.exec("PRAGMA user_version=3");'],
+      ["application.ts", "db.exec(`PRAGMA user_version=${version}`);"],
+      [
+        "packages/store/migrations.ts",
+        "export interface Migration { readonly id: number; }",
+      ],
+      [
+        "packages/store/db.ts",
+        "constructor(path: string, migrations: readonly Migration[]) {}",
+      ],
+      [
+        "packages/store/migrations.ts",
+        'const migrations = [{ feature: "notes", version: 1 }];',
+      ],
+    ]
+  ) assert(sourceErrors(path, invalid).length, `${path}: ${invalid}`);
+  const bridge = await read("packages/store/legacy.ts");
+  assertEquals(
+    [...bridge.matchAll(/case (\d+):/g)].map((match) => Number(match[1])),
+    [0, 1, 2],
+  );
+  assertEquals(
+    [...bridge.matchAll(/feature: "([^"]+)", version: (\d+)/g)].map((
+      match,
+    ) => [match[1], Number(match[2])]),
+    [["prefs", 1], ["prefs", 1], ["frecency", 1]],
+  );
+  assert(!/\.exec\(|\buser_version\s*=/.test(bridge));
+  for (const feature of ["prefs", "frecency"]) {
+    const source = await read(`packages/store/features/${feature}.ts`);
+    assert(source.includes(`feature: "${feature}"`));
+    assert(source.includes(`./migrations/${feature}/001.sql`));
+    assert(/version: 1/.test(source));
+  }
+  for await (
+    const entry of Deno.readDir(
+      new URL("packages/store/features/migrations/", root),
+    )
+  ) {
+    assert(
+      entry.isDirectory,
+      "SQL numbering must be scoped to feature directories",
+    );
+  }
 });
 
 Deno.test("RPC contracts stay open and names derive only from the mergeable registry", async () => {

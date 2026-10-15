@@ -51,7 +51,7 @@ Deno.test("core service with a composed backend/assets discovers HTTP routes and
     },
     capabilities: { prompt: undefined },
   };
-  const db = new OtkDb(settings.state.path, prefsMigrations),
+  const db = new OtkDb(settings.state.path, [prefsMigrations]),
     prefs = new Prefs(db, prefsOptions),
     rpc = new RpcRegistry(harness, db);
   registerSessions(rpc, harness);

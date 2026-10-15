@@ -76,7 +76,7 @@ import {
 } from "./mod.ts";
 
 async function run(backend: Harness, cfg: ServiceConfig, staticRoot: string) {
-  const store = new OtkDb(cfg.state.path, prefsMigrations);
+  const store = new OtkDb(cfg.state.path, [prefsMigrations]);
   const prefs = new Prefs(store, prefsOptions);
   const rpc = new RpcRegistry(backend, store);
   registerSessions(rpc, backend);

@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { OtkDb } from "../db.ts";
-import type { Migration } from "../migrations.ts";
+import type { FeatureMigrations } from "../migrations.ts";
 
 /** The prefs feature contributes its original schema version, independently. */
-export const prefsMigrations: readonly Migration[] = [
-  { id: 1, sql: new URL("./migrations/001_prefs.sql", import.meta.url) },
-];
+export const prefsMigrations: FeatureMigrations = {
+  feature: "prefs",
+  migrations: [
+    { version: 1, sql: new URL("./migrations/prefs/001.sql", import.meta.url) },
+  ],
+};
 
 /** Application policy; storage owns neither preference keys nor error types. */
 export interface PrefsOptions<P extends object> {

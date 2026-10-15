@@ -19,7 +19,7 @@ import { StreamBuffers } from "@otk/content";
 
 Deno.test("frecency RPC uses authoritative session directory instead of a client-claimed project", async () => {
   const root = await fixture(),
-    db = new OtkDb(root, [...prefsMigrations, ...frecencyMigrations]),
+    db = new OtkDb(root, [prefsMigrations, frecencyMigrations]),
     store = new Frecency(db, frecencyOptions);
   const settings = cfg();
   settings.harness.db = join(root, "missing.db");

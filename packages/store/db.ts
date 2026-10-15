@@ -1,11 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { DatabaseSync } from "node:sqlite";
 import { join } from "@std/path";
-import { migrate, type Migration, validateMigrations } from "./migrations.ts";
+import {
+  type FeatureMigrations,
+  migrate,
+  validateMigrations,
+} from "./migrations.ts";
 /** Disk-backed SQLite connection with caller-composed feature migrations. */
 export class OtkDb {
   readonly connection: DatabaseSync;
-  constructor(statePath: string, migrations: readonly Migration[]) {
+  constructor(statePath: string, migrations: readonly FeatureMigrations[]) {
     validateMigrations(migrations);
     Deno.mkdirSync(statePath, { recursive: true, mode: 0o700 });
     const db = this.connection = new DatabaseSync(join(statePath, "otk.db"));
