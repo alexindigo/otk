@@ -111,7 +111,9 @@ consumer calls `registerOtkThemes(themes)` to select the shipped complete Dark
 and Light bases, or supplies its own complete mode bases with
 `themes.register(data, { base: true })`. Partial registrations inherit missing
 slots from their own mode's base. `system` resolves the registered OS-mode base.
-No custom palette ships in OTK.
+No custom palette ships in OTK. An uninstalled theme ID falls back to the
+registered dark base at resolution; the engine retains the authoritative stored
+ID, including through previews.
 
 `ThemeEngine(themes, browserThemeEnvironment(), committedId)` is the single
 document paint owner. Call `start()` before mounting and release its returned

@@ -1,11 +1,17 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, type Element } from "solid-js";
 import { render } from "@solidjs/web";
-import { DEFAULT_PREFS, type ExternalCall } from "@otk/protocol";
+import {
+  booleanPreference,
+  createPreferences,
+  DEFAULT_PREFS,
+  type ExternalCall,
+} from "@otk/protocol";
 import {
   browserThemeEnvironment,
   Code,
   createUiRegistries,
+  DisplayMenu,
   Docks,
   emptyDraft,
   Message,
@@ -24,6 +30,9 @@ import {
 import "@fontsource/ibm-plex-mono/400.css";
 
 declare module "@otk/protocol" {
+  interface Preferences {
+    "consumer.compact": boolean;
+  }
   interface PartKinds {
     "consumer.card": { kind: "consumer.card"; id: string; text: string };
   }
@@ -52,6 +61,15 @@ function ExternalTool(props: ToolProps): Element {
   );
 }
 function Consumer(): Element {
+  const preferenceRegistry = createPreferences();
+  preferenceRegistry.register({
+    key: "consumer.compact",
+    default: false,
+    validate: booleanPreference,
+    label: "Consumer compact layout",
+    display: { order: 100, control: { kind: "toggle" } },
+  });
+  const [prefs, setPrefs] = createSignal(preferenceRegistry.defaults());
   const ui = createUiRegistries(), isolated = createUiRegistries();
   registerGenericTool(ui.tools);
   registerGenericTool(isolated.tools);
@@ -219,6 +237,19 @@ function Consumer(): Element {
               },
             }}
           />
+          <DisplayMenu
+            registry={preferenceRegistry}
+            prefs={prefs()}
+            ready
+            error=""
+            onSet={(key, value) => {
+              setPrefs((previous) => ({ ...previous, [key]: value }));
+              return Promise.resolve();
+            }}
+          />
+          <output data-consumer-preference>
+            {String(prefs()["consumer.compact"])}
+          </output>
         </section>
       </UiProvider>
       <UiProvider registries={isolated}>

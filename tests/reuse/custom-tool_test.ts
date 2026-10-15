@@ -133,6 +133,15 @@ Deno.test("independent public UI consumer renders external tools twice, updates 
     await browser.poll(
       "document.querySelector('[data-external-dock]').textContent === 'Injected dock 1'",
     );
+    await browser.click(".otk-display-menu summary");
+    await browser.poll(
+      `!![...document.querySelectorAll('.otk-display-menu label')].find(el => el.textContent.includes('Consumer compact layout'))`,
+    );
+    await browser.click('input[name="consumer.compact"]');
+    await browser.poll(
+      `document.querySelector('[data-consumer-preference]').textContent === 'true' && document.querySelector('input[name="consumer.compact"]').checked`,
+    );
+    assertEquals(browser.errors, []);
     console.info("Independent UI consumer evidence:", root);
   } finally {
     await browser?.close();

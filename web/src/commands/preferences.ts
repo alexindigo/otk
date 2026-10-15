@@ -1,11 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { CommandHub } from "@otk/client";
-import type { PreferenceKey, Preferences } from "@otk/protocol";
+import {
+  type PreferenceKey,
+  type PreferenceRegistry,
+  type Preferences,
+  preferences,
+} from "@otk/protocol";
 export function registerPreferenceCommands(commands: CommandHub, actions: {
   ready(): boolean;
   prefs(): Preferences;
   set(key: PreferenceKey, value: Preferences[PreferenceKey]): Promise<void>;
-}): () => void {
+}, registry: PreferenceRegistry = preferences): () => void {
   const releases = [commands.register({
     id: "prefs.set",
     title: "Set preference",
@@ -16,50 +21,31 @@ export function registerPreferenceCommands(commands: CommandHub, actions: {
       input: { key: PreferenceKey; value: Preferences[PreferenceKey] },
     ) => actions.set(input.key, input.value),
   })];
-  for (
-    const [key, title] of [
-      ["timestamps", "Always show timestamps"],
-      ["toolDetails", "Tool details"],
-      ["conceal", "Conceal markup"],
-      ["genericToolOutput", "Generic tool output"],
-      ["diffWrap", "Wrap diffs"],
-      ["scrollbar", "Scrollbar"],
-      ["pasteSummary", "Paste summaries"],
-    ] as const
-  ) {
+  for (const definition of registry.display()) {
+    const { key, label, display } = definition, control = display!.control;
+    const action = control.kind === "toggle" || control.options.length === 2
+      ? "toggle"
+      : "cycle";
     releases.push(
       commands.register({
-        id: `prefs.toggle.${key}`,
-        title: `Toggle ${title.toLowerCase()}`,
+        id: `prefs.${action}.${key}`,
+        title: `${
+          action === "toggle" ? "Toggle" : "Cycle"
+        } ${label.toLowerCase()}`,
         category: "Display",
         enabled: actions.ready,
-        run: () => actions.set(key, !actions.prefs()[key]),
+        run: () => {
+          const current = actions.prefs()[key];
+          return actions.set(
+            key,
+            control.kind === "toggle" ? !current : control.options[
+              (control.options.findIndex((option) => option.value === current) +
+                1) % control.options.length
+            ].value,
+          );
+        },
       }),
     );
   }
-  releases.push(commands.register({
-    id: "prefs.toggle.thinking",
-    title: "Toggle thinking",
-    category: "Display",
-    enabled: actions.ready,
-    run: () =>
-      actions.set(
-        "thinking",
-        actions.prefs().thinking === "show" ? "hide" : "show",
-      ),
-  }));
-  releases.push(commands.register({
-    id: "prefs.cycle.diffStyle",
-    title: "Cycle diff style",
-    category: "Display",
-    enabled: actions.ready,
-    run: () =>
-      actions.set(
-        "diffStyle",
-        ({ auto: "split", split: "unified", unified: "auto" } as const)[
-          actions.prefs().diffStyle
-        ],
-      ),
-  }));
   return () => releases.forEach((release) => release());
 }

@@ -28,6 +28,15 @@ Renderer tests exercise feature-owned contracts and name collisions between
 typed OTK kinds and external tools/parts; independent browser consumers verify
 external rendering and unknown fallbacks.
 
+Preferences compose an open protocol interface from their feature-owned shared
+contracts in `packages/protocol/preferences/`. The policy registry imports no
+owners; shipped composition selects registration functions, not individual keys.
+Defaults and validation derive from contributions. Display menu and commands
+consume the same display metadata. Negative fixtures reject central key/default
+lists, key-specific registry dispatch, duplicated menu/command lists and closed
+theme identities. Contribution tests observe command-driven persistence,
+validation and notifications; browser tests observe unknown-theme base paint.
+
 Native endpoints/schema belong to `@otk/harness-opencode1`. Store production
 code cannot depend on another OTK package; app preference policy and error types
 are injected. Its connection and migration runner cannot import feature modules.

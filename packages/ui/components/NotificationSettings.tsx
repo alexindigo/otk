@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./NotificationSettings.css" with { type: "text" };
 import { createSignal, For, onCleanup, Show } from "solid-js";
-import type { Preferences } from "@otk/protocol";
+import { type Preferences, preferences } from "@otk/protocol";
 import type { BrowserNotificationStatus } from "../features/notify/os.ts";
-export type NotificationPreference =
-  | "notify.toast"
-  | "notify.os"
-  | "notify.sound"
-  | "notify.badge";
+export type NotificationPreference = Extract<
+  keyof Preferences,
+  `notify.${string}`
+>;
 export default function NotificationSettings(props: {
   prefs: Preferences;
   ready: boolean;
@@ -29,28 +28,27 @@ export default function NotificationSettings(props: {
     >
       <h2>Notifications</h2>
       <For
-        each={[
-          ["notify.toast", "In-page messages"],
-          ["notify.os", "Browser notifications"],
-          ["notify.sound", "Sound"],
-          ["notify.badge", "Favicon attention badge"],
-        ] as const}
+        each={preferences.list().filter((
+          definition,
+        ): definition is import("@otk/protocol").PreferenceDefinition<
+          NotificationPreference
+        > => definition.key.startsWith("notify."))}
       >
         {(row) => (
           <label>
             <input
               type="checkbox"
-              name={row[0]}
-              checked={props.prefs[row[0]]}
+              name={row.key}
+              checked={props.prefs[row.key]}
               disabled={!props.ready}
               onChange={(event) => {
                 setError("");
-                void props.onSet(row[0], event.currentTarget.checked).catch((
+                void props.onSet(row.key, event.currentTarget.checked).catch((
                   error,
                 ) => setError((error as Error).message));
               }}
             />
-            <span>{row[1]}</span>
+            <span>{row.label}</span>
           </label>
         )}
       </For>

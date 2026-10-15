@@ -145,6 +145,64 @@ function sourceErrors(path: string, source: string): string[] {
     return [];
   }
   const errors: string[] = [];
+  if (/\btype\s+Preferences\s*=/.test(source)) {
+    errors.push(
+      "preference contracts must be a declaration-mergeable interface",
+    );
+  }
+  if (path === "packages/protocol/prefs.ts") {
+    if (/\binterface\s+Preferences\s*\{\s*[^\s}]/.test(source)) {
+      errors.push(
+        "preference keys belong to feature contributions, not the registry",
+      );
+    }
+    if (
+      imports(source).some((specifier) =>
+        specifier !== "./preference-contract.ts"
+      ) || /\b(?:switch\s*\(|if\s*\(\s*key\s*===)/.test(source)
+    ) {
+      errors.push(
+        "preference registry must not import owners or dispatch on concrete keys",
+      );
+    }
+  }
+  if (
+    path === "packages/protocol/preference-contract.ts" &&
+    /interface\s+Preferences(?:\s+extends[^{}]+)?\s*\{\s*[^\s}]/.test(source)
+  ) {
+    errors.push("preference contract composition must not own concrete keys");
+  }
+  if (/\b(?:const|let)\s+DEFAULT_PREFS\s*(?::[^=]+)?=\s*\{/.test(source)) {
+    errors.push("preference defaults must derive from contributions");
+  }
+  if (
+    /\btype\s+PreferenceKey\s*=/.test(source) &&
+    !/\btype\s+PreferenceKey\s*=\s*Extract<keyof Preferences, string>\s*;/.test(
+      source,
+    )
+  ) {
+    errors.push(
+      "preference keys must derive from the open Preferences interface",
+    );
+  }
+  if (
+    [
+      "packages/ui/components/DisplayMenu.tsx",
+      "web/src/commands/preferences.ts",
+    ].includes(path) &&
+    /["'](?:timestamps|thinking|toolDetails|conceal|genericToolOutput|diffWrap|diffStyle|scrollbar|pasteSummary)["']/
+      .test(source)
+  ) {
+    errors.push(
+      "preference menu and commands must consume contributed metadata, not their own key lists",
+    );
+  }
+  if (
+    path === "packages/protocol/preferences/theme.ts" &&
+    !/interface\s+ThemePreferences\s*\{\s*theme:\s*string\s*;/.test(source)
+  ) {
+    errors.push("theme identity must remain an open string contract");
+  }
   if (
     /\btype\s+RpcMethod\s*=/.test(source) &&
     !/\btype\s+RpcMethod\s*=\s*keyof\s+RpcMethods\s*;/.test(source)
@@ -517,6 +575,52 @@ Deno.test("standalone client consumer imports only its public framework-free ent
     new URL("tests/reuse/client-consumer.ts", root),
   );
   assertEquals(imports(consumer), ["@otk/client"]);
+});
+
+Deno.test("preferences stay feature-owned with an open composed contract and one menu-command contribution list", async () => {
+  const read = (path: string) => Deno.readTextFile(new URL(path, root));
+  const registry = await read("packages/protocol/prefs.ts");
+  const contract = await read("packages/protocol/preference-contract.ts");
+  assert(/export interface Preferences\s+extends[^{}]+\{\s*\}/.test(contract));
+  assertEquals(
+    sourceErrors("packages/protocol/preference-contract.ts", contract),
+    [],
+  );
+  assertEquals(sourceErrors("packages/protocol/prefs.ts", registry), []);
+  const composition = await read("packages/protocol/preferences.ts");
+  assert(
+    /DEFAULT_PREFS:\s*Readonly<Preferences>\s*=\s*preferences\.defaults\(\)/
+      .test(composition),
+  );
+  for (
+    const path of [
+      "packages/ui/components/DisplayMenu.tsx",
+      "web/src/commands/preferences.ts",
+    ]
+  ) {
+    const source = await read(path);
+    assert(/\.display\(\)/.test(source));
+    assertEquals(sourceErrors(path, source), []);
+    assert(
+      sourceErrors(path, 'const keys = ["timestamps", "diffStyle"];').length,
+    );
+  }
+  for (
+    const source of [
+      "export interface Preferences { timestamps: boolean; }",
+      "export type Preferences = { theme: string };",
+      'export type PreferenceKey = "timestamps" | "theme";',
+      "export const DEFAULT_PREFS = { timestamps: false };",
+      'import "./preferences/transcript.ts";',
+      'if (key === "thinking") return value === "show";',
+    ]
+  ) assert(sourceErrors("packages/protocol/prefs.ts", source).length);
+  assert(
+    sourceErrors(
+      "packages/protocol/preferences/theme.ts",
+      'interface ThemePreferences { theme: "otk-dark" | "otk-light"; }',
+    ).length,
+  );
 });
 
 Deno.test("tool and part contracts remain open with distinct external discriminants", async () => {

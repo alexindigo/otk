@@ -4,7 +4,13 @@
   "license": "LGPL-3.0-only",
   "exports": "./mod.ts",
   "publish": {
-    "include": ["*.ts", "deno.json", "README.md", "LICENSE"],
+    "include": [
+      "*.ts",
+      "preferences/*.ts",
+      "deno.json",
+      "README.md",
+      "LICENSE"
+    ],
     "exclude": ["tests/"]
   },
   "tasks": {

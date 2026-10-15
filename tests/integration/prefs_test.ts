@@ -33,7 +33,11 @@ Deno.test("prefs RPC persists across sidecar restart and broadcasts to other con
       frame.t === "prefs" && frame.prefs.keymap["palette.open"] === "Ctrl+j"
     );
     await assertRejects(() =>
-      a.rpc("prefs.set", { key: "theme", value: "extra-theme" })
+      a.rpc("prefs.set", { key: "theme", value: "invalid theme" })
+    );
+    await a.rpc("prefs.set", { key: "theme", value: "extra-theme" });
+    await b.wait((frame) =>
+      frame.t === "prefs" && frame.prefs.theme === "extra-theme"
     );
     await a.rpc("prefs.set", { key: "theme", value: "otk-light" });
     await b.wait((frame) =>

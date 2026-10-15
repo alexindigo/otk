@@ -36,6 +36,24 @@ separate method-name list. Import the feature's contract in both server and
 client consumers. `Rpc.call` infers its result from the method name, and the
 application core checks registrations against that same contract.
 
+`Preferences` is a declaration-mergeable composition of feature schemas. Each
+shared feature module in `preferences/` owns its schema and contributes its own
+default, validator and label through `PreferenceRegistry.register`. Registry
+machinery imports no features. `createPreferences()` selects the shipped owners
+into a fresh registry; `preferences`, `DEFAULT_PREFS` and `isPreference` expose
+the shipped composition. An extension augments `Preferences` beside its
+registration, and supplies the same selected registry to its server policy and
+UI consumers. Register before constructing storage or mounting UI. `defaults()`
+derives the selected snapshot; `validate` delegates only to the registered key's
+validator. No coercion occurs. Optional display controls/ordering supply both
+menu controls and command actions. Theme IDs are bounded, nonempty identifier
+strings, independent of installed palettes; missing palettes resolve to the
+consumer's dark base at paint time, without changing the saved ID. System
+retains OS-mode base selection. The shipped contract uses interface inheritance
+rather than library-internal module augmentation, which JSR's publication graph
+does not support. The composition names owners only, never individual keys or
+validators.
+
 `ToolKinds` and `PartKinds` are also declaration-mergeable interfaces, mapping
 typed OTK kind names to their wire shapes. `ToolCall` and `Part` derive from
 these maps plus `ExternalCall` / `ExternalPart`. Harness/MCP/plugin names live

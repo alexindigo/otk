@@ -38,6 +38,28 @@ function setup() {
     watching: () => !!change,
   };
 }
+Deno.test("unknown theme startup, host commit and preview restore all paint the base without overwriting saved identity", () => {
+  const f = setup();
+  f.os("light");
+  const engine = new ThemeEngine(f.themes, f.environment, "plugin:missing");
+  const stop = engine.start();
+  assertEquals(f.output()!.committed, "plugin:missing");
+  assertEquals(f.output()!.mode, "dark");
+  assertEquals(
+    f.output()!.colors,
+    f.themes.resolve("otk-dark", "light").colors,
+  );
+  const preview = engine.preview();
+  preview.select("otk-light");
+  engine.commit("new:missing");
+  assertEquals(f.output()!.mode, "light");
+  preview.close();
+  assertEquals(f.output()!.selected, "new:missing");
+  assertEquals(f.output()!.mode, "dark");
+  engine.commit("system");
+  assertEquals(f.output()!.mode, "light");
+  stop();
+});
 Deno.test("theme partial overrides inherit the selected mode's complete base without cross-mode residue", () => {
   const { themes } = setup();
   themes.register({
@@ -76,7 +98,11 @@ Deno.test("theme registry owns immutable data, rejects incomplete bases and isol
   });
   colors.accent = "#000000";
   assertEquals(themes.resolve("external", "dark").colors.accent, "#123456");
-  assertThrows(() => other.resolve("external", "dark"), Error, "Unknown theme");
+  assertThrows(
+    () => other.resolve("external", "dark"),
+    Error,
+    "Missing theme base",
+  );
   assertThrows(() => themes.register(themes.list()[0]), Error, "Duplicate");
   assertThrows(
     () =>
@@ -88,10 +114,9 @@ Deno.test("theme registry owns immutable data, rejects incomplete bases and isol
   );
   release();
   release();
-  assertThrows(
-    () => themes.resolve("external", "dark"),
-    Error,
-    "Unknown theme",
+  assertEquals(
+    themes.resolve("external", "dark").colors,
+    themes.resolve("otk-dark", "dark").colors,
   );
 });
 Deno.test("preview cancellation restores the newest committed host value and stale owners cannot repaint", () => {
@@ -133,8 +158,12 @@ Deno.test("System follows live OS changes including preview and pinned modes ret
   assertEquals(f.output()!.mode, "dark");
   preview.close();
   assertEquals(f.output()!.selected, "otk-dark");
-  assertThrows(() => engine.commit("unknown"), Error, "Unknown theme");
-  assertEquals(engine.snapshot().committed, "otk-dark");
+  engine.commit("unknown");
+  assertEquals(engine.snapshot().committed, "unknown");
+  assertEquals(
+    f.output()!.colors,
+    f.themes.resolve("otk-dark", "light").colors,
+  );
   assert(observations >= 6);
   release();
   stop();

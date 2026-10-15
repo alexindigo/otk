@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
+import { WsClient } from "../support/ws-client.ts";
 import { join } from "@std/path";
 import { runTool } from "../support/rendering.ts";
 import {
@@ -9,6 +10,52 @@ import {
 } from "../support/browser-fixture.ts";
 import type { Cdp } from "../support/cdp.ts";
 const picker = "dialog[aria-label=Theme][open]";
+Deno.test("unknown persisted theme paints the base in both browsers and after reload without rewriting identity", async () => {
+  const f = await browserFixture();
+  let client: WsClient | undefined;
+  try {
+    const server = await f.sidecar();
+    client = new WsClient(server.url);
+    await client.connect();
+    await client.rpc("prefs.set", {
+      key: "theme",
+      value: "plugin:uninstalled",
+    });
+    const browser = await f.browser("about:blank");
+    await browser.send("Emulation.setEmulatedMedia", {
+      features: [{ name: "prefers-color-scheme", value: "light" }],
+    });
+    await browser.goto(server.url);
+    const fallback =
+      `document.documentElement.dataset.otkTheme === 'plugin:uninstalled' &&
+      getComputedStyle(document.documentElement).getPropertyValue('--otk-bg') === '#1a1c1e' &&
+      getComputedStyle(document.documentElement).colorScheme === 'dark' &&
+      document.querySelector('meta[name="theme-color"]').content === '#1a1c1e'`;
+    await browser.poll(fallback);
+    const other = await f.browser(server.url);
+    await other.poll(fallback);
+    await assertRejects(() =>
+      client!.rpc("prefs.set", { key: "theme", value: "invalid theme" })
+    );
+    assertEquals(
+      await client.rpc("prefs.get", {}).then((prefs) =>
+        (prefs as { theme: string }).theme
+      ),
+      "plugin:uninstalled",
+    );
+    await browser.reload();
+    await browser.poll(fallback);
+    await client.rpc("prefs.set", { key: "theme", value: "otk-light" });
+    for (const page of [browser, other]) {
+      await page.poll(
+        `document.documentElement.dataset.otkTheme === 'otk-light' && getComputedStyle(document.documentElement).getPropertyValue('--otk-bg') === '#f4f6f8'`,
+      );
+    }
+  } finally {
+    await client?.close();
+    await f.stop();
+  }
+});
 const paint = `(() => {
   const root = document.documentElement, css = getComputedStyle(root);
   return { id:root.dataset.otkTheme, bg:css.getPropertyValue('--otk-bg'), scheme:css.colorScheme,
@@ -242,7 +289,7 @@ Deno.test("theme save rejection stays visible, retains preview and never replace
           if(typeof data==='string') {
             const frame=JSON.parse(data);
             if(frame.t==='rpc' && frame.method==='prefs.set' && frame.params.key==='theme') {
-              frame.params.value='not-a-shipped-theme'; data=JSON.stringify(frame);
+              frame.params.value='invalid theme identity'; data=JSON.stringify(frame);
             }
           }
           return send.call(this,data);

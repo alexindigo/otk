@@ -7,6 +7,7 @@ export * from "./history.ts";
 export * from "./index.ts";
 export * from "./messages.ts";
 export * from "./prefs.ts";
+export * from "./preferences.ts";
 export * from "./rpc.ts";
 export * from "./session-tree.ts";
 export * from "./version.ts";

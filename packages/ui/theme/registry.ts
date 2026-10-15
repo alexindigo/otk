@@ -10,7 +10,10 @@ export class ThemeRegistry {
   #themes = new Map<string, Theme>();
   #bases = new Map<ThemeMode, string>();
   register(theme: Theme, options: { base?: boolean } = {}): () => void {
-    if (!theme.id || theme.id === "system" || this.#themes.has(theme.id)) {
+    if (
+      !theme.id || theme.id === "system" ||
+      this.#themes.has(theme.id)
+    ) {
       throw new Error(`Duplicate or reserved theme: ${theme.id}`);
     }
     if (theme.mode !== "dark" && theme.mode !== "light") {
@@ -52,8 +55,8 @@ export class ThemeRegistry {
   ): { id: string; mode: ThemeMode; colors: ThemeColors } {
     const theme = this.#themes.get(
       id === "system" ? this.#bases.get(system)! : id,
-    );
-    if (!theme) throw new Error(`Unknown theme: ${id}`);
+    ) ?? this.#themes.get(this.#bases.get("dark")!);
+    if (!theme) throw new Error(`Missing theme base for: ${id}`);
     const base = this.#themes.get(this.#bases.get(theme.mode)!);
     if (!base) throw new Error(`Missing ${theme.mode} base`);
     return {
