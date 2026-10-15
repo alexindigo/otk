@@ -23,6 +23,9 @@ application owns this lifetime.
 Features own `params` validation and `handler`; `register(method, definition)`
 rejects duplicate names. Invalid params and handler errors propagate to the WS
 request owner. Unknown/unregistered methods return the existing `method` error.
+Method names and handler results derive from the open protocol `RpcMethods`
+interface. Validators still accept untrusted wire objects and may return their
+own parsed representation; that representation types the handler's input.
 
 `registerSessions`, `registerPrefs` and `registerFrecency` provide core and
 store features; prefs/frecency take their store as a third argument. Optional
@@ -84,6 +87,16 @@ async function run(backend: Harness, cfg: ServiceConfig, staticRoot: string) {
     handler: (ctx, id) => ctx.sessionDirectory(id),
   });
   return await startCore({ cfg, backend, store, prefs, rpc, staticRoot });
+}
+```
+
+The example's extra method declares its contract beside the feature:
+
+```ts
+declare module "@otk/protocol" {
+  interface RpcMethods {
+    "example.directory": { params: Record<string, never>; result: string };
+  }
 }
 ```
 

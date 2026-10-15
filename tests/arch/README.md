@@ -16,6 +16,11 @@ rejected in package production source. Negative fixtures exercise forbidden
 edges and public-entry bypasses, rather than relying only on the current tree
 being valid.
 
+RPC names must derive from the declaration-mergeable protocol `RpcMethods`
+interface. Negative fixtures reject closed aliases and extra literal method
+names; core RPC tests compile and exercise an external feature contract through
+server registration, direct calls and invocation-time selected calls.
+
 Native endpoints/schema belong to `@otk/harness-opencode1`. Store production
 code cannot depend on another OTK package; app preference policy and error types
 are injected. Its connection and migration runner cannot import feature modules.

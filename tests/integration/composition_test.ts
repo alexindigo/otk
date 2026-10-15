@@ -2,12 +2,7 @@
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { createIndex, createSession, SidecarConnection } from "@otk/client";
-import type {
-  FileMatch,
-  FrecencyEntry,
-  Preferences,
-  PromptInput,
-} from "@otk/protocol";
+import type { Preferences, PromptInput } from "@otk/protocol";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { fixture } from "../support/config.ts";
 import { waitFor } from "../support/opencode.ts";
@@ -104,11 +99,11 @@ Deno.test("application composition with an external core-only backend reaches cl
     client = await consumer(app.url);
     assertEquals(client.prefs()?.timestamps, true);
     assertEquals(
-      (await client.connection.rpc.call<Preferences>("prefs.get", {}))
+      (await client.connection.rpc.call("prefs.get", {}))
         .timestamps,
       true,
     );
-    const entries = await client.connection.rpc.call<FrecencyEntry[]>(
+    const entries = await client.connection.rpc.call(
       "frecency.list",
       { sessionID: "core" },
     );
@@ -152,7 +147,7 @@ Deno.test("application composition registers only supplied optional capabilities
     await client.connection.rpc.call("session.prompt", input);
     assertEquals(JSON.parse(JSON.stringify(prompts)), [input]);
     assertEquals(
-      await client.connection.rpc.call<FileMatch[]>("find.files", {
+      await client.connection.rpc.call("find.files", {
         sessionID: "core",
         query: "example",
       }),

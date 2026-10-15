@@ -9,12 +9,7 @@ import {
   type Selection,
   type SidecarConnection,
 } from "@otk/client";
-import type {
-  IndexEntry,
-  PermissionRequest,
-  Preferences,
-  ServerFrame,
-} from "@otk/protocol";
+import type { IndexEntry, Preferences, ServerFrame } from "@otk/protocol";
 import {
   registerBadgeChannel,
   registerOsChannel,
@@ -90,7 +85,7 @@ export function applicationNotifications(input: {
     }
     // Resolve action ownership before channel delivery. This schedules the input
     // tone once and constructs one OS note, without an enrichment replay.
-    void input.connection(ref.sidecar).rpc.call<PermissionRequest[]>(
+    void input.connection(ref.sidecar).rpc.call(
       "permission.list",
       { sessionID: ref.session },
     ).then((requests) => {

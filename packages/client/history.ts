@@ -9,7 +9,7 @@ export async function loadHistory(
 ): Promise<HistoryEntry[]> {
   const results = await Promise.allSettled(
     sources.map(({ id, connection }) =>
-      connection.rpc.call<HistoryEntry[]>("history.list", {}).then((entries) =>
+      connection.rpc.call("history.list", {}).then((entries) =>
         entries.map((entry) => ({
           ...entry,
           parts: entry.parts.map((part) =>

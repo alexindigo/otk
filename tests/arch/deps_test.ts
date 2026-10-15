@@ -145,6 +145,17 @@ function sourceErrors(path: string, source: string): string[] {
     return [];
   }
   const errors: string[] = [];
+  if (
+    /\btype\s+RpcMethod\s*=/.test(source) &&
+    !/\btype\s+RpcMethod\s*=\s*keyof\s+RpcMethods\s*;/.test(source)
+  ) {
+    errors.push(
+      "RPC method names must derive from the open RpcMethods interface",
+    );
+  }
+  if (/\btype\s+RpcMethods\s*=/.test(source)) {
+    errors.push("RPC contracts must be a declaration-mergeable interface");
+  }
   if (from) {
     for (
       const match of source.matchAll(
@@ -461,6 +472,24 @@ Deno.test("standalone sessions consumer imports only the harness public entries"
     new URL("tests/reuse/harness-consumer.ts", root),
   );
   assertEquals(imports(consumer), ["@otk/harness", "@otk/harness-opencode1"]);
+});
+
+Deno.test("RPC contracts stay open and names derive only from the mergeable registry", async () => {
+  const protocol = await Deno.readTextFile(
+    new URL("packages/protocol/rpc.ts", root),
+  );
+  assert(/export\s+interface\s+RpcMethods\s*\{/.test(protocol));
+  assert(
+    /export\s+type\s+RpcMethod\s*=\s*keyof\s+RpcMethods\s*;/.test(protocol),
+  );
+  for (
+    const source of [
+      'export type RpcMethod = "session.get" | "new.method";',
+      'export type RpcMethod = keyof RpcMethods | "new.method";',
+      "export type RpcMethods = Record<string, { params: unknown; result: unknown }>;",
+    ]
+  ) assertEquals(sourceErrors("packages/protocol/rpc.ts", source).length, 1);
+  assertEquals(sourceErrors("packages/protocol/rpc.ts", protocol), []);
 });
 
 Deno.test("standalone client consumer imports only its public framework-free entry", async () => {

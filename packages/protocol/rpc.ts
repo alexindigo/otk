@@ -1,5 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ModelRef } from "./content.ts";
+import type {
+  ContentSession,
+  Message,
+  ModelRef,
+  PermissionRequest,
+  QuestionRequest,
+} from "./content.ts";
+import type { HistoryEntry } from "./history.ts";
+import type { Preferences } from "./prefs.ts";
 export type PromptPart =
   | { kind: "text"; text: string }
   | {
@@ -91,28 +99,70 @@ export interface CommandInput {
   variant?: string;
   parts?: Extract<PromptPart, { kind: "file" }>[];
 }
-export type RpcMethod =
-  | "session.get"
-  | "session.children"
-  | "session.messages"
-  | "session.create"
-  | "session.prompt"
-  | "session.shell"
-  | "session.command"
-  | "commands.list"
-  | "history.list"
-  | "history.attachment"
-  | "find.files"
-  | "agents.list"
-  | "resources.list"
-  | "frecency.list"
-  | "frecency.bump"
-  | "session.abort"
-  | "session.revert"
-  | "permission.list"
-  | "question.list"
-  | "question.reply"
-  | "question.reject"
-  | "permission.reply"
-  | "prefs.get"
-  | "prefs.set";
+/** Wire contracts. Features extend this interface through module augmentation. */
+export interface RpcMethods {
+  "session.get": { params: { sessionID: string }; result: ContentSession };
+  "session.children": {
+    params: { sessionID: string };
+    result: ContentSession[];
+  };
+  "session.messages": {
+    params: { sessionID: string; limit: number; before?: string };
+    result: Message[];
+  };
+  "session.create": {
+    params: { directory: string; title?: string; parentID?: string };
+    result: ContentSession;
+  };
+  "session.prompt": { params: PromptInput; result: null };
+  "session.shell": { params: ShellInput; result: null };
+  "session.command": {
+    params: Omit<CommandInput, "arguments"> & { arguments?: string };
+    result: null;
+  };
+  "commands.list": { params: { sessionID: string }; result: CommandOption[] };
+  "history.list": { params: Record<string, never>; result: HistoryEntry[] };
+  "history.attachment": {
+    params: { messageID: string; partID: string };
+    result: Extract<PromptPart, { source: "upload" }>;
+  };
+  "find.files": {
+    params: { sessionID: string; query?: string };
+    result: FileMatch[];
+  };
+  "agents.list": {
+    params: { sessionID: string; primary?: boolean };
+    result: AgentOption[];
+  };
+  "resources.list": { params: { sessionID: string }; result: ResourceOption[] };
+  "frecency.list": { params: { sessionID: string }; result: FrecencyEntry[] };
+  "frecency.bump": {
+    params: { sessionID: string; path: string };
+    result: null;
+  };
+  "session.abort": { params: { sessionID: string }; result: null };
+  "session.revert": {
+    params: { sessionID: string; messageID: string };
+    result: ContentSession;
+  };
+  "permission.list": {
+    params: { sessionID: string };
+    result: PermissionRequest[];
+  };
+  "question.list": { params: { sessionID: string }; result: QuestionRequest[] };
+  "question.reply": {
+    params: { requestID: string; answers: string[][] };
+    result: null;
+  };
+  "question.reject": { params: { requestID: string }; result: null };
+  "permission.reply": { params: PermissionReply; result: null };
+  "prefs.get": { params: Record<string, never>; result: Preferences };
+  "prefs.set": {
+    // Values are validated by the preference owner, including runtime choices.
+    params: { key: keyof Preferences; value: unknown };
+    result: Preferences;
+  };
+}
+export type RpcMethod = keyof RpcMethods;
+export type RpcParams<M extends RpcMethod> = RpcMethods[M]["params"];
+export type RpcResult<M extends RpcMethod> = RpcMethods[M]["result"];

@@ -1,12 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createState, type StateFactory } from "./state.ts";
-import type {
-  ContentOp,
-  ContentSession,
-  Message,
-  PermissionRequest,
-  QuestionRequest,
-} from "@otk/protocol";
+import type { ContentOp, ContentSession } from "@otk/protocol";
 import { isAttentionOp } from "@otk/protocol";
 import { belongsToSession } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
@@ -88,29 +82,29 @@ export function createSession(
     try {
       const sidecar = connection(target.sidecarId), rpc = sidecar.rpc;
       const [info, messages, permissions, questions] = await Promise.all([
-        rpc.call<ContentSession>(
+        rpc.call(
           "session.get",
           { sessionID: target.sessionID },
           abort.signal,
         ),
-        rpc.call<Message[]>("session.messages", {
+        rpc.call("session.messages", {
           sessionID: target.sessionID,
           limit: 100,
         }, abort.signal),
         sidecar.supports("permissions")
-          ? rpc.call<PermissionRequest[]>("permission.list", {
+          ? rpc.call("permission.list", {
             sessionID: target.sessionID,
           }, abort.signal)
           : [],
         sidecar.supports("questions")
-          ? rpc.call<QuestionRequest[]>("question.list", {
+          ? rpc.call("question.list", {
             sessionID: target.sessionID,
           }, abort.signal)
           : [],
       ]);
       if (!current(id, request)) return;
       const siblings = info.parentID
-        ? await rpc.call<ContentSession[]>("session.children", {
+        ? await rpc.call("session.children", {
           sessionID: info.parentID,
         }, abort.signal)
         : [];
@@ -212,7 +206,7 @@ export function createSession(
         draft.paging = true;
       });
       try {
-        const messages = await connection(target.sidecarId).rpc.call<Message[]>(
+        const messages = await connection(target.sidecarId).rpc.call(
           "session.messages",
           { sessionID: target.sessionID, limit: 100, before: first },
           controller?.signal,

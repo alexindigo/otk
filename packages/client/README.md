@@ -26,6 +26,12 @@ Treat state as read-only outside model methods. A UI binding can supply a
 `StateFactory` implementing draft updates and reconciliation. The application's
 thin Solid binding retains granular updates at the UI boundary.
 
+`rpc.call(method, params, signal?)` derives its input and result types from
+`@otk/protocol`'s declaration-mergeable `RpcMethods` interface. Callers do not
+supply result type arguments. `createCurrentClient().call` uses the same
+contract with `sessionID` omitted from inputs and injected at invocation time.
+Feature-owned module augmentations are shared by server and client consumers.
+
 Browser connections use cookies. Supply an explicit base URL outside the
 browser; `ConnectionOptions.socket` allows a native transport with Origin and
 the operator's authenticated cookie. `ConnectionOptions.api` or

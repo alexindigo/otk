@@ -63,14 +63,14 @@ export async function observeReply(
     await connection.connect();
     await ready.promise;
     clearTimeout(timer);
-    const created = await connection.rpc.call<{ id: string }>(
+    const created = await connection.rpc.call(
       "session.create",
       { directory },
     );
     session.open({ sidecarId: "core", sessionID: created.id });
     await wait(() => !session.state.loading);
     if (session.state.error) throw new Error(session.state.error);
-    await current.call<void>("session.prompt", {
+    await current.call("session.prompt", {
       mode: "normal",
       parts: [{ kind: "text", text }],
     });

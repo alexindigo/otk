@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { type Capabilities, type Harness, HarnessError } from "@otk/harness";
+import { createCurrentClient, Rpc, SidecarConnection } from "@otk/client";
+import type { CurrentClient, Selection } from "@otk/client";
+import { text } from "../../../core/ws/params.ts";
 import {
   Frecency,
   frecencyMigrations,
@@ -28,6 +31,17 @@ import {
 } from "../../../core/mod.ts";
 import { fixture } from "./support.ts";
 
+declare module "@otk/protocol" {
+  interface RpcMethods {
+    "external.directory": { params: Record<string, never>; result: string };
+    "external.failure": { params: Record<string, never>; result: never };
+    "extension.measure": {
+      params: { sessionID: string; suffix: string };
+      result: { directory: string; label: string };
+    };
+  }
+}
+
 const optional = [
   registerPrompt,
   registerShell,
@@ -40,6 +54,97 @@ const optional = [
   registerQuestions,
   registerRevert,
 ];
+
+// Compile-only checks: features extend the public interface beside their code.
+// Invalid calls are never invoked; runtime validation remains feature-owned.
+export function typeContract(
+  rpc: Rpc,
+  current: CurrentClient,
+  registry: RpcRegistry,
+): void {
+  const result: Promise<{ directory: string; label: string }> = rpc.call(
+    "extension.measure",
+    { sessionID: "s", suffix: "!" },
+  );
+  const selected: typeof result = current.call("extension.measure", {
+    suffix: "!",
+  });
+  void selected;
+  // @ts-expect-error Missing feature-owned parameter.
+  rpc.call("extension.measure", { sessionID: "s" });
+  // @ts-expect-error Incorrect feature-owned parameter type.
+  current.call("extension.measure", { suffix: 1 });
+  // @ts-expect-error Unknown method names are not a string escape hatch.
+  rpc.call("extension.unknown", {});
+  // @ts-expect-error Callers cannot supply an unrelated result type.
+  rpc.call<number>("extension.measure", { sessionID: "s", suffix: "!" });
+  // @ts-expect-error The result belongs to the method, not the caller.
+  const wrong: Promise<number> = result;
+  void wrong;
+  registry.register("extension.measure", {
+    params: () => undefined,
+    // @ts-expect-error Server handlers must return the feature's declared result.
+    handler: () => 1,
+  });
+  // @ts-expect-error Server registrations also reject undeclared names.
+  registry.register("extension.unknown", {
+    params: () => null,
+    handler: () => null,
+  });
+}
+
+Deno.test("feature-owned RPC augmentation reaches direct and invocation-time selected clients", async () => {
+  const db = new OtkDb(await fixture(), []);
+  const registry = new RpcRegistry(stub(), db);
+  registry.register("extension.measure", {
+    params: (p) => ({ id: text(p, "sessionID")!, suffix: text(p, "suffix")! }),
+    handler: async (ctx, p) => ({
+      directory: await ctx.sessionDirectory(p.id),
+      label: p.id + p.suffix,
+    }),
+  });
+  const connection = new SidecarConnection("http://127.0.0.1:1502", {
+    status() {},
+    frame() {},
+  });
+  connection.send = (frame) => {
+    if (frame.t !== "rpc") return;
+    void registry.dispatch(frame.method, frame.params).then((result) => {
+      connection.rpc.receive(JSON.parse(JSON.stringify({
+        t: "rpc.result",
+        id: frame.id,
+        ok: true,
+        result,
+      })));
+    });
+  };
+  let selection: Selection = { sidecarId: "owned", sessionID: "first" };
+  const current = createCurrentClient(() => selection, () => connection);
+  try {
+    assertEquals(
+      await connection.rpc.call("extension.measure", {
+        sessionID: "direct",
+        suffix: "!",
+      }),
+      {
+        directory: "/authoritative",
+        label: "direct!",
+      },
+    );
+    assertEquals(await current.call("extension.measure", { suffix: "!" }), {
+      directory: "/authoritative",
+      label: "first!",
+    });
+    selection = { sidecarId: "owned", sessionID: "second" };
+    assertEquals(await current.call("extension.measure", { suffix: "?" }), {
+      directory: "/authoritative",
+      label: "second?",
+    });
+  } finally {
+    connection.rpc.close();
+    db.close();
+  }
+});
 export function stub(
   capabilities: Capabilities = {},
   calls: unknown[] = [],
@@ -102,7 +207,7 @@ Deno.test("registry accepts external handlers with shared context, rejects dupli
       () =>
         rpc.register("external.directory", {
           params: () => null,
-          handler: () => null,
+          handler: () => "duplicate",
         }),
       HarnessError,
       "already registered",

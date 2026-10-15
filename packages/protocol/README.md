@@ -14,7 +14,7 @@ Import only `@otk/protocol`; `mod.ts` is the single public entry point.
 | `ContentSession`, `Message`, `Part`, `Block`, `ContentOp`      | Session content and incremental updates |
 | Tool, diff, permission and question types                      | Harness-neutral structured content      |
 | `IndexEntry`, `IndexOp`                                        | Live session index                      |
-| `RpcMethod`, prompt, shell, command and option types           | RPC method names and inputs             |
+| `RpcMethods`, `RpcMethod`, `RpcParams`, `RpcResult`            | Open RPC contracts and derived names    |
 | `Preferences`, `DEFAULT_PREFS`, `isPreference`                 | Preference contract and validation      |
 | `HistoryEntry`, `sameParts`, `sameHistory`, `mergeHistory`     | Prompt history equality and merging     |
 | `ErrorObservation`, `SessionErrorState`, `sessionErrorMessage` | Reconciled error observations           |
@@ -27,6 +27,14 @@ Import only `@otk/protocol`; `mod.ts` is the single public entry point.
 The package version is `0.1.0`; the wire protocol version is `13`, including
 host-persisted keymap, Dark/Light/System theme and four notification channel
 preferences. The canonical hello version field remains `protocol`.
+
+`RpcMethods` is an open interface containing each shipped method's wire `params`
+and `result`. A feature declares additional entries beside its code using
+`declare module "@otk/protocol" { interface RpcMethods { ... } }`. `RpcMethod`,
+`RpcParams<M>` and `RpcResult<M>` derive from that interface; there is no
+separate method-name list. Import the feature's contract in both server and
+client consumers. `Rpc.call` infers its result from the method name, and the
+application core checks registrations against that same contract.
 
 ## Example
 

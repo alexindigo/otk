@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { RpcMethod } from "@otk/protocol";
+import type { RpcMethod, RpcParams, RpcResult } from "@otk/protocol";
 import type { SidecarConnection } from "./connection.ts";
 import type { Rpc } from "./rpc.ts";
 import type { Selection } from "./session.ts";
@@ -11,11 +11,11 @@ export interface CurrentContext {
 }
 export interface CurrentClient {
   context(): CurrentContext;
-  call<T>(
-    method: RpcMethod,
-    params: Record<string, unknown>,
+  call<M extends RpcMethod>(
+    method: M,
+    params: Omit<RpcParams<M>, "sessionID">,
     signal?: AbortSignal,
-  ): Promise<T>;
+  ): Promise<RpcResult<M>>;
 }
 /** Resolve selection at invocation time, never retaining a stale connection. */
 export function createCurrentClient(
@@ -30,15 +30,15 @@ export function createCurrentClient(
   };
   return {
     context,
-    call<T>(
-      method: RpcMethod,
-      params: Record<string, unknown>,
+    call<M extends RpcMethod>(
+      method: M,
+      params: Omit<RpcParams<M>, "sessionID">,
       signal?: AbortSignal,
-    ): Promise<T> {
+    ): Promise<RpcResult<M>> {
       const { selection, rpc } = context();
-      return rpc.call<T>(
+      return rpc.call(
         method,
-        { ...params, sessionID: selection.sessionID },
+        { ...params, sessionID: selection.sessionID } as RpcParams<M>,
         signal,
       );
     },

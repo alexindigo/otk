@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ClientFrame, ServerFrame } from "@otk/protocol";
 import { checkClientFrameSize } from "@otk/protocol";
-import type { RpcMethod } from "@otk/protocol";
+import type { RpcMethod, RpcParams, RpcResult } from "@otk/protocol";
 
 export class Rpc {
   #next = 0;
@@ -14,12 +14,12 @@ export class Rpc {
     }
   >();
   constructor(readonly send: (frame: ClientFrame) => void) {}
-  call<T>(
-    method: RpcMethod,
-    params: unknown,
+  call<M extends RpcMethod>(
+    method: M,
+    params: RpcParams<M>,
     signal?: AbortSignal,
-  ): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
+  ): Promise<RpcResult<M>> {
+    return new Promise<RpcResult<M>>((resolve, reject) => {
       if (signal?.aborted) {
         reject(new Error("Request cancelled"));
         return;
@@ -38,7 +38,7 @@ export class Rpc {
         30_000,
       );
       this.#pending.set(id, {
-        resolve: (value) => resolve(value as T),
+        resolve: (value) => resolve(value as RpcResult<M>),
         reject,
         cleanup: () => {
           clearTimeout(timer);

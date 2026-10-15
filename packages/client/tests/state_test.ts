@@ -166,10 +166,10 @@ Deno.test("web URL round-trips selection and rejects malformed hashes", () => {
 Deno.test("web RPC owns pending calls until result, cancellation or disconnect", async () => {
   const frames: ClientFrame[] = [],
     rpc = new Rpc((frame) => frames.push(frame));
-  const promise = rpc.call<number>("session.get", { sessionID: "x" });
+  const promise = rpc.call("session.children", { sessionID: "x" });
   assert(frames[0].t === "rpc");
-  rpc.receive({ t: "rpc.result", id: frames[0].id, ok: true, result: 3 });
-  assertEquals(await promise, 3);
+  rpc.receive({ t: "rpc.result", id: frames[0].id, ok: true, result: [] });
+  assertEquals(await promise, []);
   const abort = new AbortController();
   const cancelled = rpc.call("session.get", { sessionID: "x" }, abort.signal)
     .catch((e) => e.message);

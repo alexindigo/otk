@@ -8,7 +8,7 @@ import {
   onSettled,
   Show,
 } from "solid-js";
-import { type ContentSession, DEFAULT_PREFS } from "@otk/protocol";
+import { DEFAULT_PREFS } from "@otk/protocol";
 import { apiBase, CommandHub } from "@otk/client";
 import { registerSessionCommands } from "../commands/sessions.ts";
 import { registerPreferenceCommands } from "../commands/preferences.ts";
@@ -49,14 +49,7 @@ import {
   ThemePicker,
   Toasts,
 } from "@otk/ui";
-import type {
-  AgentOption,
-  CommandOption,
-  FileMatch,
-  FrecencyEntry,
-  PromptPart,
-  ResourceOption,
-} from "@otk/protocol";
+import type { PromptPart } from "@otk/protocol";
 export default function App(props: { theme: ThemeEngine }) {
   const index = createIndex();
   const sidecars: ReturnType<typeof createSidecars> = createSidecars(
@@ -183,20 +176,21 @@ export default function App(props: { theme: ThemeEngine }) {
     }),
   );
   onCleanup(registerAttentionCommands(commands, {
-    permission: (input) => {
+    permission: async (input) => {
       const { sidecarId, ...reply } = input;
-      return (sidecarId
+      await (sidecarId
         ? sidecars.connection(sidecarId)
-        : current.context().connection).rpc.call<void>(
+        : current.context().connection).rpc.call(
           "permission.reply",
           reply,
         );
     },
-    question: (input) =>
-      current.context().rpc.call<void>(
-        input.answers ? "question.reply" : "question.reject",
-        input,
-      ),
+    question: async (input) => {
+      const rpc = current.context().rpc;
+      if (input.answers) {
+        await rpc.call("question.reply", { ...input, answers: input.answers });
+      } else await rpc.call("question.reject", input);
+    },
   }));
   createEffect(
     () => toggles.state.prefs.keymap,
@@ -239,9 +233,10 @@ export default function App(props: { theme: ThemeEngine }) {
       current?.id === target.sessionID &&
       session.state.selection?.sidecarId === target.sidecarId
     ) return current.directory;
-    return (await sidecars.connection(target.sidecarId).rpc.call<
-      ContentSession
-    >("session.get", { sessionID: target.sessionID })).directory;
+    return (await sidecars.connection(target.sidecarId).rpc.call(
+      "session.get",
+      { sessionID: target.sessionID },
+    )).directory;
   };
   const discardDraft = () =>
     (!draft().input && !draft().chips.length && !draft().editor &&
@@ -286,9 +281,10 @@ export default function App(props: { theme: ThemeEngine }) {
     if (!discardDraft()) return;
     const revision = ++navigationRevision;
     try {
-      const info = await sidecars.connection(sidecarId).rpc.call<
-        ContentSession
-      >("session.create", { directory });
+      const info = await sidecars.connection(sidecarId).rpc.call(
+        "session.create",
+        { directory },
+      );
       if (revision !== navigationRevision) return;
       navigate({ sidecarId, sessionID: info.id });
     } catch (error) {
@@ -302,12 +298,13 @@ export default function App(props: { theme: ThemeEngine }) {
     Promise.all(
       parts.map((part) =>
         part.kind === "file" && part.source === "history"
-          ? sidecars.connection(part.sidecarID || sidecarID).rpc.call<
-            Extract<PromptPart, { source: "upload" }>
-          >("history.attachment", {
-            messageID: part.messageID,
-            partID: part.partID,
-          })
+          ? sidecars.connection(part.sidecarID || sidecarID).rpc.call(
+            "history.attachment",
+            {
+              messageID: part.messageID,
+              partID: part.partID,
+            },
+          )
           : part
       ),
     );
@@ -553,9 +550,10 @@ export default function App(props: { theme: ThemeEngine }) {
                         if (
                           !connection.supports("files")
                         ) return Promise.resolve([]);
-                        return connection.rpc.call<
-                          FileMatch[]
-                        >("find.files", { sessionID: target.sessionID, query });
+                        return connection.rpc.call("find.files", {
+                          sessionID: target.sessionID,
+                          query,
+                        });
                       }}
                       onMentions={async (query) => {
                         const { selection: target, connection, rpc } = current
@@ -565,22 +563,22 @@ export default function App(props: { theme: ThemeEngine }) {
                           await Promise
                             .all([
                               connection.supports("files")
-                                ? rpc.call<FileMatch[]>("find.files", {
+                                ? rpc.call("find.files", {
                                   sessionID: target.sessionID,
                                   query,
                                 })
                                 : [],
                               connection.supports("agents")
-                                ? rpc.call<AgentOption[]>("agents.list", {
+                                ? rpc.call("agents.list", {
                                   sessionID: target.sessionID,
                                 })
                                 : [],
                               connection.supports("resources")
-                                ? rpc.call<ResourceOption[]>("resources.list", {
+                                ? rpc.call("resources.list", {
                                   sessionID: target.sessionID,
                                 })
                                 : [],
-                              rpc.call<FrecencyEntry[]>("frecency.list", {
+                              rpc.call("frecency.list", {
                                 sessionID: target.sessionID,
                               }),
                             ]);
@@ -593,7 +591,7 @@ export default function App(props: { theme: ThemeEngine }) {
                         };
                       }}
                       onBump={async (path) => {
-                        await current.call<void>("frecency.bump", { path });
+                        await current.call("frecency.bump", { path });
                       }}
                       onCommands={() => {
                         const { selection: target, connection } = current
@@ -603,15 +601,13 @@ export default function App(props: { theme: ThemeEngine }) {
                             "commands",
                           )
                         ) return Promise.resolve([]);
-                        return connection.rpc.call<
-                          CommandOption[]
-                        >("commands.list", { sessionID: target.sessionID });
+                        return connection.rpc.call("commands.list", {
+                          sessionID: target.sessionID,
+                        });
                       }}
                       onCommand={async (command, args, parts, agent) => {
                         const { selection: target, rpc } = current.context();
-                        return rpc.call<
-                          void
-                        >("session.command", {
+                        await rpc.call("session.command", {
                           sessionID: target.sessionID,
                           command,
                           arguments: args,
@@ -625,10 +621,9 @@ export default function App(props: { theme: ThemeEngine }) {
                         });
                       }}
                       onNew={() => commands.run("session.new")}
-                      onAgents={() =>
-                        current.call<AgentOption[]>("agents.list", {
-                          primary: true,
-                        })}
+                      onAgents={() => current.call("agents.list", {
+                        primary: true,
+                      })}
                       onHistory={async () =>
                         await loadHistory(
                           sidecars.state.list.filter((sidecar) =>
@@ -642,9 +637,7 @@ export default function App(props: { theme: ThemeEngine }) {
                       onPrompt={async (parts, mode, agent) => {
                         const { selection: target, rpc } = current.context();
                         if (mode === "shell") {
-                          return rpc.call<
-                            void
-                          >("session.shell", {
+                          await rpc.call("session.shell", {
                             sessionID: target.sessionID,
                             command: parts.filter((part) =>
                               part.kind === "text"
@@ -652,17 +645,18 @@ export default function App(props: { theme: ThemeEngine }) {
                               .map((part) => part.text).join("\n"),
                             ...(agent ? { agent } : {}),
                           });
+                          return;
                         }
-                        return rpc.call<
-                          void
-                        >("session.prompt", {
+                        await rpc.call("session.prompt", {
                           sessionID: target.sessionID,
                           mode: "normal",
                           parts: await attachments(parts, target.sidecarId),
                           ...(agent ? { agent } : {}),
                         });
                       }}
-                      onAbort={() => current.call<void>("session.abort", {})}
+                      onAbort={async () => {
+                        await current.call("session.abort", {});
+                      }}
                     />
                   </Show>
                 </Show>
