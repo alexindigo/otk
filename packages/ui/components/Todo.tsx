@@ -2,10 +2,9 @@
 import "./Todo.css" with { type: "text" };
 import type { ToolRegistry } from "../registries/renderers.ts";
 export function registerTodoTool(tools: ToolRegistry): void {
-  tools.register(
+  tools.registerTyped(
     "todo",
     (props) => <Todo items={props.call.items} />,
-    (call) => call.tool === "todo",
   );
 }
 import { For } from "solid-js";

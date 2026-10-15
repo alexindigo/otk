@@ -94,6 +94,15 @@ Deno.test("independent public UI consumer renders external tools twice, updates 
     await browser.poll(
       "document.querySelector('[data-external-part]').textContent === 'Injected part: agent'",
     );
+    await browser.poll(
+      "document.querySelector('[data-typed-part]').textContent === 'Feature part: Updated result'",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector('#registered').textContent.includes('Unsupported part: future.card')",
+      ),
+      true,
+    );
     await browser.click("[data-inject]");
     await browser.poll(
       "document.querySelector('textarea[name=prompt]').value === 'Injected draft'",

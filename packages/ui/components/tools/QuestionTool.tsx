@@ -4,10 +4,9 @@ import { For } from "solid-js";
 import type { QuestionCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 export function registerQuestionTool(tools: ToolRegistry): void {
-  tools.register(
+  tools.registerTyped(
     "question",
     (props) => <QuestionTool call={props.call} />,
-    (call) => call.tool === "question",
   );
 }
 export default function QuestionTool(props: { call: QuestionCall }) {

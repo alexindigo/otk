@@ -6,7 +6,7 @@ import Diff from "../Diff.tsx";
 import Diagnostics from "./Diagnostics.tsx";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 export function registerEditTool(tools: ToolRegistry): void {
-  tools.register(
+  tools.registerTyped(
     "edit",
     (props) => (
       <EditTool
@@ -15,7 +15,6 @@ export function registerEditTool(tools: ToolRegistry): void {
         paneWidth={props.paneWidth}
       />
     ),
-    (call) => call.tool === "edit",
   );
 }
 export default function EditTool(

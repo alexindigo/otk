@@ -21,6 +21,13 @@ interface. Negative fixtures reject closed aliases and extra literal method
 names; core RPC tests compile and exercise an external feature contract through
 server registration, direct calls and invocation-time selected calls.
 
+Tool and part contracts derive from declaration-mergeable `ToolKinds` and
+`PartKinds` interfaces plus separately discriminated external variants. Negative
+fixtures reject closed unions, extra union members and closed registry aliases.
+Renderer tests exercise feature-owned contracts and name collisions between
+typed OTK kinds and external tools/parts; independent browser consumers verify
+external rendering and unknown fallbacks.
+
 Native endpoints/schema belong to `@otk/harness-opencode1`. Store production
 code cannot depend on another OTK package; app preference policy and error types
 are injected. Its connection and migration runner cannot import feature modules.

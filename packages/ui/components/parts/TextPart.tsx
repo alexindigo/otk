@@ -5,7 +5,7 @@ type TextPart = Extract<Part, { kind: "text" }>;
 import type { PartRegistry } from "../../registries/renderers.ts";
 import Blocks from "../Blocks.tsx";
 export function registerTextPart(parts: PartRegistry): void {
-  parts.register("text", (props) => (
+  parts.registerTyped("text", (props) => (
     <div class="otk-text">
       <Show when={!props.user || !(props.part as TextPart).synthetic}>
         <Blocks

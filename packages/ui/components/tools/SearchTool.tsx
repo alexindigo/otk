@@ -2,10 +2,9 @@
 import type { SearchCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 export function registerSearchTool(tools: ToolRegistry): void {
-  tools.register(
+  tools.registerTyped(
     "search",
     (props) => <SearchTool call={props.call} />,
-    (call) => call.tool === "search",
   );
 }
 export default function SearchTool(props: { call: SearchCall }) {

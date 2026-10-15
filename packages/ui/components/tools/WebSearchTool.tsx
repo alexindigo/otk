@@ -2,10 +2,9 @@
 import type { WebSearchCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 export function registerWebSearchTool(tools: ToolRegistry): void {
-  tools.register(
+  tools.registerTyped(
     "websearch",
     (props) => <WebSearchTool call={props.call} />,
-    (call) => call.tool === "websearch",
   );
 }
 export default function WebSearchTool(props: { call: WebSearchCall }) {

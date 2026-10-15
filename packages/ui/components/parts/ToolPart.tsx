@@ -5,7 +5,7 @@ type ToolPart = Extract<Part, { kind: "tool" }>;
 import type { PartRegistry } from "../../registries/renderers.ts";
 import ToolLine from "../ToolLine.tsx";
 export function registerToolPart(parts: PartRegistry): void {
-  parts.register("tool", (props) => {
+  parts.registerTyped("tool", (props) => {
     const call = () => (props.part as ToolPart).call;
     return (
       <Show when={props.prefs.toolDetails || call().status !== "completed"}>

@@ -3,7 +3,7 @@ import type { Part } from "@otk/protocol";
 type FilePart = Extract<Part, { kind: "file" }>;
 import type { PartRegistry } from "../../registries/renderers.ts";
 export function registerFilePart(parts: PartRegistry): void {
-  parts.register(
+  parts.registerTyped(
     "file",
     (props) => (
       <span class="otk-chip" title={(props.part as FilePart).path}>

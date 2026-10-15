@@ -4,7 +4,7 @@ type ReasoningPart = Extract<Part, { kind: "reasoning" }>;
 import type { PartRegistry } from "../../registries/renderers.ts";
 import Reasoning from "../Reasoning.tsx";
 export function registerReasoningPart(parts: PartRegistry): void {
-  parts.register(
+  parts.registerTyped(
     "reasoning",
     (props) => (
       <Reasoning

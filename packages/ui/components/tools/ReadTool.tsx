@@ -3,10 +3,9 @@ import { For } from "solid-js";
 import type { ReadCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 export function registerReadTool(tools: ToolRegistry): void {
-  tools.register(
+  tools.registerTyped(
     "read",
     (props) => <ReadTool call={props.call} />,
-    (call) => call.tool === "read",
   );
 }
 export default function ReadTool(props: { call: ReadCall }) {

@@ -4,10 +4,9 @@ import Code from "../Code.tsx";
 import Diagnostics from "./Diagnostics.tsx";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 export function registerWriteTool(tools: ToolRegistry): void {
-  tools.register(
+  tools.registerTyped(
     "write",
     (props) => <WriteTool call={props.call} />,
-    (call) => call.tool === "write",
   );
 }
 export default function WriteTool(props: { call: WriteCall }) {

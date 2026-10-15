@@ -2,10 +2,9 @@
 import type { SkillCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 export function registerSkillTool(tools: ToolRegistry): void {
-  tools.register(
+  tools.registerTyped(
     "skill",
     (props) => <SkillTool call={props.call} />,
-    (call) => call.tool === "skill",
   );
 }
 export default function SkillTool(props: { call: SkillCall }) {

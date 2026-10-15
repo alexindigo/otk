@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, type Element } from "solid-js";
 import { render } from "@solidjs/web";
-import { DEFAULT_PREFS, type GenericCall } from "@otk/protocol";
+import { DEFAULT_PREFS, type ExternalCall } from "@otk/protocol";
 import {
   browserThemeEnvironment,
   Code,
@@ -13,6 +13,7 @@ import {
   registerGenericTool,
   registerOtkThemes,
   registerToolPart,
+  registerUnknownPart,
   ThemeEngine,
   ThemeRegistry,
   ToolLine,
@@ -21,6 +22,12 @@ import {
   UiProvider,
 } from "@otk/ui";
 import "@fontsource/ibm-plex-mono/400.css";
+
+declare module "@otk/protocol" {
+  interface PartKinds {
+    "consumer.card": { kind: "consumer.card"; id: string; text: string };
+  }
+}
 
 const themes = new ThemeRegistry();
 registerOtkThemes(themes);
@@ -31,9 +38,9 @@ function ExternalTool(props: ToolProps): Element {
   return (
     <div data-external-tool>
       <div class="otk-tool-summary">
-        External renderer: {(props.call as GenericCall).summary}
+        External renderer: {(props.call as ExternalCall).summary}
       </div>
-      <ToolOutput text={(props.call as GenericCall).output || ""} limit={3} />
+      <ToolOutput text={(props.call as ExternalCall).output || ""} limit={3} />
       <button
         type="button"
         data-open
@@ -49,10 +56,15 @@ function Consumer(): Element {
   registerGenericTool(ui.tools);
   registerGenericTool(isolated.tools);
   registerToolPart(ui.parts);
+  registerUnknownPart(ui.parts);
   ui.tools.register("external-probe", ExternalTool);
   ui.parts.register(
     "agent",
     (props) => <p data-external-part>Injected part: {props.part.id}</p>,
+  );
+  ui.parts.registerTyped(
+    "consumer.card",
+    (props) => <p data-typed-part>Feature part: {props.part.text}</p>,
   );
   ui.docks.register({
     id: "external",
@@ -87,8 +99,8 @@ function Consumer(): Element {
     [submitted, setSubmitted] = createSignal(""),
     [capabilities, setCapabilities] = createSignal<string[]>([]),
     [dockClicks, setDockClicks] = createSignal(0);
-  const call = (): GenericCall => ({
-    tool: "generic",
+  const call = (): ExternalCall => ({
+    tool: "external",
     callID: "probe",
     name: "external-probe",
     status: "completed",
@@ -136,7 +148,9 @@ function Consumer(): Element {
               time: { created: 0 },
               parts: [
                 { id: "tool", kind: "tool", call: call() },
-                { id: "agent", kind: "agent", name: "custom" },
+                { id: "agent", kind: "external", name: "agent" },
+                { id: "card", kind: "consumer.card", text: summary() },
+                { id: "future", kind: "external", name: "future.card" },
               ],
             }}
             prefs={DEFAULT_PREFS}

@@ -10,6 +10,7 @@ import type {
 import type { IndexEntry } from "@otk/protocol";
 import { markdown, parseDiff } from "@otk/content";
 import { mapTool } from "./map-tools.ts";
+import { preview } from "./previews.ts";
 import type {
   Info,
   RawDiff,
@@ -164,7 +165,7 @@ export function mapPart(part: RawPart, awaitingPermission = false): Part {
         tokens: tokens(part.tokens),
       };
     default:
-      return { kind: "unknown", id, label: part.type };
+      return { kind: "external", id, name: part.type, data: preview(part) };
   }
 }
 export function mapDiffs(diffs: RawDiff[]): FileDiff[] {

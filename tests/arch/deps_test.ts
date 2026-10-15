@@ -156,6 +156,26 @@ function sourceErrors(path: string, source: string): string[] {
   if (/\btype\s+RpcMethods\s*=/.test(source)) {
     errors.push("RPC contracts must be a declaration-mergeable interface");
   }
+  for (
+    const [alias, registry, external] of [
+      ["ToolCall", "ToolKinds", "ExternalCall"],
+      ["Part", "PartKinds", "ExternalPart"],
+    ]
+  ) {
+    if (
+      new RegExp(`\\btype\\s+${alias}\\s*=`).test(source) &&
+      !new RegExp(
+        `\\btype\\s+${alias}\\s*=\\s*${registry}\\s*\\[\\s*keyof\\s+${registry}\\s*\\]\\s*\\|\\s*${external}\\s*;`,
+      ).test(source)
+    ) {
+      errors.push(
+        `${alias} must derive from its open registry and external variant`,
+      );
+    }
+    if (new RegExp(`\\btype\\s+${registry}\\s*=`).test(source)) {
+      errors.push(`${registry} must be a declaration-mergeable interface`);
+    }
+  }
   if (from) {
     for (
       const match of source.matchAll(
@@ -497,6 +517,37 @@ Deno.test("standalone client consumer imports only its public framework-free ent
     new URL("tests/reuse/client-consumer.ts", root),
   );
   assertEquals(imports(consumer), ["@otk/client"]);
+});
+
+Deno.test("tool and part contracts remain open with distinct external discriminants", async () => {
+  const source = await Deno.readTextFile(
+    new URL("packages/protocol/content.ts", root),
+  );
+  for (const name of ["ToolKinds", "PartKinds"]) {
+    assert(new RegExp(`export\\s+interface\\s+${name}\\s*\\{`).test(source));
+  }
+  assert(
+    /interface ExternalCall extends ToolBase\s*\{\s*tool: "external";/.test(
+      source,
+    ),
+  );
+  assert(/interface ExternalPart\s*\{\s*kind: "external";/.test(source));
+  assertEquals(sourceErrors("packages/protocol/content.ts", source), []);
+  for (
+    const closed of [
+      "export type ToolCall = BashCall | ExternalCall;",
+      'export type Part = { kind: "text" } | ExternalPart;',
+      "export type ToolCall = ToolKinds[keyof ToolKinds] | ExternalCall | OtherCall;",
+      "export type Part = PartKinds[keyof PartKinds] | ExternalPart | OtherPart;",
+      "export type ToolKinds = { bash: BashCall };",
+      "export type PartKinds = { text: TextPart };",
+    ]
+  ) {
+    assertEquals(
+      sourceErrors("packages/protocol/content.ts", closed).length,
+      1,
+    );
+  }
 });
 
 Deno.test("independent UI consumer imports public kit entries without application or backend source", async () => {

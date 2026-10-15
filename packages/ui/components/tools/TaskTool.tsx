@@ -5,10 +5,9 @@ import type { TaskCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { ownedAction } from "../../keyboard/context.tsx";
 export function registerTaskTool(tools: ToolRegistry): void {
-  tools.register(
+  tools.registerTyped(
     "task",
     (props) => <TaskTool call={props.call} onOpen={props.onOpenChild} />,
-    (call) => call.tool === "task",
   );
 }
 export default function TaskTool(

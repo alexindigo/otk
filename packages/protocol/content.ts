@@ -73,10 +73,14 @@ export interface BashCall extends ToolBase {
   output: string;
   exitCode?: number;
 }
-export interface GenericCall extends ToolBase {
-  tool: "generic";
+/** Harness/plugin names occupy a separate namespace from typed OTK tools. */
+export interface ExternalCall extends ToolBase {
+  tool: "external";
   name: string;
   summary: string;
+  /** Bounded JSON previews, not necessarily parseable after truncation. */
+  input?: string;
+  metadata?: string;
   output?: string;
   outputTruncated?: boolean;
 }
@@ -144,18 +148,22 @@ export interface QuestionCall extends ToolBase {
     answer?: string[];
   }[];
 }
-export type ToolCall =
-  | BashCall
-  | GenericCall
-  | TodoCall
-  | QuestionCall
-  | ReadCall
-  | SearchCall
-  | FetchCall
-  | WebSearchCall
-  | SkillCall
-  | FileToolCall
-  | TaskCall;
+/** Features can contribute typed tools through declaration merging. */
+export interface ToolKinds {
+  bash: BashCall;
+  todo: TodoCall;
+  question: QuestionCall;
+  read: ReadCall;
+  search: SearchCall;
+  fetch: FetchCall;
+  websearch: WebSearchCall;
+  skill: SkillCall;
+  edit: EditCall;
+  write: WriteCall;
+  patch: PatchCall;
+  task: TaskCall;
+}
+export type ToolCall = ToolKinds[keyof ToolKinds] | ExternalCall;
 // File-writing tools preserve server-built hunks and never expose LSP types.
 export type FileToolCall = EditCall | WriteCall | PatchCall;
 export interface TaskCall extends ToolBase {
@@ -166,42 +174,52 @@ export interface TaskCall extends ToolBase {
   toolCount: number;
   duration?: number;
 }
-export type Part =
-  | { kind: "meta"; id: string }
-  | {
+/** Features can contribute typed parts without changing a central union. */
+export interface PartKinds {
+  meta: { kind: "meta"; id: string };
+  text: {
     kind: "text";
     id: string;
     blocks: Block[];
     synthetic: boolean;
     streamVersion?: number;
-  }
-  | {
+  };
+  reasoning: {
     kind: "reasoning";
     id: string;
     title?: string;
     blocks: Block[];
     streamVersion?: number;
     time: { start: number; end?: number };
-  }
-  | { kind: "tool"; id: string; call: ToolCall }
-  | {
+  };
+  tool: { kind: "tool"; id: string; call: ToolCall };
+  file: {
     kind: "file";
     id: string;
     name: string;
     mime: string;
     path?: string;
     range?: { start: number; end: number };
-  }
-  | { kind: "agent"; id: string; name: string }
-  | {
+  };
+  agent: { kind: "agent"; id: string; name: string };
+  step: {
     kind: "step";
     id: string;
     phase: "start" | "finish";
     tokens?: Tokens;
     cost?: number;
-  }
-  | { kind: "compaction"; id: string }
-  | { kind: "unknown"; id: string; label: string };
+  };
+  compaction: { kind: "compaction"; id: string };
+  unknown: { kind: "unknown"; id: string; label: string };
+}
+/** Unrecognized harness parts retain their name and bounded data preview. */
+export interface ExternalPart {
+  kind: "external";
+  id: string;
+  name: string;
+  data?: string;
+}
+export type Part = PartKinds[keyof PartKinds] | ExternalPart;
 export interface UserMessage {
   id: string;
   sessionID: string;

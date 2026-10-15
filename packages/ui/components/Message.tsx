@@ -24,7 +24,7 @@ function PartView(
 ) {
   const { parts } = useUiRegistries();
   return (
-    <Show when={parts.resolve(props.part.kind)} keyed>
+    <Show when={parts.resolve(props.part)} keyed>
       {(renderer) => {
         const Component = renderer;
         return <Component {...props} />;

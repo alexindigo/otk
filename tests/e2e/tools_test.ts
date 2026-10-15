@@ -164,12 +164,12 @@ Deno.test("R4 real read, directory listing, glob, grep, local fetch, skill and g
     await browser.click(".otk-display-menu summary");
     await browser.click("input[name=genericToolOutput]");
     await browser.poll(
-      "document.querySelector('[data-tool=generic] .otk-tool-output')?.textContent==='first\\nsecond\\nthird'",
+      "document.querySelector('[data-tool=external] .otk-tool-output')?.textContent==='first\\nsecond\\nthird'",
     );
     await browser.click(".otk-display-menu summary");
-    await browser.click("[data-tool=generic] .otk-output-toggle");
+    await browser.click("[data-tool=external] .otk-output-toggle");
     await browser.poll(
-      "document.querySelector('[data-tool=generic] .otk-tool-output')?.textContent.includes('fifth')",
+      "document.querySelector('[data-tool=external] .otk-tool-output')?.textContent.includes('fifth')",
     );
     await recordTools(f.oc.root, "recorded-form-tools", parts);
     await browser.screenshot(join(f.oc.root, "r4-tool-forms.png"));

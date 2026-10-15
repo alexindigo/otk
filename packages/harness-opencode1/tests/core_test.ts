@@ -159,8 +159,23 @@ Deno.test("mapping strips harness metadata, handles all part kinds and interrupt
       output: "x".repeat(70_000),
     },
   });
-  assert(generic.kind === "tool" && generic.call.tool === "generic");
+  assert(generic.kind === "tool" && generic.call.tool === "external");
   assertEquals(generic.call.output?.length, 65_536);
+});
+Deno.test("unrecognized part kinds retain their external name and bounded payload", () => {
+  const part = mapPart({
+    id: "part",
+    messageID: "message",
+    sessionID: "session",
+    type: "plugin.card",
+    metadata: { title: "😀".repeat(40000) },
+  });
+  assert(part.kind === "external");
+  assertEquals(part.name, "plugin.card");
+  assertEquals(part.id, "part");
+  assert(part.data!.includes('"title"'));
+  assert(new TextEncoder().encode(part.data).length <= 65536);
+  assert(!part.data!.includes("�"));
 });
 const patch =
   "--- a/example.ts\n+++ b/example.ts\n@@ -1,2 +1,2 @@\n before\n-old\n+new\n";

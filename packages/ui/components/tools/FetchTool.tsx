@@ -2,10 +2,9 @@
 import type { FetchCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 export function registerFetchTool(tools: ToolRegistry): void {
-  tools.register(
+  tools.registerTyped(
     "fetch",
     (props) => <FetchTool call={props.call} />,
-    (call) => call.tool === "fetch",
   );
 }
 export default function FetchTool(props: { call: FetchCall }) {

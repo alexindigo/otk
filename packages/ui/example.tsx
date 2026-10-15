@@ -5,11 +5,11 @@ import {
   ToolLine,
   UiProvider,
 } from "./mod.ts";
-import type { GenericCall, Preferences } from "@otk/protocol";
+import type { ExternalCall, Preferences } from "@otk/protocol";
 import type { Element } from "solid-js";
 /** Minimal composition with a chosen fallback and consumer-owned navigation. */
 export function ToolExample(
-  props: { call: GenericCall; prefs: Preferences; onOpen(id: string): void },
+  props: { call: ExternalCall; prefs: Preferences; onOpen(id: string): void },
 ): Element {
   const ui = createUiRegistries();
   registerGenericTool(ui.tools);

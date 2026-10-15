@@ -3,6 +3,7 @@ import type { Todo, ToolBase, ToolCall } from "@otk/protocol";
 import { stripVTControlCharacters } from "node:util";
 import type { RawPart } from "./types.ts";
 import { mapFileTool } from "./file-tools.ts";
+import { preview } from "./previews.ts";
 const string = (value: unknown): string | undefined =>
   typeof value === "string" ? value : undefined;
 const record = (value: unknown): Record<string, unknown> =>
@@ -178,8 +179,10 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
     : state.output;
   return {
     ...base,
-    tool: "generic",
+    tool: "external",
     name: part.tool!,
+    input: preview(input),
+    metadata: preview(metadata),
     summary:
       Object.values(input).map(string).find((v) => v?.trim())?.split("\n")[0]
         .slice(0, 256) || part.tool!,

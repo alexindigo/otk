@@ -36,6 +36,15 @@ separate method-name list. Import the feature's contract in both server and
 client consumers. `Rpc.call` infers its result from the method name, and the
 application core checks registrations against that same contract.
 
+`ToolKinds` and `PartKinds` are also declaration-mergeable interfaces, mapping
+typed OTK kind names to their wire shapes. `ToolCall` and `Part` derive from
+these maps plus `ExternalCall` / `ExternalPart`. Harness/MCP/plugin names live
+in the external variant's `name`, never in a typed OTK discriminant. External
+tool input/metadata and part data are bounded JSON text previews (possibly
+truncated and therefore not parseable), not unbounded native objects. The stock
+adapter caps each preview at 64 KiB UTF-8; tool summary/output bounds are
+retained.
+
 ## Example
 
 Within the OTK workspace, Deno resolves the package by its name:

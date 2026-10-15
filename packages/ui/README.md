@@ -15,12 +15,15 @@ collections. Register before mounting. Registries import no implementations.
 
 `tools.register(name, Component)` receives `ToolProps`: the live protocol call,
 display preferences, width, directory, waiting state and an injected child-open
-callback. Generic protocol tools resolve by their external `name`; unmatched
-calls use the fallback installed by `registerGenericTool`. `ToolLine` owns the
-shared status/permission/error frame, so external renderers receive the same
-behavior. Typed tool modules additionally supply an acceptance predicate, so a
-generic call sharing a built-in name cannot enter a renderer for a different
-wire shape. `parts.register(kind, Component)` receives `PartProps`;
+callback. External protocol tools resolve by their `name`; unmatched calls use
+the fallback installed by `registerGenericTool`. `ToolLine` owns the shared
+status/permission/error frame, so external renderers receive the same behavior.
+Typed tool modules use `tools.registerTyped(kind, Component)`, whose call type
+derives from the open protocol `ToolKinds` map. Separate registration namespaces
+let an external `edit` coexist with typed OTK `edit` without either renderer
+receiving the other's shape. `parts.register(name, Component)` receives an
+external part; `parts.registerTyped(kind, Component)` derives its shape from the
+open `PartKinds` map. The same namespace separation applies to parts;
 `registerUnknownPart` supplies unsupported-part fallback.
 
 `prompt.register({ id, create(context) })` installs a per-prompt feature.

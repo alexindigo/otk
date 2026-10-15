@@ -5,7 +5,7 @@ import type { Preferences } from "@otk/protocol";
 import Diff from "../Diff.tsx";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 export function registerPatchTool(tools: ToolRegistry): void {
-  tools.register(
+  tools.registerTyped(
     "patch",
     (props) => (
       <PatchTool
@@ -14,7 +14,6 @@ export function registerPatchTool(tools: ToolRegistry): void {
         paneWidth={props.paneWidth}
       />
     ),
-    (call) => call.tool === "patch",
   );
 }
 export default function PatchTool(

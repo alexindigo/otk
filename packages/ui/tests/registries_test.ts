@@ -7,7 +7,16 @@ import {
 } from "../registries/renderers.ts";
 import { PromptRegistry } from "../registries/prompt.ts";
 import type { PromptContext } from "../registries/prompt.ts";
-import type { GenericCall } from "@otk/protocol";
+import type { ExternalCall, Part, ToolBase, ToolCall } from "@otk/protocol";
+
+declare module "@otk/protocol" {
+  interface ToolKinds {
+    "feature.probe": ToolBase & { tool: "feature.probe"; result: number };
+  }
+  interface PartKinds {
+    "feature.probe": { kind: "feature.probe"; id: string; result: number };
+  }
+}
 
 Deno.test("tool resolution honors external names, typed tools, fallback and consumer isolation", () => {
   const tools = new ToolRegistry(), other = new ToolRegistry();
@@ -16,9 +25,9 @@ Deno.test("tool resolution honors external names, typed tools, fallback and cons
     typed = () => "typed";
   tools.fallback(fallback);
   tools.register("external", external);
-  tools.register("bash", typed, (call) => call.tool === "bash");
-  const call: GenericCall = {
-    tool: "generic",
+  tools.registerTyped("bash", typed);
+  const call: ExternalCall = {
+    tool: "external",
     name: "external",
     summary: "probe",
     callID: "call",
@@ -45,6 +54,13 @@ Deno.test("tool resolution honors external names, typed tools, fallback and cons
     }),
     typed,
   );
+  tools.register("bash", external);
+  assertStrictEquals(tools.resolve({ ...call, name: "bash" }), external);
+  assertThrows(
+    () => tools.registerTyped("bash", typed),
+    Error,
+    "Duplicate tool",
+  );
   assertEquals(other.resolve(call), undefined);
   assertThrows(
     () => tools.register("external", external),
@@ -61,16 +77,51 @@ Deno.test("part fallback and separate collections preserve registered ownership"
   const parts = new PartRegistry(), other = new PartRegistry();
   const fallback = () => "unsupported", custom = () => "registered";
   parts.fallback(fallback);
-  parts.register("text", custom);
-  assertStrictEquals(parts.resolve("text"), custom);
-  assertStrictEquals(parts.resolve("future"), fallback);
-  assertEquals(other.resolve("text"), undefined);
+  parts.registerTyped("text", custom);
+  const text: Part = { kind: "text", id: "t", blocks: [], synthetic: false };
+  assertStrictEquals(parts.resolve(text), custom);
+  assertStrictEquals(
+    parts.resolve({ kind: "external", id: "f", name: "future" }),
+    fallback,
+  );
+  assertStrictEquals(
+    parts.resolve({ kind: "external", id: "t", name: "text" }),
+    fallback,
+  );
+  parts.register("text", () => "external");
+  assertStrictEquals(parts.resolve(text), custom);
+  assertEquals(other.resolve(text), undefined);
+  assertThrows(
+    () => parts.registerTyped("text", custom),
+    Error,
+    "Duplicate part",
+  );
   assertThrows(() => parts.register("text", custom), Error, "Duplicate part");
   assertThrows(
     () => parts.fallback(fallback),
     Error,
     "Duplicate part fallback",
   );
+});
+Deno.test("feature-owned tool and part contracts extend protocol and renderer dispatch", () => {
+  const tools = new ToolRegistry(), parts = new PartRegistry();
+  const tool = (props: { call: { result: number } }) =>
+    String(props.call.result);
+  const part = (props: { part: { result: number } }) =>
+    String(props.part.result);
+  tools.registerTyped("feature.probe", tool);
+  parts.registerTyped("feature.probe", part);
+  const call: ToolCall = {
+    tool: "feature.probe",
+    result: 42,
+    callID: "c",
+    status: "completed",
+    time: {},
+    awaitingPermission: false,
+  };
+  const value: Part = { kind: "feature.probe", id: "p", result: 43 };
+  assertStrictEquals(tools.resolve(call), tool);
+  assertStrictEquals(parts.resolve(value), part);
 });
 Deno.test("dock selection gates capabilities in registration order and renders injected inputs", () => {
   const docks = new DockRegistry();

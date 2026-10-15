@@ -2,6 +2,6 @@
 import type { PartRegistry } from "../../registries/renderers.ts";
 /** Wire bookkeeping remains non-visible, as in the original message dispatch. */
 export function registerMetadataParts(parts: PartRegistry): void {
-  parts.register("meta", () => null);
-  parts.register("step", () => null);
+  parts.registerTyped("meta", () => null);
+  parts.registerTyped("step", () => null);
 }

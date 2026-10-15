@@ -4,10 +4,9 @@ import type { BashCall } from "@otk/protocol";
 import ToolOutput from "./ToolOutput.tsx";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 export function registerBashTool(tools: ToolRegistry): void {
-  tools.register(
+  tools.registerTyped(
     "bash",
     (props) => <BashTool call={props.call} directory={props.directory} />,
-    (call) => call.tool === "bash",
   );
 }
 export default function BashTool(

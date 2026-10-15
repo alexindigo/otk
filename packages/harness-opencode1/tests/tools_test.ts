@@ -111,7 +111,7 @@ Deno.test("recorded basic tools retain OTK fields, actual search counts and deni
     "search",
     "fetch",
     "skill",
-    "generic",
+    "external",
     "bash",
     "websearch",
     "read",
@@ -133,7 +133,7 @@ Deno.test("recorded basic tools retain OTK fields, actual search counts and deni
     bash.tool === "bash" && read.tool === "read" && list.tool === "search" &&
       glob.tool === "search" && grep.tool === "search" &&
       fetch.tool === "fetch" && skill.tool === "skill" &&
-      generic.tool === "generic" && websearch.tool === "websearch",
+      generic.tool === "external" && websearch.tool === "websearch",
   );
   assertEquals(bash.output.trimEnd().split("\n").length, 30);
   assertEquals(bash.exitCode, 0);
@@ -156,8 +156,13 @@ Deno.test("recorded basic tools retain OTK fields, actual search counts and deni
   ]);
   assertEquals(websearch.provider, "exa");
   assert(!("results" in websearch));
+  assertEquals(generic.input, JSON.stringify(raw[7].state!.input));
+  assertEquals(generic.metadata, JSON.stringify(raw[7].state!.metadata ?? {}));
   for (const call of calls) {
-    for (const field of ["metadata", "state", "input", "sessionId"]) {
+    const fields = call.tool === "external"
+      ? ["state", "sessionId"]
+      : ["metadata", "state", "input", "sessionId"];
+    for (const field of fields) {
       assert(!(field in call));
     }
   }
@@ -169,12 +174,20 @@ Deno.test("recorded basic tools retain OTK fields, actual search counts and deni
   const large = structuredClone(raw[7]);
   large.state!.output = "x".repeat(70000);
   const capped = mapTool(large);
-  assert(capped.tool === "generic");
+  assert(capped.tool === "external");
   assertEquals(capped.output?.length, 65536);
   assertEquals(capped.outputTruncated, true);
   large.state!.output = "é".repeat(40000);
   const unicode = mapTool(large);
-  assert(unicode.tool === "generic");
+  assert(unicode.tool === "external");
   assertEquals(new TextEncoder().encode(unicode.output).length, 65536);
   assert(!unicode.output!.includes("�"));
+  large.state!.input = { query: "😀".repeat(40000) };
+  large.state!.metadata = { detail: "é".repeat(40000) };
+  const bounded = mapTool(large);
+  assert(bounded.tool === "external");
+  for (const value of [bounded.input!, bounded.metadata!]) {
+    assert(new TextEncoder().encode(value).length <= 65536);
+    assert(!value.includes("�"));
+  }
 });

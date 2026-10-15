@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Element } from "solid-js";
 import type {
+  ExternalCall,
+  ExternalPart,
   Part,
+  PartKinds,
   PermissionRequest,
   Preferences,
   ToolCall,
+  ToolKinds,
 } from "@otk/protocol";
 
 /** Inputs passed to every tool renderer; behavior belongs to injected callbacks. */
@@ -18,50 +22,41 @@ export interface ToolProps {
   onOpenChild(id: string): void;
 }
 export type ToolRenderer = (props: ToolProps) => Element;
-export type ToolRenderProps<K extends ToolCall["tool"]> =
+export type ToolRenderProps<K extends keyof ToolKinds> =
   & Omit<ToolProps, "call">
   & {
-    call: Extract<ToolCall, { tool: K }>;
+    call: ToolKinds[K];
   };
 
-/** An isolated renderer collection; generic calls resolve by their external name. */
+/** Typed OTK kinds and external names have independent registration namespaces. */
 export class ToolRegistry {
-  #renderers = new Map<
-    string,
-    { component: ToolRenderer; accepts?: (call: ToolCall) => boolean }
-  >();
+  #typed = new Map<string, ToolRenderer>();
+  #external = new Map<string, ToolRenderer>();
   #fallback?: ToolRenderer;
-  register<K extends ToolCall["tool"]>(
+  registerTyped<K extends keyof ToolKinds>(
     tool: K,
     component: (props: ToolRenderProps<K>) => Element,
-    accepts: (call: ToolCall) => boolean,
-  ): void;
-  register(tool: string, component: ToolRenderer): void;
-  register(
-    tool: string,
-    component: ToolRenderer | ((props: never) => Element),
-    accepts?: (call: ToolCall) => boolean,
   ): void {
-    if (this.#renderers.has(tool)) throw new Error(`Duplicate tool: ${tool}`);
-    this.#renderers.set(tool, {
-      component: component as ToolRenderer,
-      accepts,
-    });
+    if (this.#typed.has(tool)) throw new Error(`Duplicate tool: ${tool}`);
+    this.#typed.set(tool, component as ToolRenderer);
+  }
+  register(
+    name: string,
+    component: (
+      props: Omit<ToolProps, "call"> & { call: ExternalCall },
+    ) => Element,
+  ): void {
+    if (this.#external.has(name)) throw new Error(`Duplicate tool: ${name}`);
+    this.#external.set(name, component as ToolRenderer);
   }
   fallback(component: ToolRenderer): void {
     if (this.#fallback) throw new Error("Duplicate tool fallback");
     this.#fallback = component;
   }
   resolve(call: ToolCall): ToolRenderer | undefined {
-    for (
-      const key of [call.tool === "generic" ? call.name : call.tool, call.tool]
-    ) {
-      const candidate = this.#renderers.get(key);
-      if (candidate && (!candidate.accepts || candidate.accepts(call))) {
-        return candidate.component;
-      }
-    }
-    return this.#fallback;
+    return (call.tool === "external"
+      ? this.#external.get(call.name)
+      : this.#typed.get(call.tool)) ?? this.#fallback;
   }
 }
 
@@ -78,18 +73,35 @@ export interface PartProps {
 }
 export type PartRenderer = (props: PartProps) => Element;
 export class PartRegistry {
-  #renderers = new Map<string, PartRenderer>();
+  #typed = new Map<string, PartRenderer>();
+  #external = new Map<string, PartRenderer>();
   #fallback?: PartRenderer;
-  register(kind: string, component: PartRenderer): void {
-    if (this.#renderers.has(kind)) throw new Error(`Duplicate part: ${kind}`);
-    this.#renderers.set(kind, component);
+  registerTyped<K extends keyof PartKinds>(
+    kind: K,
+    component: (
+      props: Omit<PartProps, "part"> & { part: PartKinds[K] },
+    ) => Element,
+  ): void {
+    if (this.#typed.has(kind)) throw new Error(`Duplicate part: ${kind}`);
+    this.#typed.set(kind, component as PartRenderer);
+  }
+  register(
+    name: string,
+    component: (
+      props: Omit<PartProps, "part"> & { part: ExternalPart },
+    ) => Element,
+  ): void {
+    if (this.#external.has(name)) throw new Error(`Duplicate part: ${name}`);
+    this.#external.set(name, component as PartRenderer);
   }
   fallback(component: PartRenderer): void {
     if (this.#fallback) throw new Error("Duplicate part fallback");
     this.#fallback = component;
   }
-  resolve(kind: string): PartRenderer | undefined {
-    return this.#renderers.get(kind) ?? this.#fallback;
+  resolve(part: Part): PartRenderer | undefined {
+    return (part.kind === "external"
+      ? this.#external.get(part.name)
+      : this.#typed.get(part.kind)) ?? this.#fallback;
   }
 }
 
