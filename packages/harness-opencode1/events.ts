@@ -6,6 +6,8 @@ export async function consumeEvents(
   bytes: () => void,
   event: (envelope: Envelope) => void | Promise<void>,
   accept?: (type: string) => boolean,
+  failed: (error: unknown) => void = (error) =>
+    console.warn("harness event:", error),
 ): Promise<void> {
   if (!response.body) throw new Error("SSE body missing");
   const reader = response.body.getReader(), decoder = new TextDecoder();
@@ -15,11 +17,15 @@ export async function consumeEvents(
       if (data.length) {
         const raw = data.join("\n");
         data = [];
-        if (accept) {
-          const type = envelopeType(raw);
-          if (type !== undefined && !accept(type)) return;
+        try {
+          if (accept) {
+            const type = envelopeType(raw);
+            if (type !== undefined && !accept(type)) return;
+          }
+          await event(JSON.parse(raw) as Envelope);
+        } catch (error) {
+          failed(error);
         }
-        await event(JSON.parse(raw) as Envelope);
       }
     } else if (text.startsWith("data:")) {
       data.push(text.slice(5).replace(/^ /, ""));

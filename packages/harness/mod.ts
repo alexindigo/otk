@@ -2,3 +2,4 @@
 /** Harness-neutral lifecycle, session contracts and optional capabilities. */
 export * from "./types.ts";
 export { CapabilityRegistry, requireCapability } from "./registry.ts";
+export { SessionIndex } from "./index.ts";

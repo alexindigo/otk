@@ -49,12 +49,16 @@ export class Messages {
       before = page.next;
     } while (before);
   }
-  async get(id: string, message: string): Promise<NativeMessage> {
+  async get(
+    id: string,
+    message: string,
+    signal?: AbortSignal,
+  ): Promise<NativeMessage> {
     return await this.client.json<NativeMessage>(
       `/session/${encodeURIComponent(id)}/message/${
         encodeURIComponent(message)
       }`,
-      { query: { directory: this.directory(id) } },
+      { query: { directory: this.directory(id) }, signal },
     );
   }
 }

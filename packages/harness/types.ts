@@ -7,6 +7,7 @@ import type {
 } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
 import type { HarnessState } from "@otk/protocol";
+import type { SessionIndex } from "./index.ts";
 export type {
   AgentsCapability,
   Capabilities,
@@ -23,6 +24,8 @@ export type {
   ShellCapability,
 } from "@otk/protocol";
 export interface HarnessSink {
+  /** When provided, index callbacks write this same authoritative owner. */
+  readonly index?: SessionIndex;
   connection(state: HarnessState): void;
   indexReset(entries: IndexEntry[]): void;
   indexUpsert(entry: IndexEntry): void;

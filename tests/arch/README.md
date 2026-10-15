@@ -45,28 +45,33 @@ literal lists. A feature-owned extension reaches the real wire and client; typed
 consumers reject spelling mistakes and newer wire names remain tolerated.
 
 Native endpoints/schema belong to `@otk/harness-opencode1`. Message collection
-endpoints belong only to its bounded `Messages` reader; negative fixtures reject
-bypasses from adapter, sessions, tasks, revert, directory and new native
-modules. Point-message reads remain available for requested content. SQL task
-projections and API fallback pages are reduced to summary metadata rather than
-retained transcripts. Store production code cannot depend on another OTK
-package; app preference policy and error types are injected. Its connection and
-migration runner cannot import feature modules. Negative fixtures exercise that
-separation alongside registry-to-feature checks. Database upgrades compose
-feature-owned lists whose versions start independently at 1, tracked by
-`(feature, version)`. The runner cannot own concrete feature names or a global
-numbered list; SQL numbering is scoped to feature directories. Only the frozen
-legacy bridge can read `user_version`, mapping exactly the old 0/1/2 states; no
-production code advances it. Negative fixtures reject global version use, old
-migration IDs and flat runner inputs. Store tests observe fresh subsets,
-independent upgrades and preserved data from real legacy SQLite schemas. OTK's
-root application/core composes backend, feature registrations and assets; it is
-not a separate sidecar/server/app library. Core RPC registry machinery is
-implementation-free. HTTP routes remain reflective application files. Package
-imports cannot escape into core or root bootstrap. UI part/tool dispatch uses
-consumer-selected registries, whose machinery imports no features. Package tests
-may use test dependencies, while cross-package imports still use public names.
-App-level test support may use native endpoints for stock-server proofs.
+storage is separate from the session metadata index: connector/core index fields
+cannot create a second `Map<string, IndexEntry>`. Core extends the public
+`SessionIndex` owner and injects it through the sink; a native test changes the
+core's metadata and observes the connector's directory/status consumers using
+it. Message collection endpoints belong only to its bounded `Messages` reader;
+negative fixtures reject bypasses from adapter, sessions, tasks, revert,
+directory and new native modules. Point-message reads remain available for
+requested content. SQL task projections and API fallback pages are reduced to
+summary metadata rather than retained transcripts. Store production code cannot
+depend on another OTK package; app preference policy and error types are
+injected. Its connection and migration runner cannot import feature modules.
+Negative fixtures exercise that separation alongside registry-to-feature checks.
+Database upgrades compose feature-owned lists whose versions start independently
+at 1, tracked by `(feature, version)`. The runner cannot own concrete feature
+names or a global numbered list; SQL numbering is scoped to feature directories.
+Only the frozen legacy bridge can read `user_version`, mapping exactly the old
+0/1/2 states; no production code advances it. Negative fixtures reject global
+version use, old migration IDs and flat runner inputs. Store tests observe fresh
+subsets, independent upgrades and preserved data from real legacy SQLite
+schemas. OTK's root application/core composes backend, feature registrations and
+assets; it is not a separate sidecar/server/app library. Core RPC registry
+machinery is implementation-free. HTTP routes remain reflective application
+files. Package imports cannot escape into core or root bootstrap. UI part/tool
+dispatch uses consumer-selected registries, whose machinery imports no features.
+Package tests may use test dependencies, while cross-package imports still use
+public names. App-level test support may use native endpoints for stock-server
+proofs.
 
 The final composition check covers root server and browser entries, shared
 production composition in fixtures, retirement of old extraction directories and

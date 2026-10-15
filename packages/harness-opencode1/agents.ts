@@ -36,3 +36,25 @@ export async function agentColors(
     return color ? [[agent.name, color]] : [];
   }));
 }
+
+/** Directory configuration is shared across transcript pages and live events. */
+export class AgentColors {
+  #directories = new Map<string | undefined, Promise<Map<string, string>>>();
+  constructor(readonly client: Client) {}
+  get(directory?: string): Promise<Map<string, string>> {
+    let colors = this.#directories.get(directory);
+    if (!colors) {
+      colors = agentColors(this.client, directory).catch((error) => {
+        if (this.#directories.get(directory) === colors) {
+          this.#directories.delete(directory);
+        }
+        throw error;
+      });
+      this.#directories.set(directory, colors);
+    }
+    return colors;
+  }
+  clear(): void {
+    this.#directories.clear();
+  }
+}

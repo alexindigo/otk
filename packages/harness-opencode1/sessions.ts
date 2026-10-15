@@ -12,7 +12,7 @@ import type { Directory } from "./directory.ts";
 import type { Info, RawPart, Session } from "./types.ts";
 import { mapMessage, mapSession } from "./map.ts";
 import type { TaskProgress } from "./tasks.ts";
-import { agentColors } from "./agents.ts";
+import type { AgentColors } from "./agents.ts";
 import type { RevertInfo } from "@otk/protocol";
 import type { Messages } from "./messages.ts";
 
@@ -28,6 +28,7 @@ export function sessions(
   >,
   revertInfo: (raw: Session) => Promise<RevertInfo | undefined>,
   errors: (id: string) => SessionErrorState,
+  agentColors: AgentColors,
 ): HarnessCore {
   return {
     get kind() {
@@ -79,7 +80,7 @@ export function sessions(
         ).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
       }
       const { items: raw } = await reader.page(id, opts.limit, before);
-      const colors = await agentColors(client, session.directory);
+      const colors = await agentColors.get(session.directory);
       const messages = await Promise.all(raw.map(async (message) => {
         const mapped = mapMessage(message.info, message.parts);
         mapped.agentColor = colors.get(message.info.agent);

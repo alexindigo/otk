@@ -10,6 +10,7 @@ import {
   type HarnessCore,
   HarnessError,
   type HarnessSink,
+  SessionIndex,
 } from "@otk/harness";
 import { Client, HttpFailure } from "./client.ts";
 import { SessionErrors } from "./errors.ts";
@@ -34,7 +35,7 @@ import { prompt } from "./prompt.ts";
 import { files } from "./files.ts";
 import { mapQuestion, questions } from "./questions.ts";
 import { sessions } from "./sessions.ts";
-import { agentColors, agents } from "./agents.ts";
+import { AgentColors, agents } from "./agents.ts";
 import { resources } from "./resources.ts";
 import { commands } from "./commands.ts";
 import { type Launch, shell } from "./shell.ts";
@@ -42,6 +43,8 @@ import { permissions } from "./permissions.ts";
 import { revert } from "./revert.ts";
 import { sessionDirectory } from "./directory.ts";
 import { Messages } from "./messages.ts";
+import { Attention } from "./attention.ts";
+import { MessageRecovery } from "./recovery.ts";
 const contentEvents = new Set([
   "session.created",
   "session.updated",
@@ -70,7 +73,13 @@ export class Opencode1Adapter implements Harness {
   version = "unknown";
   readonly client: Client;
   #sink!: HarnessSink;
-  #entries = new Map<string, IndexEntry>();
+  #index = new SessionIndex();
+  #attention = new Attention(
+    (id) => this.#index.get(id),
+    (entry) => this.#sink.indexUpsert(entry),
+    (id) => this.#sink.indexRemove(id),
+    (id) => this.#index.descendants(id),
+  );
   #permissions = new Map<
     string,
     { sessionID: string; callID?: string; time: number }
@@ -89,6 +98,8 @@ export class Opencode1Adapter implements Harness {
   #history: History;
   #tasks: TaskProgress;
   #messages: Messages;
+  #colors: AgentColors;
+  #recovery: MessageRecovery;
   #reverts = new Map<string, string>();
   constructor(
     readonly cfg: Opencode1Config,
@@ -99,6 +110,39 @@ export class Opencode1Adapter implements Harness {
     this.#db = new BootstrapDb(harnessDb(cfg));
     this.#history = new History(harnessDb(cfg));
     this.#messages = new Messages(this.client, (id) => this.#directory(id));
+    this.#colors = new AgentColors(this.client);
+    this.#recovery = new MessageRecovery(
+      (session, message, signal) =>
+        this.#messages.get(session, message, signal),
+      (session, snapshot, parts) => {
+        if (this.#stopped || !this.buffers.subscribed(session)) return;
+        const cutoff = this.#reverts.get(session);
+        if (cutoff && snapshot.info.id >= cutoff) return;
+        for (const raw of snapshot.parts) {
+          if (!parts.has(raw.id)) continue;
+          if (
+            snapshot.info.role === "assistant" &&
+            snapshot.info.time.completed === undefined
+          ) {
+            this.buffers.beginReply(session, snapshot.info.id);
+          }
+          const lastOutput = this.buffers.observeOutput(
+            session,
+            snapshot.info.id,
+            Date.now(),
+            raw.time?.end,
+            raw.id,
+          );
+          this.#sink.content(session, {
+            op: "part.upsert",
+            messageID: snapshot.info.id,
+            part: mapPart(raw),
+            ...(lastOutput === undefined ? {} : { lastOutput }),
+          });
+        }
+      },
+      (error) => console.warn("message recovery:", error),
+    );
     this.#tasks = new TaskProgress(
       async (id, message) => {
         if (message) {
@@ -149,6 +193,7 @@ export class Opencode1Adapter implements Harness {
       },
       (raw) => this.#revertInfo(raw),
       (id) => this.#errors.snapshot(id),
+      this.#colors,
     );
     const registry = new CapabilityRegistry();
     const launch: Launch = (...args) => this.#launch(...args);
@@ -170,7 +215,7 @@ export class Opencode1Adapter implements Harness {
       permissions(
         this.client,
         directory,
-        (id) => this.#entries.get(id),
+        (id) => this.#index.get(id),
         (id) => this.#permissions.get(id)?.time,
       ),
     );
@@ -179,8 +224,9 @@ export class Opencode1Adapter implements Harness {
       questions(
         this.client,
         directory,
-        (id) => this.#entries.get(id),
+        (id) => this.#index.get(id),
         this.#questions,
+        (id, session) => this.#question(id, session),
       ),
     );
     registry.register(
@@ -192,7 +238,24 @@ export class Opencode1Adapter implements Harness {
     >;
   }
   #start(sink: HarnessSink): Promise<void> {
-    this.#sink = sink;
+    this.#index = sink.index ?? new SessionIndex();
+    // Standalone consumers need no index implementation. In core, callbacks
+    // already mutate the injected owner; never maintain a mirrored map.
+    this.#sink = sink.index ? sink : {
+      ...sink,
+      indexReset: (entries) => {
+        this.#index.reset(entries);
+        sink.indexReset(entries);
+      },
+      indexUpsert: (entry) => {
+        this.#index.upsert(entry);
+        sink.indexUpsert(entry);
+      },
+      indexRemove: (id) => {
+        this.#index.remove(id);
+        sink.indexRemove(id);
+      },
+    };
     this.#stopped = false;
     sink.connection("connecting");
     this.#run = this.#loop();
@@ -206,6 +269,8 @@ export class Opencode1Adapter implements Harness {
     this.#wake?.();
     this.buffers.stop();
     this.#tasks.release();
+    await this.#recovery.stop();
+    this.#colors.clear();
     await this.#run;
     await Promise.all(
       [...this.#commands.values()].map((request) => request.task),
@@ -223,9 +288,10 @@ export class Opencode1Adapter implements Harness {
     }
     if (!count) this.#tasks.release(id);
     if (!count) this.#reverts.delete(id);
+    if (!count) this.#recovery.release(id);
   }
   #directory(id: string): string | undefined {
-    return this.#entries.get(id)?.directory;
+    return this.#index.get(id)?.directory;
   }
   async #revertInfo(session: Session): Promise<RevertInfo | undefined> {
     if (!session.revert) {
@@ -304,7 +370,7 @@ export class Opencode1Adapter implements Harness {
   #publishErrors(sessionID: string, errorState: SessionErrorState): void {
     if (this.#stopped) return;
     const error = sessionErrorMessage(errorState);
-    const entry = this.#entries.get(sessionID);
+    const entry = this.#index.get(sessionID);
     if (entry) {
       this.#errorEntry(entry, errorState);
       this.#sink.indexUpsert(entry);
@@ -350,7 +416,7 @@ export class Opencode1Adapter implements Harness {
               this.#sink.connection("connected");
               this.#sink.resync("all");
               for (const pending of buffered.splice(0)) {
-                await this.#event(pending);
+                await this.#handle(pending);
               }
             }).catch((error) => {
               console.warn("bootstrap:", error);
@@ -359,12 +425,7 @@ export class Opencode1Adapter implements Harness {
           } else if (event.payload.type !== "server.heartbeat") {
             if (!ready) buffered.push(event);
             else {
-              chain = chain.then(() => this.#event(event)).catch(
-                (error) => {
-                  console.warn("event:", error);
-                  controller.abort();
-                },
-              );
+              chain = chain.then(() => this.#handle(event));
               // Once bootstrap is ready, the parser owns at most the event being
               // forwarded, rather than accumulating content in a promise queue.
               return chain;
@@ -385,7 +446,9 @@ export class Opencode1Adapter implements Harness {
       } finally {
         watchdog.stop();
         controller.abort();
+        this.#recovery.release();
         await chain;
+        this.#recovery.release();
       }
       if (this.#stopped) break;
       this.buffers.reset();
@@ -401,6 +464,7 @@ export class Opencode1Adapter implements Harness {
     }
   }
   async #bootstrap(): Promise<void> {
+    this.#recovery.release();
     this.#reverts.clear();
     this.#tasks.release();
     // Every authoritative resync starts a new content generation. Keep viewers,
@@ -425,7 +489,6 @@ export class Opencode1Adapter implements Harness {
       }
       cursor = next;
     } while (cursor);
-    this.#entries = entries;
     const previousPermissions = new Map(this.#permissions);
     this.#permissions.clear();
     this.#questions.clear();
@@ -472,50 +535,27 @@ export class Opencode1Adapter implements Harness {
         this.#questions.set(request.id, request.sessionID);
       }
     }
-    this.#attention(false);
+    this.#attention.reset(
+      [...entries.values()],
+      [...this.#permissions.values()].map((request) => request.sessionID),
+      this.#questions.values(),
+    );
     this.#sink.indexReset([...entries.values()]);
   }
-  #attention(emit = true): void {
-    const before = new Map(
-      [...this.#entries].map((
-        [id, entry],
-      ) => [id, JSON.stringify(entry.attention)]),
-    );
-    for (const entry of this.#entries.values()) {
-      entry.attention.permissions =
-        entry.attention.questions =
-        entry.attention.childPermissions =
-        entry.attention.childQuestions =
-          0;
-    }
-    const add = (sessionID: string, kind: "permissions" | "questions") => {
-      const entry = this.#entries.get(sessionID);
-      if (!entry) return;
-      entry.attention[kind]++;
-      const seen = new Set([sessionID]);
-      let parent = entry.parentID;
-      while (parent && !seen.has(parent)) {
-        seen.add(parent);
-        const ancestor = this.#entries.get(parent);
-        if (!ancestor) break;
-        ancestor.attention[
-          kind === "permissions" ? "childPermissions" : "childQuestions"
-        ]++;
-        parent = ancestor.parentID;
-      }
-    };
-    for (const request of this.#permissions.values()) {
-      add(request.sessionID, "permissions");
-    }
-    for (const sessionID of this.#questions.values()) {
-      add(sessionID, "questions");
-    }
-    if (emit) {
-      for (const [id, entry] of this.#entries) {
-        if (before.get(id) !== JSON.stringify(entry.attention)) {
-          this.#sink.indexUpsert(entry);
-        }
-      }
+  #question(id: string, session?: string): void {
+    const previous = this.#questions.get(id);
+    if (previous === session) return;
+    if (previous) this.#attention.change(previous, "questions", -1);
+    if (session) {
+      this.#questions.set(id, session);
+      this.#attention.change(session, "questions", 1);
+    } else this.#questions.delete(id);
+  }
+  async #handle(event: Envelope): Promise<void> {
+    try {
+      await this.#event(event);
+    } catch (error) {
+      console.warn("harness event:", event.payload?.type, error);
     }
   }
   async #event(event: Envelope): Promise<void> {
@@ -531,19 +571,28 @@ export class Opencode1Adapter implements Harness {
     if (type === "server.instance.disposed") {
       this.#abortCommands();
       this.#errors.reset();
-      await this.#bootstrap();
+      this.#colors.clear();
+      try {
+        await this.#bootstrap();
+      } catch (error) {
+        // A failed authoritative bootstrap remains a connection-level failure.
+        this.#controller?.abort();
+        throw error;
+      }
       this.#sink.resync("all");
       return;
     }
     const info = p.info as Info | undefined;
     const raw = p.part as RawPart | undefined;
-    const sessionID = String(
-      p.sessionID ?? info?.sessionID ?? raw?.sessionID ?? "",
-    );
-    const entry = this.#entries.get(sessionID);
+    const identity = p.sessionID ?? info?.sessionID ?? raw?.sessionID;
+    const sessionID = typeof identity === "string" ? identity : "";
+    const entry = this.#index.get(sessionID);
     if (type === "session.created" || type === "session.updated") {
+      if (typeof info?.id !== "string" || !info.id) {
+        throw new Error(`Malformed ${type}: session id missing`);
+      }
       const session = p.info as Session,
-        old = this.#entries.get(session.id),
+        old = this.#index.get(session.id),
         mapped = mapIndex(session);
       this.#errors.register(session.id);
       if (old) {
@@ -552,9 +601,7 @@ export class Opencode1Adapter implements Harness {
         mapped.attention = old.attention;
       }
       this.#errorEntry(mapped);
-      this.#entries.set(mapped.id, mapped);
-      this.#sink.indexUpsert(mapped);
-      this.#attention();
+      this.#attention.upsert(mapped);
       if (
         this.buffers.subscribed(session.id) &&
         (session.revert || this.#reverts.has(session.id))
@@ -572,14 +619,17 @@ export class Opencode1Adapter implements Harness {
     }
     if (type === "session.deleted") {
       const id = (p.info as Session).id;
+      if (typeof id !== "string" || !id) {
+        throw new Error("Malformed session.deleted: session id missing");
+      }
       this.#abortCommands(id);
       this.#errors.remove(id);
-      this.#entries.delete(id);
-      this.#sink.indexRemove(id);
-      this.#attention();
+      this.#attention.remove(id);
+      this.#recovery.release(id);
       this.buffers.removeSession(id);
       return;
     }
+    if (!sessionID) throw new Error(`Malformed ${type}: session id missing`);
     if (type === "session.status" || type === "session.idle") {
       const status: {
         type: IndexEntry["status"];
@@ -592,6 +642,9 @@ export class Opencode1Adapter implements Harness {
         message?: string;
         next?: number;
       };
+      if (!status || !["idle", "busy", "retry"].includes(status.type)) {
+        throw new Error(`Malformed ${type}: invalid status`);
+      }
       if (entry) {
         entry.status = status.type as IndexEntry["status"];
         entry.retry = entry.status === "retry"
@@ -602,8 +655,10 @@ export class Opencode1Adapter implements Harness {
           }
           : undefined;
       }
+      // Index reads are detached values: commit status before the error owner
+      // publishes its independent clear observation against that same record.
+      if (entry) this.#sink.indexUpsert(entry);
       if (status.type === "busy") this.#errors.clear(sessionID);
-      else if (entry) this.#sink.indexUpsert(entry);
       return;
     }
     if (type === "session.error") {
@@ -617,24 +672,33 @@ export class Opencode1Adapter implements Harness {
     }
     if (type === "permission.asked") {
       const request = p as unknown as RawPermission;
+      if (typeof request.id !== "string" || !request.id) {
+        throw new Error("Malformed permission.asked: request id missing");
+      }
+      const time = this.#permissions.get(request.id)?.time ?? Date.now();
+      const mapped = mapPermission(request, time);
+      const previous = this.#permissions.get(request.id)?.sessionID;
       this.#permissions.set(request.id, {
         sessionID,
         callID: request.tool?.callID,
-        time: this.#permissions.get(request.id)?.time ?? Date.now(),
+        time,
       });
-      this.#attention();
+      if (previous !== sessionID) {
+        if (previous) this.#attention.change(previous, "permissions", -1);
+        this.#attention.change(sessionID, "permissions", 1);
+      }
       this.#sink.content(sessionID, {
         op: "permission.upsert",
-        request: mapPermission(
-          request,
-          this.#permissions.get(request.id)!.time,
-        ),
+        request: mapped,
       });
       return;
     }
     if (type === "permission.replied") {
+      const previous = this.#permissions.get(String(p.requestID));
       this.#permissions.delete(String(p.requestID));
-      this.#attention();
+      if (previous) {
+        this.#attention.change(previous.sessionID, "permissions", -1);
+      }
       this.#sink.content(sessionID, {
         op: "permission.remove",
         requestID: String(p.requestID),
@@ -643,17 +707,19 @@ export class Opencode1Adapter implements Harness {
       return;
     }
     if (type === "question.asked") {
-      this.#questions.set(String(p.id), sessionID);
-      this.#attention();
+      if (typeof p.id !== "string" || !p.id) {
+        throw new Error("Malformed question.asked: request id missing");
+      }
+      const request = mapQuestion(p as unknown as RawQuestion);
+      this.#question(String(p.id), sessionID);
       this.#sink.content(sessionID, {
         op: "question.upsert",
-        request: mapQuestion(p as unknown as RawQuestion),
+        request,
       });
       return;
     }
     if (type === "question.replied" || type === "question.rejected") {
-      this.#questions.delete(String(p.requestID));
-      this.#attention();
+      this.#question(String(p.requestID));
       this.#sink.content(sessionID, {
         op: "question.remove",
         requestID: String(p.requestID),
@@ -674,6 +740,9 @@ export class Opencode1Adapter implements Harness {
       type === "message.updated" && info?.role === "assistant" &&
       info.time.completed !== undefined
     ) this.buffers.complete(info.id, (id, op) => this.#sink.content(id, op));
+    if (type === "message.updated" && info?.time.completed !== undefined) {
+      this.#recovery.message(info.id);
+    }
     if (
       type === "message.updated" && info?.role === "assistant" &&
       info.time.completed !== undefined && completedOutput === undefined &&
@@ -695,18 +764,25 @@ export class Opencode1Adapter implements Harness {
       type === "message.updated" && info?.role === "assistant" &&
       info.time.completed
     ) {
-      if (entry) {
-        entry.timeUpdated = Math.max(entry.timeUpdated, info.time.completed);
-        this.#sink.indexUpsert(entry);
+      const current = this.#index.get(sessionID);
+      if (current) {
+        current.timeUpdated = Math.max(
+          current.timeUpdated,
+          info.time.completed,
+        );
+        this.#sink.indexUpsert(current);
       }
     }
     if (type === "message.removed") {
+      this.#recovery.message(String(p.messageID));
       this.buffers.removeMessage(String(p.messageID));
     }
     if (type === "message.part.removed") {
+      this.#recovery.part(String(p.messageID), String(p.partID));
       this.buffers.forgetPart(String(p.messageID), String(p.partID));
     }
     if (type === "message.part.updated" && raw) {
+      this.#recovery.part(raw.messageID, raw.id);
       if (
         raw.type === "tool" ||
         ((raw.type === "text" || raw.type === "reasoning") &&
@@ -758,7 +834,7 @@ export class Opencode1Adapter implements Harness {
               [],
               completedOutput ?? this.buffers.outputTime(info!.id),
             ),
-            colors = await agentColors(this.client, this.#directory(sessionID));
+            colors = await this.#colors.get(this.#directory(sessionID));
           message.agentColor = colors.get(info!.agent);
           content({ op: "message.upsert", message });
         }
@@ -795,36 +871,7 @@ export class Opencode1Adapter implements Harness {
             (id, op) => this.#sink.content(id, op),
           )
         ) {
-          // Mid-stream subscriber: no event-consistent seed exists. Fetch current
-          // content per request instead of guessing which deltas the snapshot includes.
-          const message = await this.client.json<
-            { info: Info; parts: RawPart[] }
-          >(
-            `/session/${encodeURIComponent(sessionID)}/message/${
-              encodeURIComponent(String(p.messageID))
-            }`,
-            { query: { directory: this.#directory(sessionID) } },
-          );
-          const current = message.parts.find((item) => item.id === id);
-          if (current && this.buffers.subscribed(sessionID)) {
-            if (
-              message.info.role === "assistant" &&
-              message.info.time.completed === undefined
-            ) this.buffers.beginReply(sessionID, message.info.id);
-            const lastOutput = this.buffers.observeOutput(
-              sessionID,
-              String(p.messageID),
-              Date.now(),
-              current.time?.end,
-              current.id,
-            );
-            content({
-              op: "part.upsert",
-              messageID: String(p.messageID),
-              part: mapPart(current),
-              ...(lastOutput === undefined ? {} : { lastOutput }),
-            });
-          }
+          this.#recovery.touch(sessionID, String(p.messageID), id);
         }
         break;
       }

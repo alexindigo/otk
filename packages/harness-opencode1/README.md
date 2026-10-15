@@ -50,6 +50,24 @@ bytes; `capabilities.history.attachment({ messageID, partID })` retrieves those
 bytes asynchronously. Missing/incompatible databases degrade to empty history
 without creating or writing them.
 
+Core and connector share one `SessionIndex` through `HarnessSink.index`; a
+standalone consumer may omit it and use the adapter's default owner. A malformed
+event or failed event follow-up is logged without reconnecting unrelated
+sessions. Transport, watchdog and authoritative bootstrap failures retain
+reconnect behavior. Request attention changes touch only the owning session and
+ancestor path; reparenting updates the affected subtree, including late-arriving
+parents. Agent colours share one in-flight/cache entry per directory until
+native instance disposal or stop. Reconnecting alone does not invalidate
+directory configuration.
+
+When reconnect loses a streaming seed, point-message recovery coalesces deltas
+per subscribed message at a 50 ms cadence, with one in-flight read and a
+trailing refresh only when more deltas arrive. Snapshots render only the
+requested parts; they never seed appends because the native API has no shared
+snapshot/event offset. A native part update restores event-owned streaming.
+Unsubscribe, removal, disposal, disconnect and stop cancel the recovery's
+timers/readers and suppress stale output.
+
 Message collections have one bounded reader (1–200 messages per page); zero or
 missing limits cannot invoke stock's whole-history mode. Revert counts use a
 read-only SQL scalar. Task cards stream read-only SQL projections in pages of

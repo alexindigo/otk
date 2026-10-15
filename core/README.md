@@ -55,7 +55,10 @@ its state directory; root bootstrap owns memoization and default paths.
 `AuthState`, `LocalAuth`, password helpers and `allowedOrigin` retain
 cookie/origin/JWT/TOTP behavior. `Connections`, `IndexStore`, `serve`,
 `staticResponse`, `promptParts`, `object` and `text` are shared core
-implementation helpers.
+implementation helpers. `IndexStore` extends the harness-neutral `SessionIndex`
+owner and adds wire revisions/batching. Core passes that same owner in the
+backend sink, so directory, family, attention and transport reads share one
+authoritative metadata index.
 
 ## Example
 

@@ -146,6 +146,10 @@ function sourceErrors(path: string, source: string): string[] {
   }
   const errors: string[] = [];
   if (
+    (from === "harness-opencode1" || path.startsWith("core/index/")) &&
+    /#[\w]+\s*(?::[^=;]+)?=\s*new Map<string,\s*IndexEntry>/.test(source)
+  ) errors.push("session entries belong only to the shared SessionIndex owner");
+  if (
     from === "harness-opencode1" &&
     path !== "packages/harness-opencode1/messages.ts" &&
     /["'`]\/session\/[^\n]*\/message["'`]/.test(source)
@@ -633,6 +637,33 @@ Deno.test("native message collection reads cannot bypass their bounded owner", (
       "client.json(`/session/${id}/message/${message}`)",
     ),
     [],
+  );
+});
+
+Deno.test("connector and core cannot retain a second session-index map", async () => {
+  for (
+    const path of [
+      "packages/harness-opencode1/adapter.ts",
+      "packages/harness-opencode1/future.ts",
+      "core/index/store.ts",
+    ]
+  ) {
+    assertEquals(
+      sourceErrors(path, "#entries = new Map<string, IndexEntry>();"),
+      ["session entries belong only to the shared SessionIndex owner"],
+    );
+  }
+  const read = (path: string) => Deno.readTextFile(new URL(path, root));
+  assert((await read("core/index/store.ts")).includes("extends SessionIndex"));
+  assert(
+    (await read("core/service.ts")).includes(
+      "backend.core.start({\n    index,",
+    ),
+  );
+  assert(
+    (await read("packages/harness-opencode1/adapter.ts")).includes(
+      "this.#index = sink.index ?? new SessionIndex()",
+    ),
   );
 });
 

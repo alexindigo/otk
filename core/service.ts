@@ -36,6 +36,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
     rpc,
   );
   await backend.core.start({
+    index,
     connection: (state) => connections.connection(state),
     indexReset: (entries) => index.reset(entries),
     indexUpsert: (entry) => index.upsert(entry),

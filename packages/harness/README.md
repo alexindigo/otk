@@ -42,6 +42,11 @@ advertisement and client/UI availability then share the same typed name.
 The core owns lifecycle; call `stop()` to release its streams and outstanding
 operations. A sink receives connection state, index snapshots/updates/removals,
 content operations and resync notifications. Capabilities do not own the sink.
+`SessionIndex` owns session metadata. A consumer can supply that owner as
+`HarnessSink.index`, with index callbacks writing it; the native connector reads
+the same owner instead of retaining a second copy. Omitting it preserves the
+standalone sink API. The application index extends this owner with wire batching
+and revision notifications.
 
 License: LGPL-3.0-only. Workspace validation: `deno task test:unit` and
 `deno task test:arch`.

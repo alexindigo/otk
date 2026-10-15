@@ -13,16 +13,19 @@ export function questions(
   directory: Directory,
   entry: (id: string) => IndexEntry | undefined,
   owners: Map<string, string>,
+  observed: (id: string, session: string) => void = (id, session) =>
+    owners.set(id, session),
 ): QuestionsCapability {
   return {
     async listQuestions(sessionID) {
       const pending = await client.json<RawQuestion[]>("/question", {
         query: { directory: await directory.resolve(sessionID) },
       });
-      for (const request of pending) owners.set(request.id, request.sessionID);
-      return pending.filter((request) =>
+      const mapped = pending.map(mapQuestion);
+      for (const request of pending) observed(request.id, request.sessionID);
+      return mapped.filter((request) =>
         belongsToSession(request.sessionID, sessionID, entry)
-      ).map(mapQuestion).sort((a, b) => a.id.localeCompare(b.id));
+      ).sort((a, b) => a.id.localeCompare(b.id));
     },
     async answerQuestion(requestID, answers) {
       const owner = owners.get(requestID);
