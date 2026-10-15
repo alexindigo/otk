@@ -25,7 +25,7 @@ function Detail(props: { detail: PermissionDetail }) {
           <>
             <pre class="otk-permission-command">{detail().command}</pre>
             <Show when={detail().cwd}>
-              <p class="otk-muted">{detail().cwd}</p>
+              <p class="otk-muted otk-path">{detail().cwd}</p>
             </Show>
           </>
         )}
@@ -39,7 +39,7 @@ function Detail(props: { detail: PermissionDetail }) {
             >
               {(file) => (
                 <li>
-                  {file().path}{" "}
+                  <span class="otk-path">{file().path}</span>{" "}
                   <span class="otk-muted">
                     +{file().additions} / −{file().deletions}
                   </span>
@@ -165,7 +165,7 @@ function RequestDock(
       <Detail detail={props.request.detail} />
       <ul class="otk-permission-patterns">
         <For each={props.request.patterns} keyed={false}>
-          {(pattern) => <li>{pattern()}</li>}
+          {(pattern) => <li class="otk-path">{pattern()}</li>}
         </For>
       </ul>
       <Show when={error()}>
@@ -178,6 +178,7 @@ function RequestDock(
               type="button"
               disabled={pending()}
               onClick={() => void once()}
+              class="otk-primary"
             >
               Allow once
             </button>

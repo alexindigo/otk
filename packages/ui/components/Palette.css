@@ -1,7 +1,7 @@
 .otk-palette-list {
   list-style: none;
   padding: 0;
-  margin: 1rem 0 0;
+  margin: 12px 0 0;
   max-height: 55vh;
   overflow: auto;
 }
@@ -10,14 +10,14 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 12px;
   text-align: left;
   border-color: transparent;
 }
 .otk-palette-list small {
   display: block;
   color: var(--secondary);
-  font-size: .75rem;
+  font-size: 12px;
 }
 .otk-palette-list kbd {
   color: var(--secondary);

@@ -2,12 +2,12 @@
 .otk-todos {
   list-style: none;
   padding: 0;
-  margin: .5rem 0;
+  margin: 8px 0;
 }
 .otk-todos li {
   display: flex;
   align-items: baseline;
-  gap: .6rem;
+  gap: 8px;
 }
 .otk-todos li[data-todo-status=in_progress] {
   color: var(--otk-warning);

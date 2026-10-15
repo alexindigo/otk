@@ -2,9 +2,9 @@
 .otk-compaction-divider {
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 12px;
   color: var(--secondary);
-  margin: 1rem 0;
+  margin: 12px 0;
 }
 .otk-compaction-divider::before,
 .otk-compaction-divider::after {

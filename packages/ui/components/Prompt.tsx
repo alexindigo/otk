@@ -262,6 +262,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         </span>
         <button
           type="submit"
+          class="otk-primary"
           disabled={pending() ||
             props.value.chips.some((chip) => chip.pending || chip.error) ||
             !canSubmit() || !props.value.input.trim()}

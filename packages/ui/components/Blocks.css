@@ -1,44 +1,52 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-text {
+  font: 400 15px/24px var(--font-ui);
+}
 .otk-text h1,
 .otk-text h2,
 .otk-text h3,
 .otk-text h4,
 .otk-text h5,
 .otk-text h6 {
-  line-height: 1.4;
-  margin: 1rem 0;
+  font-weight: 600;
+  font-size: 16px;
+  line-height: 24px;
+  margin: 16px 0;
 }
 .otk-text h1 {
-  font-size: 1.5rem;
+  font-size: 18px;
+  line-height: 26px;
 }
 .otk-text h2 {
-  font-size: 1.3rem;
+  font-size: 16px;
 }
 .otk-text p {
-  margin: .75rem 0;
+  margin: 12px 0;
 }
 .otk-text pre {
   background: var(--panel);
   border: 1px solid var(--muted);
-  padding: 1rem;
+  padding: 12px;
+  border-radius: var(--radius-card);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
 .otk-text code {
-  font-family: inherit;
+  font-family: var(--font-mono);
 }
 .otk-text :not(pre) > code {
   background: var(--panel);
-  padding: .1rem .3rem;
+  padding: 0 4px;
+  border-radius: var(--radius-control);
 }
 .otk-text blockquote {
   border-left: 2px solid var(--muted);
-  margin: 1rem 0;
-  padding-left: 1rem;
+  margin: 12px 0;
+  padding-left: 12px;
   color: var(--secondary);
 }
 .otk-text li > input {
-  margin-right: .5rem;
+  margin-right: 8px;
 }
 .otk-text img {
   max-width: 100%;
@@ -56,7 +64,7 @@
 .otk-table-scroll th,
 .otk-table-scroll td {
   border: 1px solid var(--muted);
-  padding: .5rem .8rem;
+  padding: 8px 12px;
 }
 .otk-unconcealed .otk-text strong::before,
 .otk-unconcealed .otk-text strong::after {

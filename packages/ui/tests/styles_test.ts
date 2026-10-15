@@ -45,7 +45,10 @@ Deno.test("component-owned CSS is imported by its owner and retains structural t
     const token of [
       "--bg: var(--otk-bg)",
       "--fg: var(--otk-fg)",
-      "--accent: var(--otk-accent-text)",
+      "--accent: var(--otk-action-text)",
+      "--otk-action-text: var(--otk-accent-text)",
+      '"IBM Plex Sans"',
+      "font-family: var(--font-ui)",
       '"IBM Plex Mono"',
     ]
   ) assert(theme.includes(token));

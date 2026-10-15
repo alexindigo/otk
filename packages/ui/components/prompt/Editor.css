@@ -6,15 +6,16 @@
   width: min(90vw, 100rem);
   height: auto;
   max-height: none;
-  padding: 1rem;
+  padding: 12px;
   background: var(--bg);
   color: var(--fg);
-  border: 1px solid var(--accent);
+  border: 1px solid var(--muted);
+  border-radius: var(--radius-card);
 }
 .otk-editor[open] {
   display: flex;
   flex-direction: column;
-  gap: 1rem;
+  gap: 12px;
 }
 .otk-editor::backdrop {
   background: var(--otk-overlay-editor);
@@ -24,7 +25,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 12px;
 }
 .otk-editor h2 {
   margin: 0;
@@ -35,6 +36,6 @@
   resize: none;
   background: var(--panel);
   color: var(--fg);
-  font-family: inherit;
-  padding: 1rem;
+  font-family: var(--font-ui);
+  padding: 12px;
 }

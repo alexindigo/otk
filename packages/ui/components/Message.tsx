@@ -53,9 +53,6 @@ export default function Message(
       }]}
       data-message={props.message.id}
       data-role={props.message.role}
-      style={{
-        "border-left-color": props.message.agentColor || "var(--accent)",
-      }}
     >
       <header class="otk-message-role">
         <span
@@ -64,7 +61,7 @@ export default function Message(
           }]}
         >
           <span class="otk-role-label" tabindex="0">
-            {props.message.role === "user" ? "YOU" : "ASSISTANT"}
+            {props.message.role === "user" ? "You" : "Assistant"}
           </span>
           <time
             class="otk-created-time"
@@ -74,7 +71,7 @@ export default function Message(
           </time>
         </span>
         <Show when={props.queued}>
-          <span class="otk-queued">QUEUED</span>
+          <span class="otk-queued">Queued</span>
         </Show>
       </header>
       <For each={props.message.parts} keyed={(part) => part.id}>
@@ -98,17 +95,24 @@ export default function Message(
             <footer class="otk-message-footer">
               <span class="otk-message-details">
                 <span
-                  style={{ color: message().agentColor || "var(--accent)" }}
+                  style={{ color: message().agentColor || "var(--otk-fg-2)" }}
                 >
                   ▣
-                </span>{" "}
-                {message().agent} ·{" "}
-                {message().model.provider}/{message().model.model} ·{" "}
-                {message().time.completed === undefined
-                  ? "streaming"
-                  : duration(message().time.created, message().time.completed!)}
+                </span>
+                <span>{message().agent}</span>
+                <span class="otk-id">
+                  {message().model.provider}/{message().model.model}
+                </span>
+                <span>
+                  {message().time.completed === undefined
+                    ? "streaming"
+                    : duration(
+                      message().time.created,
+                      message().time.completed!,
+                    )}
+                </span>
                 <Show when={message().interrupted}>
-                  <span>· interrupted</span>
+                  <span>interrupted</span>
                 </Show>
               </span>
               <span class="otk-output-time-group">

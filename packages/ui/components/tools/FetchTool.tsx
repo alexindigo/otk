@@ -8,5 +8,9 @@ export function registerFetchTool(tools: ToolRegistry): void {
   );
 }
 export default function FetchTool(props: { call: FetchCall }) {
-  return <div class="otk-tool-summary">WebFetch {props.call.url}</div>;
+  return (
+    <div class="otk-tool-summary">
+      Fetch <span class="otk-path">{props.call.url}</span>
+    </div>
+  );
 }

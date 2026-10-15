@@ -1,0 +1,93 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-status-light {
+  --lamp-size: 10px;
+  --lamp-color: var(--otk-fg-3);
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: var(--lamp-size);
+  height: var(--lamp-size);
+  flex: 0 0 var(--lamp-size);
+  vertical-align: middle;
+}
+.otk-status-light[data-small] {
+  --lamp-size: 8px;
+}
+.otk-status-light[data-state=blocked] {
+  --lamp-color: var(--otk-lamp-red);
+}
+.otk-status-light[data-state=working] {
+  --lamp-color: var(--otk-lamp-amber);
+}
+.otk-status-light[data-state=finished] {
+  --lamp-color: var(--otk-lamp-green);
+}
+.otk-lamp-body,
+.otk-lamp-glow {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+}
+.otk-lamp-body {
+  border: 1px solid var(--otk-lamp-rim);
+  box-shadow: inset 0 0 0 1px var(--otk-lamp-socket);
+  background: linear-gradient(to bottom,
+    color-mix(in srgb, var(--lamp-color), white 65%) 0%,
+    color-mix(in srgb, var(--lamp-color), var(--otk-lamp-socket) 42%) 30%,
+    var(--lamp-color) 65%,
+    color-mix(in srgb, var(--lamp-color), white 30%) 100%);
+}
+.otk-lamp-body::after {
+  content: "";
+  position: absolute;
+  inset: 0 20% 55%;
+  border-radius: 50%;
+  background: linear-gradient(#fffc, #fff0);
+}
+.otk-lamp-glow {
+  background: var(--lamp-color);
+  filter: blur(3px);
+  opacity: .24;
+}
+.otk-status-light[data-state=working] .otk-lamp-glow {
+  animation: otk-lamp-breathe 1.1s ease-in-out infinite;
+}
+.otk-status-light[data-blink] .otk-lamp-body {
+  animation: otk-lamp-blink 250ms linear;
+}
+.otk-status-light[data-state=idle] .otk-lamp-glow {
+  display: none;
+}
+.otk-status-light[data-state=idle] .otk-lamp-body {
+  background: color-mix(in srgb, var(--otk-fg) 12%, var(--otk-bg));
+}
+.otk-lamp-shape {
+  display: none;
+}
+@keyframes otk-lamp-breathe {
+  0%,
+  100% {
+    opacity: .08;
+  }
+  50% {
+    opacity: .48;
+  }
+}
+@keyframes otk-lamp-blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  36% {
+    opacity: .2;
+  }
+}
+:root[data-otk-reduced-colors] .otk-lamp-body,
+:root[data-otk-reduced-colors] .otk-lamp-glow {
+  display: none;
+}
+:root[data-otk-reduced-colors] .otk-lamp-shape {
+  display: block;
+  color: var(--otk-fg);
+  font: 600 12px/1 var(--font-ui);
+}

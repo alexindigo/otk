@@ -2,6 +2,7 @@
 import "./ToolFrame.css" with { type: "text" };
 import { createSignal, type Element, Show } from "solid-js";
 import type { ToolCall } from "@otk/protocol";
+import StatusLight from "../StatusLight.tsx";
 import { ownedAction } from "../../keyboard/context.tsx";
 export default function ToolFrame(
   props: { call: ToolCall; waiting: boolean; children: Element },
@@ -18,8 +19,16 @@ export default function ToolFrame(
       data-tool-status={props.call.status}
     >
       <header class="otk-tool-state">
-        <Show when={props.call.status === "running" && !props.waiting}>
-          <span class="otk-dot otk-busy" />
+        <Show
+          when={props.waiting || props.call.status === "running" ||
+            props.call.status === "error"}
+        >
+          <StatusLight
+            state={props.waiting || props.call.status === "error"
+              ? "blocked"
+              : "working"}
+            small
+          />
         </Show>
         <span>{props.waiting ? "awaiting permission" : props.call.status}</span>
         <Show when={props.call.status === "error"}>

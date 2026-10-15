@@ -14,7 +14,15 @@ export {
 export { default as Prompt } from "./components/Prompt.tsx";
 export { default as SessionView } from "./components/SessionView.tsx";
 export { default as Sidebar } from "./components/Sidebar.tsx";
+export { default as StatusLight } from "./components/StatusLight.tsx";
+export {
+  LIGHT_STATES,
+  type LightState,
+  sessionLight,
+} from "./components/status-light.ts";
 export { default as Settings } from "./components/Settings.tsx";
+export { default as VisualSettings } from "./components/VisualSettings.tsx";
+export { paintVisualPreferences } from "./features/visual.ts";
 export { default as Login } from "./components/Login.tsx";
 export { default as Setup } from "./components/Setup.tsx";
 export {

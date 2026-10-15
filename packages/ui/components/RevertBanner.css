@@ -1,8 +1,9 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-revert-banner {
-  border-left: 2px solid var(--accent);
-  padding: .8rem 1rem;
-  margin-bottom: 1rem;
+  border-left: 2px solid var(--otk-border);
+  padding: 12px;
+  margin-bottom: 12px;
+  border-radius: var(--radius-card);
   background: var(--panel);
   overflow-wrap: anywhere;
 }

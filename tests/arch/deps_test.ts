@@ -928,6 +928,9 @@ Deno.test("independent UI consumer imports public kit entries without applicatio
     "@otk/protocol",
     "@otk/ui",
     "@fontsource/ibm-plex-mono/400.css",
+    "@fontsource/ibm-plex-sans/400.css",
+    "@fontsource/ibm-plex-sans/500.css",
+    "@fontsource/ibm-plex-sans/600.css",
   ]);
 });
 

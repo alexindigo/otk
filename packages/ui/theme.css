@@ -2,10 +2,19 @@
 :root {
   --bg: var(--otk-bg);
   --fg: var(--otk-fg);
-  --accent: var(--otk-accent-text);
+  --otk-action: var(--otk-accent);
+  --otk-action-text: var(--otk-accent-text);
+  --otk-action-on: var(--otk-accent-on);
+  --otk-action-focus: var(--otk-focus);
+  --accent: var(--otk-action-text);
   --muted: var(--otk-border);
-  --panel: var(--otk-bg-elevated);
-  --secondary: var(--otk-fg-faint);
+  --panel: var(--otk-surface);
+  --secondary: var(--otk-fg-2);
+  --font-ui: "IBM Plex Sans", sans-serif;
+  --font-mono: "IBM Plex Mono", monospace;
+  --radius-control: 6px;
+  --radius-card: 10px;
+  --radius-pill: 999px;
   /* Genuine Shiki css-variables categories. No tokens or worker work change. */
   --otk-syntax-foreground: var(--otk-code-variable);
   --otk-syntax-background: var(--otk-bg);
@@ -18,10 +27,11 @@
   --otk-syntax-token-string-expression: var(--otk-code-operator);
   --otk-syntax-token-punctuation: var(--otk-code-punctuation);
   --otk-syntax-token-link: var(--otk-code-keyword);
-  font-family: "IBM Plex Mono", monospace;
+  font-family: var(--font-ui);
   color: var(--fg);
   background: var(--bg);
   font-size: 13px;
+  line-height: 20px;
 }
 * {
   box-sizing: border-box;
@@ -39,19 +49,20 @@ select {
 button {
   background: transparent;
   border: 1px solid var(--muted);
-  padding: .55rem .8rem;
+  padding: 8px 12px;
+  border-radius: var(--radius-control);
   cursor: pointer;
 }
 button:hover {
-  border-color: var(--otk-accent);
-  background: var(--otk-accent-bg);
+  border-color: var(--otk-fg-2);
+  background: var(--otk-hover);
 }
 button:disabled {
   opacity: .5;
   cursor: default;
 }
 :focus-visible {
-  outline: 2px solid var(--otk-accent);
+  outline: 2px solid var(--otk-action-focus);
   outline-offset: 2px;
 }
 /* Field geometry belongs to text/value editors, never native compact controls.
@@ -63,10 +74,12 @@ select {
   width: 100%;
   background: var(--bg);
   border: 1px solid var(--muted);
-  padding: .7rem;
+  padding: 8px;
+  border-radius: var(--radius-control);
 }
 a {
-  color: var(--accent);
+  color: var(--fg);
+  text-decoration: underline;
 }
 h1,
 h2,
@@ -84,8 +97,9 @@ p {
 .otk-chip {
   display: inline-flex;
   border: 1px solid var(--muted);
-  padding: .2rem .5rem;
-  margin-right: .5rem;
+  padding: 4px 8px;
+  margin-right: 8px;
+  border-radius: var(--radius-pill);
 }
 .otk-dot {
   width: .5rem;
@@ -95,31 +109,91 @@ p {
   background: var(--muted);
 }
 .otk-dot-connected {
-  background: var(--otk-accent);
-}
-.otk-busy {
-  background: transparent;
-  border: 1px solid var(--otk-status-busy);
-  border-top-color: transparent;
-  width: .65rem;
-  height: .65rem;
-  animation: otk-spin .8s linear infinite;
-}
-.otk-retry {
-  color: var(--otk-status-retry);
-  background: var(--otk-status-retry);
-}
-.otk-error-dot {
-  color: var(--otk-accent);
-  background: var(--otk-accent);
-}
-@keyframes otk-spin {
-  to {
-    transform: rotate(360deg);
-  }
+  background: var(--otk-fg-2);
 }
 @media (prefers-reduced-motion: reduce) {
-  .otk-busy {
-    animation: none;
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
   }
+}
+/* User accessibility settings apply to every component and overlay. */
+:root[data-otk-animations-off] *,
+:root[data-otk-animations-off] *::before,
+:root[data-otk-animations-off] *::after {
+  animation: none !important;
+  transition: none !important;
+  scroll-behavior: auto !important;
+}
+:root[data-otk-reduced-colors] {
+  --otk-action: color-mix(in oklab, var(--otk-fg) 75%, var(--otk-accent));
+  --otk-action-text: color-mix(in oklab, var(--otk-fg) 75%, var(--otk-accent-text));
+  --otk-action-focus: color-mix(in oklab, var(--otk-fg) 75%, var(--otk-focus));
+  --otk-action-on: var(--otk-bg);
+}
+.otk-primary,
+.otk-primary:hover {
+  color: var(--otk-action-on);
+  background: var(--otk-action);
+  border-color: var(--otk-action);
+  font-weight: 600;
+}
+input[type=checkbox],
+input[type=radio] {
+  accent-color: var(--otk-fg-2);
+}
+code,
+pre,
+kbd,
+.otk-path,
+.otk-id,
+.otk-command {
+  font-family: var(--font-mono);
+}
+code {
+  font-size: max(12px, .92em);
+}
+small {
+  font-size: max(12px, .92em);
+}
+b,
+strong,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 600;
+}
+.otk-age-0 {
+  color: var(--otk-fg);
+}
+.otk-age-1 {
+  color: var(--otk-age-1);
+}
+.otk-age-2 {
+  color: var(--otk-age-2);
+}
+.otk-age-3 {
+  color: var(--otk-age-3);
+}
+:root[data-otk-reduced-colors] :is(.otk-age-0, .otk-age-1, .otk-age-2, .otk-age-3) {
+  color: var(--otk-fg);
+  text-underline-offset: 4px;
+}
+:root[data-otk-reduced-colors] .otk-age-0 {
+  text-decoration: none;
+}
+:root[data-otk-reduced-colors] .otk-age-1 {
+  text-decoration: underline dotted;
+}
+:root[data-otk-reduced-colors] .otk-age-2 {
+  text-decoration: underline wavy;
+}
+:root[data-otk-reduced-colors] .otk-age-3 {
+  text-decoration: underline double;
 }

@@ -12,7 +12,9 @@ export function registerWriteTool(tools: ToolRegistry): void {
 export default function WriteTool(props: { call: WriteCall }) {
   return (
     <>
-      <div class="otk-tool-summary">Write {props.call.path}</div>
+      <div class="otk-tool-summary">
+        Write <span class="otk-path">{props.call.path}</span>
+      </div>
       <Code text={props.call.content} lang={props.call.lang} lineNumbers />
       <Diagnostics items={props.call.diagnostics} />
     </>

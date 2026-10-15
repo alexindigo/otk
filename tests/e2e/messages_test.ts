@@ -132,11 +132,19 @@ Deno.test("message details show configured agent colour, queued-to-answered tran
     await browser.type("textarea[name=prompt]", "Queued prompt");
     await browser.key("Enter");
     await browser.poll("!!document.querySelector('.otk-queued')");
+    // The visual system replaces the heavy user-message border with a subtle
+    // surface. The existing reply metadata owns the configured agent colour.
     assertEquals(
       await browser.evaluate(
-        "getComputedStyle(document.querySelector('[data-role=user]')).borderLeftColor",
+        "getComputedStyle(document.querySelector('.otk-message-details > span')).color",
       ),
       "rgb(107, 172, 255)",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "getComputedStyle(document.querySelector('[data-role=user]')).borderLeftWidth",
+      ),
+      "0px",
     );
     await browser.screenshot(join(f.oc.root, "message-queued.png"));
     await browser.poll(

@@ -1,21 +1,23 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-diff {
-  margin: .7rem 0;
+  border-radius: var(--radius-card);
+  margin: 8px 0;
   border: 1px solid var(--muted);
 }
 .otk-diff > header {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: .6rem;
-  padding: .5rem;
+  gap: 8px;
+  padding: 8px;
 }
 .otk-diff-content {
+  font: 400 13px/20px var(--font-mono);
   overflow: auto;
 }
 .otk-hunk-header {
   color: var(--secondary);
-  padding: .3rem .5rem;
+  padding: 4px 8px;
   background: var(--panel);
 }
 .otk-diff-split-row {

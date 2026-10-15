@@ -12,8 +12,14 @@ export default function SearchTool(props: { call: SearchCall }) {
     <div class="otk-tool-summary" data-search-mode={props.call.mode}>
       {props.call.mode[0].toUpperCase() + props.call.mode.slice(1)}{" "}
       {props.call.mode !== "list" ? `"${props.call.pattern}" ` : ""}
-      {props.call.path ? `in ${props.call.path} ` : ""}({props.call.matches}
-      {" "}
+      {props.call.path
+        ? (
+          <>
+            in <span class="otk-path">{props.call.path}</span>
+            {" "}
+          </>
+        )
+        : ""}({props.call.matches}{" "}
       {props.call.mode === "list" ? "entries" : "matches"})
     </div>
   );

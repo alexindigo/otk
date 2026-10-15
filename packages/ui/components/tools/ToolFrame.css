@@ -4,23 +4,24 @@
   flex-direction: column;
   color: var(--secondary);
   border: 1px solid var(--muted);
-  padding: .6rem .8rem;
-  margin: .7rem 0;
-  font-size: .85rem;
+  padding: 8px 12px;
+  margin: 8px 0;
+  font-size: 12px;
+  border-radius: var(--radius-card);
 }
 .otk-tool-state {
   display: flex;
   align-items: center;
-  gap: .6rem;
-  margin-bottom: .3rem;
-  font-size: .75rem;
+  gap: 8px;
+  margin-bottom: 4px;
+  font-size: 12px;
 }
 .otk-tool-summary {
   color: var(--fg);
   white-space: pre-wrap;
 }
 .otk-tool-body p {
-  margin: .4rem 0;
+  margin: 4px 0;
 }
 .otk-tool-waiting {
   border-color: var(--otk-warning);
@@ -44,6 +45,6 @@
 }
 .otk-tool-error-toggle {
   align-self: flex-start;
-  font-size: .8rem;
-  padding: .25rem .5rem;
+  font-size: 12px;
+  padding: 4px 8px;
 }

@@ -7,28 +7,29 @@
 }
 .otk-settings-content {
   overflow: auto;
-  padding: 1.8rem;
+  padding: 24px;
 }
 .otk-sidecar-card {
   border: 1px solid var(--muted);
-  padding: 1.2rem;
-  margin: 1.5rem 0;
+  padding: 16px;
+  margin: 20px 0;
+  border-radius: var(--radius-card);
 }
 .otk-sidecar-card > header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
+  gap: 12px;
 }
 .otk-sidecar-card h2 {
-  font-size: 1rem;
+  font: 600 15px/22px var(--font-ui);
   margin: 0;
 }
 .otk-sidecar-card > p {
   color: var(--secondary);
-  margin: .75rem 0;
+  margin: 12px 0;
   overflow-wrap: anywhere;
 }
 .otk-sidecar-card .otk-form {
-  margin-top: 1.5rem;
+  margin-top: 20px;
 }

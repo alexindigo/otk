@@ -14,12 +14,14 @@ export default function BashTool(
 ) {
   return (
     <>
-      <div class="otk-tool-summary">$ {props.call.command}</div>
+      <div class="otk-tool-summary otk-command">$ {props.call.command}</div>
       <Show
         when={props.call.cwd && props.call.cwd !== "." &&
           props.call.cwd !== props.directory}
       >
-        <p class="otk-muted">Running in {props.call.cwd}</p>
+        <p class="otk-muted">
+          Running in <span class="otk-path">{props.call.cwd}</span>
+        </p>
       </Show>
       <ToolOutput text={props.call.output} limit={10} />
       <Show

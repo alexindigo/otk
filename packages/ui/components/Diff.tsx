@@ -71,7 +71,7 @@ export default function Diff(
     >
       <header>
         <strong>{label()}</strong>
-        <span>
+        <span class="otk-path">
           {props.file.oldPath ? `${props.file.oldPath} → ` : ""}
           {props.file.path}
         </span>

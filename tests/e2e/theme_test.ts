@@ -64,7 +64,7 @@ const paint = `(() => {
     code:[...document.querySelectorAll('.otk-code .otk-token')].map(el=>({text:el.textContent,color:getComputedStyle(el).color,style:el.getAttribute('style')})),
     add:getComputedStyle(document.querySelector('.otk-diff-add')).color,
     del:getComputedStyle(document.querySelector('.otk-diff-del')).color,
-    orange:getComputedStyle(document.querySelector('.otk-brand strong')).color,
+    wordmark:getComputedStyle(document.querySelector('.otk-brand strong')).color,
     work:globalThis.themeWorkerEvidence };
 })()`;
 async function choose(browser: Cdp, id: string) {
@@ -144,7 +144,7 @@ Deno.test("D5 actual session/code/diff paint changes with no worker work; previe
     assertEquals(dark.bg, "#1a1c1e");
     assertEquals(dark.scheme, "dark");
     assertEquals(dark.meta, dark.bg);
-    assertEquals(dark.orange, "rgb(255, 77, 0)");
+    assertEquals(dark.wordmark, "rgb(224, 230, 237)");
     await browser.evaluate(
       "globalThis.themeTokenNodes=[...document.querySelectorAll('.otk-code .otk-token')]",
     );
@@ -160,7 +160,7 @@ Deno.test("D5 actual session/code/diff paint changes with no worker work; previe
         field,
       );
     }
-    assertEquals(light.orange, dark.orange);
+    assertEquals(light.wordmark, "rgb(26, 28, 30)");
     assertEquals(
       light.work,
       dark.work,

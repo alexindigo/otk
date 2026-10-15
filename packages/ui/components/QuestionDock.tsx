@@ -310,6 +310,7 @@ function Request(
             type="button"
             disabled={pending()}
             onClick={() => void answerCommand(false)}
+            class="otk-primary"
           >
             Confirm answers
           </button>

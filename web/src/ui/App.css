@@ -12,7 +12,7 @@
   flex-direction: column;
 }
 .otk-global-error {
-  padding: .8rem 1.8rem;
+  padding: 12px 24px;
   margin: 0;
   background: var(--panel);
 }
@@ -22,17 +22,16 @@
   align-items: flex-start;
   justify-content: center;
   flex: 1;
-  padding: 4rem;
+  padding: 48px;
 }
 .otk-wordmark {
   font-size: 5rem;
-  color: var(--otk-accent);
+  color: var(--fg);
   font-weight: 600;
-  letter-spacing: -.35rem;
 }
 .otk-welcome h1 {
   font-size: 1.3rem;
-  margin-top: 1rem;
+  margin-top: 12px;
 }
 .otk-welcome p {
   color: var(--secondary);
@@ -43,5 +42,5 @@
   align-items: center;
   justify-content: center;
   overflow: auto;
-  padding: 2rem;
+  padding: 24px;
 }

@@ -69,7 +69,17 @@ Deno.test("R6 shiki worker colours streaming TS before fence closure and unknown
     const commentColor = await browser.evaluate(
       "getComputedStyle([...document.querySelectorAll('.otk-token')].find(el=>el.textContent.includes('comment continues'))).color",
     );
-    assertEquals(commentColor, "rgb(82, 88, 96)");
+    assertEquals(
+      commentColor,
+      await browser.evaluate(
+        "(()=>{const sample=document.createElement('span');sample.style.color='var(--otk-code-comment)';document.body.append(sample);const color=getComputedStyle(sample).color;sample.remove();return color})()",
+      ),
+    );
+    assert(
+      await browser.evaluate(
+        "[...document.querySelectorAll('.otk-token')].find(el=>el.textContent.includes('comment continues')).getAttribute('style').includes('--otk-syntax-token-comment')",
+      ),
+    );
     await browser.poll(
       `document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle' && [...document.querySelectorAll('.otk-token')].some(el=>el.textContent==='afterSeed')`,
     );

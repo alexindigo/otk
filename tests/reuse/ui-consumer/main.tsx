@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createSignal, type Element } from "solid-js";
+import { createEffect, createSignal, type Element, For } from "solid-js";
 import { render } from "@solidjs/web";
 import {
   booleanPreference,
@@ -15,12 +15,15 @@ import {
   DisplayMenu,
   Docks,
   emptyDraft,
+  type LightState,
   Message,
+  paintVisualPreferences,
   Prompt,
   registerGenericTool,
   registerOtkThemes,
   registerToolPart,
   registerUnknownPart,
+  StatusLight,
   ThemeEngine,
   ThemeRegistry,
   ToolLine,
@@ -29,6 +32,9 @@ import {
   UiProvider,
 } from "@otk/ui";
 import "@fontsource/ibm-plex-mono/400.css";
+import "@fontsource/ibm-plex-sans/400.css";
+import "@fontsource/ibm-plex-sans/500.css";
+import "@fontsource/ibm-plex-sans/600.css";
 
 declare module "@otk/protocol" {
   interface CapabilityContracts {
@@ -74,6 +80,8 @@ function Consumer(): Element {
     display: { order: 100, control: { kind: "toggle" } },
   });
   const [prefs, setPrefs] = createSignal(preferenceRegistry.defaults());
+  const [lightEvent, setLightEvent] = createSignal(0);
+  createEffect(() => prefs(), (value) => paintVisualPreferences(value));
   const ui = createUiRegistries(), isolated = createUiRegistries();
   registerGenericTool(ui.tools);
   registerGenericTool(isolated.tools);
@@ -135,6 +143,34 @@ function Consumer(): Element {
   return (
     <>
       <UiProvider registries={ui}>
+        <section
+          data-visual-gallery
+          style={{
+            padding: "16px",
+            display: "flex",
+            "align-items": "center",
+            gap: "16px",
+          }}
+        >
+          <For
+            each={["blocked", "working", "finished", "idle"] as LightState[]}
+          >
+            {(state) => <StatusLight state={state} event={lightEvent()} />}
+          </For>
+          <StatusLight state="working" small event={lightEvent()} />
+          <button
+            type="button"
+            data-light-event
+            onClick={() => setLightEvent((value) => value + 1)}
+          >
+            New event
+          </button>
+          <For each={[0, 1, 2, 3]}>
+            {(age) => (
+              <span class={`otk-age-${age}`} data-age={age}>Project {age}</span>
+            )}
+          </For>
+        </section>
         <section id="registered" style={{ padding: "1rem" }}>
           <h1>Independent UI registration</h1>
           <button

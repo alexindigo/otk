@@ -1,10 +1,11 @@
 .otk-command-dialog {
   width: min(46rem, calc(100vw - 3rem));
   max-height: calc(100vh - 3rem);
-  padding: 1rem;
+  padding: 12px;
   background: var(--bg);
   color: var(--fg);
   border: 1px solid var(--muted);
+  border-radius: var(--radius-card);
 }
 .otk-command-dialog::backdrop {
   background: var(--otk-overlay);
@@ -13,12 +14,12 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 1rem;
-  margin-bottom: 1rem;
+  gap: 12px;
+  margin-bottom: 12px;
 }
 .otk-command-dialog h2 {
   margin: 0;
-  font-size: 1rem;
+  font: 600 15px/22px var(--font-ui);
 }
 .otk-command-dialog input {
   width: 100%;

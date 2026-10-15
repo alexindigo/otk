@@ -4,11 +4,11 @@
   text-align: left;
   display: flex;
   flex-direction: column;
-  gap: .5rem;
+  gap: 8px;
   border: 0;
-  padding: .5rem;
+  padding: 8px;
 }
 .otk-task-card span {
   color: var(--secondary);
-  font-size: .85rem;
+  font-size: 12px;
 }

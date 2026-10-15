@@ -5,6 +5,7 @@ import type { NotificationPreferences } from "./preferences/notifications.ts";
 import type { PromptPreferences } from "./preferences/prompt.ts";
 import type { ThemePreferences } from "./preferences/theme.ts";
 import type { TranscriptPreferences } from "./preferences/transcript.ts";
+import type { VisualPreferences } from "./preferences/visual.ts";
 
 /** Open contract composition; keys and policy live with their feature owners. */
 export interface Preferences
@@ -14,4 +15,5 @@ export interface Preferences
     NotificationPreferences,
     PromptPreferences,
     ThemePreferences,
-    TranscriptPreferences {}
+    TranscriptPreferences,
+    VisualPreferences {}

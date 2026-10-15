@@ -2,17 +2,18 @@
 .otk-prompt-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: .5rem;
+  gap: 8px;
 }
 .otk-prompt-chip {
   display: inline-flex;
   align-items: center;
-  border: 1px solid var(--border);
+  border: 1px solid var(--muted);
+  border-radius: var(--radius-pill);
   max-width: 100%;
 }
 .otk-prompt-chip button {
   border: 0;
-  padding: .25rem .5rem;
+  padding: 4px 8px;
   min-width: 0;
   overflow-wrap: anywhere;
 }

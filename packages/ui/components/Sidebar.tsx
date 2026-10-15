@@ -8,6 +8,8 @@ import {
   type SidecarState,
 } from "@otk/client";
 import ConnectionBadge from "./ConnectionBadge.tsx";
+import StatusLight from "./StatusLight.tsx";
+import { sessionLight } from "./status-light.ts";
 import { ownedAction } from "../keyboard/context.tsx";
 export function shortDirectory(directory: string): string {
   return directory.split(/[\\/]/).filter(Boolean).slice(-2).join("/") ||
@@ -53,7 +55,7 @@ export default function Sidebar(
     <aside class="otk-sidebar" aria-label="Sessions">
       <header class="otk-brand">
         <strong>OTK</strong>
-        <span>OPEN TERMINAL KIT</span>
+        <span>Open Terminal Kit</span>
       </header>
       <Show when={props.actions}>
         <nav class="otk-sidebar-commands" aria-label="Commands">
@@ -134,11 +136,9 @@ export default function Sidebar(
                             {relative(entry().timeUpdated, now())}
                           </time>
                           <span class="otk-row-status">
-                            <span
-                              class={["otk-dot", {
-                                "otk-busy": entry().status === "busy",
-                                "otk-retry": entry().status === "retry",
-                              }]}
+                            <StatusLight
+                              state={sessionLight(entry())}
+                              event={entry().timeUpdated}
                             />
                             {entry().status === "retry"
                               ? `retry ${entry().retry?.attempt ?? ""}`
@@ -167,10 +167,11 @@ export default function Sidebar(
                             </Show>
                             <Show when={entry().attention.error}>
                               <span
-                                class={["otk-dot", "otk-error-dot"]}
                                 title={entry().attention.error}
                                 aria-label="Session error"
-                              />
+                              >
+                                Error
+                              </span>
                             </Show>
                           </span>
                         </button>

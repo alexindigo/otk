@@ -38,6 +38,7 @@ import {
   KeysHelp,
   Login,
   NotificationSettings,
+  paintVisualPreferences,
   Palette,
   PermissionDock,
   QuestionDock,
@@ -48,6 +49,7 @@ import {
   type ThemeEngine,
   ThemePicker,
   Toasts,
+  VisualSettings,
 } from "@otk/ui";
 import type { PromptPart } from "@otk/protocol";
 export default function App(props: { theme: ThemeEngine }) {
@@ -140,6 +142,13 @@ export default function App(props: { theme: ThemeEngine }) {
   createEffect(
     () => toggles.state.prefs.theme,
     (id) => props.theme.commit(id ?? DEFAULT_PREFS.theme),
+  );
+  createEffect(
+    () => [
+      toggles.state.prefs.reducedColors,
+      toggles.state.prefs.animationsOff,
+    ],
+    () => paintVisualPreferences(toggles.state.prefs),
   );
   onCleanup(
     commands.register({
@@ -664,6 +673,14 @@ export default function App(props: { theme: ThemeEngine }) {
             }
           >
             <Settings
+              appearance={
+                <VisualSettings
+                  prefs={toggles.state.prefs}
+                  ready={toggles.state.ready}
+                  onSet={(key, value) =>
+                    commands.run("prefs.set", { key, value })}
+                />
+              }
               notifications={
                 <NotificationSettings
                   prefs={toggles.state.prefs}

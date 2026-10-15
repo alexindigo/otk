@@ -132,7 +132,8 @@ export default function SessionView(props: {
         <div>
           <h1>{props.info?.title || "Loading session…"}</h1>
           <p title={props.info?.directory}>
-            {props.info?.directory} · {props.label}
+            <span class="otk-path">{props.info?.directory}</span>
+            <span>{props.label}</span>
           </p>
         </div>
         {props.displayMenu}

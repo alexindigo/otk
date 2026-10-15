@@ -3,6 +3,7 @@ import "./Reasoning.css" with { type: "text" };
 import { createSignal, Show } from "solid-js";
 import type { Part } from "@otk/protocol";
 import Blocks from "./Blocks.tsx";
+import StatusLight from "./StatusLight.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
 export default function Reasoning(
   props: { part: Extract<Part, { kind: "reasoning" }>; mode: "show" | "hide" },
@@ -32,7 +33,7 @@ export default function Reasoning(
         onClick={() => void toggle()}
       >
         <Show when={props.part.time.end === undefined}>
-          <span class="otk-dot otk-busy" />
+          <StatusLight state="working" small />
         </Show>
         {props.part.time.end === undefined ? "Thinking" : "Thought"}
         {title() ? `: ${title()}` : ""}

@@ -9,7 +9,8 @@ export function registerFilePart(parts: PartRegistry): void {
       <span class="otk-chip" title={(props.part as FilePart).path}>
         {(props.part as FilePart).mime === "application/x-directory"
           ? "Directory"
-          : "File"}: {(props.part as FilePart).name}
+          : "File"}:{" "}
+        <span class="otk-path">{(props.part as FilePart).name}</span>
       </span>
     ),
   );

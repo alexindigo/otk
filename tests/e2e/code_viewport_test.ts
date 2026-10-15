@@ -379,6 +379,9 @@ Deno.test("completed worker batches preserve multiline grammar and recalled unfi
       "getComputedStyle([...document.querySelectorAll('.otk-token')].find(el=>el.textContent==='recalled')).color",
     );
     await scrollBoundary(browser);
+    const commentColor = await browser.evaluate(
+      "(()=>{const sample=document.createElement('span');sample.style.color='var(--otk-code-comment)';document.body.append(sample);const color=getComputedStyle(sample).color;sample.remove();return color})()",
+    );
     for (const index of [31, 32]) {
       await browser.poll(
         `[...document.querySelectorAll('.otk-token')].some(el=>el.textContent.includes('comment across batch ${index}'))`,
@@ -387,7 +390,12 @@ Deno.test("completed worker batches preserve multiline grammar and recalled unfi
         await browser.evaluate(
           `getComputedStyle([...document.querySelectorAll('.otk-token')].find(el=>el.textContent.includes('comment across batch ${index}'))).color`,
         ),
-        "rgb(82, 88, 96)",
+        commentColor,
+      );
+      assert(
+        await browser.evaluate(
+          `[...document.querySelectorAll('.otk-token')].find(el=>el.textContent.includes('comment across batch ${index}')).getAttribute('style').includes('--otk-syntax-token-comment')`,
+        ),
       );
     }
     await scroll(browser, true);

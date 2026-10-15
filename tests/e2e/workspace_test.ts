@@ -187,12 +187,15 @@ Deno.test("E5 Esc confirmation then abort yields interrupted footer and idle ses
         frame.t === "rpc" && frame.method === "session.abort"
       ),
     );
-    await browser.poll("!!document.querySelector('.otk-error-dot')");
+    const marker =
+      `[data-session="${session.id}"] .otk-status-light[data-state=blocked]`;
+    await browser.poll(`!!document.querySelector('${marker}')`);
     const dot = await browser.evaluate<
       { width: number; height: number; radius: string }
-    >("(()=>{const el=document.querySelector('.otk-error-dot'),r=el.getBoundingClientRect();return {width:r.width,height:r.height,radius:getComputedStyle(el).borderRadius}})()");
+    >(`(()=>{const el=document.querySelector('${marker}'),r=el.getBoundingClientRect();return {width:r.width,height:r.height,radius:getComputedStyle(el.querySelector('.otk-lamp-body')).borderRadius}})()`);
     assert(
-      Math.abs(dot.width - dot.height) < .5 && dot.radius === "50%",
+      dot.width === 10 && Math.abs(dot.width - dot.height) < .5 &&
+        dot.radius === "50%",
       "Error status must use the shared circular marker",
     );
     await capture(browser, f.oc.root, "e5-interrupted");

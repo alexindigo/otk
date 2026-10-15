@@ -1,5 +1,11 @@
 # Kit dependency architecture
 
+The visual-system check enforces token-only font selection, minimum 12px text
+and the 4px spacing grid across reusable UI styles and application chrome.
+Negative fixtures reject direct font selection, undersized text and off-grid
+spacing. Theme and contrast tests own palette data and the complete surface
+matrix; browser tests own constructed lights and accessibility presentation.
+
 `deno task test:arch` checks the exact seven workspace libraries against the
 kit-repackaging dependency table. It also checks root application/core/web/test
 consumers for private paths into extracted packages and retired protocol,

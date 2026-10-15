@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
+import { preferences } from "@otk/protocol";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { Cdp } from "../support/cdp.ts";
@@ -140,7 +141,7 @@ Deno.test("shared field geometry excludes native compact inputs without consumer
         });
         for (const field of result.fields) {
           assertEquals(field.width, width);
-          assert(Math.abs(field.padding - 9.1) < .05);
+          assert(Math.abs(field.padding - 8) < .05);
           assertEquals(field.bg, result.bg);
           assertEquals(field.border, result.border);
           assertEquals(field.font, result.font);
@@ -250,7 +251,11 @@ Deno.test("Display and Markdown consumers retain native checkbox bounds and fiel
       join(f.oc.root, "control-geometry.json"),
       JSON.stringify(geometry, null, 2),
     );
-    assertEquals(geometry.controls.length, 9);
+    const toggles = preferences.display().filter((row) =>
+      row.display?.control.kind === "toggle"
+    ).length;
+    assertEquals(geometry.controls.length, toggles + 2);
+    assertEquals(geometry.labels.length, toggles);
     for (const c of geometry.controls) {
       assert(
         c.width > 0 && c.width <= 18 && c.height > 0 && c.height <= 18,
@@ -265,15 +270,20 @@ Deno.test("Display and Markdown consumers retain native checkbox bounds and fiel
       assert(label.right <= label.parentRight + .5);
     }
     for (const select of geometry.selects) {
-      assert(Math.abs(select.padding - 9.1) < .05);
-      assert(select.gap >= 9.05 && select.gap <= 10);
+      assert(Math.abs(select.padding - 8) < .05);
+      assert(Math.abs(select.gap - 8) < .05);
       assert(select.centers <= .5);
       assert(Math.abs(select.right - select.parentRight) <= .5);
     }
-    assertEquals(geometry.selects.map((s) => s.value), ["hide", "auto"]);
+    assertEquals(
+      geometry.selects.map((s) =>
+        s.value
+      ),
+      ["hide", "auto"],
+    );
     assertEquals(geometry.tasks.map((t) => [t.checked, t.disabled, t.margin]), [
-      [false, true, 6.5],
-      [true, true, 6.5],
+      [false, true, 8],
+      [true, true, 8],
     ]);
     assert(geometry.tasks[0].text.includes("Unchecked task"));
     assert(geometry.tasks[1].text.includes("Checked task"));
@@ -304,7 +314,7 @@ Deno.test("Display and Markdown consumers retain native checkbox bounds and fiel
     assertEquals(fields.map((field) => field.name), ["url", "label"]);
     for (const field of fields) {
       assertEquals(field.width, field.parentWidth);
-      assert(Math.abs(field.padding - 9.1) < .05);
+      assert(Math.abs(field.padding - 8) < .05);
     }
     const notificationControls = await browser.evaluate<
       {

@@ -22,7 +22,9 @@ export default function EditTool(
 ) {
   return (
     <>
-      <div class="otk-tool-summary">Edit {props.call.path}</div>
+      <div class="otk-tool-summary">
+        Edit <span class="otk-path">{props.call.path}</span>
+      </div>
       <For each={props.call.files} keyed={false}>
         {(file) => (
           <Diff

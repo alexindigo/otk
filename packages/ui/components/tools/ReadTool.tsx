@@ -12,14 +12,18 @@ export default function ReadTool(props: { call: ReadCall }) {
   return (
     <>
       <div class="otk-tool-summary">
-        Read {props.call.path}
+        Read <span class="otk-path">{props.call.path}</span>
         {props.call.offset !== undefined
           ? ` · offset ${props.call.offset}`
           : ""}
         {props.call.limit !== undefined ? ` · limit ${props.call.limit}` : ""}
       </div>
       <For each={props.call.loaded} keyed={false}>
-        {(path) => <div class="otk-muted">↳ Loaded {path()}</div>}
+        {(path) => (
+          <div class="otk-muted">
+            ↳ Loaded <span class="otk-path">{path()}</span>
+          </div>
+        )}
       </For>
     </>
   );

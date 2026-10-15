@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-code {
+  font: 400 13px/20px var(--font-mono);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
@@ -8,14 +9,15 @@
   grid-template-columns: auto minmax(0, 1fr);
 }
 .otk-code pre {
-  margin: .7rem 0;
+  margin: 8px 0;
   white-space: pre;
   overflow: auto;
-  padding: 1rem;
+  padding: 12px;
+  border-radius: var(--radius-card);
   background: var(--panel);
   border: 1px solid var(--muted);
   font: inherit;
-  line-height: 1.8;
+  line-height: 20px;
 }
 .otk-code code {
   font: inherit;

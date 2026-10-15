@@ -7,6 +7,7 @@ import { registerNotificationPreferences } from "./preferences/notifications.ts"
 import { registerPromptPreferences } from "./preferences/prompt.ts";
 import { registerThemePreferences } from "./preferences/theme.ts";
 import { registerTranscriptPreferences } from "./preferences/transcript.ts";
+import { registerVisualPreferences } from "./preferences/visual.ts";
 
 /** Shipped composition selects owners, never individual keys or validators. */
 export function createPreferences(): PreferenceRegistry {
@@ -17,6 +18,7 @@ export function createPreferences(): PreferenceRegistry {
   registerTranscriptPreferences(registry);
   registerDiffPreferences(registry);
   registerPromptPreferences(registry);
+  registerVisualPreferences(registry);
   return registry;
 }
 export const preferences: PreferenceRegistry = createPreferences();
@@ -30,3 +32,4 @@ export { registerNotificationPreferences } from "./preferences/notifications.ts"
 export { registerPromptPreferences } from "./preferences/prompt.ts";
 export { isThemeId, registerThemePreferences } from "./preferences/theme.ts";
 export { registerTranscriptPreferences } from "./preferences/transcript.ts";
+export { registerVisualPreferences } from "./preferences/visual.ts";

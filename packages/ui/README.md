@@ -69,11 +69,13 @@ dock registrations and verifies rendered updates, callbacks and isolation.
 Theme tokens and base controls are loaded with the UI provider. Components
 import their own CSS using `with { type: "text" }`: Deno's stable asset
 attribute validates the publication graph while Vite bundles the same styles
-normally; no CSS loader plugin or generated style mirror is needed. The shipped
-terminal identity is unchanged: IBM Plex Mono, `#1a1c1e` background, `#e0e6ed`
-foreground and `#ff4d00` accent; fonts are supplied by the consumer. Flex/grid
-alignment, source selection and code geometry retain their existing contracts.
-No visual redesign is included.
+normally; no CSS loader plugin or generated style mirror is needed. Consumers
+bundle IBM Plex Sans 400/500/600 and IBM Plex Mono 400/600; all selection uses
+`--font-ui` / `--font-mono`. Interface text is 13/20, prose 15/24, code 13/20,
+with a 12px minimum. Neutral interactions, 4px spacing, 6px controls and 10px
+cards share the base visual contract. Accent is reserved for primary actions,
+attention controls and focus. Source selection and code geometry retain their
+existing contracts.
 
 Package units live in `tests/`; real browser/app tests remain at repository
 level. Builds/tests run inside the project's assigned VM. License: LGPL-3.0-only
@@ -125,15 +127,30 @@ latest commit, including a concurrent host broadcast. The engine owns no
 storage. `ThemePicker` injects this engine, readiness, async save and close
 callbacks, owns dialog CSS and registers its actions in the public command hub.
 
-OTK preserves its existing Dark default, font, geometry and Phosphor Orange
-identity. Light uses cool white surfaces and dark ink; orange marks remain
-`#ff4d00`, while small accent text uses a contrast-safe orange ink slot.
-Existing CSS names are aliases, not another palette. Shiki's genuine
-css-variable token categories alias semantic code slots; categories shared by
-Shiki retain their shared mapping (constant includes numbers/types; foreground
-covers variables). Switching only changes paint, never source, grammar, worker
-lifecycle or cache. Hosts must select/apply a theme; the UI provider does not
-install concrete data.
+OTK preserves its Dark default and Phosphor Orange identity. Light uses cool
+white surfaces and dark ink; primary fills remain `#ff4d00`, with contrast-safe
+CTA labels and separate accent-text/focus slots. Existing CSS names are aliases,
+not another palette. Shiki's genuine css-variable token categories alias
+semantic code slots; categories shared by Shiki retain their shared mapping
+(constant includes numbers/types; foreground covers variables). Switching only
+changes paint, never source, grammar, worker lifecycle or cache. Hosts must
+select/apply a theme; the UI provider does not install concrete data.
+
+`StatusLight` takes a state (`blocked`, `working`, `finished`, `idle`), optional
+small sizing and an event identity. Rows use 10px marbles, small lights 8px;
+working breathes only its glow and a new event blinks once. Accessible labels
+and native tooltips accompany every state. Both themes use identical gel colours
+on a dark socket, with a contrast-checked outer rim. `sessionLight` maps the
+existing session index without inventing unread marks; the caller supplies a
+finished state when its model has seen information.
+
+`paintVisualPreferences` paints authoritative `reducedColors` / `animationsOff`
+preferences supplied by the consumer; `VisualSettings` takes those preferences,
+readiness and an async setter. These settings are contributed by their shared
+protocol feature. Reduced colours replaces lamps with shapes and supplies
+`.otk-age-0` through `.otk-age-3` underline styles; the action accent is mixed
+towards content. Animations off and OS reduced motion suppress all component
+animation and transitions, including breathing and event blink.
 
 ## Notification channels
 

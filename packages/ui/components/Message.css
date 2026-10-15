@@ -1,21 +1,21 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-message {
-  margin-bottom: 2rem;
-  line-height: 1.8;
+  margin-bottom: 24px;
+  line-height: 24px;
   overflow-wrap: anywhere;
 }
 .otk-user-message {
-  border-left: 2px solid var(--accent);
-  padding-left: 1rem;
+  background: var(--otk-surface);
+  border-radius: var(--radius-card);
+  padding: 12px;
 }
 .otk-message-role {
   color: var(--secondary);
-  font-size: .7rem;
-  letter-spacing: .13rem;
-  margin-bottom: .6rem;
+  font-size: 12px;
+  margin-bottom: 8px;
   display: flex;
   align-items: center;
-  gap: 1rem;
+  gap: 12px;
   flex-wrap: wrap;
 }
 .otk-message-role time {
@@ -23,30 +23,31 @@
 }
 .otk-message-footer {
   color: var(--secondary);
-  font-size: .7rem;
-  margin-top: .9rem;
+  font-size: 12px;
+  margin-top: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
-  gap: .5rem 1rem;
+  gap: 8px 12px;
   border-top: 1px solid color-mix(in srgb, var(--secondary) 12%, var(--bg));
-  padding-block-start: .45rem;
+  padding-block-start: 8px;
 }
 .otk-queued {
-  background: var(--accent);
-  color: var(--bg);
-  padding: .1rem .4rem;
+  background: var(--otk-surface-2);
+  color: var(--fg);
+  padding: 0 4px;
+  border-radius: var(--radius-control);
   letter-spacing: normal;
 }
 .otk-role-and-time {
   display: inline-flex;
   align-items: center;
-  gap: 1rem;
+  gap: 12px;
   flex-wrap: wrap;
 }
 .otk-created-time {
-  color: color-mix(in srgb, var(--secondary) 65%, var(--bg));
+  color: var(--otk-fg-3);
   visibility: hidden;
 }
 .otk-time-always .otk-created-time,
@@ -56,11 +57,15 @@
 }
 .otk-message-details {
   min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
 }
 .otk-output-time-group {
   display: inline-flex;
   align-items: center;
-  gap: .5rem;
+  gap: 8px;
   margin-inline-start: auto;
   white-space: nowrap;
 }

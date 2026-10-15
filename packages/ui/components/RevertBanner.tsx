@@ -9,8 +9,8 @@ export default function RevertBanner(props: { revert: RevertInfo }) {
       <For each={props.revert.files} keyed={false}>
         {(file) => (
           <div>
-            {file().path} <span class="otk-diff-add">+{file().additions}</span>
-            {" "}
+            <span class="otk-path">{file().path}</span>{" "}
+            <span class="otk-diff-add">+{file().additions}</span>{" "}
             <span class="otk-diff-del">−{file().deletions}</span>
           </div>
         )}

@@ -24,7 +24,7 @@ export default function TaskTool(
       onClick={() => void open()}
     >
       <strong>
-        {props.call.agent[0]?.toUpperCase() + props.call.agent.slice(1)} Task —
+        {props.call.agent[0]?.toUpperCase() + props.call.agent.slice(1)} task —
         {" "}
         {props.call.description}
       </strong>

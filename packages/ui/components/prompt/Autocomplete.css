@@ -6,17 +6,18 @@
   overflow: auto;
   border: 1px solid var(--muted);
   background: var(--panel);
-  margin-bottom: .5rem;
+  margin-bottom: 8px;
+  border-radius: var(--radius-card);
 }
 .otk-autocomplete button {
   display: flex;
   align-items: center;
   justify-content: space-between;
   text-align: left;
-  gap: 1rem;
+  gap: 12px;
   border: 0;
 }
 .otk-autocomplete [aria-selected=true] {
   background: var(--bg);
-  color: var(--accent);
+  color: var(--fg);
 }
