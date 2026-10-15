@@ -9,6 +9,7 @@ import {
   Show,
 } from "solid-js";
 import type {
+  CapabilityName,
   ContentSession,
   Message as OtkMessage,
   PermissionRequest,
@@ -42,7 +43,7 @@ export default function SessionView(props: {
   errorState?: SessionErrorState;
   draft: Draft;
   connected: boolean;
-  capabilities: readonly string[];
+  capabilities: readonly CapabilityName[];
   historyEnabled: boolean;
   docks: Readonly<Record<string, Element>>;
   displayMenu?: Element;

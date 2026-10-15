@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createState, type StateFactory } from "./state.ts";
 import {
+  type CapabilityName,
   type HarnessState,
   type ServerFrame,
   welcomeCapabilities,
@@ -22,7 +23,7 @@ export interface SidecarState extends SidecarSpec {
   harness: HarnessState;
   error?: string;
   authType?: string;
-  capabilities: string[];
+  capabilities: CapabilityName[];
 }
 export const LOCAL_SIDECAR = "local";
 export function readSidecars(storage: Pick<Storage, "getItem">): SidecarSpec[] {

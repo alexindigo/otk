@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ClientFrame, ServerFrame } from "@otk/protocol";
+import type { CapabilityName, ClientFrame, ServerFrame } from "@otk/protocol";
 import { PROTOCOL_VERSION, welcomeCapabilities } from "@otk/protocol";
 import { apiBase, type AuthStatus, request } from "./auth.ts";
 import { Rpc } from "./rpc.ts";
@@ -30,7 +30,7 @@ export class SidecarConnection {
   #stopped = false;
   #welcomed = false;
   #subscriptions = new Set<string>();
-  #capabilities = new Set<string>();
+  #capabilities = new Set<CapabilityName>();
   constructor(
     baseUrl: string,
     readonly sink: ConnectionSink,
@@ -45,7 +45,7 @@ export class SidecarConnection {
     }
     this.#socket.send(JSON.stringify(frame));
   }
-  supports(capability: string): boolean {
+  supports(capability: CapabilityName): boolean {
     return this.#welcomed && this.#capabilities.has(capability);
   }
   subscribe(sessionID: string, enabled: boolean): void {

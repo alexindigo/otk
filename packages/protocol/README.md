@@ -63,6 +63,23 @@ truncated and therefore not parseable), not unbounded native objects. The stock
 adapter caps each preview at 64 KiB UTF-8; tool summary/output bounds are
 retained.
 
+`CapabilityContracts` composes the operation contracts owned by the shared
+features in `capabilities/`. `CapabilityName` derives from its keys and
+`Capabilities` makes those implementations optional. Harness registry/require,
+welcome advertisements, client `supports` and UI gates all use that contract. An
+extension declares `interface CapabilityContracts { "feature.name": MyPort }`
+inside `declare module "@otk/protocol"` beside its own implementation, and
+imports that contract in its consumers. No central name list is edited. The
+shipped composition uses interface inheritance for JSR compatibility, just like
+preferences. Harness re-exports the operation types for compatibility.
+
+The wire representation remains a list of strings. Typed producers and gates
+reject undeclared names; receiving a newer server's unknown names neither
+filters the advertisement nor fails the connection. A missing advertisement uses
+the original feature-owned legacy contributions; explicit empty/subset lists
+remain authoritative. New extensions are never implicitly available on legacy
+servers.
+
 ## Example
 
 Within the OTK workspace, Deno resolves the package by its name:

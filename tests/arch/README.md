@@ -37,6 +37,13 @@ lists, key-specific registry dispatch, duplicated menu/command lists and closed
 theme identities. Contribution tests observe command-driven persistence,
 validation and notifications; browser tests observe unknown-theme base paint.
 
+Capability names derive only from protocol's open `CapabilityContracts`, which
+composes feature-owned operation contracts. Harness implementations are its
+partial map, with no second name list. Negative fixtures reject closed/local
+aliases, concrete composition keys, bare string capability surfaces and central
+literal lists. A feature-owned extension reaches the real wire and client; typed
+consumers reject spelling mistakes and newer wire names remain tolerated.
+
 Native endpoints/schema belong to `@otk/harness-opencode1`. Store production
 code cannot depend on another OTK package; app preference policy and error types
 are injected. Its connection and migration runner cannot import feature modules.

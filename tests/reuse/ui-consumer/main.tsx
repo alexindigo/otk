@@ -3,6 +3,7 @@ import { createSignal, type Element } from "solid-js";
 import { render } from "@solidjs/web";
 import {
   booleanPreference,
+  type CapabilityName,
   createPreferences,
   DEFAULT_PREFS,
   type ExternalCall,
@@ -30,6 +31,9 @@ import {
 import "@fontsource/ibm-plex-mono/400.css";
 
 declare module "@otk/protocol" {
+  interface CapabilityContracts {
+    external: { probe(): void };
+  }
   interface Preferences {
     "consumer.compact": boolean;
   }
@@ -115,7 +119,7 @@ function Consumer(): Element {
     [opened, setOpened] = createSignal(""),
     [draft, setDraft] = createSignal(emptyDraft()),
     [submitted, setSubmitted] = createSignal(""),
-    [capabilities, setCapabilities] = createSignal<string[]>([]),
+    [capabilities, setCapabilities] = createSignal<CapabilityName[]>([]),
     [dockClicks, setDockClicks] = createSignal(0);
   const call = (): ExternalCall => ({
     tool: "external",

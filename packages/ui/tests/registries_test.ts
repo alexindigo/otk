@@ -10,6 +10,9 @@ import type { PromptContext } from "../registries/prompt.ts";
 import type { ExternalCall, Part, ToolBase, ToolCall } from "@otk/protocol";
 
 declare module "@otk/protocol" {
+  interface CapabilityContracts {
+    custom: { probe(): void };
+  }
   interface ToolKinds {
     "feature.probe": ToolBase & { tool: "feature.probe"; result: number };
   }

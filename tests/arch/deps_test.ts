@@ -145,6 +145,38 @@ function sourceErrors(path: string, source: string): string[] {
     return [];
   }
   const errors: string[] = [];
+  if (
+    /\btype\s+CapabilityName\s*=/.test(source) &&
+    (path !== "packages/protocol/capabilities.ts" ||
+      !/\btype\s+CapabilityName\s*=\s*Extract<keyof CapabilityContracts, string>\s*;/
+        .test(source))
+  ) errors.push("capability names derive only from the open protocol contract");
+  if (/\btype\s+CapabilityContracts\s*=/.test(source)) {
+    errors.push("capability contracts must be declaration-mergeable");
+  }
+  if (
+    /\binterface\s+Capabilities\b/.test(source) ||
+    (/\btype\s+Capabilities\s*=/.test(source) &&
+      (path !== "packages/protocol/capabilities.ts" ||
+        !/\btype\s+Capabilities\s*=\s*Partial<CapabilityContracts>\s*;/.test(
+          source,
+        )))
+  ) errors.push("harness capabilities must derive from the protocol contract");
+  if (
+    path === "packages/protocol/capabilities.ts" &&
+    /interface\s+CapabilityContracts(?:\s+extends[^{}]+)?\s*\{\s*[^\s}]/.test(
+      source,
+    )
+  ) errors.push("capability composition selects owners, never concrete names");
+  if (
+    /\bcapabilit(?:y|ies)\??\s*:\s*(?:readonly\s+)?string\b|\bsupports\s*\(\s*\w+\s*:\s*string\b|#capabilities\s*=\s*new Set<string>/
+      .test(source)
+  ) errors.push("capability consumers must use the shared CapabilityName type");
+  if (
+    !/^packages\/protocol\/capabilities\//.test(path) &&
+    /\b(?:\w*[Cc]apabilit\w*|capabilities)\s*(?::[^=;]+)?=\s*(?:Object\.freeze\(\s*)?\[\s*["']/
+      .test(source)
+  ) errors.push("capability name lists belong to feature-owned contracts");
   if (/\btype\s+Preferences\s*=/.test(source)) {
     errors.push(
       "preference contracts must be a declaration-mergeable interface",
@@ -568,6 +600,82 @@ Deno.test("RPC contracts stay open and names derive only from the mergeable regi
     ]
   ) assertEquals(sourceErrors("packages/protocol/rpc.ts", source).length, 1);
   assertEquals(sourceErrors("packages/protocol/rpc.ts", protocol), []);
+});
+
+Deno.test("capability names and implementations share one open feature-owned protocol contract", async () => {
+  const path = "packages/protocol/capabilities.ts";
+  const source = await Deno.readTextFile(new URL(path, root));
+  assert(
+    /export interface CapabilityContracts\s+extends[^{}]+\{\s*\}/.test(source),
+  );
+  assert(
+    /export type CapabilityName\s*=\s*Extract<keyof CapabilityContracts, string>\s*;/
+      .test(source),
+  );
+  assert(
+    /export type Capabilities\s*=\s*Partial<CapabilityContracts>\s*;/.test(
+      source,
+    ),
+  );
+  assertEquals(sourceErrors(path, source), []);
+  for (
+    const [file, invalid] of [
+      [path, 'export type CapabilityName = "prompt" | "permissions";'],
+      [
+        path,
+        'export type CapabilityName = Extract<keyof CapabilityContracts, string> | "extra";',
+      ],
+      [path, "export type CapabilityContracts = Record<string, unknown>;"],
+      [
+        path,
+        "export interface CapabilityContracts { prompt: PromptCapability; }",
+      ],
+      [
+        "packages/harness/types.ts",
+        "export interface Capabilities { prompt?: PromptCapability; }",
+      ],
+      [
+        "packages/harness/types.ts",
+        "export type CapabilityName = keyof Capabilities;",
+      ],
+      [
+        "packages/harness/types.ts",
+        "export type Capabilities = { prompt?: PromptCapability };",
+      ],
+      [
+        "packages/client/connection.ts",
+        "supports(capability: string): boolean { return false; }",
+      ],
+      ["packages/client/connection.ts", "#capabilities = new Set<string>();"],
+      ["packages/protocol/messages.ts", "capabilities?: string[];"],
+      ["packages/ui/registries/renderers.ts", "capability?: string;"],
+      [
+        "packages/ui/components/SessionView.tsx",
+        "capabilities: readonly string[];",
+      ],
+      [
+        path,
+        'const legacyCapabilities: readonly CapabilityName[] = Object.freeze(["prompt", "permissions"]);',
+      ],
+      ["web/src/ui/App.tsx", 'const capabilities = ["prompt", "permissions"];'],
+    ]
+  ) assert(sourceErrors(file, invalid).length, `${file}: ${invalid}`);
+  for (
+    const file of [
+      "packages/harness/types.ts",
+      "packages/client/connection.ts",
+      "packages/client/sidecars.ts",
+      "packages/protocol/messages.ts",
+      "packages/ui/registries/renderers.ts",
+      "packages/ui/components/SessionView.tsx",
+      "packages/ui/components/Docks.tsx",
+    ]
+  ) {
+    assertEquals(
+      sourceErrors(file, await Deno.readTextFile(new URL(file, root))),
+      [],
+    );
+  }
 });
 
 Deno.test("standalone client consumer imports only its public framework-free entry", async () => {

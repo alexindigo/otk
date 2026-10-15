@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { type ContentOp, isAttentionOp, type Preferences } from "@otk/protocol";
 import type { ClientFrame, HarnessState, ServerFrame } from "@otk/protocol";
-import { checkClientFrameSize } from "@otk/protocol";
+import { capabilityNames, checkClientFrameSize } from "@otk/protocol";
 import { PROTOCOL_VERSION, SIDECAR_VERSION } from "@otk/protocol";
 import { type Harness, HarnessError } from "@otk/harness";
 import type { IndexStore } from "../index/store.ts";
@@ -124,9 +124,7 @@ export class Connections {
                 kind: this.backend.core.kind,
                 version: this.backend.core.version,
                 url: this.url,
-                capabilities: Object.entries(this.backend.capabilities)
-                  .filter(([, capability]) => capability != null)
-                  .map(([name]) => name),
+                capabilities: capabilityNames(this.backend.capabilities),
               },
             },
           });

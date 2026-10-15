@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Element } from "solid-js";
 import type {
+  CapabilityName,
   ExternalCall,
   ExternalPart,
   Part,
@@ -108,7 +109,7 @@ export class PartRegistry {
 /** A dock owns its renderer; composition supplies content and callbacks by ID. */
 export interface DockDefinition {
   id: string;
-  capability?: string;
+  capability?: CapabilityName;
   render(inputs: Readonly<Record<string, Element>>): Element;
 }
 export class DockRegistry {
@@ -117,7 +118,7 @@ export class DockRegistry {
     if (this.#docks.has(dock.id)) throw new Error(`Duplicate dock: ${dock.id}`);
     this.#docks.set(dock.id, dock);
   }
-  available(capabilities: readonly string[]): DockDefinition[] {
+  available(capabilities: readonly CapabilityName[]): DockDefinition[] {
     return [...this.#docks.values()].filter((dock) =>
       !dock.capability || capabilities.includes(dock.capability)
     );

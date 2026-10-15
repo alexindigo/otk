@@ -4,6 +4,7 @@ import {
   type CapabilityName,
   HarnessError,
 } from "./types.ts";
+import { capabilityNames } from "@otk/protocol";
 
 /** Typed capability composition; it has no knowledge of implementations. */
 export class CapabilityRegistry {
@@ -24,7 +25,7 @@ export class CapabilityRegistry {
     return Object.freeze({ ...this.#capabilities });
   }
   names(): CapabilityName[] {
-    return Object.keys(this.#capabilities) as CapabilityName[];
+    return capabilityNames(this.#capabilities);
   }
 }
 

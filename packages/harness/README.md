@@ -33,6 +33,12 @@ capability at their operation boundary. Missing and duplicate registrations
 raise a `HarnessError` with code `capability`. Registry snapshots are frozen;
 the supplied capability objects retain their identity and lifetimes.
 
+The name and operation contract lives in `@otk/protocol`'s open
+`CapabilityContracts` interface. This package re-exports its `Capabilities`,
+`CapabilityName` and shipped operation types. A feature augments that protocol
+interface beside its code; registry registration, `requireCapability`, wire
+advertisement and client/UI availability then share the same typed name.
+
 The core owns lifecycle; call `stop()` to release its streams and outstanding
 operations. A sink receives connection state, index snapshots/updates/removals,
 content operations and resync notifications. Capabilities do not own the sink.

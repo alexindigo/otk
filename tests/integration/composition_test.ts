@@ -3,9 +3,35 @@ import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { createIndex, createSession, SidecarConnection } from "@otk/client";
 import type { Preferences, PromptInput } from "@otk/protocol";
+import { CapabilityRegistry, requireCapability } from "@otk/harness";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { fixture } from "../support/config.ts";
 import { waitFor } from "../support/opencode.ts";
+
+declare module "@otk/protocol" {
+  interface CapabilityContracts {
+    "feature.measure": { read(): Promise<number> };
+  }
+}
+
+Deno.test("a feature-owned capability reaches registry, wire advertisement and client availability without a central name edit", async () => {
+  const registry = new CapabilityRegistry();
+  registry.register("feature.measure", { read: () => Promise.resolve(42) });
+  assertEquals(registry.names(), ["feature.measure"]);
+  assertEquals(
+    await requireCapability(registry.capabilities, "feature.measure").read(),
+    42,
+  );
+  const app = await coreBackendFixture(await fixture(), registry.capabilities);
+  const client = await consumer(app.url);
+  try {
+    assert(client.connection.supports("feature.measure"));
+    assertEquals(client.connection.supports("prompt"), false);
+  } finally {
+    await client.stop();
+    await app.app.stop();
+  }
+});
 
 async function consumer(url: string) {
   const index = createIndex();

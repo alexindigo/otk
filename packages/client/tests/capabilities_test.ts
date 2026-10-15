@@ -3,6 +3,12 @@ import { assertEquals } from "@std/assert";
 import { PROTOCOL_VERSION } from "@otk/protocol";
 import { createSidecars } from "@otk/client";
 
+declare module "@otk/protocol" {
+  interface CapabilityContracts {
+    "feature.preview": { preview(): void };
+  }
+}
+
 Deno.test("welcome consumers retain legacy capabilities while honoring explicit empty/subset advertisements", async () => {
   const keys = ["fetch", "location", "localStorage", "WebSocket"];
   const originals = new Map(
@@ -60,7 +66,12 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
     "revert",
   ];
   try {
-    for (const capabilities of [undefined, [], ["prompt"]]) {
+    for (
+      const capabilities of [undefined, [], ["prompt"], [
+        "prompt",
+        "newer.server.capability",
+      ], ["feature.preview"]]
+    ) {
       const sidecars = createSidecars(() => {}, {
         connection: { api: new URL("http://example.test/api/") },
       });
@@ -93,6 +104,11 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
         assertEquals(
           connection.supports("prompt"),
           expected.includes("prompt"),
+        );
+        assertEquals(
+          connection.supports("feature.preview"),
+          expected.includes("feature.preview"),
+          "Extensions require an explicit advertisement, never a legacy default",
         );
         assertEquals(Socket.current.sent.map((value) => JSON.parse(value).t), [
           "hello",

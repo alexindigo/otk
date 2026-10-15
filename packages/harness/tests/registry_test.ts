@@ -7,6 +7,16 @@ import {
   requireCapability,
 } from "../mod.ts";
 
+function typeChecks(registry: CapabilityRegistry) {
+  // @ts-expect-error undeclared names must not enter the registry
+  registry.register("permisssions", {});
+  // @ts-expect-error known names retain their operation contract
+  registry.register("prompt", { prompt: () => Promise.resolve() });
+  // @ts-expect-error require uses the same name contract
+  requireCapability(registry.capabilities, "permisssions");
+}
+void typeChecks;
+
 Deno.test("a core-only harness needs no optional implementation; registry snapshots preserve capability identity", async () => {
   const registry = new CapabilityRegistry();
   const harness: Harness = {

@@ -2,6 +2,7 @@
 import type { ContentOp } from "./content.ts";
 import type { IndexEntry, IndexOp } from "./index.ts";
 import type { Preferences } from "./prefs.ts";
+import { type CapabilityName, legacyCapabilities } from "./capabilities.ts";
 export const MAX_CLIENT_FRAME_BYTES: number = 64 * 1024 * 1024;
 export function checkClientFrameSize(serialized: string): void {
   if (
@@ -30,7 +31,7 @@ export type ServerFrame =
         kind: string;
         version: string;
         url: string;
-        capabilities?: string[];
+        capabilities?: CapabilityName[];
       };
     };
   }
@@ -52,20 +53,8 @@ export type ServerFrame =
 
 // Before capability advertisement, these RPC families were always exposed by
 // the wire contract. A missing field is legacy; an explicit [] advertises none.
-const legacyCapabilities: readonly string[] = Object.freeze([
-  "prompt",
-  "shell",
-  "commands",
-  "history",
-  "files",
-  "agents",
-  "resources",
-  "permissions",
-  "questions",
-  "revert",
-]);
 export function welcomeCapabilities(
   frame: Extract<ServerFrame, { t: "welcome" }>,
-): readonly string[] {
+): readonly CapabilityName[] {
   return frame.sidecar.harness.capabilities ?? legacyCapabilities;
 }
