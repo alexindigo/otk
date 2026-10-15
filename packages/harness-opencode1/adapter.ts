@@ -41,6 +41,7 @@ import { type Launch, shell } from "./shell.ts";
 import { permissions } from "./permissions.ts";
 import { revert } from "./revert.ts";
 import { sessionDirectory } from "./directory.ts";
+import { Messages } from "./messages.ts";
 const contentEvents = new Set([
   "session.created",
   "session.updated",
@@ -87,6 +88,7 @@ export class Opencode1Adapter implements Harness {
   #db: BootstrapDb;
   #history: History;
   #tasks: TaskProgress;
+  #messages: Messages;
   #reverts = new Map<string, string>();
   constructor(
     readonly cfg: Opencode1Config,
@@ -96,23 +98,13 @@ export class Opencode1Adapter implements Harness {
     this.client = new Client(cfg.harness, fetcher);
     this.#db = new BootstrapDb(harnessDb(cfg));
     this.#history = new History(harnessDb(cfg));
+    this.#messages = new Messages(this.client, (id) => this.#directory(id));
     this.#tasks = new TaskProgress(
       async (id, message) => {
-        const options = { query: { directory: this.#directory(id) } };
         if (message) {
-          return [
-            await this.client.json<{ info: Info; parts: RawPart[] }>(
-              `/session/${encodeURIComponent(id)}/message/${
-                encodeURIComponent(message)
-              }`,
-              options,
-            ),
-          ];
+          return [await this.#messages.get(id, message)];
         }
-        return this.client.json<{ info: Info; parts: RawPart[] }[]>(
-          `/session/${encodeURIComponent(id)}/message`,
-          options,
-        );
+        return this.#db.taskMessages(id) ?? this.#messages.scan(id);
       },
       (id) => this.buffers.subscribed(id),
       (parent, messageID, part) => {
@@ -137,7 +129,7 @@ export class Opencode1Adapter implements Harness {
     );
     const directory = sessionDirectory(
       (id) => this.#directory(id),
-      (id) => this.core.getSession(id),
+      (id) => this.client.json<Session>(`/session/${encodeURIComponent(id)}`),
     );
     const version = () => this.version;
     this.core = sessions(
@@ -145,6 +137,7 @@ export class Opencode1Adapter implements Harness {
       directory,
       this.buffers,
       this.#tasks,
+      this.#messages,
       {
         kind: this.kind,
         get version() {
@@ -242,19 +235,27 @@ export class Opencode1Adapter implements Harness {
     if (this.buffers.subscribed(session.id)) {
       this.#reverts.set(session.id, session.revert.messageID);
     }
-    const messages = await this.client.json<{ info: Info }[]>(
-      `/session/${encodeURIComponent(session.id)}/message`,
-      { query: { directory: session.directory } },
+    let messageCount = this.#db.revertedUserCount(
+      session.id,
+      session.revert.messageID,
     );
+    if (messageCount === undefined) {
+      messageCount = 0;
+      for await (
+        const message of this.#messages.scan(session.id, session.directory)
+      ) {
+        if (
+          message.info.role === "user" &&
+          message.info.id >= session.revert.messageID
+        ) messageCount++;
+      }
+    }
     const files = session.revert.diff
       ? parseDiff(session.revert.diff)
       : mapDiffs(session.summary?.diffs || []);
     return {
       messageID: session.revert.messageID,
-      messageCount: messages.filter((message) =>
-        message.info.role === "user" &&
-        message.info.id >= session.revert!.messageID
-      ).length,
+      messageCount,
       files: files.map(({ path, additions, deletions }) => ({
         path,
         additions,

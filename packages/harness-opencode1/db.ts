@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { DatabaseSync } from "node:sqlite";
+import type { NativeMessage } from "./messages.ts";
+import type { Info, RawPart } from "./types.ts";
 /** Never creates or writes the harness database; schema checks name query columns. */
 export class BootstrapDb {
   #db: DatabaseSync | null = null;
@@ -39,6 +41,98 @@ export class BootstrapDb {
       )
     `).all(since);
     return rows.map((r) => String(r.directory));
+  }
+  /** One scalar result, never message/part JSON or transcript content. */
+  revertedUserCount(id: string, cutoff: string): number | undefined {
+    if (!this.#db) return;
+    return Number(
+      this.#db.prepare(`
+      SELECT count(*) AS count FROM message
+      WHERE session_id = ? AND id >= ? AND json_extract(data, '$.role') = 'user'
+    `).get(id, cutoff)!.count,
+    );
+  }
+  /** Bounded, metadata-only projections; never hydrate child text/tool output. */
+  taskMessages(id: string): Iterable<NativeMessage> | undefined {
+    if (!this.#db) return;
+    try {
+      const messages = this.#db.prepare(`
+        SELECT id, json_extract(data, '$.role') AS role,
+          json_extract(data, '$.time.created') AS created,
+          json_extract(data, '$.time.completed') AS completed
+        FROM message WHERE session_id = ? AND id > ? ORDER BY id LIMIT 100
+      `);
+      const tools = this.#db.prepare(`
+        SELECT p.id, p.message_id, json_extract(p.data, '$.tool') AS tool,
+          json_extract(p.data, '$.state.status') AS status,
+          json_extract(p.data, '$.state.title') AS title,
+          json_extract(p.data, '$.state.time.start') AS start,
+          json_extract(m.data, '$.time.created') AS created
+        FROM part p JOIN message m ON m.id = p.message_id
+        WHERE p.session_id = ? AND m.session_id = ? AND p.id > ? AND json_extract(p.data, '$.type') = 'tool'
+        ORDER BY p.id LIMIT 100
+      `);
+      return (function* () {
+        let after = "";
+        while (true) {
+          const rows = messages.all(id, after);
+          if (!rows.length) break;
+          for (const row of rows) {
+            yield {
+              info: {
+                id: String(row.id),
+                sessionID: id,
+                agent: "",
+                role: row.role as Info["role"],
+                time: {
+                  created: Number(row.created),
+                  ...(row.completed === null
+                    ? {}
+                    : { completed: Number(row.completed) }),
+                },
+              },
+              parts: [],
+            };
+          }
+          after = String(rows.at(-1)!.id);
+        }
+        after = "";
+        while (true) {
+          const rows = tools.all(id, id, after);
+          if (!rows.length) break;
+          for (const row of rows) {
+            yield {
+              info: {
+                id: String(row.message_id),
+                sessionID: id,
+                agent: "",
+                role: "assistant" as const,
+                time: { created: Number(row.created) },
+              },
+              parts: [{
+                id: String(row.id),
+                messageID: String(row.message_id),
+                sessionID: id,
+                type: "tool",
+                tool: String(row.tool),
+                state: {
+                  status: row.status as NonNullable<RawPart["state"]>["status"],
+                  input: {},
+                  ...(row.title === null ? {} : { title: String(row.title) }),
+                  ...(row.start === null
+                    ? {}
+                    : { time: { start: Number(row.start) } }),
+                },
+              }],
+            };
+          }
+          after = String(rows.at(-1)!.id);
+        }
+      })();
+    } catch {
+      // Older/incompatible schemas keep the bounded stock-API route available.
+      return;
+    }
   }
   close(): void {
     this.#db?.close();

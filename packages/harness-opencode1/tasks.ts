@@ -2,6 +2,7 @@
 import type { Part, TaskCall } from "@otk/protocol";
 import { mapTool } from "./map-tools.ts";
 import type { Info, RawPart } from "./types.ts";
+import type { NativeMessage } from "./messages.ts";
 interface Link {
   parent: string;
   message: string;
@@ -9,7 +10,7 @@ interface Link {
 }
 interface Summary {
   tools: Set<string>;
-  current?: { time: number; text: string };
+  current?: { time: number; text: string; order?: [number, string, string] };
   start?: number;
   end?: number;
 }
@@ -23,7 +24,7 @@ export class TaskProgress {
     readonly read: (
       id: string,
       message?: string,
-    ) => Promise<{ info: Info; parts: RawPart[] }[]>,
+    ) => Promise<Iterable<NativeMessage> | AsyncIterable<NativeMessage>>,
     readonly subscribed: (id: string) => boolean,
     readonly emit: (parent: string, message: string, part: Part) => void,
     readonly recover: () => void,
@@ -38,12 +39,26 @@ export class TaskProgress {
     if (part?.type === "tool") {
       summary.tools.add(part.id);
       const time = part.state?.time?.start ?? 0;
+      // Native pages arrive newest first; ties still use transcript order,
+      // not page traversal order. Live part events retain arrival ordering.
+      const order: [number, string, string] | undefined = info
+        ? [info.time.created, info.id, part.id]
+        : undefined;
+      const previous = summary.current;
+      const later = !order || !previous?.order ||
+        order[0] > previous.order[0] ||
+        (order[0] === previous.order[0] &&
+          (order[1] > previous.order[1] ||
+            (order[1] === previous.order[1] && order[2] >= previous.order[2])));
       if (
-        part.state?.status !== "pending" && time >= (summary.current?.time ?? 0)
+        part.state?.status !== "pending" &&
+        (time > (previous?.time ?? 0) ||
+          (time === (previous?.time ?? 0) && later))
       ) {
         summary.current = {
           time,
           text: `${part.tool} ${part.state?.title || ""}`.trim(),
+          order,
         };
       }
     }
@@ -68,9 +83,11 @@ export class TaskProgress {
     let summary = this.#summaries.get(child);
     if (!summary) {
       summary = { tools: new Set() };
-      for (const message of await this.read(child)) {
+      for await (const message of await this.read(child)) {
         this.#apply(summary, message.info);
-        for (const part of message.parts) this.#apply(summary, undefined, part);
+        for (const part of message.parts) {
+          this.#apply(summary, message.info, part);
+        }
       }
       if (
         owner && this.#parents.get(raw.sessionID) === owner &&
@@ -112,11 +129,14 @@ export class TaskProgress {
     if (!links) return;
     for (const link of links.values()) {
       if (!this.subscribed(link.parent)) continue;
-      const messages = await this.read(link.parent, link.message);
+      let raw: RawPart | undefined;
+      for await (const message of await this.read(link.parent, link.message)) {
+        raw = message.parts.find((part) => part.id === link.part);
+        break;
+      }
       if (this.#links.get(id) !== links || !this.subscribed(link.parent)) {
         return;
       }
-      const raw = messages[0]?.parts.find((part) => part.id === link.part);
       if (raw?.tool === "task") {
         this.emit(link.parent, link.message, {
           kind: "tool",

@@ -146,6 +146,15 @@ function sourceErrors(path: string, source: string): string[] {
   }
   const errors: string[] = [];
   if (
+    from === "harness-opencode1" &&
+    path !== "packages/harness-opencode1/messages.ts" &&
+    /["'`]\/session\/[^\n]*\/message["'`]/.test(source)
+  ) {
+    errors.push(
+      "message collections belong only to the bounded Messages reader",
+    );
+  }
+  if (
     /\bPRAGMA\s+user_version\b/i.test(source) &&
     path !== "packages/store/legacy.ts"
   ) {
@@ -527,7 +536,7 @@ Deno.test("native endpoints and feature imports cannot leak into extracted share
   const endpoint = "fetch(`/session/${id}/message`)";
   assertEquals(sourceErrors("packages/protocol/rpc.ts", endpoint).length, 1);
   assertEquals(
-    sourceErrors("packages/harness-opencode1/sessions.ts", endpoint),
+    sourceErrors("packages/harness-opencode1/messages.ts", endpoint),
     [],
   );
   assertEquals(sourceErrors("tests/integration/example.ts", endpoint), []);
@@ -592,6 +601,36 @@ Deno.test("native endpoints and feature imports cannot leak into extracted share
     sourceErrors(
       "core/ws/registry.ts",
       'import type { RpcMethod } from "@otk/protocol";',
+    ),
+    [],
+  );
+});
+
+Deno.test("native message collection reads cannot bypass their bounded owner", () => {
+  for (
+    const path of [
+      "adapter.ts",
+      "sessions.ts",
+      "tasks.ts",
+      "revert.ts",
+      "directory.ts",
+      "future.ts",
+    ]
+  ) {
+    assertEquals(
+      sourceErrors(
+        `packages/harness-opencode1/${path}`,
+        "client.json(`/session/${id}/message`)",
+      ),
+      [
+        "message collections belong only to the bounded Messages reader",
+      ],
+    );
+  }
+  assertEquals(
+    sourceErrors(
+      "packages/harness-opencode1/adapter.ts",
+      "client.json(`/session/${id}/message/${message}`)",
     ),
     [],
   );

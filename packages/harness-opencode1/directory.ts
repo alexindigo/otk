@@ -8,7 +8,7 @@ export interface Directory {
 }
 export function sessionDirectory(
   cached: Directory["cached"],
-  getSession: (id: string) => Promise<ContentSession>,
+  getSession: (id: string) => Promise<Pick<ContentSession, "directory">>,
 ): Directory {
   return {
     cached,

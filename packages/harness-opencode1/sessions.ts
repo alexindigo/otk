@@ -14,12 +14,14 @@ import { mapMessage, mapSession } from "./map.ts";
 import type { TaskProgress } from "./tasks.ts";
 import { agentColors } from "./agents.ts";
 import type { RevertInfo } from "@otk/protocol";
+import type { Messages } from "./messages.ts";
 
 export function sessions(
   client: Client,
   directory: Directory,
   buffers: StreamBuffers,
   tasks: TaskProgress,
+  reader: Messages,
   lifecycle: Pick<
     HarnessCore,
     "kind" | "version" | "start" | "stop" | "subscriptions"
@@ -76,12 +78,7 @@ export function sessions(
           }),
         ).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
       }
-      const raw = await client.json<{ info: Info; parts: RawPart[] }[]>(
-        `/session/${encodeURIComponent(id)}/message`,
-        {
-          query: { directory: directory.cached(id), limit: opts.limit, before },
-        },
-      );
+      const { items: raw } = await reader.page(id, opts.limit, before);
       const colors = await agentColors(client, session.directory);
       const messages = await Promise.all(raw.map(async (message) => {
         const mapped = mapMessage(message.info, message.parts);

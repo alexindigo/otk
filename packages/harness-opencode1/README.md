@@ -50,6 +50,16 @@ bytes; `capabilities.history.attachment({ messageID, partID })` retrieves those
 bytes asynchronously. Missing/incompatible databases degrade to empty history
 without creating or writing them.
 
+Message collections have one bounded reader (1–200 messages per page); zero or
+missing limits cannot invoke stock's whole-history mode. Revert counts use a
+read-only SQL scalar. Task cards stream read-only SQL projections in pages of
+100, containing only message times/roles and tool IDs/titles/status/start times.
+Missing or incompatible databases use stock API pages of 100, reduced as they
+arrive rather than accumulated. Only summary metadata is retained while the
+parent is open. Native directory resolution reads the session record without
+decorating its revert information. The core's authoritative directory lookup can
+still use `getSession`; its revert count follows the same bounded contract.
+
 The public entry also exposes native raw types, mapping utilities, `Client`,
 `HttpFailure`, `History`, `BootstrapDb`, SSE/watchdog utilities and
 `TaskProgress` for native integrations. Cross-package imports always use this
