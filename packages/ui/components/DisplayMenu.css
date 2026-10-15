@@ -28,9 +28,6 @@
   align-items: center;
   gap: .7rem;
 }
-.otk-display-menu input {
-  width: auto;
-}
 .otk-display-menu select {
   width: auto;
   flex: 1;

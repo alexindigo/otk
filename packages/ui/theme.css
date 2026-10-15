@@ -54,7 +54,10 @@ button:disabled {
   outline: 2px solid var(--otk-accent);
   outline-offset: 2px;
 }
-input,
+/* Field geometry belongs to text/value editors, never native compact controls.
+   Unknown/missing types retain HTML's default text-field semantics. Keep this
+   selector's specificity at the element level so component layouts still own it. */
+input:where(:not([type="checkbox" i], [type="radio" i], [type="range" i], [type="color" i], [type="file" i], [type="button" i], [type="submit" i], [type="reset" i], [type="image" i], [type="hidden" i])),
 textarea,
 select {
   width: 100%;
