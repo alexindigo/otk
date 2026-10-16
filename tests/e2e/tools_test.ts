@@ -246,6 +246,11 @@ Deno.test("tool permission warning, denied strikethrough and expandable errors u
     await browser.poll(
       "!!document.querySelector('[data-tool=read][data-tool-status=error]')",
     );
+    // A tool's terminal state precedes the assistant's continuation. Observe the
+    // complete turn before testing a disclosure in the following viewport.
+    await browser.poll(
+      `document.querySelector('[data-session="${s.id}"]').dataset.status==='idle' && [...document.querySelectorAll('[data-role=assistant] .otk-text')].some(el=>el.textContent==='Missing file handled.')`,
+    );
     await browser.click("[data-tool=read] .otk-tool-error-toggle");
     await browser.poll(
       "document.querySelector('.otk-tool-error')?.textContent.includes('File not found')",

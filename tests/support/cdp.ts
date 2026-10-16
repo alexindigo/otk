@@ -110,20 +110,40 @@ export class Cdp {
       timeout,
     );
   }
-  async click(selector: string): Promise<void> {
-    const point = await this.evaluate<{ x: number; y: number }>(`(() => {
-      const el = document.querySelector(${JSON.stringify(selector)});
-      if (!el) throw new Error('Missing click target');
-      el.scrollIntoView({block:'center',inline:'nearest'});
-      const r = el.getBoundingClientRect();
-      return {x:r.x+r.width/2,y:r.y+r.height/2};
-    })()`);
+  async click(selector: string, clickCount = 1): Promise<void> {
+    // DOM presence is not pointer readiness: pending render/scroll frames can
+    // invalidate a measured point before input arrives. Observe stable rendered
+    // geometry and hit-testing before sending a single native gesture.
+    const point = await waitFor(
+      () =>
+        this.evaluate<false | { x: number; y: number }>(`(async () => {
+          const el = document.querySelector(${JSON.stringify(selector)});
+          if (!el || el.matches(':disabled')) return false;
+          el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
+          let r = el.getBoundingClientRect();
+          for (let frame = 0; frame < 2; frame++) {
+            await new Promise(requestAnimationFrame);
+            const next = el.getBoundingClientRect();
+            if (r.x !== next.x || r.y !== next.y ||
+                r.width !== next.width || r.height !== next.height) return false;
+            r = next;
+          }
+          if (!el.isConnected || el !== document.querySelector(${
+          JSON.stringify(selector)
+        }) || el.matches(':disabled') || !r.width || !r.height) return false;
+          const point = {x:r.x+r.width/2,y:r.y+r.height/2};
+          const hit = document.elementFromPoint(point.x, point.y);
+          return hit && el.contains(hit) ? point : false;
+        })()`),
+      (point) => !!point,
+    );
+    if (!point) throw new Error(`Click target not ready: ${selector}`);
     for (const type of ["mousePressed", "mouseReleased"]) {
       await this.send("Input.dispatchMouseEvent", {
         type,
         ...point,
         button: "left",
-        clickCount: 1,
+        clickCount,
         buttons: type === "mousePressed" ? 1 : 0,
       });
     }

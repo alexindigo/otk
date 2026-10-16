@@ -5,7 +5,10 @@ import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
-import { openSession } from "../support/browser-fixture.ts";
+import {
+  openSession,
+  waitForCollapsedPanels,
+} from "../support/browser-fixture.ts";
 
 const tab = (id: string) => `[data-tab=${JSON.stringify(id)}]`;
 async function evidence(b: Cdp, root: string) {
@@ -20,12 +23,20 @@ async function evidence(b: Cdp, root: string) {
 }
 async function menu(b: Cdp, id: string, text: string) {
   await b.click(tab(id));
+  await b.poll(
+    `document.querySelector(${
+      JSON.stringify(tab(id))
+    })?.getAttribute('aria-selected')==='true'`,
+  );
   const summary = await b.evaluate<string>(
     `(()=>{const e=document.querySelector(${
       JSON.stringify(tab(id))
     }).closest('.otk-tab');e.dataset.testMenu='current';return '[data-test-menu=current] summary'})()`,
   );
   await b.click(summary);
+  await b.poll(
+    "document.querySelector('[data-test-menu=current] details')?.open",
+  );
   const selector = await b.evaluate<string>(
     `(()=>{const e=[...document.querySelectorAll('[data-test-menu=current] .otk-tab-menu button')].find(e=>e.textContent===${
       JSON.stringify(text)
@@ -298,20 +309,7 @@ Deno.test("all four phantom rules render through preview pin double-click send a
       "document.querySelector('.otk-tab[data-kind=task]')?.textContent.includes('preview-b')",
     );
     await openSession(b, "double");
-    const point = await b.evaluate<{ x: number; y: number }>(
-      `(()=>{const r=document.querySelector(${
-        JSON.stringify(tab("double"))
-      }).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
-    );
-    for (const type of ["mousePressed", "mouseReleased"]) {
-      await b.send("Input.dispatchMouseEvent", {
-        type,
-        ...point,
-        button: "left",
-        clickCount: 2,
-        buttons: type === "mousePressed" ? 1 : 0,
-      });
-    }
+    await b.click(tab("double"), 2);
     await b.poll(
       "[...document.querySelectorAll('.otk-tab[data-kind=task]')].some(e=>e.textContent.includes('double'))",
     );
@@ -375,9 +373,9 @@ Deno.test("axiom 1: working blocked and unseen-finished ungrouped tabs and rail 
     await b.click(".otk-panel-collapse");
     for (let reload = 0; reload < 2; reload++) {
       if (reload) await b.reload();
-      await b.poll(
-        "document.querySelector('.otk-project-inbox')?.dataset.collapsed==='true'",
-      );
+      // Independent layout intents settle through authoritative broadcasts.
+      // Observe activity only once both requested collapses reach the screen.
+      await waitForCollapsedPanels(b);
       for (
         const [id, status] of [["otk", "working"], ["blocked", "blocked"], [
           "finished",

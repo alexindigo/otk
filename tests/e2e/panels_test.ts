@@ -241,18 +241,7 @@ Deno.test("Sessions groups the selected project's parent-child tree by task, fil
     );
     assertEquals(await b.evaluate("location.hash"), "#/local/preview");
     await b.fill("textarea[name=prompt]", "");
-    const point = await b.evaluate<{ x: number; y: number }>(
-      "(()=>{const r=document.querySelector('[data-session=preview]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
-    );
-    for (const type of ["mousePressed", "mouseReleased"]) {
-      await b.send("Input.dispatchMouseEvent", {
-        type,
-        ...point,
-        button: "left",
-        clickCount: 2,
-        buttons: type === "mousePressed" ? 1 : 0,
-      });
-    }
+    await b.click("[data-session=preview]", 2);
     await b.poll(
       "[...document.querySelectorAll('.otk-tab[data-kind=task]')].some(e=>e.textContent.includes('Idle preview'))",
     );

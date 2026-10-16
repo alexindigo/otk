@@ -93,6 +93,12 @@ export async function openSession(browser: Cdp, id: string): Promise<void> {
     `location.hash.endsWith('/${id}') && document.querySelector('[data-session="${id}"]')?.getAttribute('aria-current') === 'page' && (!!document.querySelector('.otk-prompt') || !!document.querySelector('.otk-subagent-bar')) && ![...document.querySelectorAll('.otk-messages > p')].some(el=>el.textContent === 'Loading messages…')`,
   );
 }
+/** Independent collapse intents must both reach the screen, including on reload. */
+export async function waitForCollapsedPanels(browser: Cdp): Promise<void> {
+  await browser.poll(
+    "document.querySelector('.otk-project-inbox')?.dataset.collapsed==='true' && document.querySelector('.otk-right-panel')?.hidden===true",
+  );
+}
 export function sentFrames(
   browser: Cdp,
 ): { time: number; frame: Record<string, unknown> }[] {

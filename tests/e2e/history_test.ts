@@ -268,10 +268,14 @@ Deno.test("recalled prompt caret is ready for the next native history key before
     }
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await openSession(browser, blank.id);
+    // Prepare pointer/focus before holding paint for the history-key proof.
+    await browser.click("textarea[name=prompt]");
+    await browser.poll(
+      "document.activeElement===document.querySelector('textarea[name=prompt]')",
+    );
     await browser.evaluate(
       "(()=>{globalThis.savedHistoryRaf=requestAnimationFrame;globalThis.historyRafCallbacks=[];globalThis.requestAnimationFrame=callback=>{globalThis.historyRafCallbacks.push(callback);return globalThis.historyRafCallbacks.length}})()",
     );
-    await browser.click("textarea[name=prompt]");
     await browser.key("ArrowUp");
     await browser.poll(
       "document.querySelector('textarea[name=prompt]').value==='newer caret prompt'",

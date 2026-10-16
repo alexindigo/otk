@@ -9,7 +9,10 @@ import {
   inboxClockScript,
 } from "../support/inbox-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
-import { openSession } from "../support/browser-fixture.ts";
+import {
+  openSession,
+  waitForCollapsedPanels,
+} from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 
 const row = (directory: string) =>
@@ -76,9 +79,7 @@ Deno.test("inbox activity returns inactive projects and all three required light
     );
     for (let reload = 0; reload < 2; reload++) {
       if (reload) await browser.reload();
-      await browser.poll(
-        "document.querySelector('.otk-project-inbox')?.dataset.collapsed==='true'",
-      );
+      await waitForCollapsedPanels(browser);
       assertEquals(
         await browser.evaluate(
           "document.querySelector('.otk-right-panel').hidden",
@@ -268,6 +269,9 @@ Deno.test("inbox adds empty and scanned projects, persists layout bounds and kee
       "document.querySelectorAll('.otk-template-paths button').length===4",
     );
     await browser.click(".otk-template-paths button");
+    await browser.poll(
+      "document.querySelector('input[name=directory]').value.length>0",
+    );
     assert(
       await browser.evaluate(
         "document.querySelector('input[name=directory]').value.length>0",
@@ -354,6 +358,7 @@ Deno.test("inbox merges servers with duplicate-name machine labels and stable or
       "document.querySelectorAll('.otk-project-row').length===8",
     );
     await browser.click(".otk-settings .otk-view-header button");
+    await browser.poll("!document.querySelector('.otk-settings')");
     assertEquals(
       await browser.evaluate(
         "[...document.querySelectorAll('.otk-project-machine')].map(e=>e.textContent)",
