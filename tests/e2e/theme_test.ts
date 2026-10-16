@@ -48,7 +48,7 @@ Deno.test("unknown persisted theme paints the base in both browsers and after re
     await client.rpc("prefs.set", { key: "theme", value: "otk-light" });
     for (const page of [browser, other]) {
       await page.poll(
-        `document.documentElement.dataset.otkTheme === 'otk-light' && getComputedStyle(document.documentElement).getPropertyValue('--otk-bg') === '#f4f6f8'`,
+        `document.documentElement.dataset.otkTheme === 'otk-light' && getComputedStyle(document.documentElement).getPropertyValue('--otk-bg') === '#f4eee3'`,
       );
     }
   } finally {
@@ -67,6 +67,76 @@ const paint = `(() => {
     wordmark:getComputedStyle(document.querySelector('.otk-inbox-brand strong')).color,
     work:globalThis.themeWorkerEvidence };
 })()`;
+Deno.test("System light preference saves from the picker, broadcasts, survives reload and safely falls back for unavailable identities", async () => {
+  const f = await browserFixture();
+  let client: WsClient | undefined;
+  try {
+    const server = await f.sidecar();
+    client = new WsClient(server.url);
+    await client.connect();
+    const browser = await f.browser("about:blank"),
+      other = await f.browser("about:blank");
+    for (const page of [browser, other]) {
+      await page.send("Emulation.setEmulatedMedia", {
+        features: [{ name: "prefers-color-scheme", value: "light" }],
+      });
+      await page.goto(server.url);
+    }
+    await openTheme(browser);
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector('select[name=systemLightTheme]').value",
+      ),
+      "otk-light",
+    );
+    await choose(browser, "system");
+    await browser.click(".otk-theme-actions button:last-child");
+    const painted = (bg: string) =>
+      `document.documentElement.dataset.otkTheme==='system' && getComputedStyle(document.documentElement).getPropertyValue('--otk-bg')==='${bg}'`;
+    await other.poll(painted("#f4eee3"));
+    await openTheme(browser);
+    await browser.click("select[name=systemLightTheme]");
+    await browser.key("ArrowDown");
+    await browser.key("Enter");
+    for (const page of [browser, other]) await page.poll(painted("#f5f3ef"));
+    assertEquals(
+      (await client.rpc("prefs.get", {}) as { systemLightTheme: string })
+        .systemLightTheme,
+      "otk-light-stone",
+    );
+    await browser.key("Escape");
+    await browser.reload();
+    await browser.poll(painted("#f5f3ef"));
+    await browser.send("Emulation.setEmulatedMedia", {
+      features: [{ name: "prefers-color-scheme", value: "dark" }],
+    });
+    await browser.poll(painted("#1a1c1e"));
+    await browser.send("Emulation.setEmulatedMedia", {
+      features: [{ name: "prefers-color-scheme", value: "light" }],
+    });
+    await browser.poll(painted("#f5f3ef"));
+    for (const id of ["plugin:uninstalled-light", "otk-dark"]) {
+      await client.rpc("prefs.set", { key: "systemLightTheme", value: id });
+      for (const page of [browser, other]) await page.poll(painted("#f4eee3"));
+      assertEquals(
+        (await client.rpc("prefs.get", {}) as { systemLightTheme: string })
+          .systemLightTheme,
+        id,
+      );
+    }
+    await assertRejects(() =>
+      client!.rpc("prefs.set", {
+        key: "systemLightTheme",
+        value: "invalid theme",
+      })
+    );
+    assertEquals(browser.errors, []);
+    assertEquals(other.errors, []);
+  } finally {
+    await client?.close();
+    await f.stop();
+  }
+});
 async function choose(browser: Cdp, id: string) {
   await browser.click(`[data-theme-choice='${id}']`);
   await browser.poll(
@@ -144,14 +214,14 @@ Deno.test("D5 actual session/code/diff paint changes with no worker work; previe
     assertEquals(dark.bg, "#1a1c1e");
     assertEquals(dark.scheme, "dark");
     assertEquals(dark.meta, dark.bg);
-    assertEquals(dark.wordmark, "rgb(224, 230, 237)");
+    assertEquals(dark.wordmark, "rgb(230, 234, 239)");
     await browser.evaluate(
       "globalThis.themeTokenNodes=[...document.querySelectorAll('.otk-code .otk-token')]",
     );
     await openTheme(browser);
     await choose(browser, "otk-light");
     const light = await browser.evaluate<Record<string, unknown>>(paint);
-    assertEquals(light.bg, "#f4f6f8");
+    assertEquals(light.bg, "#f4eee3");
     assertEquals(light.scheme, "light");
     assertEquals(light.meta, light.bg);
     for (const field of ["text", "code", "add", "del"]) {
@@ -160,7 +230,7 @@ Deno.test("D5 actual session/code/diff paint changes with no worker work; previe
         field,
       );
     }
-    assertEquals(light.wordmark, "rgb(26, 28, 30)");
+    assertEquals(light.wordmark, "rgb(42, 36, 28)");
     assertEquals(
       light.work,
       dark.work,

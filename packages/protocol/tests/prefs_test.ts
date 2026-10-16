@@ -71,6 +71,15 @@ Deno.test("theme preference checks identity shape without closing installed choi
   }
   assertEquals(DEFAULT_PREFS.theme, "otk-dark");
 });
+Deno.test("System light preference belongs to the theme feature and keeps open identities with Linen default", () => {
+  assertEquals(DEFAULT_PREFS.systemLightTheme, "otk-light");
+  for (const id of ["otk-light", "otk-light-stone", "plugin:light.v2"]) {
+    assert(isPreference("systemLightTheme", id));
+  }
+  for (const value of ["", "invalid theme", null, true, {}]) {
+    assertEquals(isPreference("systemLightTheme", value), false);
+  }
+});
 Deno.test("notification channel prefs preserve host defaults and reject coercion and extra channels", () => {
   assertEquals([
     DEFAULT_PREFS["notify.toast"],

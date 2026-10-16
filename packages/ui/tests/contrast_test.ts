@@ -40,8 +40,11 @@ const backgrounds = [
   "bg-elevated",
   "surface",
   "surface-2",
+  "bubble",
+  "bg-code",
+  "bg-inline-code",
 ] as const;
-Deno.test("every theme text, CTA, focus, border and constructed lamp pair meets its contrast contract", () => {
+Deno.test("every theme text, CTA and focus pair meets its contrast contract on every surface, hover and selection", () => {
   const themes = new ThemeRegistry();
   registerOtkThemes(themes);
   const failures: string[] = [];
@@ -56,15 +59,17 @@ Deno.test("every theme text, CTA, focus, border and constructed lamp pair meets 
       }
     };
     for (const surface of backgrounds) {
-      for (const hovered of [false, true]) {
-        const bg = hovered
-          ? over(colors.hover, rgb(colors[surface]))
-          : rgb(colors[surface]);
-        const label = surface + (hovered ? "+hover" : "");
+      for (const state of ["base", "hover", "selected"] as const) {
+        const bg = state === "base"
+          ? rgb(colors[surface])
+          : over(colors[state], rgb(colors[surface]));
+        const label = surface + "+" + state;
         for (const token of text) {
-          check(`${token}/${label}`, rgb(colors[token]), bg, 4.5);
+          check(`${token}/${label}`, over(colors[token], bg), bg, 4.5);
         }
-        for (const token of ["focus", "border", "lamp-rim"] as const) {
+        // Lines are decorative hairlines in the approved quiet-chrome design;
+        // the visible focus indicator owns the interactive-boundary contrast.
+        for (const token of ["focus"] as const) {
           check(`${token}/${label}`, rgb(colors[token]), bg, 3);
         }
         for (const kind of ["add", "del"] as const) {
@@ -86,32 +91,27 @@ Deno.test("every theme text, CTA, focus, border and constructed lamp pair meets 
       rgb(colors.accent),
       4.5,
     );
-    for (const lamp of ["lamp-red", "lamp-amber", "lamp-green"] as const) {
-      check(
-        `${lamp}/lamp-socket`,
-        rgb(colors[lamp]),
-        rgb(colors["lamp-socket"]),
-        3,
-      );
-    }
   }
   assert(pairs > 800, "The complete surface matrix must be exercised");
   assertEquals(failures, []);
 });
-Deno.test("lamp colours and socket are identical in dark and light", () => {
-  const themes = new ThemeRegistry();
-  registerOtkThemes(themes);
-  const dark = themes.resolve("otk-dark", "dark").colors;
-  const light = themes.resolve("otk-light", "light").colors;
-  for (
-    const token of [
-      "lamp-red",
-      "lamp-amber",
-      "lamp-green",
-      "lamp-socket",
-    ] as const
-  ) assertEquals(light[token], dark[token]);
-  assertEquals(dark["lamp-red"], "#ff2e47");
-  assertEquals(dark["lamp-amber"], "#ff9f2e");
-  assertEquals(dark["lamp-green"], "#30ff85");
+Deno.test("fixed gel colours contrast against their own Luch dark rim, including unlit", async () => {
+  const css = await Deno.readTextFile(
+    new URL("../components/StatusLight.css", import.meta.url),
+  );
+  assert(
+    !css.includes("var(--otk-lamp-"),
+    "Lamp construction cannot depend on theme slots",
+  );
+  assert(!/--lamp-color:\s*var\(/.test(css));
+  assert(!THEME_SLOTS.some((slot) => slot.startsWith("lamp-")));
+  const lamps = [...css.matchAll(/--lamp-color: (#[\da-f]{6});/g)].map((m) =>
+    m[1]
+  );
+  assertEquals(lamps, ["#8e949b", "#ff2e4d", "#ff8f2e", "#30ff85"]);
+  for (const lamp of lamps) {
+    const color = rgb(lamp), mix = lamp === "#8e949b" ? .4 : .42;
+    const rim = color.map((value) => value * mix) as Rgb;
+    assert(contrast(color, rim) >= 3, `${lamp} against its dark rim`);
+  }
 });

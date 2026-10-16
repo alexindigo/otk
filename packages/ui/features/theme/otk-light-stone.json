@@ -1,0 +1,30 @@
+{
+  "id": "otk-light-stone",
+  "label": "OTK Light, Stone",
+  "mode": "light",
+  "colors": {
+    "bg": "#f5f3ef",
+    "bg-elevated": "#fbfaf8",
+    "bg-side": "#ebe8e2",
+    "surface": "#fbfaf8",
+    "surface-2": "#e9e5de",
+    "hover": "#4632140d",
+    "selected": "#fbfaf8",
+    "selected-shadow": "0 1px 2px #46321417, 0 0 0 1px #4632140f",
+    "bubble": "#e9e5de",
+    "bg-code": "#efece6",
+    "bg-inline-code": "#e7e2d9",
+    "border-code": "#46321412",
+    "composer-shadow": "0 12px 28px -18px #46321473",
+    "fg": "#24211d",
+    "fg-2": "#24211db8",
+    "fg-3": "#24211db3",
+    "fg-muted": "#24211db3",
+    "fg-faint": "#24211db3",
+    "border": "#4632141a",
+    "code-string": "#446910",
+    "code-comment": "#5a6067",
+    "code-variable": "#24211d",
+    "code-punctuation": "#24211db8"
+  }
+}

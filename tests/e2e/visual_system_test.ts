@@ -133,8 +133,9 @@ Deno.test("public lights render all states, fixed gel colours, sizing, event bli
     );
     const probe =
       `(() => [...document.querySelectorAll('[data-visual-gallery] .otk-status-light')].map(el=>{
-      const body=getComputedStyle(el.querySelector('.otk-lamp-body')),glow=getComputedStyle(el.querySelector('.otk-lamp-glow')),shape=getComputedStyle(el.querySelector('.otk-lamp-shape')),r=el.getBoundingClientRect();
-      return {state:el.dataset.state,label:el.getAttribute('aria-label'),title:el.title,size:r.width,height:r.height,color:getComputedStyle(el).getPropertyValue('--lamp-color').trim(),rim:body.borderTopColor,socket:body.boxShadow,body:body.display,shape:shape.display,glyph:el.querySelector('.otk-lamp-shape').textContent,fg:shape.color,breathe:glow.animationName,duration:glow.animationDuration,blink:body.animationName,glow:glow.display,gradient:body.backgroundImage};
+      const halo=el.querySelector('.otk-lamp-glow');for(const animation of halo.getAnimations()){animation.pause();animation.currentTime=0;}
+      const body=getComputedStyle(el.querySelector('.otk-lamp-body')),glow=getComputedStyle(halo),shape=getComputedStyle(el.querySelector('.otk-lamp-shape')),r=el.getBoundingClientRect();
+      return {state:el.dataset.state,label:el.getAttribute('aria-label'),title:el.title,size:r.width,height:r.height,color:getComputedStyle(el).getPropertyValue('--lamp-color').trim(),rim:body.boxShadow,border:body.borderTopWidth,halo:glow.boxShadow,body:body.display,shape:shape.display,glyph:el.querySelector('.otk-lamp-shape').textContent,fg:shape.color,breathe:glow.animationName,duration:glow.animationDuration,blink:body.animationName,glow:glow.display,gradient:body.backgroundImage};
     }))()`;
     type Light = {
       state: string;
@@ -144,7 +145,8 @@ Deno.test("public lights render all states, fixed gel colours, sizing, event bli
       height: number;
       color: string;
       rim: string;
-      socket: string;
+      border: string;
+      halo: string;
       body: string;
       shape: string;
       glyph: string;
@@ -168,20 +170,30 @@ Deno.test("public lights render all states, fixed gel colours, sizing, event bli
       assertEquals(lamp.size, lamp.height);
       assertEquals(lamp.title, lamp.label);
       assert(lamp.label.length > 0);
-      assertEquals(lamp.rim, "rgb(162, 171, 183)");
-      assert(lamp.socket.includes("rgb(26, 28, 30)"));
+      assertEquals(lamp.border, "0px", "No pale/theme-dependent rim");
+      assert(lamp.rim.includes("0px 0px 0px 1px"));
     }
+    assertEquals(dark.map((lamp) => lamp.color), [
+      "#ff2e4d",
+      "#ff8f2e",
+      "#30ff85",
+      "#8e949b",
+      "#ff8f2e",
+    ]);
+    assert(dark[0].gradient.includes("radial-gradient"));
     assert(dark[0].gradient.includes("linear-gradient"));
     assertEquals(dark[1].breathe, "otk-lamp-breathe");
     assertEquals(dark[1].duration, "1.1s");
     assertEquals(dark[3].glow, "none");
     assertEquals(dark[0].blink, "none");
-    const breathing = await browser.evaluate<number[]>(`(() => {
+    const breathing = await browser.evaluate<(string | number)[]>(`(() => {
       const lamp=document.querySelector('[data-visual-gallery] [data-state=working]'),glow=lamp.querySelector('.otk-lamp-glow'),body=lamp.querySelector('.otk-lamp-body'),animation=glow.getAnimations()[0];
-      animation.pause();animation.currentTime=0;const low=Number(getComputedStyle(glow).opacity),steady=Number(getComputedStyle(body).opacity);
-      animation.currentTime=550;const high=Number(getComputedStyle(glow).opacity),still=Number(getComputedStyle(body).opacity);animation.play();return [low,high,steady,still];
+      animation.pause();animation.currentTime=0;const low=getComputedStyle(glow).boxShadow,steady=Number(getComputedStyle(body).opacity);
+      animation.currentTime=1100;const high=getComputedStyle(glow).boxShadow,still=Number(getComputedStyle(body).opacity);animation.play();return [low,high,steady,still];
     })()`);
-    assert(breathing[1] - breathing[0] > .3);
+    assert(breathing[0] !== breathing[1]);
+    assert(String(breathing[0]).includes("6px"));
+    assert(String(breathing[1]).includes("11px"));
     assertEquals(
       breathing.slice(2),
       [1, 1],
@@ -208,13 +220,26 @@ Deno.test("public lights render all states, fixed gel colours, sizing, event bli
     await browser.poll(
       "document.documentElement.dataset.otkTheme === 'otk-light'",
     );
-    const light = await browser.evaluate<Light[]>(probe);
+    const construction = (lamps: Light[]) =>
+      lamps.map((
+        { color, rim, border, halo, gradient, glow, size, height },
+      ) => ({ color, rim, border, halo, gradient, glow, size, height }));
     assertEquals(
-      light.filter((lamp) => lamp.state !== "idle").map((lamp) => lamp.color),
-      dark.filter((lamp) => lamp.state !== "idle").map((lamp) => lamp.color),
+      construction(await browser.evaluate<Light[]>(probe)),
+      construction(dark),
     );
-    assertEquals(light[0].rim, "rgb(82, 88, 96)");
-    assertEquals(light[0].socket, dark[0].socket);
+    await browser.click("[data-stone]");
+    await browser.poll(
+      "document.documentElement.dataset.otkTheme === 'otk-light-stone'",
+    );
+    assertEquals(
+      construction(await browser.evaluate<Light[]>(probe)),
+      construction(dark),
+    );
+    await browser.click("[data-light]");
+    await browser.poll(
+      "document.documentElement.dataset.otkTheme === 'otk-light'",
+    );
     for (const reduced of ["setting", "system"]) {
       if (reduced === "setting") {
         await browser.evaluate(
@@ -259,17 +284,17 @@ Deno.test("public lights render all states, fixed gel colours, sizing, event bli
     for (const lamp of shapes) {
       assertEquals(lamp.body, "none");
       assertEquals(lamp.shape, "block");
-      assertEquals(lamp.fg, "rgb(26, 28, 30)");
+      assertEquals(lamp.fg, "rgb(42, 36, 28)");
     }
     assertEquals(
       await browser.evaluate(
         "[...document.querySelectorAll('[data-age]')].map(el=>[getComputedStyle(el).color,getComputedStyle(el).textDecorationStyle,getComputedStyle(el).textDecorationLine])",
       ),
       [
-        ["rgb(26, 28, 30)", "solid", "none"],
-        ["rgb(26, 28, 30)", "dotted", "underline"],
-        ["rgb(26, 28, 30)", "wavy", "underline"],
-        ["rgb(26, 28, 30)", "double", "underline"],
+        ["rgb(42, 36, 28)", "solid", "none"],
+        ["rgb(42, 36, 28)", "dotted", "underline"],
+        ["rgb(42, 36, 28)", "wavy", "underline"],
+        ["rgb(42, 36, 28)", "double", "underline"],
       ],
     );
     for (const mode of ["dark", "light"]) {
@@ -298,6 +323,45 @@ Deno.test("public lights render all states, fixed gel colours, sizing, event bli
           ratios[i] >= (i % 2 ? 4.5 : 3),
           `${mode} reduced action pair ${i}: ${ratios[i]}`,
         );
+      }
+    }
+    for (const mode of ["dark", "light", "stone"]) {
+      await browser.click(`[data-${mode}]`);
+      await browser.poll(
+        `document.documentElement.dataset.otkTheme === '${
+          mode === "stone" ? "otk-light-stone" : "otk-" + mode
+        }'`,
+      );
+      for (const reduced of [false, true]) {
+        await browser.evaluate(
+          `document.documentElement.toggleAttribute('data-otk-reduced-colors',${reduced})`,
+        );
+        const geometry = await browser.evaluate<
+          {
+            kind: string;
+            content: string;
+            width: number;
+            height: number;
+            center: number;
+            rowCenter: number;
+            bottom: number;
+            fill: string;
+          }[]
+        >(`[...document.querySelectorAll('[data-otk-selection]')].map(el=>{const row=el.getBoundingClientRect(),css=getComputedStyle(el,'::after');return {kind:el.dataset.otkSelection,content:css.content,width:parseFloat(css.width),height:parseFloat(css.height),center:parseFloat(css.top)+parseFloat(css.marginTop)+parseFloat(css.height)/2,rowCenter:row.height/2,bottom:parseFloat(css.bottom),fill:getComputedStyle(el).backgroundColor}})`);
+        assertEquals(geometry.map((g) => g.content), [
+          '""',
+          "none",
+          '""',
+          "none",
+        ]);
+        assertEquals([geometry[0].width, geometry[0].height], [3, 14]);
+        assert(
+          Math.abs(geometry[0].center - geometry[0].rowCenter) < .5,
+          "Pointer shares the row's centreline",
+        );
+        assertEquals([geometry[2].height, geometry[2].bottom], [2, 0]);
+        assert(geometry[2].width > 0);
+        assert(geometry[0].fill !== "rgba(0, 0, 0, 0)");
       }
     }
     assertEquals(browser.errors, []);

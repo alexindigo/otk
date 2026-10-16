@@ -120,11 +120,19 @@ import their own CSS using `with { type: "text" }`: Deno's stable asset
 attribute validates the publication graph while Vite bundles the same styles
 normally; no CSS loader plugin or generated style mirror is needed. Consumers
 bundle IBM Plex Sans 400/500/600 and IBM Plex Mono 400/600; all selection uses
-`--font-ui` / `--font-mono`. Interface text is 13/20, prose 15/24, code 13/20,
-with a 12px minimum. Neutral interactions, 4px spacing, 6px controls and 10px
-cards share the base visual contract. Accent is reserved for primary actions,
-attention controls and focus. Source selection and code geometry retain their
-existing contracts.
+`--font-ui` / `--font-mono`. Interface text is 13/20, prose 14/24, headings
+16/24 600 and metadata 12px sans; mono is for code, paths, commands and IDs.
+Base buttons are ghost controls; `.otk-pill`, `.otk-icon-button` and
+`.otk-send-button` provide action pills, 28px icons and 32px circular Send.
+Radii use shared role tokens: controls/rows 8px, inline code 5px, cards 10px,
+bubbles 18px and composer 20px. Accent is reserved for primary actions and
+focus. Source selection and code geometry retain their existing contracts.
+
+Lists opt into `data-otk-selection="vertical"` or `"horizontal"`. The shared
+primitive reads `aria-selected="true"`, a non-false `aria-current`,
+`aria-pressed="true"` or a present `data-selected` attribute. Selected items
+receive a fill plus a vertically centred 3×14px left pointer or a 2px bottom
+underline. Hover alone only fills; reduced colours retains both indicators.
 
 Package units live in `tests/`; real browser/app tests remain at repository
 level. Builds/tests run inside the project's assigned VM. License: LGPL-3.0-only
@@ -159,39 +167,47 @@ Shift+Enter inserts a newline through the prompt-owned input port.
 
 `ThemeRegistry` owns immutable data registrations; it imports no themes. A
 consumer calls `registerOtkThemes(themes)` to select the shipped complete Dark
-and Light bases, or supplies its own complete mode bases with
+and Linen light bases plus Stone, or supplies its own complete mode bases with
 `themes.register(data, { base: true })`. Partial registrations inherit missing
-slots from their own mode's base. `system` resolves the registered OS-mode base.
-No custom palette ships in OTK. An uninstalled theme ID falls back to the
-registered dark base at resolution; the engine retains the authoritative stored
-ID, including through previews.
+slots from their own mode's base. `system` resolves the registered OS-mode base;
+an injected registered light-theme identity can select System's light palette.
+Unavailable or dark identities fall back to the light base without rewriting the
+stored preference. No custom palette ships in OTK. An uninstalled theme ID falls
+back to the registered dark base at resolution; the engine retains the
+authoritative stored ID, including through previews.
 
 `ThemeEngine(themes, browserThemeEnvironment(), committedId)` is the single
 document paint owner. Call `start()` before mounting and release its returned
 listener cleanup on application teardown. It applies semantic `--otk-*` slots,
 native `color-scheme` and browser `theme-color`; System follows media changes
 live. The consumer calls `commit(id)` only from authoritative preference state.
+`commit(id, systemLightTheme)` updates both authoritative preferences together.
 `preview()` returns an owner-scoped select/close port; close always restores the
 latest commit, including a concurrent host broadcast. The engine owns no
 storage. `ThemePicker` injects this engine, readiness, async save and close
 callbacks, owns dialog CSS and registers its actions in the public command hub.
 
-OTK preserves its Dark default and Phosphor Orange identity. Light uses cool
-white surfaces and dark ink; primary fills remain `#ff4d00`, with contrast-safe
-CTA labels and separate accent-text/focus slots. Existing CSS names are aliases,
-not another palette. Shiki's genuine css-variable token categories alias
-semantic code slots; categories shared by Shiki retain their shared mapping
-(constant includes numbers/types; foreground covers variables). Switching only
-changes paint, never source, grammar, worker lifecycle or cache. Hosts must
-select/apply a theme; the UI provider does not install concrete data.
+OTK preserves its anthracite Dark default and Phosphor Orange identity. Linen
+(`otk-light`, default System light) uses warm beige, Stone (`otk-light-stone`)
+uses warm grey. The feature-owned `systemLightTheme` preference is edited in the
+theme picker and follows the serving host's persistence/broadcast flow. Primary
+fills remain `#ff4d00`, with contrast-safe CTA labels and separate
+accent-text/focus slots. Existing CSS names are aliases, not another palette.
+Shiki's genuine css-variable token categories alias semantic code slots;
+categories shared by Shiki retain their shared mapping (constant includes
+numbers/types; foreground covers variables). Switching only changes paint, never
+source, grammar, worker lifecycle or cache. Hosts must select/apply a theme; the
+UI provider does not install concrete data.
 
 `StatusLight` takes a state (`blocked`, `working`, `finished`, `idle`), optional
 small sizing and an event identity. Rows use 10px marbles, small lights 8px;
 working breathes only its glow and a new event blinks once. Accessible labels
-and native tooltips accompany every state. Both themes use identical gel colours
-on a dark socket, with a contrast-checked outer rim. `sessionLight` maps the
-existing session index without inventing unread marks; the caller supplies a
-finished state when its model has seen information.
+and native tooltips accompany every state. Every theme uses the same fixed gel
+colours (`#ff2e4d`, `#ff8f2e`, `#30ff85`, idle `#8e949b`), a radial top
+highlight and a colour-mixed dark rim. Lamp colours are owned by the component,
+not theme slots; their contrast is measured against their own rim.
+`sessionLight` maps the existing session index without inventing unread marks;
+the caller supplies a finished state when its model has seen information.
 
 `paintVisualPreferences` paints authoritative `reducedColors` / `animationsOff`
 preferences supplied by the consumer; `VisualSettings` takes those preferences,

@@ -16,3 +16,8 @@
   align-items: center;
   gap: 8px;
 }
+.otk-system-light {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0;
+}

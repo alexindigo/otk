@@ -59,7 +59,7 @@ Deno.test("component-owned CSS is imported by its owner and retains structural t
   for (
     const [slot, value] of Object.entries({
       bg: "#1a1c1e",
-      fg: "#e0e6ed",
+      fg: "#e6eaef",
       accent: "#ff4d00",
     })
   ) {

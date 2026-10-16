@@ -12,9 +12,18 @@
   --secondary: var(--otk-fg-2);
   --font-ui: "IBM Plex Sans", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
-  --radius-control: 6px;
+  --radius-control: 8px;
+  --radius-row: 8px;
+  --radius-inline-code: 5px;
   --radius-card: 10px;
+  --radius-bubble: 18px;
+  --radius-composer: 20px;
   --radius-pill: 999px;
+  --text-ui: 13px;
+  --text-prose: 14px;
+  --text-heading: 16px;
+  --text-meta: 12px;
+  --pill-inset: 14px;
   /* Genuine Shiki css-variables categories. No tokens or worker work change. */
   --otk-syntax-foreground: var(--otk-code-variable);
   --otk-syntax-background: var(--otk-bg);
@@ -48,14 +57,19 @@ select {
 }
 button {
   background: transparent;
-  border: 1px solid var(--muted);
-  padding: 8px 12px;
+  border: 0;
+  padding: 4px 8px;
   border-radius: var(--radius-control);
+  color: var(--otk-fg-2);
+  font-weight: 500;
   cursor: pointer;
 }
 button:hover {
-  border-color: var(--otk-fg-2);
   background: var(--otk-hover);
+  color: var(--otk-fg);
+}
+button:active:not(:disabled) {
+  transform: scale(.98);
 }
 button:disabled {
   opacity: .5;
@@ -96,7 +110,7 @@ p {
 }
 .otk-chip {
   display: inline-flex;
-  border: 1px solid var(--muted);
+  background: var(--otk-hover);
   padding: 4px 8px;
   margin-right: 8px;
   border-radius: var(--radius-pill);
@@ -147,7 +161,6 @@ input[type=radio] {
 }
 code,
 pre,
-kbd,
 .otk-path,
 .otk-id,
 .otk-command {
@@ -158,6 +171,71 @@ code {
 }
 small {
   font-size: max(12px, .92em);
+}
+/* Shared controls: feature owners choose their role, never their palette. */
+.otk-pill {
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 var(--pill-inset);
+  border-radius: var(--radius-pill);
+  font-family: var(--font-ui);
+  font-size: var(--text-ui);
+  line-height: 1;
+}
+.otk-icon-button {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border-radius: var(--radius-control);
+  color: var(--otk-fg-3);
+}
+.otk-send-button {
+  width: 32px;
+  height: 32px;
+  display: inline-grid;
+  place-items: center;
+  padding: 0;
+  border-radius: 50%;
+}
+/* One selection primitive per orientation. State is supplied by the owner.
+   The overlay's inset + auto margin structurally centres the pointer. */
+[data-otk-selection] {
+  position: relative;
+  border-radius: var(--radius-row);
+}
+[data-otk-selection]:hover {
+  background: var(--otk-hover);
+}
+[data-otk-selection]:is([aria-selected=true], [aria-current]:not([aria-current=false]), [aria-pressed=true], [data-selected]) {
+  background: var(--otk-selected);
+  color: var(--otk-fg);
+  box-shadow: var(--otk-selected-shadow);
+}
+[data-otk-selection]:is([aria-selected=true], [aria-current]:not([aria-current=false]), [aria-pressed=true], [data-selected])::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  border-radius: 2px;
+  background: var(--otk-fg);
+}
+[data-otk-selection=vertical]::after {
+  inset-block: 0;
+  left: 3px;
+  margin-block: auto;
+  width: 3px;
+  height: 14px;
+}
+[data-otk-selection=horizontal]::after {
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 2px;
 }
 b,
 strong,

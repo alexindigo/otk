@@ -4,7 +4,11 @@ The visual-system check enforces token-only font selection, minimum 12px text
 and the 4px spacing grid across reusable UI styles and application chrome.
 Negative fixtures reject direct font selection, undersized text and off-grid
 spacing. Theme and contrast tests own palette data and the complete surface
-matrix; browser tests own constructed lights and accessibility presentation.
+matrix (including alpha compositing, all three themes, hover and selection);
+browser tests own constructed lights and accessibility presentation. Lamp paint,
+including unlit, belongs only to StatusLight, never theme slots. Selection's
+shared pointer/underline CSS contract has unit coverage and real-browser
+geometry coverage in full and reduced colours.
 
 The shell check enforces implementation-free open dialog/panel/takeover
 registries, common typed session ports and absence of per-feature prompt inputs

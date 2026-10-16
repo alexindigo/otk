@@ -52,9 +52,14 @@ export class ThemeRegistry {
   resolve(
     id: string,
     system: ThemeMode,
+    systemLight?: string,
   ): { id: string; mode: ThemeMode; colors: ThemeColors } {
+    const light = systemLight && this.#themes.get(systemLight);
+    const systemId = system === "light" && light && light.mode === "light"
+      ? light.id
+      : this.#bases.get(system);
     const theme = this.#themes.get(
-      id === "system" ? this.#bases.get(system)! : id,
+      id === "system" ? systemId! : id,
     ) ?? this.#themes.get(this.#bases.get("dark")!);
     if (!theme) throw new Error(`Missing theme base for: ${id}`);
     const base = this.#themes.get(this.#bases.get(theme.mode)!);

@@ -38,6 +38,13 @@ export function registerCommandDialogs(dialogs: DialogRegistry): void {
         <ThemePicker
           theme={shell.theme}
           ready={shell.toggles.state.ready}
+          systemLightTheme={shell.toggles.state.prefs.systemLightTheme}
+          onSystemLightSave={async (value) => {
+            await shell.connection(LOCAL_SIDECAR).rpc.call("prefs.set", {
+              key: "systemLightTheme",
+              value,
+            });
+          }}
           onSave={async (value) => {
             await shell.connection(LOCAL_SIDECAR).rpc.call("prefs.set", {
               key: "theme",

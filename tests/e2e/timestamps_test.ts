@@ -4,6 +4,19 @@ import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { SidecarTest } from "../support/sidecar.ts";
+// Sample the rendered colour, including translucent ink and ancestor surfaces.
+// Reading RGB from a transparent canvas discards the alpha-based hierarchy.
+const renderedColors = `
+  const canvas=document.createElement('canvas');canvas.width=canvas.height=1;
+  const ctx=canvas.getContext('2d');
+  const color=(element,property='color')=>{
+    ctx.clearRect(0,0,1,1);
+    const layers=[];for(let node=element;node;node=node.parentElement)layers.unshift(node);
+    for(const node of layers){ctx.fillStyle=getComputedStyle(node).backgroundColor;ctx.fillRect(0,0,1,1)}
+    ctx.fillStyle=getComputedStyle(element)[property];ctx.fillRect(0,0,1,1);
+    return [...ctx.getImageData(0,0,1,1).data].slice(0,3);
+  };
+`;
 Deno.test("creation-time hover and persistent visibility, structural footer date/clock, native final time and completed restart", async () => {
   const f = await browserFixture();
   let server: SidecarTest | undefined;
@@ -107,7 +120,7 @@ Deno.test("creation-time hover and persistent visibility, structural footer date
       join(f.oc.root, "timestamps-hover-output-date.png"),
     );
     const contrast = await browser.evaluate<number>(
-      "(()=>{const footer=getComputedStyle(document.querySelector('.otk-message-footer')),canvas=document.createElement('canvas');canvas.width=canvas.height=1;const ctx=canvas.getContext('2d'),rgb=value=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=value;ctx.fillRect(0,0,1,1);return [...ctx.getImageData(0,0,1,1).data].slice(0,3)},border=rgb(footer.borderTopColor),background=rgb(getComputedStyle(document.documentElement).backgroundColor),text=rgb(footer.color),distance=a=>a.reduce((sum,v,i)=>sum+Math.abs(v-background[i]),0);return distance(border)/distance(text)})()",
+      `(()=>{${renderedColors}const footer=document.querySelector('.otk-message-footer'),border=color(footer,'borderTopColor'),background=color(document.documentElement,'backgroundColor'),text=color(footer),distance=a=>a.reduce((sum,v,i)=>sum+Math.abs(v-background[i]),0);return distance(border)/distance(text)})()`,
     );
     assert(
       contrast > 0 && contrast < .2,
@@ -159,7 +172,7 @@ Deno.test("creation-time hover and persistent visibility, structural footer date
         roleColor: number[];
         createdColor: number[];
       }
-    >(`(()=>{const footer=document.querySelector('.otk-message-footer'),t=footer.querySelector('.otk-last-output-time'),d=footer.querySelector('.otk-message-details'),canvas=document.createElement('canvas'),ctx=canvas.getContext('2d');canvas.width=canvas.height=1;const color=selector=>{ctx.clearRect(0,0,1,1);ctx.fillStyle=getComputedStyle(document.querySelector(selector)).color;ctx.fillRect(0,0,1,1);return [...ctx.getImageData(0,0,1,1).data].slice(0,3)};return {footerRight:footer.getBoundingClientRect().right,timeRight:t.getBoundingClientRect().right,detailsRight:d.getBoundingClientRect().right,timeLeft:t.getBoundingClientRect().left,footerColor:getComputedStyle(footer).color,timeColor:getComputedStyle(t).color,roleColor:color('.otk-role-label'),createdColor:color('.otk-created-time')}})()`);
+    >(`(()=>{${renderedColors}const footer=document.querySelector('.otk-message-footer'),t=footer.querySelector('.otk-last-output-time'),d=footer.querySelector('.otk-message-details');return {footerRight:footer.getBoundingClientRect().right,timeRight:t.getBoundingClientRect().right,detailsRight:d.getBoundingClientRect().right,timeLeft:t.getBoundingClientRect().left,footerColor:getComputedStyle(footer).color,timeColor:getComputedStyle(t).color,roleColor:color(document.querySelector('.otk-role-label')),createdColor:color(document.querySelector('.otk-created-time'))}})()`);
     assert(Math.abs(style.footerRight - style.timeRight) < .5);
     assert(style.detailsRight < style.timeLeft);
     assertEquals(style.footerColor, style.timeColor);

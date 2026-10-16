@@ -156,7 +156,7 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
     assert(geometry.prose <= 760 && geometry.code > geometry.prose);
     assert(Math.abs(geometry.left - geometry.codeLeft) < .5);
     assert(geometry.font.includes("IBM Plex Sans"));
-    assertEquals([geometry.size, geometry.line], ["15px", "24px"]);
+    assertEquals([geometry.size, geometry.line], ["14px", "24px"]);
     await b.poll(
       "document.querySelector('[data-tool=bash] .otk-tool-toggle').getAttribute('aria-expanded')==='false' && document.querySelector('[data-tool=bash] .otk-tool-body').hidden",
     );

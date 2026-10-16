@@ -202,8 +202,16 @@ export default function Shell(
     }));
   }
   createEffect(
-    () => toggles.state.prefs.theme,
-    (id) => props.theme.commit(id ?? DEFAULT_PREFS.theme),
+    () =>
+      [
+        toggles.state.prefs.theme,
+        toggles.state.prefs.systemLightTheme,
+      ] as const,
+    ([id, light]) =>
+      props.theme.commit(
+        id ?? DEFAULT_PREFS.theme,
+        light ?? DEFAULT_PREFS.systemLightTheme,
+      ),
   );
   createEffect(
     () => [

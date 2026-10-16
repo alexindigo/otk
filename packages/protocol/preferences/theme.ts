@@ -2,6 +2,7 @@
 import type { PreferenceRegistry } from "../prefs.ts";
 export interface ThemePreferences {
   theme: string;
+  systemLightTheme: string;
 }
 /** Theme identity is data, not an enumeration of the installed palettes. */
 export function isThemeId(value: unknown): value is string {
@@ -13,5 +14,11 @@ export function registerThemePreferences(registry: PreferenceRegistry): void {
     default: "otk-dark",
     validate: isThemeId,
     label: "Theme",
+  });
+  registry.register({
+    key: "systemLightTheme",
+    default: "otk-light",
+    validate: isThemeId,
+    label: "System light theme",
   });
 }

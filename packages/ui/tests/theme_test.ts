@@ -146,7 +146,7 @@ Deno.test("System follows live OS changes including preview and pinned modes ret
   let observations = 0;
   const release = engine.subscribe(() => observations++), stop = engine.start();
   f.os("light");
-  assertEquals(f.output()!.colors.bg, "#f4f6f8");
+  assertEquals(f.output()!.colors.bg, "#f4eee3");
   assertEquals(f.output()!.committed, "system");
   engine.commit("otk-dark");
   f.os("light");
@@ -217,4 +217,38 @@ Deno.test("OTK Light text including code, statuses and agents has >=4.5:1 contra
     }
   }
   assertEquals(colors.accent, "#ff4d00");
+});
+Deno.test("System uses Linen by default, accepts registered light preferences and falls back within light mode", () => {
+  const f = setup(),
+    engine = new ThemeEngine(f.themes, f.environment, "system");
+  const stop = engine.start();
+  f.os("light");
+  assertEquals(f.output()!.colors.bg, "#f4eee3");
+  engine.commit("system", "otk-light-stone");
+  assertEquals(f.output()!.colors.bg, "#f5f3ef");
+  const preview = engine.preview();
+  preview.select("otk-dark");
+  engine.commit("system", "otk-light");
+  assertEquals(f.output()!.colors.bg, "#1a1c1e");
+  preview.close();
+  assertEquals(f.output()!.colors.bg, "#f4eee3");
+  for (const id of ["otk-dark", "system", "plugin:missing"]) {
+    engine.commit("system", id);
+    assertEquals(f.output()!.colors.bg, "#f4eee3");
+    assertEquals(f.output()!.committed, "system");
+  }
+  engine.commit("otk-light-stone", "otk-light");
+  f.os("dark");
+  assertEquals(f.output()!.colors.bg, "#f5f3ef");
+  f.themes.register({
+    id: "external-light",
+    label: "External light",
+    mode: "light",
+    colors: { bg: "#fefefe" },
+  });
+  engine.commit("system", "external-light");
+  assertEquals(f.output()!.colors.bg, "#1a1c1e");
+  f.os("light");
+  assertEquals(f.output()!.colors.bg, "#fefefe");
+  stop();
 });

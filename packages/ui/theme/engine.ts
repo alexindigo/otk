@@ -43,6 +43,7 @@ export function browserThemeEnvironment(
 /** One paint owner. Preview never mutates the latest authoritative commit. */
 export class ThemeEngine {
   #committed: string;
+  #systemLight?: string;
   #preview?: { owner: symbol; id: string };
   #listeners = new Set<() => void>();
   #stop?: () => void;
@@ -50,13 +51,19 @@ export class ThemeEngine {
     readonly themes: ThemeRegistry,
     readonly environment: ThemeEnvironment,
     committed: string,
+    systemLight?: string,
   ) {
     this.#committed = committed;
+    this.#systemLight = systemLight;
     this.snapshot();
   }
   snapshot(): ThemeSnapshot {
     const selected = this.#preview?.id ?? this.#committed;
-    const resolved = this.themes.resolve(selected, this.environment.system());
+    const resolved = this.themes.resolve(
+      selected,
+      this.environment.system(),
+      this.#systemLight,
+    );
     return {
       committed: this.#committed,
       selected,
@@ -79,9 +86,13 @@ export class ThemeEngine {
     this.#listeners.add(listener);
     return () => this.#listeners.delete(listener);
   }
-  commit(id: string): void {
+  commit(
+    id: string,
+    systemLight: string | undefined = this.#systemLight,
+  ): void {
     this.themes.resolve(id, this.environment.system());
     this.#committed = id;
+    this.#systemLight = systemLight;
     this.#paint();
   }
   preview(): { select(id: string): void; close(): void } {

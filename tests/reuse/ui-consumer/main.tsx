@@ -237,6 +237,61 @@ function Consumer(): Element {
           >
             Dark
           </button>
+          <button
+            type="button"
+            data-stone
+            onClick={() => theme.commit("otk-light-stone")}
+          >
+            Stone
+          </button>
+          <section data-selection-gallery>
+            <button
+              type="button"
+              data-otk-selection="vertical"
+              aria-selected="true"
+            >
+              Vertical selected
+            </button>
+            <button
+              type="button"
+              data-otk-selection="vertical"
+              aria-selected="false"
+            >
+              Vertical idle
+            </button>
+            <button
+              type="button"
+              data-otk-selection="horizontal"
+              aria-current="page"
+            >
+              Horizontal current
+            </button>
+            <button
+              type="button"
+              data-otk-selection="horizontal"
+              aria-current="false"
+            >
+              Horizontal idle
+            </button>
+            <button type="button" class="otk-pill">Quiet action</button>
+            <button type="button" class="otk-pill otk-primary">
+              Primary action
+            </button>
+            <button
+              type="button"
+              class="otk-icon-button"
+              aria-label="Icon action"
+            >
+              +
+            </button>
+            <button
+              type="button"
+              class="otk-send-button otk-primary"
+              aria-label="Send"
+            >
+              ↑
+            </button>
+          </section>
           <div data-library-code>
             <Code text="const externalResult: number = 7;" lang="ts" />
           </div>
