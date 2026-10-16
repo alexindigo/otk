@@ -3,6 +3,14 @@ import type { IndexEntry, IndexOp } from "@otk/protocol";
 import type { ServerFrame } from "@otk/protocol";
 import { SessionIndex } from "@otk/harness";
 export class IndexStore extends SessionIndex {
+  #observers = new Set<(entry: IndexEntry, previous?: IndexEntry) => void>();
+  /** Synchronous observations preserve transitions even within one wire batch. */
+  observe(
+    listener: (entry: IndexEntry, previous?: IndexEntry) => void,
+  ): () => void {
+    this.#observers.add(listener);
+    return () => this.#observers.delete(listener);
+  }
   #listeners = new Set<(frame: ServerFrame) => void>();
   #pending: IndexOp[] = [];
   #scheduled = false;
@@ -20,13 +28,26 @@ export class IndexStore extends SessionIndex {
   }
   override reset(entries: IndexEntry[]): void {
     this.#pending = [];
+    const changes = entries.map((entry) => ({
+      entry,
+      previous: this.get(entry.id),
+    }));
     super.reset(entries);
+    for (const { entry, previous } of changes) {
+      for (const listener of this.#observers) {
+        listener(structuredClone(entry), previous && structuredClone(previous));
+      }
+    }
     this.rev++;
     this.#emit(this.snapshot());
   }
   override upsert(entry: IndexEntry): void {
     const copy = structuredClone(entry);
+    const previous = this.get(copy.id);
     super.upsert(copy);
+    for (const listener of this.#observers) {
+      listener(structuredClone(copy), previous && structuredClone(previous));
+    }
     this.#queue({ op: "upsert", entry: copy });
   }
   override remove(id: string): void {

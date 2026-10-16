@@ -6,6 +6,7 @@ import { AuthState } from "./auth/state.ts";
 import type { ServiceConfig } from "./config/schema.ts";
 import { IndexStore } from "./index/store.ts";
 import { Connections } from "./ws/connections.ts";
+import type { FrameSource } from "./ws/connections.ts";
 import type { RpcRegistry } from "./ws/registry.ts";
 import { serve } from "./http/server.ts";
 
@@ -16,6 +17,8 @@ export interface CoreOptions {
   prefs: Prefs<Preferences>;
   rpc: RpcRegistry;
   staticRoot: string;
+  index?: IndexStore;
+  sources?: readonly FrameSource[];
 }
 export interface CoreServer {
   server: Deno.HttpServer<Deno.NetAddr>;
@@ -27,13 +30,14 @@ export interface CoreServer {
 /** Application composition supplies a backend, registrations, store and assets. */
 export async function startCore(options: CoreOptions): Promise<CoreServer> {
   const { cfg, backend, store, prefs, rpc, staticRoot } = options;
-  const auth = new AuthState(cfg), index = new IndexStore();
+  const auth = new AuthState(cfg), index = options.index ?? new IndexStore();
   const connections = new Connections(
     backend,
     index,
     cfg.harness.url,
     prefs,
     rpc,
+    options.sources,
   );
   await backend.core.start({
     index,

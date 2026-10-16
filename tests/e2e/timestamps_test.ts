@@ -213,7 +213,15 @@ Deno.test("creation-time hover and persistent visibility, structural footer date
         db.prepare(
           "SELECT feature,version FROM otk_migrations ORDER BY feature",
         ).all(),
-        [{ feature: "frecency", version: 1 }, { feature: "prefs", version: 1 }],
+        [
+          { feature: "finishes", version: 1 },
+          { feature: "frecency", version: 1 },
+          { feature: "prefs", version: 1 },
+          { feature: "project-templates", version: 1 },
+          { feature: "projects", version: 1 },
+          { feature: "seen", version: 1 },
+          { feature: "tasks", version: 1 },
+        ],
       );
     } finally {
       db.close();

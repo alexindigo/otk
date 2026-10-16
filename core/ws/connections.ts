@@ -13,21 +13,32 @@ interface Connection {
   welcomed: boolean;
   sessions: Set<string>;
 }
+/** Feature-owned metadata streams, including a fresh snapshot on every hello. */
+export interface FrameSource {
+  snapshot(): ServerFrame;
+  listen(listener: (frame: ServerFrame) => void): () => void;
+  close?(): void;
+}
 export class Connections {
   #connections = new Set<Connection>();
   #counts = new Map<string, number>();
   harnessState: HarnessState = "connecting";
   #stopPrefs: () => void;
+  #stopSources: (() => void)[];
   constructor(
     readonly backend: Harness,
     readonly index: IndexStore,
     readonly url: string,
     readonly prefs: Prefs<Preferences>,
     readonly rpc: RpcRegistry,
+    readonly sources: readonly FrameSource[] = [],
   ) {
     index.listen((frame) => this.broadcast(frame));
     this.#stopPrefs = prefs.listen((prefs) =>
       this.broadcast({ t: "prefs", prefs })
+    );
+    this.#stopSources = sources.map((source) =>
+      source.listen((frame) => this.broadcast(frame))
     );
   }
   #send(connection: Connection, frame: ServerFrame): void {
@@ -131,6 +142,9 @@ export class Connections {
           this.#send(connection, { t: "harness", state: this.harnessState });
           this.#send(connection, this.index.snapshot());
           this.#send(connection, { t: "prefs", prefs: this.prefs.get() });
+          for (const source of this.sources) {
+            this.#send(connection, source.snapshot());
+          }
           return;
         }
         if (frame.t === "pong") {
@@ -184,6 +198,8 @@ export class Connections {
   }
   close(): void {
     this.#stopPrefs();
+    for (const stop of this.#stopSources) stop();
+    for (const source of this.sources) source.close?.();
     for (const connection of this.#connections) {
       connection.ws.close(1001, "server stopping");
     }

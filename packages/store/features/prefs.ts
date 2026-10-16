@@ -25,7 +25,7 @@ export class Prefs<P extends object> {
   #listeners = new Set<(prefs: P) => void>();
   constructor(readonly db: OtkDb, readonly options: PrefsOptions<P>) {}
   get(): P {
-    const prefs = { ...this.options.defaults };
+    const prefs = structuredClone(this.options.defaults) as P;
     for (
       const row of this.db.connection.prepare("SELECT key, value FROM prefs")
         .all()

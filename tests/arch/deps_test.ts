@@ -146,6 +146,23 @@ function sourceErrors(path: string, source: string): string[] {
   }
   const errors: string[] = [];
   if (
+    path !== "packages/client/inbox.ts" &&
+    /\bfunction\s+(?:inboxStatus|inboxProjects|rollup|visitTime|ageing)\s*\(/
+      .test(source)
+  ) {
+    errors.push(
+      "inbox projections belong to the shared framework-free client owner",
+    );
+  }
+  if (
+    path !== "packages/client/tabs.ts" &&
+    /\bfunction\s+createTabs\s*\(/.test(source)
+  ) {
+    errors.push(
+      "task, phantom and preview state belongs to the shared client tab model",
+    );
+  }
+  if (
     (from === "harness-opencode1" || path.startsWith("core/index/")) &&
     /#[\w]+\s*(?::[^=;]+)?=\s*new Map<string,\s*IndexEntry>/.test(source)
   ) errors.push("session entries belong only to the shared SessionIndex owner");
@@ -744,7 +761,11 @@ Deno.test("RPC contracts stay open and names derive only from the mergeable regi
   const protocol = await Deno.readTextFile(
     new URL("packages/protocol/rpc.ts", root),
   );
-  assert(/export\s+interface\s+RpcMethods\s*\{/.test(protocol));
+  assert(
+    /export\s+interface\s+RpcMethods(?:\s+extends\s+[\w,\s]+)?\s*\{/.test(
+      protocol,
+    ),
+  );
   assert(
     /export\s+type\s+RpcMethod\s*=\s*keyof\s+RpcMethods\s*;/.test(protocol),
   );
@@ -1072,4 +1093,39 @@ Deno.test("notification registry is feature/channel agnostic and notification ac
     assert(imports(source).every((name) => name === "@otk/client"), id);
     assert(!/rpc\.call|core\/|harness|otk\.db|localStorage/.test(source), id);
   }
+});
+
+Deno.test("inbox and tab models remain reusable, framework-free owners with injected RPC and promotion ports", async () => {
+  for (const file of ["inbox", "tabs"]) {
+    const path = `packages/client/${file}.ts`,
+      source = await Deno.readTextFile(new URL(path, root));
+    assertEquals(sourceErrors(path, source), []);
+    assert(
+      imports(source).every((name) =>
+        name === "@otk/protocol" || name?.startsWith("./")
+      ),
+    );
+    assert(
+      !/\b(?:window|document|localStorage|WebSocket|Deno)\b|solid-js|@otk\/(?:store|ui|harness)/
+        .test(source),
+    );
+  }
+  for (
+    const definition of [
+      "function rollup() {}",
+      "function inboxProjects() {}",
+      "function createTabs() {}",
+    ]
+  ) {
+    assert(sourceErrors("packages/ui/inbox.ts", definition).length);
+    assert(sourceErrors("web/src/ui/App.tsx", definition).length);
+  }
+  assertEquals(
+    dependencyError(
+      "packages/client/inbox.ts",
+      "solid-js",
+      new Set(Object.keys(allowed)),
+    ),
+    "client must remain framework-free",
+  );
 });

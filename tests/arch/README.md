@@ -22,6 +22,12 @@ rejected in package production source. Negative fixtures exercise forbidden
 edges and public-entry bypasses, rather than relying only on the current tree
 being valid.
 
+Inbox roll-up, visit/ageing and task/phantom/preview projections belong to the
+framework-free client owner. Negative fixtures reject duplicate project/tab
+model definitions in UI/application source and Solid imports into the models.
+The ordinary dependency scan applies to new store/core/client feature files;
+their standalone public entries remain the only cross-package boundary.
+
 RPC names must derive from the declaration-mergeable protocol `RpcMethods`
 interface. Negative fixtures reject closed aliases and extra literal method
 names; core RPC tests compile and exercise an external feature contract through

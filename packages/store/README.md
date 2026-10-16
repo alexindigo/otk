@@ -1,9 +1,9 @@
 # @otk/store
 
-Disk-backed SQLite storage for preferences and canonical frecency paths. Uses
-`node:sqlite` and `@std/path`; depends on no other OTK package. Import only the
-public `@otk/store` entry. Applications supply their preference schema,
-defaults, validator and error construction.
+Disk-backed SQLite storage for preferences, canonical frecency paths and inbox
+metadata. Uses `node:sqlite` and `@std/path`; depends on no other OTK package.
+Import only the public `@otk/store` entry. Applications supply their preference
+schema, defaults, validator and error construction.
 
 ```ts
 import {
@@ -72,9 +72,20 @@ parse-error behavior. `listen` returns an unsubscribe callback.
 `Frecency` resolves project/path keys exactly as the app did, rejects empty,
 NUL-containing or over-4096-character keys before writing, increments scores,
 and retains at most 1000 entries globally. Lists are project-scoped and ordered
-by last use. Decay/ranking are consumer concerns. Apart from upgrade tracking,
-this package supplies only prefs/frecency schemas, with no output-times
-persistence.
+by last use. Decay/ranking are consumer concerns.
+
+Inbox features independently export `Projects` / `projectsMigrations`, `Tasks` /
+`tasksMigrations`, `Seen` / `seenMigrations`, `Finishes` / `finishesMigrations`
+and `ProjectTemplates` / `projectTemplatesMigrations`. Each owns its schema
+starting at version 1. They store metadata only, never transcripts. Projects and
+seen marks take a user key; tasks, finishes and path templates are
+server-scoped. Project discovery preserves first-appearance order, including
+directories not explicitly added. Inactive marks freeze visit clocks; clearing a
+mark excludes the paused interval. Task membership is ordered and exclusive per
+session; replacement and creation with initial sessions are atomic. Closing a
+task deletes only its grouping. Clocks can be injected for deterministic
+consumers. Feature listeners run after committed writes. Composite preference
+defaults are detached on every read.
 
 Use Deno read/write permissions for the state directory and packaged SQL.
 License: LGPL-3.0-only. Validate with `deno task test:unit` and

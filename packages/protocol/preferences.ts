@@ -2,6 +2,7 @@
 import { PreferenceRegistry } from "./prefs.ts";
 import type { Preferences } from "./preference-contract.ts";
 import { registerDiffPreferences } from "./preferences/diff.ts";
+import { registerInboxPreferences } from "./preferences/inbox.ts";
 import { registerKeymapPreferences } from "./preferences/keymap.ts";
 import { registerNotificationPreferences } from "./preferences/notifications.ts";
 import { registerPromptPreferences } from "./preferences/prompt.ts";
@@ -19,6 +20,7 @@ export function createPreferences(): PreferenceRegistry {
   registerDiffPreferences(registry);
   registerPromptPreferences(registry);
   registerVisualPreferences(registry);
+  registerInboxPreferences(registry);
   return registry;
 }
 export const preferences: PreferenceRegistry = createPreferences();
@@ -33,3 +35,7 @@ export { registerPromptPreferences } from "./preferences/prompt.ts";
 export { isThemeId, registerThemePreferences } from "./preferences/theme.ts";
 export { registerTranscriptPreferences } from "./preferences/transcript.ts";
 export { registerVisualPreferences } from "./preferences/visual.ts";
+export {
+  DEFAULT_PROJECT_AGEING,
+  registerInboxPreferences,
+} from "./preferences/inbox.ts";

@@ -6,6 +6,7 @@ export * from "./errors.ts";
 export * from "./frecency.ts";
 export * from "./history.ts";
 export * from "./index.ts";
+export * from "./inbox.ts";
 export * from "./messages.ts";
 export * from "./prefs.ts";
 export * from "./preferences.ts";

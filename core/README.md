@@ -109,6 +109,19 @@ dispatch edit. HTTP handlers remain discovered from `http/routes/`, including
 API auth middleware; there is no handwritten route table.
 
 `core/mod.ts` is a local application convenience entry, not a workspace package.
+
+`InboxFeature` composes project/task/seen/finish/template stores and owns inbox
+RPC validation and metadata frames. `IndexStore.observe` supplies synchronous,
+detached before/after entries, so a busy-to-idle edge cannot disappear inside a
+wire batch. Initial idle snapshots do not invent finish times. Activity clears
+persisted inactive marks for affected users; projects with sessions are
+discovered without being explicitly added. `Connections` consumes generic
+`FrameSource`s with welcome snapshots and lifetime-bound listeners; it imports
+no inbox feature. The shipped single-user server resolves its current configured
+auth username (or `local`) at use time as the project/seen storage key,
+including after first-run setup. No authentication contract changes are needed.
+Inbox RPCs are core-owned, not optional backend capabilities. Templates expand
+one `{project}` path segment on this server, never a recursive wildcard search.
 The smaller [`example.ts`](./example.ts) is retained as an alternate
 composition; its core-only routes and absence of optional RPCs are covered by
 the service test.

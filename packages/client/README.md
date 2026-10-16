@@ -66,6 +66,31 @@ reduced streaming content and a finished assistant clock. Application
 integration/e2e tests stay at root; client units live in `tests/`. Run project
 checks in the assigned OTK VM.
 
+## Inbox metadata and tabs
+
+`createInbox(rpc, factory?)` receives connection-local `inbox` frames, including
+the snapshot sent on every hello. `openProject`, `openSession` and `act` reset
+the server-owned visit clock; opening a session also records its seen timestamp.
+Wrap sends, approvals, answers and interrupts in `act(directory, callback)`.
+`promote(session)` creates a title-named task with its initial session
+atomically. These are UI-independent ports: callers own navigation guards,
+action callbacks and failure presentation.
+
+`inboxStatus`, `rollup`, `unread`, `inboxProjects`, `visitTime` and `ageing` are
+the shared pure projections for column, rail and badges. Supply the connection's
+index entries, its metadata and an explicit current time. Ageing defaults to
+2h/8h/24h and accepts the validated `projectAgeing` preference (milliseconds).
+Keep each server's inputs separate when merging the resulting project rows.
+
+`createTabs(inbox.promote, factory?)` takes
+`update({directory, entries, inbox})` and exposes task, mandatory phantom and
+single-preview tabs. `select`, `preview`, `pin` (also the double-click action)
+and `send(sessionID, callback)` own tab transitions. Required activity tabs
+never disappear when a preview is replaced; an idle/seen selected phantom
+remains until selection leaves. Inputs remain owned by their index/metadata
+models, and tabs never delete sessions. Concurrent pins share promotion; late
+completion cannot steal a newer selection.
+
 ## Commands
 
 `new CommandHub(context, keys)` creates an empty, framework-free registry. A
