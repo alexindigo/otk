@@ -33,7 +33,10 @@ check, error reporting and `SessionProvider`'s common session ports: typed
 `rpc(method, params)`, `supports(capability)`, session ID, directory,
 preferences, history, attachment resolution, dirty-state and successful-action
 callbacks. There are no per-feature callbacks or capability flags on `Prompt`.
-Features can provide triggers and autocomplete sources, key handling,
+The session `supports` port reads reactive advertised capabilities: an initial
+welcome activates already-mounted consumers, and reconnecting retains feature
+owners and their unsent input. Transport readiness is a separate input to
+actions. Features can provide triggers and autocomplete sources, key handling,
 paste/drop, submission transforms, completion hooks, chips, actions and
 overlays. Shell, mentions, slash, history, paste, attachments and editor each
 own their implementation. `Prompt` owns native input, submission identity and

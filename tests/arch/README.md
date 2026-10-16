@@ -14,6 +14,11 @@ checks follow their new reusable owners. Inbox/browser tests observe the new
 column and centre navigation rather than the retired application sidebar. The
 right-panel host cannot import or select concrete views or call their RPCs;
 negative fixtures enforce that boundary. Registered views own their adapters.
+Shell feature availability reads reactive advertised sidecar state, never the
+transport's private `supports` query. Negative fixtures reject that bypass;
+order-controlled browser tests hold welcome until the direct-route consumer is
+mounted and observe permission, question and prompt availability after release
+and reload. Existing reconnect coverage preserves unsent attention input.
 Session hierarchy/grouping/search remains in the framework-free client owner,
 with negative fixtures rejecting duplicate UI or application projections.
 

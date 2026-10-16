@@ -508,7 +508,9 @@ export default function Shell(
           ? sidecars.state.list.some((s) =>
             s.status === "connected" && s.capabilities.includes(capability)
           )
-          : connection.supports(capability),
+          : sidecars.state.list.some((s) =>
+            s.id === target.sidecarId && s.capabilities.includes(capability)
+          ),
       rpc: (method, params) => connection.rpc.call(method, params),
       sessionID: () => target.sessionID,
       directory: () => directoryFor(target),

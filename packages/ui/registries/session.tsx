@@ -13,6 +13,7 @@ import type {
 
 /** Session-scoped data and typed operations, independent of any feature list. */
 export interface SessionPorts {
+  /** Reactive advertised features; transport loss must not unmount dirty owners. */
   supports(capability: CapabilityName): boolean;
   rpc: InboxRpc["call"];
   sessionID(): string;

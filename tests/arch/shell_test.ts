@@ -42,6 +42,11 @@ function errors(path: string, source: string): string[] {
   ) {
     errors.push("panel host owns a concrete view or its data");
   }
+  if (path.endsWith("/Shell.tsx") && /\.supports\(/.test(source)) {
+    errors.push(
+      "shell feature availability bypasses reactive advertised state",
+    );
+  }
   return errors;
 }
 Deno.test("shell registries stay open, implementation-free and feature ports replace per-feature prompt wiring", async () => {
@@ -162,4 +167,15 @@ Deno.test("layout controls send field intents to the authoritative persistence o
     ),
   );
   assert(!/\basync\b|\bawait\b/.test(owner.replace(/\/\/[^\n]*/g, "")));
+});
+
+Deno.test("shell feature ports observe advertised state rather than transport-private capability checks", async () => {
+  const path = "packages/ui/shell/Shell.tsx";
+  assertEquals(errors(path, await Deno.readTextFile(new URL(path, root))), []);
+  for (
+    const source of [
+      "supports: (capability) => connection.supports(capability)",
+      "supports: (capability) => sidecars.connection(id).supports(capability)",
+    ]
+  ) assert(errors(path, source).length > 0, source);
 });
