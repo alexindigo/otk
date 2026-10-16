@@ -9,6 +9,7 @@ import type {
 import type { HistoryEntry } from "./history.ts";
 import type { Preferences } from "./prefs.ts";
 import type { InboxRpcMethods } from "./inbox.ts";
+import type { LayoutRpcMethods } from "./preferences/layout.ts";
 export type PromptPart =
   | { kind: "text"; text: string }
   | {
@@ -101,7 +102,7 @@ export interface CommandInput {
   parts?: Extract<PromptPart, { kind: "file" }>[];
 }
 /** Wire contracts. Features extend this interface through module augmentation. */
-export interface RpcMethods extends InboxRpcMethods {
+export interface RpcMethods extends InboxRpcMethods, LayoutRpcMethods {
   "session.get": { params: { sessionID: string }; result: ContentSession };
   "session.children": {
     params: { sessionID: string };

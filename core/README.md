@@ -126,6 +126,14 @@ The smaller [`example.ts`](./example.ts) is retained as an alternate
 composition; its core-only routes and absence of optional RPCs are covered by
 the service test.
 
+`registerLayout(rpc, prefs)` contributes `layout.patch` for shell field intents.
+It synchronously merges each patch into the latest persisted `shellLayout`, then
+uses the existing complete-value validator, save and preference broadcast. Rapid
+controls and separate browser connections therefore preserve independent fields;
+UI preference state still follows authoritative broadcasts without optimistic
+copies. Invalid patches cannot partially persist. Explicit `prefs.set`
+replacement remains available for complete preference values.
+
 Core tests live in `tests/unit/core/`; application integration/e2e tests stay at
 root. They cover config, auth/index, RPC validation/capability absence and
 actual HTTP/WS/browser behavior. Library units stay in their packages. Core is

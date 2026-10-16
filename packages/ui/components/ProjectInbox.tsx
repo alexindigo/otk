@@ -8,7 +8,7 @@ import {
   type ProjectSelection,
   type SidecarState,
 } from "@otk/client";
-import type { Preferences } from "@otk/protocol";
+import type { Preferences, ShellLayout } from "@otk/protocol";
 import StatusLight from "./StatusLight.tsx";
 import ConnectionBadge from "./ConnectionBadge.tsx";
 import { ownedAction, useCommandPorts } from "../keyboard/context.tsx";
@@ -25,7 +25,7 @@ export default function ProjectInbox(props: {
   ready: boolean;
   onOpen(project: ProjectSelection): void;
   onInactive(project: ProjectSelection, value: boolean): Promise<void>;
-  onLayout(layout: Preferences["shellLayout"]): Promise<void>;
+  onLayout(patch: Partial<ShellLayout>): Promise<void>;
 }): import("solid-js").Element {
   const [inactiveOpen, setInactiveOpen] = createSignal(false);
   const [dragWidth, setDragWidth] = createSignal<number>();
@@ -34,9 +34,9 @@ export default function ProjectInbox(props: {
   const layout = () => props.prefs.shellLayout;
   const collapsed = () => layout().leftCollapsed;
   const width = () => collapsed() ? 48 : dragWidth() ?? layout().leftWidth;
-  const save = async (value: Preferences["shellLayout"]) => {
+  const save = async (patch: Partial<ShellLayout>) => {
     try {
-      await props.onLayout(value);
+      await props.onLayout(patch);
     } catch (error) {
       setError((error as Error).message);
     }
@@ -136,8 +136,7 @@ export default function ProjectInbox(props: {
           type="button"
           aria-label={collapsed() ? "Expand projects" : "Collapse projects"}
           disabled={!props.ready}
-          onClick={() =>
-            void save({ ...layout(), leftCollapsed: !collapsed() })}
+          onClick={() => void save({ leftCollapsed: !collapsed() })}
         >
           {collapsed() ? "›" : "‹"}
         </button>
@@ -252,7 +251,7 @@ export default function ProjectInbox(props: {
                 200,
                 Math.min(360, width() + (event.key === "ArrowLeft" ? -8 : 8)),
               );
-            void save({ ...layout(), leftWidth: next });
+            void save({ leftWidth: next });
           }}
           onPointerDown={(event) => {
             event.currentTarget.setPointerCapture(event.pointerId);
@@ -275,7 +274,7 @@ export default function ProjectInbox(props: {
           }}
           onPointerUp={(event) => {
             event.currentTarget.releasePointerCapture(event.pointerId);
-            void save({ ...layout(), leftWidth: width() }).finally(() =>
+            void save({ leftWidth: width() }).finally(() =>
               setDragWidth(undefined)
             );
           }}

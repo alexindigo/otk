@@ -27,6 +27,7 @@ import {
   registerFiles,
   registerFrecency,
   registerHistory,
+  registerLayout,
   registerPermissions,
   registerPrefs,
   registerPrompt,
@@ -72,6 +73,7 @@ export function startApplication(
   );
   inbox.register(rpc);
   registerPrefs(rpc, backend, prefs);
+  registerLayout(rpc, prefs);
   registerFrecency(rpc, backend, new Frecency(store, frecencyOptions));
   registerSessions(rpc, backend);
   registerPrompt(rpc, backend);

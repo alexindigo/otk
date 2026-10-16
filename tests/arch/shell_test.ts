@@ -30,6 +30,11 @@ function errors(path: string, source: string): string[] {
     !/createTabs\([\s\S]*?\binput:\s*\(\)\s*=>\s*tabInput\(p\),\s*session:/
       .test(source)
   ) errors.push("shell tabs lack owner-current inputs and session resolution");
+  if (
+    path.startsWith("packages/ui/") &&
+    /\.\.\.\s*layout\(\)|key:\s*["']shellLayout["']|onLayout\(\w+:\s*Preferences\["shellLayout"\]/
+      .test(source)
+  ) errors.push("layout controls must send field intents, not stale snapshots");
   return errors;
 }
 Deno.test("shell registries stay open, implementation-free and feature ports replace per-feature prompt wiring", async () => {
@@ -108,4 +113,38 @@ Deno.test("tab commands own readiness and the shell injects current inputs and a
       ],
     ]
   ) assert(errors(path, source).length > 0, source);
+});
+
+Deno.test("layout controls send field intents to the authoritative persistence owner", async () => {
+  for (
+    const path of [
+      "packages/ui/shell/Shell.tsx",
+      "packages/ui/components/ProjectInbox.tsx",
+    ]
+  ) {
+    assertEquals(
+      errors(path, await Deno.readTextFile(new URL(path, root))),
+      [],
+    );
+    for (
+      const source of [
+        "save({ ...layout(), leftWidth: next });",
+        'rpc.call("prefs.set", { key: "shellLayout", value });',
+        'onLayout(layout: Preferences["shellLayout"]): Promise<void>;',
+      ]
+    ) assert(errors(path, source).length > 0, source);
+  }
+  const shell = await Deno.readTextFile(
+    new URL("packages/ui/shell/Shell.tsx", root),
+  );
+  assert(shell.includes('rpc.call("layout.patch", patch)'));
+  const owner = await Deno.readTextFile(
+    new URL("core/features/layout.ts", root),
+  );
+  assert(
+    owner.includes(
+      'prefs.set("shellLayout", { ...prefs.get().shellLayout, ...patch })',
+    ),
+  );
+  assert(!/\basync\b|\bawait\b/.test(owner.replace(/\/\/[^\n]*/g, "")));
 });

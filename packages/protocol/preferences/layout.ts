@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PreferenceRegistry } from "../prefs.ts";
+import type { Preferences } from "../preference-contract.ts";
 export interface ShellLayout {
   leftWidth: number;
   leftCollapsed: boolean;
@@ -7,6 +8,9 @@ export interface ShellLayout {
 }
 export interface LayoutPreferences {
   shellLayout: ShellLayout;
+}
+export interface LayoutRpcMethods {
+  "layout.patch": { params: Partial<ShellLayout>; result: Preferences };
 }
 export function registerLayoutPreferences(registry: PreferenceRegistry): void {
   registry.register({

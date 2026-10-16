@@ -59,17 +59,20 @@ right-panel views; R3 provides the empty slot and R5 its view host.
 UI registrations. `ProjectInbox` renders the shared client projection in its
 column and 48px rail; it does not recompute roll-ups, unread or ageing. Width
 (200–360px, 248 default) and collapsed states follow the serving server's
-`shellLayout` preference. `ProjectTabs` consumes the public client tabs model,
-server/project-scoped task actions and injected guarded navigation. It renders
-task/phantom/preview tabs, ordered foldable breadcrumbs with helper nesting and
-reported usage, using 8px status lights. `registerTaskDialogs` contributes its
-name editor to the dialog host. `session.preview` is the command port for the
-future Sessions panel; preview replacement cannot remove required activity tabs.
-The interim `ProjectSessions` remains inside Browse sessions until that panel
-lands. The shell's existing navigation guard protects draft/attention input,
-including same-event slash navigation and browser history. Project-only URLs
-support empty projects. Opening or acting resets visits; a loaded viewed session
-records seen.
+`shellLayout` preference. Controls pass independent `Partial<ShellLayout>` field
+intents through `onLayout`; the shell sends `layout.patch`, whose core owner
+merges against persisted state before validation/save/broadcast. No control
+constructs a whole-layout replacement from props. `ProjectTabs` consumes the
+public client tabs model, server/project-scoped task actions and injected
+guarded navigation. It renders task/phantom/preview tabs, ordered foldable
+breadcrumbs with helper nesting and reported usage, using 8px status lights.
+`registerTaskDialogs` contributes its name editor to the dialog host.
+`session.preview` is the command port for the future Sessions panel; preview
+replacement cannot remove required activity tabs. The interim `ProjectSessions`
+remains inside Browse sessions until that panel lands. The shell's existing
+navigation guard protects draft/attention input, including same-event slash
+navigation and browser history. Project-only URLs support empty projects.
+Opening or acting resets visits; a loaded viewed session records seen.
 
 `createIndex`, `createSession`, `createSidecars` and `solidState` bind the
 framework-free client models to Solid stores. Connection options, including the

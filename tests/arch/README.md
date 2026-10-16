@@ -13,6 +13,14 @@ violations. Web's App is public-entry composition only; notification and command
 checks follow their new reusable owners. Inbox/browser tests observe the new
 column and centre navigation rather than the retired application sidebar.
 
+Layout controls emit independent field patches, never whole-layout copies from
+broadcast-backed props. Negative fixtures reject those stale replacements; the
+shell routes intents through the synchronous persisted-state layout RPC owner.
+Browser tests hold all gestures in one turn and observe saved fields, rendered
+collapse states and restored width after reload. Integration tests cover
+separate connections, authoritative broadcasts, invalid-patch atomicity and
+restart.
+
 `deno task test:arch` checks the exact seven workspace libraries against the
 kit-repackaging dependency table. It also checks root application/core/web/test
 consumers for private paths into extracted packages and retired protocol,

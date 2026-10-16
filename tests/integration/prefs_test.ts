@@ -57,6 +57,47 @@ Deno.test("prefs RPC persists across sidecar restart and broadcasts to other con
         frame.t === "prefs" && frame.prefs[key] === !DEFAULT_PREFS[key]
       );
     }
+    // Independent connections need no observed broadcast before their next intent.
+    const layout = {
+      leftWidth: 360,
+      leftCollapsed: true,
+      rightCollapsed: false,
+    };
+    await Promise.all([
+      a.rpc("layout.patch", { leftWidth: layout.leftWidth }),
+      b.rpc("layout.patch", { leftCollapsed: layout.leftCollapsed }),
+      a.rpc("layout.patch", { rightCollapsed: layout.rightCollapsed }),
+    ]);
+    for (const client of [a, b]) {
+      const frame = await client.wait((frame) =>
+        frame.t === "prefs" &&
+        frame.prefs.shellLayout.leftWidth === layout.leftWidth &&
+        frame.prefs.shellLayout.leftCollapsed === layout.leftCollapsed &&
+        frame.prefs.shellLayout.rightCollapsed === layout.rightCollapsed
+      );
+      assertEquals(frame.t === "prefs" && frame.prefs.shellLayout, layout);
+      assertEquals(
+        (await client.rpc<Preferences>("prefs.get", {})).shellLayout,
+        layout,
+      );
+    }
+    for (
+      const patch of [
+        { leftWidth: 199 },
+        { leftWidth: 361 },
+        { leftCollapsed: "true" },
+        { rightCollapsed: null },
+        { unknown: true },
+        { leftWidth: 200, rightCollapsed: "false" },
+      ]
+    ) {
+      await assertRejects(() => a.rpc("layout.patch", patch));
+      assertEquals(
+        (await b.rpc<Preferences>("prefs.get", {})).shellLayout,
+        layout,
+        "An invalid field cannot partially save the remaining fields",
+      );
+    }
     await a.close();
     await b.close();
     await server.stop();
@@ -70,6 +111,10 @@ Deno.test("prefs RPC persists across sidecar restart and broadcasts to other con
     await c.connect();
     assertEquals((await c.rpc<Preferences>("prefs.get", {})).thinking, "show");
     assertEquals((await c.rpc<Preferences>("prefs.get", {})).keymap, keymap);
+    assertEquals(
+      (await c.rpc<Preferences>("prefs.get", {})).shellLayout,
+      layout,
+    );
     assertEquals(
       (await c.rpc<Preferences>("prefs.get", {})).theme,
       "otk-light",

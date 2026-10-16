@@ -34,6 +34,7 @@ export { register as registerPermissions } from "./features/permissions.ts";
 export { register as registerQuestions } from "./features/questions.ts";
 export { register as registerRevert } from "./features/revert.ts";
 export { prefsOptions, register as registerPrefs } from "./features/prefs.ts";
+export { register as registerLayout } from "./features/layout.ts";
 export {
   frecencyOptions,
   register as registerFrecency,

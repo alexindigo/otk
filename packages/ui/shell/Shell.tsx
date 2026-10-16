@@ -12,6 +12,7 @@ import {
   DEFAULT_PREFS,
   type PromptPart,
   sessionAncestors,
+  type ShellLayout,
 } from "@otk/protocol";
 import {
   type ClientTabs,
@@ -621,11 +622,8 @@ export default function Shell(
     };
   });
   const layout = () => toggles.state.prefs.shellLayout;
-  const saveLayout = async (value: typeof DEFAULT_PREFS.shellLayout) => {
-    await sidecars.connection(LOCAL_SIDECAR).rpc.call("prefs.set", {
-      key: "shellLayout",
-      value,
-    });
+  const saveLayout = async (patch: Partial<ShellLayout>) => {
+    await sidecars.connection(LOCAL_SIDECAR).rpc.call("layout.patch", patch);
   };
   return (
     <CommandProvider commands={commands} keyboard={keyboard}>
@@ -669,7 +667,6 @@ export default function Shell(
                 disabled={!toggles.state.ready}
                 onClick={() =>
                   void saveLayout({
-                    ...layout(),
                     rightCollapsed: !layout().rightCollapsed,
                   }).catch(fail)}
               >
