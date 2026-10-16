@@ -42,17 +42,20 @@ Each session retains its unsent browser draft across takeovers, session/tab
 switches and history navigation. The browser title follows the selected project
 and session.
 
-Transcript prose uses a left-aligned 72ch reading column; code and diffs can use
-the full centre. One metadata line per reply shows reported agent/model/timing,
-with token and cost details on hover. Tool summaries expand to the existing
-renderers; file edits and helper cards start expanded. Typed tool cards show
-bash output, read/search/fetch/skill operations, file diffs and diagnostics,
-todos, read-only questions and subagent progress. Click a task to open its
-child; the subagent bar returns to the parent or cycles siblings. Child sessions
-are read-only. Code highlighting runs in a shared Shiki worker with on-demand
-grammars; session changes release it. The Display menu persists preferences in
-the serving sidecar's `otk.db` and updates other connected tabs. Reverted turns
-show a file-summary banner.
+Transcript prose, code, diffs and the rounded composer share a centred 46rem
+lane. User messages are right-aligned bubbles without role labels. Expandable
+work-log folds hold compact tool rows and thinking lines; file targets are
+project-relative and a single edit's diff sits directly below its row. One
+metadata line per reply shows reported agent/model/timing, with token and cost
+details on hover. Tool summaries expand to the existing renderers; file edits
+and helper cards start expanded. Typed tool cards show bash output,
+read/search/fetch/skill operations, file diffs and diagnostics, todos, read-only
+questions and subagent progress. Click a task to open its child; the subagent
+bar returns to the parent or cycles siblings. Child sessions are read-only. Code
+highlighting runs in a shared Shiki worker with on-demand grammars; session
+changes release it. The Display menu persists preferences in the serving
+sidecar's `otk.db` and updates other connected tabs. Reverted turns show a
+file-summary banner.
 
 | #  | Setting                               | Environment variable                                       | Shipped value                                                                  |
 | -- | ------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |

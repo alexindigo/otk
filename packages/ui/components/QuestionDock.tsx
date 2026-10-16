@@ -10,6 +10,7 @@ export function registerQuestionDock(docks: DockRegistry): void {
 }
 import { createSignal, For, onSettled, Show } from "solid-js";
 import type { QuestionRequest } from "@otk/protocol";
+import TakeoverHeader from "./TakeoverHeader.tsx";
 import { useSessionPorts } from "../registries/session.tsx";
 import type {
   SurfaceRegistry,
@@ -31,6 +32,10 @@ function QuestionTakeover() {
   return (
     <QuestionDock
       request={request()}
+      where={request()
+        ? session.location?.(request()!.sessionID) ??
+          session.entry(request()!.sessionID)?.title
+        : undefined}
       childTitle={request()?.sessionID !== session.sessionID()
         ? session.entry(request()?.sessionID ?? "")?.title
         : undefined}
@@ -52,6 +57,7 @@ function Request(
   props: {
     request: QuestionRequest;
     childTitle?: string;
+    where?: string;
     onReply(id: string, answers?: string[][]): Promise<void>;
     onDirty(value: boolean): void;
   },
@@ -236,18 +242,18 @@ function Request(
         }
       }}
     >
-      <header>
-        <h2>Question</h2>
-        <Show when={props.childTitle}>
-          <span>From {props.childTitle}</span>
-        </Show>
-      </header>
+      <TakeoverHeader
+        title="The agent asks"
+        where={props.where}
+        childTitle={props.childTitle}
+      />
       <div class="otk-question-tabs" role="tablist">
         <For each={props.request.questions} keyed={false}>
           {(q, i) => (
             <button
               type="button"
               role="tab"
+              data-otk-selection="horizontal"
               aria-selected={tab() === i ? "true" : "false"}
               onClick={() => void tabCommand(i)}
             >
@@ -258,6 +264,7 @@ function Request(
         <button
           type="button"
           role="tab"
+          data-otk-selection="horizontal"
           aria-selected={confirm() ? "true" : "false"}
           onClick={() => void tabCommand(props.request.questions.length)}
         >
@@ -277,10 +284,12 @@ function Request(
                 aria-pressed={answers()[tab()]?.includes(option().label)
                   ? "true"
                   : "false"}
-                data-active={selected() === i}
+                data-otk-selection="vertical"
+                data-selected={selected() === i ? "" : undefined}
+                title={`Choose ${i + 1}`}
                 onClick={() => void chooseCommand(i)}
               >
-                <span>{i + 1}. {option().label}</span>
+                <span>{option().label}</span>
                 <span class="otk-muted">{option().description}</span>
               </button>
             )}
@@ -289,8 +298,13 @@ function Request(
             <button
               type="button"
               onClick={() => void chooseCommand(question().options.length)}
+              data-otk-selection="vertical"
+              data-selected={selected() === question().options.length
+                ? ""
+                : undefined}
+              class="otk-question-own"
             >
-              Type your own answer
+              Or type your own answer
             </button>
           </Show>
         </div>
@@ -316,7 +330,7 @@ function Request(
                 }}
               />
             </label>
-            <button type="submit">Use answer</button>
+            <button type="submit" class="otk-pill">Use answer</button>
           </form>
         </Show>
         <Show when={question()?.multiple}>
@@ -345,7 +359,8 @@ function Request(
             void (confirm()
               ? answerCommand(false)
               : tabCommand(props.request.questions.length))}
-          class="otk-primary"
+          class="otk-primary otk-pill"
+          title="Answer (Enter on Confirm)"
         >
           Answer
         </button>
@@ -353,12 +368,11 @@ function Request(
           type="button"
           disabled={pending()}
           onClick={() => void reject()}
+          class="otk-pill"
+          title="Skip question (Esc)"
         >
-          Reject question
+          Skip question
         </button>
-        <span class="otk-muted">
-          j/k select · h/l switch · numbers choose · Esc reject
-        </span>
       </div>
       <Show when={error()}>
         <p role="alert" class="otk-error">{error()}</p>
@@ -370,6 +384,7 @@ export default function QuestionDock(
   props: {
     request?: QuestionRequest;
     childTitle?: string;
+    where?: string;
     onReply(id: string, answers?: string[][]): Promise<void>;
     onDirty(value: boolean): void;
   },
@@ -380,6 +395,7 @@ export default function QuestionDock(
         <Request
           request={q()}
           childTitle={props.childTitle}
+          where={props.where}
           onReply={props.onReply}
           onDirty={props.onDirty}
         />

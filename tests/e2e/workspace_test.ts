@@ -206,7 +206,7 @@ Deno.test("E5 Esc confirmation then abort yields interrupted footer and idle ses
     );
     await browser.key("Escape");
     await browser.poll(
-      "document.querySelector('.otk-prompt-actions').textContent.includes('esc again to interrupt')",
+      "document.querySelector('.otk-prompt button[type=submit]').title==='Esc again to interrupt'",
     );
     await browser.key("Escape");
     await browser.poll(
@@ -412,7 +412,9 @@ Deno.test("E8 switch releases >=2 MB session, unsubscribes, DOM and heap return 
       .usedSize as number;
     assert(
       opened - baseline >= 2 * 1024 * 1024,
-      "Large reply was not retained while visible",
+      `Large reply was not retained while visible: baseline=${baseline}, opened=${opened}, delta=${
+        opened - baseline
+      }`,
     );
     await openSession(browser, b.id);
     await browser.poll(

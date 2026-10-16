@@ -20,15 +20,23 @@ callback. External protocol tools resolve by their `name`; unmatched calls use
 the fallback installed by `registerGenericTool`. `ToolLine` owns the shared
 collapsed summary and status/permission/error frame, so external renderers
 receive the same behavior. An optional third `presentation(call)` registration
-argument supplies `{icon, verb, target?, summary?, expanded?}`; the shared frame
-has no concrete tool list. Edits/patches/writes and helper cards start expanded.
-Typed tool modules use `tools.registerTyped(kind, Component)`, whose call type
-derives from the open protocol `ToolKinds` map. Separate registration namespaces
-let an external `edit` coexist with typed OTK `edit` without either renderer
-receiving the other's shape. `parts.register(name, Component)` receives an
-external part; `parts.registerTyped(kind, Component)` derives its shape from the
-open `PartKinds` map. The same namespace separation applies to parts;
-`registerUnknownPart` supplies unsupported-part fallback.
+argument supplies `{icon, verb, target?, summary?, expanded?}` with the caller's
+directory as a second context argument; path-owning features supply relative
+targets. Icons accept strings or feature-owned SVG render functions. The shared
+frame has no concrete tool list. Edits/patches/writes and helper cards start
+expanded. Typed tool modules use `tools.registerTyped(kind, Component)`, whose
+call type derives from the open protocol `ToolKinds` map. Separate registration
+namespaces let an external `edit` coexist with typed OTK `edit` without either
+renderer receiving the other's shape. `parts.register(name, Component)` receives
+an external part; `parts.registerTyped(kind, Component)` derives its shape from
+the open `PartKinds` map. The same namespace separation applies to parts;
+`registerUnknownPart` supplies unsupported-part fallback. Part registrations can
+contribute `{work?, text?, hidden?}` presentation data: the message groups
+adjacent contributed work clocks into expandable folds and copies contributed
+source text without dispatching concrete part kinds or reading child DOM.
+Invisible bookkeeping owners declare themselves hidden so wire steps cannot
+split a visible work fold. Reply metadata combines contiguous source parts for
+one whole-reply copy.
 
 `prompt.register({ id, create(context) })` installs a per-prompt feature.
 `PromptContext` injects selection/caret/focus operations, an active-lifetime
@@ -50,8 +58,12 @@ owners. `ComposerTakeovers` mounts capability-available components; they read
 session state from context and construct their own UI. Optional feature-owned
 `active(session)` predicates suspend the ordinary composer while attention owns
 its area. The prompt's draft survives the takeover. Permission and question
-owners preserve dirty state through reconnects. The legacy `Docks` API remains
-independently reusable for existing consumers.
+surfaces share that composer's raised, bordered, 20px-radius surface and a
+common blocked-light header. Consumer-supplied session location names the
+project/task; question tabs/options use shared underline/pointer primitives.
+Static keyboard hints are in titles, Keys and the palette, not the surface.
+Permission and question owners preserve dirty state through reconnects. The
+legacy `Docks` API remains independently reusable for existing consumers.
 
 `dialogs.register({ id, component })` installs a feature-owned dialog. A single
 `DialogHost` handles `dialog.open({ id, input? })` through the command hub. It
@@ -136,6 +148,9 @@ Base buttons are ghost controls; `.otk-pill`, `.otk-icon-button` and
 Radii use shared role tokens: controls/rows 8px, inline code 5px, cards 10px,
 bubbles 18px and composer 20px. Accent is reserved for primary actions and
 focus. Source selection and code geometry retain their existing contracts.
+Transcript, composer and takeovers share `--lane-width: 736px` (the prototype's
+46rem at its default 16px root), centred within 24px gutters independently of
+the 13px interface root. User bubbles occupy at most 80% of that lane.
 
 Lists opt into `data-otk-selection="vertical"` or `"horizontal"`. The shared
 primitive reads `aria-selected="true"`, a non-false `aria-current`,

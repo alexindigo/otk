@@ -1,0 +1,18 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-composer-dock {
+  flex: 0 1 auto;
+  min-height: 0;
+  padding: 0 24px 20px;
+  display: flex;
+}
+.otk-composer {
+  width: 100%;
+  max-width: var(--lane-width);
+  margin-inline: auto;
+  min-height: 0;
+  overflow: auto;
+  background: var(--otk-bg-elevated);
+  border: 1px solid var(--otk-border);
+  border-radius: var(--radius-composer);
+  box-shadow: var(--otk-composer-shadow);
+}

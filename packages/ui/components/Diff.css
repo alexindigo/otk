@@ -2,7 +2,9 @@
 .otk-diff {
   border-radius: var(--radius-card);
   margin: 8px 0;
-  border: 1px solid var(--muted);
+  border: 1px solid var(--otk-border-code);
+  background: var(--otk-bg-code);
+  overflow: hidden;
 }
 .otk-diff > header {
   display: flex;
@@ -18,7 +20,7 @@
 .otk-hunk-header {
   color: var(--secondary);
   padding: 4px 8px;
-  background: var(--panel);
+  background: var(--otk-bg-code);
 }
 .otk-diff-split-row {
   display: grid;

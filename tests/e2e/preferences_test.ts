@@ -47,7 +47,7 @@ Deno.test("R7 host preferences control real reasoning, persist on reload and pro
     );
     await browser.click("input[name=timestamps]");
     await browser.poll(
-      "getComputedStyle(document.querySelector('.otk-message-role time')).visibility==='visible'",
+      "getComputedStyle(document.querySelector('.otk-user-meta time')).visibility==='visible'",
     );
     await browser.reload();
     await browser.poll(

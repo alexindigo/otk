@@ -5,6 +5,7 @@ import type { ToolCall } from "@otk/protocol";
 import StatusLight from "../StatusLight.tsx";
 import { ownedAction } from "../../keyboard/context.tsx";
 import type { ToolPresentation } from "../../registries/renderers.ts";
+import { elapsed } from "../work-log.ts";
 export default function ToolFrame(
   props: {
     call: ToolCall;
@@ -34,8 +35,14 @@ export default function ToolFrame(
           aria-expanded={open() ? "true" : "false"}
           onClick={() => void expand()}
         >
-          <span aria-hidden="true">{props.presentation?.icon ?? "◇"}</span>
-          <span>{props.presentation?.verb ?? props.call.tool}</span>
+          <span class="otk-tool-icon" aria-hidden="true">
+            {typeof props.presentation?.icon === "function"
+              ? props.presentation.icon()
+              : props.presentation?.icon ?? "◇"}
+          </span>
+          <span class="otk-tool-verb">
+            {props.presentation?.verb ?? props.call.tool}
+          </span>
           <Show when={props.presentation?.target}>
             <span class="otk-tool-target otk-id">
               {props.presentation?.target}
@@ -43,6 +50,14 @@ export default function ToolFrame(
           </Show>
           <Show when={props.presentation?.summary}>
             <span class="otk-tool-brief">{props.presentation?.summary}</span>
+          </Show>
+          <Show when={props.presentation?.changes}>
+            {(changes) => (
+              <>
+                <span class="otk-tool-add">+{changes().additions}</span>
+                <span class="otk-tool-del">−{changes().deletions}</span>
+              </>
+            )}
           </Show>
           <Show when={props.call.status === "running" && !props.waiting}>
             <StatusLight state="working" small activity="spinner" />
@@ -53,7 +68,14 @@ export default function ToolFrame(
           <Show when={props.call.status === "error"}>
             <span>Failed</span>
           </Show>
-          <span aria-hidden="true">{open() ? "▾" : "▸"}</span>
+          <Show
+            when={props.call.time.start !== undefined &&
+              props.call.time.end !== undefined}
+          >
+            <span class="otk-tool-duration">
+              {elapsed(props.call.time.start!, props.call.time.end!)}
+            </span>
+          </Show>
         </button>
         <Show when={props.call.status === "error"}>
           <button

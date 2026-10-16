@@ -1,15 +1,15 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-reasoning {
   color: var(--secondary);
-  margin: 8px 0;
+  margin: 0 0 4px;
 }
 .otk-reasoning > button {
   display: flex;
   align-items: center;
   gap: 8px;
   border: 0;
-  padding: 4px 0;
-  color: var(--otk-fg-2);
+  padding: 0;
+  color: var(--otk-fg-3);
 }
 .otk-reasoning > button:disabled {
   opacity: 1;
@@ -17,4 +17,11 @@
 .otk-reasoning-body {
   padding: 8px 12px;
   border-left: 1px solid var(--muted);
+}
+.otk-reasoning .otk-chrome-icon {
+  width: 13px;
+  height: 13px;
+}
+.otk-reasoning > button[aria-expanded=true] .otk-chrome-icon {
+  rotate: 90deg;
 }

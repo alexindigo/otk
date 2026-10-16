@@ -62,8 +62,8 @@ const paint = `(() => {
     meta:document.querySelector('meta[name="theme-color"]').content,
     text:getComputedStyle(document.querySelector('.otk-text')).color,
     code:[...document.querySelectorAll('.otk-code .otk-token')].map(el=>({text:el.textContent,color:getComputedStyle(el).color,style:el.getAttribute('style')})),
-    add:getComputedStyle(document.querySelector('.otk-diff-add')).color,
-    del:getComputedStyle(document.querySelector('.otk-diff-del')).color,
+     add:getComputedStyle(document.querySelector('.otk-tool-add')).color,
+     del:getComputedStyle(document.querySelector('.otk-tool-del')).color,
     wordmark:getComputedStyle(document.querySelector('.otk-inbox-brand strong')).color,
     work:globalThis.themeWorkerEvidence };
 })()`;
@@ -203,7 +203,7 @@ Deno.test("D5 actual session/code/diff paint changes with no worker work; previe
     );
     await browser.key("Enter");
     await browser.poll(
-      `document.querySelector('[data-session="${seed.id}"]').dataset.status==='idle' && [...document.querySelectorAll('.otk-token')].some(el=>el.textContent.includes('Theme comment')) && !!document.querySelector('.otk-diff-add')`,
+      `document.querySelector('[data-session="${seed.id}"]').dataset.status==='idle' && [...document.querySelectorAll('.otk-token')].some(el=>el.textContent.includes('Theme comment')) && !!document.querySelector('.otk-tool-add')`,
     );
     // Wait for externally observed work to settle before opening the picker.
     await browser.poll(

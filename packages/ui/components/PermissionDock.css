@@ -1,41 +1,26 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-permission-dock {
-  flex: 0 1 auto;
   min-height: 0;
   max-height: 40vh;
   overflow: auto;
-  border-top: 1px solid var(--accent);
-  background: var(--panel);
-  padding: 12px 24px;
+  padding: 16px;
   overflow-wrap: anywhere;
 }
-.otk-permission-dock > header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-.otk-permission-dock h2 {
-  font: 600 15px/22px var(--font-ui);
-  color: var(--accent);
-  margin: 0;
-}
-.otk-permission-child {
-  font-size: 12px;
-  color: var(--secondary);
-}
-.otk-permission-title {
-  margin: 8px 0;
-}
 .otk-permission-command {
-  margin: 8px 0;
+  margin: 0 0 12px;
   white-space: pre-wrap;
   font: 400 13px/20px var(--font-mono);
+  background: var(--otk-bg-code);
+  border: 1px solid var(--otk-border-code);
+  border-radius: var(--radius-card);
+  padding: 8px 12px;
 }
 .otk-permission-patterns {
-  color: var(--secondary);
-  font-size: 12px;
+  color: var(--otk-fg-3);
+  font-size: var(--text-meta);
+  margin: 8px 0;
+}
+.otk-permission-patterns ul {
   margin: 8px 0;
 }
 .otk-permission-actions {
@@ -43,10 +28,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding-top: 8px;
-}
-.otk-permission-actions > span {
-  font-size: 12px;
+  padding-top: 4px;
 }
 .otk-permission-dock form label {
   display: flex;
@@ -56,7 +38,14 @@
 .otk-permission-dock textarea {
   min-height: 4rem;
 }
+.otk-rejection-reason {
+  flex: 1;
+  min-width: 160px;
+  width: auto;
+  border-radius: var(--radius-pill);
+  padding: 4px 12px;
+  background: transparent;
+}
 .otk-permission-confirm {
-  border-left: 2px solid var(--accent);
-  padding-left: 12px;
+  padding-top: 8px;
 }

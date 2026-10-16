@@ -38,6 +38,9 @@ Session hierarchy/grouping/search remains in the framework-free client owner,
 with negative fixtures rejecting duplicate UI or application projections.
 Browser drafts likewise belong to client; negative fixtures reject duplicate UI
 draft models and concrete attention/tool dispatch in the shared takeover/frame
+hosts. Question selections follow the same orientation contract as chrome.
+Work-log groups derive from feature-contributed part presentation; negative
+fixtures reject concrete tool/reasoning selection in the message or grouping
 hosts. Tool owners contribute their summary and initial expansion alongside
 their renderer. Browser tests prove the same renderers, draft/late-upload
 ownership and backend attention outcomes through the new composer area.

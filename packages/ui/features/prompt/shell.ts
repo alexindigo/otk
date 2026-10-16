@@ -49,7 +49,7 @@ export function registerShellPrompt(prompt: PromptRegistry): void {
         placeholder: () =>
           ctx.props.value.mode === "shell"
             ? "Run a shell command…"
-            : "Message the agent…",
+            : "Ask for a change, @ to add files, / for commands",
         key(event) {
           const { start, end } = ctx.selection();
           if (

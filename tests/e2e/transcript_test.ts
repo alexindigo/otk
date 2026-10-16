@@ -10,9 +10,10 @@ import {
   sentFrames,
 } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
+import { WsClient } from "../support/ws-client.ts";
 
 const prose =
-  "A readable reply stays in a left-aligned reading column while source and diffs can use the whole centre. "
+  "A readable reply stays in a centred lane with source and diffs aligned to its shared edges. "
     .repeat(12);
 const part = (id: string, text: string) => ({
   id,
@@ -40,7 +41,7 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
     callID: "call",
     status: "completed" as const,
     awaitingPermission: false,
-    time: {},
+    time: { start: 2000, end: 6000 },
   };
   const messages: Message[] = [
     {
@@ -93,10 +94,10 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
             ...base,
             callID: "edit",
             tool: "edit",
-            path: "source.ts",
+            path: `${root}/projects/otk/source.ts`,
             diagnostics: [],
             files: [{
-              path: "source.ts",
+              path: `${root}/projects/otk/source.ts`,
               status: "modified",
               additions: 1,
               deletions: 1,
@@ -110,6 +111,37 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
                   { kind: "add", text: "const after = true;", newNo: 1 },
                 ],
               }],
+            }],
+          },
+        },
+        { id: "step-boundary", kind: "step", phase: "finish" },
+        { id: "bookkeeping", kind: "meta" },
+        { id: "step-next", kind: "step", phase: "start" },
+        {
+          id: "continued-read",
+          kind: "tool",
+          call: {
+            ...base,
+            callID: "continued",
+            tool: "read",
+            path: `${root}/projects/otk/source.ts`,
+            loaded: [],
+          },
+        },
+        {
+          id: "rename",
+          kind: "tool",
+          call: {
+            ...base,
+            callID: "rename",
+            tool: "patch",
+            files: [{
+              path: `${root}/projects/otk/new-name.ts`,
+              oldPath: "old-name.ts",
+              status: "moved",
+              additions: 0,
+              deletions: 0,
+              hunks: [],
             }],
           },
         },
@@ -132,9 +164,17 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
       mobile: false,
     });
     await b.goto(f.url);
+    await b.send("Browser.grantPermissions", {
+      origin: f.url,
+      permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"],
+    });
     await openSession(b, "otk");
     await b.poll(
       "document.querySelectorAll('.otk-message-footer').length===1 && document.title==='Execution — otk — OTK'",
+    );
+    assertEquals(
+      await b.evaluate("document.querySelectorAll('.otk-work-fold').length"),
+      1,
     );
     assertEquals(
       await b.evaluate(
@@ -153,7 +193,9 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
         line: string;
       }
     >("(()=>{const p=document.querySelector('[data-message=step-1] .otk-text p'),c=document.querySelector('[data-message=step-1] .otk-code'),a=p.getBoundingClientRect(),z=c.getBoundingClientRect(),s=getComputedStyle(p);return {prose:a.width,code:z.width,left:a.left,codeLeft:z.left,font:s.fontFamily,size:s.fontSize,line:s.lineHeight}})()");
-    assert(geometry.prose <= 760 && geometry.code > geometry.prose);
+    assert(
+      geometry.prose <= 736 && Math.abs(geometry.code - geometry.prose) < .5,
+    );
     assert(Math.abs(geometry.left - geometry.codeLeft) < .5);
     assert(geometry.font.includes("IBM Plex Sans"));
     assertEquals([geometry.size, geometry.line], ["14px", "24px"]);
@@ -177,7 +219,17 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
       await b.evaluate(
         "document.querySelector('.otk-reasoning > button').textContent.trim()",
       ),
-      "Thought · 4.0s",
+      "Thought for 4.0s",
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('[data-tool=edit] .otk-tool-target').textContent",
+      ),
+      "source.ts",
+    );
+    await b.click(".otk-copy-message");
+    await b.poll(
+      `navigator.clipboard.readText().then(text=>text.includes('A readable reply') && text.includes('The reply is complete.') && !text.includes('Reasoning remains available.'))`,
     );
     await b.click(".otk-reasoning > button");
     await b.poll(
@@ -201,6 +253,108 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
     ) assert(footer.title.includes(value), value);
     await b.poll(
       "document.querySelector('.otk-prompt-context').textContent.includes('build') && document.querySelector('.otk-prompt-context').textContent.includes('test/reported-model') && !!document.querySelector('[aria-label=\"Attach files\"]')",
+    );
+    const client = new WsClient(f.url);
+    await client.connect();
+    try {
+      for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+        await client.rpc("prefs.set", { key: "theme", value: theme });
+        await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
+        const layout = await b.evaluate<
+          {
+            lane: DOMRect;
+            scroll: DOMRect;
+            bubble: DOMRect;
+            composer: DOMRect;
+            border: string;
+            radius: string;
+            font: string;
+            hints: boolean;
+          }
+        >(`(()=>{const lane=document.querySelector('.otk-message-flow'),scroll=document.querySelector('.otk-messages'),bubble=document.querySelector('.otk-user-bubble'),composer=document.querySelector('.otk-composer'),s=getComputedStyle(composer);return {lane:lane.getBoundingClientRect().toJSON(),scroll:scroll.getBoundingClientRect().toJSON(),bubble:bubble.getBoundingClientRect().toJSON(),composer:composer.getBoundingClientRect().toJSON(),border:s.borderTopWidth,radius:s.borderRadius,font:getComputedStyle(document.querySelector('.otk-message-footer')).fontFamily,hints:/Enter to send|Shift\\+Enter for newline|1 \\/ 2 \\/ 3|j\\/k select/.test(document.querySelector('.otk-session-view').innerText)}})()`);
+        assertEquals(
+          layout.lane.width,
+          await b.evaluate(
+            "(()=>{const s=document.querySelector('.otk-messages'),c=getComputedStyle(s);return Math.min(736,s.clientWidth-parseFloat(c.paddingLeft)-parseFloat(c.paddingRight))})()",
+          ),
+        );
+        assert(
+          Math.abs(
+            (layout.lane.left + layout.lane.right) -
+              (layout.scroll.left + layout.scroll.right),
+          ) < 1,
+        );
+        assert(
+          Math.abs(layout.lane.left - layout.composer.left) < .5 &&
+            Math.abs(layout.lane.right - layout.composer.right) < .5,
+        );
+        assert(
+          layout.bubble.width <= layout.lane.width * .8 + .5 &&
+            Math.abs(layout.bubble.right - layout.lane.right) < .5,
+        );
+        assertEquals([layout.border, layout.radius], ["1px", "20px"]);
+        assert(layout.font.includes("IBM Plex Sans"));
+        assertEquals(layout.hints, false);
+        assertEquals(
+          await b.evaluate(
+            "document.querySelectorAll('.otk-role-label').length",
+          ),
+          0,
+        );
+        const rule = await b.evaluate<
+          { width: string; style: string; ratio: number }
+        >(`(()=>{const e=document.querySelector('.otk-work-rule'),s=getComputedStyle(e),canvas=document.createElement('canvas');canvas.width=canvas.height=1;const c=canvas.getContext('2d'),rgb=color=>{c.clearRect(0,0,1,1);c.fillStyle=getComputedStyle(document.documentElement).backgroundColor;c.fillRect(0,0,1,1);c.fillStyle=color;c.fillRect(0,0,1,1);return [...c.getImageData(0,0,1,1).data].slice(0,3)},bg=rgb('transparent'),distance=a=>a.reduce((n,v,i)=>n+Math.abs(v-bg[i]),0);return {width:s.borderTopWidth,style:s.borderTopStyle,ratio:distance(rgb(s.borderTopColor))/distance(rgb(s.color))}})()`);
+        assertEquals([rule.width, rule.style], ["1px", "solid"]);
+        assert(
+          rule.ratio > 0 && rule.ratio < .2,
+          "Work-fold hairline retains the subtle divider contract",
+        );
+      }
+    } finally {
+      await client.close();
+    }
+    for (const width of [1280, 1600, 2000]) {
+      await b.send("Emulation.setDeviceMetricsOverride", {
+        width,
+        height: 1100,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await b.poll(
+        "(()=>{const s=document.querySelector('.otk-messages'),c=getComputedStyle(s),lane=document.querySelector('.otk-message-flow').getBoundingClientRect(),composer=document.querySelector('.otk-composer').getBoundingClientRect();return Math.abs(lane.width-Math.min(736,s.clientWidth-parseFloat(c.paddingLeft)-parseFloat(c.paddingRight)))<.5 && Math.abs(lane.width-composer.width)<.5 && Math.abs(lane.left-composer.left)<.5})()",
+      );
+    }
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('[data-tool=patch] .otk-tool-target').textContent",
+      ),
+      "new-name.ts",
+    );
+    assert(
+      await b.evaluate(
+        "document.querySelector('[data-tool=patch] .otk-diff > header')?.textContent.includes('old-name.ts')",
+      ),
+      "Single-file inline cards retain the rename source",
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('[data-tool=patch] .otk-diff > header').textContent.includes('new-name.ts')",
+      ),
+      false,
+    );
+    await b.click(".otk-work-fold");
+    await b.poll(
+      "document.querySelector('.otk-work-body').hidden && document.querySelector('.otk-work-fold').getAttribute('aria-expanded')==='false'",
+    );
+    await b.click(".otk-work-fold");
+    await b.poll(
+      "!document.querySelector('.otk-work-body').hidden && document.querySelector('[data-tool=edit] .otk-diff').getBoundingClientRect().height>0",
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('[data-tool=edit] .otk-diff > header')",
+      ),
+      null,
     );
     f.update("otk", {
       status: "retry",

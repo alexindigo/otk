@@ -1,0 +1,22 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-takeover-header {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+.otk-takeover-header h2 {
+  margin: 0;
+  color: var(--otk-fg);
+  font: 600 var(--text-ui)/20px var(--font-ui);
+}
+.otk-takeover-where,
+.otk-permission-child,
+.otk-draft-kept {
+  color: var(--otk-fg-3);
+  font-size: var(--text-meta);
+}
+.otk-draft-kept {
+  margin-left: auto;
+}

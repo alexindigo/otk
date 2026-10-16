@@ -134,10 +134,11 @@ Deno.test("message details show configured agent colour, queued-to-answered tran
     await browser.key("Enter");
     await browser.poll("!!document.querySelector('.otk-queued')");
     // The visual system replaces the heavy user-message border with a subtle
-    // surface. The existing reply metadata owns the configured agent colour.
+    // surface. The quiet metadata reveals the configured agent colour on hover.
+    await browser.click(".otk-message-agent");
     assertEquals(
       await browser.evaluate(
-        "getComputedStyle(document.querySelector('.otk-message-details > span')).color",
+        "getComputedStyle(document.querySelector('.otk-message-agent')).color",
       ),
       "rgb(107, 172, 255)",
     );
@@ -157,15 +158,20 @@ Deno.test("message details show configured agent colour, queued-to-answered tran
       "[...document.querySelectorAll('.otk-message-footer')].map(el=>el.textContent)",
     );
     assert(
-      footers.every((footer) =>
-        footer.includes("▣") && footer.includes("build") && /\ds/.test(footer)
-      ),
+      footers.every((footer) => footer.includes("build") && /\ds/.test(footer)),
     );
     assertEquals(
       await browser.evaluate(
         "[...document.querySelectorAll('.otk-messages p')].some(el=>el.textContent==='step'||el.textContent==='unknown')",
       ),
       false,
+    );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelectorAll('.otk-message-footer .otk-copy-message svg').length",
+      ),
+      footers.length,
+      "Plain metadata has a copy affordance instead of a role glyph",
     );
     await browser.screenshot(join(f.oc.root, "message-answered.png"));
   } finally {

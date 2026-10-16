@@ -61,7 +61,7 @@ Deno.test("web typed edit and generic permission details render before rejected 
     await browser.type("textarea[name=prompt]", "Describe the proposed edit");
     await browser.key("Enter");
     await browser.poll(
-      "document.querySelector('.otk-permission-dock h2')?.textContent.includes('read') && document.querySelector('.otk-permission-dock')?.textContent.includes('README.md')",
+      "document.querySelector('.otk-permission-dock .otk-takeover-where')?.textContent.includes('read') && document.querySelector('.otk-permission-dock')?.textContent.includes('README.md')",
       60_000,
     );
     await capture(browser, f.oc.root, "permission-generic-before-edit");
@@ -83,7 +83,7 @@ Deno.test("web typed edit and generic permission details render before rejected 
     await browser.type("textarea[name=prompt]", "Describe the read permission");
     await browser.key("Enter");
     await browser.poll(
-      "document.querySelector('.otk-permission-dock h2')?.textContent.includes('read') && document.querySelector('.otk-permission-dock')?.textContent.includes('README.md')",
+      "document.querySelector('.otk-permission-dock .otk-takeover-where')?.textContent.includes('read') && document.querySelector('.otk-permission-dock')?.textContent.includes('README.md')",
       60_000,
     );
     await capture(browser, f.oc.root, "permission-generic-summary");
@@ -117,7 +117,10 @@ Deno.test("E3 bash permission, real Allow once click, completed output-bearing t
     const geometry = await browser.evaluate<{ dock: number; prompt: number }>(
       "({dock:document.querySelector('.otk-permission-dock').getBoundingClientRect().bottom,prompt:document.querySelector('.otk-composer').getBoundingClientRect().bottom})",
     );
-    assert(Math.abs(geometry.dock - geometry.prompt) < .5);
+    assert(
+      Math.abs(geometry.dock - (geometry.prompt - 1)) < .5,
+      "Takeover stays inside the composer's one-pixel border",
+    );
     await capture(browser, f.oc.root, "e3-pending");
     await clickText(browser, "Allow once");
     await browser.poll(

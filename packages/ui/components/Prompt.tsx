@@ -13,6 +13,7 @@ import type { PromptContext, PromptProps } from "../registries/prompt.ts";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import { createKeyboard } from "../keyboard/dispatcher.ts";
 import { useSessionPorts } from "../registries/session.tsx";
+import { SendIcon } from "./ChromeIcons.tsx";
 
 /** Input and submission lifetime; concrete prompt concepts are injected features. */
 export default function Prompt(props: PromptProps): import("solid-js").Element {
@@ -239,7 +240,8 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         id="otk-prompt-input"
         name="prompt"
         placeholder={features.find((feature) => feature.placeholder)
-          ?.placeholder?.() ?? "Message the agent…"}
+          ?.placeholder?.() ??
+          "Ask for a change, @ to add files, / for commands"}
         value={props.value.input}
         onPaste={(event) => {
           for (const feature of features) {
@@ -267,7 +269,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
             {props.value.agent ?? props.context?.agent ??
               "Backend default agent"}
           </span>
-          <span class="otk-id">
+          <span>
             {props.context?.model
               ? `${props.context.model.provider}/${props.context.model.model}`
               : "Backend default model"}
@@ -277,19 +279,18 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
           </Show>
         </div>
         <For each={features}>{(feature) => feature.actions?.()}</For>
-        <span class="otk-muted otk-prompt-help">
-          {armed()
-            ? "esc again to interrupt"
-            : "Enter to send · Shift+Enter for newline · Esc twice to interrupt"}
-        </span>
         <button
           type="submit"
-          class="otk-primary"
+          class="otk-primary otk-send-button"
+          aria-label="Send"
+          title={armed()
+            ? "Esc again to interrupt"
+            : "Send (Enter); Shift+Enter for newline; Esc twice to interrupt"}
           disabled={pending() ||
             props.value.chips.some((chip) => chip.pending || chip.error) ||
             !canSubmit() || !props.value.input.trim()}
         >
-          Send
+          <SendIcon />
         </button>
       </div>
       <Show when={error()}>

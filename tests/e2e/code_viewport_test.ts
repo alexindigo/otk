@@ -1049,7 +1049,7 @@ Deno.test("source commits stay atomic and selected raw/styled endpoints survive 
           `getSelection().toString()===${JSON.stringify(word)}`,
         );
         await browser.evaluate(
-          "globalThis.appendEndpoint=getSelection().anchorNode",
+          "globalThis.appendEndpoint=getSelection().anchorNode;globalThis.appendCode=[...document.querySelectorAll('.otk-code code')].at(-1);globalThis.appendMessage=appendCode.closest('.otk-message')",
         );
       }
       await browser.poll(
@@ -1074,6 +1074,11 @@ Deno.test("source commits stay atomic and selected raw/styled endpoints survive 
             "getSelection().anchorNode===appendEndpoint && appendEndpoint.isConnected",
           ),
           true,
+          await browser.evaluate(
+            `JSON.stringify({mode:${
+              JSON.stringify(mode)
+            },messageConnected:appendMessage.isConnected,codeConnected:appendCode.isConnected,endpointConnected:appendEndpoint.isConnected})`,
+          ),
         );
         assertEquals(await browser.evaluate("getSelection().toString()"), word);
         await browser.send("Browser.grantPermissions", {

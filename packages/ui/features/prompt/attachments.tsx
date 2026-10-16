@@ -8,6 +8,7 @@ import {
 } from "../../components/prompt/model.ts";
 import { upload } from "../../components/prompt/attachments.ts";
 import Chips from "../../components/prompt/Chips.tsx";
+import { AttachIcon } from "../../components/ChromeIcons.tsx";
 export function registerAttachmentsPrompt(prompt: PromptRegistry): void {
   prompt.register({
     id: "attachments",
@@ -36,9 +37,11 @@ export function registerAttachmentsPrompt(prompt: PromptRegistry): void {
             <button
               type="button"
               aria-label="Attach files"
+              title="Attach files"
+              class="otk-icon-button"
               onClick={() => picker.click()}
             >
-              Attach
+              <AttachIcon />
             </button>
           </>
         ),

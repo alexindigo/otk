@@ -54,9 +54,13 @@ never cleared by completion of an older submission. Permission/question input
 remains owned by its UI feature and protected by navigation confirmation.
 
 `replyMetadata(messages)` combines contiguous backend steps for the same reply
-into one final metadata record, summing only reported tokens/costs and retaining
-the reply's start, final clock and interrupted state. No session content is
-stored outside the currently loaded transcript.
+using the same grouping owner as `replyMessages(messages)`. The latter supplies
+the transcript with stable first-step keys, so expanding a work log or tool is
+preserved as later backend steps stream in. Metadata is projected into one final
+metadata record, summing only reported tokens/costs and retaining the reply's
+start, final clock and interrupted state. No session content is duplicated into
+a second store; the projection also combines source parts for whole-reply
+copying. No session content is stored outside the currently loaded transcript.
 
 ## Plain Deno example
 

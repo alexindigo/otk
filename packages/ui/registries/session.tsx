@@ -19,6 +19,8 @@ export interface SessionPorts {
   sessionID(): string;
   directory(): Promise<string>;
   entry(id: string): IndexEntry | undefined;
+  /** Consumer-supplied project/task context for a session's surfaces. */
+  location?(id: string): string;
   permissions(): PermissionRequest[];
   questions(): QuestionRequest[];
   prefs(): Preferences;

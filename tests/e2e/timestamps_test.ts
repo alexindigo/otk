@@ -103,10 +103,8 @@ Deno.test("creation-time hover and persistent visibility, structural footer date
         timeCenter: number;
         date: string;
         expected: string;
-        dividerWidth: string;
-        dividerStyle: string;
       }
-    >("(()=>{const date=document.querySelector('.otk-last-output-date'),time=document.querySelector('.otk-last-output-time'),d=date.getBoundingClientRect(),t=time.getBoundingClientRect(),footer=getComputedStyle(document.querySelector('.otk-message-footer'));return {dateRight:d.right,timeLeft:t.left,timeRight:t.right,dateCenter:d.y+d.height/2,timeCenter:t.y+t.height/2,date:date.textContent.trim(),expected:new Date(time.dateTime).toLocaleDateString(),dividerWidth:footer.borderTopWidth,dividerStyle:footer.borderTopStyle}})()");
+    >("(()=>{const date=document.querySelector('.otk-last-output-date'),time=document.querySelector('.otk-last-output-time'),d=date.getBoundingClientRect(),t=time.getBoundingClientRect();return {dateRight:d.right,timeLeft:t.left,timeRight:t.right,dateCenter:d.y+d.height/2,timeCenter:t.y+t.height/2,date:date.textContent.trim(),expected:new Date(time.dateTime).toLocaleDateString()}})()");
     assertEquals(geometry.date, geometry.expected);
     assert(geometry.dateRight < geometry.timeLeft);
     assert(Math.abs(geometry.dateCenter - geometry.timeCenter) < .5);
@@ -114,18 +112,11 @@ Deno.test("creation-time hover and persistent visibility, structural footer date
       Math.abs(geometry.timeLeft - before.left) < .5 &&
         Math.abs(geometry.timeRight - before.right) < .5,
     );
-    assertEquals(geometry.dividerWidth, "1px");
-    assertEquals(geometry.dividerStyle, "solid");
     await browser.screenshot(
       join(f.oc.root, "timestamps-hover-output-date.png"),
     );
-    const contrast = await browser.evaluate<number>(
-      `(()=>{${renderedColors}const footer=document.querySelector('.otk-message-footer'),border=color(footer,'borderTopColor'),background=color(document.documentElement,'backgroundColor'),text=color(footer),distance=a=>a.reduce((sum,v,i)=>sum+Math.abs(v-background[i]),0);return distance(border)/distance(text)})()`,
-    );
-    assert(
-      contrast > 0 && contrast < .2,
-      "Footer divider must remain barely noticeable",
-    );
+    // The divider now belongs to the work-fold line; its exact width, style and
+    // barely-noticeable contrast are exercised in transcript_test in all themes.
     await browser.send("Input.dispatchMouseEvent", {
       type: "mouseMoved",
       x: 10,
@@ -142,7 +133,7 @@ Deno.test("creation-time hover and persistent visibility, structural footer date
         "hidden",
       );
       const p = await browser.evaluate<{ x: number; y: number }>(
-        `(()=>{const el=document.querySelector('[data-role=${role}] .otk-role-label');el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
+        `(()=>{const el=document.querySelector('[data-role=${role}] .otk-created-trigger');el.scrollIntoView({block:'center'});const r=el.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
       );
       await browser.send("Input.dispatchMouseEvent", {
         type: "mouseMoved",
@@ -172,7 +163,7 @@ Deno.test("creation-time hover and persistent visibility, structural footer date
         roleColor: number[];
         createdColor: number[];
       }
-    >(`(()=>{${renderedColors}const footer=document.querySelector('.otk-message-footer'),t=footer.querySelector('.otk-last-output-time'),d=footer.querySelector('.otk-message-details');return {footerRight:footer.getBoundingClientRect().right,timeRight:t.getBoundingClientRect().right,detailsRight:d.getBoundingClientRect().right,timeLeft:t.getBoundingClientRect().left,footerColor:getComputedStyle(footer).color,timeColor:getComputedStyle(t).color,roleColor:color(document.querySelector('.otk-role-label')),createdColor:color(document.querySelector('.otk-created-time'))}})()`);
+    >(`(()=>{${renderedColors}const footer=document.querySelector('.otk-message-footer'),t=footer.querySelector('.otk-last-output-time'),d=footer.querySelector('.otk-message-details');return {footerRight:footer.getBoundingClientRect().right,timeRight:t.getBoundingClientRect().right,detailsRight:d.getBoundingClientRect().right,timeLeft:t.getBoundingClientRect().left,footerColor:getComputedStyle(footer).color,timeColor:getComputedStyle(t).color,roleColor:color(document.querySelector('.otk-created-trigger')),createdColor:color(document.querySelector('.otk-created-time'))}})()`);
     assert(Math.abs(style.footerRight - style.timeRight) < .5);
     assert(style.detailsRight < style.timeLeft);
     assertEquals(style.footerColor, style.timeColor);
@@ -180,14 +171,19 @@ Deno.test("creation-time hover and persistent visibility, structural footer date
       style.createdColor.reduce((a, b) => a + b, 0) <
         style.roleColor.reduce((a, b) => a + b, 0),
     );
-    await browser.click("[data-role=assistant] .otk-role-label");
+    await browser.click("[data-role=assistant] .otk-created-trigger");
+    await browser.key("Tab");
+    await browser.poll(
+      "document.activeElement===document.querySelector('.otk-copy-message')",
+    );
     await browser.key("Tab");
     await browser.poll(
       "document.activeElement===document.querySelector('.otk-last-output-time') && getComputedStyle(document.querySelector('.otk-last-output-date')).visibility==='visible'",
     );
     await browser.key("Tab", 8);
+    await browser.key("Tab", 8);
     await browser.poll(
-      "document.activeElement===document.querySelector('[data-role=assistant] .otk-role-label') && getComputedStyle(document.querySelector('[data-role=assistant] .otk-created-time')).visibility==='visible'",
+      "document.activeElement===document.querySelector('[data-role=assistant] .otk-created-trigger') && getComputedStyle(document.querySelector('[data-role=assistant] .otk-created-time')).visibility==='visible'",
     );
     await browser.click(".otk-display-menu summary");
     await browser.poll(

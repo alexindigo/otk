@@ -5,6 +5,8 @@ import type { Preferences } from "@otk/protocol";
 import Diff from "../Diff.tsx";
 import Diagnostics from "./Diagnostics.tsx";
 import type { ToolRegistry } from "../../registries/renderers.ts";
+import { relativeTarget } from "./paths.ts";
+import { EditIcon } from "./ToolIcons.tsx";
 export function registerEditTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "edit",
@@ -15,13 +17,14 @@ export function registerEditTool(tools: ToolRegistry): void {
         paneWidth={props.paneWidth}
       />
     ),
-    (call) => ({
-      icon: "±",
+    (call, context) => ({
+      icon: EditIcon,
       verb: "Edit",
-      target: call.path,
-      summary: call.files.map((file) =>
-        `+${file.additions} / −${file.deletions}`
-      ).join(", "),
+      target: relativeTarget(call.path, context.directory),
+      changes: {
+        additions: call.files.reduce((n, file) => n + file.additions, 0),
+        deletions: call.files.reduce((n, file) => n + file.deletions, 0),
+      },
       expanded: true,
     }),
   );
@@ -31,13 +34,12 @@ export default function EditTool(
 ) {
   return (
     <>
-      <div class="otk-tool-summary">
-        Edit <span class="otk-path">{props.call.path}</span>
-      </div>
       <For each={props.call.files} keyed={false}>
         {(file) => (
           <Diff
             file={file()}
+            inline={props.call.files.length === 1 &&
+              file().path === props.call.path}
             style={props.prefs.diffStyle}
             wrap={props.prefs.diffWrap}
             paneWidth={props.paneWidth}

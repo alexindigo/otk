@@ -2,14 +2,16 @@
 import { For } from "solid-js";
 import type { ReadCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
+import { relativeTarget } from "./paths.ts";
+import { FileIcon } from "./ToolIcons.tsx";
 export function registerReadTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "read",
     (props) => <ReadTool call={props.call} />,
-    (call) => ({
-      icon: "▤",
+    (call, context) => ({
+      icon: FileIcon,
       verb: "Read",
-      target: call.path,
+      target: relativeTarget(call.path, context.directory),
       summary: [
         call.offset !== undefined ? `offset ${call.offset}` : "",
         call.limit !== undefined ? `limit ${call.limit}` : "",

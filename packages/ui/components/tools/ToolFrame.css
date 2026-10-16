@@ -2,58 +2,14 @@
 .otk-tool-line {
   display: flex;
   flex-direction: column;
-  color: var(--secondary);
-  border: 1px solid var(--muted);
-  padding: 8px 12px;
-  margin: 8px 0;
-  font-size: 12px;
-  border-radius: var(--radius-card);
+  color: var(--otk-fg-2);
+  margin: 0 0 4px;
+  font-size: var(--text-ui);
 }
 .otk-tool-state {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-bottom: 4px;
-  font-size: 12px;
-}
-.otk-tool-summary {
-  color: var(--fg);
-  white-space: pre-wrap;
-}
-.otk-tool-body p {
-  margin: 4px 0;
-}
-.otk-tool-waiting {
-  border-color: var(--otk-warning);
-}
-.otk-tool-waiting .otk-tool-state {
-  color: var(--otk-warning);
-}
-.otk-tool-line[data-tool-status=error] {
-  border-color: var(--otk-status-error);
-}
-.otk-tool-line[data-tool-status=error] .otk-tool-state,
-.otk-tool-error {
-  color: var(--otk-status-error);
-}
-.otk-tool-line[data-tool-status=denied] .otk-tool-summary {
-  text-decoration: line-through;
-}
-.otk-tool-error {
-  white-space: pre-wrap;
-  font: inherit;
-}
-.otk-tool-error-toggle {
-  align-self: flex-start;
-  font-size: 12px;
-  padding: 4px 8px;
-}
-.otk-tool-line {
-  border: 0;
-  padding: 0;
-}
-.otk-tool-state {
-  margin: 0;
 }
 .otk-tool-toggle {
   display: flex;
@@ -61,10 +17,26 @@
   gap: 8px;
   min-width: 0;
   width: 100%;
-  border: 0;
-  padding: 4px 0;
+  min-height: 26px;
+  padding: 0 4px;
   color: inherit;
   text-align: left;
+}
+.otk-tool-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  flex: 0 0 13px;
+  color: var(--otk-fg-3);
+}
+.otk-tool-icon svg {
+  width: 13px;
+  height: 13px;
+}
+.otk-tool-verb {
+  font-weight: 500;
+  flex: none;
 }
 .otk-tool-target,
 .otk-tool-brief {
@@ -72,17 +44,58 @@
   white-space: nowrap;
   text-overflow: ellipsis;
   min-width: 0;
+  color: var(--otk-fg-3);
+  font-size: var(--text-meta);
 }
 .otk-tool-target {
-  color: var(--otk-fg);
+  font-family: var(--font-mono);
 }
 .otk-tool-brief {
   flex: 1;
 }
-.otk-tool-body {
-  padding: 8px 12px;
-  border-left: 1px solid var(--otk-border);
+.otk-tool-duration {
+  margin-left: auto;
+  color: var(--otk-fg-3);
+  font-size: var(--text-meta);
+  opacity: 0;
+  font-variant-numeric: tabular-nums;
 }
-.otk-tool-line[data-tool-status=denied] .otk-tool-toggle {
+.otk-tool-toggle:is(:hover,:focus-visible) .otk-tool-duration {
+  opacity: 1;
+}
+.otk-tool-body {
+  padding: 0 0 4px 24px;
+}
+.otk-tool-body p {
+  margin: 4px 0;
+}
+.otk-tool-summary {
+  color: var(--fg);
+  white-space: pre-wrap;
+}
+.otk-tool-line[data-tool-status=error] .otk-tool-state,
+.otk-tool-error {
+  color: var(--otk-status-error);
+}
+.otk-tool-line[data-tool-status=denied] :is(.otk-tool-toggle, .otk-tool-summary) {
   text-decoration: line-through;
+}
+.otk-tool-error {
+  white-space: pre-wrap;
+  font: 400 13px/20px var(--font-mono);
+}
+.otk-tool-error-toggle {
+  align-self: flex-start;
+  font-size: var(--text-meta);
+  padding: 4px 8px;
+}
+.otk-tool-add,
+.otk-tool-del {
+  font-size: var(--text-meta);
+}
+.otk-tool-add {
+  color: var(--otk-diff-add);
+}
+.otk-tool-del {
+  color: var(--otk-diff-del);
 }

@@ -1,49 +1,50 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-prompt {
-  border-top: 1px solid var(--muted);
-  padding: 12px 24px;
+  padding: 12px 16px 8px;
 }
 .otk-prompt > label {
-  font-size: 12px;
-  color: var(--secondary);
-  display: block;
-  margin-bottom: 8px;
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
 }
 .otk-prompt > textarea {
-  min-height: 5rem;
+  min-height: 48px;
   max-height: 16rem;
   resize: vertical;
-  line-height: 1.6;
-  border-radius: var(--radius-card);
+  line-height: 24px;
+  font: 400 var(--text-prose)/24px var(--font-ui);
+  background: transparent;
+  border: 0;
+  padding: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+.otk-prompt > textarea:focus-visible {
+  outline-offset: 4px;
 }
 .otk-prompt-actions {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding-top: 8px;
-}
-.otk-prompt-actions > span {
-  font-size: 12px;
-}
-.otk-prompt-actions {
   flex-wrap: wrap;
-  justify-content: flex-start;
-  gap: 8px;
+  gap: 4px;
+  padding-top: 4px;
 }
 .otk-prompt-context {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px;
   color: var(--otk-fg-2);
-  font-size: 12px;
+  font-size: var(--text-meta);
   margin-right: auto;
 }
-.otk-prompt-help {
-  flex-basis: 100%;
-  order: 1;
+.otk-prompt-context > span {
+  border-radius: var(--radius-control);
+  padding: 4px 8px;
+  font-weight: 500;
 }
-.otk-prompt > textarea {
-  background: var(--otk-surface);
+.otk-prompt-context > span:hover {
+  background: var(--otk-hover);
 }

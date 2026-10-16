@@ -98,6 +98,7 @@ Deno.test("chrome selected/current states opt into the shared orientation primit
       "ThemePicker",
       "Palette",
       "Sidebar",
+      "QuestionDock",
     ]
   ) {
     assertEquals(

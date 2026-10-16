@@ -536,6 +536,18 @@ export default function Shell(
       sessionID: () => target.sessionID,
       directory: () => directoryFor(target),
       entry: (id) => entry(target.sidecarId, id),
+      location: (id) => {
+        const value = entry(target.sidecarId, id),
+          tasks = inbox(target.sidecarId).state.inbox.tasks;
+        const task = tasks.find((task) =>
+          task.sessions.includes(id) ||
+          task.sessions.includes(target.rootID ?? target.sessionID)
+        );
+        return [
+          value && projectName(value.directory),
+          task?.name ?? value?.title,
+        ].filter(Boolean).join(", ");
+      },
       permissions: () => session.state.content.permissions,
       questions: () => session.state.content.questions,
       prefs: () => toggles.state.prefs,

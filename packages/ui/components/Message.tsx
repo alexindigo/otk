@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Message.css" with { type: "text" };
-import { For, Show } from "solid-js";
+import { createMemo, For, Show } from "solid-js";
+import WorkLog from "./WorkLog.tsx";
+import { elapsed, partGroups } from "./work-log.ts";
+import { CopyIcon } from "./ChromeIcons.tsx";
+import { ownedAction } from "../keyboard/context.tsx";
 import type {
   Message as OtkMessage,
   Part,
@@ -8,8 +12,7 @@ import type {
 } from "@otk/protocol";
 import { useUiRegistries } from "../registries/context.tsx";
 import type { Preferences } from "@otk/protocol";
-const duration = (start: number, end: number) =>
-  `${Math.max(0, (end - start) / 1000).toFixed(1)}s`;
+import type { PartProps } from "../registries/renderers.ts";
 function PartView(
   props: {
     part: Part;
@@ -32,6 +35,25 @@ function PartView(
     </Show>
   );
 }
+/** A stable keyed component boundary preserves source nodes during part updates. */
+function PartsView(props: Omit<PartProps, "part"> & { parts: Part[] }) {
+  return (
+    <For each={props.parts} keyed={(part) => part.id}>
+      {(part) => (
+        <PartView
+          part={part()}
+          prefs={props.prefs}
+          directory={props.directory}
+          permissions={props.permissions}
+          paneWidth={props.paneWidth}
+          onOpenChild={props.onOpenChild}
+          user={props.user}
+          streaming={props.streaming}
+        />
+      )}
+    </For>
+  );
+}
 export default function Message(
   props: {
     message: OtkMessage;
@@ -44,6 +66,25 @@ export default function Message(
     queued: boolean;
   },
 ): import("solid-js").Element {
+  const { parts } = useUiRegistries();
+  const groups = createMemo(() =>
+    partGroups(
+      props.message.parts,
+      (part) =>
+        props.message.role === "assistant"
+          ? parts.presentation(part, props.prefs)
+          : {},
+    )
+  );
+  const copy = ownedAction(
+    "message.copy",
+    () =>
+      navigator.clipboard.writeText(
+        (assistant()?.parts ?? props.message.parts).map((part) =>
+          parts.presentation(part, props.prefs).text
+        ).filter(Boolean).join("\n\n"),
+      ),
+  );
   const assistant = () =>
     props.metadata === null ? undefined : props.metadata ??
       (props.message.role === "assistant" ? props.message : undefined);
@@ -60,43 +101,64 @@ export default function Message(
       data-message={props.message.id}
       data-role={props.message.role}
     >
-      <Show when={props.message.role === "user"}>
-        <header class="otk-message-role">
-          <span
-            class={["otk-role-and-time", {
-              "otk-time-always": props.prefs.timestamps,
-            }]}
-          >
-            <span class="otk-role-label" tabindex="0">
-              {props.message.role === "user" ? "You" : "Assistant"}
-            </span>
-            <time
-              class="otk-created-time"
-              datetime={new Date(props.message.time.created).toISOString()}
+      <div
+        class={props.message.role === "user"
+          ? "otk-user-bubble otk-created-trigger"
+          : "otk-message-content"}
+        tabindex={props.message.role === "user" ? "0" : undefined}
+      >
+        <For each={groups()} keyed={(group) => group.id}>
+          {(group) => (
+            <Show
+              when={group().work}
+              fallback={
+                <PartsView
+                  parts={group().parts}
+                  prefs={props.prefs}
+                  directory={props.directory}
+                  permissions={props.permissions}
+                  paneWidth={props.paneWidth}
+                  onOpenChild={props.onOpenChild}
+                  user={props.message.role === "user"}
+                  streaming={props.message.role === "assistant" &&
+                    props.message.time.completed === undefined}
+                />
+              }
             >
-              {new Date(props.message.time.created).toLocaleString()}
-            </time>
-          </span>
+              <WorkLog time={group().time}>
+                <PartsView
+                  parts={group().parts}
+                  prefs={props.prefs}
+                  directory={props.directory}
+                  permissions={props.permissions}
+                  paneWidth={props.paneWidth}
+                  onOpenChild={props.onOpenChild}
+                  user={props.message.role === "user"}
+                  streaming={props.message.role === "assistant" &&
+                    props.message.time.completed === undefined}
+                />
+              </WorkLog>
+            </Show>
+          )}
+        </For>
+      </div>
+      <Show when={props.message.role === "user"}>
+        <footer
+          class={["otk-user-meta", {
+            "otk-time-always": props.prefs.timestamps,
+          }]}
+        >
+          <time
+            class="otk-created-time"
+            datetime={new Date(props.message.time.created).toISOString()}
+          >
+            {new Date(props.message.time.created).toLocaleString()}
+          </time>
           <Show when={props.queued}>
             <span class="otk-queued">Queued</span>
           </Show>
-        </header>
+        </footer>
       </Show>
-      <For each={props.message.parts} keyed={(part) => part.id}>
-        {(part) => (
-          <PartView
-            part={part()}
-            prefs={props.prefs}
-            directory={props.directory}
-            permissions={props.permissions}
-            paneWidth={props.paneWidth}
-            onOpenChild={props.onOpenChild}
-            user={props.message.role === "user"}
-            streaming={props.message.role === "assistant" &&
-              props.message.time.completed === undefined}
-          />
-        )}
-      </For>
       <Show when={assistant()}>
         {(message) => (
           <>
@@ -108,11 +170,13 @@ export default function Message(
             >
               <span class="otk-message-details">
                 <span
-                  style={{ color: message().agentColor || "var(--otk-fg-2)" }}
+                  class="otk-message-agent otk-created-trigger"
+                  tabindex="0"
+                  style={{
+                    "--message-agent-color": message().agentColor ||
+                      "var(--otk-fg-3)",
+                  }}
                 >
-                  ▣
-                </span>
-                <span class="otk-role-label" tabindex="0">
                   {message().agent}
                 </span>
                 <time
@@ -121,13 +185,13 @@ export default function Message(
                 >
                   {new Date(message().time.created).toLocaleString()}
                 </time>
-                <span class="otk-id">
+                <span>
                   {message().model.provider}/{message().model.model}
                 </span>
                 <span>
                   {message().time.completed === undefined
                     ? "streaming"
-                    : duration(
+                    : elapsed(
                       message().time.created,
                       message().time.completed!,
                     )}
@@ -136,6 +200,15 @@ export default function Message(
                   <span>interrupted</span>
                 </Show>
               </span>
+              <button
+                type="button"
+                class="otk-icon-button otk-copy-message"
+                aria-label="Copy reply"
+                title="Copy reply"
+                onClick={() => void copy()}
+              >
+                <CopyIcon />
+              </button>
               <span class="otk-output-time-group">
                 <span class="otk-last-output-date" aria-hidden="true">
                   {new Date(message().time.lastOutput ?? message().time.created)

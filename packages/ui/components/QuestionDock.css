@@ -1,42 +1,47 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-question-dock {
-  border-left: 2px solid var(--accent);
-  background: var(--panel);
-  padding: 12px 24px;
+  padding: 16px;
   max-height: 45vh;
   overflow: auto;
 }
-.otk-question-dock header,
 .otk-question-tabs {
   display: flex;
   align-items: center;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
 }
-.otk-question-dock h2 {
+.otk-question-tabs button {
+  padding: 4px 8px;
+  color: var(--otk-fg-3);
+}
+.otk-question-dock > p {
   margin: 0 0 8px;
-  font: 600 15px/22px var(--font-ui);
-}
-.otk-question-tabs [aria-selected=true],
-.otk-question-options [aria-pressed=true] {
-  border-color: var(--otk-fg-2);
-  color: var(--fg);
-  background: var(--otk-hover);
+  font-size: var(--text-prose);
+  line-height: 24px;
 }
 .otk-question-options {
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 4px;
-  margin-bottom: 8px;
+  margin-bottom: 12px;
 }
 .otk-question-options button {
   text-align: left;
   display: flex;
-  flex-direction: column;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding: 8px 12px;
 }
-.otk-question-options [data-active=true] {
-  background: var(--bg);
+.otk-question-options .otk-muted {
+  font-size: var(--text-meta);
+}
+.otk-question-own {
+  margin-top: 4px;
+  border: 1px solid var(--otk-border);
+  color: var(--otk-fg-3);
 }
 .otk-question-actions {
   display: flex;

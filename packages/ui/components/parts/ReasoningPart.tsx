@@ -12,5 +12,6 @@ export function registerReasoningPart(parts: PartRegistry): void {
         mode={props.prefs.thinking}
       />
     ),
+    (part) => ({ work: part.time }),
   );
 }

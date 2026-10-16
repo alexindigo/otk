@@ -65,7 +65,7 @@ Deno.test("empty completion results leave Enter, native ArrowUp and normal Escap
     await ready();
     await browser.key("Escape");
     await browser.poll(
-      "document.querySelector('.otk-prompt-actions').textContent.includes('esc again to interrupt')",
+      "document.querySelector('.otk-prompt button[type=submit]').title==='Esc again to interrupt'",
     );
     reply.release();
   } finally {

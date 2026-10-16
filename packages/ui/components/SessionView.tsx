@@ -23,7 +23,7 @@ import SubagentBar from "./SubagentBar.tsx";
 import RevertBanner from "./RevertBanner.tsx";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
-import { queuedMessages, replyMetadata } from "@otk/client";
+import { queuedMessages, replyMessages } from "@otk/client";
 import { followViewport } from "./viewport.ts";
 import { highlightingScope } from "../highlight/client.ts";
 import type { Draft, DraftChange } from "./prompt/model.ts";
@@ -62,7 +62,7 @@ export default function SessionView(props: {
 }): Element {
   const writeDraft = props.onDraft;
   const queued = () => queuedMessages(props.messages, props.busy);
-  const metadata = createMemo(() => replyMetadata(props.messages));
+  const messages = createMemo(() => replyMessages(props.messages));
   const [now, setNow] = createSignal(Date.now());
   const older = ownedAction("session.page", () => props.onOlder());
   const retry = ownedAction("session.refetch", () => props.onRetry());
@@ -175,11 +175,10 @@ export default function SessionView(props: {
               </div>
             )}
           </Show>
-          <For each={props.messages} keyed={(message) => message.id}>
+          <For each={messages()} keyed={(message) => message.id}>
             {(message) => (
               <Message
                 message={message()}
-                metadata={metadata().get(message().id) ?? null}
                 prefs={props.prefs}
                 directory={props.info?.directory}
                 permissions={props.permissions}

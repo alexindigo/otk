@@ -2,6 +2,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
+import { WsClient } from "../support/ws-client.ts";
 export const questions = [
   {
     header: "Rendering",
@@ -42,6 +43,53 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
     await browser.key("Enter");
     await browser.poll(
       "document.querySelectorAll('.otk-question-tabs [role=tab]').length===3",
+    );
+    const pointer = await browser.evaluate<
+      {
+        width: string;
+        height: string;
+        top: number;
+        centre: number;
+        tab: string;
+      }
+    >("(()=>{const e=document.querySelector('.otk-question-options [data-selected]'),r=e.getBoundingClientRect(),p=getComputedStyle(e,'::after'),t=document.querySelector('.otk-question-tabs [aria-selected=true]');return {width:p.width,height:p.height,top:r.top+parseFloat(getComputedStyle(e).borderTopWidth)+parseFloat(p.top)+parseFloat(p.marginTop)+parseFloat(p.height)/2,centre:r.top+r.height/2,tab:getComputedStyle(t,'::after').height}})()");
+    assertEquals([pointer.width, pointer.height, pointer.tab], [
+      "3px",
+      "14px",
+      "2px",
+    ]);
+    assert(Math.abs(pointer.top - pointer.centre) < .5);
+    const client = new WsClient(server.url);
+    await client.connect();
+    try {
+      for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+        await client.rpc("prefs.set", { key: "theme", value: theme });
+        await client.rpc("prefs.set", { key: "reducedColors", value: true });
+        await browser.poll(
+          `document.documentElement.dataset.otkTheme==='${theme}' && document.documentElement.hasAttribute('data-otk-reduced-colors')`,
+        );
+        assertEquals(
+          await browser.evaluate(
+            "(()=>{const e=document.querySelector('.otk-question-options [data-selected]'),p=getComputedStyle(e,'::after'),t=document.querySelector('.otk-question-tabs [aria-selected=true]');return [p.width,p.height,getComputedStyle(t,'::after').height]})()",
+          ),
+          ["3px", "14px", "2px"],
+        );
+      }
+      await client.rpc("prefs.set", { key: "reducedColors", value: false });
+      await client.rpc("prefs.set", { key: "theme", value: "otk-dark" });
+    } finally {
+      await client.close();
+    }
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector('.otk-question-options button').textContent.includes('1.')",
+      ),
+      false,
+    );
+    assert(
+      await browser.evaluate(
+        "document.querySelector('.otk-question-actions button:last-child').title.includes('Esc') && !document.querySelector('.otk-question-actions').textContent.includes('j/k')",
+      ),
     );
     await browser.screenshot(join(f.oc.root, "p1-question-tabs.png"));
     assertEquals(
@@ -91,24 +139,22 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
     const geometry = await browser.evaluate<
       {
         buttonGap: number;
-        helpGap: number;
-        helpTop: number;
-        buttonBottom: number;
-        helpRight: number;
+        actionsRight: number;
+        buttonRight: number;
         dockRight: number;
       }
-    >("(()=>{const d=document.querySelector('.otk-question-dock'),buttons=[...d.querySelectorAll('button')].filter(el=>el.textContent.trim()==='Answer'||el.textContent.trim()==='Reject question'),a=buttons[0].getBoundingClientRect(),b=buttons[1].getBoundingClientRect(),h=d.querySelector('span.otk-muted').getBoundingClientRect();return {buttonGap:b.left-a.right,helpGap:h.left-b.right,helpTop:h.top,buttonBottom:b.bottom,helpRight:h.right,dockRight:d.getBoundingClientRect().right}})()");
+    >("(()=>{const d=document.querySelector('.otk-question-dock'),buttons=[...d.querySelectorAll('.otk-question-actions button')],a=buttons[0].getBoundingClientRect(),b=buttons[1].getBoundingClientRect();return {buttonGap:b.left-a.right,actionsRight:d.querySelector('.otk-question-actions').getBoundingClientRect().right,buttonRight:b.right,dockRight:d.getBoundingClientRect().right}})()");
     assert(
       geometry.buttonGap >= 4,
       "Question actions must have structural spacing",
     );
     assert(
-      geometry.helpGap >= 4 || geometry.helpTop >= geometry.buttonBottom + 4,
-      "Question key help must be separated from buttons, including wrapped rows",
+      geometry.buttonRight <= geometry.actionsRight,
+      "Question actions stay within their structural row",
     );
     assert(
-      geometry.helpRight <= geometry.dockRight - .5,
-      "Question key help must stay within the dock",
+      geometry.actionsRight <= geometry.dockRight - .5,
+      "Question actions stay within the dock; keyboard help is in titles",
     );
     await browser.click(".otk-question-dock button[role=tab]:first-child");
     await browser.key("l");

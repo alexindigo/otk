@@ -60,10 +60,26 @@ function errors(path: string, source: string): string[] {
     errors.push("tool frame owns feature presentation");
   }
   if (
+    (path.endsWith("/Message.tsx") || path.endsWith("/work-log.ts")) &&
+    /(?:part\.kind|case)\s*(?:===\s*)?["'](?:tool|reasoning)["']/.test(source)
+  ) errors.push("work grouping belongs to contributed part presentation");
+  if (
     path.startsWith("packages/ui/") &&
     /(?:interface|type)\s+Draft\s*[={]|new Map<string,\s*Draft>/.test(source)
   ) {
     errors.push("browser draft model belongs to client");
+  }
+  if (
+    path.startsWith("packages/ui/") &&
+    /function\s+(?:replyMessages|replyGroups|replyMetadata)\s*\(/.test(source)
+  ) errors.push("reply projection belongs to client");
+  if (
+    path.endsWith("/Message.tsx") &&
+    /fallback=\{[A-Za-z_$][\w$]*\([^}]*\.parts/.test(source)
+  ) {
+    errors.push(
+      "part updates must flow through a stable keyed component, not a recreated JSX factory",
+    );
   }
   return errors;
 }
@@ -72,6 +88,8 @@ Deno.test("composer and tool hosts remain open while client owns browser drafts"
     const path of [
       "packages/ui/components/ComposerTakeovers.tsx",
       "packages/ui/components/tools/ToolFrame.tsx",
+      "packages/ui/components/Message.tsx",
+      "packages/ui/components/work-log.ts",
       "packages/ui/components/prompt/model.ts",
       "packages/ui/shell/Shell.tsx",
     ]
@@ -89,11 +107,20 @@ Deno.test("composer and tool hosts remain open while client owns browser drafts"
         "session.permissions().length || session.questions().length",
       ],
       ["packages/ui/components/tools/ToolFrame.tsx", 'call.tool === "edit"'],
+      ["packages/ui/components/Message.tsx", 'part.kind === "tool"'],
       [
         "packages/ui/components/prompt/model.ts",
         "interface Draft { input: string }",
       ],
       ["packages/ui/shell/Shell.tsx", "new Map<string, Draft>()"],
+      [
+        "packages/ui/components/Message.tsx",
+        "fallback={renderParts(group().parts)}",
+      ],
+      [
+        "packages/ui/components/Message.tsx",
+        "function replyMessages(messages) {}",
+      ],
     ]
   ) assert(errors(path, source).length > 0, source);
 });

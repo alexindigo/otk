@@ -5,6 +5,7 @@ import type { Part } from "@otk/protocol";
 import Blocks from "./Blocks.tsx";
 import StatusLight from "./StatusLight.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
+import { ChevronIcon } from "./ChromeIcons.tsx";
 export default function Reasoning(
   props: { part: Extract<Part, { kind: "reasoning" }>; mode: "show" | "hide" },
 ) {
@@ -32,12 +33,13 @@ export default function Reasoning(
         disabled={props.mode === "show"}
         onClick={() => void toggle()}
       >
+        <ChevronIcon />
         <Show when={props.part.time.end === undefined}>
           <StatusLight state="working" small activity="spinner" />
         </Show>
-        {props.part.time.end === undefined ? "Thinking…" : "Thought"}
+        {props.part.time.end === undefined ? "Thinking…" : "Thought for"}
         {props.part.time.end !== undefined
-          ? ` · ${
+          ? ` ${
             Math.max(0, (props.part.time.end - props.part.time.start) / 1000)
               .toFixed(1)
           }s`

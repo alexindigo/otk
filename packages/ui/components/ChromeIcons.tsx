@@ -62,3 +62,19 @@ export const SessionsIcon = () => (
     <path d="M21 12h-8M21 6H8M21 18h-8M3 6v4a2 2 0 0 0 2 2h3M3 10v6a2 2 0 0 0 2 2h3" />
   </Icon>
 );
+export const CopyIcon = () => (
+  <Icon>
+    <rect x="9" y="9" width="12" height="12" rx="2" />
+    <path d="M5 15H4a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1h10a1 1 0 0 1 1 1v1" />
+  </Icon>
+);
+export const AttachIcon = () => (
+  <Icon>
+    <path d="m21 11-8.6 8.6a5.5 5.5 0 0 1-7.8-7.8l8.6-8.6a3.7 3.7 0 0 1 5.2 5.2l-8.6 8.6a1.8 1.8 0 0 1-2.6-2.6L15 6.5" />
+  </Icon>
+);
+export const SendIcon = () => (
+  <Icon>
+    <path d="m6 11 6-6 6 6M12 19V5" />
+  </Icon>
+);

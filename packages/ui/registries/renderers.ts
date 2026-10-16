@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Element } from "solid-js";
+export interface WorkTime {
+  start?: number;
+  end?: number;
+}
+export interface PartPresentation {
+  work?: WorkTime;
+  text?: string;
+  hidden?: boolean;
+}
 import type {
   CapabilityName,
   ExternalCall,
@@ -24,11 +33,15 @@ export interface ToolProps {
 }
 export type ToolRenderer = (props: ToolProps) => Element;
 export interface ToolPresentation {
-  icon: string;
+  icon: string | (() => Element);
   verb: string;
   target?: string;
   summary?: string;
+  changes?: { additions: number; deletions: number };
   expanded?: boolean;
+}
+export interface PresentationContext {
+  directory?: string;
 }
 export type ToolRenderProps<K extends keyof ToolKinds> =
   & Omit<ToolProps, "call">
@@ -41,18 +54,27 @@ export class ToolRegistry {
   #typed = new Map<string, ToolRenderer>();
   #external = new Map<string, ToolRenderer>();
   #fallback?: ToolRenderer;
-  #presentations = new Map<string, (call: ToolCall) => ToolPresentation>();
+  #presentations = new Map<
+    string,
+    (call: ToolCall, context: PresentationContext) => ToolPresentation
+  >();
   registerTyped<K extends keyof ToolKinds>(
     tool: K,
     component: (props: ToolRenderProps<K>) => Element,
-    presentation?: (call: ToolKinds[K]) => ToolPresentation,
+    presentation?: (
+      call: ToolKinds[K],
+      context: PresentationContext,
+    ) => ToolPresentation,
   ): void {
     if (this.#typed.has(tool)) throw new Error(`Duplicate tool: ${tool}`);
     this.#typed.set(tool, component as ToolRenderer);
     if (presentation) {
       this.#presentations.set(
         `typed:${tool}`,
-        presentation as (call: ToolCall) => ToolPresentation,
+        presentation as (
+          call: ToolCall,
+          context: PresentationContext,
+        ) => ToolPresentation,
       );
     }
   }
@@ -61,14 +83,20 @@ export class ToolRegistry {
     component: (
       props: Omit<ToolProps, "call"> & { call: ExternalCall },
     ) => Element,
-    presentation?: (call: ExternalCall) => ToolPresentation,
+    presentation?: (
+      call: ExternalCall,
+      context: PresentationContext,
+    ) => ToolPresentation,
   ): void {
     if (this.#external.has(name)) throw new Error(`Duplicate tool: ${name}`);
     this.#external.set(name, component as ToolRenderer);
     if (presentation) {
       this.#presentations.set(
         `external:${name}`,
-        presentation as (call: ToolCall) => ToolPresentation,
+        presentation as (
+          call: ToolCall,
+          context: PresentationContext,
+        ) => ToolPresentation,
       );
     }
   }
@@ -81,10 +109,13 @@ export class ToolRegistry {
       ? this.#external.get(call.name)
       : this.#typed.get(call.tool)) ?? this.#fallback;
   }
-  presentation(call: ToolCall): ToolPresentation {
+  presentation(
+    call: ToolCall,
+    context: PresentationContext = {},
+  ): ToolPresentation {
     return this.#presentations.get(
       call.tool === "external" ? `external:${call.name}` : `typed:${call.tool}`,
-    )?.(call) ?? {
+    )?.(call, context) ?? {
       icon: "◇",
       verb: call.tool === "external" ? call.name : call.tool,
       summary: call.tool === "external" ? call.summary : call.title,
@@ -108,23 +139,41 @@ export class PartRegistry {
   #typed = new Map<string, PartRenderer>();
   #external = new Map<string, PartRenderer>();
   #fallback?: PartRenderer;
+  #presentations = new Map<
+    string,
+    (part: Part, prefs: Preferences) => PartPresentation
+  >();
   registerTyped<K extends keyof PartKinds>(
     kind: K,
     component: (
       props: Omit<PartProps, "part"> & { part: PartKinds[K] },
     ) => Element,
+    presentation?: (part: PartKinds[K], prefs: Preferences) => PartPresentation,
   ): void {
     if (this.#typed.has(kind)) throw new Error(`Duplicate part: ${kind}`);
     this.#typed.set(kind, component as PartRenderer);
+    if (presentation) {
+      this.#presentations.set(
+        `typed:${kind}`,
+        presentation as (part: Part, prefs: Preferences) => PartPresentation,
+      );
+    }
   }
   register(
     name: string,
     component: (
       props: Omit<PartProps, "part"> & { part: ExternalPart },
     ) => Element,
+    presentation?: (part: ExternalPart, prefs: Preferences) => PartPresentation,
   ): void {
     if (this.#external.has(name)) throw new Error(`Duplicate part: ${name}`);
     this.#external.set(name, component as PartRenderer);
+    if (presentation) {
+      this.#presentations.set(
+        `external:${name}`,
+        presentation as (part: Part, prefs: Preferences) => PartPresentation,
+      );
+    }
   }
   fallback(component: PartRenderer): void {
     if (this.#fallback) throw new Error("Duplicate part fallback");
@@ -134,6 +183,11 @@ export class PartRegistry {
     return (part.kind === "external"
       ? this.#external.get(part.name)
       : this.#typed.get(part.kind)) ?? this.#fallback;
+  }
+  presentation(part: Part, prefs: Preferences): PartPresentation {
+    return this.#presentations.get(
+      part.kind === "external" ? `external:${part.name}` : `typed:${part.kind}`,
+    )?.(part, prefs) ?? {};
   }
 }
 

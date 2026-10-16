@@ -50,6 +50,8 @@ export default function Diff(
     style: "auto" | "split" | "unified";
     wrap: boolean;
     paneWidth: number;
+    /** The tool row already names this file; retain the accessible identity. */
+    inline?: boolean;
   },
 ): import("solid-js").Element {
   const style = () =>
@@ -68,16 +70,26 @@ export default function Diff(
       class={["otk-diff", { "otk-diff-wrap": props.wrap }]}
       data-diff-style={style()}
       data-file-status={props.file.status}
+      aria-label={`${label()} ${
+        props.file.oldPath ? `${props.file.oldPath} → ` : ""
+      }${props.file.path}`}
     >
-      <header>
-        <strong>{label()}</strong>
-        <span class="otk-path">
-          {props.file.oldPath ? `${props.file.oldPath} → ` : ""}
-          {props.file.path}
-        </span>
-        <span class="otk-diff-add">+{props.file.additions}</span>
-        <span class="otk-diff-del">−{props.file.deletions}</span>
-      </header>
+      <Show when={!props.inline || props.file.oldPath}>
+        <header>
+          <strong>{label()}</strong>
+          <span class="otk-path">
+            {props.inline
+              ? `from ${props.file.oldPath}`
+              : `${
+                props.file.oldPath ? `${props.file.oldPath} → ` : ""
+              }${props.file.path}`}
+          </span>
+          <Show when={!props.inline}>
+            <span class="otk-diff-add">+{props.file.additions}</span>
+            <span class="otk-diff-del">−{props.file.deletions}</span>
+          </Show>
+        </header>
+      </Show>
       <For each={props.file.hunks} keyed={false}>
         {(hunk) => (
           <div class="otk-diff-content">

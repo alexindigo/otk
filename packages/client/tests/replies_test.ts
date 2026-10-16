@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import type { AssistantMessage } from "@otk/protocol";
-import { replyMetadata } from "../replies.ts";
+import { replyMessages, replyMetadata } from "../replies.ts";
 Deno.test("reply metadata combines backend steps once, without combining unrelated or unparented replies", () => {
   const step = (id: string, replyTo?: string): AssistantMessage => ({
     id,
@@ -14,7 +14,7 @@ Deno.test("reply metadata combines backend steps once, without combining unrelat
     tokens: { input: 2, output: 3, reasoning: 4, cache: { read: 5, write: 6 } },
     cost: .1,
     interrupted: false,
-    parts: [],
+    parts: [{ kind: "text", id: `text-${id}`, synthetic: false, blocks: [] }],
   });
   const records = replyMetadata([
     step("1", "user"),
@@ -33,4 +33,16 @@ Deno.test("reply metadata combines backend steps once, without combining unrelat
   assertEquals(records.get("2")?.cost, .2);
   assertEquals(records.get("2")?.time.created, 1);
   assertEquals(records.get("2")?.interrupted, true);
+  const projected = replyMessages([
+    step("1", "user"),
+    step("2", "user"),
+    step("3", "another"),
+  ]);
+  assertEquals(projected.map((message) => message.id), ["1", "3"]);
+  assertEquals(projected[0].parts.map((part) => part.id), ["text-1", "text-2"]);
+  assertEquals(projected[0].time.created, 1);
+  assertEquals(records.get("2")?.parts.map((part) => part.id), [
+    "text-1",
+    "text-2",
+  ]);
 });

@@ -14,8 +14,8 @@
   overflow: auto;
   padding: 12px;
   border-radius: var(--radius-card);
-  background: var(--panel);
-  border: 1px solid var(--muted);
+  background: var(--otk-bg-code);
+  border: 1px solid var(--otk-border-code);
   font: inherit;
   line-height: 20px;
 }

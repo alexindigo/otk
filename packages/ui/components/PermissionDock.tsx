@@ -14,6 +14,7 @@ import type { PermissionReply } from "@otk/protocol";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import { useSessionPorts } from "../registries/session.tsx";
 import { oldestPermission } from "@otk/client";
+import TakeoverHeader from "./TakeoverHeader.tsx";
 import type {
   SurfaceRegistry,
   TakeoverDefinition,
@@ -40,6 +41,12 @@ function PermissionTakeover() {
   return (
     <PermissionDock
       request={request()}
+      where={request()
+        ? `${request()!.kind} in ${
+          session.location?.(request()!.sessionID) ??
+            session.entry(request()!.sessionID)?.title ?? request()!.sessionID
+        }`
+        : undefined}
       childTitle={request()?.sessionID !== session.sessionID()
         ? session.entry(request()?.sessionID ?? "")?.title ||
           request()?.sessionID
@@ -96,6 +103,7 @@ function RequestDock(
   props: {
     request: PermissionRequest;
     childTitle?: string;
+    where?: string;
     onReply(input: PermissionReply): Promise<void>;
     onDirty(value: boolean): void;
   },
@@ -192,19 +200,23 @@ function RequestDock(
         }
       }}
     >
-      <header>
-        <h2>Permission · {props.request.kind}</h2>
-        <Show when={props.childTitle}>
-          <span class="otk-permission-child">From {props.childTitle}</span>
-        </Show>
-      </header>
-      <p class="otk-permission-title">{props.request.title}</p>
+      <TakeoverHeader
+        title={props.request.detail.kind === "bash"
+          ? "Run this command?"
+          : "Allow this action?"}
+        detail={props.request.title}
+        where={props.where ?? props.request.kind}
+        childTitle={props.childTitle}
+      />
       <Detail detail={props.request.detail} />
-      <ul class="otk-permission-patterns">
-        <For each={props.request.patterns} keyed={false}>
-          {(pattern) => <li class="otk-path">{pattern()}</li>}
-        </For>
-      </ul>
+      <details class="otk-permission-patterns">
+        <summary>Requested scope</summary>
+        <ul>
+          <For each={props.request.patterns} keyed={false}>
+            {(pattern) => <li class="otk-path">{pattern()}</li>}
+          </For>
+        </ul>
+      </details>
       <Show when={error()}>
         <p class="otk-error" role="alert">{error()}</p>
       </Show>
@@ -215,7 +227,8 @@ function RequestDock(
               type="button"
               disabled={pending()}
               onClick={() => void once()}
-              class="otk-primary"
+              class="otk-primary otk-pill"
+              title="Allow once (1 when focused)"
             >
               Allow once
             </button>
@@ -223,17 +236,30 @@ function RequestDock(
               type="button"
               disabled={pending()}
               onClick={() => void always()}
+              class="otk-pill"
+              title="Review future grant (2 when focused)"
             >
-              Allow always
+              Always allow
             </button>
             <button
               type="button"
               disabled={pending()}
               onClick={() => void reject()}
+              class="otk-pill"
+              title="Reject (3 when focused)"
             >
               Reject
             </button>
-            <span class="otk-muted">1 / 2 / 3 when focused</span>
+            <input
+              class="otk-rejection-reason"
+              aria-label="Reason for rejecting (optional)"
+              placeholder="Reason for rejecting (optional)"
+              value={message()}
+              onInput={(event) => {
+                setMessage(event.currentTarget.value);
+                props.onDirty(!!event.currentTarget.value);
+              }}
+            />
           </div>
         </Match>
         <Match when={mode() === "always"}>
@@ -249,6 +275,7 @@ function RequestDock(
                 type="button"
                 disabled={pending()}
                 onClick={() => void answerCommand("always")}
+                class="otk-primary otk-pill"
               >
                 Confirm allow always
               </button>
@@ -256,6 +283,7 @@ function RequestDock(
                 type="button"
                 disabled={pending()}
                 onClick={() => void close()}
+                class="otk-pill"
               >
                 Cancel
               </button>
@@ -281,11 +309,14 @@ function RequestDock(
               />
             </label>
             <div class="otk-permission-actions">
-              <button type="submit" disabled={pending()}>Reject request</button>
+              <button type="submit" class="otk-pill" disabled={pending()}>
+                Reject request
+              </button>
               <button
                 type="button"
                 disabled={pending()}
                 onClick={() => void close()}
+                class="otk-pill"
               >
                 Cancel
               </button>
@@ -300,6 +331,7 @@ export default function PermissionDock(
   props: {
     request?: PermissionRequest;
     childTitle?: string;
+    where?: string;
     onReply(input: PermissionReply): Promise<void>;
     onDirty(value: boolean): void;
   },
@@ -313,6 +345,7 @@ export default function PermissionDock(
         <RequestDock
           request={request()}
           childTitle={props.childTitle}
+          where={props.where}
           onReply={(input) => props.onReply(input)}
           onDirty={(value) => props.onDirty(value)}
         />

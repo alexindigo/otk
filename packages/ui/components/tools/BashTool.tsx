@@ -3,12 +3,13 @@ import { Show } from "solid-js";
 import type { BashCall } from "@otk/protocol";
 import ToolOutput from "./ToolOutput.tsx";
 import type { ToolRegistry } from "../../registries/renderers.ts";
+import { RunIcon } from "./ToolIcons.tsx";
 export function registerBashTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "bash",
     (props) => <BashTool call={props.call} directory={props.directory} />,
     (call) => ({
-      icon: "›",
+      icon: RunIcon,
       verb: "Run",
       target: call.command,
       summary: call.description,
