@@ -6,7 +6,9 @@ import {
   registerAgentPart,
   registerAttachmentsPrompt,
   registerBashTool,
+  registerCommandDialogs,
   registerCompactionPart,
+  registerEditorDialog,
   registerEditorPrompt,
   registerEditTool,
   registerFetchTool,
@@ -18,8 +20,9 @@ import {
   registerOtkThemes,
   registerPastePrompt,
   registerPatchTool,
-  registerPermissionDock,
-  registerQuestionDock,
+  registerPermissionTakeover,
+  registerProjectDialogs,
+  registerQuestionTakeover,
   registerQuestionTool,
   registerReadTool,
   registerReasoningPart,
@@ -70,9 +73,12 @@ export function applicationUi(): UiRegistries {
   registerPastePrompt(ui.prompt);
   registerAttachmentsPrompt(ui.prompt);
   registerEditorPrompt(ui.prompt);
+  registerEditorDialog(ui.dialogs);
   registerAgentCyclePrompt(ui.prompt);
-  registerPermissionDock(ui.docks);
-  registerQuestionDock(ui.docks);
+  registerPermissionTakeover(ui.takeovers);
+  registerQuestionTakeover(ui.takeovers);
+  registerCommandDialogs(ui.dialogs);
+  registerProjectDialogs(ui.dialogs);
   return ui;
 }
 

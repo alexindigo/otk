@@ -6,6 +6,13 @@ Negative fixtures reject direct font selection, undersized text and off-grid
 spacing. Theme and contrast tests own palette data and the complete surface
 matrix; browser tests own constructed lights and accessibility presentation.
 
+The shell check enforces implementation-free open dialog/panel/takeover
+registries, common typed session ports and absence of per-feature prompt inputs
+or shell-built registered dialogs/docks. Negative fixtures reject those boundary
+violations. Web's App is public-entry composition only; notification and command
+checks follow their new reusable owners. Inbox/browser tests observe the new
+column and centre navigation rather than the retired application sidebar.
+
 `deno task test:arch` checks the exact seven workspace libraries against the
 kit-repackaging dependency table. It also checks root application/core/web/test
 consumers for private paths into extracted packages and retired protocol,

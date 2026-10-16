@@ -12,6 +12,7 @@ import { useUiRegistries } from "../registries/context.tsx";
 import type { PromptContext, PromptProps } from "../registries/prompt.ts";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import { createKeyboard } from "../keyboard/dispatcher.ts";
+import { useSessionPorts } from "../registries/session.tsx";
 
 /** Input and submission lifetime; concrete prompt concepts are injected features. */
 export default function Prompt(props: PromptProps): import("solid-js").Element {
@@ -35,6 +36,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     return draft;
   };
   const ctx: PromptContext = {
+    ...useSessionPorts(),
     commands: ports.commands,
     keyboard,
     own: (release) => releases.push(release),
@@ -58,7 +60,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     props.connected &&
     (features.map((feature) => feature.enabled?.()).find((value) =>
       value !== undefined
-    ) ?? props.promptEnabled !== false);
+    ) ?? ctx.supports("prompt"));
   const submit = async () => {
     const draft = change((current) => current);
     for (const feature of features) {
@@ -133,7 +135,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     title: "Interrupt session",
     category: "Session",
     enabled: () =>
-      props.connected && props.promptEnabled !== false && props.busy !== false,
+      props.connected && ctx.supports("prompt") && props.busy !== false,
     run: async (_context, args?: { confirm?: boolean }) => {
       if (!args?.confirm) return await props.onAbort();
       if (Date.now() < deadline) {

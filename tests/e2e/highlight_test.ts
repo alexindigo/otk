@@ -246,6 +246,11 @@ Deno.test("R-perf external DOM latency and tracing for 2000 TS lines plus 20 str
     await browser.poll(
       `document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle'`,
     );
+    // The second streamed block can fill the transcript's visible height. Bring
+    // the first block's final lines into view before demanding their lazy tokens.
+    await browser.evaluate(
+      "document.querySelector('.otk-code').scrollIntoView({block:'end'})",
+    );
     await browser.poll(
       "[...document.querySelectorAll('.otk-token')].some(el=>el.textContent==='value1999')",
       60000,

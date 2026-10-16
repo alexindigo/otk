@@ -1,0 +1,41 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-project-sessions {
+  flex: none;
+  max-height: 200px;
+  overflow: auto;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.otk-project-session-heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+.otk-project-session-heading > span {
+  font-weight: 600;
+}
+.otk-project-session-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.otk-project-sessions .otk-session-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 100%;
+  padding: 8px;
+}
+.otk-project-sessions .otk-session-row[aria-current] {
+  background: var(--hover);
+}
+.otk-project-sessions .otk-row-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.otk-project-sessions .otk-new-session {
+  padding: 4px 8px;
+}

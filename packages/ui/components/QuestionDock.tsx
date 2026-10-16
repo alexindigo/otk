@@ -10,6 +10,38 @@ export function registerQuestionDock(docks: DockRegistry): void {
 }
 import { createSignal, For, onSettled, Show } from "solid-js";
 import type { QuestionRequest } from "@otk/protocol";
+import { useSessionPorts } from "../registries/session.tsx";
+import type {
+  SurfaceRegistry,
+  TakeoverDefinition,
+} from "../registries/shell.ts";
+export function registerQuestionTakeover(
+  registry: SurfaceRegistry<TakeoverDefinition>,
+): void {
+  registry.register({
+    id: "questions",
+    capability: "questions",
+    component: QuestionTakeover,
+  });
+}
+function QuestionTakeover() {
+  const session = useSessionPorts(), { commands } = useCommandPorts();
+  const request = () => session.questions()[0];
+  return (
+    <QuestionDock
+      request={request()}
+      childTitle={request()?.sessionID !== session.sessionID()
+        ? session.entry(request()?.sessionID ?? "")?.title
+        : undefined}
+      onDirty={(value) => session.dirty("questions", value)}
+      onReply={(requestID, answers) =>
+        commands.run("question.reply", {
+          requestID,
+          ...(answers ? { answers } : {}),
+        })}
+    />
+  );
+}
 import {
   ownedAction,
   ownedCommand,

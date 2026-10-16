@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { CommandHub, Selection } from "@otk/client";
-/** Navigation feature owns the command contracts; application owns the guards. */
+/** Navigation feature owns the command contracts; the consumer owns the guards. */
 export function registerSessionCommands(commands: CommandHub, actions: {
   available(input?: { sidecarId: string; directory: string }): boolean;
   create(input?: { sidecarId: string; directory: string }): Promise<void>;

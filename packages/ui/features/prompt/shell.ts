@@ -31,10 +31,20 @@ export function registerShellPrompt(prompt: PromptRegistry): void {
         ),
       );
       return {
+        async submit(draft, parts) {
+          if (draft.mode !== "shell") return false;
+          await ctx.act(() =>
+            ctx.rpc("session.shell", {
+              sessionID: ctx.sessionID(),
+              command: parts.filter((p) => p.kind === "text").map((p) => p.text)
+                .join("\n"),
+              ...(draft.agent ? { agent: draft.agent } : {}),
+            })
+          );
+          return true;
+        },
         enabled: () =>
-          ctx.props.value.mode === "shell"
-            ? ctx.props.shellEnabled !== false
-            : undefined,
+          ctx.props.value.mode === "shell" ? ctx.supports("shell") : undefined,
         label: () => ctx.props.value.mode === "shell" ? "Shell" : "Prompt",
         placeholder: () =>
           ctx.props.value.mode === "shell"
@@ -45,7 +55,7 @@ export function registerShellPrompt(prompt: PromptRegistry): void {
           if (
             event.key === "!" && !event.isComposing &&
             ctx.props.value.mode === "normal" &&
-            ctx.props.shellEnabled !== false && start === 0 && end === 0
+            ctx.supports("shell") && start === 0 && end === 0
           ) {
             event.preventDefault();
             event.stopPropagation();

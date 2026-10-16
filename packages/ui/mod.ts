@@ -13,6 +13,18 @@ export {
 } from "./components/tools/GenericTool.tsx";
 export { default as Prompt } from "./components/Prompt.tsx";
 export { default as SessionView } from "./components/SessionView.tsx";
+export { default as Shell } from "./shell/Shell.tsx";
+export { default as ProjectSessions } from "./components/ProjectSessions.tsx";
+export { registerCommandDialogs } from "./features/dialogs.tsx";
+export {
+  ProjectSettings,
+  registerProjectDialogs,
+} from "./features/projects.tsx";
+export {
+  default as ProjectInbox,
+  type ProjectRow,
+} from "./components/ProjectInbox.tsx";
+export * from "./shell/context.tsx";
 export { default as Sidebar } from "./components/Sidebar.tsx";
 export { default as StatusLight } from "./components/StatusLight.tsx";
 export {
@@ -28,10 +40,12 @@ export { default as Setup } from "./components/Setup.tsx";
 export {
   default as PermissionDock,
   registerPermissionDock,
+  registerPermissionTakeover,
 } from "./components/PermissionDock.tsx";
 export {
   default as QuestionDock,
   registerQuestionDock,
+  registerQuestionTakeover,
 } from "./components/QuestionDock.tsx";
 export { default as DisplayMenu } from "./components/DisplayMenu.tsx";
 export { createToggles, type Toggles } from "./components/Toggles.ts";
@@ -43,6 +57,10 @@ export { solidState } from "./state/binding.ts";
 export * from "./registries/renderers.ts";
 export * from "./registries/prompt.ts";
 export * from "./registries/context.tsx";
+export * from "./registries/session.tsx";
+export * from "./registries/shell.ts";
+export { default as DialogHost } from "./components/DialogHost.tsx";
+export { default as ComposerTakeovers } from "./components/ComposerTakeovers.tsx";
 export * from "./components/prompt/model.ts";
 export type {
   CompletionOption,
@@ -74,7 +92,10 @@ export { registerSlashPrompt } from "./features/prompt/slash.ts";
 export { registerHistoryPrompt } from "./features/prompt/history.ts";
 export { registerPastePrompt } from "./features/prompt/paste.ts";
 export { registerAttachmentsPrompt } from "./features/prompt/attachments.tsx";
-export { registerEditorPrompt } from "./features/prompt/editor.tsx";
+export {
+  registerEditorDialog,
+  registerEditorPrompt,
+} from "./features/prompt/editor.tsx";
 export { registerAgentCyclePrompt } from "./features/prompt/agents.tsx";
 export * from "./keyboard/keys.ts";
 export * from "./keyboard/dispatcher.ts";

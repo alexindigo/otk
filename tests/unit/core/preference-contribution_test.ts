@@ -10,7 +10,7 @@ import { type Harness, HarnessError } from "@otk/harness";
 import { OtkDb, Prefs, prefsMigrations } from "@otk/store";
 import { prefsOptions, register } from "../../../core/features/prefs.ts";
 import { RpcRegistry } from "../../../core/ws/registry.ts";
-import { registerPreferenceCommands } from "../../../web/src/commands/preferences.ts";
+import { registerPreferenceCommands } from "@otk/client";
 import { fixture } from "./support.ts";
 
 declare module "@otk/protocol" {

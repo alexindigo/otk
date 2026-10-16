@@ -57,20 +57,30 @@ Deno.test("registered slash aliases retain canonical native names and MCP source
     commands,
     own: (release: () => void) => releases.push(release),
     active: () => active,
-    props: {
-      connected: true,
-      value: { input: "", mode: "normal", chips: [] },
-      onCommands: () =>
-        Promise.resolve([{
+    supports: () => true,
+    sessionID: () => "session",
+    attachments: (parts: unknown[]) => Promise.resolve(parts),
+    act: (action: () => Promise<unknown>) => action(),
+    rpc: (method: string, params: Record<string, unknown>) => {
+      if (method === "commands.list") {
+        return Promise.resolve([{
           name: "probe",
           description: "Native probe",
           source: "mcp",
           aliases: ["shortcut"],
-        }]),
-      onCommand: (...args: unknown[]) => {
-        invoked.push(args);
-        return Promise.resolve();
-      },
+        }]);
+      }
+      invoked.push([
+        params.command,
+        params.arguments,
+        params.parts,
+        params.agent,
+      ]);
+      return Promise.resolve();
+    },
+    props: {
+      connected: true,
+      value: { input: "", mode: "normal", chips: [] },
     },
     fail: (error: unknown) => {
       throw error;
@@ -107,11 +117,12 @@ function catalogConsumer(load: () => Promise<CommandOption[]>) {
     commands,
     own: (release: () => void) => releases.push(release),
     active: () => active,
+    supports: () => true,
+    sessionID: () => "session",
+    rpc: load,
     props: {
       connected: true,
       value: { input: "", mode: "normal", chips: [] },
-      onCommands: load,
-      onCommand: () => Promise.resolve(),
     },
     fail: (error: unknown) => {
       throw error;

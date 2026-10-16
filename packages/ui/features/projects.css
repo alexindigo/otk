@@ -1,0 +1,30 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-template-paths {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 280px;
+  overflow: auto;
+  padding: 16px;
+}
+.otk-template-paths h3 {
+  font-size: 14px;
+  margin: 0 0 8px;
+}
+.otk-template-paths > button {
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.otk-project-settings {
+  margin-bottom: 24px;
+}
+.otk-project-settings h2 {
+  font-size: 15px;
+}
+.otk-ageing-fields {
+  display: flex;
+  gap: 12px;
+}
+.otk-ageing-fields input {
+  width: 100%;
+}

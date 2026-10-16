@@ -10,12 +10,10 @@ import {
   type SidecarConnection,
 } from "@otk/client";
 import type { IndexEntry, Preferences, ServerFrame } from "@otk/protocol";
-import {
-  registerBadgeChannel,
-  registerOsChannel,
-  registerSoundChannel,
-  registerToastChannel,
-} from "@otk/ui";
+import { registerBadgeChannel } from "../features/notify/badge.ts";
+import { registerOsChannel } from "../features/notify/os.ts";
+import { registerSoundChannel } from "../features/notify/sound.ts";
+import { registerToastChannel } from "../features/notify/toast.ts";
 /** The application selects channels and supplies live host/selection/RPC ports. */
 export function applicationNotifications(input: {
   commands: CommandHub;

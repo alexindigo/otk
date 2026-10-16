@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createEffect, createSignal, type Element, For } from "solid-js";
 import { render } from "@solidjs/web";
+import { CommandHub } from "@otk/client";
 import {
   booleanPreference,
   type CapabilityName,
@@ -11,7 +12,10 @@ import {
 import {
   browserThemeEnvironment,
   Code,
+  CommandProvider,
+  ComposerTakeovers,
   createUiRegistries,
+  DialogHost,
   DisplayMenu,
   Docks,
   emptyDraft,
@@ -23,6 +27,8 @@ import {
   registerOtkThemes,
   registerToolPart,
   registerUnknownPart,
+  type SessionPorts,
+  SessionProvider,
   StatusLight,
   ThemeEngine,
   ThemeRegistry,
@@ -30,6 +36,7 @@ import {
   ToolOutput,
   type ToolProps,
   UiProvider,
+  useSessionPorts,
 } from "@otk/ui";
 import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-sans/400.css";
@@ -39,6 +46,9 @@ import "@fontsource/ibm-plex-sans/600.css";
 declare module "@otk/protocol" {
   interface CapabilityContracts {
     external: { probe(): void };
+  }
+  interface RpcMethods {
+    "consumer.echo": { params: { value: string }; result: string };
   }
   interface Preferences {
     "consumer.compact": boolean;
@@ -71,6 +81,7 @@ function ExternalTool(props: ToolProps): Element {
   );
 }
 function Consumer(): Element {
+  const commands = new CommandHub();
   const preferenceRegistry = createPreferences();
   preferenceRegistry.register({
     key: "consumer.compact",
@@ -100,6 +111,36 @@ function Consumer(): Element {
     id: "external",
     capability: "external",
     render: (inputs) => inputs.external,
+  });
+  ui.dialogs.register<{ text: string }>({
+    id: "external",
+    component: (props) => (
+      <section role="dialog" data-external-dialog>
+        {props.input.text}
+        <button type="button" data-close-dialog onClick={props.close}>
+          Close external dialog
+        </button>
+      </section>
+    ),
+  });
+  ui.takeovers.register({
+    id: "external",
+    capability: "external",
+    component: () => {
+      const session = useSessionPorts();
+      return (
+        <button
+          type="button"
+          data-external-takeover
+          onClick={() =>
+            void session.rpc("consumer.echo", { value: "external" }).then(
+              setOpened,
+            )}
+        >
+          External takeover
+        </button>
+      );
+    },
   });
   ui.prompt.register({
     id: "external-transform",
@@ -141,7 +182,7 @@ function Consumer(): Element {
     childSessionID: "child-probe",
   });
   return (
-    <>
+    <CommandProvider commands={commands}>
       <UiProvider registries={ui}>
         <section
           data-visual-gallery
@@ -225,34 +266,53 @@ function Consumer(): Element {
             Update result
           </button>
           <output id="opened">{opened()}</output>
-          <Prompt
-            value={draft()}
-            onChange={(change) => {
-              setDraft(change);
-              return draft();
+          <SessionProvider
+            ports={{
+              supports: (capability) =>
+                capability === "prompt" || capabilities().includes(capability),
+              rpc:
+                (() => Promise.resolve("typed external reply")) as SessionPorts[
+                  "rpc"
+                ],
+              sessionID: () => "session",
+              directory: () => Promise.resolve(""),
+              entry: () => undefined,
+              permissions: () => [],
+              questions: () => [],
+              prefs,
+              dirty: () => {},
+              act: (action) => action(),
+              history: () => Promise.resolve([]),
+              attachments: (parts) => Promise.resolve(parts),
             }}
-            connected
-            pasteSummary
-            onSubmit={(parts) => {
-              setSubmitted(JSON.stringify(parts));
-              return Promise.resolve();
-            }}
-            onFind={() => Promise.resolve([])}
-            onMentions={() =>
-              Promise.resolve({
-                files: [],
-                agents: [],
-                resources: [],
-                frecency: [],
-                directory: "",
+          >
+            <Prompt
+              value={draft()}
+              onChange={(change) => {
+                setDraft(change);
+                return draft();
+              }}
+              connected
+              onSubmit={(parts) => {
+                setSubmitted(JSON.stringify(parts));
+                return Promise.resolve();
+              }}
+              onAbort={async () => {}}
+            />
+            <ComposerTakeovers />
+          </SessionProvider>
+          <button
+            type="button"
+            data-open-dialog
+            onClick={() =>
+              void commands.run("dialog.open", {
+                id: "external",
+                input: { text: "Feature-owned dialog" },
               })}
-            onBump={async () => {}}
-            onCommands={() => Promise.resolve([])}
-            onCommand={async () => {}}
-            onNew={async () => {}}
-            onHistory={() => Promise.resolve([])}
-            onAbort={async () => {}}
-          />
+          >
+            Open external dialog
+          </button>
+          <DialogHost />
           <output id="submitted">{submitted()}</output>
           <button
             type="button"
@@ -305,7 +365,7 @@ function Consumer(): Element {
           />
         </section>
       </UiProvider>
-    </>
+    </CommandProvider>
   );
 }
 render(Consumer, document.getElementById("app")!);

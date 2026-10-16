@@ -8,10 +8,11 @@ imports and knows no native backend.
 ## Composition and API
 
 Import from `@otk/ui`. `createUiRegistries()` creates empty `tools`, `parts`,
-`prompt` and `docks` collections. Choose feature-owned `register*` functions in
-your composition root, then provide the collection through `UiProvider`.
-Registration rejects duplicate IDs; distinct consumers have independent
-collections. Register before mounting. Registries import no implementations.
+`prompt`, `dialogs`, `panels`, `takeovers` and legacy `docks` collections.
+Choose feature-owned `register*` functions in your composition root, then
+provide the collection through `UiProvider`. Registration rejects duplicate IDs;
+distinct consumers have independent collections. Register before mounting.
+Registries import no implementations.
 
 `tools.register(name, Component)` receives `ToolProps`: the live protocol call,
 display preferences, width, directory, waiting state and an injected child-open
@@ -27,18 +28,42 @@ open `PartKinds` map. The same namespace separation applies to parts;
 `registerUnknownPart` supplies unsupported-part fallback.
 
 `prompt.register({ id, create(context) })` installs a per-prompt feature.
-`PromptContext` injects data, callbacks, selection/caret/focus operations, an
-active-lifetime check and error reporting. Features can provide triggers and
-autocomplete sources, key handling, paste/drop, submission transforms,
-completion hooks, chips, actions and overlays. Shell, mentions, slash, history,
-paste, attachments and editor each own their implementation. `Prompt` owns
-native input, submission identity and teardown; it has no feature import list.
+`PromptContext` injects selection/caret/focus operations, an active-lifetime
+check, error reporting and `SessionProvider`'s common session ports: typed
+`rpc(method, params)`, `supports(capability)`, session ID, directory,
+preferences, history, attachment resolution, dirty-state and successful-action
+callbacks. There are no per-feature callbacks or capability flags on `Prompt`.
+Features can provide triggers and autocomplete sources, key handling,
+paste/drop, submission transforms, completion hooks, chips, actions and
+overlays. Shell, mentions, slash, history, paste, attachments and editor each
+own their implementation. `Prompt` owns native input, submission identity and
+teardown; it has no feature import list.
 
-`docks.register({ id, capability, render(inputs) })` selects
-capability-available injected content by ID. `SessionView` supplies the
-data/callback-composed dock slots to `Docks`, preserving mounted dirty state
-during transport reconnects. The consumer owns draft/navigation/RPC operations;
-children only execute the callbacks they receive.
+`takeovers.register({ id, capability, component })` supplies composer attention
+owners. `ComposerTakeovers` mounts capability-available components; they read
+session state from context and construct their own UI. The shipped permission
+and question owners preserve dirty state through reconnects. R3 retains their
+above-prompt placement; R6 changes their presentation to composer takeovers. The
+legacy `Docks` API remains independently reusable for existing consumers.
+
+`dialogs.register({ id, component })` installs a feature-owned dialog. A single
+`DialogHost` handles `dialog.open({ id, input? })` through the command hub. It
+returns an identity-bound close handle, so a stale completion or feature
+teardown cannot close a replacement dialog. Command, keymap, theme, editor and
+add-project features own their registrations.
+`panels.register({ id, title, icon, capability?,
+component })` contributes
+right-panel views; R3 provides the empty slot and R5 its view host.
+
+`Shell({ theme, api })` composes the reusable three-region shell with selected
+UI registrations. `ProjectInbox` renders the shared client projection in its
+column and 48px rail; it does not recompute roll-ups, unread or ageing. Width
+(200–360px, 248 default) and collapsed states follow the serving server's
+`shellLayout` preference. The centre's interim `ProjectSessions` owns
+root-session switching; the shell's existing navigation guard protects
+draft/attention input, including same-event slash navigation and browser
+history. Project-only URLs support empty projects. Opening or acting resets
+visits; a loaded viewed session records seen.
 
 `createIndex`, `createSession`, `createSidecars` and `solidState` bind the
 framework-free client models to Solid stores. Connection options, including the
@@ -46,17 +71,18 @@ local API base, are supplied by the consumer; package URLs are never used to
 discover an application's address.
 
 `Blocks`, `Code`, `Diff`, `Message`, `ToolLine`, `ToolFrame`, `ToolOutput`,
-`Prompt`, `SessionView`, `Sidebar`, `Settings`, `Login`, `Setup`, dock and
-display components are independently reusable. The shared highlighting worker
-owns its existing bounded cache/capture lifetime; consumers inject all
-navigation. Its TextMate metadata and WASM asset use Shiki's public `textmate`
-and `onig.wasm` exports. Asset-aware bundling resolves the literal dependency
-URL; the worker fetches the same pinned binary into worker-owned complete bytes.
-The accepted initialization callback constructs `WebAssembly.Module` and
-`WebAssembly.Instance` synchronously in that worker, preserving immediate
-termination without an asynchronous streaming validator or persistent cache.
-Native Deno module workers resolve that same public export with
-`import.meta.resolve`, so direct workers also avoid consumer install paths.
+`Prompt`, `SessionView`, `ProjectInbox`, `ProjectSessions`, `Sidebar`,
+`Settings`, `Login`, `Setup`, dock and display components are independently
+reusable. The shared highlighting worker owns its existing bounded cache/capture
+lifetime; consumers inject all navigation. Its TextMate metadata and WASM asset
+use Shiki's public `textmate` and `onig.wasm` exports. Asset-aware bundling
+resolves the literal dependency URL; the worker fetches the same pinned binary
+into worker-owned complete bytes. The accepted initialization callback
+constructs `WebAssembly.Module` and `WebAssembly.Instance` synchronously in that
+worker, preserving immediate termination without an asynchronous streaming
+validator or persistent cache. Native Deno module workers resolve that same
+public export with `import.meta.resolve`, so direct workers also avoid consumer
+install paths.
 
 ## Example
 

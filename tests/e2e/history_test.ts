@@ -56,7 +56,7 @@ Deno.test("P6 history merges connected sidecars by time, recalls shell mode and 
       ".otk-settings .otk-settings-content > .otk-form button[type=submit]",
     );
     await browser.poll(
-      "document.querySelectorAll('.otk-sidecar-group [data-connection]').length===2 && [...document.querySelectorAll('.otk-sidecar-group [data-connection]')].every(el=>el.textContent==='connected')",
+      "document.querySelectorAll('.otk-server-connections [data-connection]').length===2 && [...document.querySelectorAll('.otk-server-connections [data-connection]')].every(el=>el.textContent==='connected')",
     );
     await browser.click(".otk-settings .otk-view-header button");
     await openSession(browser, first.id);
@@ -150,7 +150,7 @@ Deno.test("recalled image metadata resolves exact bytes only on send through its
       ".otk-settings-content > .otk-form button[type=submit]",
     );
     await browser.poll(
-      "document.querySelectorAll('.otk-sidecar-group [data-connection]').length===2 && [...document.querySelectorAll('.otk-sidecar-group [data-connection]')].every(el=>el.textContent==='connected')",
+      "document.querySelectorAll('.otk-server-connections [data-connection]').length===2 && [...document.querySelectorAll('.otk-server-connections [data-connection]')].every(el=>el.textContent==='connected')",
     );
     await browser.click(".otk-settings .otk-view-header button");
     await openSession(browser, blank.id);
@@ -231,7 +231,7 @@ Deno.test("history keeps valid local prompts when a connected sibling transport 
       ".otk-settings-content > .otk-form button[type=submit]",
     );
     await browser.poll(
-      "document.querySelectorAll('.otk-sidecar-group [data-connection]').length===2 && [...document.querySelectorAll('.otk-sidecar-group [data-connection]')].every(el=>el.textContent==='connected')",
+      "document.querySelectorAll('.otk-server-connections [data-connection]').length===2 && [...document.querySelectorAll('.otk-server-connections [data-connection]')].every(el=>el.textContent==='connected')",
     );
     await browser.click(".otk-settings .otk-view-header button");
     await openSession(browser, blank.id);

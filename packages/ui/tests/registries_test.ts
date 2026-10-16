@@ -8,6 +8,12 @@ import {
 import { PromptRegistry } from "../registries/prompt.ts";
 import type { PromptContext } from "../registries/prompt.ts";
 import type { ExternalCall, Part, ToolBase, ToolCall } from "@otk/protocol";
+import {
+  DialogRegistry,
+  type PanelDefinition,
+  SurfaceRegistry,
+  type TakeoverDefinition,
+} from "../registries/shell.ts";
 
 declare module "@otk/protocol" {
   interface CapabilityContracts {
@@ -174,4 +180,61 @@ Deno.test("prompt factories create independent feature lifetimes with caller-inj
     Error,
     "Duplicate prompt feature",
   );
+});
+Deno.test("open dialog, panel and takeover collections retain component ownership, capability order and consumer isolation", () => {
+  const dialogs = new DialogRegistry(), other = new DialogRegistry();
+  const component = (props: { input: { value: string }; close(): void }) =>
+    props.input.value;
+  dialogs.register({ id: "external", component });
+  assertEquals(
+    dialogs.resolve("external")!.component({
+      input: { value: "feature" },
+      close() {},
+    }),
+    "feature",
+  );
+  assertEquals(other.resolve("external"), undefined);
+  assertThrows(
+    () => dialogs.register({ id: "external", component }),
+    Error,
+    "Duplicate dialog",
+  );
+  const panels = new SurfaceRegistry<PanelDefinition>();
+  panels.register({
+    id: "always",
+    title: "Always",
+    icon: "A",
+    component: () => "A",
+  });
+  panels.register({
+    id: "custom",
+    title: "Custom",
+    icon: "C",
+    capability: "custom",
+    component: () => "C",
+  });
+  assertEquals(panels.available(() => false).map((v) => v.id), ["always"]);
+  assertEquals(panels.available(() => true).map((v) => v.component()), [
+    "A",
+    "C",
+  ]);
+  assertThrows(
+    () =>
+      panels.register({
+        id: "custom",
+        title: "duplicate",
+        icon: "D",
+        component: () => "D",
+      }),
+    Error,
+    "Duplicate surface",
+  );
+  const takeovers = new SurfaceRegistry<TakeoverDefinition>();
+  takeovers.register({
+    id: "external",
+    capability: "custom",
+    component: () => "takeover",
+  });
+  assertEquals(takeovers.available(() => false), []);
+  assertEquals(takeovers.available(() => true)[0].component(), "takeover");
 });

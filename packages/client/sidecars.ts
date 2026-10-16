@@ -27,7 +27,7 @@ export interface SidecarState extends SidecarSpec {
 }
 export const LOCAL_SIDECAR = "local";
 export function readSidecars(storage: Pick<Storage, "getItem">): SidecarSpec[] {
-  const implicit = { id: LOCAL_SIDECAR, baseUrl: "", label: "This sidecar" };
+  const implicit = { id: LOCAL_SIDECAR, baseUrl: "", label: "This server" };
   try {
     const raw = JSON.parse(storage.getItem("otk.sidecars") || "[]");
     if (!Array.isArray(raw)) return [implicit];

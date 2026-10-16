@@ -9,7 +9,6 @@ import {
   Show,
 } from "solid-js";
 import type {
-  CapabilityName,
   ContentSession,
   Message as OtkMessage,
   PermissionRequest,
@@ -17,7 +16,7 @@ import type {
 } from "@otk/protocol";
 import Message from "./Message.tsx";
 import Prompt from "./Prompt.tsx";
-import Docks from "./Docks.tsx";
+import ComposerTakeovers from "./ComposerTakeovers.tsx";
 import type { Preferences } from "@otk/protocol";
 import SubagentBar from "./SubagentBar.tsx";
 import RevertBanner from "./RevertBanner.tsx";
@@ -27,9 +26,7 @@ import { queuedMessages } from "@otk/client";
 import { followViewport } from "./viewport.ts";
 import { highlightingScope } from "../highlight/client.ts";
 import type { Draft, DraftChange } from "./prompt/model.ts";
-import type { CommandOption, FileMatch, PromptPart } from "@otk/protocol";
-import type { MentionSources } from "./prompt/autocomplete.ts";
-import type { HistoryEntry } from "@otk/protocol";
+import type { PromptPart } from "@otk/protocol";
 import { ownedAction } from "../keyboard/context.tsx";
 export default function SessionView(props: {
   info?: ContentSession;
@@ -43,9 +40,6 @@ export default function SessionView(props: {
   errorState?: SessionErrorState;
   draft: Draft;
   connected: boolean;
-  capabilities: readonly CapabilityName[];
-  historyEnabled: boolean;
-  docks: Readonly<Record<string, Element>>;
   displayMenu?: Element;
   prefs: Preferences;
   permissions: PermissionRequest[];
@@ -62,20 +56,7 @@ export default function SessionView(props: {
     mode: Draft["mode"],
     agent?: string,
   ): Promise<void>;
-  onFind(query: string): Promise<FileMatch[]>;
-  onMentions(query: string): Promise<MentionSources>;
-  onBump(path: string): Promise<void>;
-  onCommands(): Promise<CommandOption[]>;
-  onCommand(
-    command: string,
-    args: string,
-    parts: Extract<PromptPart, { kind: "file" }>[],
-    agent?: string,
-  ): Promise<void>;
-  onNew(): Promise<void>;
-  onHistory(): Promise<HistoryEntry[]>;
   onAbort(): Promise<void>;
-  onAgents?(): Promise<import("@otk/protocol").AgentOption[]>;
 }): Element {
   const queued = () => queuedMessages(props.messages, props.busy);
   const older = ownedAction("session.page", () => props.onOlder());
@@ -204,27 +185,13 @@ export default function SessionView(props: {
         </div>
       </div>
       <Show when={!props.child}>
-        <Docks capabilities={props.capabilities} inputs={props.docks} />
+        <ComposerTakeovers />
         <Prompt
-          promptEnabled={props.capabilities.includes("prompt")}
-          shellEnabled={props.capabilities.includes("shell")}
-          historyEnabled={props.historyEnabled}
           busy={props.busy}
-          agentsEnabled={props.capabilities.includes("agents")}
-          commandsEnabled={props.capabilities.includes("commands")}
-          onAgents={props.onAgents}
           value={props.draft}
           connected={props.connected}
-          pasteSummary={props.prefs.pasteSummary}
           onChange={(value) => props.onDraft(value)}
           onSubmit={(parts, mode, agent) => props.onPrompt(parts, mode, agent)}
-          onFind={props.onFind}
-          onMentions={props.onMentions}
-          onBump={props.onBump}
-          onCommands={props.onCommands}
-          onCommand={props.onCommand}
-          onNew={props.onNew}
-          onHistory={props.onHistory}
           onAbort={() => props.onAbort()}
         />
       </Show>

@@ -12,6 +12,37 @@ import { createSignal, For, Match, onSettled, Show, Switch } from "solid-js";
 import type { PermissionDetail, PermissionRequest } from "@otk/protocol";
 import type { PermissionReply } from "@otk/protocol";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
+import { useSessionPorts } from "../registries/session.tsx";
+import { oldestPermission } from "@otk/client";
+import type {
+  SurfaceRegistry,
+  TakeoverDefinition,
+} from "../registries/shell.ts";
+export function registerPermissionTakeover(
+  registry: SurfaceRegistry<TakeoverDefinition>,
+): void {
+  registry.register({
+    id: "permissions",
+    capability: "permissions",
+    component: PermissionTakeover,
+  });
+}
+function PermissionTakeover() {
+  const session = useSessionPorts(), { commands } = useCommandPorts();
+  const request = () =>
+    oldestPermission(session.permissions(), session.sessionID(), session.entry);
+  return (
+    <PermissionDock
+      request={request()}
+      childTitle={request()?.sessionID !== session.sessionID()
+        ? session.entry(request()?.sessionID ?? "")?.title ||
+          request()?.sessionID
+        : undefined}
+      onDirty={(value) => session.dirty("permissions", value)}
+      onReply={(input) => commands.run("permission.reply", input)}
+    />
+  );
+}
 const detailOf = <K extends PermissionDetail["kind"]>(
   detail: PermissionDetail,
   kind: K,

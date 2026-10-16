@@ -462,7 +462,7 @@ Deno.test("real downward wheel retains follow intent when transcript growth prec
       await browser.poll(
         `document.querySelector('.otk-code code')?.textContent===${
           JSON.stringify(source)
-        } && document.querySelector('[aria-current=page]')?.dataset.status==='idle' && [...document.querySelectorAll('.otk-message-details')].every(el=>!el.textContent.includes('streaming')) && ${
+        } && document.querySelector('.otk-project-sessions [aria-current=page]')?.dataset.status==='idle' && [...document.querySelectorAll('.otk-message-details')].every(el=>!el.textContent.includes('streaming')) && ${
           numbered
             ? "[...document.querySelectorAll('.otk-text p')].some(el=>el.textContent==='Written.')"
             : "true"
@@ -1016,7 +1016,7 @@ Deno.test("source commits stay atomic and selected raw/styled endpoints survive 
       await browser.poll(
         `[...document.querySelectorAll('.otk-text p')].some(p=>p.textContent===${
           JSON.stringify(marker)
-        }) && document.querySelector('[aria-current=page]')?.dataset.status==='idle'`,
+        }) && document.querySelector('.otk-project-sessions [aria-current=page]')?.dataset.status==='idle'`,
       );
       assertEquals(
         await browser.evaluate(

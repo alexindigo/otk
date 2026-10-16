@@ -2,7 +2,7 @@
 import type { CapabilityName, ServerFrame } from "@otk/protocol";
 import type { SidecarConnection, SidecarState } from "@otk/client";
 import type { DockDefinition } from "../registries/renderers.ts";
-import type SessionView from "../components/SessionView.tsx";
+import type { SessionPorts } from "../registries/session.tsx";
 import type Docks from "../components/Docks.tsx";
 
 // Compile-only contracts prove all consumers reject misspelled names. These
@@ -15,7 +15,7 @@ export type CapabilityTypeChecks = [
   Assert<RejectsTypo<SidecarState["capabilities"][number]>>,
   Assert<RejectsTypo<DockDefinition["capability"]>>,
   Assert<
-    RejectsTypo<Parameters<typeof SessionView>[0]["capabilities"][number]>
+    RejectsTypo<Parameters<SessionPorts["supports"]>[0]>
   >,
   Assert<RejectsTypo<Parameters<typeof Docks>[0]["capabilities"][number]>>,
   Assert<

@@ -18,8 +18,12 @@ configuration is layered: `defaults/otk.toml` → generated auth state → optio
 environment name is documented in the defaults file. `OTK_CONFIG` selects
 another operator overlay. Unknown nodes and invalid types fail loudly.
 
-The production Solid UI lists root sessions by sidecar and project. Add further
-sidecars in Settings; their indexes merge into the sidebar. Open one session to
+The production Solid UI merges projects across connected servers into an inbox.
+Each project has an always-visible roll-up light, unread name and visit clock;
+the column collapses to a status-light rail. Activity restores inactive
+projects. Add servers and path templates in Settings, and add empty or scanned
+projects through Add project. The centre provides project-local root-session
+navigation while task tabs and panel views are developed. Open a session to
 stream its transcript, send prompts, or press Esc twice to interrupt. Message
 history for the previous session is released on switching. Web assets and fonts
 are bundled locally; no dev server or CDN is used.
@@ -108,15 +112,15 @@ or Web Push is required.
 
 ## Application ownership
 
-| # | Entry or area                                               | Responsibility                                                                                                               |
-| - | ----------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| 1 | `main.ts`, `defaults/otk.toml`                              | Layered operator/auth-state config, selected native backend and content buffers, bundled asset path, process signal lifetime |
-| 2 | `application.ts`                                            | Backend-neutral shipped composition: public store migrations/services and feature-owned core RPC registrations               |
-| 3 | `core/`                                                     | Config/auth, reflective HTTP adapters, WS/RPC transport, session index and backend-neutral service lifetime                  |
-| 4 | `web/index.html`, `web/src/main.tsx`, `web/src/features.ts` | Browser bootstrap, fonts/provider and public UI feature selection                                                            |
-| 5 | `web/src/ui/App.tsx`, `App.css`                             | Application chrome, draft/navigation ownership and injected RPC/data callbacks                                               |
-| 6 | `tests/`                                                    | Application units, integration/e2e, shared fixtures, architectural boundaries and standalone reuse consumers                 |
-| 7 | `packages/*/tests/`                                         | Library-owned units; application support stays at root                                                                       |
+| # | Entry or area                                               | Responsibility                                                                                                                  |
+| - | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| 1 | `main.ts`, `defaults/otk.toml`                              | Layered operator/auth-state config, selected native backend and content buffers, bundled asset path, process signal lifetime    |
+| 2 | `application.ts`                                            | Backend-neutral shipped composition: public store migrations/services and feature-owned core RPC registrations                  |
+| 3 | `core/`                                                     | Config/auth, reflective HTTP adapters, WS/RPC transport, session index and backend-neutral service lifetime                     |
+| 4 | `web/index.html`, `web/src/main.tsx`, `web/src/features.ts` | Browser bootstrap, fonts/provider and public UI feature selection                                                               |
+| 5 | `packages/ui/shell/`, `web/src/ui/App.tsx`                  | Reusable shell owns chrome, guarded navigation, draft and metadata bindings; web only composes its public entry and API address |
+| 6 | `tests/`                                                    | Application units, integration/e2e, shared fixtures, architectural boundaries and standalone reuse consumers                    |
+| 7 | `packages/*/tests/`                                         | Library-owned units; application support stays at root                                                                          |
 
 Application fixtures use the same composition as production: subprocesses launch
 `main.ts`; external-backend fixtures call `startApplication`. Config, wire names

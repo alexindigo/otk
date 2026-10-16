@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { LayoutPreferences } from "./preferences/layout.ts";
 import type { DiffPreferences } from "./preferences/diff.ts";
 import type { InboxPreferences } from "./preferences/inbox.ts";
 import type { KeymapPreferences } from "./preferences/keymap.ts";
@@ -13,6 +14,7 @@ export interface Preferences
   extends
     DiffPreferences,
     InboxPreferences,
+    LayoutPreferences,
     KeymapPreferences,
     NotificationPreferences,
     PromptPreferences,

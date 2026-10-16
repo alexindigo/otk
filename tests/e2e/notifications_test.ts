@@ -314,9 +314,11 @@ Deno.test("D9 background child Allow once targets originating remote family and 
     await notificationSettings(browser);
     await browser.fill("input[name=url]", other.url);
     await browser.fill("input[name=label]", "Remote notification host");
-    await browser.click(".otk-settings .otk-form button[type=submit]");
+    await browser.click(
+      ".otk-settings-content > .otk-form button[type=submit]",
+    );
     await browser.poll(
-      "[...document.querySelectorAll('.otk-toast[data-kind=info]')].some(el=>el.textContent.includes('Sidecar added'))",
+      "[...document.querySelectorAll('.otk-toast[data-kind=info]')].some(el=>el.textContent.includes('Server added'))",
     );
     await browser.poll(
       "[...document.querySelectorAll('[data-settings-sidecar]')].some(el=>el.textContent.includes('Remote notification host') && el.textContent.includes('connected'))",

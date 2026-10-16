@@ -133,6 +133,17 @@ Deno.test("independent public UI consumer renders external tools twice, updates 
     await browser.poll(
       "document.querySelector('[data-external-dock]').textContent === 'Injected dock 1'",
     );
+    await browser.poll("!!document.querySelector('[data-external-takeover]')");
+    await browser.click("[data-external-takeover]");
+    await browser.poll(
+      "document.querySelector('#opened').textContent==='typed external reply'",
+    );
+    await browser.click("[data-open-dialog]");
+    await browser.poll(
+      "document.querySelector('[data-external-dialog]')?.textContent.includes('Feature-owned dialog')",
+    );
+    await browser.click("[data-close-dialog]");
+    await browser.poll("!document.querySelector('[data-external-dialog]')");
     await browser.click(".otk-display-menu summary");
     await browser.poll(
       `!![...document.querySelectorAll('.otk-display-menu label')].find(el => el.textContent.includes('Consumer compact layout'))`,

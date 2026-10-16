@@ -76,6 +76,13 @@ Wrap sends, approvals, answers and interrupts in `act(directory, callback)`.
 atomically. These are UI-independent ports: callers own navigation guards,
 action callbacks and failure presentation.
 
+`projectHash` / `projectRoute` provide project-only URLs for empty projects,
+separate from session URLs; pass both through the same guarded navigation owner.
+`projectName` names a path without embedding server identity. Consumers keep
+server IDs alongside shared projections and add machine labels for collisions.
+`registerPreferenceCommands` is the framework-free command contribution owner;
+its menu/command metadata still derives from the protocol preference registry.
+
 `inboxStatus`, `rollup`, `unread`, `inboxProjects`, `visitTime` and `ageing` are
 the shared pure projections for column, rail and badges. Supply the connection's
 index entries, its metadata and an explicit current time. Ageing defaults to

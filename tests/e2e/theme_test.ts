@@ -64,7 +64,7 @@ const paint = `(() => {
     code:[...document.querySelectorAll('.otk-code .otk-token')].map(el=>({text:el.textContent,color:getComputedStyle(el).color,style:el.getAttribute('style')})),
     add:getComputedStyle(document.querySelector('.otk-diff-add')).color,
     del:getComputedStyle(document.querySelector('.otk-diff-del')).color,
-    wordmark:getComputedStyle(document.querySelector('.otk-brand strong')).color,
+    wordmark:getComputedStyle(document.querySelector('.otk-inbox-brand strong')).color,
     work:globalThis.themeWorkerEvidence };
 })()`;
 async function choose(browser: Cdp, id: string) {

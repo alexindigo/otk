@@ -12,11 +12,31 @@ export function registerMentionsPrompt(prompt: PromptRegistry): void {
     create: (ctx) => ({
       source: {
         trigger: mention,
-        options: async (token) =>
-          mentionOptions(
-            await ctx.props.onMentions(mentionQuery(token.query).query),
-            token.query,
-          ),
+        options: async (token) => {
+          const sessionID = ctx.sessionID(),
+            query = mentionQuery(token.query).query;
+          const [files, agents, resources, frecency, directory] = await Promise
+            .all([
+              ctx.supports("files")
+                ? ctx.rpc("find.files", { sessionID, query })
+                : [],
+              ctx.supports("agents")
+                ? ctx.rpc("agents.list", { sessionID })
+                : [],
+              ctx.supports("resources")
+                ? ctx.rpc("resources.list", { sessionID })
+                : [],
+              ctx.rpc("frecency.list", { sessionID }),
+              ctx.directory(),
+            ]);
+          return mentionOptions({
+            files,
+            agents,
+            resources,
+            frecency,
+            directory,
+          }, token.query);
+        },
         select(token, option, expand) {
           if (expand && option.directory) {
             ctx.change((current) =>
@@ -37,7 +57,12 @@ export function registerMentionsPrompt(prompt: PromptRegistry): void {
                 `@${option.label}`,
                 option.part!,
               ), token.start + option.label.length + 2);
-            if (option.path) void ctx.props.onBump(option.path).catch(ctx.fail);
+            if (option.path) {
+              void ctx.rpc("frecency.bump", {
+                sessionID: ctx.sessionID(),
+                path: option.path,
+              }).catch(ctx.fail);
+            }
           }
           ctx.focus();
         },

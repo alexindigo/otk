@@ -12,11 +12,11 @@ export function registerHistoryPrompt(prompt: PromptRegistry): void {
         queue = queue.then(async () => {
           const draft = ctx.change((current) => current);
           if (
-            !ctx.active() || ctx.props.historyEnabled === false ||
+            !ctx.active() || !ctx.supports("history") ||
             !history.canMove(draft)
           ) return;
           if (history.empty) {
-            const entries = await ctx.props.onHistory();
+            const entries = await ctx.history();
             if (
               !ctx.active() || ctx.change((current) => current) !== draft
             ) return;

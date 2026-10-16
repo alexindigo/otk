@@ -18,7 +18,12 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
             title: "New session",
             category: "Session",
             slash: ["new"],
-            run: () => ctx.props.onNew(),
+            run: async () => {
+              const info = await ctx.rpc("session.create", {
+                directory: await ctx.directory(),
+              });
+              await ctx.commands.run("session.open", { sessionID: info.id });
+            },
           });
         }
       });
@@ -51,13 +56,13 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
         );
       };
       const catalog = async () => {
-        if (!ctx.props.connected || ctx.props.commandsEnabled === false) {
+        if (!ctx.props.connected || !ctx.supports("commands")) {
           return options();
         }
         const revision = ++generation;
         let next: CommandOption[];
         try {
-          next = await ctx.props.onCommands();
+          next = await ctx.rpc("commands.list", { sessionID: ctx.sessionID() });
         } catch (error) {
           if (ctx.active() && revision === generation) throw error;
           return options();
@@ -86,8 +91,7 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
             title: command.description || command.name,
             category: "Server commands",
             slash: [command.name, ...command.aliases],
-            enabled: () =>
-              ctx.props.connected && ctx.props.commandsEnabled !== false,
+            enabled: () => ctx.props.connected && ctx.supports("commands"),
             run: (
               _context,
               args: {
@@ -96,12 +100,19 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
                 parts?: Extract<PromptPart, { kind: "file" }>[];
               } = {},
             ) =>
-              ctx.props.onCommand(
-                name,
-                args.arguments ?? "",
-                args.parts ?? [],
-                args.agent ?? ctx.props.value.agent,
-              ),
+              ctx.act(async () => {
+                await ctx.rpc("session.command", {
+                  sessionID: ctx.sessionID(),
+                  command: name,
+                  arguments: args.arguments ?? "",
+                  agent: args.agent ?? ctx.props.value.agent,
+                  parts: (await ctx.attachments(args.parts ?? [])).filter((
+                    part,
+                  ): part is Extract<PromptPart, { kind: "file" }> =>
+                    part.kind === "file"
+                  ),
+                });
+              }),
           });
           registered.set(name, { signature, release });
         }

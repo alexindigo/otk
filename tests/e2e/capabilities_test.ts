@@ -60,7 +60,14 @@ Deno.test("core-only welcome loads a session without optional RPCs and preserves
       sentFrames(browser).flatMap(({ frame }) =>
         frame.t === "rpc" ? [frame.method] : []
       ).filter((method) =>
-        !["session.get", "session.messages", "prefs.get", "frecency.list"]
+        ![
+          "session.get",
+          "session.messages",
+          "prefs.get",
+          "frecency.list",
+          "projects.visit",
+          "sessions.seen",
+        ]
           .includes(String(method))
       ),
       [],
@@ -120,7 +127,7 @@ Deno.test("transport reconnecting retains advertised features and unsent permiss
     await app.stop();
     stopped = true;
     await browser.poll(
-      "document.querySelector('.otk-sidebar')?.textContent.includes('reconnecting')",
+      "document.querySelector('.otk-project-inbox')?.textContent.includes('reconnecting')",
     );
     assertEquals(
       await browser.evaluate(`({

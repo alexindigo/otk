@@ -18,7 +18,7 @@ async function capture(browser: Cdp, root: string, name: string) {
   await browser.screenshot(path);
   console.info("Browser capture:", path);
 }
-Deno.test("E1 roots grouped by directory, descendants hidden, SPA assets and API boundary", async () => {
+Deno.test("E1 project inbox and centre roots grouped by directory, descendants hidden, SPA assets and API boundary", async () => {
   const f = await browserFixture();
   try {
     const root = await f.oc.request<{ id: string }>("/session", {
@@ -48,7 +48,7 @@ Deno.test("E1 roots grouped by directory, descendants hidden, SPA assets and API
     );
     assertEquals(
       await browser.evaluate(
-        `document.querySelector('[data-session="${other.id}"]')?.closest('[data-project]')?.dataset.project`,
+        `document.querySelector('[data-session="${other.id}"]')?.closest('[data-session-project]')?.dataset.sessionProject`,
       ),
       second,
     );
@@ -79,7 +79,7 @@ Deno.test("E1 roots grouped by directory, descendants hidden, SPA assets and API
         viewport: number;
         mainBottom: number;
       }
-    >("(()=>{const s=document.querySelector('.otk-sidebar').getBoundingClientRect(),m=document.querySelector('.otk-main').getBoundingClientRect();return {sidebarRight:s.right,mainLeft:m.left,viewport:innerHeight,mainBottom:m.bottom}})()");
+    >("(()=>{const s=document.querySelector('.otk-project-inbox').getBoundingClientRect(),m=document.querySelector('.otk-main').getBoundingClientRect();return {sidebarRight:s.right,mainLeft:m.left,viewport:innerHeight,mainBottom:m.bottom}})()");
     assert(Math.abs(geometry.sidebarRight - geometry.mainLeft) < .5);
     assert(Math.abs(geometry.viewport - geometry.mainBottom) < .5);
     await browser.goto(server.url + "/nested/route");
@@ -304,7 +304,7 @@ Deno.test("E7 add authenticated second sidecar, merged groups, prompt and persis
       "[data-settings-sidecar]:not([data-settings-sidecar=local]) button[type=submit]",
     );
     await browser.poll(
-      "document.querySelectorAll('.otk-sidecar-group [data-connection]').length === 2 && [...document.querySelectorAll('.otk-sidecar-group [data-connection]')].every(el=>el.textContent==='connected')",
+      "document.querySelectorAll('.otk-server-connections [data-connection]').length === 2 && [...document.querySelectorAll('.otk-server-connections [data-connection]')].every(el=>el.textContent==='connected')",
     );
     await browser.click(".otk-view-header button");
     await openSession(browser, remote.id);
@@ -323,7 +323,7 @@ Deno.test("E7 add authenticated second sidecar, merged groups, prompt and persis
     await capture(browser, f.oc.root, "e7-two-sidecars");
     await browser.reload();
     await browser.poll(
-      "document.querySelectorAll('[data-session]').length === 2",
+      "document.querySelectorAll('.otk-project-inbox [data-project]').length === 2 && document.querySelectorAll('[data-session]').length === 1",
     );
   } finally {
     await second?.stop();

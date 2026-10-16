@@ -18,7 +18,7 @@ export function registerPastePrompt(prompt: PromptRegistry): void {
         if (data.files.length) return ctx.acceptFiles(Array.from(data.files));
         const text = data.getData("text/plain").replace(/\r\n?/g, "\n"),
           { start, end } = ctx.selection();
-        const summarized = summarizePaste(text, ctx.props.pasteSummary);
+        const summarized = summarizePaste(text, ctx.prefs().pasteSummary);
         const draft = ctx.change(
           (current) =>
             summarized
@@ -35,7 +35,12 @@ export function registerPastePrompt(prompt: PromptRegistry): void {
         );
         try {
           const path = serverPath(text),
-            matches = path ? await ctx.props.onFind(path) : [];
+            matches = path && ctx.supports("files")
+              ? await ctx.rpc("find.files", {
+                sessionID: ctx.sessionID(),
+                query: path,
+              })
+              : [];
           if (!ctx.active()) return;
           if (path && matches.some((file) => file.path === path)) {
             ctx.change(

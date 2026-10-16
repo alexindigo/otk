@@ -30,7 +30,7 @@ export default function Settings(props: {
   return (
     <section class="otk-settings" aria-label="Settings">
       <header class="otk-view-header">
-        <h1>Settings / sidecars</h1>
+        <h1>Settings / servers</h1>
         <button type="button" onClick={() => void close()}>
           Close settings
         </button>
@@ -39,7 +39,7 @@ export default function Settings(props: {
         {props.appearance}
         {props.notifications}
         <p class="otk-muted">
-          A remote sidecar must list this page’s origin,{" "}
+          A remote server must list this page’s origin,{" "}
           <code>{location.origin}</code>, in <code>server.origins</code>.
         </p>
         <For each={props.sidecars} keyed={(item) => item.id}>
@@ -55,11 +55,11 @@ export default function Settings(props: {
                     type="button"
                     onClick={() => void remove(sidecar().id)}
                   >
-                    Remove sidecar
+                    Remove server
                   </button>
                 </Show>
               </header>
-              <p>{sidecar().baseUrl || "Serving sidecar · relative /api/"}</p>
+              <p>{sidecar().baseUrl || "Serving server · relative /api/"}</p>
               <ConnectionBadge sidecar={sidecar()} />
               <Show when={sidecar().error}>
                 <p class="otk-error" role="alert">{sidecar().error}</p>
@@ -83,8 +83,8 @@ export default function Settings(props: {
           )}
         </For>
         <Form
-          title="Add sidecar"
-          submitLabel="Add sidecar"
+          title="Add server"
+          submitLabel="Add server"
           onSubmit={async (data) => {
             await props.onAdd(
               String(data.get("url")),

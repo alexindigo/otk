@@ -270,7 +270,7 @@ function sourceErrors(path: string, source: string): string[] {
   if (
     [
       "packages/ui/components/DisplayMenu.tsx",
-      "web/src/commands/preferences.ts",
+      "packages/client/preference-commands.ts",
     ].includes(path) &&
     /["'](?:timestamps|thinking|toolDetails|conceal|genericToolOutput|diffWrap|diffStyle|scrollbar|pasteSummary)["']/
       .test(source)
@@ -880,7 +880,7 @@ Deno.test("preferences stay feature-owned with an open composed contract and one
   for (
     const path of [
       "packages/ui/components/DisplayMenu.tsx",
-      "web/src/commands/preferences.ts",
+      "packages/client/preference-commands.ts",
     ]
   ) {
     const source = await read(path);
@@ -946,6 +946,7 @@ Deno.test("independent UI consumer imports public kit entries without applicatio
   assertEquals(imports(consumer), [
     "solid-js",
     "@solidjs/web",
+    "@otk/client",
     "@otk/protocol",
     "@otk/ui",
     "@fontsource/ibm-plex-mono/400.css",
@@ -1077,12 +1078,15 @@ Deno.test("notification registry is feature/channel agnostic and notification ac
       .test(hub),
   );
   const application = await Deno.readTextFile(
-    new URL("web/src/notifications.ts", root),
+    new URL("packages/ui/shell/notifications.ts", root),
   );
   assertEquals(imports(application), [
     "@otk/client",
     "@otk/protocol",
-    "@otk/ui",
+    "../features/notify/badge.ts",
+    "../features/notify/os.ts",
+    "../features/notify/sound.ts",
+    "../features/notify/toast.ts",
   ]);
   assert(application.includes('command: "permission.reply"'));
   assert(application.includes("candidates.get(incoming.id) !== incoming"));

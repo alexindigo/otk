@@ -64,6 +64,16 @@ export async function browserFixture(
   };
 }
 export async function openSession(browser: Cdp, id: string): Promise<void> {
+  await browser.poll(
+    `!!document.querySelector('[data-session="${id}"]') || !!document.querySelector('[data-project-sessions~="${id}"]')`,
+  );
+  if (
+    !await browser.evaluate(
+      `!!document.querySelector('[data-session="${id}"]')`,
+    )
+  ) {
+    await browser.click(`[data-project-sessions~="${id}"] .otk-project-open`);
+  }
   await browser.poll(`!!document.querySelector('[data-session="${id}"]')`);
   await browser.click(`[data-session="${id}"]`);
   await browser.poll(

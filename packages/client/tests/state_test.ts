@@ -141,7 +141,7 @@ Deno.test("web merged index isolates sidecar snapshots, refuses revision gaps an
 Deno.test("web sidecar persistence keeps the implicit source and rejects duplicate identities/URLs", () => {
   const read = (value: unknown) =>
     readSidecars({ getItem: () => JSON.stringify(value) });
-  assertEquals(read([]), [{ id: "local", baseUrl: "", label: "This sidecar" }]);
+  assertEquals(read([]), [{ id: "local", baseUrl: "", label: "This server" }]);
   assertEquals(
     read([{ id: "local", baseUrl: "http://other", label: "replace" }, {
       id: "r",

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { CommandHub } from "@otk/client";
+import type { CommandHub } from "./commands.ts";
 import {
   type PreferenceKey,
   type PreferenceRegistry,

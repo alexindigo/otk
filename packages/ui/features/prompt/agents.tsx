@@ -12,10 +12,14 @@ export function registerAgentCyclePrompt(prompt: PromptRegistry): void {
         const task = queue.then(async () => {
           if (!ctx.active()) return;
           const draft = ctx.change((current) => current);
-          const agents = await ctx.props.onAgents?.() ?? [];
+          if (!ctx.supports("agents")) return;
+          const agents = await ctx.rpc("agents.list", {
+            sessionID: ctx.sessionID(),
+            primary: true,
+          });
           if (
             !ctx.active() || !ctx.props.connected ||
-            ctx.props.agentsEnabled === false || !agents.length
+            !ctx.supports("agents") || !agents.length
           ) return;
           ctx.change((current) => {
             if (current.agent !== draft.agent) return current;
@@ -34,9 +38,7 @@ export function registerAgentCyclePrompt(prompt: PromptRegistry): void {
         queue = task.catch(() => {});
         return task;
       };
-      const enabled = () =>
-        ctx.props.connected && !!ctx.props.onAgents &&
-        ctx.props.agentsEnabled !== false;
+      const enabled = () => ctx.props.connected && ctx.supports("agents");
       ownedCommand(ctx, {
         id: "agent.cycle",
         title: "Next agent",
@@ -73,7 +75,7 @@ export function registerAgentCyclePrompt(prompt: PromptRegistry): void {
       });
       return {
         actions: () => (
-          <Show when={ctx.props.agentsEnabled && ctx.props.value.agent}>
+          <Show when={ctx.supports("agents") && ctx.props.value.agent}>
             <span class="otk-chip">{ctx.props.value.agent}</span>
           </Show>
         ),

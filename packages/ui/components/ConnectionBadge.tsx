@@ -11,7 +11,7 @@ export default function ConnectionBadge(props: { sidecar: SidecarState }) {
       />
       <span data-connection={props.sidecar.id}>{props.sidecar.status}</span>
       <small data-harness={props.sidecar.id}>
-        harness {props.sidecar.harness}
+        Agent service {props.sidecar.harness}
       </small>
     </div>
   );

@@ -31,7 +31,7 @@ export function createCompletion(
     value: ctx.props.value.input,
     mode: ctx.props.value.mode,
     caret: ctx.caret(),
-    connected: ctx.props.connected && ctx.props.promptEnabled !== false,
+    connected: ctx.props.connected && ctx.supports("prompt"),
   }), ({ value, mode, caret, connected }) => {
     let found: { token: PromptCompletion; source: PromptSource } | undefined;
     if (

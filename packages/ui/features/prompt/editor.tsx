@@ -1,13 +1,22 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { Show } from "solid-js";
+import { createEffect, onSettled } from "solid-js";
 import type { PromptRegistry } from "../../registries/prompt.ts";
 import { editorSave } from "../../components/prompt/model.ts";
 import Editor from "../../components/prompt/Editor.tsx";
 import { ownedCommand } from "../../keyboard/context.tsx";
+import type { DialogRegistry } from "../../registries/shell.ts";
+export function registerEditorDialog(dialogs: DialogRegistry): void {
+  dialogs.register<Parameters<typeof Editor>[0]>({
+    id: "editor",
+    component: (props) => <Editor {...props.input} />,
+  });
+}
 export function registerEditorPrompt(prompt: PromptRegistry): void {
   prompt.register({
     id: "editor",
     create: (ctx) => {
+      let dialog: { close(): void } | undefined;
+      ctx.own(() => dialog?.close());
       const open = ownedCommand(ctx, {
         id: "prompt.editor",
         title: "Edit prompt",
@@ -27,6 +36,7 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
         hidden: true,
         run: () => {
           ctx.change(editorSave);
+          dialog?.close();
           ctx.focus();
         },
       });
@@ -37,6 +47,7 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
         hidden: true,
         run: () => {
           ctx.change((current) => ({ ...current, editor: undefined }));
+          dialog?.close();
           ctx.focus();
         },
       });
@@ -47,6 +58,40 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
           25,
         ),
       );
+      onSettled(() => {
+        createEffect(() => !!ctx.props.value.editor, (opened) => {
+          if (opened) {
+            void ctx.commands.run<{ close(): void }>("dialog.open", {
+              id: "editor",
+              input: {
+                get title() {
+                  return ctx.props.value.editor?.chipID
+                    ? "Edit pasted text"
+                    : "Edit prompt";
+                },
+                get value() {
+                  return ctx.props.value.editor?.text ?? "";
+                },
+                onChange: (text: string) =>
+                  ctx.change((current) =>
+                    current.editor
+                      ? { ...current, editor: { ...current.editor, text } }
+                      : current
+                  ),
+                onSave: () => {
+                  void save().catch(ctx.fail);
+                },
+                onCancel: () => {
+                  void cancel().catch(ctx.fail);
+                },
+              },
+            }).then((handle) => {
+              if (ctx.active()) dialog = handle;
+              else handle.close();
+            }).catch(ctx.fail);
+          }
+        });
+      });
       return {
         actions: () => (
           <button
@@ -55,24 +100,6 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
           >
             Edit prompt
           </button>
-        ),
-        overlay: () => (
-          <Show when={ctx.props.value.editor}>
-            {(editor) => (
-              <Editor
-                title={editor().chipID ? "Edit pasted text" : "Edit prompt"}
-                value={editor().text}
-                onChange={(text) =>
-                  ctx.change((current) =>
-                    current.editor
-                      ? { ...current, editor: { ...current.editor, text } }
-                      : current
-                  )}
-                onSave={() => void save().catch(ctx.fail)}
-                onCancel={() => void cancel().catch(ctx.fail)}
-              />
-            )}
-          </Show>
         ),
       };
     },

@@ -1,0 +1,70 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+import { assert, assertEquals } from "@std/assert";
+const root = new URL("../../", import.meta.url);
+function errors(path: string, source: string): string[] {
+  const errors: string[] = [];
+  if (
+    path === "packages/ui/registries/shell.ts" &&
+    /from\s+["'][^"']*(?:features|components|shell\/)/.test(source)
+  ) errors.push("registry imports an implementation");
+  if (
+    path === "packages/ui/registries/prompt.ts" &&
+    /\b(?:promptEnabled|shellEnabled|historyEnabled|agentsEnabled|commandsEnabled|pasteSummary|onAgents|onFind|onMentions|onBump|onCommands|onCommand|onNew|onHistory)\b/
+      .test(source)
+  ) errors.push("prompt owns feature-specific inputs");
+  if (
+    path.endsWith("/Shell.tsx") &&
+    /<(?:PermissionDock|QuestionDock|Palette|KeysHelp|ThemePicker|Editor)\b|docks=/
+      .test(source)
+  ) errors.push("shell builds a registered feature");
+  if (
+    path === "web/src/ui/App.tsx" &&
+    /create(?:Signal|Effect|Store)|\.rpc\.|new CommandHub/.test(source)
+  ) errors.push("web owns shell behaviour");
+  return errors;
+}
+Deno.test("shell registries stay open, implementation-free and feature ports replace per-feature prompt wiring", async () => {
+  for (
+    const path of [
+      "packages/ui/registries/shell.ts",
+      "packages/ui/registries/prompt.ts",
+      "packages/ui/shell/Shell.tsx",
+      "web/src/ui/App.tsx",
+    ]
+  ) {
+    assertEquals(
+      errors(path, await Deno.readTextFile(new URL(path, root))),
+      [],
+      path,
+    );
+  }
+  for (
+    const [path, source] of [
+      [
+        "packages/ui/registries/shell.ts",
+        'import Palette from "../components/Palette.tsx";',
+      ],
+      ["packages/ui/registries/prompt.ts", "onMentions(): void;"],
+      ["packages/ui/registries/prompt.ts", "shellEnabled?: boolean;"],
+      ["packages/ui/shell/Shell.tsx", "const feature = <PermissionDock />;"],
+      ["web/src/ui/App.tsx", "const state = createSignal(false);"],
+    ]
+  ) assert(errors(path, source).length > 0, source);
+  const session = await Deno.readTextFile(
+    new URL("packages/ui/registries/session.tsx", root),
+  );
+  assert(session.includes('rpc: InboxRpc["call"]'));
+  assert(session.includes("supports(capability: CapabilityName)"));
+  const features = await Deno.readTextFile(
+    new URL("web/src/features.ts", root),
+  );
+  for (
+    const owner of [
+      "registerPermissionTakeover",
+      "registerQuestionTakeover",
+      "registerCommandDialogs",
+      "registerProjectDialogs",
+      "registerEditorDialog",
+    ]
+  ) assert(features.includes(owner));
+});
