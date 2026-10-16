@@ -128,7 +128,7 @@ Deno.test("transport reconnecting retains advertised features and unsent permiss
     await app.stop();
     stopped = true;
     await browser.poll(
-      "document.querySelector('.otk-project-inbox')?.textContent.includes('reconnecting')",
+      "document.querySelector('.otk-server-status[data-connection=local]')?.title.includes(': reconnecting;')",
     );
     assertEquals(
       await browser.evaluate(`({

@@ -39,7 +39,7 @@ Deno.test("web late creation reply retains a draft typed while RPC was pending",
     );
     assertEquals(
       await browser.evaluate(
-        "document.querySelector('.otk-view-header h1').textContent",
+        "document.querySelector('.otk-session-crumb[aria-current] .otk-crumb-title').textContent",
       ),
       "Keep this draft",
     );
@@ -69,7 +69,7 @@ Deno.test("web removed sidecar cannot reconnect after an in-flight login returns
     const url = `http://127.0.0.1:${proxy.port}`;
     const browser = await f.browser(local.url);
     await browser.poll(
-      "document.querySelector('[data-connection=local]')?.textContent === 'connected'",
+      "document.querySelector('.otk-server-status[data-connection=local]')?.title.includes(': connected;')",
     );
     await browser.click(".otk-settings-entry");
     await browser.poll("!!document.querySelector('input[name=url]')");
@@ -163,7 +163,7 @@ Deno.test("web newer selection supersedes a pending session creation without los
       "document.querySelectorAll('[data-session]').length === 3",
     );
     await browser.poll(
-      `document.querySelector('.otk-view-header h1').textContent === 'Newer selection B' && document.querySelector('textarea[name=prompt]').value === 'Belongs to B'`,
+      `document.querySelector('.otk-session-crumb[aria-current] .otk-crumb-title').textContent === 'Newer selection B' && document.querySelector('textarea[name=prompt]').value === 'Belongs to B'`,
     );
     assertEquals(await browser.evaluate("location.hash"), `#/local/${b.id}`);
   } finally {

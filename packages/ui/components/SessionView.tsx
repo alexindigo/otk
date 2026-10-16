@@ -118,16 +118,7 @@ export default function SessionView(props: {
         view = element;
       }}
     >
-      <header class="otk-view-header">
-        <div>
-          <h1>{props.info?.title || "Loading session…"}</h1>
-          <p title={props.info?.directory}>
-            <span class="otk-path">{props.info?.directory}</span>
-            <span>{props.label}</span>
-          </p>
-        </div>
-        {props.displayMenu}
-      </header>
+      {props.displayMenu}
       <Show when={props.info?.parentID}>
         <SubagentBar
           info={props.info!}

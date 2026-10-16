@@ -57,6 +57,11 @@ export default function Palette(
               <button
                 type="button"
                 data-command={row().cmd.id}
+                data-otk-selection="vertical"
+                data-selected={rows().find((item) => item.enabled)?.cmd.id ===
+                    row().cmd.id
+                  ? ""
+                  : undefined}
                 disabled={!row().enabled}
                 onClick={() => void invoke(row().cmd.id)}
               >

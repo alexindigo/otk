@@ -63,6 +63,7 @@ import DialogHost from "../components/DialogHost.tsx";
 import ProjectInbox from "../components/ProjectInbox.tsx";
 import RightPanel from "../components/RightPanel.tsx";
 import ProjectTabs from "../components/ProjectTabs.tsx";
+import { PanelLeftIcon, PanelRightIcon } from "../components/ChromeIcons.tsx";
 import { type SessionPorts, SessionProvider } from "../registries/session.tsx";
 import { ShellProvider } from "./context.tsx";
 
@@ -694,7 +695,45 @@ export default function Shell(
           selection: () => session.state.selection,
         }}
       >
-        <div class="otk-app">
+        <div
+          class="otk-app"
+          data-right-collapsed={String(layout().rightCollapsed)}
+        >
+          <button
+            type="button"
+            class="otk-icon-button otk-corner otk-corner-left"
+            aria-label={layout().leftCollapsed
+              ? "Expand projects"
+              : "Collapse projects"}
+            aria-expanded={layout().leftCollapsed ? "false" : "true"}
+            title={layout().leftCollapsed
+              ? "Expand projects"
+              : "Collapse projects"}
+            disabled={!toggles.state.ready}
+            onClick={() =>
+              void saveLayout({ leftCollapsed: !layout().leftCollapsed }).catch(
+                fail,
+              )}
+          >
+            <PanelLeftIcon />
+          </button>
+          <button
+            type="button"
+            class="otk-icon-button otk-corner otk-corner-right otk-panel-collapse"
+            aria-label={layout().rightCollapsed
+              ? "Open right panel"
+              : "Collapse right panel"}
+            aria-expanded={layout().rightCollapsed ? "false" : "true"}
+            title={layout().rightCollapsed
+              ? "Open right panel"
+              : "Collapse right panel"}
+            disabled={!toggles.state.ready}
+            onClick={() =>
+              void saveLayout({ rightCollapsed: !layout().rightCollapsed })
+                .catch(fail)}
+          >
+            <PanelRightIcon />
+          </button>
           <ProjectInbox
             projects={projects()}
             entries={entries()}
@@ -715,21 +754,6 @@ export default function Shell(
             <Show when={error()}>
               <p class="otk-error otk-global-error" role="alert">{error()}</p>
             </Show>
-            <div class="otk-shell-toolbar">
-              <button
-                type="button"
-                aria-label={layout().rightCollapsed
-                  ? "Open right panel"
-                  : "Collapse right panel"}
-                disabled={!toggles.state.ready}
-                onClick={() =>
-                  void saveLayout({
-                    rightCollapsed: !layout().rightCollapsed,
-                  }).catch(fail)}
-              >
-                ◫
-              </button>
-            </div>
             <Show
               when={settings()}
               fallback={
@@ -768,6 +792,16 @@ export default function Shell(
                         inbox={inbox(project()!.sidecarId).state.inbox}
                         messages={session.state.content.messages}
                         exhausted={session.state.exhausted}
+                        session={info()}
+                        displayMenu={
+                          <DisplayMenu
+                            prefs={toggles.state.prefs}
+                            ready={toggles.state.ready}
+                            error={toggles.state.error}
+                            onSet={(key, value) =>
+                              commands.run("prefs.set", { key, value })}
+                          />
+                        }
                         ready={sidecars.state.list.find((s) =>
                           s.id === project()!.sidecarId
                         )?.status === "connected"}
@@ -829,15 +863,6 @@ export default function Shell(
                             void commands.run("session.child", id)}
                           permissions={session.state.content.permissions}
                           prefs={toggles.state.prefs}
-                          displayMenu={
-                            <DisplayMenu
-                              prefs={toggles.state.prefs}
-                              ready={toggles.state.ready}
-                              error={toggles.state.error}
-                              onSet={(key, value) =>
-                                commands.run("prefs.set", { key, value })}
-                            />
-                          }
                           info={info()}
                           label={selectedSidecar()?.label || "Server"}
                           messages={session.state.content.messages}

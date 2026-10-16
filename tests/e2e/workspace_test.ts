@@ -95,7 +95,7 @@ Deno.test("E1 project inbox and Sessions tree scoped by directory, descendants n
     assert(Math.abs(geometry.viewport - geometry.mainBottom) < .5);
     await browser.goto(server.url + "/nested/route");
     await browser.poll(
-      "document.querySelectorAll('[data-project]').length === 2 && document.querySelector('[data-connection=local]').textContent === 'connected'",
+      "document.querySelectorAll('[data-project]').length === 2 && document.querySelector('.otk-server-status[data-connection=local]').title.includes(': connected;')",
     );
     await openSession(browser, root.id);
     assertEquals(
@@ -181,7 +181,7 @@ Deno.test("E2 new session, trusted prompt, incremental structured markdown and i
       false,
     );
     await browser.poll(
-      `document.querySelector('.otk-view-header h1').textContent === document.querySelector('[data-session="${id}"] .otk-row-title').textContent`,
+      `document.querySelector('.otk-session-crumb[aria-current] .otk-crumb-title').textContent === document.querySelector('[data-session="${id}"] .otk-row-title').textContent`,
     );
     await capture(browser, f.oc.root, "e2-streamed-markdown");
     console.info("Rendered intermediate lengths:", [...lengths]);
@@ -224,7 +224,7 @@ Deno.test("E5 Esc confirmation then abort yields interrupted footer and idle ses
       { width: number; height: number; radius: string }
     >(`(()=>{const el=document.querySelector('${marker}'),r=el.getBoundingClientRect();return {width:r.width,height:r.height,radius:getComputedStyle(el.querySelector('.otk-lamp-body')).borderRadius}})()`);
     assert(
-      dot.width === 10 && Math.abs(dot.width - dot.height) < .5 &&
+      dot.width === 8 && Math.abs(dot.width - dot.height) < .5 &&
         dot.radius === "50%",
       "Error status must use the shared circular marker",
     );
@@ -260,7 +260,7 @@ Deno.test("E6 frozen harness stream resyncs complete reply and idle without relo
     ).length;
     proxy.freeze();
     await browser.poll(
-      "document.querySelector('[data-harness=local]').textContent.includes('reconnecting')",
+      "document.querySelector('.otk-server-status[data-connection=local]').title.includes('agent service reconnecting')",
     );
     proxy.thaw();
     await browser.poll(
@@ -310,7 +310,7 @@ Deno.test("E7 add authenticated second sidecar, merged groups, prompt and persis
     });
     const browser = await f.browser(server.url);
     await browser.poll(
-      "document.querySelector('[data-connection=local]')?.textContent === 'connected'",
+      "document.querySelector('.otk-server-status[data-connection=local]')?.title.includes(': connected;')",
     );
     await browser.click(".otk-settings-entry");
     await browser.poll("!!document.querySelector('input[name=url]')");
@@ -334,7 +334,7 @@ Deno.test("E7 add authenticated second sidecar, merged groups, prompt and persis
       "[data-settings-sidecar]:not([data-settings-sidecar=local]) button[type=submit]",
     );
     await browser.poll(
-      "document.querySelectorAll('.otk-server-connections [data-connection]').length === 2 && [...document.querySelectorAll('.otk-server-connections [data-connection]')].every(el=>el.textContent==='connected')",
+      "document.querySelectorAll('.otk-sidecar-card [data-connection]').length === 2 && [...document.querySelectorAll('.otk-sidecar-card [data-connection]')].every(el=>el.textContent==='connected')",
     );
     await browser.click(".otk-view-header button");
     await openSession(browser, remote.id);
@@ -471,7 +471,7 @@ Deno.test("E9 serving-sidecar wrong password error then correct login", async ()
     await browser.fill("input[name=password]", "secret");
     await browser.click(".otk-auth-view button[type=submit]");
     await browser.poll(
-      "document.querySelector('[data-connection=local]').textContent === 'connected' && document.querySelectorAll('[data-project]').length === 1 && !document.querySelector('.otk-auth-view')",
+      "document.querySelector('.otk-server-status[data-connection=local]').title.includes(': connected;') && document.querySelectorAll('[data-project]').length === 1 && !document.querySelector('.otk-auth-view')",
     );
     await browser.click(".otk-project-open");
     await browser.poll(
@@ -486,13 +486,13 @@ Deno.test("E10 75-second idle browser stays connected and sends JSON pongs at 20
   try {
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await browser.poll(
-      "document.querySelector('[data-connection=local]')?.textContent === 'connected'",
+      "document.querySelector('.otk-server-status[data-connection=local]')?.title.includes(': connected;')",
     );
     const start = browser.events.length;
     await new Promise((resolve) => setTimeout(resolve, 75_000));
     assertEquals(
       await browser.evaluate(
-        "document.querySelector('[data-connection=local]').textContent",
+        "document.querySelector('.otk-server-status[data-connection=local]').title.split(': ')[1].split(';')[0]",
       ),
       "connected",
     );
@@ -550,11 +550,11 @@ Deno.test("web setup persists auth choice and routes back/forward select the cor
     await openSession(browser, b.id);
     await browser.evaluate("history.back()");
     await browser.poll(
-      `location.hash.endsWith('/${a.id}') && document.querySelector('.otk-view-header h1')?.textContent === 'History A'`,
+      `location.hash.endsWith('/${a.id}') && document.querySelector('.otk-session-crumb[aria-current] .otk-crumb-title')?.textContent === 'History A'`,
     );
     await browser.evaluate("history.forward()");
     await browser.poll(
-      `location.hash.endsWith('/${b.id}') && document.querySelector('.otk-view-header h1')?.textContent === 'History B'`,
+      `location.hash.endsWith('/${b.id}') && document.querySelector('.otk-session-crumb[aria-current] .otk-crumb-title')?.textContent === 'History B'`,
     );
     const auth = await browser.evaluate(
       "fetch('api/session').then(r=>r.json())",
@@ -673,11 +673,11 @@ Deno.test("web history navigation retains each session's draft and keeps URL and
     );
     await browser.evaluate("history.back()");
     await browser.poll(
-      `location.hash.endsWith('/${a.id}') && document.querySelector('.otk-view-header h1').textContent === 'Draft A' && document.querySelector('textarea[name=prompt]').value === ''`,
+      `location.hash.endsWith('/${a.id}') && document.querySelector('.otk-session-crumb[aria-current] .otk-crumb-title').textContent === 'Draft A' && document.querySelector('textarea[name=prompt]').value === ''`,
     );
     await browser.evaluate("history.forward()");
     await browser.poll(
-      `location.hash.endsWith('/${b.id}') && document.querySelector('.otk-view-header h1').textContent === 'Draft B' && document.querySelector('textarea[name=prompt]').value === 'Unsent work'`,
+      `location.hash.endsWith('/${b.id}') && document.querySelector('.otk-session-crumb[aria-current] .otk-crumb-title').textContent === 'Draft B' && document.querySelector('textarea[name=prompt]').value === 'Unsent work'`,
     );
   } finally {
     await f.stop();
@@ -708,7 +708,7 @@ Deno.test("web sidecar restart resubscribes open session and refetches final con
     await server.stop();
     await f.sidecar({ server: { port: server.port } });
     await browser.poll(
-      `document.querySelector('[data-connection=local]').textContent === 'connected' && document.querySelector('.otk-text pre')?.textContent.includes('const otk = 1;') && document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle'`,
+      `document.querySelector('.otk-server-status[data-connection=local]').title.includes(': connected;') && document.querySelector('.otk-text pre')?.textContent.includes('const otk = 1;') && document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle'`,
       60_000,
     );
     assert(

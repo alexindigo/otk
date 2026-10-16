@@ -86,6 +86,7 @@ export default function ThemePicker(props: {
             <button
               type="button"
               data-theme-choice={choice().id}
+              data-otk-selection="vertical"
               aria-pressed={selected() === choice().id ? "true" : "false"}
               disabled={pending()}
               onClick={() => void select(choice().id)}

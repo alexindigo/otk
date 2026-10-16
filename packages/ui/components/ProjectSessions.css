@@ -4,8 +4,8 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding: 0 12px 12px;
+  gap: 4px;
+  padding: 0 8px 8px;
 }
 .otk-project-session-heading {
   display: flex;
@@ -13,8 +13,22 @@
   justify-content: space-between;
   gap: 8px;
 }
-.otk-project-session-heading > span {
-  font-weight: 600;
+.otk-session-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  flex: 1;
+  padding-left: var(--chrome-inset);
+  border-radius: var(--radius-control);
+  color: var(--otk-fg-3);
+}
+.otk-session-search:hover {
+  background: var(--otk-hover);
+}
+.otk-session-search .otk-chrome-icon {
+  width: 13px;
+  height: 13px;
 }
 .otk-project-session-list {
   list-style: none;
@@ -29,23 +43,26 @@
   max-width: 100%;
   width: 100%;
   text-align: left;
-  padding: 8px;
-  padding-inline-start: calc(8px + var(--session-depth, 0) * 16px);
-}
-.otk-project-sessions .otk-session-row[aria-current] {
-  background: var(--hover);
+  height: 30px;
+  padding: 0 var(--chrome-inset);
+  color: var(--otk-fg-2);
 }
 .otk-project-sessions .otk-row-title {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.otk-project-sessions .otk-new-session {
-  padding: 4px 8px;
-}
 .otk-project-sessions input[type="search"] {
   width: 100%;
   min-width: 0;
+  height: 30px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--otk-fg-3);
+}
+.otk-project-sessions input::placeholder {
+  color: inherit;
 }
 .otk-project-session-tree {
   flex: 1;
@@ -53,9 +70,14 @@
   overflow: auto;
 }
 .otk-session-group h3 {
-  margin: 12px 4px 4px;
-  color: var(--secondary);
-  font-size: 13px;
+  height: 32px;
+  margin: 4px 0 0;
+  padding: 0 var(--project-inset);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--otk-fg-3);
+  font-size: 12px;
   line-height: 20px;
   font-weight: 500;
 }
@@ -63,5 +85,28 @@
   margin: 8px;
 }
 .otk-session-branch {
-  color: var(--secondary);
+  width: 20px;
+  height: 30px;
+  flex: none;
+  color: var(--otk-border);
+}
+.otk-session-leading {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.otk-session-indent {
+  display: flex;
+  justify-content: flex-end;
+  width: calc(var(--session-depth, 0) * 20px);
+}
+.otk-session-group h3 .otk-chrome-icon {
+  width: 13px;
+  height: 13px;
+  transform: rotate(90deg);
+}
+.otk-session-group-rule {
+  flex: 1;
+  height: 1px;
+  background: var(--otk-border);
 }

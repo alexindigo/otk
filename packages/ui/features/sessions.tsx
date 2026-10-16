@@ -3,6 +3,7 @@ import { useCommandPorts } from "../keyboard/context.tsx";
 import { useShellPorts } from "../shell/context.tsx";
 import type { PanelDefinition, SurfaceRegistry } from "../registries/shell.ts";
 import ProjectSessions from "../components/ProjectSessions.tsx";
+import { SessionsIcon } from "../components/ChromeIcons.tsx";
 
 export function registerSessionsPanel(
   registry: SurfaceRegistry<PanelDefinition>,
@@ -10,7 +11,7 @@ export function registerSessionsPanel(
   registry.register({
     id: "sessions",
     title: "Sessions",
-    icon: "≡",
+    icon: SessionsIcon,
     component: () => {
       const shell = useShellPorts(), { commands } = useCommandPorts();
       return (

@@ -60,13 +60,14 @@ teardown cannot close a replacement dialog. Command, keymap, theme, editor and
 add-project features own their registrations.
 `panels.register({ id, title, icon, capability?,
 component })` contributes
-right-panel views. `RightPanel` mounts available registrations with a neutral
-icon strip, keyboard/pointer resizing (280–480px, 320 default) and injected
-layout persistence. Unknown or unavailable stored view IDs fall back to the
-first available view without overwriting the stored preference.
-`registerSessionsPanel` contributes the project-local, task-grouped searchable
-parent/child tree. Its feature adapter reads common `ShellPorts` resources; the
-panel knows no views.
+right-panel views. Icons may be strings or feature-owned render functions; the
+host does not dispatch concrete view icons. `RightPanel` mounts available
+registrations with a neutral icon strip, keyboard/pointer resizing (280–480px,
+320 default) and injected layout persistence. Unknown or unavailable stored view
+IDs fall back to the first available view without overwriting the stored
+preference. `registerSessionsPanel` contributes the project-local, task-grouped
+searchable parent/child tree. Its feature adapter reads common `ShellPorts`
+resources; the panel knows no views.
 
 `Shell({ theme, api })` composes the reusable three-region shell with selected
 UI registrations. `ProjectInbox` renders the shared client projection in its
@@ -79,6 +80,14 @@ constructs a whole-layout replacement from props. `ProjectTabs` consumes the
 public client tabs model, server/project-scoped task actions and injected
 guarded navigation. It renders task/phantom/preview tabs, ordered foldable
 breadcrumbs with helper nesting and reported usage, using 8px status lights.
+Shell-owned 28px corner toggles stay at a shared 12px offset across full/rail
+and right-open/closed layouts; each top bar reserves the corner zone. The 52px
+centre bar contains quiet task pills and injected Display options; the
+breadcrumb owns the selected session title and path tooltip. Reported usage
+never invents a context-window denominator or percentage. The inbox has 32px
+rows, hover-revealed menus, Search and a compact settings/keys/server footer;
+Sessions has 30px rows and CSS child guides. Chrome uses the shared selection
+pointer/underline, and shortcuts remain in tooltips, Keys and the palette.
 `registerTaskDialogs` contributes its name editor to the dialog host.
 `session.preview` and `session.pin` are guarded command ports for the Sessions
 panel; preview replacement cannot remove required activity tabs.

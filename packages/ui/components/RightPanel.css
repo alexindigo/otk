@@ -5,7 +5,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
-  border-left: 1px solid var(--border);
+  border-left: 1px solid var(--otk-border);
   background: var(--otk-bg-side);
 }
 .otk-right-panel[hidden] {
@@ -14,21 +14,14 @@
 .otk-panel-icons {
   display: flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px 12px;
-  border-bottom: 1px solid var(--border);
+  gap: var(--chrome-gap);
+  padding: 0 var(--corner-zone) 0 var(--chrome-inset);
+  min-height: 52px;
+  flex: none;
   flex-wrap: wrap;
 }
-.otk-panel-icons button {
-  width: 32px;
-  height: 28px;
-  padding: 0;
-}
-.otk-panel-icons [aria-selected="true"] {
-  background: var(--hover);
-}
-.otk-panel-collapse {
-  margin-left: auto;
+.otk-panel-icons button > span {
+  display: flex;
 }
 .otk-panel-content {
   flex: 1;
@@ -37,9 +30,9 @@
   flex-direction: column;
 }
 .otk-panel-content > h2 {
-  margin: 12px 16px;
-  font-size: 15px;
-  line-height: 22px;
+  margin: 0 20px 8px;
+  font-size: 13px;
+  line-height: 20px;
   font-weight: 600;
 }
 .otk-panel-resizer {

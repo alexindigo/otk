@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ProjectTabs.css" with { type: "text" };
-import { createMemo, createSignal, For, Show } from "solid-js";
-import type { InboxSnapshot, Message, TaskRecord } from "@otk/protocol";
+import { createMemo, createSignal, type Element, For, Show } from "solid-js";
+import type {
+  ContentSession,
+  InboxSnapshot,
+  Message,
+  TaskRecord,
+} from "@otk/protocol";
 import {
   type ClientTabs,
   contextMeter,
@@ -14,6 +19,7 @@ import {
   taskBreadcrumbs,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
+import { ChevronIcon, PlusIcon } from "./ChromeIcons.tsx";
 import { ownedAction, useCommandPorts } from "../keyboard/context.tsx";
 
 /** Presentation and injected actions only; the framework-free tabs owner decides
@@ -25,6 +31,8 @@ export default function ProjectTabs(props: {
   inbox: InboxSnapshot;
   messages: Message[];
   exhausted: boolean;
+  session?: ContentSession;
+  displayMenu?: Element;
   ready: boolean;
   onOpen(id: string): boolean;
   onEmpty(): boolean;
@@ -108,7 +116,11 @@ export default function ProjectTabs(props: {
   );
   const crumbs = createMemo(() => {
     const task = active();
-    if (!task) return [];
+    if (!task) {
+      return props.session
+        ? [{ id: props.session.id, helper: !!props.session.parentID, depth: 0 }]
+        : [];
+    }
     return taskBreadcrumbs(task, props.entries, props.model.state.sessionID);
   });
   const visibleCrumb = (n: number) =>
@@ -118,8 +130,11 @@ export default function ProjectTabs(props: {
       ) <= 1;
   const openCrumb = ownedAction("task.session.open", (id: string) => {
     const task = active();
-    if (task && props.onOpen(id)) {
-      props.model.select({ kind: "task", id: task.id }, id);
+    if (props.onOpen(id)) {
+      props.model.select(
+        task ? { kind: "task", id: task.id } : { kind: "session", id },
+        id,
+      );
     }
   });
   const meter = createMemo(() => contextMeter(props.messages));
@@ -148,6 +163,8 @@ export default function ProjectTabs(props: {
                   type="button"
                   role="tab"
                   class="otk-tab-open"
+                  data-otk-selection="horizontal"
+                  title={tab().title}
                   data-tab={tab().id}
                   data-status={entry(props.model.state.sessionID ?? "")?.status}
                   aria-selected={props.model.state.selected?.id === tab().id
@@ -257,19 +274,18 @@ export default function ProjectTabs(props: {
         </div>
         <button
           type="button"
-          class="otk-task-new"
+          class="otk-icon-button otk-task-new"
           aria-label="New task"
+          title="New task"
           disabled={!props.ready}
           onClick={() => run(rename(undefined))}
         >
-          +
+          <PlusIcon />
         </button>
+        <div class="otk-topbar-end">{props.displayMenu}</div>
       </div>
       <div class="otk-breadcrumb-row">
         <nav class="otk-task-crumbs" aria-label="Task sessions">
-          <Show when={active()}>
-            <span class="otk-crumb-task">{active()!.name}</span>
-          </Show>
           <For each={crumbs()} keyed={(c) => c.id}>
             {(crumb, n) => (
               <Show
@@ -286,6 +302,11 @@ export default function ProjectTabs(props: {
                           {(c) => (
                             <button
                               type="button"
+                              data-otk-selection="vertical"
+                              aria-current={props.model.state.sessionID ===
+                                  c().id
+                                ? "page"
+                                : undefined}
                               onClick={() => run(openCrumb(c().id))}
                             >
                               {entry(c().id)?.title ?? c().id}
@@ -297,28 +318,38 @@ export default function ProjectTabs(props: {
                   </Show>
                 }
               >
-                <button
-                  type="button"
-                  class="otk-session-crumb"
-                  data-helper={String(crumb().helper)}
-                  data-depth={crumb().depth}
-                  data-crumb={crumb().id}
-                  aria-current={props.model.state.sessionID === crumb().id
-                    ? "page"
-                    : undefined}
-                  onClick={() => run(openCrumb(crumb().id))}
-                >
-                  <span aria-hidden="true">{crumb().helper ? "└" : "›"}</span>
-                  <span>
-                    {entry(crumb().id)?.title ?? "Session unavailable"}
-                  </span>
-                  <StatusLight
-                    small
-                    state={entry(crumb().id)
-                      ? inboxStatus(entry(crumb().id)!, props.inbox)
-                      : "idle"}
-                  />
-                </button>
+                <span class="otk-crumb-link">
+                  <Show when={n() > 0}>
+                    <span class="otk-crumb-separator">
+                      <ChevronIcon />
+                    </span>
+                  </Show>
+                  <button
+                    type="button"
+                    class="otk-session-crumb"
+                    data-otk-selection="horizontal"
+                    title={props.project.directory}
+                    data-helper={String(crumb().helper)}
+                    data-depth={crumb().depth}
+                    data-crumb={crumb().id}
+                    aria-current={props.model.state.sessionID === crumb().id
+                      ? "page"
+                      : undefined}
+                    onClick={() => run(openCrumb(crumb().id))}
+                  >
+                    <StatusLight
+                      small
+                      state={entry(crumb().id)
+                        ? inboxStatus(entry(crumb().id)!, props.inbox)
+                        : "idle"}
+                    />
+                    <span class="otk-crumb-title">
+                      {props.session?.id === crumb().id
+                        ? props.session.title
+                        : entry(crumb().id)?.title ?? "Session unavailable"}
+                    </span>
+                  </button>
+                </span>
               </Show>
             )}
           </For>
@@ -328,7 +359,7 @@ export default function ProjectTabs(props: {
             disabled={!props.ready}
             onClick={() => run(createSession())}
           >
-            + session
+            <PlusIcon /> Session
           </button>
         </nav>
         <output
@@ -342,6 +373,7 @@ export default function ProjectTabs(props: {
         >
           <Show when={meter().tokens !== undefined}>
             <span>{meter().tokens!.toLocaleString("en-US")} tokens</span>
+            <span class="otk-context-bar" aria-hidden="true" />
           </Show>
           <Show when={meter().cost !== undefined}>
             <span>${meter().cost!.toFixed(4)}</span>

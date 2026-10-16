@@ -8,7 +8,18 @@ matrix (including alpha compositing, all three themes, hover and selection);
 browser tests own constructed lights and accessibility presentation. Lamp paint,
 including unlit, belongs only to StatusLight, never theme slots. Selection's
 shared pointer/underline CSS contract has unit coverage and real-browser
-geometry coverage in full and reduced colours.
+geometry coverage in full and reduced colours. Selected/current chrome controls
+must declare the shared orientation primitive; negative fixtures reject a
+selected button that bypasses it. Browser geometry checks span Dark/Linen/Stone,
+full/rail, right-open/closed and reduced colours; the two shell corner toggles
+retain their bounds and remain hit-testable. Title/navigation assertions follow
+the selected breadcrumb; full connection status assertions follow Settings,
+which owns that diagnostic presentation.
+
+Both column resizers use the shared immutable pointer-delta gesture owner,
+independent of border width or the separator's grab point. Negative fixtures
+reject parent-edge coordinate calculations; browser tests observe exact drag
+distance, persisted width and reload for both columns.
 
 The shell check enforces implementation-free open dialog/panel/takeover
 registries, common typed session ports and absence of per-feature prompt inputs

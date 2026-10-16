@@ -8,6 +8,7 @@ import {
   preferences,
 } from "@otk/protocol";
 import { ownedAction } from "../keyboard/context.tsx";
+import { SettingsIcon } from "./ChromeIcons.tsx";
 export default function DisplayMenu(props: {
   prefs: Preferences;
   ready: boolean;
@@ -22,7 +23,13 @@ export default function DisplayMenu(props: {
   );
   return (
     <details class="otk-display-menu">
-      <summary>Display</summary>
+      <summary
+        class="otk-icon-button"
+        aria-label="Display options"
+        title="Display options"
+      >
+        <SettingsIcon />
+      </summary>
       <fieldset disabled={!props.ready}>
         <legend>Display preferences</legend>
         <For each={(props.registry ?? preferences).display()} keyed={false}>

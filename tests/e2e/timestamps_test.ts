@@ -246,7 +246,7 @@ Deno.test("creation-time hover and persistent visibility, structural footer date
       state: { path: join(f.oc.root, `otk-${port}`) },
     });
     await browser.poll(
-      `document.querySelector('[data-connection=local]').textContent==='connected' && document.querySelector('.otk-last-output-time')?.dateTime===${
+      `document.querySelector('.otk-server-status[data-connection=local]').title.includes(': connected;') && document.querySelector('.otk-last-output-time')?.dateTime===${
         JSON.stringify(completed)
       }`,
       60000,

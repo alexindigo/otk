@@ -245,7 +245,7 @@ Deno.test("selected complete raw-tail endpoints survive source materialization a
     await browser.poll(
       "navigator.clipboard.readText().then(text=>text==='viewport1999')",
     );
-    await browser.click(".otk-view-header h1");
+    await browser.click(".otk-tabs-project");
     await browser.poll(
       "[...document.querySelectorAll('.otk-token')].some(token=>token.textContent==='viewport1999')",
     );
@@ -784,7 +784,7 @@ Deno.test("source rows and selected raw endpoints survive token catch-up while a
     await browser.poll(
       "navigator.clipboard.readText().then(text=>text==='viewport0')",
     );
-    await browser.click(".otk-view-header h1");
+    await browser.click(".otk-tabs-project");
     await scroll(browser, false);
     await browser.poll(
       "[...document.querySelectorAll('.otk-code-group:first-child .otk-token')].some(el=>el.textContent==='viewport0')",
@@ -886,7 +886,7 @@ Deno.test("code viewport projection preserves complete text, selection/copy, rea
     await browser.poll(
       "navigator.clipboard.readText().then(text=>text==='viewport0')",
     );
-    await browser.click(".otk-view-header h1");
+    await browser.click(".otk-tabs-project");
     await browser.poll(
       "!document.querySelector('.otk-code-group:first-child .otk-token')",
     );
@@ -1088,7 +1088,7 @@ Deno.test("source commits stay atomic and selected raw/styled endpoints survive 
         );
       }
       if (mode === "raw") await browser.evaluate("releaseTokens()");
-      await browser.click(".otk-view-header h1");
+      await browser.click(".otk-tabs-project");
       await browser.poll(
         `[...document.querySelectorAll('.otk-token')].some(el=>el.textContent===${
           JSON.stringify(word + "Name")

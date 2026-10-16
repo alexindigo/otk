@@ -78,3 +78,77 @@ Deno.test("visual typography and spacing stay behind the shared contract", async
     "User-action motion remains allowed by the spec",
   );
 });
+
+function selectionErrors(source: string): string[] {
+  return [...source.matchAll(/<(?:button|a)\b[^>]*(?:\{[^}]*\}[^>]*)*>/g)]
+    .filter(([tag]) =>
+      /\b(?:aria-selected|aria-current|aria-pressed|data-selected)=/.test(
+        tag,
+      ) && !/data-otk-selection="(?:vertical|horizontal)"/.test(tag)
+    )
+    .map(() => "selected chrome item bypasses the shared selection primitive");
+}
+Deno.test("chrome selected/current states opt into the shared orientation primitive", async () => {
+  for (
+    const name of [
+      "ProjectInbox",
+      "ProjectTabs",
+      "ProjectSessions",
+      "RightPanel",
+      "ThemePicker",
+      "Palette",
+      "Sidebar",
+    ]
+  ) {
+    assertEquals(
+      selectionErrors(
+        await Deno.readTextFile(
+          new URL(`../../packages/ui/components/${name}.tsx`, import.meta.url),
+        ),
+      ),
+      [],
+      name,
+    );
+  }
+  assertEquals(
+    selectionErrors('<button aria-current={selected ? "page" : undefined}>'),
+    ["selected chrome item bypasses the shared selection primitive"],
+  );
+  assertEquals(
+    selectionErrors(
+      '<button data-otk-selection="vertical" aria-current={selected ? "page" : undefined}>',
+    ),
+    [],
+  );
+});
+
+function resizeErrors(source: string): string[] {
+  return /parentElement[\s\S]*?getBoundingClientRect/.test(source) ||
+      !source.includes("resizeDrag(")
+    ? [
+      "resizing must use an immutable pointer-delta gesture, not a parent edge",
+    ]
+    : [];
+}
+Deno.test("both column resizers share border-independent pointer-delta ownership", async () => {
+  for (const name of ["ProjectInbox", "RightPanel"]) {
+    assertEquals(
+      resizeErrors(
+        await Deno.readTextFile(
+          new URL(`../../packages/ui/components/${name}.tsx`, import.meta.url),
+        ),
+      ),
+      [],
+      name,
+    );
+  }
+  assert(
+    resizeErrors(
+      "const right = event.currentTarget.parentElement.getBoundingClientRect().right; width = right - event.clientX;",
+    ).length > 0,
+  );
+  assertEquals(
+    resizeErrors("drag = resizeDrag(width(), event.clientX, -1, 280, 480);"),
+    [],
+  );
+});

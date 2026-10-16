@@ -68,7 +68,7 @@ export async function openSession(browser: Cdp, id: string): Promise<void> {
   // Decide from the received host layout, not the pre-handshake default. Another
   // browser may already have persisted an open panel before this one connects.
   await browser.poll(
-    "!!document.querySelector('.otk-shell-toolbar button:not(:disabled)')",
+    "!!document.querySelector('.otk-corner-right:not(:disabled)')",
   );
   if (
     await browser.evaluate("document.querySelector('.otk-right-panel').hidden")

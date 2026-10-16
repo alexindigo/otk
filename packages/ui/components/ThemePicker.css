@@ -5,10 +5,7 @@
 }
 .otk-theme-choices button {
   text-align: left;
-}
-.otk-theme-choices button[aria-pressed=true] {
-  border-color: var(--otk-fg-2);
-  background: var(--otk-hover);
+  padding-left: 16px;
 }
 .otk-theme-actions {
   display: flex;

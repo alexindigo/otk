@@ -122,6 +122,7 @@ export default function Sidebar(
                           }]}
                           data-session={entry().id}
                           data-status={entry().status}
+                          data-otk-selection="vertical"
                           aria-current={props.selected ===
                               sessionKey(entry().sidecarId, entry().id)
                             ? "page"

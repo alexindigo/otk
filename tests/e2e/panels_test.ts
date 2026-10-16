@@ -86,6 +86,11 @@ Deno.test("registered panel views, width and collapsed state persist in host pre
     const width = await b.evaluate<number>(
       "document.querySelector('.otk-right-panel').getBoundingClientRect().width",
     );
+    assertEquals(
+      width,
+      400,
+      "An 80px gesture grows 320px to 400px regardless of border/grab position",
+    );
     await b.reload();
     await b.poll(
       `document.querySelector('[data-external-view]') && document.querySelector('.otk-right-panel').getBoundingClientRect().width===${width}`,

@@ -10,7 +10,14 @@ import {
 } from "@otk/client";
 import type { Preferences, ShellLayout } from "@otk/protocol";
 import StatusLight from "./StatusLight.tsx";
-import ConnectionBadge from "./ConnectionBadge.tsx";
+import { resizeDrag } from "./resize.ts";
+import {
+  ChevronIcon,
+  KeyboardIcon,
+  PlusIcon,
+  SearchIcon,
+  SettingsIcon,
+} from "./ChromeIcons.tsx";
 import { ownedAction, useCommandPorts } from "../keyboard/context.tsx";
 export interface ProjectRow extends InboxProject {
   sidecarId: string;
@@ -29,8 +36,16 @@ export default function ProjectInbox(props: {
 }): import("solid-js").Element {
   const [inactiveOpen, setInactiveOpen] = createSignal(false);
   const [dragWidth, setDragWidth] = createSignal<number>();
+  let drag: ReturnType<typeof resizeDrag> | undefined;
   const [error, setError] = createSignal("");
   const { commands } = useCommandPorts();
+  const commandTitle = (id: string, label: string) => {
+    props.prefs.keymap;
+    const keys = commands.list().find((row) => row.cmd.id === id)?.keys.join(
+      " / ",
+    );
+    return keys ? `${label} (${keys})` : label;
+  };
   const layout = () => props.prefs.shellLayout;
   const collapsed = () => layout().leftCollapsed;
   const width = () => collapsed() ? 48 : dragWidth() ?? layout().leftWidth;
@@ -75,6 +90,7 @@ export default function ProjectInbox(props: {
         <button
           type="button"
           class="otk-project-open"
+          data-otk-selection="vertical"
           aria-label={`Open project ${name()}${
             duplicate() ? ` on ${project().label}` : ""
           }`}
@@ -134,23 +150,24 @@ export default function ProjectInbox(props: {
         <strong>OTK</strong>
         <button
           type="button"
-          aria-label={collapsed() ? "Expand projects" : "Collapse projects"}
-          disabled={!props.ready}
-          onClick={() => void save({ leftCollapsed: !collapsed() })}
+          class="otk-icon-button otk-add-project"
+          aria-label="Add project"
+          title="Add project"
+          onClick={() =>
+            void commands.run("dialog.open", { id: "add-project" })}
         >
-          {collapsed() ? "›" : "‹"}
+          <PlusIcon />
         </button>
       </header>
       <Show when={!collapsed()}>
-        <nav class="otk-sidebar-commands" aria-label="Commands">
+        <nav class="otk-sidebar-commands" aria-label="Search">
           <button
             type="button"
+            class="otk-inbox-search"
+            title={commandTitle("palette.open", "Search commands")}
             onClick={() => void commands.run("palette.open")}
           >
-            Commands
-          </button>
-          <button type="button" onClick={() => void commands.run("help.keys")}>
-            Keys
+            <SearchIcon /> Search
           </button>
         </nav>
       </Show>
@@ -165,8 +182,10 @@ export default function ProjectInbox(props: {
             aria-expanded={inactiveOpen() ? "true" : "false"}
             onClick={() => setInactiveOpen(!inactiveOpen())}
           >
-            {inactiveOpen() ? "▾" : "▸"}{" "}
-            Inactive ({props.projects.filter((p) => p.inactive).length})
+            <ChevronIcon />
+            <span>Inactive</span>
+            <span class="otk-inbox-rule" />
+            <span>({props.projects.filter((p) => p.inactive).length})</span>
           </button>
           <Show when={inactiveOpen()}>
             <section
@@ -189,41 +208,56 @@ export default function ProjectInbox(props: {
       <footer class="otk-inbox-footer">
         <button
           type="button"
-          class="otk-add-project"
-          title="Add project"
-          onClick={() =>
-            void commands.run("dialog.open", { id: "add-project" })}
-        >
-          {collapsed() ? "+" : "+ Add project"}
-        </button>
-        <button
-          type="button"
-          class="otk-settings-entry"
+          class="otk-icon-button otk-settings-entry"
+          aria-label="Settings"
           title="Settings and server connections"
           onClick={() => void commands.run("settings.open")}
         >
-          {collapsed() ? "⚙" : "⚙ Settings"}
+          <SettingsIcon />
         </button>
-        <Show when={!collapsed()}>
-          <div class="otk-server-connections" aria-label="Server connections">
-            <For each={props.servers} keyed={(s) => s.id}>
-              {(s) => (
-                <section class="otk-server-connection">
-                  <button
-                    type="button"
-                    onClick={() => void commands.run("settings.open")}
-                  >
-                    {s().label}
-                  </button>
-                  <ConnectionBadge sidecar={s()} />
-                  <Show when={s().error}>
-                    <p class="otk-error" role="alert">{s().error}</p>
-                  </Show>
-                </section>
-              )}
-            </For>
-          </div>
-        </Show>
+        <button
+          type="button"
+          class="otk-icon-button otk-keys-entry"
+          aria-label="Keyboard shortcuts"
+          title={commandTitle("help.keys", "Keyboard shortcuts")}
+          onClick={() => void commands.run("help.keys")}
+        >
+          <KeyboardIcon />
+        </button>
+        <div class="otk-server-connections" aria-label="Server connections">
+          <For each={props.servers} keyed={(s) => s.id}>
+            {(s) => (
+              <section class="otk-server-connection">
+                <button
+                  type="button"
+                  class="otk-server-status"
+                  data-connection={s().id}
+                  aria-label={`${s().label}: ${s().status}; agent service ${s().harness}`}
+                  title={`${s().label}: ${s().status}; agent service ${s().harness}${
+                    s().error ? `; ${s().error}` : ""
+                  }`}
+                  onClick={() => void commands.run("settings.open")}
+                >
+                  <StatusLight
+                    small
+                    label={`${s().label}: ${s().status}; agent service ${s().harness}`}
+                    state={s().status === "connected" &&
+                        s().harness === "connected"
+                      ? "finished"
+                      : s().error || s().status === "login required" ||
+                          s().status === "setup required"
+                      ? "blocked"
+                      : "idle"}
+                  />
+                  <span>{s().label}</span>
+                </button>
+                <Show when={s().error}>
+                  <p class="otk-error" role="alert">{s().error}</p>
+                </Show>
+              </section>
+            )}
+          </For>
+        </div>
         <Show when={error()}>
           <p role="alert" class="otk-error">{error()}</p>
         </Show>
@@ -255,30 +289,31 @@ export default function ProjectInbox(props: {
           }}
           onPointerDown={(event) => {
             event.currentTarget.setPointerCapture(event.pointerId);
+            drag = resizeDrag(width(), event.clientX, 1, 200, 360);
             setDragWidth(width());
           }}
           onPointerMove={(event) => {
-            if (event.currentTarget.hasPointerCapture(event.pointerId)) {
-              setDragWidth(
-                Math.max(
-                  200,
-                  Math.min(
-                    360,
-                    event.clientX -
-                      event.currentTarget.parentElement!.getBoundingClientRect()
-                        .left,
-                  ),
-                ),
-              );
-            }
+            if (
+              !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
+            ) return;
+            setDragWidth(drag(event.clientX));
           }}
           onPointerUp={(event) => {
+            if (
+              !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
+            ) return;
+            const gesture = drag;
             event.currentTarget.releasePointerCapture(event.pointerId);
-            void save({ leftWidth: width() }).finally(() =>
-              setDragWidth(undefined)
-            );
+            void save({ leftWidth: gesture(event.clientX) }).finally(() => {
+              if (drag !== gesture) return;
+              drag = undefined;
+              setDragWidth(undefined);
+            });
           }}
-          onPointerCancel={() => setDragWidth(undefined)}
+          onPointerCancel={() => {
+            drag = undefined;
+            setDragWidth(undefined);
+          }}
         />
       </Show>
     </aside>

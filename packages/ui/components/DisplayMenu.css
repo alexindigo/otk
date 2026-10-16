@@ -5,7 +5,11 @@
 }
 .otk-display-menu summary {
   cursor: pointer;
-  padding: 8px;
+  list-style: none;
+}
+.otk-display-menu summary:hover {
+  background: var(--otk-hover);
+  color: var(--otk-fg);
 }
 .otk-display-menu fieldset {
   position: absolute;
@@ -18,7 +22,8 @@
   margin: 0;
   padding: 12px;
   background: var(--panel);
-  border: 1px solid var(--muted);
+  border: 0;
+  box-shadow: var(--otk-selected-shadow);
   border-radius: var(--radius-card);
   display: flex;
   flex-direction: column;

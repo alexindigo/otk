@@ -5,12 +5,12 @@ import type { InboxSnapshot } from "@otk/protocol";
 import {
   inboxStatus,
   type MergedEntry,
-  projectName,
   type ProjectSelection,
   type Selection,
   sessionTree,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
+import { ChevronIcon, PlusIcon, SearchIcon } from "./ChromeIcons.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
 
 /** Reusable presentation of the client-owned task/session hierarchy. */
@@ -65,26 +65,27 @@ export default function ProjectSessions(props: {
         }
       >
         <div class="otk-project-session-heading">
-          <span title={props.project!.directory}>
-            {projectName(props.project!.directory)}
-          </span>
+          <label class="otk-session-search">
+            <SearchIcon />
+            <input
+              type="search"
+              aria-label="Search sessions by title"
+              placeholder="Find a session"
+              value={query()}
+              onInput={(event) => setQuery(event.currentTarget.value)}
+            />
+          </label>
           <button
             type="button"
-            class="otk-new-session"
+            class="otk-icon-button otk-panel-new-session"
+            title="New session"
             aria-label={`New session in ${props.project!.directory}`}
             disabled={!props.connected(props.project!.sidecarId)}
             onClick={() => run(create(props.project!))}
           >
-            + New session
+            <PlusIcon />
           </button>
         </div>
-        <input
-          type="search"
-          aria-label="Search sessions by title"
-          placeholder="Search sessions…"
-          value={query()}
-          onInput={(event) => setQuery(event.currentTarget.value)}
-        />
         <div class="otk-project-session-tree">
           <For each={groups()} keyed={(group) => group.id}>
             {(group) => (
@@ -93,7 +94,11 @@ export default function ProjectSessions(props: {
                 data-session-group={group().id}
                 aria-label={group().title}
               >
-                <h3>{group().title}</h3>
+                <h3>
+                  <ChevronIcon />
+                  <span>{group().title}</span>
+                  <span class="otk-session-group-rule" />
+                </h3>
                 <ul class="otk-project-session-list">
                   <For each={group().rows} keyed={(row) => row.session.id}>
                     {(row) => (
@@ -101,6 +106,7 @@ export default function ProjectSessions(props: {
                         <button
                           type="button"
                           class="otk-session-row"
+                          data-otk-selection="vertical"
                           data-session={row().session.id}
                           data-status={row().session.status}
                           style={{ "--session-depth": row().depth }}
@@ -120,18 +126,31 @@ export default function ProjectSessions(props: {
                           onDblClick={() =>
                             run(pin(merged(row().session.id)))}
                         >
-                          <Show when={row().depth > 0}>
-                            <span class="otk-session-branch" aria-hidden="true">
-                              └
-                            </span>
-                          </Show>
-                          <StatusLight
-                            state={inboxStatus(
-                              row().session,
-                              props.inbox(props.project!.sidecarId),
-                            )}
-                            event={row().session.timeUpdated}
-                          />
+                          <span class="otk-session-leading">
+                            <Show when={row().depth > 0}>
+                              <span
+                                class="otk-session-indent"
+                                aria-hidden="true"
+                              >
+                                <svg
+                                  class="otk-session-branch"
+                                  viewBox="0 0 20 30"
+                                  fill="none"
+                                  stroke="currentColor"
+                                >
+                                  <path d="M4 0v10a5 5 0 0 0 5 5h7" />
+                                </svg>
+                              </span>
+                            </Show>
+                            <StatusLight
+                              small
+                              state={inboxStatus(
+                                row().session,
+                                props.inbox(props.project!.sidecarId),
+                              )}
+                              event={row().session.timeUpdated}
+                            />
+                          </span>
                           <span class="otk-row-title">
                             {row().session.title}
                           </span>

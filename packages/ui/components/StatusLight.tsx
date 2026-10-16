@@ -6,6 +6,7 @@ import { LIGHT_STATES, type LightState } from "./status-light.ts";
 export default function StatusLight(props: {
   state: LightState;
   small?: boolean;
+  label?: string;
   activity?: "spinner";
   event?: string | number;
 }): import("solid-js").Element {
@@ -30,8 +31,8 @@ export default function StatusLight(props: {
       data-small={props.small || undefined}
       data-blink={blink() || undefined}
       role="img"
-      aria-label={LIGHT_STATES[props.state].label}
-      title={LIGHT_STATES[props.state].label}
+      aria-label={props.label ?? LIGHT_STATES[props.state].label}
+      title={props.label ?? LIGHT_STATES[props.state].label}
     >
       <span class="otk-lamp-glow" aria-hidden="true" />
       <span class="otk-lamp-body" aria-hidden="true" />

@@ -3,6 +3,7 @@ import "./RightPanel.css" with { type: "text" };
 import { createMemo, createSignal, For, Show } from "solid-js";
 import type { CapabilityName, Preferences } from "@otk/protocol";
 import { useUiRegistries } from "../registries/context.tsx";
+import { resizeDrag } from "./resize.ts";
 
 /** A feature-agnostic host. Registrations own their content and read public
  * context ports; the panel owns only layout and view selection. */
@@ -18,6 +19,7 @@ export default function RightPanel(props: {
     views().find((v) => v.id === props.layout.rightView) ?? views()[0]
   );
   const [dragWidth, setDragWidth] = createSignal<number>();
+  let drag: ReturnType<typeof resizeDrag> | undefined;
   const [error, setError] = createSignal("");
   const width = () => dragWidth() ?? props.layout.rightWidth ?? 320;
   const save = async (patch: Partial<Preferences["shellLayout"]>) => {
@@ -44,6 +46,8 @@ export default function RightPanel(props: {
           {(view) => (
             <button
               type="button"
+              class="otk-icon-button"
+              data-otk-selection="horizontal"
               role="tab"
               title={view().title}
               aria-label={view().title}
@@ -53,19 +57,15 @@ export default function RightPanel(props: {
               data-panel-view={view().id}
               onClick={() => void save({ rightView: view().id })}
             >
-              <span aria-hidden="true">{view().icon}</span>
+              <span aria-hidden="true">
+                {(() => {
+                  const icon = view().icon;
+                  return typeof icon === "function" ? icon() : icon;
+                })()}
+              </span>
             </button>
           )}
         </For>
-        <button
-          type="button"
-          class="otk-panel-collapse"
-          aria-label="Collapse right panel"
-          disabled={!props.ready}
-          onClick={() => void save({ rightCollapsed: true })}
-        >
-          ›
-        </button>
       </div>
       <Show when={error()}>
         <p role="alert" class="otk-error">{error()}</p>
@@ -115,22 +115,31 @@ export default function RightPanel(props: {
         onPointerDown={(event) => {
           if (!props.ready) return;
           event.currentTarget.setPointerCapture(event.pointerId);
+          drag = resizeDrag(width(), event.clientX, -1, 280, 480);
           setDragWidth(width());
         }}
         onPointerMove={(event) => {
-          if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
-          const right =
-            event.currentTarget.parentElement!.getBoundingClientRect().right;
-          setDragWidth(Math.max(280, Math.min(480, right - event.clientX)));
+          if (
+            !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
+          ) return;
+          setDragWidth(drag(event.clientX));
         }}
         onPointerUp={(event) => {
-          if (!event.currentTarget.hasPointerCapture(event.pointerId)) return;
+          if (
+            !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
+          ) return;
+          const gesture = drag;
           event.currentTarget.releasePointerCapture(event.pointerId);
-          void save({ rightWidth: width() }).finally(() =>
-            setDragWidth(undefined)
-          );
+          void save({ rightWidth: gesture(event.clientX) }).finally(() => {
+            if (drag !== gesture) return;
+            drag = undefined;
+            setDragWidth(undefined);
+          });
         }}
-        onPointerCancel={() => setDragWidth(undefined)}
+        onPointerCancel={() => {
+          drag = undefined;
+          setDragWidth(undefined);
+        }}
       />
     </aside>
   );

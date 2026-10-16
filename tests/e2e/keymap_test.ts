@@ -128,7 +128,7 @@ Deno.test("D4 production rebind UI rejects conflicts, applies the new key, persi
     });
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await openSession(browser, seed.id);
-    await browser.click(".otk-sidebar-commands button:last-child");
+    await browser.click(".otk-keys-entry");
     await browser.poll(`!!document.querySelector("${keys}")`);
     await browser.poll(
       "document.querySelector('[data-binding=\"prompt.newline\"] > span')?.textContent.includes('Insert newline') && document.querySelector('[data-binding=\"prompt.submit\"] > span')?.textContent.includes('Send prompt')",
@@ -155,7 +155,7 @@ Deno.test("D4 production rebind UI rejects conflicts, applies the new key, persi
     await browser.key("Escape");
     await browser.reload();
     await browser.poll("!!document.querySelector('.otk-prompt')");
-    await browser.click(".otk-sidebar-commands button:last-child");
+    await browser.click(".otk-keys-entry");
     await browser.poll(`!!document.querySelector("${keys}")`);
     await browser.poll(
       "document.querySelector('[data-binding=\"palette.open\"] kbd')?.textContent==='Ctrl+j'",
@@ -165,7 +165,7 @@ Deno.test("D4 production rebind UI rejects conflicts, applies the new key, persi
     await browser.key("j", 2);
     await browser.poll(`!!document.querySelector('${palette}')`);
     await browser.key("Escape");
-    await browser.click(".otk-sidebar-commands button:last-child");
+    await browser.click(".otk-keys-entry");
     await browser.poll(`!!document.querySelector("${keys}")`);
     await browser.click("[data-binding='palette.open'] button:last-of-type");
     await browser.poll(

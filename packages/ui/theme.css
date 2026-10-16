@@ -24,6 +24,13 @@
   --text-heading: 16px;
   --text-meta: 12px;
   --pill-inset: 14px;
+  /* Prototype chrome geometry, shared by the bars that reserve its corners. */
+  --corner: 12px;
+  --corner-zone: calc(var(--corner) + 28px + 8px);
+  --chrome-gap: 4px;
+  --chrome-inset: 12px;
+  --project-inset: 12px;
+  --project-gap: 8px;
   /* Genuine Shiki css-variables categories. No tokens or worker work change. */
   --otk-syntax-foreground: var(--otk-code-variable);
   --otk-syntax-background: var(--otk-bg);
@@ -194,6 +201,11 @@ small {
   padding: 0;
   border-radius: var(--radius-control);
   color: var(--otk-fg-3);
+}
+.otk-chrome-icon {
+  width: 16px;
+  height: 16px;
+  flex: none;
 }
 .otk-send-button {
   width: 32px;

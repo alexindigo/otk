@@ -71,10 +71,6 @@
     border: 1px solid transparent;
     padding: 12px 8px;
   }
-  .otk-selected {
-    border-left-color: var(--otk-fg-2);
-    background: var(--otk-hover);
-  }
   .otk-row-title {
     overflow: hidden;
     text-overflow: ellipsis;

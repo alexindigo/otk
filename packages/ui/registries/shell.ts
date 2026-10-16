@@ -28,7 +28,7 @@ export class DialogRegistry {
 export interface PanelDefinition {
   id: string;
   title: string;
-  icon: string;
+  icon: string | (() => Element);
   capability?: CapabilityName;
   component(): Element;
 }
