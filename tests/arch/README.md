@@ -11,7 +11,11 @@ registries, common typed session ports and absence of per-feature prompt inputs
 or shell-built registered dialogs/docks. Negative fixtures reject those boundary
 violations. Web's App is public-entry composition only; notification and command
 checks follow their new reusable owners. Inbox/browser tests observe the new
-column and centre navigation rather than the retired application sidebar.
+column and centre navigation rather than the retired application sidebar. The
+right-panel host cannot import or select concrete views or call their RPCs;
+negative fixtures enforce that boundary. Registered views own their adapters.
+Session hierarchy/grouping/search remains in the framework-free client owner,
+with negative fixtures rejecting duplicate UI or application projections.
 
 Layout controls emit independent field patches, never whole-layout copies from
 broadcast-backed props. Negative fixtures reject those stale replacements; the

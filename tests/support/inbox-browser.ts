@@ -10,6 +10,7 @@ export async function inboxBrowserFixture(
   root: string,
   origins: string[] = [],
   messages: Record<string, Message[]> = {},
+  assets = fromFileUrl(new URL("../../web/dist/", import.meta.url)),
 ) {
   const names = ["otk", "atmosphera", "globnotes", "luch"],
     entries: IndexEntry[] = [];
@@ -114,7 +115,7 @@ export async function inboxBrowserFixture(
   const app = await startApplication(
     settings,
     backend,
-    fromFileUrl(new URL("../../web/dist/", import.meta.url)),
+    assets,
   );
   return {
     app,

@@ -146,6 +146,14 @@ function sourceErrors(path: string, source: string): string[] {
   }
   const errors: string[] = [];
   if (
+    path !== "packages/client/session-tree.ts" &&
+    /\bfunction\s+sessionTree\s*\(/.test(source)
+  ) {
+    errors.push(
+      "session hierarchy and task grouping belong to the shared client owner",
+    );
+  }
+  if (
     path !== "packages/client/context-meter.ts" &&
     /\bfunction\s+contextMeter\s*\(/.test(source)
   ) {
@@ -1120,7 +1128,7 @@ Deno.test("notification registry is feature/channel agnostic and notification ac
 });
 
 Deno.test("inbox and tab models remain reusable, framework-free owners with injected RPC and promotion ports", async () => {
-  for (const file of ["inbox", "tabs"]) {
+  for (const file of ["inbox", "tabs", "session-tree"]) {
     const path = `packages/client/${file}.ts`,
       source = await Deno.readTextFile(new URL(path, root));
     assertEquals(sourceErrors(path, source), []);
@@ -1139,6 +1147,7 @@ Deno.test("inbox and tab models remain reusable, framework-free owners with inje
       "function rollup() {}",
       "function inboxProjects() {}",
       "function createTabs() {}",
+      "function sessionTree() {}",
     ]
   ) {
     assert(sourceErrors("packages/ui/inbox.ts", definition).length);

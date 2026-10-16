@@ -87,8 +87,13 @@ Deno.test("R2/R3 real edit diffs, live styles/wrap, write highlights/line number
     await browser.key("ArrowUp");
     await browser.key("Enter");
     await browser.click(".otk-display-menu summary");
+    // Auto diff style uses the actual transcript pane, whose available width
+    // now excludes both side panels rather than only the project column.
+    const wideViewport = await browser.evaluate<number>(
+      "Math.ceil(innerWidth + 1280 - document.querySelector('.otk-session-view').getBoundingClientRect().width)",
+    );
     await browser.send("Emulation.setDeviceMetricsOverride", {
-      width: 1600,
+      width: wideViewport,
       height: 800,
       deviceScaleFactor: 1,
       mobile: false,

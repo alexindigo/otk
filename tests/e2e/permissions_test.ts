@@ -182,11 +182,16 @@ Deno.test("E4 real subagent permission appears on parent dock with child title",
       }) && document.querySelector('.otk-permission-command')?.textContent === 'echo otk'`,
       60_000,
     );
+    await browser.poll(
+      `!!document.querySelector('[data-session="${children[0].id}"]')`,
+    );
     assertEquals(
       await browser.evaluate(
-        `!!document.querySelector('[data-session="${children[0].id}"]')`,
+        `document.querySelector('[data-session="${
+          children[0].id
+        }"]')?.closest('li')?.dataset.parent`,
       ),
-      false,
+      session.id,
     );
     await capture(browser, f.oc.root, "e4-child-permission");
     await clickText(browser, "Allow once");

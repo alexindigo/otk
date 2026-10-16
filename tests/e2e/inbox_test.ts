@@ -32,6 +32,12 @@ Deno.test("inbox activity returns inactive projects and all three required light
     await browser.poll(
       "document.querySelectorAll('.otk-project-row').length===4",
     );
+    // Select the other session before producing the unseen finish. Switching
+    // projects later legitimately opens its first root, so it is not a direct
+    // observation of opening only this other session.
+    await openSession(browser, "other-finished");
+    await browser.click(".otk-panel-collapse");
+    await browser.poll("document.querySelector('.otk-right-panel').hidden");
     for (const entry of f.entries.slice(0, 3)) {
       const selector = row(entry.directory);
       await browser.click(`${selector} summary`);
@@ -75,7 +81,7 @@ Deno.test("inbox activity returns inactive projects and all three required light
       );
       assertEquals(
         await browser.evaluate(
-          "document.querySelector('.otk-right-panel-slot').hidden",
+          "document.querySelector('.otk-right-panel').hidden",
         ),
         true,
       );

@@ -15,6 +15,8 @@ export { default as Prompt } from "./components/Prompt.tsx";
 export { default as SessionView } from "./components/SessionView.tsx";
 export { default as Shell } from "./shell/Shell.tsx";
 export { default as ProjectSessions } from "./components/ProjectSessions.tsx";
+export { default as RightPanel } from "./components/RightPanel.tsx";
+export { registerSessionsPanel } from "./features/sessions.tsx";
 export { default as ProjectTabs } from "./components/ProjectTabs.tsx";
 export { registerTaskDialogs, type TaskNameInput } from "./features/tasks.tsx";
 export { registerCommandDialogs } from "./features/dialogs.tsx";

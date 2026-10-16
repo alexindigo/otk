@@ -7,10 +7,31 @@ Deno.test("shell layout preference validates persisted bounds and complete colla
     leftWidth: 248,
     leftCollapsed: false,
     rightCollapsed: true,
+    rightWidth: 320,
+    rightView: "",
   });
   for (const leftWidth of [200, 248, 360]) {
     assertEquals(isPreference("shellLayout", { ...base, leftWidth }), true);
   }
+  for (const rightWidth of [280, 320, 480]) {
+    assertEquals(
+      isPreference("shellLayout", {
+        ...base,
+        rightWidth,
+        rightView: "external-view",
+      }),
+      true,
+    );
+  }
+  // Normal upgrades retain a valid pre-panel layout without losing left settings.
+  assertEquals(
+    isPreference("shellLayout", {
+      leftWidth: 300,
+      leftCollapsed: true,
+      rightCollapsed: false,
+    }),
+    true,
+  );
   for (
     const value of [
       { ...base, leftWidth: 199 },
@@ -18,6 +39,11 @@ Deno.test("shell layout preference validates persisted bounds and complete colla
       { ...base, leftCollapsed: "true" },
       { leftWidth: 248, leftCollapsed: false },
       { ...base, unknown: true },
+      { ...base, rightWidth: 279 },
+      { ...base, rightWidth: 481 },
+      { ...base, rightWidth: NaN },
+      { ...base, rightView: 1 },
+      { ...base, rightView: "x".repeat(129) },
     ]
   ) assertEquals(isPreference("shellLayout", value), false);
 });

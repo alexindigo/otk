@@ -64,17 +64,19 @@ export async function browserFixture(
   };
 }
 export async function openSession(browser: Cdp, id: string): Promise<void> {
-  // Until the Sessions panel replaces the interim browser, reveal its owner
-  // through the real summary click before targeting one of its session rows.
-  await browser.poll("!!document.querySelector('.otk-session-browser')");
+  await browser.poll("!!document.querySelector('.otk-right-panel')");
+  // Decide from the received host layout, not the pre-handshake default. Another
+  // browser may already have persisted an open panel before this one connects.
+  await browser.poll(
+    "!!document.querySelector('.otk-shell-toolbar button:not(:disabled)')",
+  );
   if (
-    !await browser.evaluate(
-      "document.querySelector('.otk-session-browser').open",
-    )
+    await browser.evaluate("document.querySelector('.otk-right-panel').hidden")
   ) {
-    await browser.click(".otk-session-browser > summary");
-    await browser.poll("document.querySelector('.otk-session-browser').open");
+    await browser.click('[aria-label="Open right panel"]');
+    await browser.poll("!document.querySelector('.otk-right-panel').hidden");
   }
+  await browser.click('[data-panel-view="sessions"]');
   await browser.poll(
     `!!document.querySelector('[data-session="${id}"]') || !!document.querySelector('[data-project-sessions~="${id}"]')`,
   );
@@ -88,7 +90,7 @@ export async function openSession(browser: Cdp, id: string): Promise<void> {
   await browser.poll(`!!document.querySelector('[data-session="${id}"]')`);
   await browser.click(`[data-session="${id}"]`);
   await browser.poll(
-    `location.hash.endsWith('/${id}') && document.querySelector('[data-session="${id}"]')?.getAttribute('aria-current') === 'page' && !!document.querySelector('.otk-prompt') && ![...document.querySelectorAll('.otk-messages > p')].some(el=>el.textContent === 'Loading messages…')`,
+    `location.hash.endsWith('/${id}') && document.querySelector('[data-session="${id}"]')?.getAttribute('aria-current') === 'page' && (!!document.querySelector('.otk-prompt') || !!document.querySelector('.otk-subagent-bar')) && ![...document.querySelectorAll('.otk-messages > p')].some(el=>el.textContent === 'Loading messages…')`,
   );
 }
 export function sentFrames(

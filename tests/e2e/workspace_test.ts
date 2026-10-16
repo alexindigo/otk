@@ -18,7 +18,7 @@ async function capture(browser: Cdp, root: string, name: string) {
   await browser.screenshot(path);
   console.info("Browser capture:", path);
 }
-Deno.test("E1 project inbox and centre roots grouped by directory, descendants hidden, SPA assets and API boundary", async () => {
+Deno.test("E1 project inbox and Sessions tree scoped by directory, descendants nested, SPA assets and API boundary", async () => {
   const f = await browserFixture();
   try {
     const root = await f.oc.request<{ id: string }>("/session", {
@@ -38,14 +38,25 @@ Deno.test("E1 project inbox and centre roots grouped by directory, descendants h
     });
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await browser.poll(
-      "document.querySelectorAll('[data-session]').length === 2 && document.querySelectorAll('[data-project]').length === 2",
+      "document.querySelectorAll('[data-project]').length === 2",
+    );
+    await openSession(browser, root.id);
+    await browser.poll(
+      "document.querySelectorAll('[data-session]').length === 2",
     );
     assertEquals(
       await browser.evaluate(
-        `!!document.querySelector('[data-session="${child.id}"]')`,
+        `document.querySelector('[data-session="${child.id}"]')?.closest('li')?.dataset.parent`,
+      ),
+      root.id,
+    );
+    assertEquals(
+      await browser.evaluate(
+        `!!document.querySelector('[data-session="${other.id}"]')`,
       ),
       false,
     );
+    await openSession(browser, other.id);
     assertEquals(
       await browser.evaluate(
         `document.querySelector('[data-session="${other.id}"]')?.closest('[data-session-project]')?.dataset.sessionProject`,
@@ -84,11 +95,25 @@ Deno.test("E1 project inbox and centre roots grouped by directory, descendants h
     assert(Math.abs(geometry.viewport - geometry.mainBottom) < .5);
     await browser.goto(server.url + "/nested/route");
     await browser.poll(
-      "document.querySelectorAll('[data-session]').length === 2 && document.querySelector('[data-connection=local]').textContent === 'connected'",
+      "document.querySelectorAll('[data-project]').length === 2 && document.querySelector('[data-connection=local]').textContent === 'connected'",
+    );
+    await openSession(browser, root.id);
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelectorAll('[data-session]').length",
+      ),
+      2,
     );
     await browser.goto(server.url);
     await browser.poll(
-      "document.querySelectorAll('[data-session]').length === 2",
+      "document.querySelectorAll('[data-project]').length === 2",
+    );
+    await openSession(browser, other.id);
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelectorAll('[data-session]').length",
+      ),
+      1,
     );
     await capture(browser, f.oc.root, "e1-workspace-empty");
   } finally {
@@ -446,7 +471,11 @@ Deno.test("E9 serving-sidecar wrong password error then correct login", async ()
     await browser.fill("input[name=password]", "secret");
     await browser.click(".otk-auth-view button[type=submit]");
     await browser.poll(
-      "document.querySelector('[data-connection=local]').textContent === 'connected' && document.querySelectorAll('[data-session]').length === 1 && !document.querySelector('.otk-auth-view')",
+      "document.querySelector('[data-connection=local]').textContent === 'connected' && document.querySelectorAll('[data-project]').length === 1 && !document.querySelector('.otk-auth-view')",
+    );
+    await browser.click(".otk-project-open");
+    await browser.poll(
+      "document.querySelectorAll('[data-session]').length === 1",
     );
   } finally {
     await f.stop();

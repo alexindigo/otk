@@ -50,13 +50,3 @@
   padding: 4px 16px;
   border-bottom: 1px solid var(--border);
 }
-.otk-right-panel-slot {
-  flex: none;
-  width: 320px;
-  border-left: 1px solid var(--border);
-  background: var(--otk-bg-side);
-  padding: 16px;
-}
-.otk-right-panel-slot[hidden] {
-  display: none;
-}

@@ -372,6 +372,7 @@ Deno.test("axiom 1: working blocked and unseen-finished ungrouped tabs and rail 
     await b.goto(f.url);
     await openSession(b, "otk");
     await b.click('[aria-label="Collapse projects"]');
+    await b.click(".otk-panel-collapse");
     for (let reload = 0; reload < 2; reload++) {
       if (reload) await b.reload();
       await b.poll(
@@ -395,7 +396,7 @@ Deno.test("axiom 1: working blocked and unseen-finished ungrouped tabs and rail 
       }
       assertEquals(
         await b.evaluate(
-          "document.querySelector('.otk-right-panel-slot').hidden",
+          "document.querySelector('.otk-right-panel').hidden",
         ),
         true,
       );

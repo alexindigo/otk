@@ -2,7 +2,9 @@
 import { createContext, type Element, useContext } from "solid-js";
 import type {
   InboxModel,
+  MergedEntry,
   ProjectSelection,
+  Selection,
   SidecarConnection,
   SidecarState,
 } from "@otk/client";
@@ -17,6 +19,9 @@ export interface ShellPorts {
   connection(id: string): SidecarConnection;
   inbox(id: string): InboxModel;
   openProject(project: ProjectSelection): void;
+  project(): ProjectSelection | undefined;
+  entries(): MergedEntry[];
+  selection(): Selection | undefined;
 }
 const Context = createContext<ShellPorts>();
 export function ShellProvider(

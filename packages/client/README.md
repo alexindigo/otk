@@ -123,6 +123,13 @@ helpers. Helper URLs retain their owning task; removing membership preserves the
 viewed session as an ungrouped tab rather than leaving transcript and task
 inconsistent.
 
+`sessionTree(entries, tasks, directory, query?)` projects ordered task groups
+followed by “Not in a task”, with parent/child depth. Helpers inherit the
+nearest explicitly grouped ancestor; explicit helper membership takes
+precedence. Title search retains matching ancestor paths, while missing parents
+and malformed cycles cannot hide sessions. Keep each server's entries separate
+at the caller.
+
 ## Commands
 
 `new CommandHub(context, keys)` creates an empty, framework-free registry. A

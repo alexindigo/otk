@@ -1,124 +1,185 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ProjectSessions.css" with { type: "text" };
-import { For, Show } from "solid-js";
-import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
+import { createMemo, createSignal, For, Show } from "solid-js";
+import type { InboxSnapshot } from "@otk/protocol";
 import {
   inboxStatus,
   type MergedEntry,
   projectName,
   type ProjectSelection,
   type Selection,
+  sessionTree,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
-/** Interim centre-owned session navigation; task tabs and the panel replace it. */
+
+/** Reusable presentation of the client-owned task/session hierarchy. */
 export default function ProjectSessions(props: {
   entries: MergedEntry[];
   project?: ProjectSelection;
   selected?: Selection;
   connected(id: string): boolean;
   inbox(id: string): InboxSnapshot;
-  onOpen(entry: MergedEntry): void;
-  onCreate(project: ProjectSelection): void;
+  onOpen(entry: MergedEntry): void | Promise<unknown>;
+  onPin?(entry: MergedEntry): void | Promise<unknown>;
+  onCreate(project: ProjectSelection): void | Promise<unknown>;
 }): import("solid-js").Element {
-  const roots = () =>
-    props.entries.filter((e) =>
-      !e.parentID &&
-      (!props.project ||
-        (e.sidecarId === props.project.sidecarId &&
-          e.directory === props.project.directory))
-    );
+  const [query, setQuery] = createSignal("");
+  const [error, setError] = createSignal("");
   const open = ownedAction("project.session.open", props.onOpen);
+  const pin = ownedAction(
+    "project.session.pin",
+    (entry: MergedEntry) => props.onPin?.(entry),
+  );
   const create = ownedAction("project.session.new", props.onCreate);
-  const projects = () =>
-    props.project
-      ? [props.project]
-      : roots().filter((e, n, all) =>
-        all.findIndex((p) =>
-          p.sidecarId === e.sidecarId && p.directory === e.directory
-        ) === n
-      ).map((e) => ({ sidecarId: e.sidecarId, directory: e.directory }));
+  const run = (promise: Promise<unknown>) =>
+    void promise.catch((e) => setError((e as Error).message));
+  const groups = createMemo(() => {
+    const project = props.project;
+    return project
+      ? sessionTree(
+        props.entries.filter((e) => e.sidecarId === project.sidecarId),
+        props.inbox(project.sidecarId).tasks,
+        project.directory,
+        query(),
+      )
+      : [];
+  });
+  const merged = (id: string) =>
+    props.entries.find((e) =>
+      e.sidecarId === props.project?.sidecarId && e.id === id
+    )!;
   return (
-    <nav class="otk-project-sessions" aria-label="Project sessions">
-      <For each={projects()} keyed={(p) => `${p.sidecarId}/${p.directory}`}>
-        {(p) => (
-          <section data-session-project={p().directory}>
-            <div class="otk-project-session-heading">
-              <span title={p().directory}>{projectName(p().directory)}</span>
-              <button
-                type="button"
-                class="otk-new-session"
-                aria-label={`New session in ${p().directory}`}
-                disabled={!props.connected(p().sidecarId)}
-                onClick={() => void create(p())}
+    <nav
+      class="otk-project-sessions"
+      aria-label="Project sessions"
+      data-session-project={props.project?.directory}
+    >
+      <Show when={error()}>
+        <p class="otk-error" role="alert">{error()}</p>
+      </Show>
+      <Show
+        when={props.project}
+        fallback={
+          <p class="otk-muted">Choose a project to browse its sessions.</p>
+        }
+      >
+        <div class="otk-project-session-heading">
+          <span title={props.project!.directory}>
+            {projectName(props.project!.directory)}
+          </span>
+          <button
+            type="button"
+            class="otk-new-session"
+            aria-label={`New session in ${props.project!.directory}`}
+            disabled={!props.connected(props.project!.sidecarId)}
+            onClick={() => run(create(props.project!))}
+          >
+            + New session
+          </button>
+        </div>
+        <input
+          type="search"
+          aria-label="Search sessions by title"
+          placeholder="Search sessions…"
+          value={query()}
+          onInput={(event) => setQuery(event.currentTarget.value)}
+        />
+        <div class="otk-project-session-tree">
+          <For each={groups()} keyed={(group) => group.id}>
+            {(group) => (
+              <section
+                class="otk-session-group"
+                data-session-group={group().id}
+                aria-label={group().title}
               >
-                + New session
-              </button>
-            </div>
-            <div class="otk-project-session-list">
-              <For
-                each={roots().filter((e) =>
-                  e.sidecarId === p().sidecarId && e.directory === p().directory
-                )}
-                keyed={(e) => e.id}
-              >
-                {(e) => (
-                  <button
-                    type="button"
-                    class="otk-session-row"
-                    data-session={e().id}
-                    data-status={e().status}
-                    aria-current={props.selected?.sidecarId === e().sidecarId &&
-                        (props.selected.rootID || props.selected.sessionID) ===
-                          e().id
-                      ? "page"
-                      : undefined}
-                    onClick={() => void open(e())}
-                  >
-                    <StatusLight
-                      state={inboxStatus(
-                        e() as IndexEntry,
-                        props.inbox(e().sidecarId),
-                      )}
-                      event={e().timeUpdated}
-                    />
-                    <span class="otk-row-title">{e().title}</span>
-                    <Show when={e().status === "retry"}>
-                      <span>retry {e().retry?.attempt}</span>
-                    </Show>
-                    <Show
-                      when={e().attention.permissions +
-                        e().attention.childPermissions}
-                    >
-                      <span title="Pending permissions">
-                        P {e().attention.permissions +
-                          e().attention.childPermissions}
-                      </span>
-                    </Show>
-                    <Show
-                      when={e().attention.questions +
-                        e().attention.childQuestions}
-                    >
-                      <span title="Pending questions">
-                        Q{" "}
-                        {e().attention.questions + e().attention.childQuestions}
-                      </span>
-                    </Show>
-                    <Show when={e().attention.error}>
-                      <span
-                        title={e().attention.error}
-                        aria-label="Session error"
-                      >
-                        Error
-                      </span>
-                    </Show>
-                  </button>
-                )}
-              </For>
-            </div>
-          </section>
-        )}
-      </For>
+                <h3>{group().title}</h3>
+                <ul class="otk-project-session-list">
+                  <For each={group().rows} keyed={(row) => row.session.id}>
+                    {(row) => (
+                      <li data-depth={row().depth} data-parent={row().parentID}>
+                        <button
+                          type="button"
+                          class="otk-session-row"
+                          data-session={row().session.id}
+                          data-status={row().session.status}
+                          style={{ "--session-depth": row().depth }}
+                          title={row().session.title}
+                          aria-label={`${row().session.title}${
+                            row().parentID
+                              ? `, child of ${merged(row().parentID!).title}`
+                              : ""
+                          }`}
+                          aria-current={props.selected?.sidecarId ===
+                                props.project!.sidecarId &&
+                              props.selected.sessionID === row().session.id
+                            ? "page"
+                            : undefined}
+                          onClick={() =>
+                            run(open(merged(row().session.id)))}
+                          onDblClick={() =>
+                            run(pin(merged(row().session.id)))}
+                        >
+                          <Show when={row().depth > 0}>
+                            <span class="otk-session-branch" aria-hidden="true">
+                              └
+                            </span>
+                          </Show>
+                          <StatusLight
+                            state={inboxStatus(
+                              row().session,
+                              props.inbox(props.project!.sidecarId),
+                            )}
+                            event={row().session.timeUpdated}
+                          />
+                          <span class="otk-row-title">
+                            {row().session.title}
+                          </span>
+                          <Show when={row().session.status === "retry"}>
+                            <span>retry {row().session.retry?.attempt}</span>
+                          </Show>
+                          <Show
+                            when={row().session.attention.permissions +
+                              row().session.attention.childPermissions}
+                          >
+                            <span title="Pending permissions">
+                              P {row().session.attention.permissions +
+                                row().session.attention.childPermissions}
+                            </span>
+                          </Show>
+                          <Show
+                            when={row().session.attention.questions +
+                              row().session.attention.childQuestions}
+                          >
+                            <span title="Pending questions">
+                              Q {row().session.attention.questions +
+                                row().session.attention.childQuestions}
+                            </span>
+                          </Show>
+                          <Show when={row().session.attention.error}>
+                            <span
+                              title={row().session.attention.error}
+                              aria-label="Session error"
+                            >
+                              Error
+                            </span>
+                          </Show>
+                        </button>
+                      </li>
+                    )}
+                  </For>
+                </ul>
+                <Show when={!group().rows.length}>
+                  <p class="otk-muted">No sessions</p>
+                </Show>
+              </section>
+            )}
+          </For>
+          <Show when={!groups().length}>
+            <p class="otk-muted">No matching sessions</p>
+          </Show>
+        </div>
+      </Show>
     </nav>
   );
 }

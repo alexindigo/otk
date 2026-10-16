@@ -115,12 +115,3 @@
   content: "·";
   margin-right: 8px;
 }
-.otk-session-browser {
-  flex: none;
-  border-bottom: 1px solid var(--border);
-}
-.otk-session-browser > summary {
-  cursor: pointer;
-  padding: 4px 16px;
-  color: var(--fg-2);
-}

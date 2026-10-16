@@ -60,7 +60,7 @@ import Toasts from "../components/Toasts.tsx";
 import VisualSettings from "../components/VisualSettings.tsx";
 import DialogHost from "../components/DialogHost.tsx";
 import ProjectInbox from "../components/ProjectInbox.tsx";
-import ProjectSessions from "../components/ProjectSessions.tsx";
+import RightPanel from "../components/RightPanel.tsx";
 import ProjectTabs from "../components/ProjectTabs.tsx";
 import { type SessionPorts, SessionProvider } from "../registries/session.tsx";
 import { ShellProvider } from "./context.tsx";
@@ -583,6 +583,23 @@ export default function Shell(
       },
     }),
   );
+  onCleanup(commands.register({
+    id: "session.pin",
+    title: "Open session as task",
+    category: "Session",
+    hidden: true,
+    run: async (_ctx, target: Selection) => {
+      if (!navigate(target)) return false;
+      const directory = entry(target.sidecarId, target.sessionID)?.directory;
+      if (!directory) return false;
+      const model = tabsFor({ sidecarId: target.sidecarId, directory });
+      model.preview(target.sessionID);
+      // A helper already belongs to its ancestor's task. Do not duplicate it.
+      if (model.state.selected?.kind === "task") return true;
+      await model.pin(target.sessionID);
+      return true;
+    },
+  }));
   const projects = createMemo(() =>
     sidecars.state.list.flatMap((s) =>
       inboxProjects(
@@ -635,6 +652,9 @@ export default function Shell(
           connection: (id) => sidecars.connection(id),
           inbox,
           openProject,
+          project,
+          entries,
+          selection: () => session.state.selection,
         }}
       >
         <div class="otk-app">
@@ -733,25 +753,6 @@ export default function Shell(
                         )}
                       />
                     </Show>
-                    <details class="otk-session-browser">
-                      <summary>Browse sessions</summary>
-                      <ProjectSessions
-                        entries={entries()}
-                        project={project()}
-                        selected={session.state.selection}
-                        connected={(id) =>
-                          sidecars.state.list.find((s) => s.id === id)
-                            ?.status ===
-                            "connected"}
-                        inbox={(id) => inbox(id).state.inbox}
-                        onOpen={(e) =>
-                          void commands.run("session.preview", {
-                            sidecarId: e.sidecarId,
-                            sessionID: e.id,
-                          })}
-                        onCreate={(p) => void commands.run("session.new", p)}
-                      />
-                    </details>
                     <Show
                       when={session.state.selection}
                       keyed
@@ -764,7 +765,7 @@ export default function Shell(
                           </h1>
                           <p>
                             {project()
-                              ? "Open a session above, or start a new one in this project."
+                              ? "Open Sessions in the right panel, or start a new session."
                               : "Choose a project to supervise its sessions."}
                           </p>
                         </div>
@@ -885,13 +886,17 @@ export default function Shell(
               />
             </Show>
           </main>
-          <aside
-            class="otk-right-panel-slot"
-            aria-label="Right panel"
-            hidden={layout().rightCollapsed}
-          >
-            <p class="otk-muted">No panel views selected.</p>
-          </aside>
+          <RightPanel
+            layout={layout()}
+            ready={toggles.state.ready}
+            supports={(capability) => {
+              const id = project()?.sidecarId;
+              const server = sidecars.state.list.find((s) => s.id === id);
+              return server?.status === "connected" &&
+                server.capabilities.includes(capability);
+            }}
+            onLayout={saveLayout}
+          />
           <Toasts model={notifications.toast} />
           <DialogHost onChange={setDialog} />
         </div>

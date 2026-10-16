@@ -35,6 +35,13 @@ function errors(path: string, source: string): string[] {
     /\.\.\.\s*layout\(\)|key:\s*["']shellLayout["']|onLayout\(\w+:\s*Preferences\["shellLayout"\]/
       .test(source)
   ) errors.push("layout controls must send field intents, not stale snapshots");
+  if (
+    path.endsWith("/RightPanel.tsx") &&
+    /(?:from\s+["'][^"']*(?:features|ProjectSessions)|["']sessions["']|<ProjectSessions\b|rpc\.call)/
+      .test(source)
+  ) {
+    errors.push("panel host owns a concrete view or its data");
+  }
   return errors;
 }
 Deno.test("shell registries stay open, implementation-free and feature ports replace per-feature prompt wiring", async () => {
@@ -43,6 +50,7 @@ Deno.test("shell registries stay open, implementation-free and feature ports rep
       "packages/ui/registries/shell.ts",
       "packages/ui/registries/prompt.ts",
       "packages/ui/shell/Shell.tsx",
+      "packages/ui/components/RightPanel.tsx",
       "web/src/ui/App.tsx",
     ]
   ) {
@@ -62,6 +70,11 @@ Deno.test("shell registries stay open, implementation-free and feature ports rep
       ["packages/ui/registries/prompt.ts", "shellEnabled?: boolean;"],
       ["packages/ui/shell/Shell.tsx", "const feature = <PermissionDock />;"],
       ["web/src/ui/App.tsx", "const state = createSignal(false);"],
+      [
+        "packages/ui/components/RightPanel.tsx",
+        'import ProjectSessions from "./ProjectSessions.tsx";',
+      ],
+      ["packages/ui/components/RightPanel.tsx", 'const view = "sessions";'],
     ]
   ) assert(errors(path, source).length > 0, source);
   const session = await Deno.readTextFile(
@@ -79,6 +92,7 @@ Deno.test("shell registries stay open, implementation-free and feature ports rep
       "registerCommandDialogs",
       "registerProjectDialogs",
       "registerEditorDialog",
+      "registerSessionsPanel",
     ]
   ) assert(features.includes(owner));
 });
@@ -120,6 +134,7 @@ Deno.test("layout controls send field intents to the authoritative persistence o
     const path of [
       "packages/ui/shell/Shell.tsx",
       "packages/ui/components/ProjectInbox.tsx",
+      "packages/ui/components/RightPanel.tsx",
     ]
   ) {
     assertEquals(

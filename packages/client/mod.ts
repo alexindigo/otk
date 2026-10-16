@@ -29,3 +29,8 @@ export {
 export { contextMeter } from "./context-meter.ts";
 export { createTaskActions, type TaskActions } from "./task-actions.ts";
 export { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
+export {
+  sessionTree,
+  type SessionTreeGroup,
+  type SessionTreeRow,
+} from "./session-tree.ts";

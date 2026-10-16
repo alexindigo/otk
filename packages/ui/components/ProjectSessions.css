@@ -1,24 +1,25 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-project-sessions {
-  flex: none;
-  max-height: 200px;
-  overflow: auto;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 0 12px 12px;
 }
 .otk-project-session-heading {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 4px;
+  justify-content: space-between;
+  gap: 8px;
 }
 .otk-project-session-heading > span {
   font-weight: 600;
 }
 .otk-project-session-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
 }
 .otk-project-sessions .otk-session-row {
   display: flex;
@@ -26,7 +27,10 @@
   gap: 8px;
   min-width: 0;
   max-width: 100%;
+  width: 100%;
+  text-align: left;
   padding: 8px;
+  padding-inline-start: calc(8px + var(--session-depth, 0) * 16px);
 }
 .otk-project-sessions .otk-session-row[aria-current] {
   background: var(--hover);
@@ -38,4 +42,26 @@
 }
 .otk-project-sessions .otk-new-session {
   padding: 4px 8px;
+}
+.otk-project-sessions input[type="search"] {
+  width: 100%;
+  min-width: 0;
+}
+.otk-project-session-tree {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.otk-session-group h3 {
+  margin: 12px 4px 4px;
+  color: var(--secondary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+}
+.otk-session-group > p {
+  margin: 8px;
+}
+.otk-session-branch {
+  color: var(--secondary);
 }

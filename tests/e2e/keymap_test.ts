@@ -24,7 +24,10 @@ Deno.test("D1 palette, project button and slash create sessions through the same
       `!location.hash.endsWith('/${seed.id}') && !document.querySelector('${palette}') && !!document.querySelector('.otk-prompt')`,
     );
     const first = await browser.evaluate<string>("location.hash");
-    await browser.click(".otk-new-session");
+    await browser.poll(
+      "!!document.querySelector('.otk-project-tabs .otk-new-session:not(:disabled)')",
+    );
+    await browser.click(".otk-project-tabs .otk-new-session");
     await browser.poll(
       `location.hash!==${
         JSON.stringify(first)

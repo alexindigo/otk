@@ -64,6 +64,7 @@ Deno.test("core-only welcome loads a session without optional RPCs and preserves
           "session.get",
           "session.messages",
           "prefs.get",
+          "layout.patch",
           "frecency.list",
           "projects.visit",
           "sessions.seen",

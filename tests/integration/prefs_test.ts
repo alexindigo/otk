@@ -59,21 +59,28 @@ Deno.test("prefs RPC persists across sidecar restart and broadcasts to other con
     }
     // Independent connections need no observed broadcast before their next intent.
     const layout = {
+      ...DEFAULT_PREFS.shellLayout,
       leftWidth: 360,
       leftCollapsed: true,
       rightCollapsed: false,
+      rightWidth: 400,
+      rightView: "external-view",
     };
     await Promise.all([
       a.rpc("layout.patch", { leftWidth: layout.leftWidth }),
       b.rpc("layout.patch", { leftCollapsed: layout.leftCollapsed }),
       a.rpc("layout.patch", { rightCollapsed: layout.rightCollapsed }),
+      b.rpc("layout.patch", { rightWidth: layout.rightWidth }),
+      a.rpc("layout.patch", { rightView: layout.rightView }),
     ]);
     for (const client of [a, b]) {
       const frame = await client.wait((frame) =>
         frame.t === "prefs" &&
         frame.prefs.shellLayout.leftWidth === layout.leftWidth &&
         frame.prefs.shellLayout.leftCollapsed === layout.leftCollapsed &&
-        frame.prefs.shellLayout.rightCollapsed === layout.rightCollapsed
+        frame.prefs.shellLayout.rightCollapsed === layout.rightCollapsed &&
+        frame.prefs.shellLayout.rightWidth === layout.rightWidth &&
+        frame.prefs.shellLayout.rightView === layout.rightView
       );
       assertEquals(frame.t === "prefs" && frame.prefs.shellLayout, layout);
       assertEquals(
@@ -89,6 +96,10 @@ Deno.test("prefs RPC persists across sidecar restart and broadcasts to other con
         { rightCollapsed: null },
         { unknown: true },
         { leftWidth: 200, rightCollapsed: "false" },
+        { rightWidth: 279 },
+        { rightWidth: 481 },
+        { rightView: 1 },
+        { rightView: "x".repeat(129) },
       ]
     ) {
       await assertRejects(() => a.rpc("layout.patch", patch));

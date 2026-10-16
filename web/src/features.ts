@@ -27,6 +27,7 @@ import {
   registerReadTool,
   registerReasoningPart,
   registerSearchTool,
+  registerSessionsPanel,
   registerShellPrompt,
   registerSkillTool,
   registerSlashPrompt,
@@ -81,6 +82,7 @@ export function applicationUi(): UiRegistries {
   registerCommandDialogs(ui.dialogs);
   registerProjectDialogs(ui.dialogs);
   registerTaskDialogs(ui.dialogs);
+  registerSessionsPanel(ui.panels);
   return ui;
 }
 

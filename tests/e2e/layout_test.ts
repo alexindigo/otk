@@ -25,7 +25,7 @@ Deno.test("rapid layout gestures preserve independent fields through broadcast a
       document.querySelector('[aria-label="Open right panel"]').click();
     })()`);
     await browser.poll(
-      "!document.querySelector('.otk-right-panel-slot').hidden",
+      "!document.querySelector('.otk-right-panel').hidden",
     );
     const expected = {
       ...DEFAULT_PREFS.shellLayout,
@@ -40,7 +40,7 @@ Deno.test("rapid layout gestures preserve independent fields through broadcast a
     for (let reload = 0; reload < 2; reload++) {
       if (reload) await browser.reload();
       await browser.poll(
-        "document.querySelector('.otk-project-inbox')?.dataset.collapsed==='true' && !document.querySelector('.otk-right-panel-slot').hidden",
+        "document.querySelector('.otk-project-inbox')?.dataset.collapsed==='true' && !document.querySelector('.otk-right-panel').hidden",
       );
       assertEquals(
         await browser.evaluate(

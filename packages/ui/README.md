@@ -53,7 +53,13 @@ teardown cannot close a replacement dialog. Command, keymap, theme, editor and
 add-project features own their registrations.
 `panels.register({ id, title, icon, capability?,
 component })` contributes
-right-panel views; R3 provides the empty slot and R5 its view host.
+right-panel views. `RightPanel` mounts available registrations with a neutral
+icon strip, keyboard/pointer resizing (280–480px, 320 default) and injected
+layout persistence. Unknown or unavailable stored view IDs fall back to the
+first available view without overwriting the stored preference.
+`registerSessionsPanel` contributes the project-local, task-grouped searchable
+parent/child tree. Its feature adapter reads common `ShellPorts` resources; the
+panel knows no views.
 
 `Shell({ theme, api })` composes the reusable three-region shell with selected
 UI registrations. `ProjectInbox` renders the shared client projection in its
@@ -67,12 +73,13 @@ public client tabs model, server/project-scoped task actions and injected
 guarded navigation. It renders task/phantom/preview tabs, ordered foldable
 breadcrumbs with helper nesting and reported usage, using 8px status lights.
 `registerTaskDialogs` contributes its name editor to the dialog host.
-`session.preview` is the command port for the future Sessions panel; preview
-replacement cannot remove required activity tabs. The interim `ProjectSessions`
-remains inside Browse sessions until that panel lands. The shell's existing
-navigation guard protects draft/attention input, including same-event slash
-navigation and browser history. Project-only URLs support empty projects.
-Opening or acting resets visits; a loaded viewed session records seen.
+`session.preview` and `session.pin` are guarded command ports for the Sessions
+panel; preview replacement cannot remove required activity tabs.
+`ProjectSessions` consumes the framework-free client hierarchy and injected
+open/pin/create actions. The shell's existing navigation guard protects
+draft/attention input, including same-event slash navigation and browser
+history. Project-only URLs support empty projects. Opening or acting resets
+visits; a loaded viewed session records seen.
 
 `createIndex`, `createSession`, `createSidecars` and `solidState` bind the
 framework-free client models to Solid stores. Connection options, including the
