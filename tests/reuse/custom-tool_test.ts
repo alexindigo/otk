@@ -85,6 +85,13 @@ Deno.test("independent public UI consumer renders external tools twice, updates 
     );
     await browser.click("[data-update]");
     await browser.poll(
+      "document.querySelector('#registered .otk-tool-toggle').textContent.includes('Inspect') && document.querySelector('#registered .otk-tool-toggle').textContent.includes('external target')",
+    );
+    await browser.click("#registered .otk-tool-toggle");
+    await browser.poll(
+      "!document.querySelector('#registered .otk-tool-body').hidden",
+    );
+    await browser.poll(
       "[...document.querySelectorAll('[data-external-tool] .otk-tool-summary')].every(el=>el.textContent.includes('Updated result'))",
     );
     await browser.click("[data-open]");

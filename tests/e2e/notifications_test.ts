@@ -51,7 +51,7 @@ async function finish(
     parts: [{ kind: "text", text: "Run notification completion" }],
   });
 }
-Deno.test("D6 focused background completion opens only after accepted dirty navigation; selected completion stays silent", async () => {
+Deno.test("D6 focused background completion opens while retaining the previous session draft; selected completion stays silent", async () => {
   const f = await browserFixture();
   let ws: WsClient | undefined;
   try {
@@ -69,28 +69,26 @@ Deno.test("D6 focused background completion opens only after accepted dirty navi
       }")?.textContent.includes('Session done')`,
     );
     await browser.poll(`${badge}==='1 sessions need attention'`);
-    await browser.dialog(
-      () => browser.click(`${toast(b.id)} .otk-toast-actions button`),
-      false,
+    await browser.click(`${toast(b.id)} .otk-toast-actions button`);
+    await browser.poll(
+      `location.hash.endsWith('/${b.id}') && ${badge}==='OTK'`,
     );
+    await openSession(browser, a.id);
     assertEquals(
       await browser.evaluate(
         "document.querySelector('textarea[name=prompt]').value",
       ),
       "Keep unsent draft",
     );
-    assertEquals(await browser.evaluate(badge), "1 sessions need attention");
+    assertEquals(await browser.evaluate(badge), "OTK");
     assert(
       await browser.evaluate(
-        `location.hash.endsWith('/${a.id}') && !!document.querySelector("${
+        `location.hash.endsWith('/${a.id}') && !document.querySelector("${
           toast(b.id)
         }")`,
       ),
     );
-    await browser.dialog(
-      () => browser.click(`${toast(b.id)} .otk-toast-actions button`),
-      true,
-    );
+    await openSession(browser, b.id);
     await browser.poll(
       `location.hash.endsWith('/${b.id}') && document.querySelector('[data-role=assistant] .otk-text')?.textContent==='Background completed' && !document.querySelector("${
         toast(b.id)
@@ -164,27 +162,21 @@ Deno.test("D7 real hidden/granted Notification tag replacement, session favicon 
     await restore();
     restore = undefined;
     await browser.poll("notificationEvidence.notes.every(n=>n.closed)");
-    await browser.dialog(
-      () =>
-        browser.evaluate(
-          "notificationEvidence.notes[1].instance.dispatchEvent(new Event('click',{cancelable:true}))",
-        ),
-      false,
+    await browser.evaluate(
+      "notificationEvidence.notes[1].instance.dispatchEvent(new Event('click',{cancelable:true}))",
     );
+    await browser.poll(
+      `location.hash.endsWith('/${b.id}') && ${badge}==='1 sessions need attention'`,
+    );
+    await openSession(browser, a.id);
     assertEquals(
       await browser.evaluate(
         "document.querySelector('textarea[name=prompt]').value",
       ),
       "Keep OS draft",
     );
-    assertEquals(await browser.evaluate(badge), "2 sessions need attention");
-    await browser.dialog(
-      () =>
-        browser.evaluate(
-          "notificationEvidence.notes[1].instance.dispatchEvent(new Event('click',{cancelable:true}))",
-        ),
-      true,
-    );
+    assertEquals(await browser.evaluate(badge), "1 sessions need attention");
+    await openSession(browser, b.id);
     await browser.poll(
       `location.hash.endsWith('/${b.id}') && [...document.querySelectorAll('[data-role=assistant] .otk-text')].some(el=>el.textContent==='Replacement completed')`,
     );

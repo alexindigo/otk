@@ -159,7 +159,10 @@ Deno.test("task tabs create rename reorder and close without deleting sessions; 
       "location.hash.endsWith('/second') && document.querySelector('[data-crumb=second]')?.getAttribute('aria-current')==='page'",
     );
     await b.type("textarea[name=prompt]", "Keep the task draft");
-    await b.dialog(() => b.click(tab(plan.id)), false);
+    await b.click(tab(plan.id));
+    await b.poll("!location.hash.endsWith('/second')");
+    await b.click(tab(exec.id));
+    await b.poll("location.hash.endsWith('/second')");
     assertEquals(
       await b.evaluate("document.querySelector('textarea[name=prompt]').value"),
       "Keep the task draft",

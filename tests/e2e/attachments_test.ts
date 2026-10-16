@@ -26,10 +26,9 @@ Deno.test("P9 client drop and image paste reach stock opencode as file parts; pa
     await browser.poll(
       "document.querySelector('.otk-prompt-chip')?.textContent.includes('[File 1]') && !document.querySelector('.otk-prompt button[type=submit]').disabled",
     );
-    await browser.dialog(
-      () => browser.click(`[data-session="${other.id}"]`),
-      false,
-    );
+    await openSession(browser, other.id);
+    await browser.poll("!document.querySelector('.otk-prompt-chip')");
+    await openSession(browser, session.id);
     await browser.poll(
       `location.hash.endsWith('/${session.id}') && !!document.querySelector('.otk-prompt-chip')`,
     );

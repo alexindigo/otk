@@ -14,6 +14,12 @@ export function registerPatchTool(tools: ToolRegistry): void {
         paneWidth={props.paneWidth}
       />
     ),
+    (call) => ({
+      icon: "±",
+      verb: "Patch",
+      target: call.files.map((file) => file.path).join(", "),
+      expanded: true,
+    }),
   );
 }
 export default function PatchTool(

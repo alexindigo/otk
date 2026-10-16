@@ -21,6 +21,11 @@ mounted and observe permission, question and prompt availability after release
 and reload. Existing reconnect coverage preserves unsent attention input.
 Session hierarchy/grouping/search remains in the framework-free client owner,
 with negative fixtures rejecting duplicate UI or application projections.
+Browser drafts likewise belong to client; negative fixtures reject duplicate UI
+draft models and concrete attention/tool dispatch in the shared takeover/frame
+hosts. Tool owners contribute their summary and initial expansion alongside
+their renderer. Browser tests prove the same renderers, draft/late-upload
+ownership and backend attention outcomes through the new composer area.
 
 Layout controls emit independent field patches, never whole-layout copies from
 broadcast-backed props. Negative fixtures reject those stale replacements; the

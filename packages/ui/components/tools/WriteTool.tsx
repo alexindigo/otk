@@ -7,6 +7,7 @@ export function registerWriteTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "write",
     (props) => <WriteTool call={props.call} />,
+    (call) => ({ icon: "±", verb: "Write", target: call.path, expanded: true }),
   );
 }
 export default function WriteTool(props: { call: WriteCall }) {

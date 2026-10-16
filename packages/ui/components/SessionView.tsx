@@ -2,6 +2,7 @@
 import "./SessionView.css" with { type: "text" };
 import {
   createEffect,
+  createMemo,
   createSignal,
   type Element,
   For,
@@ -22,7 +23,7 @@ import SubagentBar from "./SubagentBar.tsx";
 import RevertBanner from "./RevertBanner.tsx";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
-import { queuedMessages } from "@otk/client";
+import { queuedMessages, replyMetadata } from "@otk/client";
 import { followViewport } from "./viewport.ts";
 import { highlightingScope } from "../highlight/client.ts";
 import type { Draft, DraftChange } from "./prompt/model.ts";
@@ -48,6 +49,7 @@ export default function SessionView(props: {
   child: boolean;
   revert: RevertInfo | null;
   busy: boolean;
+  retryState?: { attempt: number; message: string; next: number };
   onOlder(): Promise<void>;
   onRetry(): Promise<void>;
   onDraft(value: DraftChange): Draft;
@@ -58,7 +60,10 @@ export default function SessionView(props: {
   ): Promise<void>;
   onAbort(): Promise<void>;
 }): Element {
+  const writeDraft = props.onDraft;
   const queued = () => queuedMessages(props.messages, props.busy);
+  const metadata = createMemo(() => replyMetadata(props.messages));
+  const [now, setNow] = createSignal(Date.now());
   const older = ownedAction("session.page", () => props.onOlder());
   const retry = ownedAction("session.refetch", () => props.onRetry());
   const [paneWidth, setPaneWidth] = createSignal(0);
@@ -84,6 +89,9 @@ export default function SessionView(props: {
     },
   );
   onSettled(() => {
+    const clock = setInterval(() => {
+      if (props.retryState) setNow(Date.now());
+    }, 1000);
     const observer = new ResizeObserver((entries) =>
       setPaneWidth(entries[0].contentRect.width)
     );
@@ -94,6 +102,7 @@ export default function SessionView(props: {
       }
     });
     return () => {
+      clearInterval(clock);
       observer.disconnect();
       following?.dispose();
       following = undefined;
@@ -163,10 +172,23 @@ export default function SessionView(props: {
             </button>
           </Show>
           <SessionError state={props.errorState} error={props.sessionError} />
+          <Show when={props.retryState}>
+            {(retry) => (
+              <div class="otk-retry-banner" role="status">
+                <strong>Retrying · attempt {retry().attempt}</strong>
+                <p>{retry().message}</p>
+                <span>
+                  Next attempt in{" "}
+                  {Math.max(0, Math.ceil((retry().next - now()) / 1000))}s
+                </span>
+              </div>
+            )}
+          </Show>
           <For each={props.messages} keyed={(message) => message.id}>
             {(message) => (
               <Message
                 message={message()}
+                metadata={metadata().get(message().id) ?? null}
                 prefs={props.prefs}
                 directory={props.info?.directory}
                 permissions={props.permissions}
@@ -185,15 +207,25 @@ export default function SessionView(props: {
         </div>
       </div>
       <Show when={!props.child}>
-        <ComposerTakeovers />
-        <Prompt
-          busy={props.busy}
-          value={props.draft}
-          connected={props.connected}
-          onChange={(value) => props.onDraft(value)}
-          onSubmit={(parts, mode, agent) => props.onPrompt(parts, mode, agent)}
-          onAbort={() => props.onAbort()}
-        />
+        <ComposerTakeovers>
+          {(active) => (
+            <div hidden={active()} inert={active()}>
+              <Prompt
+                suspended={active()}
+                context={props.messages.findLast((message) =>
+                  message.role === "user"
+                ) as import("@otk/protocol").UserMessage | undefined}
+                busy={props.busy}
+                value={props.draft}
+                connected={props.connected}
+                onChange={writeDraft}
+                onSubmit={(parts, mode, agent) =>
+                  props.onPrompt(parts, mode, agent)}
+                onAbort={() => props.onAbort()}
+              />
+            </div>
+          )}
+        </ComposerTakeovers>
       </Show>
     </section>
   );

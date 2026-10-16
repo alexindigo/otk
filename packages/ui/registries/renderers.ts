@@ -23,6 +23,13 @@ export interface ToolProps {
   onOpenChild(id: string): void;
 }
 export type ToolRenderer = (props: ToolProps) => Element;
+export interface ToolPresentation {
+  icon: string;
+  verb: string;
+  target?: string;
+  summary?: string;
+  expanded?: boolean;
+}
 export type ToolRenderProps<K extends keyof ToolKinds> =
   & Omit<ToolProps, "call">
   & {
@@ -34,21 +41,36 @@ export class ToolRegistry {
   #typed = new Map<string, ToolRenderer>();
   #external = new Map<string, ToolRenderer>();
   #fallback?: ToolRenderer;
+  #presentations = new Map<string, (call: ToolCall) => ToolPresentation>();
   registerTyped<K extends keyof ToolKinds>(
     tool: K,
     component: (props: ToolRenderProps<K>) => Element,
+    presentation?: (call: ToolKinds[K]) => ToolPresentation,
   ): void {
     if (this.#typed.has(tool)) throw new Error(`Duplicate tool: ${tool}`);
     this.#typed.set(tool, component as ToolRenderer);
+    if (presentation) {
+      this.#presentations.set(
+        `typed:${tool}`,
+        presentation as (call: ToolCall) => ToolPresentation,
+      );
+    }
   }
   register(
     name: string,
     component: (
       props: Omit<ToolProps, "call"> & { call: ExternalCall },
     ) => Element,
+    presentation?: (call: ExternalCall) => ToolPresentation,
   ): void {
     if (this.#external.has(name)) throw new Error(`Duplicate tool: ${name}`);
     this.#external.set(name, component as ToolRenderer);
+    if (presentation) {
+      this.#presentations.set(
+        `external:${name}`,
+        presentation as (call: ToolCall) => ToolPresentation,
+      );
+    }
   }
   fallback(component: ToolRenderer): void {
     if (this.#fallback) throw new Error("Duplicate tool fallback");
@@ -58,6 +80,15 @@ export class ToolRegistry {
     return (call.tool === "external"
       ? this.#external.get(call.name)
       : this.#typed.get(call.tool)) ?? this.#fallback;
+  }
+  presentation(call: ToolCall): ToolPresentation {
+    return this.#presentations.get(
+      call.tool === "external" ? `external:${call.name}` : `typed:${call.tool}`,
+    )?.(call) ?? {
+      icon: "◇",
+      verb: call.tool === "external" ? call.name : call.tool,
+      summary: call.tool === "external" ? call.summary : call.title,
+    };
   }
 }
 

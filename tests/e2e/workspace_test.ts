@@ -651,7 +651,7 @@ Deno.test("web history paging preserves viewport and autoscroll follows only the
   }
 });
 
-Deno.test("web cancelled dirty navigation preserves prompt and URL, confirmed navigation discards explicitly", async () => {
+Deno.test("web history navigation retains each session's draft and keeps URL and content together", async () => {
   const f = await browserFixture();
   try {
     const a = await f.oc.request<{ id: string }>("/session", {
@@ -669,17 +669,13 @@ Deno.test("web cancelled dirty navigation preserves prompt and URL, confirmed na
     await browser.poll(
       "document.querySelector('textarea[name=prompt]').value === 'Unsent work' && !document.querySelector('.otk-prompt button[type=submit]').disabled",
     );
-    await browser.dialog(() => browser.evaluate("history.back()"), false);
-    await browser.poll(
-      `location.hash.endsWith('/${b.id}') && document.querySelector('.otk-view-header h1').textContent === 'Draft B' && document.querySelector('textarea[name=prompt]').value === 'Unsent work'`,
-    );
-    await browser.dialog(() => browser.evaluate("history.back()"), true);
+    await browser.evaluate("history.back()");
     await browser.poll(
       `location.hash.endsWith('/${a.id}') && document.querySelector('.otk-view-header h1').textContent === 'Draft A' && document.querySelector('textarea[name=prompt]').value === ''`,
     );
     await browser.evaluate("history.forward()");
     await browser.poll(
-      `location.hash.endsWith('/${b.id}') && document.querySelector('.otk-view-header h1').textContent === 'Draft B'`,
+      `location.hash.endsWith('/${b.id}') && document.querySelector('.otk-view-header h1').textContent === 'Draft B' && document.querySelector('textarea[name=prompt]').value === 'Unsent work'`,
     );
   } finally {
     await f.stop();

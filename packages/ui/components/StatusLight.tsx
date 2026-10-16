@@ -6,6 +6,7 @@ import { LIGHT_STATES, type LightState } from "./status-light.ts";
 export default function StatusLight(props: {
   state: LightState;
   small?: boolean;
+  activity?: "spinner";
   event?: string | number;
 }): import("solid-js").Element {
   const [blink, setBlink] = createSignal(false);
@@ -25,6 +26,7 @@ export default function StatusLight(props: {
     <span
       class="otk-status-light"
       data-state={props.state}
+      data-activity={props.activity}
       data-small={props.small || undefined}
       data-blink={blink() || undefined}
       role="img"

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { onSettled, Show } from "solid-js";
+import { onSettled } from "solid-js";
 import type { PromptRegistry } from "../../registries/prompt.ts";
 import { ownedCommand } from "../../keyboard/context.tsx";
 /** Essential cycling only. Agent data and selected draft belong to the consumer. */
@@ -38,7 +38,8 @@ export function registerAgentCyclePrompt(prompt: PromptRegistry): void {
         queue = task.catch(() => {});
         return task;
       };
-      const enabled = () => ctx.props.connected && ctx.supports("agents");
+      const enabled = () =>
+        !ctx.props.suspended && ctx.props.connected && ctx.supports("agents");
       ownedCommand(ctx, {
         id: "agent.cycle",
         title: "Next agent",
@@ -73,13 +74,7 @@ export function registerAgentCyclePrompt(prompt: PromptRegistry): void {
           previous();
         };
       });
-      return {
-        actions: () => (
-          <Show when={ctx.supports("agents") && ctx.props.value.agent}>
-            <span class="otk-chip">{ctx.props.value.agent}</span>
-          </Show>
-        ),
-      };
+      return {};
     },
   });
 }

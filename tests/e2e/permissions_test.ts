@@ -115,7 +115,7 @@ Deno.test("E3 bash permission, real Allow once click, completed output-bearing t
       "document.querySelector('.otk-permission-command')?.textContent === 'echo otk'",
     );
     const geometry = await browser.evaluate<{ dock: number; prompt: number }>(
-      "({dock:document.querySelector('.otk-permission-dock').getBoundingClientRect().bottom,prompt:document.querySelector('.otk-prompt').getBoundingClientRect().top})",
+      "({dock:document.querySelector('.otk-permission-dock').getBoundingClientRect().bottom,prompt:document.querySelector('.otk-composer').getBoundingClientRect().bottom})",
     );
     assert(Math.abs(geometry.dock - geometry.prompt) < .5);
     await capture(browser, f.oc.root, "e3-pending");

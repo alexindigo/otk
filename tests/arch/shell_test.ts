@@ -47,8 +47,56 @@ function errors(path: string, source: string): string[] {
       "shell feature availability bypasses reactive advertised state",
     );
   }
+  if (
+    path.endsWith("/ComposerTakeovers.tsx") &&
+    /Permission|Question|\.permissions\(|\.questions\(/.test(source)
+  ) {
+    errors.push("takeover host selects concrete attention owners");
+  }
+  if (
+    path.endsWith("/ToolFrame.tsx") &&
+    /call\.tool\s*===|case\s+["'](?:edit|bash|task)["']/.test(source)
+  ) {
+    errors.push("tool frame owns feature presentation");
+  }
+  if (
+    path.startsWith("packages/ui/") &&
+    /(?:interface|type)\s+Draft\s*[={]|new Map<string,\s*Draft>/.test(source)
+  ) {
+    errors.push("browser draft model belongs to client");
+  }
   return errors;
 }
+Deno.test("composer and tool hosts remain open while client owns browser drafts", async () => {
+  for (
+    const path of [
+      "packages/ui/components/ComposerTakeovers.tsx",
+      "packages/ui/components/tools/ToolFrame.tsx",
+      "packages/ui/components/prompt/model.ts",
+      "packages/ui/shell/Shell.tsx",
+    ]
+  ) {
+    assertEquals(
+      errors(path, await Deno.readTextFile(new URL(path, root))),
+      [],
+      path,
+    );
+  }
+  for (
+    const [path, source] of [
+      [
+        "packages/ui/components/ComposerTakeovers.tsx",
+        "session.permissions().length || session.questions().length",
+      ],
+      ["packages/ui/components/tools/ToolFrame.tsx", 'call.tool === "edit"'],
+      [
+        "packages/ui/components/prompt/model.ts",
+        "interface Draft { input: string }",
+      ],
+      ["packages/ui/shell/Shell.tsx", "new Map<string, Draft>()"],
+    ]
+  ) assert(errors(path, source).length > 0, source);
+});
 Deno.test("shell registries stay open, implementation-free and feature ports replace per-feature prompt wiring", async () => {
   for (
     const path of [

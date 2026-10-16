@@ -18,7 +18,10 @@ Registries import no implementations.
 display preferences, width, directory, waiting state and an injected child-open
 callback. External protocol tools resolve by their `name`; unmatched calls use
 the fallback installed by `registerGenericTool`. `ToolLine` owns the shared
-status/permission/error frame, so external renderers receive the same behavior.
+collapsed summary and status/permission/error frame, so external renderers
+receive the same behavior. An optional third `presentation(call)` registration
+argument supplies `{icon, verb, target?, summary?, expanded?}`; the shared frame
+has no concrete tool list. Edits/patches/writes and helper cards start expanded.
 Typed tool modules use `tools.registerTyped(kind, Component)`, whose call type
 derives from the open protocol `ToolKinds` map. Separate registration namespaces
 let an external `edit` coexist with typed OTK `edit` without either renderer
@@ -44,10 +47,11 @@ teardown; it has no feature import list.
 
 `takeovers.register({ id, capability, component })` supplies composer attention
 owners. `ComposerTakeovers` mounts capability-available components; they read
-session state from context and construct their own UI. The shipped permission
-and question owners preserve dirty state through reconnects. R3 retains their
-above-prompt placement; R6 changes their presentation to composer takeovers. The
-legacy `Docks` API remains independently reusable for existing consumers.
+session state from context and construct their own UI. Optional feature-owned
+`active(session)` predicates suspend the ordinary composer while attention owns
+its area. The prompt's draft survives the takeover. Permission and question
+owners preserve dirty state through reconnects. The legacy `Docks` API remains
+independently reusable for existing consumers.
 
 `dialogs.register({ id, component })` installs a feature-owned dialog. A single
 `DialogHost` handles `dialog.open({ id, input? })` through the command hub. It

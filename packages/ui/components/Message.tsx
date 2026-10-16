@@ -35,6 +35,7 @@ function PartView(
 export default function Message(
   props: {
     message: OtkMessage;
+    metadata?: import("@otk/protocol").AssistantMessage | null;
     prefs: Preferences;
     directory?: string;
     permissions: PermissionRequest[];
@@ -44,7 +45,12 @@ export default function Message(
   },
 ): import("solid-js").Element {
   const assistant = () =>
-    props.message.role === "assistant" ? props.message : undefined;
+    props.metadata === null ? undefined : props.metadata ??
+      (props.message.role === "assistant" ? props.message : undefined);
+  const error = () =>
+    props.message.role === "assistant" && !props.message.interrupted
+      ? props.message.error?.message
+      : undefined;
   return (
     <article
       class={["otk-message", {
@@ -54,26 +60,28 @@ export default function Message(
       data-message={props.message.id}
       data-role={props.message.role}
     >
-      <header class="otk-message-role">
-        <span
-          class={["otk-role-and-time", {
-            "otk-time-always": props.prefs.timestamps,
-          }]}
-        >
-          <span class="otk-role-label" tabindex="0">
-            {props.message.role === "user" ? "You" : "Assistant"}
-          </span>
-          <time
-            class="otk-created-time"
-            datetime={new Date(props.message.time.created).toISOString()}
+      <Show when={props.message.role === "user"}>
+        <header class="otk-message-role">
+          <span
+            class={["otk-role-and-time", {
+              "otk-time-always": props.prefs.timestamps,
+            }]}
           >
-            {new Date(props.message.time.created).toLocaleString()}
-          </time>
-        </span>
-        <Show when={props.queued}>
-          <span class="otk-queued">Queued</span>
-        </Show>
-      </header>
+            <span class="otk-role-label" tabindex="0">
+              {props.message.role === "user" ? "You" : "Assistant"}
+            </span>
+            <time
+              class="otk-created-time"
+              datetime={new Date(props.message.time.created).toISOString()}
+            >
+              {new Date(props.message.time.created).toLocaleString()}
+            </time>
+          </span>
+          <Show when={props.queued}>
+            <span class="otk-queued">Queued</span>
+          </Show>
+        </header>
+      </Show>
       <For each={props.message.parts} keyed={(part) => part.id}>
         {(part) => (
           <PartView
@@ -92,14 +100,27 @@ export default function Message(
       <Show when={assistant()}>
         {(message) => (
           <>
-            <footer class="otk-message-footer">
+            <footer
+              class={["otk-message-footer", {
+                "otk-time-always": props.prefs.timestamps,
+              }]}
+              title={`Input ${message().tokens.input} · output ${message().tokens.output} · reasoning ${message().tokens.reasoning} · cache read ${message().tokens.cache.read} · cache write ${message().tokens.cache.write} · cost $${message().cost}`}
+            >
               <span class="otk-message-details">
                 <span
                   style={{ color: message().agentColor || "var(--otk-fg-2)" }}
                 >
                   ▣
                 </span>
-                <span>{message().agent}</span>
+                <span class="otk-role-label" tabindex="0">
+                  {message().agent}
+                </span>
+                <time
+                  class="otk-created-time"
+                  datetime={new Date(message().time.created).toISOString()}
+                >
+                  {new Date(message().time.created).toLocaleString()}
+                </time>
                 <span class="otk-id">
                   {message().model.provider}/{message().model.model}
                 </span>
@@ -138,11 +159,11 @@ export default function Message(
                 </time>
               </span>
             </footer>
-            <Show when={message().error && !message().interrupted}>
-              <p class="otk-error" role="alert">{message().error?.message}</p>
-            </Show>
           </>
         )}
+      </Show>
+      <Show when={error()}>
+        <p class="otk-error" role="alert">{error()}</p>
       </Show>
     </article>
   );

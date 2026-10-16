@@ -51,3 +51,22 @@
 .otk-scrollbar-hidden::-webkit-scrollbar {
   display: none;
 }
+.otk-composer {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.otk-composer[data-takeover=true] {
+  border-top: 1px solid var(--otk-border);
+}
+.otk-composer > :is(.otk-permission-dock, .otk-question-dock) {
+  border: 0;
+  background: var(--otk-surface);
+}
+.otk-retry-banner {
+  background: var(--otk-surface);
+  border-radius: var(--radius-card);
+  padding: 12px;
+  margin-bottom: 16px;
+  color: var(--otk-fg-2);
+}

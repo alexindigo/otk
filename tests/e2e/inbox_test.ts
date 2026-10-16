@@ -321,13 +321,15 @@ Deno.test("inbox adds empty and scanned projects, persists layout bounds and kee
     await openSession(browser, "otk");
     await browser.type("textarea[name=prompt]", "Keep this work");
     const target = `${row(f.entries[1].directory)} .otk-project-open`;
-    await browser.dialog(() => browser.click(target), false);
+    await browser.click(target);
+    await browser.poll("location.hash.endsWith('/atmosphera')");
+    await openSession(browser, "otk");
     assert(
       await browser.evaluate(
         "location.hash.endsWith('/otk') && document.querySelector('textarea[name=prompt]').value==='Keep this work'",
       ),
     );
-    await browser.dialog(() => browser.click(target), true);
+    await browser.click(target);
     await browser.poll(
       "location.hash.endsWith('/atmosphera') && !!document.querySelector('.otk-prompt') && document.querySelector('textarea[name=prompt]').value===''",
     );

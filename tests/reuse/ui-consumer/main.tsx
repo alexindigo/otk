@@ -98,7 +98,16 @@ function Consumer(): Element {
   registerGenericTool(isolated.tools);
   registerToolPart(ui.parts);
   registerUnknownPart(ui.parts);
-  ui.tools.register("external-probe", ExternalTool);
+  ui.tools.register(
+    "external-probe",
+    ExternalTool,
+    (call) => ({
+      icon: "◇",
+      verb: "Inspect",
+      target: "external target",
+      summary: call.summary,
+    }),
+  );
   ui.parts.register(
     "agent",
     (props) => <p data-external-part>Injected part: {props.part.id}</p>,

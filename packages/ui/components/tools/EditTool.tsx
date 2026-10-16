@@ -15,6 +15,15 @@ export function registerEditTool(tools: ToolRegistry): void {
         paneWidth={props.paneWidth}
       />
     ),
+    (call) => ({
+      icon: "±",
+      verb: "Edit",
+      target: call.path,
+      summary: call.files.map((file) =>
+        `+${file.additions} / −${file.deletions}`
+      ).join(", "),
+      expanded: true,
+    }),
   );
 }
 export default function EditTool(

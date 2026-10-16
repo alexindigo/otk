@@ -79,3 +79,15 @@
 .otk-output-time-group:has(.otk-last-output-time:focus-visible) .otk-last-output-date {
   visibility: visible;
 }
+.otk-user-message {
+  max-width: min(72ch, 760px);
+}
+.otk-message-details .otk-created-time {
+  display: none;
+}
+.otk-message-footer.otk-time-always .otk-created-time,
+.otk-message-details:has(.otk-role-label:hover) .otk-created-time,
+.otk-message-details:has(.otk-role-label:focus-visible) .otk-created-time {
+  display: inline;
+  visibility: visible;
+}

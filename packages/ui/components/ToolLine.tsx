@@ -11,6 +11,7 @@ export default function ToolLine(props: ToolProps): import("solid-js").Element {
     <ToolFrame
       call={props.call}
       waiting={props.waiting || props.call.awaitingPermission}
+      presentation={tools.presentation(props.call)}
     >
       <Show when={tools.resolve(props.call)} keyed>
         {(renderer) => {

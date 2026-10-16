@@ -36,6 +36,10 @@ Deno.test("R1 bash output is ten lines, expands to thirty, and displays differin
       true,
     );
     await browser.screenshot(join(f.oc.root, "r1-bash-collapsed.png"));
+    await browser.click("[data-tool=bash] .otk-tool-toggle");
+    await browser.poll(
+      "!document.querySelector('[data-tool=bash] .otk-tool-body').hidden",
+    );
     await browser.click("[data-tool=bash] .otk-output-toggle");
     await browser.poll(
       "document.querySelector('[data-tool=bash] .otk-tool-output').textContent.split('\\n').length===30",
@@ -167,6 +171,7 @@ Deno.test("R4 real read, directory listing, glob, grep, local fetch, skill and g
       "document.querySelector('[data-tool=external] .otk-tool-output')?.textContent==='first\\nsecond\\nthird'",
     );
     await browser.click(".otk-display-menu summary");
+    await browser.click("[data-tool=external] .otk-tool-toggle");
     await browser.click("[data-tool=external] .otk-output-toggle");
     await browser.poll(
       "document.querySelector('[data-tool=external] .otk-tool-output')?.textContent.includes('fifth')",

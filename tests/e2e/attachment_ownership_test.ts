@@ -84,10 +84,7 @@ Deno.test("P9 upload completions preserve edits, removals, concurrent work and r
     await browser.poll(
       "window.uploadReads.length===4 && !!document.querySelector('.otk-prompt-chip')",
     );
-    await browser.dialog(
-      () => browser.click(`[data-session="${other.id}"]`),
-      true,
-    );
+    await browser.click(`[data-session="${other.id}"]`);
     await browser.poll(
       `location.hash.endsWith('/${other.id}') && !document.querySelector('.otk-prompt-chip')`,
     );
@@ -101,6 +98,26 @@ Deno.test("P9 upload completions preserve edits, removals, concurrent work and r
         "document.querySelectorAll('.otk-prompt-chip').length",
       ),
       0,
+    );
+    await openSession(browser, session.id);
+    await browser.poll(
+      "document.querySelector('.otk-prompt-chip')?.textContent.includes('[File 1]') && !document.querySelector('.otk-prompt-chip').textContent.includes('reading…') && !document.querySelector('.otk-prompt button[type=submit]').disabled",
+    );
+    f.fake.queue({ chunks: ["Retained upload received."] });
+    await browser.click(".otk-prompt button[type=submit]");
+    await waitFor(
+      () =>
+        f.oc.request<{ parts: { filename?: string; url?: string }[] }[]>(
+          `/session/${session.id}/message`,
+        ),
+      (rows) =>
+        rows.some((row) =>
+          row.parts.some((part) =>
+            part.filename === "old-session.txt" &&
+            part.url ===
+              "data:text/plain;base64," + btoa("bytes:old-session.txt")
+          )
+        ),
     );
   } finally {
     await f.stop();

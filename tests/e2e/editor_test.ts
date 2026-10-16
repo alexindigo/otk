@@ -118,7 +118,7 @@ Deno.test("editor changes and attachment completion retain one owner-current dra
     await browser.poll(
       "editorReads.length===1 && document.querySelector('.otk-prompt-chip')?.textContent.includes('reading…')",
     );
-    await browser.click(".otk-prompt-actions > button:first-child");
+    await browser.click("[aria-label='Edit prompt']");
     await browser.poll("!!document.querySelector('.otk-editor[open]')");
     await browser.fill(
       "textarea[name=editor]",

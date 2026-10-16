@@ -234,7 +234,10 @@ Deno.test("Sessions groups the selected project's parent-child tree by task, fil
       "document.querySelector('[data-tab=preview]')?.closest('.otk-tab').dataset.preview==='true' && document.querySelector('.otk-messages').textContent.includes('Transcript for preview')",
     );
     await b.type("textarea[name=prompt]", "Keep this draft");
-    await b.dialog(() => b.click("[data-session=blocked]"), false);
+    await b.click("[data-session=blocked]");
+    await b.poll("location.hash.endsWith('/blocked')");
+    await b.click("[data-session=preview]");
+    await b.poll("location.hash.endsWith('/preview')");
     assertEquals(
       await b.evaluate("document.querySelector('textarea[name=prompt]').value"),
       "Keep this draft",

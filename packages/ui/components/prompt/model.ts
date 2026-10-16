@@ -1,29 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PromptPart } from "@otk/protocol";
-export interface Chip {
-  id: string;
-  label: string;
-  start: number;
-  end: number;
-  part: PromptPart;
-  pending?: boolean;
-  error?: string;
-}
-export interface Draft {
-  input: string;
-  chips: Chip[];
-  mode: "normal" | "shell";
-  agent?: string;
-  editor?: { text: string; chipID?: string };
-}
+import type { Draft } from "@otk/client";
+export {
+  type Chip,
+  type Draft,
+  type DraftChange,
+  emptyDraft,
+} from "@otk/client";
 // The owner applies transforms synchronously to its latest proposed draft and
 // returns that draft, even when rendered inputs still show a committed snapshot.
-export type DraftChange = Draft | ((current: Draft) => Draft);
-export const emptyDraft = (): Draft => ({
-  input: "",
-  chips: [],
-  mode: "normal",
-});
 export function editDraft(draft: Draft, input: string): Draft {
   let start = 0, oldEnd = draft.input.length, end = input.length;
   while (start < oldEnd && start < end && draft.input[start] === input[start]) {

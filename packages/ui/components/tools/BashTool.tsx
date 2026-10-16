@@ -7,6 +7,12 @@ export function registerBashTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "bash",
     (props) => <BashTool call={props.call} directory={props.directory} />,
+    (call) => ({
+      icon: "›",
+      verb: "Run",
+      target: call.command,
+      summary: call.description,
+    }),
   );
 }
 export default function BashTool(

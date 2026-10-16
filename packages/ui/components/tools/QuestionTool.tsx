@@ -7,6 +7,11 @@ export function registerQuestionTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "question",
     (props) => <QuestionTool call={props.call} />,
+    (call) => ({
+      icon: "?",
+      verb: "Ask",
+      summary: call.questions.map((q) => q.text).join(" · "),
+    }),
   );
 }
 export default function QuestionTool(props: { call: QuestionCall }) {

@@ -26,3 +26,24 @@
 .otk-prompt-actions > span {
   font-size: 12px;
 }
+.otk-prompt-actions {
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 8px;
+}
+.otk-prompt-context {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  color: var(--otk-fg-2);
+  font-size: 12px;
+  margin-right: auto;
+}
+.otk-prompt-help {
+  flex-basis: 100%;
+  order: 1;
+}
+.otk-prompt > textarea {
+  background: var(--otk-surface);
+}

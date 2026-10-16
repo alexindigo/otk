@@ -46,8 +46,17 @@ Legacy welcome frames retain their supported RPC families; explicit capability
 lists are authoritative. Connection metadata remains mounted across reconnects,
 while `supports` reports live availability. Session generations, aborted
 requests, buffered ops, error and stream revisions and finished clocks retain
-their existing semantics. Dirty prompt and permission/question drafts belong to
-their UI owners.
+their existing semantics. `createDrafts(factory?)` owns browser-lifetime,
+server/session-keyed unsent `Draft` values. `writer(key)` binds updates to one
+session and returns invocation-current values even before a framework paints.
+Late uploads and sends update only their originating draft; a newer edit is
+never cleared by completion of an older submission. Permission/question input
+remains owned by its UI feature and protected by navigation confirmation.
+
+`replyMetadata(messages)` combines contiguous backend steps for the same reply
+into one final metadata record, summing only reported tokens/costs and retaining
+the reply's start, final clock and interrupted state. No session content is
+stored outside the currently loaded transcript.
 
 ## Plain Deno example
 

@@ -10,7 +10,7 @@ import { FakeLlm } from "../support/fake-llm.ts";
 import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 
-Deno.test("web late creation reply asks before discarding a draft typed while RPC was pending", async () => {
+Deno.test("web late creation reply retains a draft typed while RPC was pending", async () => {
   const f = await browserFixture(), proxy = new FreezeProxy(f.oc.port);
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -29,19 +29,11 @@ Deno.test("web late creation reply asks before discarding a draft typed while RP
       (frames) => frames.some(({ frame }) => frame.method === "session.create"),
     );
     await browser.type("textarea[name=prompt]", "Work typed during creation");
-    const before = browser.events.filter((e) =>
-      e.method === "Page.javascriptDialogOpening"
-    ).length;
     proxy.thaw();
-    await waitFor(
-      () =>
-        browser.events.filter((e) =>
-          e.method === "Page.javascriptDialogOpening"
-        ).length,
-      (n) => n > before,
-      10_000,
+    await browser.poll(
+      `!location.hash.endsWith('/${session.id}') && document.querySelector('textarea[name=prompt]').value===''`,
     );
-    await browser.send("Page.handleJavaScriptDialog", { accept: false });
+    await openSession(browser, session.id);
     await browser.poll(
       `location.hash.endsWith('/${session.id}') && document.querySelector('textarea[name=prompt]').value === 'Work typed during creation'`,
     );

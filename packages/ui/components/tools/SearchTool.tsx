@@ -5,6 +5,14 @@ export function registerSearchTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "search",
     (props) => <SearchTool call={props.call} />,
+    (call) => ({
+      icon: "⌕",
+      verb: call.mode === "list" ? "List" : "Search",
+      target: call.pattern || call.path,
+      summary: `${call.matches} ${
+        call.mode === "list" ? "entries" : "matches"
+      }`,
+    }),
   );
 }
 export default function SearchTool(props: { call: SearchCall }) {

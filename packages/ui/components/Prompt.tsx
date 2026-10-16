@@ -21,13 +21,16 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     [armed, setArmed] = createSignal(false),
     [caret, setCaret] = createSignal(0);
   let active = true, input!: HTMLTextAreaElement;
+  // Capture the session-bound writer: a late send/upload must never edit a
+  // replacement session, and must still finish updating its retained draft.
+  const write = props.onChange;
   let deadline = 0, timer: ReturnType<typeof setTimeout> | undefined;
   const ports = useCommandPorts();
   const keyboard = ports.keyboard ??
     createKeyboard(ports.commands, (error) => ctx.fail(error));
   const releases: (() => void)[] = [];
   const change = (update: DraftChange, caret?: number) => {
-    const draft = props.onChange(update);
+    const draft = write(update);
     if (caret !== undefined && active) {
       input.value = draft.input;
       input.setSelectionRange(caret, caret);
@@ -46,7 +49,9 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     active: () => active,
     selection: () => ({ start: input.selectionStart, end: input.selectionEnd }),
     focus: () => input.focus(),
-    focused: () => document.activeElement === input && !props.value.editor,
+    focused: () =>
+      !props.suspended && document.activeElement === input &&
+      !props.value.editor,
     fail: (error) => {
       if (active) setError((error as Error).message);
     },
@@ -57,17 +62,18 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   const features = useUiRegistries().prompt.create(ctx);
   const completion = createCompletion(ctx, features);
   const canSubmit = () =>
-    props.connected &&
+    !props.suspended && props.connected &&
     (features.map((feature) => feature.enabled?.()).find((value) =>
       value !== undefined
     ) ?? ctx.supports("prompt"));
   const submit = async () => {
+    if (!canSubmit()) return;
     const draft = change((current) => current);
     for (const feature of features) {
       if (await feature.beforeSubmit?.(draft)) return;
     }
     if (
-      !draft.input.trim() || !canSubmit() || pending() ||
+      !active || !draft.input.trim() || !canSubmit() || pending() ||
       draft.chips.some((chip) => chip.pending || chip.error)
     ) return;
     setPending(true);
@@ -82,12 +88,10 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         }
       }
       if (!handled) await send({ parts, mode: draft.mode, agent: draft.agent });
-      if (active) {
-        for (const feature of features) feature.submitted?.();
-        change((current) =>
-          current === draft ? { ...emptyDraft(), agent: draft.agent } : current
-        );
-      }
+      if (active) { for (const feature of features) feature.submitted?.(); }
+      change((current) =>
+        current === draft ? { ...emptyDraft(), agent: draft.agent } : current
+      );
     } catch (error) {
       if (active && change((current) => current) === draft) ctx.fail(error);
     } finally {
@@ -114,6 +118,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     title: "Send prompt",
     category: "Prompt",
     hidden: true,
+    enabled: canSubmit,
     run: submit,
   });
   ownedCommand(ports, {
@@ -135,7 +140,8 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     title: "Interrupt session",
     category: "Session",
     enabled: () =>
-      props.connected && ctx.supports("prompt") && props.busy !== false,
+      !props.suspended && props.connected && ctx.supports("prompt") &&
+      props.busy !== false,
     run: async (_context, args?: { confirm?: boolean }) => {
       if (!args?.confirm) return await props.onAbort();
       if (Date.now() < deadline) {
@@ -256,8 +262,22 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         }}
       />
       <div class="otk-prompt-actions">
+        <div class="otk-prompt-context" aria-label="Next message settings">
+          <span>
+            {props.value.agent ?? props.context?.agent ??
+              "Backend default agent"}
+          </span>
+          <span class="otk-id">
+            {props.context?.model
+              ? `${props.context.model.provider}/${props.context.model.model}`
+              : "Backend default model"}
+          </span>
+          <Show when={props.context?.variant}>
+            <span>{props.context?.variant}</span>
+          </Show>
+        </div>
         <For each={features}>{(feature) => feature.actions?.()}</For>
-        <span class="otk-muted">
+        <span class="otk-muted otk-prompt-help">
           {armed()
             ? "esc again to interrupt"
             : "Enter to send · Shift+Enter for newline · Esc twice to interrupt"}

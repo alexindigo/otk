@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Element } from "solid-js";
 import type { CapabilityName } from "@otk/protocol";
+import type { SessionPorts } from "./session.tsx";
 
 export interface DialogProps<T = unknown> {
   input: T;
@@ -35,6 +36,7 @@ export interface TakeoverDefinition {
   id: string;
   capability: CapabilityName;
   component(): Element;
+  active?(session: SessionPorts): boolean;
 }
 /** Open collections; consumers select features, machinery knows no implementations. */
 export class SurfaceRegistry<

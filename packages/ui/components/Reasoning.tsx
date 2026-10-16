@@ -33,10 +33,9 @@ export default function Reasoning(
         onClick={() => void toggle()}
       >
         <Show when={props.part.time.end === undefined}>
-          <StatusLight state="working" small />
+          <StatusLight state="working" small activity="spinner" />
         </Show>
-        {props.part.time.end === undefined ? "Thinking" : "Thought"}
-        {title() ? `: ${title()}` : ""}
+        {props.part.time.end === undefined ? "Thinking…" : "Thought"}
         {props.part.time.end !== undefined
           ? ` · ${
             Math.max(0, (props.part.time.end - props.part.time.start) / 1000)
@@ -46,6 +45,9 @@ export default function Reasoning(
       </button>
       <Show when={open()}>
         <div class="otk-reasoning-body">
+          <Show when={title()}>
+            <strong>{title()}</strong>
+          </Show>
           <Blocks
             blocks={heading() ? props.part.blocks.slice(1) : props.part.blocks}
           />

@@ -91,3 +91,19 @@
   color: var(--otk-fg);
   font: 600 12px/1 var(--font-ui);
 }
+.otk-status-light[data-activity=spinner] .otk-lamp-glow,
+.otk-status-light[data-activity=spinner] .otk-lamp-body::after {
+  display: none;
+}
+.otk-status-light[data-activity=spinner] .otk-lamp-body {
+  background: none;
+  box-shadow: none;
+  border: 1px solid var(--otk-fg-2);
+  border-top-color: transparent;
+  animation: otk-activity-spin 1.1s linear infinite;
+}
+@keyframes otk-activity-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

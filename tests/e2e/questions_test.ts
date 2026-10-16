@@ -46,8 +46,8 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
     await browser.screenshot(join(f.oc.root, "p1-question-tabs.png"));
     assertEquals(
       await browser.evaluate("document.activeElement?.getAttribute('name')"),
-      "prompt",
-      "Question arrival stole prompt focus",
+      null,
+      "Question arrival must not put focus into an answer action",
     );
     await browser.send("Input.dispatchKeyEvent", {
       type: "keyDown",
@@ -65,9 +65,8 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
       nativeVirtualKeyCode: 49,
     });
     await browser.poll(
-      "document.querySelector('textarea[name=prompt]').value==='1' && document.querySelector('.otk-question-dock p').textContent.includes('Choose the output')",
+      "document.querySelector('textarea[name=prompt]').value==='' && document.querySelector('.otk-question-dock p').textContent.includes('Choose the output') && !!document.querySelector('.otk-prompt').closest('[hidden]')",
     );
-    await browser.fill("textarea[name=prompt]", "");
     await browser.click(".otk-question-tabs [role=tab]:first-child");
     await browser.key("1");
     await browser.poll(
@@ -98,7 +97,7 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
         helpRight: number;
         dockRight: number;
       }
-    >("(()=>{const d=document.querySelector('.otk-question-dock'),buttons=[...d.querySelectorAll('button')].filter(el=>el.textContent.trim()==='Confirm answers'||el.textContent.trim()==='Reject question'),a=buttons[0].getBoundingClientRect(),b=buttons[1].getBoundingClientRect(),h=d.querySelector('span.otk-muted').getBoundingClientRect();return {buttonGap:b.left-a.right,helpGap:h.left-b.right,helpTop:h.top,buttonBottom:b.bottom,helpRight:h.right,dockRight:d.getBoundingClientRect().right}})()");
+    >("(()=>{const d=document.querySelector('.otk-question-dock'),buttons=[...d.querySelectorAll('button')].filter(el=>el.textContent.trim()==='Answer'||el.textContent.trim()==='Reject question'),a=buttons[0].getBoundingClientRect(),b=buttons[1].getBoundingClientRect(),h=d.querySelector('span.otk-muted').getBoundingClientRect();return {buttonGap:b.left-a.right,helpGap:h.left-b.right,helpTop:h.top,buttonBottom:b.bottom,helpRight:h.right,dockRight:d.getBoundingClientRect().right}})()");
     assert(
       geometry.buttonGap >= 4,
       "Question actions must have structural spacing",

@@ -48,3 +48,41 @@
   font-size: 12px;
   padding: 4px 8px;
 }
+.otk-tool-line {
+  border: 0;
+  padding: 0;
+}
+.otk-tool-state {
+  margin: 0;
+}
+.otk-tool-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  padding: 4px 0;
+  color: inherit;
+  text-align: left;
+}
+.otk-tool-target,
+.otk-tool-brief {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  min-width: 0;
+}
+.otk-tool-target {
+  color: var(--otk-fg);
+}
+.otk-tool-brief {
+  flex: 1;
+}
+.otk-tool-body {
+  padding: 8px 12px;
+  border-left: 1px solid var(--otk-border);
+}
+.otk-tool-line[data-tool-status=denied] .otk-tool-toggle {
+  text-decoration: line-through;
+}

@@ -22,6 +22,7 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
         title: "Edit prompt",
         category: "Prompt",
         slash: ["editor"],
+        enabled: () => !ctx.props.suspended,
         run: () => {
           ctx.change((current) => ({
             ...current,
@@ -96,6 +97,7 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
         actions: () => (
           <button
             type="button"
+            aria-label="Edit prompt"
             onClick={() => void open().catch(ctx.fail)}
           >
             Edit prompt

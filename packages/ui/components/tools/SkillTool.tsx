@@ -5,6 +5,7 @@ export function registerSkillTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "skill",
     (props) => <SkillTool call={props.call} />,
+    (call) => ({ icon: "◇", verb: "Load skill", target: call.name }),
   );
 }
 export default function SkillTool(props: { call: SkillCall }) {

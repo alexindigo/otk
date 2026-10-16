@@ -5,6 +5,12 @@ export function registerFetchTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "fetch",
     (props) => <FetchTool call={props.call} />,
+    (call) => ({
+      icon: "↓",
+      verb: "Fetch",
+      target: call.url,
+      summary: call.format,
+    }),
   );
 }
 export default function FetchTool(props: { call: FetchCall }) {

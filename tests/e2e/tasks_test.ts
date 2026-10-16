@@ -83,11 +83,7 @@ Deno.test("R5 task progress, real child navigation, parent/history and sibling c
     await browser.poll(
       "document.querySelector('textarea[name=prompt]').value==='Unsent parent work' && !document.querySelector('.otk-prompt button[type=submit]').disabled",
     );
-    await browser.dialog(() => browser.click(".otk-task-card"), false);
-    await browser.poll(
-      `location.hash==='#/local/${root.id}' && document.querySelector('textarea[name=prompt]').value==='Unsent parent work'`,
-    );
-    await browser.dialog(() => browser.click(".otk-task-card"), true);
+    await browser.click(".otk-task-card");
     await browser.poll(
       `location.hash==='#/local/${root.id}/${first.id}' && document.querySelector('.otk-subagent-bar')?.textContent.includes('First inspection') && !document.querySelector('.otk-prompt')`,
     );
@@ -101,7 +97,7 @@ Deno.test("R5 task progress, real child navigation, parent/history and sibling c
     );
     await browser.click(".otk-subagent-bar button:first-child");
     await browser.poll(
-      `location.hash==='#/local/${root.id}' && !!document.querySelector('.otk-prompt')`,
+      `location.hash==='#/local/${root.id}' && document.querySelector('textarea[name=prompt]').value==='Unsent parent work'`,
     );
     await browser.evaluate("history.back()");
     await browser.poll(

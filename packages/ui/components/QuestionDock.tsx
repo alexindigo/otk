@@ -22,6 +22,7 @@ export function registerQuestionTakeover(
     id: "questions",
     capability: "questions",
     component: QuestionTakeover,
+    active: (session) => session.questions().length > 0,
   });
 }
 function QuestionTakeover() {
@@ -337,16 +338,17 @@ function Request(
         </dl>
       </Show>
       <div class="otk-question-actions">
-        <Show when={confirm()}>
-          <button
-            type="button"
-            disabled={pending()}
-            onClick={() => void answerCommand(false)}
-            class="otk-primary"
-          >
-            Confirm answers
-          </button>
-        </Show>
+        <button
+          type="button"
+          disabled={pending()}
+          onClick={() =>
+            void (confirm()
+              ? answerCommand(false)
+              : tabCommand(props.request.questions.length))}
+          class="otk-primary"
+        >
+          Answer
+        </button>
         <button
           type="button"
           disabled={pending()}

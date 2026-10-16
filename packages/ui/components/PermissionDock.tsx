@@ -25,6 +25,12 @@ export function registerPermissionTakeover(
     id: "permissions",
     capability: "permissions",
     component: PermissionTakeover,
+    active: (session) =>
+      !!oldestPermission(
+        session.permissions(),
+        session.sessionID(),
+        session.entry,
+      ),
   });
 }
 function PermissionTakeover() {

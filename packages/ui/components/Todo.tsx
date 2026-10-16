@@ -5,6 +5,13 @@ export function registerTodoTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "todo",
     (props) => <Todo items={props.call.items} />,
+    (call) => ({
+      icon: "☑",
+      verb: "Update tasks",
+      summary: `${
+        call.items.filter((item) => item.status === "completed").length
+      }/${call.items.length} completed`,
+    }),
   );
 }
 import { For } from "solid-js";

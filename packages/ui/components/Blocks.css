@@ -114,3 +114,6 @@
 .otk-unconcealed .otk-text h6::before {
   content: "###### ";
 }
+.otk-message .otk-text > :is(p, h1, h2, h3, h4, h5, h6, ul, ol, blockquote, hr) {
+  max-width: min(72ch, 760px);
+}

@@ -5,6 +5,12 @@ export function registerWebSearchTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "websearch",
     (props) => <WebSearchTool call={props.call} />,
+    (call) => ({
+      icon: "⌕",
+      verb: "Search web",
+      target: call.query,
+      summary: call.provider,
+    }),
   );
 }
 export default function WebSearchTool(props: { call: WebSearchCall }) {

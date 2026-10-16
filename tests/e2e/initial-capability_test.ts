@@ -107,6 +107,7 @@ Deno.test("initial direct route and reload render an already pending native perm
 
 Deno.test("initial advertised session capabilities activate question and prompt consumers after welcome and reload", async () => {
   const root = await fixture();
+  const rejected: string[] = [];
   const { app, url } = await coreBackendFixture(root, {
     questions: {
       listQuestions: () =>
@@ -120,7 +121,15 @@ Deno.test("initial advertised session capabilities activate question and prompt 
             custom: true,
           }],
         }]),
-      answerQuestion: () => Promise.resolve(),
+      answerQuestion: (requestID): Promise<void> => {
+        rejected.push(requestID);
+        app.connections.content("core", {
+          op: "question.remove",
+          requestID,
+          sessionID: "core",
+        });
+        return Promise.resolve();
+      },
     },
     prompt: {
       prompt: () => Promise.resolve(),
@@ -146,8 +155,21 @@ Deno.test("initial advertised session capabilities activate question and prompt 
         "document.querySelector('.otk-messages')?.textContent.includes('Core transcript')",
       );
       await browser.poll(
-        "document.querySelector('.otk-question-dock')?.getBoundingClientRect().height > 0 && !document.querySelector('.otk-prompt button[type=submit]').disabled",
+        "document.querySelector('.otk-question-dock')?.getBoundingClientRect().height > 0 && !!document.querySelector('.otk-prompt').closest('[hidden]') && document.querySelector('.otk-prompt button[type=submit]').disabled",
       );
+      assertEquals(
+        await browser.evaluate(
+          "document.querySelector('textarea[name=prompt]').value",
+        ),
+        "Keep initial draft",
+      );
+      assertEquals(await browser.evaluate("location.hash"), "#/local/core");
+      await browser.click(".otk-question-actions button:not(.otk-primary)");
+      await browser.poll(
+        "!document.querySelector('.otk-question-dock') && !document.querySelector('.otk-prompt').closest('[hidden]') && !document.querySelector('.otk-prompt button[type=submit]').disabled",
+      );
+      assertEquals(rejected.length, phase === "direct" ? 1 : 2);
+      assertEquals(rejected.at(-1), "initial-question");
       assertEquals(
         await browser.evaluate(
           "document.querySelector('textarea[name=prompt]').value",

@@ -18,6 +18,7 @@ import {
   type ClientTabs,
   CommandHub,
   createCurrentClient,
+  createDrafts,
   createInbox,
   createNavigation,
   createTabs,
@@ -29,6 +30,7 @@ import {
   loadHistory,
   LOCAL_SIDECAR,
   projectHash,
+  projectName,
   projectRoute,
   type ProjectSelection,
   route,
@@ -47,7 +49,6 @@ import { solidState } from "../state/binding.ts";
 import { createKeyboard } from "../keyboard/dispatcher.ts";
 import { createToggles } from "../components/Toggles.ts";
 import DisplayMenu from "../components/DisplayMenu.tsx";
-import { emptyDraft } from "../components/prompt/model.ts";
 import Login from "../components/Login.tsx";
 import NotificationSettings from "../components/NotificationSettings.tsx";
 import { paintVisualPreferences } from "../features/visual.ts";
@@ -118,6 +119,12 @@ export default function Shell(
   const entry = (sidecar: string, id: string) =>
     index.state.entries[sessionKey(sidecar, id)];
   const session = createSession((id) => sidecars.connection(id), entry);
+  const drafts = createDrafts(solidState);
+  const draftKey = () => {
+    const selected = session.state.selection;
+    return selected ? sessionKey(selected.sidecarId, selected.sessionID) : "";
+  };
+  const draft = () => drafts.get(draftKey());
   const current = createCurrentClient(
     () => session.state.selection,
     (id) => sidecars.connection(id),
@@ -126,7 +133,6 @@ export default function Shell(
     sidecars.connection(LOCAL_SIDECAR).rpc.call("prefs.set", { key, value })
   );
   const [settings, setSettings] = createSignal(false),
-    [draft, setDraft] = createSignal(emptyDraft()),
     [error, setError] = createSignal("");
   const [dialog, setDialog] = createSignal("");
   const [project, setProject] = createSignal<ProjectSelection>();
@@ -296,10 +302,17 @@ export default function Shell(
   const discardDraft = () => {
     // Solid batches rendered reads during input events; guards use the same
     // owner-current update port as Prompt, not the previous painted value.
-    const current = setDraft((value) => value);
-    return (!current.input && !current.chips.length && !current.editor &&
-      ![...dirty.values()].some(Boolean)) ||
-      globalThis.confirm("Discard unsent text before switching sessions?");
+    const current = drafts.writer(draftKey())((value) => value);
+    if (!current.editor && ![...dirty.values()].some(Boolean)) return true;
+    if (
+      !globalThis.confirm(
+        "Discard unsaved editor or attention input before switching sessions?",
+      )
+    ) return false;
+    if (current.editor) {
+      drafts.writer(draftKey())((value) => ({ ...value, editor: undefined }));
+    }
+    return true;
   };
   const applyRoute = (hash: string) => {
     const target = route(hash),
@@ -330,7 +343,6 @@ export default function Shell(
       }
     }
     if (changes) {
-      setDraft(emptyDraft());
       dirty.clear();
     }
   };
@@ -612,6 +624,21 @@ export default function Shell(
       ).map((p) => ({ ...p, sidecarId: s.id, label: s.label }))
     )
   );
+  const originalTitle = document.title;
+  createEffect(
+    () => [info()?.title, project()] as const,
+    ([title, selected]) => {
+      document.title = [
+        title,
+        selected && projectName(selected.directory),
+        "OTK",
+      ]
+        .filter(Boolean).join(" — ");
+    },
+  );
+  onCleanup(() => {
+    document.title = originalTitle;
+  });
   onSettled(() => {
     const stopNotifications = notifications.start(),
       stopKeyboard = keyboard.start();
@@ -781,6 +808,12 @@ export default function Shell(
                                 session.state.selection.sidecarId,
                                 session.state.selection.sessionID,
                               )?.status !== "idle"}
+                          retryState={session.state.selection
+                            ? entry(
+                              session.state.selection.sidecarId,
+                              session.state.selection.sessionID,
+                            )?.retry
+                            : undefined}
                           child={!!session.state.selection?.rootID ||
                             !!info()?.parentID}
                           siblings={session.state.siblings}
@@ -810,7 +843,7 @@ export default function Shell(
                           connected={selectedSidecar()?.status === "connected"}
                           onOlder={() => commands.run("session.older")}
                           onRetry={() => commands.run("session.retry")}
-                          onDraft={(value) => setDraft(value)}
+                          onDraft={drafts.writer(draftKey())}
                           onPrompt={async (parts, _mode, agent) => {
                             const { selection: target, rpc } = current
                               .context();

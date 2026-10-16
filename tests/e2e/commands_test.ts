@@ -94,15 +94,18 @@ Deno.test("P5 project, MCP and skill slash commands run with multiline arguments
     await browser.poll("!document.querySelector('dialog[open]')");
     const before = await f.oc.request<{ id: string }[]>("/session");
     await browser.fill("textarea[name=prompt]", "/new unsent text");
-    await browser.dialog(() => browser.key("Enter"), false);
+    await browser.key("Enter");
+    await browser.poll(
+      `!location.hash.endsWith('/${session.id}') && document.querySelector('textarea[name=prompt]').value===''`,
+    );
+    await openSession(browser, session.id);
     await browser.poll(
       `location.hash.endsWith('/${session.id}') && document.querySelector('textarea[name=prompt]').value==='unsent text'`,
     );
     assertEquals(
-      (await f.oc.request<{ id: string }[]>("/session")).map((row) => row.id)
-        .sort(),
-      before.map((row) => row.id).sort(),
-      "Cancelled /new created an empty session",
+      (await f.oc.request<{ id: string }[]>("/session")).length,
+      before.length + 1,
+      "The /new command creates exactly one session while keeping the original draft",
     );
     await browser.fill("textarea[name=prompt]", "/new");
     await browser.poll(

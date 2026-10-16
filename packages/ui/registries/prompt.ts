@@ -12,6 +12,12 @@ export interface PromptProps {
   value: Draft;
   connected: boolean;
   busy?: boolean;
+  suspended?: boolean;
+  context?: {
+    agent?: string;
+    model?: import("@otk/protocol").ModelRef;
+    variant?: string;
+  };
   onChange(value: DraftChange): Draft;
   onSubmit(
     parts: PromptPart[],

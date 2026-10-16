@@ -8,6 +8,13 @@ export function registerTaskTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "task",
     (props) => <TaskTool call={props.call} onOpen={props.onOpenChild} />,
+    (call) => ({
+      icon: "↳",
+      verb: "Delegate",
+      target: call.agent,
+      summary: call.description,
+      expanded: true,
+    }),
   );
 }
 export default function TaskTool(

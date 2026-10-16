@@ -6,6 +6,15 @@ export function registerReadTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "read",
     (props) => <ReadTool call={props.call} />,
+    (call) => ({
+      icon: "▤",
+      verb: "Read",
+      target: call.path,
+      summary: [
+        call.offset !== undefined ? `offset ${call.offset}` : "",
+        call.limit !== undefined ? `limit ${call.limit}` : "",
+      ].filter(Boolean).join(" · "),
+    }),
   );
 }
 export default function ReadTool(props: { call: ReadCall }) {
