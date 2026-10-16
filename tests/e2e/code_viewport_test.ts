@@ -110,7 +110,7 @@ Deno.test("actual busy rendering prepares one worker and idle plaintext releases
     });
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await openSession(browser, session.id);
-    f.fake.queue({
+    const reply = f.fake.queueHeld({
       chunks: [
         "Plain activity ",
         "continues ",
@@ -140,6 +140,7 @@ Deno.test("actual busy rendering prepares one worker and idle plaintext releases
       ),
       0,
     );
+    reply.release();
     await browser.poll(
       `document.querySelector('[data-session="${session.id}"]').dataset.status==='idle' && document.querySelector('.otk-messages').textContent.includes('Plain activity continues without code and finishes.')`,
     );

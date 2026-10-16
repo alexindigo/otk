@@ -31,7 +31,7 @@ Deno.test("appearance settings persist, broadcast and paint real session status 
       ),
       '"IBM Plex Sans", sans-serif',
     );
-    f.fake.queue({
+    const reply = f.fake.queueHeld({
       chunks: ["Working with the visual system.", " Finished."],
       delay: 900,
     });
@@ -40,6 +40,7 @@ Deno.test("appearance settings persist, broadcast and paint real session status 
     await browser.poll(
       `document.querySelector('${light}')?.dataset.state === 'working'`,
     );
+    reply.release();
     await browser.poll(
       `document.querySelector('${light}')?.dataset.state === 'idle'`,
     );

@@ -95,7 +95,7 @@ Deno.test("D3 Esc closes palette before permission confirmation and real double 
     await browser.poll(
       `document.querySelector('[data-session="${seed.id}"]').dataset.status==='idle'`,
     );
-    f.fake.queue({ chunks: Array(30).fill("stream "), delay: 500 });
+    f.fake.queueHeld({ chunks: ["stream "] });
     await browser.fill("textarea[name=prompt]", "Interrupt this long turn");
     await browser.key("Enter");
     await browser.poll(

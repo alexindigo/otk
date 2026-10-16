@@ -99,6 +99,18 @@ export async function waitForCollapsedPanels(browser: Cdp): Promise<void> {
     "document.querySelector('.otk-project-inbox')?.dataset.collapsed==='true' && document.querySelector('.otk-right-panel')?.hidden===true",
   );
 }
+/** A terminal part is not a terminal reply: content and idle must both arrive. */
+export async function waitForReply(
+  browser: Cdp,
+  sessionID: string,
+  text: string,
+): Promise<void> {
+  await browser.poll(
+    `document.querySelector('[data-session="${sessionID}"]')?.dataset.status==='idle' && [...document.querySelectorAll('[data-role=assistant] .otk-text')].some(el=>el.textContent===${
+      JSON.stringify(text)
+    }) && [...document.querySelectorAll('.otk-message-footer')].every(el=>!el.textContent.includes('streaming'))`,
+  );
+}
 export function sentFrames(
   browser: Cdp,
 ): { time: number; frame: Record<string, unknown> }[] {

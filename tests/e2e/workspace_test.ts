@@ -198,11 +198,11 @@ Deno.test("E5 Esc confirmation then abort yields interrupted footer and idle ses
     });
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await openSession(browser, session.id);
-    f.fake.queue({ chunks: Array(100).fill("continuing "), delay: 100 });
+    f.fake.queueHeld({ chunks: ["continuing "] });
     await browser.type("textarea[name=prompt]", "Continue slowly");
     await browser.key("Enter");
     await browser.poll(
-      "!!document.querySelector('[data-role=assistant] .otk-text')",
+      `!!document.querySelector('[data-role=assistant] .otk-text') && document.querySelector('[data-session="${session.id}"]')?.dataset.status==='busy'`,
     );
     await browser.key("Escape");
     await browser.poll(
@@ -605,7 +605,7 @@ Deno.test("web history paging preserves viewport and autoscroll follows only the
     const before = await browser.evaluate<number>(
       "document.querySelector('.otk-messages').scrollTop",
     );
-    f.fake.queue({
+    const olderReply = f.fake.queueHeld({
       chunks: Array(30).fill("While you read older messages. "),
       delay: 50,
     });
@@ -614,6 +614,7 @@ Deno.test("web history paging preserves viewport and autoscroll follows only the
     await browser.poll(
       `document.querySelector('[data-session="${session.id}"]').dataset.status === 'busy'`,
     );
+    olderReply.release();
     await browser.poll(
       `document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle' && !!document.querySelector('[data-role=assistant]')`,
     );
@@ -634,12 +635,13 @@ Deno.test("web history paging preserves viewport and autoscroll follows only the
     await browser.poll(
       "(()=>{const el=document.querySelector('.otk-messages');return el.scrollHeight-el.clientHeight-el.scrollTop < 2})()",
     );
-    f.fake.queue(streamScript());
+    const followingReply = f.fake.queueHeld(streamScript());
     await browser.type("textarea[name=prompt]", "Follow the bottom");
     await browser.key("Enter");
     await browser.poll(
       `document.querySelector('[data-session="${session.id}"]').dataset.status === 'busy'`,
     );
+    followingReply.release();
     await browser.poll(
       `document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle' && !!document.querySelector('.otk-text pre')`,
     );

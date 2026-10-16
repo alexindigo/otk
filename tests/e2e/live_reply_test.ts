@@ -28,7 +28,7 @@ Deno.test("reload, switching and an initially unwatched reply retain all current
       { length: 32 },
       (_, i) => `chunk${String(i).padStart(2, "0")} `,
     );
-    f.fake.queue({ chunks, delay: 700 });
+    const reply = f.fake.queueHeld({ chunks, delay: 700 });
     await browser.type("textarea[name=prompt]", "Keep this live reply");
     await browser.key("Enter");
     await browser.poll(
@@ -59,6 +59,7 @@ Deno.test("reload, switching and an initially unwatched reply retain all current
         JSON.stringify(prefix)
       })`,
     );
+    reply.release();
     await browser.poll(
       `document.querySelector('[data-session="${a.id}"]').dataset.status==='idle' && document.querySelector('[data-role=assistant] .otk-text')?.textContent.trim()===${
         JSON.stringify(chunks.join("").trim())

@@ -7,7 +7,8 @@ export interface Script {
 }
 export class FakeLlm {
   readonly requests: Record<string, unknown>[] = [];
-  #queue: Script[] = [];
+  #queue: (Script & { finish?: Promise<void> })[] = [];
+  #holds = new Set<() => void>();
   readonly server: Deno.HttpServer;
   readonly port: number;
   constructor() {
@@ -30,9 +31,10 @@ export class FakeLlm {
           message.role === "user" && typeof message.content === "string" &&
           message.content.startsWith("Generate a title for this conversation:")
         );
-        const script = body.stream && !titleRequest
-          ? this.#queue.shift() ?? { chunks: ["Completed."] }
-          : { chunks: ["OTK session"] };
+        const script: Script & { finish?: Promise<void> } =
+          body.stream && !titleRequest
+            ? this.#queue.shift() ?? { chunks: ["Completed."] }
+            : { chunks: ["OTK session"] };
         const id = `chatcmpl-${crypto.randomUUID()}`;
         if (!body.stream) {
           return Response.json({
@@ -96,6 +98,8 @@ export class FakeLlm {
               if (cancelled) return;
               send({ content: chunk });
             }
+            await script.finish;
+            if (cancelled) return;
             send({}, script.tool ? "tool_calls" : "stop");
             if (!cancelled) {
               controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
@@ -116,7 +120,19 @@ export class FakeLlm {
   queue(...scripts: Script[]): void {
     this.#queue.push(...scripts);
   }
+  /** Keep a real reply active until its consumer has exercised the busy state. */
+  queueHeld(script: Script): { release(): void } {
+    const gate = Promise.withResolvers<void>();
+    const release = () => {
+      this.#holds.delete(release);
+      gate.resolve();
+    };
+    this.#holds.add(release);
+    this.#queue.push({ ...script, finish: gate.promise });
+    return { release };
+  }
   async stop(): Promise<void> {
+    for (const release of this.#holds) release();
     await this.server.shutdown();
   }
 }

@@ -120,10 +120,11 @@ Deno.test("message details show configured agent colour, queued-to-answered tran
     });
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await openSession(browser, s.id);
-    f.fake.queue({
+    const reply = f.fake.queueHeld({
       chunks: Array(20).fill("First reply continues. "),
       delay: 100,
-    }, { chunks: ["Queued prompt answered."] });
+    });
+    f.fake.queue({ chunks: ["Queued prompt answered."] });
     await browser.type("textarea[name=prompt]", "First prompt");
     await browser.key("Enter");
     await browser.poll(
@@ -147,6 +148,7 @@ Deno.test("message details show configured agent colour, queued-to-answered tran
       "0px",
     );
     await browser.screenshot(join(f.oc.root, "message-queued.png"));
+    reply.release();
     await browser.poll(
       `document.querySelector('[data-session="${s.id}"]').dataset.status==='idle' && document.querySelector('.otk-messages').textContent.includes('Queued prompt answered.') && !document.querySelector('.otk-queued')`,
       60000,

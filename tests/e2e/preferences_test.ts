@@ -5,6 +5,7 @@ import {
   browserFixture,
   openSession,
   sentFrames,
+  waitForReply,
 } from "../support/browser-fixture.ts";
 Deno.test("R7 host preferences control real reasoning, persist on reload and propagate to an independent browser", async () => {
   const f = await browserFixture();
@@ -28,6 +29,7 @@ Deno.test("R7 host preferences control real reasoning, persist on reload and pro
     await browser.poll(
       "document.querySelector('.otk-reasoning > button')?.textContent.includes('Thought')",
     );
+    await waitForReply(browser, session.id, "Preference proof.");
     await browser.poll("!document.querySelector('.otk-reasoning-body')");
     await browser.click(".otk-reasoning > button");
     await browser.poll(

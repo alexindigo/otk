@@ -41,7 +41,7 @@ Deno.test("empty completion results leave Enter, native ArrowUp and normal Escap
       );
       await browser.poll("!document.querySelector('.otk-autocomplete')");
     };
-    f.fake.queue({ chunks: ["No-match prompt submitted."] });
+    const reply = f.fake.queueHeld({ chunks: ["No-match prompt submitted."] });
     await browser.type("textarea[name=prompt]", "@" + query);
     await ready();
     await browser.key("Enter");
@@ -49,6 +49,9 @@ Deno.test("empty completion results leave Enter, native ArrowUp and normal Escap
       `document.querySelector('[data-role=user] .otk-text')?.textContent.includes(${
         JSON.stringify("@" + query)
       }) && document.querySelector('textarea[name=prompt]').value===''`,
+    );
+    await browser.poll(
+      `document.querySelector('[data-session="${session.id}"]')?.dataset.status==='busy'`,
     );
     await browser.type("textarea[name=prompt]", "@" + query);
     await ready();
@@ -64,6 +67,7 @@ Deno.test("empty completion results leave Enter, native ArrowUp and normal Escap
     await browser.poll(
       "document.querySelector('.otk-prompt-actions').textContent.includes('esc again to interrupt')",
     );
+    reply.release();
   } finally {
     await f.stop();
   }

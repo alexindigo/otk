@@ -133,7 +133,10 @@ Deno.test("long slash admission clears the sent draft and keeps a new draft usab
     },
   });
   try {
-    f.fake.queue({ chunks: ["Long slash ", "finished."], delay: 16000 });
+    const reply = f.fake.queueHeld({
+      chunks: ["Long slash ", "finished."],
+      delay: 16000,
+    });
     const session = await f.oc.request<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Long slash" },
@@ -149,6 +152,7 @@ Deno.test("long slash admission clears the sent draft and keeps a new draft usab
     await browser.poll(
       "document.querySelector('textarea[name=prompt]').value==='keep the next draft' && !document.querySelector('.otk-prompt button[type=submit]').disabled",
     );
+    reply.release();
     await browser.poll(
       "document.querySelector('[data-role=assistant] .otk-text')?.textContent==='Long slash finished.' && !document.querySelector('.otk-message[data-role=assistant] .otk-streaming')",
       60000,

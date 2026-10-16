@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { browserFixture, openSession } from "../support/browser-fixture.ts";
+import {
+  browserFixture,
+  openSession,
+  waitForReply,
+} from "../support/browser-fixture.ts";
 import { recordTools, runTool } from "../support/rendering.ts";
 import { waitFor } from "../support/opencode.ts";
 import type { RawPart } from "@otk/harness-opencode1";
@@ -253,9 +257,7 @@ Deno.test("tool permission warning, denied strikethrough and expandable errors u
     );
     // A tool's terminal state precedes the assistant's continuation. Observe the
     // complete turn before testing a disclosure in the following viewport.
-    await browser.poll(
-      `document.querySelector('[data-session="${s.id}"]').dataset.status==='idle' && [...document.querySelectorAll('[data-role=assistant] .otk-text')].some(el=>el.textContent==='Missing file handled.')`,
-    );
+    await waitForReply(browser, s.id, "Missing file handled.");
     await browser.click("[data-tool=read] .otk-tool-error-toggle");
     await browser.poll(
       "document.querySelector('.otk-tool-error')?.textContent.includes('File not found')",
