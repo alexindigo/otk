@@ -70,18 +70,25 @@ export default function Shell(
 ): import("solid-js").Element {
   const index = createIndex(), inboxes = new Map<string, InboxModel>();
   const tabModels = new Map<string, ClientTabs>();
+  const tabInput = (p: ProjectSelection) => ({
+    directory: p.directory,
+    entries: Object.values(index.state.entries).filter((e) =>
+      e.sidecarId === p.sidecarId
+    ),
+    inbox: inbox(p.sidecarId).state.inbox,
+  });
   const tabsFor = (p: ProjectSelection) => {
     const key = `${p.sidecarId}/${p.directory}`;
     let model = tabModels.get(key);
     if (!model) {
-      model = createTabs(inbox(p.sidecarId).promote, solidState);
-      model.update({
-        directory: p.directory,
-        entries: Object.values(index.state.entries).filter((e) =>
-          e.sidecarId === p.sidecarId
-        ),
-        inbox: inbox(p.sidecarId).state.inbox,
+      model = createTabs(inbox(p.sidecarId).promote, solidState, {
+        input: () => tabInput(p),
+        session: (sessionID) =>
+          sidecars.connection(p.sidecarId).rpc.call("session.get", {
+            sessionID,
+          }),
       });
+      model.update(tabInput(p));
       tabModels.set(key, model);
     }
     return model;

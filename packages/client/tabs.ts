@@ -20,6 +20,14 @@ export interface TabInput {
   entries: readonly IndexEntry[];
   inbox: InboxSnapshot;
 }
+/** Promotion needs identity and naming metadata, not a replicated status row. */
+export type TabSession = Pick<IndexEntry, "id" | "directory" | "title">;
+export interface TabSources {
+  /** Read owner-current inputs at invocation, independently of view effects. */
+  input(): TabInput;
+  /** Resolve a session not yet present in the streamed index. */
+  session(sessionID: string): Promise<TabSession>;
+}
 export interface TabState {
   selected?: TabSelection;
   preview?: string;
@@ -39,8 +47,9 @@ export interface ClientTabs {
 }
 /** The current idle/seen phantom is retained until selection moves elsewhere. */
 export function createTabs(
-  promote: (session: IndexEntry) => Promise<TaskRecord>,
+  promote: (session: TabSession) => Promise<TaskRecord>,
   factory: StateFactory = createState,
+  sources?: TabSources,
 ): ClientTabs {
   const store = factory<TabState>({ revision: 0 });
   const promotions = new Map<string, Promise<TaskRecord>>();
@@ -56,6 +65,9 @@ export function createTabs(
       finishes: {},
       pathTemplates: [],
     },
+  };
+  const refresh = () => {
+    if (sources) model.update(sources.input());
   };
   function tabs(): InboxTab[] {
     // Inputs are not owned by the state factory; expose their invalidation too.
@@ -115,7 +127,7 @@ export function createTabs(
     if (task && saved && contains(task, saved)) return saved;
     return task?.sessions[0];
   }
-  return {
+  const model: ClientTabs = {
     state: store.state,
     subscribe: store.subscribe,
     tabs,
@@ -173,6 +185,7 @@ export function createTabs(
       });
     },
     select(selection: TabSelection, sessionID?: string): void {
+      refresh();
       if (
         !tabs().some((tab) =>
           tab.id === selection.id &&
@@ -198,6 +211,7 @@ export function createTabs(
       });
     },
     preview(sessionID: string): void {
+      refresh();
       if (
         !input.entries.some((e) =>
           e.id === sessionID && e.directory === input.directory
@@ -222,16 +236,25 @@ export function createTabs(
       });
     },
     async pin(sessionID: string): Promise<TaskRecord> {
+      refresh();
+      const directory = input.directory;
       const entry = input.entries.find((e) =>
-        e.id === sessionID && e.directory === input.directory
+        e.id === sessionID && e.directory === directory
       );
-      if (!entry) throw new Error("Unknown project session");
       const revision = selectionRevision;
       const existing = input.inbox.tasks.find((t) =>
-        t.sessions.includes(sessionID)
+        t.directory === directory && t.sessions.includes(sessionID)
       );
       if (!existing && !promotions.has(sessionID)) {
-        const pending = Promise.resolve().then(() => promote(entry));
+        // Index delivery and UI projection are not command acknowledgements.
+        // Share the whole resolution/promotion, retaining its invocation scope.
+        const pending = Promise.resolve().then(async () => {
+          const session = entry ?? await sources?.session(sessionID);
+          if (session?.id !== sessionID || session.directory !== directory) {
+            throw new Error("Unknown project session");
+          }
+          return await promote(session);
+        });
         promotions.set(sessionID, pending);
         void pending.catch(() => {
           if (promotions.get(sessionID) === pending) {
@@ -255,4 +278,5 @@ export function createTabs(
       return await action();
     },
   };
+  return model;
 }

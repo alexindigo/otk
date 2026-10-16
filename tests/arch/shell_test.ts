@@ -21,6 +21,15 @@ function errors(path: string, source: string): string[] {
     path === "web/src/ui/App.tsx" &&
     /create(?:Signal|Effect|Store)|\.rpc\.|new CommandHub/.test(source)
   ) errors.push("web owns shell behaviour");
+  if (
+    /^packages\/client\/(?:tabs|inbox)\.ts$/.test(path) &&
+    /promote\s*[:(][^;{]*\bsession:\s*IndexEntry/.test(source)
+  ) errors.push("tab promotion depends on a replicated status row");
+  if (
+    path.endsWith("/Shell.tsx") && source.includes("createTabs(") &&
+    !/createTabs\([\s\S]*?\binput:\s*\(\)\s*=>\s*tabInput\(p\),\s*session:/
+      .test(source)
+  ) errors.push("shell tabs lack owner-current inputs and session resolution");
   return errors;
 }
 Deno.test("shell registries stay open, implementation-free and feature ports replace per-feature prompt wiring", async () => {
@@ -67,4 +76,36 @@ Deno.test("shell registries stay open, implementation-free and feature ports rep
       "registerEditorDialog",
     ]
   ) assert(features.includes(owner));
+});
+
+Deno.test("tab commands own readiness and the shell injects current inputs and authoritative metadata", async () => {
+  for (
+    const path of [
+      "packages/client/tabs.ts",
+      "packages/client/inbox.ts",
+      "packages/ui/shell/Shell.tsx",
+    ]
+  ) {
+    assertEquals(
+      errors(path, await Deno.readTextFile(new URL(path, root))),
+      [],
+      path,
+    );
+  }
+  for (
+    const [path, source] of [
+      [
+        "packages/client/tabs.ts",
+        "promote: (session: IndexEntry) => Promise<TaskRecord>",
+      ],
+      [
+        "packages/client/inbox.ts",
+        "promote(session: IndexEntry): Promise<TaskRecord>;",
+      ],
+      [
+        "packages/ui/shell/Shell.tsx",
+        "createTabs(inbox(p.sidecarId).promote, solidState);",
+      ],
+    ]
+  ) assert(errors(path, source).length > 0, source);
 });

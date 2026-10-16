@@ -11,6 +11,7 @@ import type {
   TaskRecord,
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
+import type { TabSession } from "./tabs.ts";
 export type InboxStatus = "blocked" | "working" | "finished" | "idle";
 export function unread(
   sessionID: string,
@@ -100,7 +101,7 @@ export interface InboxModel {
   state: InboxState;
   subscribe(listener: (state: InboxState) => void): () => void;
   receive(frame: ServerFrame): void;
-  promote(session: IndexEntry): Promise<TaskRecord>;
+  promote(session: TabSession): Promise<TaskRecord>;
   openProject(directory: string): Promise<void>;
   openSession(sessionID: string, directory: string): Promise<void>;
   act<T>(directory: string, action: () => Promise<T>): Promise<T>;
@@ -123,7 +124,7 @@ export function createInbox(
     state: store.state,
     subscribe: store.subscribe,
     /** Atomic server-side promotion, suitable as createTabs' injected port. */
-    promote(session: IndexEntry) {
+    promote(session: TabSession) {
       return rpc.call("tasks.create", {
         directory: session.directory,
         name: session.title || "Session",

@@ -98,6 +98,17 @@ remains until selection leaves. Inputs remain owned by their index/metadata
 models, and tabs never delete sessions. Concurrent pins share promotion; late
 completion cannot steal a newer selection.
 
+An optional third `sources` argument supplies `input()` (owner-current tab
+inputs) and `session(sessionID)` (authoritative identity/title/directory
+lookup). Tab commands read current inputs before validation, so a deferred
+rendering effect cannot reject a newly available tab. Pin/send resolve missing
+session metadata without waiting for index replication; concurrent calls share
+resolution and promotion, and validate the invocation's project and session
+identity before acting. `TabSession` contains only identity, directory and
+title: promotion never requires a replicated status/attention row. `update`
+remains the view-invalidation port and the input port for consumers that update
+synchronously.
+
 Tab state also exposes its selected `sessionID` and an input `revision` for
 reactive bindings. `sessionFor(taskID)` resolves the remembered member/helper or
 first member; `select(selection, sessionID?)` keeps that session inside its

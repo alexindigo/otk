@@ -38,6 +38,13 @@ actions rather than calling RPC itself. The ordinary dependency scan applies to
 new store/core/client feature files; their standalone public entries remain the
 only cross-package boundary.
 
+Tab promotion accepts identity/title/directory metadata rather than requiring a
+replicated index row. The shell injects current-input and authoritative-session
+ports at the client tab owner; negative fixtures reject status-row-dependent
+promotion and a shell binding without those readiness ports. Owner units hold
+input delivery deterministically; browser coverage holds real index frames until
+the provider reply reaches the transcript, then replays them without loss.
+
 RPC names must derive from the declaration-mergeable protocol `RpcMethods`
 interface. Negative fixtures reject closed aliases and extra literal method
 names; core RPC tests compile and exercise an external feature contract through
