@@ -1,0 +1,126 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-project-tabs {
+  flex: none;
+  border-bottom: 1px solid var(--border);
+  padding: 0 16px;
+}
+.otk-task-strip,
+.otk-task-list,
+.otk-tab,
+.otk-tab-open,
+.otk-breadcrumb-row,
+.otk-task-crumbs,
+.otk-session-crumb,
+.otk-context-meter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.otk-task-strip {
+  align-items: flex-start;
+  padding: 8px 0;
+}
+.otk-tabs-project {
+  font-weight: 600;
+  padding: 8px 0;
+}
+.otk-task-list {
+  flex: 1;
+  flex-wrap: wrap;
+}
+.otk-tab {
+  position: relative;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+.otk-tab-open {
+  padding: 8px;
+  text-align: left;
+}
+.otk-tab-open[aria-selected=true] {
+  background: var(--hover);
+}
+.otk-tab[data-kind=phantom] .otk-tab-open {
+  opacity: .72;
+  font-style: italic;
+}
+.otk-preview-label {
+  font-size: 12px;
+  color: var(--fg-2);
+}
+.otk-tab-actions > summary {
+  cursor: pointer;
+  padding: 8px;
+  list-style: none;
+}
+.otk-tab-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 20;
+  min-width: 200px;
+  display: flex;
+  flex-direction: column;
+  padding: 4px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 8px 24px #0004;
+}
+.otk-tab-menu button {
+  text-align: left;
+  padding: 8px;
+}
+.otk-task-new {
+  padding: 8px 12px;
+}
+.otk-breadcrumb-row {
+  justify-content: space-between;
+  flex-wrap: wrap;
+  padding-bottom: 8px;
+}
+.otk-task-crumbs {
+  flex: 1;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.otk-crumb-task {
+  color: var(--fg-2);
+}
+.otk-session-crumb {
+  padding: 4px;
+  gap: 4px;
+}
+.otk-session-crumb[aria-current] {
+  background: var(--hover);
+}
+.otk-session-crumb[data-helper=true] {
+  color: var(--fg-2);
+}
+.otk-folded-crumbs {
+  position: relative;
+}
+.otk-folded-crumbs summary {
+  cursor: pointer;
+  padding: 4px 8px;
+}
+.otk-context-meter {
+  color: var(--fg-2);
+  font-variant-numeric: tabular-nums;
+  font-size: 12px;
+}
+.otk-context-meter span + span::before {
+  content: "·";
+  margin-right: 8px;
+}
+.otk-session-browser {
+  flex: none;
+  border-bottom: 1px solid var(--border);
+}
+.otk-session-browser > summary {
+  cursor: pointer;
+  padding: 4px 16px;
+  color: var(--fg-2);
+}

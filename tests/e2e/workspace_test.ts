@@ -98,17 +98,22 @@ Deno.test("E1 project inbox and centre roots grouped by directory, descendants h
 Deno.test("E2 new session, trusted prompt, incremental structured markdown and idle outcome", async () => {
   const f = await browserFixture();
   try {
-    await f.oc.request("/session", {
+    const seed = await f.oc.request<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Existing project" },
     });
     const server = await f.sidecar(), browser = await f.browser(server.url);
+    await browser.poll("!!document.querySelector('.otk-project-open')");
+    await browser.click(".otk-project-open");
+    await browser.poll(
+      "!!document.querySelector('.otk-project-tabs .otk-new-session:not(:disabled)')",
+    );
     await browser.poll(
       "!!document.querySelector('.otk-new-session:not(:disabled)')",
     );
     await browser.click(".otk-new-session");
     await browser.poll(
-      "!!document.querySelector('.otk-prompt') && location.hash.startsWith('#/local/')",
+      `!!document.querySelector('.otk-prompt') && location.hash.startsWith('#/local/') && !location.hash.endsWith('/${seed.id}')`,
     );
     const id = await browser.evaluate<string>(
       "location.hash.split('/').at(-1)",

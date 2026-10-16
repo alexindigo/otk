@@ -98,6 +98,20 @@ remains until selection leaves. Inputs remain owned by their index/metadata
 models, and tabs never delete sessions. Concurrent pins share promotion; late
 completion cannot steal a newer selection.
 
+Tab state also exposes its selected `sessionID` and an input `revision` for
+reactive bindings. `sessionFor(taskID)` resolves the remembered member/helper or
+first member; `select(selection, sessionID?)` keeps that session inside its
+task. `createTaskActions(rpc, directory)` captures server/project ownership for
+task editors before asynchronous interaction. `contextMeter(messages)` uses the
+latest reported assistant token footprint (including reasoning and caches) and
+sums reported costs for the supplied loaded messages. It supplies no guessed
+model context window or percentage; paged consumers label the cost's loaded
+scope. `taskBreadcrumbs(task, entries, selected)` preserves explicit membership
+order, expands the selected helper path and prevents cycles or duplicate grouped
+helpers. Helper URLs retain their owning task; removing membership preserves the
+viewed session as an ungrouped tab rather than leaving transcript and task
+inconsistent.
+
 ## Commands
 
 `new CommandHub(context, keys)` creates an empty, framework-free registry. A

@@ -146,6 +146,26 @@ function sourceErrors(path: string, source: string): string[] {
   }
   const errors: string[] = [];
   if (
+    path !== "packages/client/context-meter.ts" &&
+    /\bfunction\s+contextMeter\s*\(/.test(source)
+  ) {
+    errors.push("reported usage projection belongs to the shared client owner");
+  }
+  if (
+    path !== "packages/client/task-actions.ts" &&
+    /\bfunction\s+createTaskActions\s*\(/.test(source)
+  ) {
+    errors.push("task mutation ports belong to the shared client owner");
+  }
+  if (
+    path !== "packages/client/task-breadcrumbs.ts" &&
+    /\bfunction\s+taskBreadcrumbs\s*\(/.test(source)
+  ) {
+    errors.push(
+      "task breadcrumb projection belongs to the shared client owner",
+    );
+  }
+  if (
     path !== "packages/client/inbox.ts" &&
     /\bfunction\s+(?:inboxStatus|inboxProjects|rollup|visitTime|ageing)\s*\(/
       .test(source)
@@ -1132,4 +1152,31 @@ Deno.test("inbox and tab models remain reusable, framework-free owners with inje
     ),
     "client must remain framework-free",
   );
+});
+
+Deno.test("task actions and reported context usage stay in framework-free public client owners", async () => {
+  for (const file of ["context-meter", "task-actions", "task-breadcrumbs"]) {
+    const path = `packages/client/${file}.ts`;
+    assertEquals(
+      sourceErrors(path, await Deno.readTextFile(new URL(path, root))),
+      [],
+    );
+  }
+  for (
+    const definition of [
+      "function contextMeter() {}",
+      "function createTaskActions() {}",
+      "function taskBreadcrumbs() {}",
+    ]
+  ) {
+    assert(
+      sourceErrors("packages/ui/components/ProjectTabs.tsx", definition).length,
+    );
+  }
+  const ui = await Deno.readTextFile(
+    new URL("packages/ui/components/ProjectTabs.tsx", root),
+  );
+  assert(ui.includes("props.model.tabs()"));
+  assert(ui.includes("contextMeter(props.messages)"));
+  assert(!ui.includes("rpc.call("));
 });

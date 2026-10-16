@@ -30,6 +30,7 @@ import {
   registerShellPrompt,
   registerSkillTool,
   registerSlashPrompt,
+  registerTaskDialogs,
   registerTaskTool,
   registerTextPart,
   registerTodoTool,
@@ -79,6 +80,7 @@ export function applicationUi(): UiRegistries {
   registerQuestionTakeover(ui.takeovers);
   registerCommandDialogs(ui.dialogs);
   registerProjectDialogs(ui.dialogs);
+  registerTaskDialogs(ui.dialogs);
   return ui;
 }
 

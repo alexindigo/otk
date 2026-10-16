@@ -64,6 +64,17 @@ export async function browserFixture(
   };
 }
 export async function openSession(browser: Cdp, id: string): Promise<void> {
+  // Until the Sessions panel replaces the interim browser, reveal its owner
+  // through the real summary click before targeting one of its session rows.
+  await browser.poll("!!document.querySelector('.otk-session-browser')");
+  if (
+    !await browser.evaluate(
+      "document.querySelector('.otk-session-browser').open",
+    )
+  ) {
+    await browser.click(".otk-session-browser > summary");
+    await browser.poll("document.querySelector('.otk-session-browser').open");
+  }
   await browser.poll(
     `!!document.querySelector('[data-session="${id}"]') || !!document.querySelector('[data-project-sessions~="${id}"]')`,
   );

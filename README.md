@@ -22,11 +22,15 @@ The production Solid UI merges projects across connected servers into an inbox.
 Each project has an always-visible roll-up light, unread name and visit clock;
 the column collapses to a status-light rail. Activity restores inactive
 projects. Add servers and path templates in Settings, and add empty or scanned
-projects through Add project. The centre provides project-local root-session
-navigation while task tabs and panel views are developed. Open a session to
-stream its transcript, send prompts, or press Esc twice to interrupt. Message
-history for the previous session is released on switching. Web assets and fonts
-are bundled locally; no dev server or CDN is used.
+projects through Add project. The centre provides ordered task tabs,
+always-visible active-session phantom tabs and a single replaceable session
+preview. Pin, double-click or send in a phantom to make a task. Task breadcrumbs
+switch sessions and their helpers; the meter shows reported token usage and
+loaded-message cost. Browse sessions provides project-local navigation until the
+Sessions panel lands. Open a session to stream its transcript, send prompts, or
+press Esc twice to interrupt. Message history for the previous session is
+released on switching. Web assets and fonts are bundled locally; no dev server
+or CDN is used.
 
 Pending permissions for the open session and its descendants appear above the
 prompt. Allow once, confirm the displayed future grant patterns for Allow

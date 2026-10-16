@@ -8,12 +8,19 @@ import {
   onSettled,
   Show,
 } from "solid-js";
-import { DEFAULT_PREFS, type PromptPart } from "@otk/protocol";
 import {
+  DEFAULT_PREFS,
+  type PromptPart,
+  sessionAncestors,
+} from "@otk/protocol";
+import {
+  type ClientTabs,
   CommandHub,
   createCurrentClient,
   createInbox,
   createNavigation,
+  createTabs,
+  createTaskActions,
   hashFor,
   type InboxModel,
   inboxProjects,
@@ -53,6 +60,7 @@ import VisualSettings from "../components/VisualSettings.tsx";
 import DialogHost from "../components/DialogHost.tsx";
 import ProjectInbox from "../components/ProjectInbox.tsx";
 import ProjectSessions from "../components/ProjectSessions.tsx";
+import ProjectTabs from "../components/ProjectTabs.tsx";
 import { type SessionPorts, SessionProvider } from "../registries/session.tsx";
 import { ShellProvider } from "./context.tsx";
 
@@ -61,6 +69,23 @@ export default function Shell(
   props: { theme: ThemeEngine; api: URL },
 ): import("solid-js").Element {
   const index = createIndex(), inboxes = new Map<string, InboxModel>();
+  const tabModels = new Map<string, ClientTabs>();
+  const tabsFor = (p: ProjectSelection) => {
+    const key = `${p.sidecarId}/${p.directory}`;
+    let model = tabModels.get(key);
+    if (!model) {
+      model = createTabs(inbox(p.sidecarId).promote, solidState);
+      model.update({
+        directory: p.directory,
+        entries: Object.values(index.state.entries).filter((e) =>
+          e.sidecarId === p.sidecarId
+        ),
+        inbox: inbox(p.sidecarId).state.inbox,
+      });
+      tabModels.set(key, model);
+    }
+    return model;
+  };
   const inbox = (id: string) => {
     let model = inboxes.get(id);
     if (!model) {
@@ -313,6 +338,15 @@ export default function Shell(
     },
   });
   const navigate = (selection: Selection) => {
+    // Navigation owns family identity. Callers may know only an immediate
+    // parent; every entry point still writes the same root-based session URL.
+    const ancestors = sessionAncestors(
+      selection.sessionID,
+      (id) => entry(selection.sidecarId, id),
+    );
+    if (ancestors.length) {
+      selection = { ...selection, rootID: ancestors.at(-1) };
+    }
     const previous = session.state.selection;
     if (navigation.open(hashFor(selection))) {
       setSettings(false);
@@ -325,7 +359,9 @@ export default function Shell(
           inbox(selection.sidecarId).openSession(selection.sessionID, directory)
         ).catch(fail);
       }
+      return true;
     }
+    return false;
   };
   const openProject = (target: ProjectSelection) => {
     if (
@@ -389,7 +425,11 @@ export default function Shell(
       }).catch(fail);
     }
   });
-  const create = async (sidecarId: string, directory: string) => {
+  const create = async (
+    sidecarId: string,
+    directory: string,
+    task?: import("@otk/protocol").TaskRecord,
+  ) => {
     if (!discardDraft()) return;
     const revision = ++navigationRevision;
     try {
@@ -397,6 +437,12 @@ export default function Shell(
         "session.create",
         { directory },
       );
+      if (task) {
+        await sidecars.connection(sidecarId).rpc.call("tasks.sessions", {
+          id: task.id,
+          sessions: [...task.sessions, created.id],
+        });
+      }
       if (revision === navigationRevision) {
         navigate({ sidecarId, sessionID: created.id });
       }
@@ -420,18 +466,12 @@ export default function Shell(
     );
   const openChild = (id: string) => {
     const selected = session.state.selection!;
-    let current = entry(selected.sidecarId, id),
-      root = current ? id : selected.rootID || selected.sessionID;
-    const seen = new Set<string>();
-    while (current?.parentID && !seen.has(current.id)) {
-      seen.add(current.id);
-      root = current.parentID;
-      current = entry(selected.sidecarId, root);
-    }
     navigate({
       sidecarId: selected.sidecarId,
       sessionID: id,
-      ...(id === root ? {} : { rootID: root }),
+      ...(entry(selected.sidecarId, id)
+        ? {}
+        : { rootID: selected.rootID || selected.sessionID }),
     });
   };
   onCleanup(registerSessionCommands(commands, {
@@ -482,6 +522,59 @@ export default function Shell(
     };
   };
   const entries = () => Object.values(index.state.entries);
+  createEffect(() => {
+    const p = project();
+    if (!p) return undefined;
+    const metadata = inbox(p.sidecarId).state.inbox;
+    return {
+      p,
+      entries: entries().filter((e) => e.sidecarId === p.sidecarId).map((
+        e,
+      ) => ({ ...e, attention: { ...e.attention } })),
+      metadata: {
+        ...metadata,
+        tasks: metadata.tasks.map((t) => ({ ...t, sessions: [...t.sessions] })),
+        seen: { ...metadata.seen },
+        finishes: { ...metadata.finishes },
+      },
+      selected: session.state.selection,
+    };
+  }, (value) => {
+    if (!value) return;
+    const model = tabsFor(value.p);
+    model.update({
+      directory: value.p.directory,
+      entries: value.entries,
+      inbox: value.metadata,
+    });
+    const id = value.selected?.sessionID;
+    if (
+      id && value.entries.some((e) =>
+        e.id === id && e.directory === value.p.directory
+      ) && (model.state.sessionID !== id || !model.state.selected)
+    ) {
+      model.preview(id);
+    }
+  });
+  // R5's Sessions view calls this port; it never reaches into tab UI internals.
+  onCleanup(
+    commands.register({
+      id: "session.preview",
+      title: "Preview session",
+      category: "Session",
+      hidden: true,
+      run: (_ctx, target: Selection) => {
+        if (!navigate(target)) return false;
+        const directory = entry(target.sidecarId, target.sessionID)?.directory;
+        if (directory) {
+          tabsFor({ sidecarId: target.sidecarId, directory }).preview(
+            target.sessionID,
+          );
+        }
+        return true;
+      },
+    }),
+  );
   const projects = createMemo(() =>
     sidecars.state.list.flatMap((s) =>
       inboxProjects(
@@ -603,21 +696,58 @@ export default function Shell(
                       </div>
                     }
                   >
-                    <ProjectSessions
-                      entries={entries()}
-                      project={project()}
-                      selected={session.state.selection}
-                      connected={(id) =>
-                        sidecars.state.list.find((s) => s.id === id)?.status ===
-                          "connected"}
-                      inbox={(id) => inbox(id).state.inbox}
-                      onOpen={(e) =>
-                        void commands.run("session.open", {
-                          sidecarId: e.sidecarId,
-                          sessionID: e.id,
-                        })}
-                      onCreate={(p) => void commands.run("session.new", p)}
-                    />
+                    <Show when={project()}>
+                      <ProjectTabs
+                        project={project()!}
+                        model={tabsFor(project()!)}
+                        entries={entries().filter((e) =>
+                          e.sidecarId === project()!.sidecarId &&
+                          e.directory === project()!.directory
+                        )}
+                        inbox={inbox(project()!.sidecarId).state.inbox}
+                        messages={session.state.content.messages}
+                        exhausted={session.state.exhausted}
+                        ready={sidecars.state.list.find((s) =>
+                          s.id === project()!.sidecarId
+                        )?.status === "connected"}
+                        onOpen={(id) => {
+                          return navigate({
+                            sidecarId: project()!.sidecarId,
+                            sessionID: id,
+                          });
+                        }}
+                        onEmpty={() => navigation.open(projectHash(project()!))}
+                        onCreateSession={(task) =>
+                          create(
+                            project()!.sidecarId,
+                            project()!.directory,
+                            task,
+                          )}
+                        actions={createTaskActions(
+                          sidecars.connection(project()!.sidecarId).rpc,
+                          project()!.directory,
+                        )}
+                      />
+                    </Show>
+                    <details class="otk-session-browser">
+                      <summary>Browse sessions</summary>
+                      <ProjectSessions
+                        entries={entries()}
+                        project={project()}
+                        selected={session.state.selection}
+                        connected={(id) =>
+                          sidecars.state.list.find((s) => s.id === id)
+                            ?.status ===
+                            "connected"}
+                        inbox={(id) => inbox(id).state.inbox}
+                        onOpen={(e) =>
+                          void commands.run("session.preview", {
+                            sidecarId: e.sidecarId,
+                            sessionID: e.id,
+                          })}
+                        onCreate={(p) => void commands.run("session.new", p)}
+                      />
+                    </details>
                     <Show
                       when={session.state.selection}
                       keyed
@@ -677,17 +807,22 @@ export default function Shell(
                           onPrompt={async (parts, _mode, agent) => {
                             const { selection: target, rpc } = current
                               .context();
-                            await act(target, async () => {
-                              await rpc.call("session.prompt", {
-                                sessionID: target.sessionID,
-                                mode: "normal",
-                                parts: await attachments(
-                                  parts,
-                                  target.sidecarId,
-                                ),
-                                ...(agent ? { agent } : {}),
-                              });
-                            });
+                            const directory = await directoryFor(target);
+                            await tabsFor({
+                              sidecarId: target.sidecarId,
+                              directory,
+                            }).send(target.sessionID, () =>
+                              act(target, async () => {
+                                await rpc.call("session.prompt", {
+                                  sessionID: target.sessionID,
+                                  mode: "normal",
+                                  parts: await attachments(
+                                    parts,
+                                    target.sidecarId,
+                                  ),
+                                  ...(agent ? { agent } : {}),
+                                });
+                              }));
                           }}
                           onAbort={async () => {
                             const { selection: target, rpc } = current

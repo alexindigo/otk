@@ -303,3 +303,71 @@ Deno.test("concurrent phantom promotions share one operation and a late result c
   assertEquals(calls, 1);
   assertEquals(tabs.state.selected, { kind: "session", id: "b" });
 });
+
+Deno.test("task selection remembers its session and publishes input invalidation for reactive consumers", () => {
+  const inbox = snapshot(),
+    tabs = createTabs(() => {
+      throw new Error("unused");
+    });
+  inbox.tasks.push({
+    id: "task",
+    directory: "/p",
+    name: "exec",
+    order: 0,
+    sessions: ["a", "b"],
+  });
+  const input = {
+    directory: "/p",
+    entries: [entry("a"), entry("b"), entry("busy", "busy")],
+    inbox,
+  };
+  tabs.update(input);
+  const revision = tabs.state.revision;
+  tabs.select({ kind: "task", id: "task" }, "b");
+  tabs.preview("busy");
+  tabs.select({ kind: "task", id: "task" });
+  assertEquals(tabs.state.sessionID, "b");
+  input.entries[2].status = "idle";
+  tabs.update(input);
+  assert(tabs.state.revision > revision);
+  assertEquals(tabs.tabs().map((t) => t.id), ["task"]);
+});
+
+Deno.test("helper URLs select their owning task and removed membership preserves the viewed session as a phantom", () => {
+  const inbox = snapshot(),
+    tabs = createTabs(() => {
+      throw new Error("unused");
+    });
+  const task = {
+    id: "task",
+    directory: "/p",
+    name: "exec",
+    order: 0,
+    sessions: ["a"],
+  };
+  inbox.tasks.push(task);
+  const input = {
+    directory: "/p",
+    entries: [entry("a"), { ...entry("helper"), parentID: "a" }],
+    inbox,
+  };
+  tabs.update(input);
+  tabs.preview("helper");
+  assertEquals(tabs.state.selected, { kind: "task", id: "task" });
+  assertEquals(tabs.sessionFor("task"), "helper");
+  task.sessions = [];
+  tabs.update(input);
+  assertEquals(tabs.state.selected, { kind: "session", id: "helper" });
+  assertEquals(tabs.state.sessionID, "helper");
+  task.sessions = ["a"];
+  inbox.tasks.push({
+    id: "helper-task",
+    directory: "/p",
+    name: "Helper",
+    order: 1,
+    sessions: ["helper"],
+  });
+  tabs.update(input);
+  tabs.preview("helper");
+  assertEquals(tabs.state.selected, { kind: "task", id: "helper-task" });
+});

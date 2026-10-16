@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { InboxSnapshot, IndexEntry, TaskRecord } from "@otk/protocol";
+import { belongsToSession } from "@otk/protocol";
 import { type InboxStatus, inboxStatus, rollup } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
 export type TabSelection = { kind: "task"; id: string } | {
@@ -22,13 +23,16 @@ export interface TabInput {
 export interface TabState {
   selected?: TabSelection;
   preview?: string;
+  sessionID?: string;
+  revision: number;
 }
 export interface ClientTabs {
   state: TabState;
   subscribe(listener: (state: TabState) => void): () => void;
   tabs(): InboxTab[];
+  sessionFor(taskID: string): string | undefined;
   update(input: TabInput): void;
-  select(selection: TabSelection): void;
+  select(selection: TabSelection, sessionID?: string): void;
   preview(sessionID: string): void;
   pin(sessionID: string): Promise<TaskRecord>;
   send<T>(sessionID: string, action: () => Promise<T>): Promise<T>;
@@ -38,8 +42,9 @@ export function createTabs(
   promote: (session: IndexEntry) => Promise<TaskRecord>,
   factory: StateFactory = createState,
 ): ClientTabs {
-  const store = factory<{ selected?: TabSelection; preview?: string }>({});
+  const store = factory<TabState>({ revision: 0 });
   const promotions = new Map<string, Promise<TaskRecord>>();
+  const remembered = new Map<string, string>();
   let selectionRevision = 0;
   let input: TabInput = {
     directory: "",
@@ -53,6 +58,8 @@ export function createTabs(
     },
   };
   function tabs(): InboxTab[] {
+    // Inputs are not owned by the state factory; expose their invalidation too.
+    void store.state.revision;
     const tasks = input.inbox.tasks.filter((task) =>
       task.directory === input.directory
     ).sort((a, b) => a.order - b.order);
@@ -91,10 +98,28 @@ export function createTabs(
     }
     return result;
   }
+  const contains = (task: TaskRecord, id: string) =>
+    task.sessions.some((root) =>
+      belongsToSession(
+        id,
+        root,
+        (id) =>
+          input.entries.find((e) =>
+            e.id === id && e.directory === task.directory
+          ),
+      )
+    );
+  function sessionFor(taskID: string): string | undefined {
+    const task = input.inbox.tasks.find((t) => t.id === taskID);
+    const saved = remembered.get(taskID);
+    if (task && saved && contains(task, saved)) return saved;
+    return task?.sessions[0];
+  }
   return {
     state: store.state,
     subscribe: store.subscribe,
     tabs,
+    sessionFor,
     update(next: TabInput): void {
       const changedProject = next.directory !== input.directory;
       input = next;
@@ -103,9 +128,11 @@ export function createTabs(
         for (const id of task.sessions) promotions.delete(id);
       }
       store.update((draft) => {
+        draft.revision++;
         if (changedProject) {
           delete draft.selected;
           delete draft.preview;
+          delete draft.sessionID;
         }
         if (draft.selected?.kind === "session") {
           const task = input.inbox.tasks.find((t) =>
@@ -123,6 +150,14 @@ export function createTabs(
             t.id === draft.selected!.id && t.directory === input.directory
           )
         ) delete draft.selected;
+        if (draft.selected?.kind === "task" && draft.sessionID) {
+          const task = input.inbox.tasks.find((t) =>
+            t.id === draft.selected!.id
+          )!;
+          if (!contains(task, draft.sessionID)) {
+            draft.selected = { kind: "session", id: draft.sessionID };
+          }
+        }
         if (
           draft.selected?.kind === "session" &&
           !input.entries.some((e) =>
@@ -137,7 +172,7 @@ export function createTabs(
         ) delete draft.preview;
       });
     },
-    select(selection: TabSelection): void {
+    select(selection: TabSelection, sessionID?: string): void {
       if (
         !tabs().some((tab) =>
           tab.id === selection.id &&
@@ -146,9 +181,19 @@ export function createTabs(
             : tab.kind === "phantom")
         )
       ) throw new Error("Unknown tab");
+      const task = selection.kind === "task"
+        ? input.inbox.tasks.find((t) => t.id === selection.id)
+        : undefined;
+      const selectedID = sessionID ??
+        (task ? sessionFor(task.id) : selection.id);
+      if (task && selectedID && !contains(task, selectedID)) {
+        throw new Error("Unknown task session");
+      }
+      if (task && selectedID) remembered.set(task.id, selectedID);
       selectionRevision++;
       store.update((draft) => {
         draft.selected = { ...selection };
+        draft.sessionID = selectedID;
         delete draft.preview;
       });
     },
@@ -158,15 +203,20 @@ export function createTabs(
           e.id === sessionID && e.directory === input.directory
         )
       ) throw new Error("Unknown project session");
-      const task = input.inbox.tasks.find((t) =>
-        t.directory === input.directory && t.sessions.includes(sessionID)
-      );
+      const task =
+        input.inbox.tasks.find((t) =>
+          t.directory === input.directory && t.sessions.includes(sessionID)
+        ) ?? input.inbox.tasks.find((t) =>
+          t.directory === input.directory && contains(t, sessionID)
+        );
       selectionRevision++;
       store.update((draft) => {
         draft.selected = {
           kind: task ? "task" : "session",
           id: task?.id ?? sessionID,
         };
+        draft.sessionID = sessionID;
+        if (task) remembered.set(task.id, sessionID);
         if (task) delete draft.preview;
         else draft.preview = sessionID;
       });
@@ -194,6 +244,7 @@ export function createTabs(
         selectionRevision++;
         store.update((draft) => {
           draft.selected = { kind: "task", id: task.id };
+          draft.sessionID = sessionID;
           delete draft.preview;
         });
       }

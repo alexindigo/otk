@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { fromFileUrl, join } from "@std/path";
 import type { Harness, HarnessSink } from "@otk/harness";
-import type { ContentSession, IndexEntry } from "@otk/protocol";
+import type { ContentSession, IndexEntry, Message } from "@otk/protocol";
 import { startApplication } from "../../application.ts";
 import { cfg } from "./config.ts";
 
@@ -9,6 +9,7 @@ import { cfg } from "./config.ts";
 export async function inboxBrowserFixture(
   root: string,
   origins: string[] = [],
+  messages: Record<string, Message[]> = {},
 ) {
   const names = ["otk", "atmosphera", "globnotes", "luch"],
     entries: IndexEntry[] = [];
@@ -39,6 +40,7 @@ export async function inboxBrowserFixture(
     directory: entry.directory,
     projectID: entry.projectID,
     title: entry.title,
+    ...(entry.parentID ? { parentID: entry.parentID } : {}),
     archived: false,
     time: { created: entry.timeCreated, updated: entry.timeUpdated },
   });
@@ -65,23 +67,26 @@ export async function inboxBrowserFixture(
       subscriptions() {},
       getSession: (id) =>
         Promise.resolve(content(entries.find((e) => e.id === id)!)),
-      listChildren: () => Promise.resolve([]),
+      listChildren: (id) =>
+        Promise.resolve(entries.filter((e) => e.parentID === id).map(content)),
       listMessages: (id) =>
-        Promise.resolve([{
-          id: `${id}-message`,
-          sessionID: id,
-          role: "user",
-          time: { created: 1 },
-          parts: [{
-            id: `${id}-text`,
-            kind: "text",
-            synthetic: false,
-            blocks: [{
-              b: "paragraph",
-              inline: [{ i: "text", text: `Transcript for ${id}` }],
+        Promise.resolve(
+          messages[id] ?? [{
+            id: `${id}-message`,
+            sessionID: id,
+            role: "user",
+            time: { created: 1 },
+            parts: [{
+              id: `${id}-text`,
+              kind: "text",
+              synthetic: false,
+              blocks: [{
+                b: "paragraph",
+                inline: [{ i: "text", text: `Transcript for ${id}` }],
+              }],
             }],
           }],
-        }]),
+        ),
       createSession(input) {
         const entry = {
           ...entries[0],
@@ -115,6 +120,10 @@ export async function inboxBrowserFixture(
     app,
     entries,
     update,
+    add(entry: IndexEntry) {
+      entries.push(entry);
+      sink.indexUpsert(entry);
+    },
     url: `http://127.0.0.1:${app.server.addr.port}`,
   };
 }

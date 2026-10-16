@@ -574,6 +574,39 @@ async function scroll(browser: Cdp, bottom: boolean) {
   );
 }
 
+/** A scroll-to-top is not a reveal: chrome height and preceding message content
+ * can leave the first source line below the transcript's clip. Resolve a native
+ * source point only after a real wheel brings it inside the consumer viewport. */
+async function sourcePoint(browser: Cdp, expression: string) {
+  const measure =
+    `(()=>{const point=(${expression}),r=document.querySelector('.otk-messages').getBoundingClientRect();return {...point,visible:point.y>r.top&&point.y<r.bottom,pane:{x:r.x+r.width/2,y:r.y+r.height/2}}})()`;
+  const point = await browser.evaluate<
+    { x: number; y: number; visible: boolean; pane: { x: number; y: number } }
+  >(measure);
+  if (!point.visible) {
+    console.info("Source target reveal", point);
+    await browser.send("Input.dispatchMouseEvent", {
+      type: "mouseWheel",
+      ...point.pane,
+      deltaX: 0,
+      deltaY: point.y - point.pane.y,
+    });
+    await browser.poll(`(${measure}).visible`);
+  }
+  return await browser.evaluate<{ x: number; y: number }>(
+    `(()=>{const {x,y}=${measure};return {x,y}})()`,
+  );
+}
+
+async function revealLine(browser: Cdp, selector: string, index: number) {
+  await sourcePoint(
+    browser,
+    `(()=>{const code=document.querySelector(${
+      JSON.stringify(selector)
+    }),r=code.getBoundingClientRect(),line=(${sourceGeometry})(code,${index});return {x:r.x+Math.min(100,r.width/2),y:line.row}})()`,
+  );
+}
+
 async function scrollBoundary(browser: Cdp) {
   const point = await browser.evaluate<{ x: number; y: number; delta: number }>(
     `(()=>{
@@ -697,9 +730,12 @@ Deno.test("source rows and selected raw endpoints survive token catch-up while a
       "Viewport demand waited for every raw group despite complete native source",
     );
     await scroll(browser, false);
-    const point = await browser.evaluate<{ x: number; y: number }>(`(()=>{
+    const point = await sourcePoint(
+      browser,
+      `(()=>{
       const walker=document.createTreeWalker(document.querySelector('.otk-code code'),NodeFilter.SHOW_TEXT);let node;while(node=walker.nextNode()){const start=node.textContent.indexOf('viewport0');if(start>=0){const range=document.createRange();range.setStart(node,start);range.setEnd(node,start+9);const r=range.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}}}throw new Error('No raw viewport0 node');
-    })()`);
+    })()`,
+    );
     for (const type of ["mousePressed", "mouseReleased"]) {
       await browser.send("Input.dispatchMouseEvent", {
         type,
@@ -813,7 +849,8 @@ Deno.test("code viewport projection preserves complete text, selection/copy, rea
     const prefix = await browser.evaluate(
       "[...document.querySelectorAll('.otk-code-group:first-child .otk-token')].slice(0,8).map(el=>({text:el.textContent,color:getComputedStyle(el).color}))",
     );
-    const point = await browser.evaluate<{ x: number; y: number }>(
+    const point = await sourcePoint(
+      browser,
       "(()=>{const token=[...document.querySelectorAll('.otk-code-group:first-child .otk-token')].find(el=>el.textContent==='viewport0'),r=token.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
     );
     for (const type of ["mousePressed", "mouseReleased"]) {
@@ -907,6 +944,7 @@ Deno.test("code viewport projection preserves complete text, selection/copy, rea
       60000,
     );
     await scroll(browser, true);
+    await revealLine(browser, ".otk-code[data-numbered=true] code", 1999);
     await browser.poll(
       "[...document.querySelectorAll('.otk-code .otk-token')].some(el=>el.textContent==='viewport1999')",
     );
@@ -1137,6 +1175,12 @@ Deno.test("numbered source retains natural empty, blank and terminal geometry th
       );
       await browser.evaluate("measureShape();releaseShape()");
       if (targets.length) {
+        await scroll(browser, true);
+        await revealLine(
+          browser,
+          ".otk-code[data-numbered=true] code",
+          targets.at(-1)!.index,
+        );
         await browser.poll(
           `[...document.querySelectorAll('.otk-token')].some(el=>el.textContent===${
             JSON.stringify(targets.at(-1)!.word)
