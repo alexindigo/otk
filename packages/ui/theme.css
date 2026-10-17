@@ -232,39 +232,53 @@ small {
   padding: 0;
   border-radius: 50%;
 }
-/* One selection primitive per orientation. State is supplied by the owner.
-   The overlay's inset + auto margin structurally centres the pointer. */
+/* Selection state belongs to the binding; decoration belongs to item flow. */
 [data-otk-selection] {
-  position: relative;
   border-radius: var(--radius-row);
 }
 [data-otk-selection]:hover {
   background: var(--otk-hover);
 }
-[data-otk-selection]:is([aria-selected=true], [aria-current]:not([aria-current=false]), [aria-pressed=true], [data-selected]) {
+[data-otk-selection].is-selected {
   background: var(--otk-selected);
   color: var(--otk-fg);
   box-shadow: var(--otk-selected-shadow);
 }
-[data-otk-selection]:is([aria-selected=true], [aria-current]:not([aria-current=false]), [aria-pressed=true], [data-selected])::after {
-  content: "";
-  position: absolute;
-  pointer-events: none;
-  border-radius: 2px;
-  background: var(--otk-fg);
+:root [data-otk-selection=vertical].otk-selection-item {
+  display: flex;
+  align-items: center;
+  column-gap: 0;
+  padding-inline-start: 0;
 }
-[data-otk-selection=vertical]::after {
-  inset-block: 0;
-  left: 3px;
-  margin-block: auto;
+.otk-selection-lane {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: var(--selection-inset, 12px);
+}
+.otk-selection-marker {
+  flex: none;
   width: 3px;
   height: 14px;
+  border-radius: 2px;
+  background: transparent;
 }
-[data-otk-selection=horizontal]::after {
-  left: 8px;
-  right: 8px;
-  bottom: 0;
-  height: 2px;
+.is-selected > .otk-selection-lane > .otk-selection-marker {
+  background: var(--otk-fg);
+}
+.otk-selection-content {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
+}
+:root [data-otk-selection=horizontal].otk-selection-item {
+  border-bottom: 2px solid transparent;
+}
+:root [data-otk-selection=horizontal].is-selected {
+  border-bottom-color: var(--otk-fg);
 }
 b,
 strong,

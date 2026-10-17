@@ -17,7 +17,7 @@
   gap: 12px;
   border: 0;
 }
-.otk-autocomplete [aria-selected=true] {
+.otk-autocomplete .is-selected {
   background: var(--bg);
   color: var(--fg);
 }

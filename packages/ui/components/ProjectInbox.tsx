@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ProjectInbox.css" with { type: "text" };
+import { selection } from "./selection.ts";
+import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, For, Show } from "solid-js";
 import {
   type InboxProject,
@@ -90,35 +92,38 @@ export default function ProjectInbox(props: {
       >
         <button
           type="button"
-          class="otk-project-open"
+          {...selection({
+            class: "otk-project-open",
+            kind: "current",
+            selected: props.selected?.sidecarId === project().sidecarId &&
+              props.selected?.directory === project().directory,
+          })}
           data-otk-selection="vertical"
           aria-label={`Open project ${name()}${
             duplicate() ? ` on ${project().label}` : ""
           }`}
-          aria-current={props.selected?.sidecarId === project().sidecarId &&
-              props.selected?.directory === project().directory
-            ? "page"
-            : undefined}
           title={`${project().directory} · ${project().label} · ${project().status}`}
           onClick={() => void open(project())}
         >
-          <StatusLight state={project().status} />
-          <Show when={!collapsed()}>
-            <span class="otk-project-name-line">
-              <span
-                class={`otk-project-name otk-age-${project().ageing}`}
-                data-unread={project().unread ? "true" : "false"}
-              >
-                {name()}
+          <SelectionContent class="otk-project-content">
+            <StatusLight state={project().status} />
+            <Show when={!collapsed()}>
+              <span class="otk-project-name-line">
+                <span
+                  class={`otk-project-name otk-age-${project().ageing}`}
+                  data-unread={project().unread ? "true" : "false"}
+                >
+                  {name()}
+                </span>
+                <Show when={duplicate()}>
+                  <span class="otk-project-machine">{project().label}</span>
+                </Show>
               </span>
-              <Show when={duplicate()}>
-                <span class="otk-project-machine">{project().label}</span>
-              </Show>
-            </span>
-            <time class="otk-project-visit" title="Since last visit">
-              {project().visitText}
-            </time>
-          </Show>
+              <time class="otk-project-visit" title="Since last visit">
+                {project().visitText}
+              </time>
+            </Show>
+          </SelectionContent>
         </button>
         <Show when={!collapsed()}>
           <Menu

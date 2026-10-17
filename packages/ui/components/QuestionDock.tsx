@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./QuestionDock.css" with { type: "text" };
+import { selection } from "./selection.ts";
+import SelectionContent from "./SelectionContent.tsx";
 import type { DockRegistry } from "../registries/renderers.ts";
 export function registerQuestionDock(docks: DockRegistry): void {
   docks.register({
@@ -254,7 +256,7 @@ function Request(
               type="button"
               role="tab"
               data-otk-selection="horizontal"
-              aria-selected={tab() === i ? "true" : "false"}
+              {...selection({ kind: "selected", selected: tab() === i })}
               onClick={() => void tabCommand(i)}
             >
               {q().header || `Question ${i + 1}`}
@@ -265,7 +267,7 @@ function Request(
           type="button"
           role="tab"
           data-otk-selection="horizontal"
-          aria-selected={confirm() ? "true" : "false"}
+          {...selection({ kind: "selected", selected: confirm() })}
           onClick={() => void tabCommand(props.request.questions.length)}
         >
           Confirm
@@ -281,16 +283,19 @@ function Request(
             {(option, i) => (
               <button
                 type="button"
-                aria-pressed={answers()[tab()]?.includes(option().label)
-                  ? "true"
-                  : "false"}
+                {...selection({
+                  kind: "pressed",
+                  selected: answers()[tab()]?.includes(option().label) ?? false,
+                  candidate: selected() === i,
+                })}
                 data-otk-selection="vertical"
-                data-selected={selected() === i ? "" : undefined}
                 title={`Choose ${i + 1}`}
                 onClick={() => void chooseCommand(i)}
               >
-                <span>{option().label}</span>
-                <span class="otk-muted">{option().description}</span>
+                <SelectionContent class="otk-question-content">
+                  <span>{option().label}</span>
+                  <span class="otk-muted">{option().description}</span>
+                </SelectionContent>
               </button>
             )}
           </For>
@@ -299,12 +304,13 @@ function Request(
               type="button"
               onClick={() => void chooseCommand(question().options.length)}
               data-otk-selection="vertical"
-              data-selected={selected() === question().options.length
-                ? ""
-                : undefined}
-              class="otk-question-own"
+              {...selection({
+                class: "otk-question-own",
+                kind: "candidate",
+                selected: selected() === question().options.length,
+              })}
             >
-              Or type your own answer
+              <SelectionContent>Or type your own answer</SelectionContent>
             </button>
           </Show>
         </div>

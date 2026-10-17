@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Palette.css" with { type: "text" };
+import { selection } from "./selection.ts";
+import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
 import { useCommandPorts } from "../keyboard/context.tsx";
 export default function Palette(
@@ -57,18 +59,22 @@ export default function Palette(
                 type="button"
                 data-command={row().cmd.id}
                 data-otk-selection="vertical"
-                data-selected={rows().find((item) => item.enabled)?.cmd.id ===
-                    row().cmd.id
-                  ? ""
-                  : undefined}
+                {...selection({
+                  kind: "candidate",
+                  selected: rows().find((item) =>
+                    item.enabled
+                  )?.cmd.id === row().cmd.id,
+                })}
                 disabled={!row().enabled}
                 onClick={() => void invoke(row().cmd.id)}
               >
-                <span>
-                  {row().cmd.title}
-                  <small>{row().cmd.category}</small>
-                </span>
-                <kbd>{row().keys.join(" / ")}</kbd>
+                <SelectionContent class="otk-palette-content">
+                  <span>
+                    {row().cmd.title}
+                    <small>{row().cmd.category}</small>
+                  </span>
+                  <kbd>{row().keys.join(" / ")}</kbd>
+                </SelectionContent>
               </button>
             </li>
           )}

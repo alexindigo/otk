@@ -3,6 +3,10 @@ import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
+import {
+  type SelectionGeometry,
+  selectionGeometry,
+} from "../support/selection-geometry.ts";
 export const questions = [
   {
     header: "Rendering",
@@ -52,7 +56,7 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
         centre: number;
         tab: string;
       }
-    >("(()=>{const e=document.querySelector('.otk-question-options [data-selected]'),r=e.getBoundingClientRect(),p=getComputedStyle(e,'::after'),t=document.querySelector('.otk-question-tabs [aria-selected=true]');return {width:p.width,height:p.height,top:r.top+parseFloat(getComputedStyle(e).borderTopWidth)+parseFloat(p.top)+parseFloat(p.marginTop)+parseFloat(p.height)/2,centre:r.top+r.height/2,tab:getComputedStyle(t,'::after').height}})()");
+    >("(()=>{const e=document.querySelector('.otk-question-options .is-selected'),r=e.getBoundingClientRect(),m=e.querySelector('.otk-selection-marker'),p=m.getBoundingClientRect(),t=document.querySelector('.otk-question-tabs [aria-selected=true]');return {width:getComputedStyle(m).width,height:getComputedStyle(m).height,top:p.y+p.height/2,centre:r.top+r.height/2,tab:getComputedStyle(t).borderBottomWidth}})()");
     assertEquals([pointer.width, pointer.height, pointer.tab], [
       "3px",
       "14px",
@@ -64,16 +68,44 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
     try {
       for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         await client.rpc("prefs.set", { key: "theme", value: theme });
-        await client.rpc("prefs.set", { key: "reducedColors", value: true });
-        await browser.poll(
-          `document.documentElement.dataset.otkTheme==='${theme}' && document.documentElement.hasAttribute('data-otk-reduced-colors')`,
-        );
-        assertEquals(
-          await browser.evaluate(
-            "(()=>{const e=document.querySelector('.otk-question-options [data-selected]'),p=getComputedStyle(e,'::after'),t=document.querySelector('.otk-question-tabs [aria-selected=true]');return [p.width,p.height,getComputedStyle(t,'::after').height]})()",
-          ),
-          ["3px", "14px", "2px"],
-        );
+        for (const reduced of [false, true]) {
+          await client.rpc("prefs.set", {
+            key: "reducedColors",
+            value: reduced,
+          });
+          await browser.poll(
+            `document.documentElement.dataset.otkTheme==='${theme}' && document.documentElement.hasAttribute('data-otk-reduced-colors')===${reduced}`,
+          );
+          assertEquals(
+            await browser.evaluate(
+              "(()=>{const e=document.querySelector('.otk-question-options .is-selected'),p=getComputedStyle(e.querySelector('.otk-selection-marker')),t=document.querySelector('.otk-question-tabs [aria-selected=true]');return [p.width,p.height,getComputedStyle(t).borderBottomWidth]})()",
+            ),
+            ["3px", "14px", "2px"],
+          );
+          const items = await browser.evaluate<SelectionGeometry[]>(
+            selectionGeometry(
+              ".otk-question-options [data-otk-selection],.otk-question-tabs [data-otk-selection]",
+            ),
+          );
+          assert(items.length >= 5);
+          for (const item of items) {
+            assertEquals(item.shift, 0);
+            if (item.orientation === "vertical") {
+              assertEquals([item.w, item.h], [3, 14]);
+              assert(item.centred <= .5, JSON.stringify(item));
+              if (item.ariaPressed !== null) {
+                assertEquals(
+                  item.ariaPressed,
+                  "false",
+                  "The initial candidate is not a committed answer",
+                );
+              }
+            } else {
+              assertEquals(item.h, 2);
+              assertEquals(item.ariaSelected === "true", item.selected);
+            }
+          }
+        }
       }
       await client.rpc("prefs.set", { key: "reducedColors", value: false });
       await client.rpc("prefs.set", { key: "theme", value: "otk-dark" });

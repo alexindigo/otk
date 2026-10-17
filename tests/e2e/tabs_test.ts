@@ -338,7 +338,7 @@ Deno.test("all four phantom rules render through preview pin double-click send a
     await b.poll(
       `document.querySelector(${
         JSON.stringify(tab("otk"))
-      })?.getAttribute('aria-current')==='page'`,
+      })?.getAttribute('aria-selected')==='true'`,
     );
     await c.rpc("sessions.seen", { sessionID: "otk" });
     await b.click(tab(task.id));

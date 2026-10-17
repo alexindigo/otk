@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ThemePicker.css" with { type: "text" };
+import { selection } from "./selection.ts";
+import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, type Element, For, onSettled, Show } from "solid-js";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import type { ThemeEngine } from "../theme/engine.ts";
@@ -86,11 +88,14 @@ export default function ThemePicker(props: {
               type="button"
               data-theme-choice={choice().id}
               data-otk-selection="vertical"
-              aria-pressed={selected() === choice().id ? "true" : "false"}
+              {...selection({
+                kind: "pressed",
+                selected: selected() === choice().id,
+              })}
               disabled={pending()}
               onClick={() => void select(choice().id)}
             >
-              {choice().label}
+              <SelectionContent>{choice().label}</SelectionContent>
             </button>
           )}
         </For>

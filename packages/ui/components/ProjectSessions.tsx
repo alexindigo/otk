@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ProjectSessions.css" with { type: "text" };
+import { selection } from "./selection.ts";
+import SelectionContent from "./SelectionContent.tsx";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import type { InboxSnapshot } from "@otk/protocol";
 import {
@@ -105,7 +107,13 @@ export default function ProjectSessions(props: {
                       <li data-depth={row().depth} data-parent={row().parentID}>
                         <button
                           type="button"
-                          class="otk-session-row"
+                          {...selection({
+                            class: "otk-session-row",
+                            kind: "current",
+                            selected: props.selected?.sidecarId ===
+                                props.project!.sidecarId &&
+                              props.selected.sessionID === row().session.id,
+                          })}
                           data-otk-selection="vertical"
                           data-session={row().session.id}
                           data-status={row().session.status}
@@ -116,73 +124,70 @@ export default function ProjectSessions(props: {
                               ? `, child of ${merged(row().parentID!).title}`
                               : ""
                           }`}
-                          aria-current={props.selected?.sidecarId ===
-                                props.project!.sidecarId &&
-                              props.selected.sessionID === row().session.id
-                            ? "page"
-                            : undefined}
                           onClick={() =>
                             run(open(merged(row().session.id)))}
                           onDblClick={() =>
                             run(pin(merged(row().session.id)))}
                         >
-                          <span class="otk-session-leading">
-                            <Show when={row().depth > 0}>
-                              <span
-                                class="otk-session-indent"
-                                aria-hidden="true"
-                              >
-                                <svg
-                                  class="otk-session-branch"
-                                  viewBox="0 0 20 30"
-                                  fill="none"
-                                  stroke="currentColor"
+                          <SelectionContent>
+                            <span class="otk-session-leading">
+                              <Show when={row().depth > 0}>
+                                <span
+                                  class="otk-session-indent"
+                                  aria-hidden="true"
                                 >
-                                  <path d="M4 0v10a5 5 0 0 0 5 5h7" />
-                                </svg>
+                                  <svg
+                                    class="otk-session-branch"
+                                    viewBox="0 0 20 30"
+                                    fill="none"
+                                    stroke="currentColor"
+                                  >
+                                    <path d="M4 0v10a5 5 0 0 0 5 5h7" />
+                                  </svg>
+                                </span>
+                              </Show>
+                              <StatusLight
+                                small
+                                state={inboxStatus(
+                                  row().session,
+                                  props.inbox(props.project!.sidecarId),
+                                )}
+                                event={row().session.timeUpdated}
+                              />
+                            </span>
+                            <span class="otk-row-title">
+                              {row().session.title}
+                            </span>
+                            <Show when={row().session.status === "retry"}>
+                              <span>retry {row().session.retry?.attempt}</span>
+                            </Show>
+                            <Show
+                              when={row().session.attention.permissions +
+                                row().session.attention.childPermissions}
+                            >
+                              <span title="Pending permissions">
+                                P {row().session.attention.permissions +
+                                  row().session.attention.childPermissions}
                               </span>
                             </Show>
-                            <StatusLight
-                              small
-                              state={inboxStatus(
-                                row().session,
-                                props.inbox(props.project!.sidecarId),
-                              )}
-                              event={row().session.timeUpdated}
-                            />
-                          </span>
-                          <span class="otk-row-title">
-                            {row().session.title}
-                          </span>
-                          <Show when={row().session.status === "retry"}>
-                            <span>retry {row().session.retry?.attempt}</span>
-                          </Show>
-                          <Show
-                            when={row().session.attention.permissions +
-                              row().session.attention.childPermissions}
-                          >
-                            <span title="Pending permissions">
-                              P {row().session.attention.permissions +
-                                row().session.attention.childPermissions}
-                            </span>
-                          </Show>
-                          <Show
-                            when={row().session.attention.questions +
-                              row().session.attention.childQuestions}
-                          >
-                            <span title="Pending questions">
-                              Q {row().session.attention.questions +
+                            <Show
+                              when={row().session.attention.questions +
                                 row().session.attention.childQuestions}
-                            </span>
-                          </Show>
-                          <Show when={row().session.attention.error}>
-                            <span
-                              title={row().session.attention.error}
-                              aria-label="Session error"
                             >
-                              Error
-                            </span>
-                          </Show>
+                              <span title="Pending questions">
+                                Q {row().session.attention.questions +
+                                  row().session.attention.childQuestions}
+                              </span>
+                            </Show>
+                            <Show when={row().session.attention.error}>
+                              <span
+                                title={row().session.attention.error}
+                                aria-label="Session error"
+                              >
+                                Error
+                              </span>
+                            </Show>
+                          </SelectionContent>
                         </button>
                       </li>
                     )}

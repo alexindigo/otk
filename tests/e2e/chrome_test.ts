@@ -5,6 +5,10 @@ import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
+import {
+  type SelectionGeometry,
+  selectionGeometry,
+} from "../support/selection-geometry.ts";
 
 Deno.test("quiet chrome keeps corner geometry and non-colour selection across themes, collapse states and reload", async () => {
   const root = await fixture(),
@@ -70,17 +74,15 @@ Deno.test("quiet chrome keeps corner geometry and non-colour selection across th
                 )
               )
             );
-            const indicators = await b.evaluate<
-              {
-                orientation: string;
-                w: number;
-                h: number;
-                centred: number;
-                fill: string;
-              }[]
-            >(`[...document.querySelectorAll('[data-otk-selection][aria-current], [data-otk-selection][aria-selected=true]')].filter(e=>e.getBoundingClientRect().width).map(e=>{const s=getComputedStyle(e,'::after'),r=e.getBoundingClientRect();return {orientation:e.dataset.otkSelection,w:parseFloat(s.width),h:parseFloat(s.height),centred:Math.abs(parseFloat(s.top)+parseFloat(s.marginTop)+parseFloat(s.height)/2-r.height/2),fill:getComputedStyle(e).backgroundColor}})`);
+            const indicators = await b.evaluate<SelectionGeometry[]>(
+              selectionGeometry("[data-otk-selection].is-selected"),
+            );
             assert(indicators.length >= (rightCollapsed ? 3 : 5));
             for (const item of indicators) {
+              assertEquals(item.shift, 0);
+              assert(
+                item.ariaCurrent === "page" || item.ariaSelected === "true",
+              );
               assert(item.fill !== "rgba(0, 0, 0, 0)");
               if (item.orientation === "vertical") {
                 assertEquals(item.w, 3);
@@ -193,9 +195,9 @@ Deno.test("quiet chrome keeps corner geometry and non-colour selection across th
     );
     assertEquals(
       await b.evaluate(
-        `getComputedStyle(document.querySelector('[data-project-sessions~=atmosphera] .otk-project-open'),'::after').content`,
+        `getComputedStyle(document.querySelector('[data-project-sessions~=atmosphera] .otk-selection-marker')).backgroundColor`,
       ),
-      "none",
+      "rgba(0, 0, 0, 0)",
       "Hover alone must not claim selection",
     );
     await b.click(".otk-inbox-search");
@@ -206,7 +208,7 @@ Deno.test("quiet chrome keeps corner geometry and non-colour selection across th
     );
     assertEquals(
       await b.evaluate(
-        `getComputedStyle(document.querySelector('.otk-palette-list [data-selected]'),'::after').width`,
+        `getComputedStyle(document.querySelector('.otk-palette-list .is-selected .otk-selection-marker')).width`,
       ),
       "3px",
     );
@@ -216,7 +218,7 @@ Deno.test("quiet chrome keeps corner geometry and non-colour selection across th
     );
     assertEquals(
       await b.evaluate(
-        `getComputedStyle(document.querySelector('[data-theme-choice][aria-pressed=true]'),'::after').height`,
+        `getComputedStyle(document.querySelector('[data-theme-choice][aria-pressed=true] .otk-selection-marker')).height`,
       ),
       "14px",
     );

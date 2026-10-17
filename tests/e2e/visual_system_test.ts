@@ -339,7 +339,7 @@ Deno.test("public lights render all states, fixed gel colours, sizing, event bli
         const geometry = await browser.evaluate<
           {
             kind: string;
-            content: string;
+            selected: boolean;
             width: number;
             height: number;
             center: number;
@@ -347,12 +347,12 @@ Deno.test("public lights render all states, fixed gel colours, sizing, event bli
             bottom: number;
             fill: string;
           }[]
-        >(`[...document.querySelectorAll('[data-otk-selection]')].map(el=>{const row=el.getBoundingClientRect(),css=getComputedStyle(el,'::after');return {kind:el.dataset.otkSelection,content:css.content,width:parseFloat(css.width),height:parseFloat(css.height),center:parseFloat(css.top)+parseFloat(css.marginTop)+parseFloat(css.height)/2,rowCenter:row.height/2,bottom:parseFloat(css.bottom),fill:getComputedStyle(el).backgroundColor}})`);
-        assertEquals(geometry.map((g) => g.content), [
-          '""',
-          "none",
-          '""',
-          "none",
+        >(`[...document.querySelectorAll('[data-otk-selection]')].map(el=>{const row=el.getBoundingClientRect(),m=el.querySelector('.otk-selection-marker'),r=m?.getBoundingClientRect(),css=getComputedStyle(el);return {kind:el.dataset.otkSelection,selected:el.classList.contains('is-selected'),width:r?.width??row.width,height:r?.height??parseFloat(css.borderBottomWidth),center:r?r.y+r.height/2:0,rowCenter:row.y+row.height/2,bottom:row.height-el.clientHeight-parseFloat(css.borderTopWidth)-parseFloat(css.borderBottomWidth),fill:css.backgroundColor}})`);
+        assertEquals(geometry.map((g) => g.selected), [
+          true,
+          false,
+          true,
+          false,
         ]);
         assertEquals([geometry[0].width, geometry[0].height], [3, 14]);
         assert(

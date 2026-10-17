@@ -58,6 +58,8 @@ export { createIndex } from "./state/index.ts";
 export { createSession } from "./state/session.ts";
 export { createSidecars } from "./state/sidecars.ts";
 export { solidState } from "./state/binding.ts";
+export { selection } from "./components/selection.ts";
+export { default as SelectionContent } from "./components/SelectionContent.tsx";
 export * from "./registries/renderers.ts";
 export * from "./registries/prompt.ts";
 export * from "./registries/context.tsx";

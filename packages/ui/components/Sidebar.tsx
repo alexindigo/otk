@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Sidebar.css" with { type: "text" };
+import { selection } from "./selection.ts";
+import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
 import {
   type MergedEntry,
@@ -116,65 +118,65 @@ export default function Sidebar(
                       {(entry) => (
                         <button
                           type="button"
-                          class={["otk-session-row", {
-                            "otk-selected": props.selected ===
+                          {...selection({
+                            class: "otk-session-row",
+                            kind: "current",
+                            selected: props.selected ===
                               sessionKey(entry().sidecarId, entry().id),
-                          }]}
+                          })}
                           data-session={entry().id}
                           data-status={entry().status}
                           data-otk-selection="vertical"
-                          aria-current={props.selected ===
-                              sessionKey(entry().sidecarId, entry().id)
-                            ? "page"
-                            : undefined}
                           onClick={() => void open(entry())}
                         >
-                          <span class="otk-row-title">{entry().title}</span>
-                          <time
-                            datetime={new Date(entry().timeUpdated)
-                              .toISOString()}
-                          >
-                            {relative(entry().timeUpdated, now())}
-                          </time>
-                          <span class="otk-row-status">
-                            <StatusLight
-                              state={sessionLight(entry())}
-                              event={entry().timeUpdated}
-                            />
-                            {entry().status === "retry"
-                              ? `retry ${entry().retry?.attempt ?? ""}`
-                              : entry().status}
-                          </span>
-                          <span class="otk-attention">
-                            <Show
-                              when={entry().attention.permissions +
-                                entry().attention.childPermissions}
+                          <SelectionContent class="otk-sidebar-session-content">
+                            <span class="otk-row-title">{entry().title}</span>
+                            <time
+                              datetime={new Date(entry().timeUpdated)
+                                .toISOString()}
                             >
-                              {(count) => (
-                                <span title="Pending permissions">
-                                  P {count()}
-                                </span>
-                              )}
-                            </Show>
-                            <Show
-                              when={entry().attention.questions +
-                                entry().attention.childQuestions}
-                            >
-                              {(count) => (
-                                <span title="Pending questions">
-                                  Q {count()}
-                                </span>
-                              )}
-                            </Show>
-                            <Show when={entry().attention.error}>
-                              <span
-                                title={entry().attention.error}
-                                aria-label="Session error"
+                              {relative(entry().timeUpdated, now())}
+                            </time>
+                            <span class="otk-row-status">
+                              <StatusLight
+                                state={sessionLight(entry())}
+                                event={entry().timeUpdated}
+                              />
+                              {entry().status === "retry"
+                                ? `retry ${entry().retry?.attempt ?? ""}`
+                                : entry().status}
+                            </span>
+                            <span class="otk-attention">
+                              <Show
+                                when={entry().attention.permissions +
+                                  entry().attention.childPermissions}
                               >
-                                Error
-                              </span>
-                            </Show>
-                          </span>
+                                {(count) => (
+                                  <span title="Pending permissions">
+                                    P {count()}
+                                  </span>
+                                )}
+                              </Show>
+                              <Show
+                                when={entry().attention.questions +
+                                  entry().attention.childQuestions}
+                              >
+                                {(count) => (
+                                  <span title="Pending questions">
+                                    Q {count()}
+                                  </span>
+                                )}
+                              </Show>
+                              <Show when={entry().attention.error}>
+                                <span
+                                  title={entry().attention.error}
+                                  aria-label="Session error"
+                                >
+                                  Error
+                                </span>
+                              </Show>
+                            </span>
+                          </SelectionContent>
                         </button>
                       )}
                     </For>

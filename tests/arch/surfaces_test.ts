@@ -97,10 +97,6 @@ function ownershipErrors(files: Sources): string[] {
     for (const match of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const selector = match[1].replace(/\/\*[\s\S]*?\*\//g, "").trim(),
         body = match[2];
-      // Overlay-surfaces plan §2 explicitly parks the shared selection-marker
-      // structure. Its existing theme.css pseudo-element is not overlay layout.
-      const parkedSelectionMarker = name === "theme.css" &&
-        selector.includes("[data-otk-selection");
       const surface = name === "components/surface/Surface.css";
       const shadow = /box-shadow\s*:\s*([^;]+)/.exec(body)?.[1].trim();
       if (
@@ -113,7 +109,6 @@ function ownershipErrors(files: Sources): string[] {
         /(?:background|border-radius|box-shadow)\s*:/.test(body)
       ) errors.push(`${name}: field grouping is not a surface`);
       if (
-        !parkedSelectionMarker &&
         (overlay.has(name.replace(/\.css$/, ".tsx")) ||
           /^components\/surface\/\w+\.css$/.test(name)) &&
         !allowedPositions.has(`${name}:${selector}`)

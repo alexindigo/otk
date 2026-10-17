@@ -162,11 +162,17 @@ Transcript, composer and takeovers share `--lane-width: 736px` (the prototype's
 46rem at its default 16px root), centred within 24px gutters independently of
 the 13px interface root. User bubbles occupy at most 80% of that lane.
 
-Lists opt into `data-otk-selection="vertical"` or `"horizontal"`. The shared
-primitive reads `aria-selected="true"`, a non-false `aria-current`,
-`aria-pressed="true"` or a present `data-selected` attribute. Selected items
-receive a fill plus a vertically centred 3×14px left pointer or a 2px bottom
-underline. Hover alone only fills; reduced colours retains both indicators.
+Lists opt into `data-otk-selection="vertical"` or `"horizontal"` and spread
+`selection({ selected, kind, class? })` onto each item. This binding alone owns
+the `is-selected` state class and role-appropriate `selected`, `current` or
+`pressed` ARIA state. `candidate` marks an action the keyboard will invoke; an
+independent candidate may accompany committed multi-choice answers without
+changing their pressed state. All selection paint keys on the state class.
+Vertical items place their children inside `SelectionContent`, whose permanent
+leading lane holds a flowing, vertically centred 3×14px pointer. Horizontal
+items reserve their own 2px bottom border in both states. Neither decoration
+uses positioning or pseudo-elements; selection never changes box size. Hover
+alone only fills; reduced colours retains both indicators.
 
 Package units live in `tests/`; real browser/app tests remain at repository
 level. Builds/tests run inside the project's assigned VM. License: LGPL-3.0-only

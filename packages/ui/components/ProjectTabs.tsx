@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ProjectTabs.css" with { type: "text" };
+import { selection } from "./selection.ts";
+import SelectionContent from "./SelectionContent.tsx";
 import { createMemo, createSignal, type Element, For, Show } from "solid-js";
 import type {
   ContentSession,
@@ -163,17 +165,15 @@ export default function ProjectTabs(props: {
                 <button
                   type="button"
                   role="tab"
-                  class="otk-tab-open"
+                  {...selection({
+                    class: "otk-tab-open",
+                    kind: "selected",
+                    selected: props.model.state.selected?.id === tab().id,
+                  })}
                   data-otk-selection="horizontal"
                   title={tab().title}
                   data-tab={tab().id}
                   data-status={entry(props.model.state.sessionID ?? "")?.status}
-                  aria-selected={props.model.state.selected?.id === tab().id
-                    ? "true"
-                    : "false"}
-                  aria-current={props.model.state.selected?.id === tab().id
-                    ? "page"
-                    : undefined}
                   onClick={() => run(select(tab()))}
                   onDblClick={() =>
                     tab().kind === "phantom" && run(pin(tab().id))}
@@ -301,13 +301,15 @@ export default function ProjectTabs(props: {
                           <button
                             type="button"
                             data-otk-selection="vertical"
-                            aria-current={props.model.state.sessionID ===
-                                c().id
-                              ? "page"
-                              : undefined}
+                            {...selection({
+                              kind: "current",
+                              selected: props.model.state.sessionID === c().id,
+                            })}
                             onClick={() => run(openCrumb(c().id))}
                           >
-                            {entry(c().id)?.title ?? c().id}
+                            <SelectionContent>
+                              {entry(c().id)?.title ?? c().id}
+                            </SelectionContent>
                           </button>
                         )}
                       </For>
@@ -323,15 +325,16 @@ export default function ProjectTabs(props: {
                   </Show>
                   <button
                     type="button"
-                    class="otk-session-crumb"
+                    {...selection({
+                      class: "otk-session-crumb",
+                      kind: "current",
+                      selected: props.model.state.sessionID === crumb().id,
+                    })}
                     data-otk-selection="horizontal"
                     title={props.project.directory}
                     data-helper={String(crumb().helper)}
                     data-depth={crumb().depth}
                     data-crumb={crumb().id}
-                    aria-current={props.model.state.sessionID === crumb().id
-                      ? "page"
-                      : undefined}
                     onClick={() => run(openCrumb(crumb().id))}
                   >
                     <StatusLight

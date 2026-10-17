@@ -204,3 +204,9 @@
 .otk-project-inbox[data-collapsed=true] .otk-keys-entry {
   display: none;
 }
+.otk-project-inbox[data-collapsed=true] .otk-project-open {
+  padding-inline-end: var(--project-inset);
+}
+.otk-project-inbox[data-collapsed=true] .otk-project-content {
+  justify-content: center;
+}

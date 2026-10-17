@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./RightPanel.css" with { type: "text" };
+import { selection } from "./selection.ts";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import type { CapabilityName, Preferences } from "@otk/protocol";
 import { useUiRegistries } from "../registries/context.tsx";
@@ -46,12 +47,15 @@ export default function RightPanel(props: {
           {(view) => (
             <button
               type="button"
-              class="otk-icon-button"
+              {...selection({
+                class: "otk-icon-button",
+                kind: "selected",
+                selected: active()?.id === view().id,
+              })}
               data-otk-selection="horizontal"
               role="tab"
               title={view().title}
               aria-label={view().title}
-              aria-selected={active()?.id === view().id ? "true" : "false"}
               aria-controls="otk-panel-content"
               disabled={!props.ready}
               data-panel-view={view().id}

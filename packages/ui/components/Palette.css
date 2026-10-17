@@ -24,3 +24,10 @@
   color: var(--secondary);
   white-space: nowrap;
 }
+.otk-palette-list button {
+  --selection-inset: 16px;
+}
+.otk-palette-content {
+  justify-content: space-between;
+  gap: 12px;
+}

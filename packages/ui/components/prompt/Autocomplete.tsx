@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Autocomplete.css" with { type: "text" };
+import { selection } from "../selection.ts";
 import { For } from "solid-js";
 import type { CompletionOption } from "./autocomplete.ts";
 export default function Autocomplete(
@@ -20,7 +21,10 @@ export default function Autocomplete(
           <button
             type="button"
             role="option"
-            aria-selected={props.selected === index() ? "true" : "false"}
+            {...selection({
+              kind: "selected",
+              selected: props.selected === index(),
+            })}
             onClick={() => props.onSelect(index())}
           >
             <span>{option().label}{option().directory ? "/" : ""}</span>

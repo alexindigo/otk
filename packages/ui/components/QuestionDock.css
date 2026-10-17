@@ -49,3 +49,8 @@
   flex-wrap: wrap;
   gap: 8px;
 }
+.otk-question-content {
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}

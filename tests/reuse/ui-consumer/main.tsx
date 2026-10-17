@@ -27,6 +27,8 @@ import {
   registerOtkThemes,
   registerToolPart,
   registerUnknownPart,
+  selection,
+  SelectionContent,
   type SessionPorts,
   SessionProvider,
   StatusLight,
@@ -249,28 +251,28 @@ function Consumer(): Element {
             <button
               type="button"
               data-otk-selection="vertical"
-              aria-selected="true"
+              {...selection({ kind: "selected", selected: true })}
             >
-              Vertical selected
+              <SelectionContent>Vertical selected</SelectionContent>
             </button>
             <button
               type="button"
               data-otk-selection="vertical"
-              aria-selected="false"
+              {...selection({ kind: "selected", selected: false })}
             >
-              Vertical idle
+              <SelectionContent>Vertical idle</SelectionContent>
             </button>
             <button
               type="button"
               data-otk-selection="horizontal"
-              aria-current="page"
+              {...selection({ kind: "current", selected: true })}
             >
               Horizontal current
             </button>
             <button
               type="button"
               data-otk-selection="horizontal"
-              aria-current="false"
+              {...selection({ kind: "current", selected: false })}
             >
               Horizontal idle
             </button>

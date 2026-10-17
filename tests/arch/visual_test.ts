@@ -82,9 +82,8 @@ Deno.test("visual typography and spacing stay behind the shared contract", async
 function selectionErrors(source: string): string[] {
   return [...source.matchAll(/<(?:button|a)\b[^>]*(?:\{[^}]*\}[^>]*)*>/g)]
     .filter(([tag]) =>
-      /\b(?:aria-selected|aria-current|aria-pressed|data-selected)=/.test(
-        tag,
-      ) && !/data-otk-selection="(?:vertical|horizontal)"/.test(tag)
+      /\b(?:aria-selected|aria-current|aria-pressed|data-selected)=|\.\.\.selection\(/
+        .test(tag) && !/data-otk-selection="(?:vertical|horizontal)"/.test(tag)
     )
     .map(() => "selected chrome item bypasses the shared selection primitive");
 }
@@ -117,7 +116,7 @@ Deno.test("chrome selected/current states opt into the shared orientation primit
   );
   assertEquals(
     selectionErrors(
-      '<button data-otk-selection="vertical" aria-current={selected ? "page" : undefined}>',
+      '<button data-otk-selection="vertical" {...selection({ kind: "current", selected })}>',
     ),
     [],
   );

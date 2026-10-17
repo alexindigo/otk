@@ -70,6 +70,12 @@
     width: 100%;
     border: 1px solid transparent;
     padding: 12px 8px;
+    --selection-inset: 8px;
+  }
+  .otk-sidebar-session-content {
+    display: grid;
+    grid-template-columns: minmax(0,1fr) auto;
+    gap: 8px;
   }
   .otk-row-title {
     overflow: hidden;
