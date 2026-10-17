@@ -102,7 +102,7 @@ Deno.test("inbox activity returns inactive projects and all three required light
     );
     const unread = `${row(f.entries[2].directory)} .otk-project-name`;
     const alignment = await browser.evaluate<number[]>(
-      `[...document.querySelectorAll('.otk-project-open')].map(e=>{const a=e.querySelector('.otk-status-light').getBoundingClientRect(),b=e.querySelector('.otk-project-name-line').getBoundingClientRect(),c=e.querySelector('time').getBoundingClientRect();return Math.max(Math.abs(a.y+a.height/2-b.y-b.height/2),Math.abs(a.y+a.height/2-c.y-c.height/2))})`,
+      `[...document.querySelectorAll('.otk-project-row')].map(e=>{const a=e.querySelector('.otk-status-light').getBoundingClientRect(),b=e.querySelector('.otk-project-name-line').getBoundingClientRect(),c=e.querySelector('time').getBoundingClientRect();return Math.max(Math.abs(a.y+a.height/2-b.y-b.height/2),Math.abs(a.y+a.height/2-c.y-c.height/2))})`,
     );
     assert(alignment.every((delta) => delta < .5), JSON.stringify(alignment));
     assertEquals(

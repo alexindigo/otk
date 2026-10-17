@@ -187,13 +187,12 @@ Deno.test("every registered dialog and anchored menu shares contained flow and n
       await browser.poll(
         "document.activeElement===document.querySelector('[aria-label=\"Edit prompt\"]')",
       );
-      await browser.click(".otk-tab-actions > button");
-      await browser.poll(
-        "!!document.querySelector('.otk-tab-actions :popover-open')",
+      assertEquals(
+        await browser.evaluate(
+          "document.querySelectorAll('.otk-tab button[popovertarget], .otk-tab [popover]').length",
+        ),
+        0,
       );
-      await contained(browser, `${theme} tab actions`);
-      await browser.key("Escape");
-      await browser.poll("!document.querySelector(':popover-open')");
       await browser.click(".otk-folded-crumbs > button");
       await browser.poll(
         "!!document.querySelector('.otk-folded-crumbs :popover-open')",

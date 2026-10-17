@@ -48,8 +48,8 @@
 .otk-project-row {
   display: flex;
   align-items: center;
-  position: relative;
   height: 32px;
+  color: var(--otk-fg-2);
 }
 .otk-project-open {
   display: flex;
@@ -58,9 +58,14 @@
   flex: 1;
   min-width: 0;
   height: 32px;
-  padding: 0 var(--chrome-inset) 0 var(--project-inset);
+  padding: 0 var(--chrome-inset) 0 0;
   border: 0;
   text-align: left;
+  color: inherit;
+}
+.otk-project-open:hover {
+  background: transparent;
+  color: inherit;
 }
 .otk-project-name-line {
   flex: 1;
@@ -68,6 +73,9 @@
   align-items: center;
   gap: 4px;
   min-width: 0;
+}
+.otk-project-content {
+  gap: 0;
 }
 .otk-project-name {
   font-size: 13px;
@@ -90,9 +98,18 @@
   white-space: nowrap;
   font-size: 12px;
 }
+.otk-project-trailing {
+  display: grid;
+  align-items: center;
+  justify-items: end;
+  flex: none;
+  min-width: 24px;
+  padding-inline-end: 4px;
+}
+.otk-project-trailing > * {
+  grid-area: 1 / 1;
+}
 .otk-project-menu {
-  position: absolute;
-  right: 4px;
   opacity: 0;
 }
 .otk-project-row:is(:hover, :focus-within) .otk-project-menu,
@@ -204,7 +221,7 @@
 .otk-project-inbox[data-collapsed=true] .otk-keys-entry {
   display: none;
 }
-.otk-project-inbox[data-collapsed=true] .otk-project-open {
+.otk-project-inbox[data-collapsed=true] .otk-project-row {
   padding-inline-end: var(--project-inset);
 }
 .otk-project-inbox[data-collapsed=true] .otk-project-content {

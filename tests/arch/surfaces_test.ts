@@ -88,7 +88,6 @@ function ownershipErrors(files: Sources): string[] {
   }
   const allowedPositions = new Set([
     "components/surface/Popover.css:.otk-popover-panel", // The anchored overlay itself, never content.
-    "components/ProjectInbox.css:.otk-project-menu", // Existing parked trigger placement.
     "components/ProjectInbox.css:.otk-inbox-resizer",
     "components/Toasts.css:.otk-toasts", // Existing fixed notification stack.
   ]);

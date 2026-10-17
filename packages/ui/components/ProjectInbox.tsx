@@ -80,7 +80,13 @@ export default function ProjectInbox(props: {
         1;
     return (
       <div
-        class="otk-project-row"
+        {...selection({
+          class: "otk-project-row",
+          kind: "current",
+          selected: props.selected?.sidecarId === project().sidecarId &&
+            props.selected?.directory === project().directory,
+        })}
+        data-otk-selection="vertical"
         data-project={project().directory}
         data-server={project().sidecarId}
         data-project-sessions={props.entries.filter((e) =>
@@ -90,22 +96,16 @@ export default function ProjectInbox(props: {
         data-inactive={project().inactive ? "true" : "false"}
         data-rollup={project().status}
       >
-        <button
-          type="button"
-          {...selection({
-            class: "otk-project-open",
-            kind: "current",
-            selected: props.selected?.sidecarId === project().sidecarId &&
-              props.selected?.directory === project().directory,
-          })}
-          data-otk-selection="vertical"
-          aria-label={`Open project ${name()}${
-            duplicate() ? ` on ${project().label}` : ""
-          }`}
-          title={`${project().directory} · ${project().label} · ${project().status}`}
-          onClick={() => void open(project())}
-        >
-          <SelectionContent class="otk-project-content">
+        <SelectionContent class="otk-project-content">
+          <button
+            type="button"
+            class="otk-project-open"
+            aria-label={`Open project ${name()}${
+              duplicate() ? ` on ${project().label}` : ""
+            }`}
+            title={`${project().directory} · ${project().label} · ${project().status}`}
+            onClick={() => void open(project())}
+          >
             <StatusLight state={project().status} />
             <Show when={!collapsed()}>
               <span class="otk-project-name-line">
@@ -119,30 +119,32 @@ export default function ProjectInbox(props: {
                   <span class="otk-project-machine">{project().label}</span>
                 </Show>
               </span>
+            </Show>
+          </button>
+          <Show when={!collapsed()}>
+            <div class="otk-project-trailing">
               <time class="otk-project-visit" title="Since last visit">
                 {project().visitText}
               </time>
-            </Show>
-          </SelectionContent>
-        </button>
-        <Show when={!collapsed()}>
-          <Menu
-            class="otk-project-menu"
-            label={`Project menu for ${name()}`}
-            trigger="⋯"
-          >
-            <button
-              type="button"
-              onClick={() =>
-                void inactive({
-                  project: project(),
-                  value: !project().inactive,
-                })}
-            >
-              {project().inactive ? "Mark active" : "Mark inactive"}
-            </button>
-          </Menu>
-        </Show>
+              <Menu
+                class="otk-project-menu"
+                label={`Project menu for ${name()}`}
+                trigger="⋯"
+              >
+                <button
+                  type="button"
+                  onClick={() =>
+                    void inactive({
+                      project: project(),
+                      value: !project().inactive,
+                    })}
+                >
+                  {project().inactive ? "Mark active" : "Mark inactive"}
+                </button>
+              </Menu>
+            </div>
+          </Show>
+        </SelectionContent>
       </div>
     );
   }

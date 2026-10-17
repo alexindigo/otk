@@ -24,6 +24,7 @@ import StatusLight from "./StatusLight.tsx";
 import { ChevronIcon, PlusIcon } from "./ChromeIcons.tsx";
 import { ownedAction, useCommandPorts } from "../keyboard/context.tsx";
 import Menu from "./surface/Menu.tsx";
+import { createTaskControls } from "../features/task-controls.ts";
 
 /** Presentation and injected actions only; the framework-free tabs owner decides
  * which mandatory, preview and selected-idle tabs exist. */
@@ -71,48 +72,18 @@ export default function ProjectTabs(props: {
       props.model.select({ kind: "task", id: tab.id }, id);
     }
   });
-  const name = (task?: TaskRecord) => {
-    const actions = props.actions, model = props.model;
-    run(commands.run("dialog.open", {
-      id: "task-name",
-      input: {
-        name: task?.name,
-        save: async (name: string) => {
-          if (task) await actions.rename(task.id, name);
-          else {
-            const created = await actions.create(name);
-            if (props.model === model && props.onEmpty()) {
-              model.select({ kind: "task", id: created.id });
-            }
-          }
-        },
-      },
-    }));
-  };
-  const reorder = async (task: TaskRecord, delta: number) => {
-    const ids = tasks().map((t) => t.id),
-      from = ids.indexOf(task.id),
-      to = from + delta;
-    if (to < 0 || to >= ids.length) return;
-    [ids[from], ids[to]] = [ids[to], ids[from]];
-    await props.actions.reorder(ids);
-  };
-  const pin = ownedAction("task.pin", (id: string) => props.model.pin(id));
-  const rename = ownedAction("task.rename", (task?: TaskRecord) => name(task));
-  const move = ownedAction(
-    "task.reorder",
-    (input: { task: TaskRecord; delta: number }) =>
-      reorder(input.task, input.delta),
-  );
-  const close = ownedAction(
-    "task.close",
-    (id: string) => props.actions.close(id),
-  );
-  const add = ownedAction(
-    "task.add",
-    (input: { task: TaskRecord; sessionID: string }) =>
-      props.actions.add(input.task, input.sessionID),
-  );
+  const controls = createTaskControls({
+    commands,
+    actions: () => props.actions,
+    model: () => props.model,
+    tasks,
+    onEmpty: () => props.onEmpty(),
+  });
+  const pin = ownedAction("task.pin", controls.pin);
+  const rename = ownedAction("task.rename", controls.rename);
+  ownedAction("task.reorder", controls.move);
+  ownedAction("task.close", controls.close);
+  ownedAction("task.add", controls.add);
   const createSession = ownedAction(
     "task.session.new",
     () => props.onCreateSession(active()),
@@ -186,86 +157,6 @@ export default function ProjectTabs(props: {
                     </Show>
                   </SelectionContent>
                 </button>
-                <Menu
-                  class="otk-tab-actions"
-                  label={`Actions for ${tab().title}`}
-                  trigger="⋯"
-                >
-                  <Show
-                    when={tab().kind === "task"}
-                    fallback={
-                      <>
-                        <button
-                          type="button"
-                          disabled={!props.ready}
-                          onClick={() => run(pin(tab().id))}
-                        >
-                          Pin as task
-                        </button>
-                        <For
-                          each={tasks()}
-                          keyed={(t) => t.id}
-                        >
-                          {(task) => (
-                            <button
-                              type="button"
-                              disabled={!props.ready}
-                              onClick={() =>
-                                run(
-                                  add({ task: task(), sessionID: tab().id }),
-                                )}
-                            >
-                              Add to task: {task().name}
-                            </button>
-                          )}
-                        </For>
-                      </>
-                    }
-                  >
-                    <button
-                      type="button"
-                      disabled={!props.ready}
-                      onClick={() =>
-                        run(rename(tasks().find((t) => t.id === tab().id)))}
-                    >
-                      Rename task
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!props.ready || tasks()[0]?.id === tab().id}
-                      onClick={() =>
-                        run(
-                          move({
-                            task: tasks().find((t) => t.id === tab().id)!,
-                            delta: -1,
-                          }),
-                        )}
-                    >
-                      Move task left
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!props.ready ||
-                        tasks().at(-1)?.id === tab().id}
-                      onClick={() =>
-                        run(
-                          move({
-                            task: tasks().find((t) => t.id === tab().id)!,
-                            delta: 1,
-                          }),
-                        )}
-                    >
-                      Move task right
-                    </button>
-                    <button
-                      type="button"
-                      disabled={!props.ready}
-                      onClick={() => run(close(tab().id))}
-                    >
-                      Close task
-                    </button>
-                  </Show>
-                </Menu>
               </div>
             )}
           </For>

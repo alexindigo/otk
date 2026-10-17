@@ -34,7 +34,6 @@
   gap: var(--chrome-gap);
 }
 .otk-tab {
-  position: relative;
   gap: 0;
   border-radius: var(--radius-row);
 }
@@ -53,15 +52,6 @@
   font-size: 12px;
   color: var(--otk-fg-3);
   font-style: normal;
-}
-.otk-tab-actions > .otk-popover-trigger {
-  cursor: pointer;
-  padding: 0 4px;
-  opacity: 0;
-}
-.otk-tab:is(:hover, :focus-within) .otk-tab-actions > .otk-popover-trigger,
-.otk-tab-actions[data-open=true] > .otk-popover-trigger {
-  opacity: 1;
 }
 .otk-topbar-end {
   margin-left: auto;

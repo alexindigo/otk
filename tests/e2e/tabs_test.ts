@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import type { InboxSnapshot, Message, TaskRecord } from "@otk/protocol";
+import { createTabs, createTaskActions } from "@otk/client";
 import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
@@ -21,31 +22,27 @@ async function evidence(b: Cdp, root: string) {
   );
   console.info("Tabs browser evidence:", root);
 }
-async function menu(b: Cdp, id: string, text: string) {
-  await b.click(tab(id));
-  await b.poll(
-    `document.querySelector(${
-      JSON.stringify(tab(id))
-    })?.getAttribute('aria-selected')==='true'`,
+/** Public client owners drive real RPC while tabs have no menu entry point.
+ * Package-local units cover the retained UI handlers; return these drivers to
+ * the UI when the replacement tab-menu wiring is specified. */
+async function taskControls(
+  c: WsClient,
+  f: Awaited<ReturnType<typeof inboxBrowserFixture>>,
+) {
+  const directory = f.entries[0].directory;
+  const inbox = await c.rpc<InboxSnapshot>("inbox.get", {});
+  const actions = createTaskActions({
+    call: (method, params) => c.rpc(method, params),
+  }, directory);
+  const model = createTabs((session) =>
+    c.rpc<TaskRecord>("tasks.create", {
+      directory: session.directory,
+      name: session.title,
+      sessions: [session.id],
+    })
   );
-  const summary = await b.evaluate<string>(
-    `(()=>{const e=document.querySelector(${
-      JSON.stringify(tab(id))
-    }).closest('.otk-tab');e.dataset.testMenu='current';return '[data-test-menu=current] .otk-popover-trigger'})()`,
-  );
-  await b.click(summary);
-  await b.poll(
-    "document.querySelector('[data-test-menu=current] .otk-popover-panel')?.matches(':popover-open')",
-  );
-  const selector = await b.evaluate<string>(
-    `(()=>{const e=[...document.querySelectorAll('[data-test-menu=current] .otk-menu-items button')].find(e=>e.textContent===${
-      JSON.stringify(text)
-    });e.dataset.testAction='current';return '[data-test-action=current]'})()`,
-  );
-  await b.click(selector);
-  await b.evaluate(
-    "document.querySelectorAll('[data-test-menu],[data-test-action]').forEach(e=>{delete e.dataset.testMenu;delete e.dataset.testAction})",
-  );
+  model.update({ directory, entries: f.entries, inbox });
+  return { actions, model };
 }
 async function createTask(b: Cdp, name: string) {
   await b.click(".otk-task-new");
@@ -176,19 +173,43 @@ Deno.test("task tabs create rename reorder and close without deleting sessions; 
       "true",
     );
     await b.fill("textarea[name=prompt]", "");
-    await menu(b, exec.id, "Rename task");
-    await b.fill("input[name=taskName]", "Build");
-    await b.click("dialog button[type=submit]");
+    const owner = await taskControls(c, f);
+    await owner.actions.rename(exec.id, "Build");
     await b.poll(
       `document.querySelector(${
         JSON.stringify(tab(exec.id))
       })?.textContent.includes('Build')`,
     );
-    await menu(b, exec.id, "Move task left");
+    assertEquals(
+      (await c.rpc<TaskRecord[]>("tasks.list", {})).find((t) =>
+        t.id === exec.id
+      )!.name,
+      "Build",
+    );
+    await owner.actions.reorder([exec.id, plan.id]);
     await b.poll(
       `document.querySelector('.otk-tab-open')?.dataset.tab===${
         JSON.stringify(exec.id)
       }`,
+    );
+    await owner.actions.reorder([plan.id, exec.id]);
+    await b.poll(
+      `document.querySelector('.otk-tab-open')?.dataset.tab===${
+        JSON.stringify(plan.id)
+      }`,
+    );
+    await owner.actions.reorder([exec.id, plan.id]);
+    await b.poll(
+      `document.querySelector('.otk-tab-open')?.dataset.tab===${
+        JSON.stringify(exec.id)
+      }`,
+    );
+    // Both directions persist; UI-handler units prove the move boundaries.
+    assertEquals(
+      (await c.rpc<TaskRecord[]>("tasks.list", {})).sort((a, b) =>
+        a.order - b.order
+      ).map((t) => t.id),
+      [exec.id, plan.id],
     );
     await b.click(".otk-new-session");
     await b.poll(
@@ -202,7 +223,7 @@ Deno.test("task tabs create rename reorder and close without deleting sessions; 
         JSON.stringify(exec.id)
       }`,
     );
-    await menu(b, exec.id, "Close task");
+    await owner.actions.close(exec.id);
     await b.poll(`!document.querySelector(${JSON.stringify(tab(exec.id))})`);
     for (const id of ["otk", "second"]) {
       assert(await c.rpc("session.get", { sessionID: id }));
@@ -307,7 +328,7 @@ Deno.test("all four phantom rules render through preview pin double-click send a
       ),
       "italic",
     );
-    await menu(b, "preview-b", "Pin as task");
+    await (await taskControls(c, f)).model.pin("preview-b");
     await b.poll(
       "document.querySelector('.otk-tab[data-kind=task]')?.textContent.includes('preview-b')",
     );
@@ -326,7 +347,7 @@ Deno.test("all four phantom rules render through preview pin double-click send a
     const task = (await c.rpc<TaskRecord[]>("tasks.list", {})).find((t) =>
       t.name === "send"
     )!;
-    await menu(b, "pin", "Add to task: send");
+    await (await taskControls(c, f)).actions.add(task, "pin");
     await b.poll(`!document.querySelector(${JSON.stringify(tab("pin"))})`);
     assert(
       (await c.rpc<TaskRecord[]>("tasks.list", {})).find((t) =>

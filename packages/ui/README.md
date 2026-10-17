@@ -110,14 +110,19 @@ never invents a context-window denominator or percentage. The inbox has 32px
 rows, hover-revealed menus, Search and a compact settings/keys/server footer;
 Sessions has 30px rows and CSS child guides. Chrome uses the shared selection
 pointer/underline, and shortcuts remain in tooltips, Keys and the palette.
-`registerTaskDialogs` contributes its name editor to the dialog host.
-`session.preview` and `session.pin` are guarded command ports for the Sessions
-panel; preview replacement cannot remove required activity tabs.
-`ProjectSessions` consumes the framework-free client hierarchy and injected
-open/pin/create actions. The shell's existing navigation guard protects
-draft/attention input, including same-event slash navigation and browser
-history. Project-only URLs support empty projects. Opening or acting resets
-visits; a loaded viewed session records seen.
+`registerTaskDialogs` contributes its name editor to the dialog host. Tabs have
+no per-tab menu; their owner-scoped commands and package-internal task handlers
+retain pin, naming, moving, adding and closing actions independently of
+presentation. Project rows own selection around their flowing open button and
+trailing cell. That cell reserves visit time and menu trigger in the same grid
+cell, revealing the trigger on hover or focus without shifting content or
+positioning it over the row. `session.preview` and `session.pin` are guarded
+command ports for the Sessions panel; preview replacement cannot remove required
+activity tabs. `ProjectSessions` consumes the framework-free client hierarchy
+and injected open/pin/create actions. The shell's existing navigation guard
+protects draft/attention input, including same-event slash navigation and
+browser history. Project-only URLs support empty projects. Opening or acting
+resets visits; a loaded viewed session records seen.
 
 `createIndex`, `createSession`, `createSidecars` and `solidState` bind the
 framework-free client models to Solid stores. Connection options, including the

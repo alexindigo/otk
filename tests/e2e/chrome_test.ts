@@ -193,7 +193,7 @@ Deno.test("quiet chrome keeps corner geometry and non-colour selection across th
     );
     assertEquals(
       await b.evaluate(
-        `getComputedStyle(document.querySelector('[data-project-sessions~=atmosphera] .otk-project-open'),'::before').backgroundColor`,
+        `getComputedStyle(document.querySelector('[data-project-sessions~=atmosphera]'),'::before').backgroundColor`,
       ),
       "rgba(0, 0, 0, 0)",
       "Hover alone must not claim selection",
