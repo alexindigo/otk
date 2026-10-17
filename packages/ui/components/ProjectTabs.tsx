@@ -21,6 +21,7 @@ import {
 import StatusLight from "./StatusLight.tsx";
 import { ChevronIcon, PlusIcon } from "./ChromeIcons.tsx";
 import { ownedAction, useCommandPorts } from "../keyboard/context.tsx";
+import Menu from "./surface/Menu.tsx";
 
 /** Presentation and injected actions only; the framework-free tabs owner decides
  * which mandatory, preview and selected-idle tabs exist. */
@@ -183,91 +184,86 @@ export default function ProjectTabs(props: {
                     <span class="otk-preview-label">Preview</span>
                   </Show>
                 </button>
-                <details class="otk-tab-actions">
-                  <summary aria-label={`Actions for ${tab().title}`}>⋯</summary>
-                  <div
-                    class="otk-tab-menu"
-                    onClick={(e) =>
-                      e.currentTarget.closest("details")?.removeAttribute(
-                        "open",
-                      )}
+                <Menu
+                  class="otk-tab-actions"
+                  label={`Actions for ${tab().title}`}
+                  trigger="⋯"
+                >
+                  <Show
+                    when={tab().kind === "task"}
+                    fallback={
+                      <>
+                        <button
+                          type="button"
+                          disabled={!props.ready}
+                          onClick={() => run(pin(tab().id))}
+                        >
+                          Pin as task
+                        </button>
+                        <For
+                          each={tasks()}
+                          keyed={(t) => t.id}
+                        >
+                          {(task) => (
+                            <button
+                              type="button"
+                              disabled={!props.ready}
+                              onClick={() =>
+                                run(
+                                  add({ task: task(), sessionID: tab().id }),
+                                )}
+                            >
+                              Add to task: {task().name}
+                            </button>
+                          )}
+                        </For>
+                      </>
+                    }
                   >
-                    <Show
-                      when={tab().kind === "task"}
-                      fallback={
-                        <>
-                          <button
-                            type="button"
-                            disabled={!props.ready}
-                            onClick={() => run(pin(tab().id))}
-                          >
-                            Pin as task
-                          </button>
-                          <For
-                            each={tasks()}
-                            keyed={(t) => t.id}
-                          >
-                            {(task) => (
-                              <button
-                                type="button"
-                                disabled={!props.ready}
-                                onClick={() =>
-                                  run(
-                                    add({ task: task(), sessionID: tab().id }),
-                                  )}
-                              >
-                                Add to task: {task().name}
-                              </button>
-                            )}
-                          </For>
-                        </>
-                      }
+                    <button
+                      type="button"
+                      disabled={!props.ready}
+                      onClick={() =>
+                        run(rename(tasks().find((t) => t.id === tab().id)))}
                     >
-                      <button
-                        type="button"
-                        disabled={!props.ready}
-                        onClick={() =>
-                          run(rename(tasks().find((t) => t.id === tab().id)))}
-                      >
-                        Rename task
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!props.ready || tasks()[0]?.id === tab().id}
-                        onClick={() =>
-                          run(
-                            move({
-                              task: tasks().find((t) => t.id === tab().id)!,
-                              delta: -1,
-                            }),
-                          )}
-                      >
-                        Move task left
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!props.ready ||
-                          tasks().at(-1)?.id === tab().id}
-                        onClick={() =>
-                          run(
-                            move({
-                              task: tasks().find((t) => t.id === tab().id)!,
-                              delta: 1,
-                            }),
-                          )}
-                      >
-                        Move task right
-                      </button>
-                      <button
-                        type="button"
-                        disabled={!props.ready}
-                        onClick={() => run(close(tab().id))}
-                      >
-                        Close task
-                      </button>
-                    </Show>
-                  </div>
-                </details>
+                      Rename task
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!props.ready || tasks()[0]?.id === tab().id}
+                      onClick={() =>
+                        run(
+                          move({
+                            task: tasks().find((t) => t.id === tab().id)!,
+                            delta: -1,
+                          }),
+                        )}
+                    >
+                      Move task left
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!props.ready ||
+                        tasks().at(-1)?.id === tab().id}
+                      onClick={() =>
+                        run(
+                          move({
+                            task: tasks().find((t) => t.id === tab().id)!,
+                            delta: 1,
+                          }),
+                        )}
+                    >
+                      Move task right
+                    </button>
+                    <button
+                      type="button"
+                      disabled={!props.ready}
+                      onClick={() => run(close(tab().id))}
+                    >
+                      Close task
+                    </button>
+                  </Show>
+                </Menu>
               </div>
             )}
           </For>
@@ -292,29 +288,30 @@ export default function ProjectTabs(props: {
                 when={visibleCrumb(n())}
                 fallback={
                   <Show when={n() === 0 || visibleCrumb(n() - 1)}>
-                    <details class="otk-folded-crumbs">
-                      <summary aria-label="More task sessions">…</summary>
-                      <div class="otk-tab-menu">
-                        <For
-                          each={crumbs().filter((_, i) => !visibleCrumb(i))}
-                          keyed={(c) => c.id}
-                        >
-                          {(c) => (
-                            <button
-                              type="button"
-                              data-otk-selection="vertical"
-                              aria-current={props.model.state.sessionID ===
-                                  c().id
-                                ? "page"
-                                : undefined}
-                              onClick={() => run(openCrumb(c().id))}
-                            >
-                              {entry(c().id)?.title ?? c().id}
-                            </button>
-                          )}
-                        </For>
-                      </div>
-                    </details>
+                    <Menu
+                      class="otk-folded-crumbs"
+                      label="More task sessions"
+                      trigger="…"
+                    >
+                      <For
+                        each={crumbs().filter((_, i) => !visibleCrumb(i))}
+                        keyed={(c) => c.id}
+                      >
+                        {(c) => (
+                          <button
+                            type="button"
+                            data-otk-selection="vertical"
+                            aria-current={props.model.state.sessionID ===
+                                c().id
+                              ? "page"
+                              : undefined}
+                            onClick={() => run(openCrumb(c().id))}
+                          >
+                            {entry(c().id)?.title ?? c().id}
+                          </button>
+                        )}
+                      </For>
+                    </Menu>
                   </Show>
                 }
               >

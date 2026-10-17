@@ -43,6 +43,6 @@
   touch-action: none;
 }
 .otk-panel-resizer:focus-visible {
-  outline: 2px solid var(--focus);
+  outline: 2px solid var(--otk-action-focus);
   outline-offset: -2px;
 }

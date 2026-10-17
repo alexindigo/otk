@@ -2,6 +2,7 @@
 import "./Toasts.css" with { type: "text" };
 import { createSignal, For, onCleanup, Show } from "solid-js";
 import type { ToastsModel } from "../features/notify/toast.ts";
+import Toast from "./surface/Toast.tsx";
 export default function Toasts(
   props: { model: ToastsModel },
 ): import("solid-js").Element {
@@ -15,11 +16,7 @@ export default function Toasts(
           item.note.id}
       >
         {(item) => (
-          <article
-            class="otk-toast"
-            data-note={item().note.id}
-            data-kind={item().note.kind}
-          >
+          <Toast id={item().note.id} kind={item().note.kind}>
             <button
               type="button"
               class="otk-toast-message"
@@ -45,7 +42,7 @@ export default function Toasts(
                 </For>
               </div>
             </Show>
-          </article>
+          </Toast>
         )}
       </For>
     </section>

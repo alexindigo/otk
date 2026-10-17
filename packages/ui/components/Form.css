@@ -6,18 +6,10 @@
   flex-direction: column;
   gap: 12px;
 }
-.otk-form h2 {
-  font: 600 15px/22px var(--font-ui);
-  margin: 0;
-}
 .otk-form fieldset {
-  border: 0;
-  padding: 0;
-  margin: 0;
   display: flex;
   flex-direction: column;
   gap: 12px;
-  min-width: 0;
 }
 .otk-form label {
   display: flex;

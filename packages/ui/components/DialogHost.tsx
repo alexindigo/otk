@@ -2,6 +2,7 @@
 import { createSignal, For } from "solid-js";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import { useUiRegistries } from "../registries/context.tsx";
+import Dialog from "./surface/Dialog.tsx";
 
 /** A single owner for registered dialogs, including external feature dialogs. */
 export default function DialogHost(
@@ -38,13 +39,28 @@ export default function DialogHost(
   });
   return (
     <For each={opened() ? [opened()!] : []} keyed={(value) => value.id}>
-      {(value) =>
-        dialogs.resolve(value().id)!.component({
-          get input() {
-            return value().input;
-          },
-          close: () => close(value()),
-        })}
+      {(value) => {
+        const definition = dialogs.resolve(value().id)!;
+        return (
+          <Dialog
+            id={definition.commandId ?? definition.id}
+            title={typeof definition.title === "function"
+              ? definition.title(value().input)
+              : definition.title ?? definition.id}
+            onClose={() => {
+              if (definition.dismiss) definition.dismiss(value().input);
+              else close(value());
+            }}
+          >
+            {definition.component({
+              get input() {
+                return value().input;
+              },
+              close: () => close(value()),
+            })}
+          </Dialog>
+        );
+      }}
     </For>
   );
 }

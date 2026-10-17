@@ -96,15 +96,15 @@
   opacity: 0;
 }
 .otk-project-row:is(:hover, :focus-within) .otk-project-menu,
-.otk-project-menu[open] {
+.otk-project-menu[data-open=true] {
   opacity: 1;
   pointer-events: auto;
 }
 .otk-project-row:is(:hover, :focus-within) .otk-project-visit,
-.otk-project-row:has(.otk-project-menu[open]) .otk-project-visit {
+.otk-project-row:has(.otk-project-menu[data-open=true]) .otk-project-visit {
   opacity: 0;
 }
-.otk-project-menu summary {
+.otk-project-menu > .otk-popover-trigger {
   cursor: pointer;
   list-style: none;
   padding: 4px;
@@ -114,17 +114,6 @@
   display: grid;
   place-items: center;
   border-radius: var(--radius-control);
-}
-.otk-project-menu > div {
-  position: absolute;
-  right: 0;
-  top: 100%;
-  z-index: 5;
-  padding: 4px;
-  background: var(--panel);
-  border-radius: 10px;
-  box-shadow: var(--otk-selected-shadow);
-  white-space: nowrap;
 }
 .otk-inactive-toggle {
   width: 100%;
@@ -187,7 +176,7 @@
 }
 .otk-inbox-resizer:hover,
 .otk-inbox-resizer:focus-visible {
-  background: var(--hover);
+  background: var(--otk-hover);
 }
 .otk-project-inbox[data-collapsed=true] .otk-inbox-brand {
   padding: 0;

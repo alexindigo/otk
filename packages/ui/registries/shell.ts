@@ -9,12 +9,21 @@ export interface DialogProps<T = unknown> {
 }
 export interface DialogDefinition {
   id: string;
+  title?: string | ((input: unknown) => string);
+  commandId?: string;
+  dismiss?(input: unknown): void;
   component(props: DialogProps): Element;
 }
 export class DialogRegistry {
   #items = new Map<string, DialogDefinition>();
   register<T = unknown>(
-    definition: { id: string; component(props: DialogProps<T>): Element },
+    definition: {
+      id: string;
+      title?: string | ((input: T) => string);
+      commandId?: string;
+      dismiss?(input: T): void;
+      component(props: DialogProps<T>): Element;
+    },
   ): void {
     if (this.#items.has(definition.id)) {
       throw new Error(`Duplicate dialog: ${definition.id}`);

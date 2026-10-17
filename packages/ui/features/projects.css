@@ -7,7 +7,7 @@
   overflow: auto;
   padding: 16px;
 }
-.otk-template-paths h3 {
+.otk-template-paths > strong {
   font-size: 14px;
   margin: 0 0 8px;
 }

@@ -137,7 +137,7 @@ Deno.test("D4 production rebind UI rejects conflicts, applies the new key, persi
     await browser.click("[data-binding='palette.open'] input");
     await browser.key("?", 8);
     await browser.poll(
-      "document.querySelector('.otk-command-dialog [role=alert]')?.textContent.includes('Conflicts with help.keys')",
+      "document.querySelector('.otk-dialog [role=alert]')?.textContent.includes('Conflicts with help.keys')",
     );
     assertEquals(
       sentFrames(browser).filter(({ frame }) => frame.method === "prefs.set")

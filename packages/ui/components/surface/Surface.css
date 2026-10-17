@@ -1,0 +1,45 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-surface {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  max-height: inherit;
+  padding: 8px;
+  background: var(--overlay-bg);
+  color: var(--otk-fg);
+  border: 1px solid var(--overlay-border);
+  border-radius: var(--overlay-radius);
+  box-shadow: var(--overlay-shadow);
+}
+.otk-surface-title,
+.otk-surface-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+  padding: 4px;
+}
+.otk-surface-title h2 {
+  margin: 0;
+  font: 600 var(--text-heading)/24px var(--font-ui);
+}
+.otk-surface-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  min-height: 0;
+  padding: 4px;
+  overflow: auto;
+}
+.otk-surface-body > * {
+  min-width: 0;
+  min-height: 0;
+  max-width: 100%;
+}
+.otk-surface-body > :last-child {
+  margin-bottom: 0;
+}

@@ -43,8 +43,8 @@ Deno.test("inbox activity returns inactive projects and all three required light
     await browser.poll("document.querySelector('.otk-right-panel').hidden");
     for (const entry of f.entries.slice(0, 3)) {
       const selector = row(entry.directory);
-      await browser.click(`${selector} summary`);
-      await browser.click(`${selector} .otk-project-menu button`);
+      await browser.click(`${selector} .otk-project-menu > button`);
+      await browser.click(`${selector} .otk-menu-items button`);
       await browser.poll(
         `!document.querySelector(${JSON.stringify(selector)})`,
       );
@@ -225,8 +225,8 @@ Deno.test("inbox mocked-clock ageing, reduced-colour underlines, visit resets on
         JSON.stringify(`${selector} time`)
       })?.textContent==='now'`,
     );
-    await browser.click(`${selector} summary`);
-    await browser.click(`${selector} .otk-project-menu button`);
+    await browser.click(`${selector} .otk-project-menu > button`);
+    await browser.click(`${selector} .otk-menu-items button`);
     await browser.poll("!!document.querySelector('.otk-inactive-toggle')");
     await browser.click(".otk-inactive-toggle");
     await browser.poll(`!!document.querySelector(${JSON.stringify(selector)})`);

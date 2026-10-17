@@ -35,7 +35,7 @@ Deno.test("R7 host preferences control real reasoning, persist on reload and pro
     await browser.poll(
       "document.querySelector('.otk-reasoning-body')?.textContent.includes('Reasoning body visible')",
     );
-    await browser.click(".otk-display-menu summary");
+    await browser.click(".otk-display-menu > button");
     await browser.poll(
       "!document.querySelector('.otk-display-menu fieldset').disabled",
     );
@@ -55,7 +55,7 @@ Deno.test("R7 host preferences control real reasoning, persist on reload and pro
     );
     const second = await f.browser(server.url + `/#/local/${session.id}`);
     await second.poll("!!document.querySelector('.otk-reasoning-body')");
-    await browser.click(".otk-display-menu summary");
+    await browser.click(".otk-display-menu > button");
     await browser.click("select[name=thinking]");
     await browser.key("ArrowUp");
     await browser.key("Enter");

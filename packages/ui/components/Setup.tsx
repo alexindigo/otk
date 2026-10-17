@@ -10,27 +10,30 @@ export default function Setup(
 ): import("solid-js").Element {
   const [type, setType] = createSignal("password");
   return (
-    <Form
-      title="Configure this sidecar"
-      submitLabel="Configure sidecar"
-      onSubmit={(data) =>
-        props.onSetup({
-          type: String(data.get("type")),
-          username: String(data.get("username") ?? ""),
-          password: String(data.get("password") ?? ""),
-        })}
-    >
-      <label>
-        Authentication<select
-          name="type"
-          value={type()}
-          onChange={(event) => setType(event.currentTarget.value)}
-        >
-          <option value="password">Password</option>
-          <option value="none">None</option>
-        </select>
-      </label>
-      <Credentials required={type() === "password"} newPassword />
-    </Form>
+    <>
+      <h2>Configure this sidecar</h2>
+      <Form
+        title="Configure this sidecar"
+        submitLabel="Configure sidecar"
+        onSubmit={(data) =>
+          props.onSetup({
+            type: String(data.get("type")),
+            username: String(data.get("username") ?? ""),
+            password: String(data.get("password") ?? ""),
+          })}
+      >
+        <label>
+          Authentication<select
+            name="type"
+            value={type()}
+            onChange={(event) => setType(event.currentTarget.value)}
+          >
+            <option value="password">Password</option>
+            <option value="none">None</option>
+          </select>
+        </label>
+        <Credentials required={type() === "password"} newPassword />
+      </Form>
+    </>
   );
 }

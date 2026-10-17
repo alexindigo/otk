@@ -1,0 +1,13 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-toast {
+  pointer-events: auto;
+}
+.otk-toast > .otk-surface {
+  border-left: 3px solid var(--otk-success);
+}
+.otk-toast[data-kind=error] > .otk-surface {
+  border-left-color: var(--otk-status-error);
+}
+.otk-toast:is([data-kind=permission], [data-kind=question]) > .otk-surface {
+  border-left-color: var(--otk-attention);
+}

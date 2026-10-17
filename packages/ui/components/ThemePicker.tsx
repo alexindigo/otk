@@ -3,7 +3,6 @@ import "./ThemePicker.css" with { type: "text" };
 import { createSignal, type Element, For, onSettled, Show } from "solid-js";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import type { ThemeEngine } from "../theme/engine.ts";
-import CommandDialog from "./CommandDialog.tsx";
 /** Preview is locally owned; committed state and saves are supplied by the host. */
 export default function ThemePicker(props: {
   theme: ThemeEngine;
@@ -76,7 +75,7 @@ export default function ThemePicker(props: {
     theme.mode === "light"
   );
   return (
-    <CommandDialog id="theme.picker" title="Theme" onClose={cancel}>
+    <>
       <p class="otk-muted">
         Preview a theme. Save to use it in connected tabs.
       </p>
@@ -145,6 +144,6 @@ export default function ThemePicker(props: {
           {pending() ? "Saving…" : "Save theme"}
         </button>
       </footer>
-    </CommandDialog>
+    </>
   );
 }

@@ -2,9 +2,8 @@
 import "./Palette.css" with { type: "text" };
 import { createSignal, For, onSettled, Show } from "solid-js";
 import { useCommandPorts } from "../keyboard/context.tsx";
-import CommandDialog from "./CommandDialog.tsx";
 export default function Palette(
-  props: { onClose(): void },
+  _props: { onClose(): void },
 ): import("solid-js").Element {
   const { commands } = useCommandPorts();
   const [query, setQuery] = createSignal(""),
@@ -34,7 +33,7 @@ export default function Palette(
     }
   };
   return (
-    <CommandDialog id="palette" title="Commands" onClose={props.onClose}>
+    <>
       <input
         name="command-search"
         aria-label="Find a command"
@@ -81,6 +80,6 @@ export default function Palette(
       <Show when={error()}>
         <p role="alert">{error()}</p>
       </Show>
-    </CommandDialog>
+    </>
   );
 }

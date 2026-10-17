@@ -123,8 +123,9 @@ function Consumer(): Element {
   });
   ui.dialogs.register<{ text: string }>({
     id: "external",
+    title: "External dialog",
     component: (props) => (
-      <section role="dialog" data-external-dialog>
+      <section data-external-dialog>
         {props.input.text}
         <button type="button" data-close-dialog onClick={props.close}>
           Close external dialog

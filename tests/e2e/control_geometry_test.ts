@@ -206,7 +206,7 @@ Deno.test("Display and Markdown consumers retain native checkbox bounds and fiel
       "document.querySelectorAll('.otk-text li > input[type=checkbox]').length===2 && !!document.querySelector('.otk-prompt')",
     );
     await browser.fill("textarea[name=prompt]", "Retain this draft");
-    await browser.click(".otk-display-menu summary");
+    await browser.click(".otk-display-menu > button");
     await browser.poll(
       "!document.querySelector('.otk-display-menu fieldset').disabled",
     );
@@ -297,7 +297,7 @@ Deno.test("Display and Markdown consumers retain native checkbox bounds and fiel
       ),
       "Retain this draft",
     );
-    await browser.click(".otk-display-menu summary");
+    await browser.click(".otk-display-menu > button");
     await browser.key("k", 2);
     await browser.poll(
       "!!document.querySelector('input[name=command-search]')",

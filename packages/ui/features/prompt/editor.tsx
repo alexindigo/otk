@@ -8,6 +8,9 @@ import type { DialogRegistry } from "../../registries/shell.ts";
 export function registerEditorDialog(dialogs: DialogRegistry): void {
   dialogs.register<Parameters<typeof Editor>[0]>({
     id: "editor",
+    title: (input) => input.title,
+    commandId: "editor",
+    dismiss: (input) => input.onCancel(),
     component: (props) => <Editor {...props.input} />,
   });
 }

@@ -31,14 +31,14 @@ async function menu(b: Cdp, id: string, text: string) {
   const summary = await b.evaluate<string>(
     `(()=>{const e=document.querySelector(${
       JSON.stringify(tab(id))
-    }).closest('.otk-tab');e.dataset.testMenu='current';return '[data-test-menu=current] summary'})()`,
+    }).closest('.otk-tab');e.dataset.testMenu='current';return '[data-test-menu=current] .otk-popover-trigger'})()`,
   );
   await b.click(summary);
   await b.poll(
-    "document.querySelector('[data-test-menu=current] details')?.open",
+    "document.querySelector('[data-test-menu=current] .otk-popover-panel')?.matches(':popover-open')",
   );
   const selector = await b.evaluate<string>(
-    `(()=>{const e=[...document.querySelectorAll('[data-test-menu=current] .otk-tab-menu button')].find(e=>e.textContent===${
+    `(()=>{const e=[...document.querySelectorAll('[data-test-menu=current] .otk-menu-items button')].find(e=>e.textContent===${
       JSON.stringify(text)
     });e.dataset.testAction='current';return '[data-test-action=current]'})()`,
   );
@@ -240,8 +240,8 @@ Deno.test("long task chains fold in the middle, reveal a chosen session and pres
     await b.poll(
       "!!document.querySelector('.otk-folded-crumbs') && document.querySelectorAll('[data-crumb]').length<10",
     );
-    await b.click(".otk-folded-crumbs summary");
-    await b.click(".otk-folded-crumbs .otk-tab-menu button:nth-child(2)");
+    await b.click(".otk-folded-crumbs > button");
+    await b.click(".otk-folded-crumbs .otk-menu-items button:nth-child(2)");
     await b.poll(
       "document.querySelector('[data-crumb=chain-2]')?.getAttribute('aria-current')==='page' && location.hash.endsWith('/chain-2')",
     );

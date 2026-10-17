@@ -185,7 +185,7 @@ Deno.test("creation-time hover and persistent visibility, structural footer date
     await browser.poll(
       "document.activeElement===document.querySelector('[data-role=assistant] .otk-created-trigger') && getComputedStyle(document.querySelector('[data-role=assistant] .otk-created-time')).visibility==='visible'",
     );
-    await browser.click(".otk-display-menu summary");
+    await browser.click(".otk-display-menu > button");
     await browser.poll(
       "document.querySelector('.otk-display-menu').textContent.includes('Always show timestamps')",
     );

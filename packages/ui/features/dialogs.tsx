@@ -9,10 +9,13 @@ import { LOCAL_SIDECAR } from "@otk/client";
 export function registerCommandDialogs(dialogs: DialogRegistry): void {
   dialogs.register({
     id: "palette",
+    title: "Commands",
     component: (props) => <Palette onClose={props.close} />,
   });
   dialogs.register({
     id: "keys",
+    title: "Keyboard shortcuts",
+    commandId: "help.keys",
     component: (props) => {
       const shell = useShellPorts(), { keyboard } = useCommandPorts();
       return (
@@ -32,6 +35,8 @@ export function registerCommandDialogs(dialogs: DialogRegistry): void {
   });
   dialogs.register({
     id: "theme",
+    title: "Theme",
+    commandId: "theme.picker",
     component: (props) => {
       const shell = useShellPorts();
       return (

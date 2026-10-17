@@ -53,32 +53,14 @@
   color: var(--otk-fg-3);
   font-style: normal;
 }
-.otk-tab-actions > summary {
+.otk-tab-actions > .otk-popover-trigger {
   cursor: pointer;
   padding: 0 4px;
-  list-style: none;
   opacity: 0;
 }
-.otk-tab:is(:hover, :focus-within) .otk-tab-actions > summary,
-.otk-tab-actions[open] > summary {
+.otk-tab:is(:hover, :focus-within) .otk-tab-actions > .otk-popover-trigger,
+.otk-tab-actions[data-open=true] > .otk-popover-trigger {
   opacity: 1;
-}
-.otk-tab-menu {
-  position: absolute;
-  top: 100%;
-  right: 0;
-  z-index: 20;
-  min-width: 200px;
-  display: flex;
-  flex-direction: column;
-  padding: 4px;
-  background: var(--surface);
-  border-radius: 10px;
-  box-shadow: var(--otk-selected-shadow);
-}
-.otk-tab-menu button {
-  text-align: left;
-  padding: 8px;
 }
 .otk-topbar-end {
   margin-left: auto;
@@ -129,10 +111,7 @@
   white-space: nowrap;
   color: var(--otk-fg-3);
 }
-.otk-folded-crumbs {
-  position: relative;
-}
-.otk-folded-crumbs summary {
+.otk-folded-crumbs > .otk-popover-trigger {
   cursor: pointer;
   padding: 4px 8px;
 }

@@ -3,7 +3,6 @@ import "./KeysHelp.css" with { type: "text" };
 import { createSignal, For, onSettled, Show } from "solid-js";
 import { comboFromEvent, type Keymap } from "../keyboard/keys.ts";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
-import CommandDialog from "./CommandDialog.tsx";
 export default function KeysHelp(props: {
   keymap: Keymap;
   ready: boolean;
@@ -100,11 +99,7 @@ export default function KeysHelp(props: {
     ports.keyboard?.layer("keymap.capture.cancel", () => !!editing(), 35)
   );
   return (
-    <CommandDialog
-      id="help.keys"
-      title="Keyboard shortcuts"
-      onClose={props.onClose}
-    >
+    <>
       <p class="otk-muted">
         Text fields keep their keys unless a binding opts in. Mod is Ctrl, or ⌘
         on macOS. Esc closes the top layer first.
@@ -169,6 +164,6 @@ export default function KeysHelp(props: {
       >
         Reset all shortcuts
       </button>
-    </CommandDialog>
+    </>
   );
 }

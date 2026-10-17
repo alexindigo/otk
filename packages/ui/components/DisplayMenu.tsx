@@ -9,6 +9,7 @@ import {
 } from "@otk/protocol";
 import { ownedAction } from "../keyboard/context.tsx";
 import { SettingsIcon } from "./ChromeIcons.tsx";
+import Popover from "./surface/Popover.tsx";
 export default function DisplayMenu(props: {
   prefs: Preferences;
   ready: boolean;
@@ -22,16 +23,13 @@ export default function DisplayMenu(props: {
       props.onSet(input.key, input.value),
   );
   return (
-    <details class="otk-display-menu">
-      <summary
-        class="otk-icon-button"
-        aria-label="Display options"
-        title="Display options"
-      >
-        <SettingsIcon />
-      </summary>
+    <Popover
+      class="otk-display-menu"
+      label="Display options"
+      title="Display preferences"
+      trigger={<SettingsIcon />}
+    >
       <fieldset disabled={!props.ready}>
-        <legend>Display preferences</legend>
         <For each={(props.registry ?? preferences).display()} keyed={false}>
           {(item) => {
             const options = () => {
@@ -83,6 +81,6 @@ export default function DisplayMenu(props: {
       <Show when={props.error}>
         <p class="otk-error" role="alert">{props.error}</p>
       </Show>
-    </details>
+    </Popover>
   );
 }

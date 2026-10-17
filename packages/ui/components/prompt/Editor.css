@@ -1,41 +1,22 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-editor {
-  position: fixed;
-  inset: 1rem;
-  margin: auto;
-  width: min(90vw, 100rem);
-  height: auto;
-  max-height: none;
-  padding: 12px;
-  background: var(--bg);
-  color: var(--fg);
-  border: 1px solid var(--muted);
-  border-radius: var(--radius-card);
-}
-.otk-editor[open] {
   display: flex;
   flex-direction: column;
   gap: 12px;
+  flex: 1 1 auto;
+  width: min(90vw, 100rem);
+  height: 100vh;
+  min-height: 0;
 }
-.otk-editor::backdrop {
-  background: var(--otk-overlay-editor);
-}
-.otk-editor header,
 .otk-editor footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 12px;
-}
-.otk-editor h2 {
-  margin: 0;
 }
 .otk-editor textarea {
   flex: 1;
   min-height: 0;
   resize: none;
-  background: var(--panel);
-  color: var(--fg);
   font-family: var(--font-ui);
-  padding: 12px;
 }

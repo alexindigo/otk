@@ -19,6 +19,7 @@ import {
   SettingsIcon,
 } from "./ChromeIcons.tsx";
 import { ownedAction, useCommandPorts } from "../keyboard/context.tsx";
+import Menu from "./surface/Menu.tsx";
 export interface ProjectRow extends InboxProject {
   sidecarId: string;
   label: string;
@@ -120,21 +121,22 @@ export default function ProjectInbox(props: {
           </Show>
         </button>
         <Show when={!collapsed()}>
-          <details class="otk-project-menu">
-            <summary aria-label={`Project menu for ${name()}`}>⋯</summary>
-            <div>
-              <button
-                type="button"
-                onClick={() =>
-                  void inactive({
-                    project: project(),
-                    value: !project().inactive,
-                  })}
-              >
-                {project().inactive ? "Mark active" : "Mark inactive"}
-              </button>
-            </div>
-          </details>
+          <Menu
+            class="otk-project-menu"
+            label={`Project menu for ${name()}`}
+            trigger="⋯"
+          >
+            <button
+              type="button"
+              onClick={() =>
+                void inactive({
+                  project: project(),
+                  value: !project().inactive,
+                })}
+            >
+              {project().inactive ? "Mark active" : "Mark inactive"}
+            </button>
+          </Menu>
         </Show>
       </div>
     );

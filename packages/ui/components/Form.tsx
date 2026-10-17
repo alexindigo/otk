@@ -32,8 +32,9 @@ export default function Form(
   };
   return (
     <form class="otk-form" onSubmit={submit}>
-      <h2>{props.title}</h2>
-      <fieldset disabled={pending()}>{props.children}</fieldset>
+      <fieldset aria-label={props.title} disabled={pending()}>
+        {props.children}
+      </fieldset>
       <Show when={error()}>
         <p role="alert" class="otk-error">{error()}</p>
       </Show>

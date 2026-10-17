@@ -65,11 +65,21 @@ Static keyboard hints are in titles, Keys and the palette, not the surface.
 Permission and question owners preserve dirty state through reconnects. The
 legacy `Docks` API remains independently reusable for existing consumers.
 
-`dialogs.register({ id, component })` installs a feature-owned dialog. A single
-`DialogHost` handles `dialog.open({ id, input? })` through the command hub. It
-returns an identity-bound close handle, so a stale completion or feature
-teardown cannot close a replacement dialog. Command, keymap, theme, editor and
-add-project features own their registrations.
+`dialogs.register({ id, title, component })` installs feature-owned dialog
+content. A single `DialogHost` handles `dialog.open({ id, input? })` through the
+command hub. It returns an identity-bound close handle, so a stale completion or
+feature teardown cannot close a replacement dialog. Command, keymap, theme,
+editor and add-project features own their registrations. `DialogHost` wraps
+every registration in the native `Dialog` owner; optional `commandId` preserves
+feature close IDs and `dismiss(input)` routes dismissal through feature state
+when needed. Content never creates a second dialog, title or card. The internal
+`Surface` owns boundary, paint, padding and title/body/action flow; only
+`Dialog`, `Popover`, `Menu` and `Toast` specialisations may consume it.
+`Popover` owns native top-layer anchoring and outside-click/Escape dismissal,
+`Menu` supplies a normal-flow item column and `Toast` supplies the card in the
+fixed notification stack. Overlay tokens and the content/popover/dialog/toast
+layer scale live in `theme.css`. Fieldsets and legends are layout-neutral
+grouping, never cards.
 `panels.register({ id, title, icon, capability?,
 component })` contributes
 right-panel views. Icons may be strings or feature-owned render functions; the
@@ -182,10 +192,11 @@ invoke commands.
 `Palette` lists the injected registry; `KeysHelp` lists the injected keymap,
 checks overlap conflicts and supplies proposed overrides to `onSave`. Production
 OTK uses the host core's ordered `keymap` preference broadcast; failed saves do
-not optimistically change bindings. Components own dialog focus and styles. The
-essential shipped bindings are Tab/reverse agent cycle, Enter submission, Mod+K
-palette, outside-text `?` help and top-layer Esc before double-Esc interrupt.
-Shift+Enter inserts a newline through the prompt-owned input port.
+not optimistically change bindings. The shared Dialog owns focus return, modal
+keyboard priority and styles, including the prompt editor. The essential shipped
+bindings are Tab/reverse agent cycle, Enter submission, Mod+K palette,
+outside-text `?` help and top-layer Esc before double-Esc interrupt. Shift+Enter
+inserts a newline through the prompt-owned input port.
 
 ## Semantic themes
 
@@ -209,7 +220,8 @@ live. The consumer calls `commit(id)` only from authoritative preference state.
 `preview()` returns an owner-scoped select/close port; close always restores the
 latest commit, including a concurrent host broadcast. The engine owns no
 storage. `ThemePicker` injects this engine, readiness, async save and close
-callbacks, owns dialog CSS and registers its actions in the public command hub.
+callbacks and registers its actions in the public command hub. Its content flows
+inside the shared Dialog; preview cleanup restores the latest committed paint.
 
 OTK preserves its anthracite Dark default and Phosphor Orange identity. Linen
 (`otk-light`, default System light) uses warm beige, Stone (`otk-light-stone`)

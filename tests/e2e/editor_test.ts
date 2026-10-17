@@ -41,7 +41,7 @@ Deno.test("P7/P8 200-line paste and whole-prompt editor save/cancel preserve chi
         footerBottom: number;
         dialogBottom: number;
       }
-    >("(()=>{const d=document.querySelector('.otk-editor').getBoundingClientRect(),t=document.querySelector('.otk-editor textarea').getBoundingClientRect(),f=document.querySelector('.otk-editor footer').getBoundingClientRect();return {height:t.height,viewport:innerHeight,textareaBottom:t.bottom,footerTop:f.top,footerBottom:f.bottom,dialogBottom:d.bottom}})()");
+    >("(()=>{const d=document.querySelector('.otk-dialog').getBoundingClientRect(),t=document.querySelector('.otk-editor textarea').getBoundingClientRect(),f=document.querySelector('.otk-editor footer').getBoundingClientRect();return {height:t.height,viewport:innerHeight,textareaBottom:t.bottom,footerTop:f.top,footerBottom:f.bottom,dialogBottom:d.bottom}})()");
     assert(
       geometry.height > geometry.viewport * .6,
       "Editor textarea must fill the dialog's available vertical space",
@@ -58,7 +58,7 @@ Deno.test("P7/P8 200-line paste and whole-prompt editor save/cancel preserve chi
         expectedTop: number;
         expectedBottom: number;
       }
-    >("(()=>{const el=document.querySelector('.otk-editor'),r=el.getBoundingClientRect(),s=getComputedStyle(el);return {top:r.top,bottom:innerHeight-r.bottom,expectedTop:parseFloat(s.top),expectedBottom:parseFloat(s.bottom)}})()");
+    >("(()=>{const r=document.querySelector('.otk-dialog').getBoundingClientRect();return {top:r.top,bottom:innerHeight-r.bottom,expectedTop:16,expectedBottom:16}})()");
     assert(
       Math.abs(inset.top - inset.expectedTop) <= .5 &&
         Math.abs(inset.bottom - inset.expectedBottom) <= .5,
@@ -119,7 +119,9 @@ Deno.test("editor changes and attachment completion retain one owner-current dra
       "editorReads.length===1 && document.querySelector('.otk-prompt-chip')?.textContent.includes('reading…')",
     );
     await browser.click("[aria-label='Edit prompt']");
-    await browser.poll("!!document.querySelector('.otk-editor[open]')");
+    await browser.poll(
+      "!!document.querySelector('.otk-dialog[open] .otk-editor')",
+    );
     await browser.fill(
       "textarea[name=editor]",
       "editor before [File 1] editor after",
@@ -130,7 +132,7 @@ Deno.test("editor changes and attachment completion retain one owner-current dra
     );
     await browser.click(".otk-editor footer button:last-child");
     await browser.poll(
-      "!document.querySelector('.otk-editor[open]') && document.querySelector('textarea[name=prompt]').value==='editor before [File 1] editor after' && !document.querySelector('.otk-prompt button[type=submit]').disabled",
+      "!document.querySelector('.otk-dialog[open] .otk-editor') && document.querySelector('textarea[name=prompt]').value==='editor before [File 1] editor after' && !document.querySelector('.otk-prompt button[type=submit]').disabled",
     );
     f.fake.queue({ chunks: ["Editor attachment received."] });
     await browser.click(".otk-prompt button[type=submit]");

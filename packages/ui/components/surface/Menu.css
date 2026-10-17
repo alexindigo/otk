@@ -1,0 +1,13 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-menu > .otk-popover-panel {
+  width: max-content;
+}
+.otk-menu-items {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.otk-menu-items button {
+  text-align: left;
+  padding: 8px;
+}

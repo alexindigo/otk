@@ -52,14 +52,14 @@ Deno.test("R2/R3 real edit diffs, live styles/wrap, write highlights/line number
     await browser.poll(
       "!!document.querySelector('[data-tool=edit] [data-line-kind=add]') && !!document.querySelector('[data-tool=edit] [data-line-kind=del]')",
     );
-    await browser.click(".otk-display-menu summary");
+    await browser.click(".otk-display-menu > button");
     await browser.click("select[name=diffStyle]");
     await browser.key("ArrowDown");
     await browser.key("Enter");
     await browser.poll(
       "document.querySelector('[data-tool=edit] .otk-diff').dataset.diffStyle==='split'",
     );
-    await browser.click(".otk-display-menu summary");
+    await browser.click(".otk-display-menu > button");
     const geometry = await browser.evaluate<
       { left: number; right: number; topA: number; topB: number }
     >("(()=>{const cells=document.querySelector('.otk-diff-split-row').children,a=cells[0].getBoundingClientRect(),b=cells[1].getBoundingClientRect();return {left:a.height,right:b.height,topA:a.top,topB:b.top}})()");
@@ -68,7 +68,7 @@ Deno.test("R2/R3 real edit diffs, live styles/wrap, write highlights/line number
         Math.abs(geometry.topA - geometry.topB) < .5,
     );
     await browser.screenshot(join(f.oc.root, "r2-edit-split.png"));
-    await browser.click(".otk-display-menu summary");
+    await browser.click(".otk-display-menu > button");
     await browser.click("select[name=diffStyle]");
     await browser.key("ArrowDown");
     await browser.key("Enter");
@@ -79,14 +79,14 @@ Deno.test("R2/R3 real edit diffs, live styles/wrap, write highlights/line number
     await browser.poll(
       "!document.querySelector('[data-tool=edit] .otk-diff').classList.contains('otk-diff-wrap')",
     );
-    await browser.click(".otk-display-menu summary");
+    await browser.click(".otk-display-menu > button");
     await browser.screenshot(join(f.oc.root, "r2-edit-unified.png"));
-    await browser.click(".otk-display-menu summary");
+    await browser.click(".otk-display-menu > button");
     await browser.click("select[name=diffStyle]");
     await browser.key("ArrowUp");
     await browser.key("ArrowUp");
     await browser.key("Enter");
-    await browser.click(".otk-display-menu summary");
+    await browser.click(".otk-display-menu > button");
     // Auto diff style uses the actual transcript pane, whose available width
     // now excludes both side panels rather than only the project column.
     const wideViewport = await browser.evaluate<number>(

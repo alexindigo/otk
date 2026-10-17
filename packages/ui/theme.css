@@ -19,6 +19,14 @@
   --radius-bubble: 18px;
   --radius-composer: 20px;
   --radius-pill: 999px;
+  --overlay-bg: var(--otk-surface);
+  --overlay-border: var(--otk-border);
+  --overlay-radius: var(--radius-card);
+  --overlay-shadow: 0 8px 24px var(--otk-overlay);
+  --layer-content: 0;
+  --layer-popover: 20;
+  --layer-dialog: 40;
+  --layer-toast: 60;
   --text-ui: 13px;
   --text-prose: 14px;
   --text-heading: 16px;
@@ -56,6 +64,13 @@
 }
 body {
   margin: 0;
+}
+fieldset,
+legend {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
 }
 button,
 input,

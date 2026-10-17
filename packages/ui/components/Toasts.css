@@ -3,7 +3,7 @@
   position: fixed;
   right: 16px;
   bottom: 16px;
-  z-index: 60;
+  z-index: var(--layer-toast);
   display: flex;
   flex-direction: column;
   align-items: stretch;
@@ -12,21 +12,6 @@
   max-height: 50vh;
   overflow: auto;
   pointer-events: none;
-}
-.otk-toast {
-  pointer-events: auto;
-  background: var(--otk-bg-elevated);
-  color: var(--otk-fg);
-  border: 1px solid var(--otk-border);
-  border-left: 3px solid var(--otk-success);
-  border-radius: var(--radius-card);
-}
-.otk-toast[data-kind="error"] {
-  border-left-color: var(--otk-status-error);
-}
-.otk-toast[data-kind="permission"],
-.otk-toast[data-kind="question"] {
-  border-left-color: var(--otk-attention);
 }
 .otk-toast .otk-toast-message {
   display: flex;
@@ -38,7 +23,7 @@
   background: transparent;
   color: inherit;
   text-align: left;
-  padding: 12px;
+  padding: 0;
   line-height: 1.5;
   overflow-wrap: anywhere;
 }
@@ -53,7 +38,6 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 0 12px 12px;
 }
 .otk-toast-actions button {
   font-size: 12px;

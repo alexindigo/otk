@@ -69,6 +69,17 @@ Deno.test("D6 focused background completion opens while retaining the previous s
       }")?.textContent.includes('Session done')`,
     );
     await browser.poll(`${badge}==='1 sessions need attention'`);
+    assert(
+      await browser.evaluate(`(() => {
+      const surface=document.querySelector("${toast(b.id)} .otk-surface");
+      const r=surface.getBoundingClientRect(),s=getComputedStyle(surface);
+      return [...surface.querySelectorAll('.otk-toast-message,.otk-toast-actions')].every(el=>{
+        const t=el.getBoundingClientRect();
+        return t.left>=r.left+parseFloat(s.paddingLeft)-.5 && t.right<=r.right-parseFloat(s.paddingRight)+.5 && t.top>=r.top+parseFloat(s.paddingTop)-.5 && t.bottom<=r.bottom-parseFloat(s.paddingBottom)+.5;
+      });
+    })()`),
+      "Toast content stays inside its shared padded surface",
+    );
     await browser.click(`${toast(b.id)} .otk-toast-actions button`);
     await browser.poll(
       `location.hash.endsWith('/${b.id}') && ${badge}==='OTK'`,

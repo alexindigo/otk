@@ -1,0 +1,22 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-popover {
+  display: inline-flex;
+  flex: none;
+}
+.otk-popover-panel {
+  position: absolute;
+  position-area: bottom span-left;
+  position-try-fallbacks: flip-block, flip-inline;
+  inset: auto;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--otk-fg);
+  width: min(28rem, calc(100vw - 16px));
+  min-width: 200px;
+  max-width: min(28rem, calc(100vw - 16px));
+  max-height: 65vh;
+  overflow: visible;
+  z-index: var(--layer-popover);
+}

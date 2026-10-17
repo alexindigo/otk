@@ -3,11 +3,15 @@ import "./projects.css" with { type: "text" };
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import type { DialogProps, DialogRegistry } from "../registries/shell.ts";
 import { useShellPorts } from "../shell/context.tsx";
-import CommandDialog from "../components/CommandDialog.tsx";
 import Form from "../components/Form.tsx";
 
 export function registerProjectDialogs(dialogs: DialogRegistry): void {
-  dialogs.register({ id: "add-project", component: AddProject });
+  dialogs.register({
+    id: "add-project",
+    title: "Add project",
+    commandId: "project.add",
+    component: AddProject,
+  });
 }
 function AddProject(props: DialogProps) {
   const shell = useShellPorts();
@@ -42,7 +46,7 @@ function AddProject(props: DialogProps) {
     },
   );
   return (
-    <CommandDialog id="project.add" title="Add project" onClose={props.close}>
+    <>
       <Form
         title="Project directory"
         submitLabel="Add project"
@@ -60,13 +64,11 @@ function AddProject(props: DialogProps) {
           Server<select
             name="server"
             value={server()}
-            onChange={(e) =>
-              setServer(e.currentTarget.value)}
+            onChange={(e) => setServer(e.currentTarget.value)}
           >
             <For
               each={shell.servers()}
-              keyed={(s) =>
-                s.id}
+              keyed={(s) => s.id}
             >
               {(s) => (
                 <option value={s().id} disabled={s().status !== "connected"}>
@@ -83,13 +85,12 @@ function AddProject(props: DialogProps) {
             required
             value={path()}
             placeholder="/home/me/Projects/my-project"
-            onInput={(e) =>
-              setPath(e.currentTarget.value)}
+            onInput={(e) => setPath(e.currentTarget.value)}
           />
         </label>
       </Form>
       <section class="otk-template-paths" aria-label="Scanned projects">
-        <h3>From path templates</h3>
+        <strong>From path templates</strong>
         <Show when={loading()}>
           <p class="otk-muted">Scanning directories…</p>
         </Show>
@@ -114,7 +115,7 @@ function AddProject(props: DialogProps) {
           </p>
         </Show>
       </section>
-    </CommandDialog>
+    </>
   );
 }
 
@@ -124,6 +125,7 @@ export function ProjectSettings(): import("solid-js").Element {
   return (
     <section class="otk-project-settings" aria-label="Project settings">
       <h2>Projects</h2>
+      <h3>Ageing thresholds (hours)</h3>
       <Form
         title="Ageing thresholds (hours)"
         submitLabel="Save ageing"
@@ -157,27 +159,34 @@ export function ProjectSettings(): import("solid-js").Element {
       </Form>
       <For each={shell.servers()} keyed={(s) => s.id}>
         {(s) => (
-          <Form
-            title={`${s().label} path templates`}
-            submitLabel="Save templates"
-            onSubmit={async (data) => {
-              await shell.connection(s().id).rpc.call("projects.templates", {
-                templates: String(data.get("templates") ?? "").split("\n").map((
-                  s,
-                ) => s.trim()).filter(Boolean),
-              });
-            }}
-          >
-            <label>
-              One path per line; use {"{project}"} for a directory name<textarea
-                name="templates"
-                class="otk-path"
-                disabled={s().status !== "connected"}
-                value={shell.inbox(s().id).state.inbox.pathTemplates.join("\n")}
-                placeholder="~/Projects/{project}/"
-              />
-            </label>
-          </Form>
+          <>
+            <h3>{s().label} path templates</h3>
+            <Form
+              title={`${s().label} path templates`}
+              submitLabel="Save templates"
+              onSubmit={async (data) => {
+                await shell.connection(s().id).rpc.call("projects.templates", {
+                  templates: String(data.get("templates") ?? "").split("\n")
+                    .map((
+                      s,
+                    ) => s.trim()).filter(Boolean),
+                });
+              }}
+            >
+              <label>
+                One path per line; use {"{project}"}{" "}
+                for a directory name<textarea
+                  name="templates"
+                  class="otk-path"
+                  disabled={s().status !== "connected"}
+                  value={shell.inbox(s().id).state.inbox.pathTemplates.join(
+                    "\n",
+                  )}
+                  placeholder="~/Projects/{project}/"
+                />
+              </label>
+            </Form>
+          </>
         )}
       </For>
     </section>

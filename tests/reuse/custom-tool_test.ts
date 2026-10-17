@@ -151,7 +151,7 @@ Deno.test("independent public UI consumer renders external tools twice, updates 
     );
     await browser.click("[data-close-dialog]");
     await browser.poll("!document.querySelector('[data-external-dialog]')");
-    await browser.click(".otk-display-menu summary");
+    await browser.click(".otk-display-menu > button");
     await browser.poll(
       `!![...document.querySelectorAll('.otk-display-menu label')].find(el => el.textContent.includes('Consumer compact layout'))`,
     );

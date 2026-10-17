@@ -1,5 +1,18 @@
 # Kit dependency architecture
 
+Overlay registrations provide content only: DialogHost supplies the native
+Dialog, and only overlay specialisations import the internal Surface boundary.
+Negative fixtures reject native-dialog/popover bypasses, duplicate card paint,
+fieldset or legend cards and positioned overlay content, following registered
+components and anchored content dependencies. Existing project-menu trigger
+placement, resizers and the toast stack remain outside content. The existing
+shared selection marker in `theme.css` is excluded by name: overlay-surfaces
+plan §2 parks that separate structural item. Every CSS variable must resolve to
+a theme slot or a declared structural/component token. Browser checks measure
+the Display title in Dark/Linen/Stone, every registered dialog and menu's padded
+flow, one heading per dialog, native dismissal, focus return and existing
+actions.
+
 The visual-system check enforces token-only font selection, minimum 12px text
 and the 4px spacing grid across reusable UI styles and application chrome.
 Negative fixtures reject direct font selection, undersized text and off-grid

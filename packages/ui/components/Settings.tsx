@@ -82,6 +82,7 @@ export default function Settings(props: {
             </section>
           )}
         </For>
+        <h2>Add server</h2>
         <Form
           title="Add server"
           submitLabel="Add server"

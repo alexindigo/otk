@@ -1,5 +1,7 @@
 .otk-keys-list {
   display: grid;
+  min-height: 0;
+  overflow: auto;
   gap: 8px;
   margin: 12px 0;
 }
