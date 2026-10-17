@@ -42,11 +42,11 @@ Deno.test("selection has one shared pointer/underline owner for selected, curren
   );
   assertMatch(
     css,
-    /\.otk-selection-marker\s*\{[^}]*width: 3px;[^}]*height: 14px;/,
+    /\[data-otk-selection=vertical\]\.otk-selection-item::before\s*\{[^}]*content: "";[^}]*width: 3px;[^}]*height: 14px;[^}]*margin-inline-start: var\(--selection-pointer-inset\);/,
   );
   assertMatch(
     css,
-    /\[data-otk-selection=horizontal\]\.otk-selection-item\s*\{[^}]*border-bottom: 2px solid transparent;/,
+    /\[data-otk-selection=horizontal\]\.otk-selection-item::after\s*\{[^}]*content: "";[^}]*height: 2px;[^}]*margin-inline: 8px;/,
   );
   assertMatch(
     css,

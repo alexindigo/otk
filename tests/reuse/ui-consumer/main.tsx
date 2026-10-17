@@ -267,14 +267,14 @@ function Consumer(): Element {
               data-otk-selection="horizontal"
               {...selection({ kind: "current", selected: true })}
             >
-              Horizontal current
+              <SelectionContent>Horizontal current</SelectionContent>
             </button>
             <button
               type="button"
               data-otk-selection="horizontal"
               {...selection({ kind: "current", selected: false })}
             >
-              Horizontal idle
+              <SelectionContent>Horizontal idle</SelectionContent>
             </button>
             <button type="button" class="otk-pill">Quiet action</button>
             <button type="button" class="otk-pill otk-primary">

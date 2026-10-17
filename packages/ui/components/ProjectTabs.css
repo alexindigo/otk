@@ -39,6 +39,7 @@
   border-radius: var(--radius-row);
 }
 .otk-tab-open {
+  --selection-padding: 0 var(--chrome-inset);
   height: 28px;
   padding: 0 var(--chrome-inset);
   text-align: left;
@@ -94,6 +95,7 @@
   height: 13px;
 }
 .otk-session-crumb {
+  --selection-padding: 4px;
   padding: 4px;
   gap: 8px;
   color: var(--otk-fg-3);

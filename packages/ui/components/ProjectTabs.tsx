@@ -178,11 +178,13 @@ export default function ProjectTabs(props: {
                   onDblClick={() =>
                     tab().kind === "phantom" && run(pin(tab().id))}
                 >
-                  <StatusLight small state={tab().status} />
-                  <span>{tab().title || "Session"}</span>
-                  <Show when={tab().preview}>
-                    <span class="otk-preview-label">Preview</span>
-                  </Show>
+                  <SelectionContent>
+                    <StatusLight small state={tab().status} />
+                    <span>{tab().title || "Session"}</span>
+                    <Show when={tab().preview}>
+                      <span class="otk-preview-label">Preview</span>
+                    </Show>
+                  </SelectionContent>
                 </button>
                 <Menu
                   class="otk-tab-actions"
@@ -337,17 +339,19 @@ export default function ProjectTabs(props: {
                     data-crumb={crumb().id}
                     onClick={() => run(openCrumb(crumb().id))}
                   >
-                    <StatusLight
-                      small
-                      state={entry(crumb().id)
-                        ? inboxStatus(entry(crumb().id)!, props.inbox)
-                        : "idle"}
-                    />
-                    <span class="otk-crumb-title">
-                      {props.session?.id === crumb().id
-                        ? props.session.title
-                        : entry(crumb().id)?.title ?? "Session unavailable"}
-                    </span>
+                    <SelectionContent>
+                      <StatusLight
+                        small
+                        state={entry(crumb().id)
+                          ? inboxStatus(entry(crumb().id)!, props.inbox)
+                          : "idle"}
+                      />
+                      <span class="otk-crumb-title">
+                        {props.session?.id === crumb().id
+                          ? props.session.title
+                          : entry(crumb().id)?.title ?? "Session unavailable"}
+                      </span>
+                    </SelectionContent>
                   </button>
                 </span>
               </Show>

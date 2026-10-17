@@ -20,7 +20,10 @@
   flex: none;
   flex-wrap: wrap;
 }
-.otk-panel-icons button > span {
+.otk-panel-icons button {
+  --selection-padding: 0;
+}
+.otk-panel-icons .otk-selection-content > span {
   display: flex;
 }
 .otk-panel-content {

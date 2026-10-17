@@ -259,7 +259,9 @@ function Request(
               {...selection({ kind: "selected", selected: tab() === i })}
               onClick={() => void tabCommand(i)}
             >
-              {q().header || `Question ${i + 1}`}
+              <SelectionContent>
+                {q().header || `Question ${i + 1}`}
+              </SelectionContent>
             </button>
           )}
         </For>
@@ -270,7 +272,7 @@ function Request(
           {...selection({ kind: "selected", selected: confirm() })}
           onClick={() => void tabCommand(props.request.questions.length)}
         >
-          Confirm
+          <SelectionContent>Confirm</SelectionContent>
         </button>
       </div>
       <Show when={!confirm()}>

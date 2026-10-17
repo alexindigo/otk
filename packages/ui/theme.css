@@ -41,6 +41,7 @@
   --chrome-inset: 12px;
   --project-inset: 12px;
   --project-gap: 8px;
+  --selection-pointer-inset: 3px;
   /* Genuine Shiki css-variables categories. No tokens or worker work change. */
   --otk-syntax-foreground: var(--otk-code-variable);
   --otk-syntax-background: var(--otk-bg);
@@ -245,27 +246,19 @@ small {
   box-shadow: var(--otk-selected-shadow);
 }
 :root [data-otk-selection=vertical].otk-selection-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: var(--selection-inset, 12px) minmax(0, 1fr);
   align-items: center;
   column-gap: 0;
   padding-inline-start: 0;
 }
-.otk-selection-lane {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: var(--selection-inset, 12px);
-}
-.otk-selection-marker {
-  flex: none;
+:root [data-otk-selection=vertical].otk-selection-item::before {
+  content: "";
   width: 3px;
   height: 14px;
+  margin-inline-start: var(--selection-pointer-inset);
   border-radius: 2px;
   background: transparent;
-}
-.is-selected > .otk-selection-lane > .otk-selection-marker {
-  background: var(--otk-fg);
 }
 .otk-selection-content {
   display: flex;
@@ -275,10 +268,28 @@ small {
   gap: 8px;
 }
 :root [data-otk-selection=horizontal].otk-selection-item {
-  border-bottom: 2px solid transparent;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr) 2px;
+  align-items: stretch;
+  justify-items: stretch;
+  gap: 0;
+  padding: 0;
 }
-:root [data-otk-selection=horizontal].is-selected {
-  border-bottom-color: var(--otk-fg);
+:root [data-otk-selection=horizontal].otk-selection-item::after {
+  content: "";
+  height: 2px;
+  margin-inline: 8px;
+  border-radius: 2px;
+  background: transparent;
+}
+[data-otk-selection=horizontal] > .otk-selection-content {
+  justify-content: center;
+  padding: var(--selection-padding, 4px 8px);
+}
+:root [data-otk-selection=vertical].is-selected::before,
+:root [data-otk-selection=horizontal].is-selected::after {
+  background: var(--otk-fg);
 }
 b,
 strong,

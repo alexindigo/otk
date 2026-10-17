@@ -7,13 +7,13 @@ fieldset or legend cards and positioned overlay content, following registered
 components and anchored content dependencies. Existing project-menu trigger
 placement, resizers and the toast stack remain outside content. Selection has no
 exception: its shared binding owns the state class and ARIA attributes, and its
-marker and bottom border participate in item flow. Architecture negatives reject
-hand-written state, attribute-driven paint and positioned/pseudo-element
-selection decoration across all UI consumers. Every CSS variable must resolve to
-a theme slot or a declared structural/component token. Browser checks measure
-the Display title in Dark/Linen/Stone, every registered dialog and menu's padded
-flow, one heading per dialog, native dismissal, focus return and existing
-actions.
+pointer and inset underline are always-present in-flow pseudo-elements.
+Architecture negatives reject hand-written state, attribute-driven paint and
+positioned selection decoration across all UI consumers. Every CSS variable must
+resolve to a theme slot or a declared structural/component token. Browser checks
+measure the Display title in Dark/Linen/Stone, every registered dialog and
+menu's padded flow, one heading per dialog, native dismissal, focus return and
+existing actions.
 
 The visual-system check enforces token-only font selection, minimum 12px text
 and the 4px spacing grid across reusable UI styles and application chrome.

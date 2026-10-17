@@ -5,10 +5,7 @@ import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
-import {
-  type SelectionGeometry,
-  selectionGeometry,
-} from "../support/selection-geometry.ts";
+import { selectionGeometry } from "../support/selection-geometry.ts";
 
 Deno.test("quiet chrome keeps corner geometry and non-colour selection across themes, collapse states and reload", async () => {
   const root = await fixture(),
@@ -74,8 +71,9 @@ Deno.test("quiet chrome keeps corner geometry and non-colour selection across th
                 )
               )
             );
-            const indicators = await b.evaluate<SelectionGeometry[]>(
-              selectionGeometry("[data-otk-selection].is-selected"),
+            const indicators = await selectionGeometry(
+              b,
+              "[data-otk-selection].is-selected",
             );
             assert(indicators.length >= (rightCollapsed ? 3 : 5));
             for (const item of indicators) {
@@ -195,7 +193,7 @@ Deno.test("quiet chrome keeps corner geometry and non-colour selection across th
     );
     assertEquals(
       await b.evaluate(
-        `getComputedStyle(document.querySelector('[data-project-sessions~=atmosphera] .otk-selection-marker')).backgroundColor`,
+        `getComputedStyle(document.querySelector('[data-project-sessions~=atmosphera] .otk-project-open'),'::before').backgroundColor`,
       ),
       "rgba(0, 0, 0, 0)",
       "Hover alone must not claim selection",
@@ -208,7 +206,7 @@ Deno.test("quiet chrome keeps corner geometry and non-colour selection across th
     );
     assertEquals(
       await b.evaluate(
-        `getComputedStyle(document.querySelector('.otk-palette-list .is-selected .otk-selection-marker')).width`,
+        `getComputedStyle(document.querySelector('.otk-palette-list .is-selected'),'::before').width`,
       ),
       "3px",
     );
@@ -218,7 +216,7 @@ Deno.test("quiet chrome keeps corner geometry and non-colour selection across th
     );
     assertEquals(
       await b.evaluate(
-        `getComputedStyle(document.querySelector('[data-theme-choice][aria-pressed=true] .otk-selection-marker')).height`,
+        `getComputedStyle(document.querySelector('[data-theme-choice][aria-pressed=true]'),'::before').height`,
       ),
       "14px",
     );

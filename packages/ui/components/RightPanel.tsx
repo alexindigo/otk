@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./RightPanel.css" with { type: "text" };
 import { selection } from "./selection.ts";
+import SelectionContent from "./SelectionContent.tsx";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import type { CapabilityName, Preferences } from "@otk/protocol";
 import { useUiRegistries } from "../registries/context.tsx";
@@ -61,12 +62,14 @@ export default function RightPanel(props: {
               data-panel-view={view().id}
               onClick={() => void save({ rightView: view().id })}
             >
-              <span aria-hidden="true">
-                {(() => {
-                  const icon = view().icon;
-                  return typeof icon === "function" ? icon() : icon;
-                })()}
-              </span>
+              <SelectionContent>
+                <span aria-hidden="true">
+                  {(() => {
+                    const icon = view().icon;
+                    return typeof icon === "function" ? icon() : icon;
+                  })()}
+                </span>
+              </SelectionContent>
             </button>
           )}
         </For>

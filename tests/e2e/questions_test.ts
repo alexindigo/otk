@@ -3,10 +3,7 @@ import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
-import {
-  type SelectionGeometry,
-  selectionGeometry,
-} from "../support/selection-geometry.ts";
+import { selectionGeometry } from "../support/selection-geometry.ts";
 export const questions = [
   {
     header: "Rendering",
@@ -48,21 +45,16 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
     await browser.poll(
       "document.querySelectorAll('.otk-question-tabs [role=tab]').length===3",
     );
-    const pointer = await browser.evaluate<
-      {
-        width: string;
-        height: string;
-        top: number;
-        centre: number;
-        tab: string;
-      }
-    >("(()=>{const e=document.querySelector('.otk-question-options .is-selected'),r=e.getBoundingClientRect(),m=e.querySelector('.otk-selection-marker'),p=m.getBoundingClientRect(),t=document.querySelector('.otk-question-tabs [aria-selected=true]');return {width:getComputedStyle(m).width,height:getComputedStyle(m).height,top:p.y+p.height/2,centre:r.top+r.height/2,tab:getComputedStyle(t).borderBottomWidth}})()");
-    assertEquals([pointer.width, pointer.height, pointer.tab], [
-      "3px",
-      "14px",
-      "2px",
-    ]);
-    assert(Math.abs(pointer.top - pointer.centre) < .5);
+    const [pointer] = await selectionGeometry(
+      browser,
+      ".otk-question-options .is-selected",
+    );
+    const [tab] = await selectionGeometry(
+      browser,
+      ".otk-question-tabs [aria-selected=true]",
+    );
+    assertEquals([pointer.w, pointer.h, tab.h], [3, 14, 2]);
+    assert(pointer.centred < .5);
     const client = new WsClient(server.url);
     await client.connect();
     try {
@@ -78,14 +70,13 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
           );
           assertEquals(
             await browser.evaluate(
-              "(()=>{const e=document.querySelector('.otk-question-options .is-selected'),p=getComputedStyle(e.querySelector('.otk-selection-marker')),t=document.querySelector('.otk-question-tabs [aria-selected=true]');return [p.width,p.height,getComputedStyle(t).borderBottomWidth]})()",
+              "(()=>{const e=document.querySelector('.otk-question-options .is-selected'),p=getComputedStyle(e,'::before'),t=document.querySelector('.otk-question-tabs [aria-selected=true]');return [p.width,p.height,getComputedStyle(t,'::after').height]})()",
             ),
             ["3px", "14px", "2px"],
           );
-          const items = await browser.evaluate<SelectionGeometry[]>(
-            selectionGeometry(
-              ".otk-question-options [data-otk-selection],.otk-question-tabs [data-otk-selection]",
-            ),
+          const items = await selectionGeometry(
+            browser,
+            ".otk-question-options [data-otk-selection],.otk-question-tabs [data-otk-selection]",
           );
           assert(items.length >= 5);
           for (const item of items) {

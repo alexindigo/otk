@@ -5,6 +5,7 @@ import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { selectionGeometry } from "../support/selection-geometry.ts";
 
 Deno.test("appearance settings persist, broadcast and paint real session status lights", async () => {
   const f = await browserFixture();
@@ -336,31 +337,23 @@ Deno.test("public lights render all states, fixed gel colours, sizing, event bli
         await browser.evaluate(
           `document.documentElement.toggleAttribute('data-otk-reduced-colors',${reduced})`,
         );
-        const geometry = await browser.evaluate<
-          {
-            kind: string;
-            selected: boolean;
-            width: number;
-            height: number;
-            center: number;
-            rowCenter: number;
-            bottom: number;
-            fill: string;
-          }[]
-        >(`[...document.querySelectorAll('[data-otk-selection]')].map(el=>{const row=el.getBoundingClientRect(),m=el.querySelector('.otk-selection-marker'),r=m?.getBoundingClientRect(),css=getComputedStyle(el);return {kind:el.dataset.otkSelection,selected:el.classList.contains('is-selected'),width:r?.width??row.width,height:r?.height??parseFloat(css.borderBottomWidth),center:r?r.y+r.height/2:0,rowCenter:row.y+row.height/2,bottom:row.height-el.clientHeight-parseFloat(css.borderTopWidth)-parseFloat(css.borderBottomWidth),fill:css.backgroundColor}})`);
+        const geometry = await selectionGeometry(
+          browser,
+          "[data-otk-selection]",
+        );
         assertEquals(geometry.map((g) => g.selected), [
           true,
           false,
           true,
           false,
         ]);
-        assertEquals([geometry[0].width, geometry[0].height], [3, 14]);
+        assertEquals([geometry[0].w, geometry[0].h], [3, 14]);
         assert(
-          Math.abs(geometry[0].center - geometry[0].rowCenter) < .5,
+          geometry[0].centred < .5,
           "Pointer shares the row's centreline",
         );
-        assertEquals([geometry[2].height, geometry[2].bottom], [2, 0]);
-        assert(geometry[2].width > 0);
+        assertEquals([geometry[2].h, geometry[2].bottom], [2, 0]);
+        assert(geometry[2].w > 0);
         assert(geometry[0].fill !== "rgba(0, 0, 0, 0)");
       }
     }

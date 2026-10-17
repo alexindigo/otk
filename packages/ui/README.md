@@ -167,12 +167,13 @@ Lists opt into `data-otk-selection="vertical"` or `"horizontal"` and spread
 the `is-selected` state class and role-appropriate `selected`, `current` or
 `pressed` ARIA state. `candidate` marks an action the keyboard will invoke; an
 independent candidate may accompany committed multi-choice answers without
-changing their pressed state. All selection paint keys on the state class.
-Vertical items place their children inside `SelectionContent`, whose permanent
-leading lane holds a flowing, vertically centred 3×14px pointer. Horizontal
-items reserve their own 2px bottom border in both states. Neither decoration
-uses positioning or pseudo-elements; selection never changes box size. Hover
-alone only fills; reduced colours retains both indicators.
+changing their pressed state. All selection paint keys on the state class. Items
+place their children inside `SelectionContent`. Vertical items reserve a leading
+grid track with an always-present `::before`: a centred 3×14px pointer, 3px from
+the item's start. Horizontal items reserve a 2px bottom grid track with an
+always-present `::after`, inset 8px from both ends. Only the state class paints
+the marks. Neither decoration uses positioning; selection never changes box
+size. Hover alone only fills; reduced colours retains both indicators.
 
 Package units live in `tests/`; real browser/app tests remain at repository
 level. Builds/tests run inside the project's assigned VM. License: LGPL-3.0-only

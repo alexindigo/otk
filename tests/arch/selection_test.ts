@@ -14,8 +14,8 @@ function paintErrors(css: string): string[] {
       errors.push("selection paint must use the state class");
     }
     if (/otk-selection|is-selected/.test(selector)) {
-      if (/::(?:before|after)|\[aria-|\[data-selected/.test(selector)) {
-        errors.push("selection has no attribute or pseudo-element decoration");
+      if (/\[aria-|\[data-selected/.test(selector)) {
+        errors.push("selection has no attribute-driven decoration");
       }
       if (
         /\bposition\s*:|(?:^|;)\s*(?:top|left|right|bottom|inset)(?:-[\w-]+)?\s*:/
@@ -48,10 +48,10 @@ Deno.test("selection state and decoration have one enforceable owner across UI c
           file.pathname,
         );
         for (const [item] of source.matchAll(/<button\b[\s\S]*?<\/button>/g)) {
-          if (item.includes('data-otk-selection="vertical"')) {
+          if (/data-otk-selection="(?:vertical|horizontal)"/.test(item)) {
             assert(
               item.includes("<SelectionContent"),
-              `${file.pathname}: vertical items must reserve their marker lane`,
+              `${file.pathname}: items must group content beside their flowing mark`,
             );
           }
         }
@@ -65,6 +65,22 @@ Deno.test("selection state and decoration have one enforceable owner across UI c
     }
   }
   await inspect(new URL("../../packages/ui/", import.meta.url));
+  const theme = await Deno.readTextFile(
+    new URL("../../packages/ui/theme.css", import.meta.url),
+  );
+  for (
+    const [orientation, pseudo] of [["vertical", "before"], [
+      "horizontal",
+      "after",
+    ]]
+  ) {
+    assert(
+      new RegExp(
+        `\\[data-otk-selection=${orientation}\\]\\.otk-selection-item::${pseudo}\\s*\\{[^}]*content: "";`,
+      ).test(theme),
+      `${orientation}: the shared owner must always reserve its in-flow pseudo-element`,
+    );
+  }
   for (
     const invalid of [
       "<button aria-selected={chosen}>",
@@ -87,13 +103,19 @@ Deno.test("selection state and decoration have one enforceable owner across UI c
     const invalid of [
       "[aria-selected=true] { background: red; }",
       "[data-selected] { color: red; }",
-      '.is-selected::after { content: ""; }',
+      '.is-selected::after { position: absolute; content: ""; }',
       "[data-otk-selection] { position: relative; }",
       ".otk-selection-marker { inset-block: 0; }",
     ]
   ) assert(paintErrors(invalid).length > 0, invalid);
   assertEquals(
     paintErrors(".is-selected { background: var(--otk-selected); }"),
+    [],
+  );
+  assertEquals(
+    paintErrors(
+      '[data-otk-selection=horizontal]::after { content: ""; height: 2px; }',
+    ),
     [],
   );
 });

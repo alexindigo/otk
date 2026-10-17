@@ -3,10 +3,7 @@ import { assert, assertEquals } from "@std/assert";
 import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
-import {
-  type SelectionGeometry,
-  selectionGeometry,
-} from "../support/selection-geometry.ts";
+import { selectionGeometry } from "../support/selection-geometry.ts";
 import { WsClient } from "../support/ws-client.ts";
 
 Deno.test("selection flow, state and stable boxes span chrome, menu, palette and picker in all themes and colour modes", async () => {
@@ -15,9 +12,7 @@ Deno.test("selection flow, state and stable boxes span chrome, menu, palette and
     b = await Cdp.launch(root),
     c = new WsClient(f.url);
   async function observe(selector: string, minimum: number) {
-    const items = await b.evaluate<SelectionGeometry[]>(
-      selectionGeometry(selector),
-    );
+    const items = await selectionGeometry(b, selector);
     assert(items.length >= minimum, selector);
     for (const item of items) {
       assertEquals(item.shift, 0, JSON.stringify(item));
@@ -25,7 +20,12 @@ Deno.test("selection flow, state and stable boxes span chrome, menu, palette and
         assertEquals([item.w, item.h], [3, 14]);
         assert(item.centred <= .5, JSON.stringify(item));
         assertEquals(item.position, "static");
-      } else assertEquals(item.h, 2);
+        assertEquals(item.start, 3);
+      } else {
+        assertEquals(item.h, 2);
+        assertEquals([item.start, item.end, item.bottom], [8, 8, 0]);
+        assertEquals(item.position, "static");
+      }
       assertEquals(
         item.paint === "rgba(0, 0, 0, 0)",
         !item.selected,
