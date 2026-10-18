@@ -228,6 +228,7 @@ export interface UserMessage {
   agent?: string;
   agentColor?: string;
   model?: ModelRef;
+  variant?: string;
   parts: Part[];
 }
 export interface AssistantMessage {

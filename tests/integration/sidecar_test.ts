@@ -25,6 +25,7 @@ Deno.test("I11 message paging accepts OTK message IDs without leaking harness cu
       "commands",
       "files",
       "history",
+      "models",
       "permissions",
       "prompt",
       "questions",

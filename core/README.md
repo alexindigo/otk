@@ -30,15 +30,19 @@ own parsed representation; that representation types the handler's input.
 `registerSessions`, `registerPrefs` and `registerFrecency` provide core and
 store features; prefs/frecency take their store as a third argument. Optional
 `registerPrompt`, `registerShell`, `registerCommands`, `registerHistory`,
-`registerFiles`, `registerAgents`, `registerResources`, `registerPermissions`,
-`registerQuestions` and `registerRevert` register only when their backend
-capability exists. Registry machinery never composes those features;
-`application.ts` does. `prefsOptions` and `frecencyOptions` retain OTK
+`registerFiles`, `registerAgents`, `registerModels`, `registerResources`,
+`registerPermissions`, `registerQuestions` and `registerRevert` register only
+when their backend capability exists. Registry machinery never composes those
+features; `application.ts` does. `prefsOptions` and `frecencyOptions` retain OTK
 preference/path validation. `agents.list` keeps mention-list behavior by default
 and accepts optional boolean `primary` for the essential agent-cycle command.
 The neutral agents capability receives that optional selection; the native
 backend excludes hidden agents and selects primary/all agents for cycling, or
 subagent/all agents for mentions.
+
+`models.list` validates a session ID and delegates to the optional models
+capability. Its catalog and agent metadata are neutral protocol shapes; native
+provider/config requests and credential filtering belong to the adapter.
 
 The existing `welcome.sidecar.harness` wire shape gains a `capabilities` array
 advertising present backend capabilities. Consumers gate optional features on

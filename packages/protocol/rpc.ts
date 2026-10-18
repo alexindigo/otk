@@ -10,6 +10,7 @@ import type { HistoryEntry } from "./history.ts";
 import type { Preferences } from "./prefs.ts";
 import type { InboxRpcMethods } from "./inbox.ts";
 import type { LayoutRpcMethods } from "./preferences/layout.ts";
+import type { ModelsRpcMethods } from "./models.ts";
 export type PromptPart =
   | { kind: "text"; text: string }
   | {
@@ -61,6 +62,9 @@ export interface FileMatch {
 export interface AgentOption {
   name: string;
   description?: string;
+  color?: string;
+  model?: ModelRef;
+  variant?: string;
 }
 export interface ResourceOption {
   name: string;
@@ -102,7 +106,8 @@ export interface CommandInput {
   parts?: Extract<PromptPart, { kind: "file" }>[];
 }
 /** Wire contracts. Features extend this interface through module augmentation. */
-export interface RpcMethods extends InboxRpcMethods, LayoutRpcMethods {
+export interface RpcMethods
+  extends InboxRpcMethods, LayoutRpcMethods, ModelsRpcMethods {
   "session.get": { params: { sessionID: string }; result: ContentSession };
   "session.children": {
     params: { sessionID: string };

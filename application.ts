@@ -28,6 +28,7 @@ import {
   registerFrecency,
   registerHistory,
   registerLayout,
+  registerModels,
   registerPermissions,
   registerPrefs,
   registerPrompt,
@@ -82,6 +83,7 @@ export function startApplication(
   registerHistory(rpc, backend);
   registerFiles(rpc, backend);
   registerAgents(rpc, backend);
+  registerModels(rpc, backend);
   registerResources(rpc, backend);
   registerPermissions(rpc, backend);
   registerQuestions(rpc, backend);

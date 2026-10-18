@@ -67,10 +67,17 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
   ];
   try {
     for (
-      const capabilities of [undefined, [], ["prompt"], [
-        "prompt",
-        "newer.server.capability",
-      ], ["feature.preview"]]
+      const capabilities of [
+        undefined,
+        [],
+        ["prompt"],
+        [
+          "prompt",
+          "newer.server.capability",
+        ],
+        ["models"],
+        ["feature.preview"],
+      ]
     ) {
       const sidecars = createSidecars(() => {}, {
         connection: { api: new URL("http://example.test/api/") },
@@ -109,6 +116,11 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
           connection.supports("feature.preview"),
           expected.includes("feature.preview"),
           "Extensions require an explicit advertisement, never a legacy default",
+        );
+        assertEquals(
+          connection.supports("models"),
+          expected.includes("models"),
+          "Models require an explicit advertisement, never a legacy default",
         );
         assertEquals(Socket.current.sent.map((value) => JSON.parse(value).t), [
           "hello",

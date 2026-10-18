@@ -23,6 +23,7 @@ import {
   type AgentsCapabilities,
   legacyAgentsCapabilities,
 } from "./capabilities/agents.ts";
+import type { ModelsCapabilities } from "./capabilities/models.ts";
 import {
   legacyResourcesCapabilities,
   type ResourcesCapabilities,
@@ -49,6 +50,7 @@ export interface CapabilityContracts
     HistoryCapabilities,
     FilesCapabilities,
     AgentsCapabilities,
+    ModelsCapabilities,
     ResourcesCapabilities,
     PermissionsCapabilities,
     QuestionsCapabilities,
@@ -89,6 +91,7 @@ export type {
 } from "./capabilities/history.ts";
 export type { FilesCapability } from "./capabilities/files.ts";
 export type { AgentsCapability } from "./capabilities/agents.ts";
+export type { ModelsCapability } from "./capabilities/models.ts";
 export type { ResourcesCapability } from "./capabilities/resources.ts";
 export type { PermissionsCapability } from "./capabilities/permissions.ts";
 export type { QuestionsCapability } from "./capabilities/questions.ts";

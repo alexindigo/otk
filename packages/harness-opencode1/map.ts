@@ -76,6 +76,7 @@ export function mapMessage(
       model: info.model
         ? { provider: info.model.providerID, model: info.model.modelID }
         : undefined,
+      variant: info.model?.variant,
     };
   }
   const ends = parts.flatMap((part) =>

@@ -39,7 +39,7 @@ try {
 Run a consumer with Deno's network/read/environment permissions. No OTK sidecar
 is required; start a stock server separately. Empty `db` resolves through
 `XDG_DATA_HOME`/`HOME` using the native default. There are no sidecar auth/state
-inputs. All ten optional capabilities are implemented in separate modules and
+inputs. All eleven optional capabilities are implemented in separate modules and
 share one session-directory resolver. Use `core` for lifecycle/session queries
 and `capabilities.<name>` for optional operations.
 
@@ -59,6 +59,15 @@ ancestor path; reparenting updates the affected subtree, including late-arriving
 parents. Agent colours share one in-flight/cache entry per directory until
 native instance disposal or stop. Reconnecting alone does not invalidate
 directory configuration.
+
+`capabilities.models.listModels(sessionID)` reads native `GET /provider` and
+`GET /config` in that session's directory. It allowlists connected provider and
+model display metadata, never credentials/options/headers/environment fields.
+Variant names come from the model's variant keys; `free` means the `opencode`
+provider with zero input cost. Configured `model` becomes the catalog default
+only if present among the connected models. `agents.list` uses the same colour
+resolution as transcripts and includes configured model/variant metadata. Native
+user `info.model.variant` maps to OTK `UserMessage.variant` (stock 1.18.34).
 
 When reconnect loses a streaming seed, point-message recovery coalesces deltas
 per subscribed message at a 50 ms cadence, with one in-flight read and a

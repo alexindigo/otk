@@ -27,11 +27,11 @@ async function readChildren(harness: Harness, id: string) {
 
 A harness pairs `core` (identity, start/stop, subscriptions, session creation
 and queries) with `capabilities`. Prompt/abort, shell, commands, history, files,
-agents, resources, permissions, questions and revert are optional. History reads
-and attachment retrieval are asynchronous. Consumers check or require a
-capability at their operation boundary. Missing and duplicate registrations
-raise a `HarnessError` with code `capability`. Registry snapshots are frozen;
-the supplied capability objects retain their identity and lifetimes.
+agents, models, resources, permissions, questions and revert are optional.
+History reads and attachment retrieval are asynchronous. Consumers check or
+require a capability at their operation boundary. Missing and duplicate
+registrations raise a `HarnessError` with code `capability`. Registry snapshots
+are frozen; the supplied capability objects retain their identity and lifetimes.
 
 The name and operation contract lives in `@otk/protocol`'s open
 `CapabilityContracts` interface. This package re-exports its `Capabilities`,

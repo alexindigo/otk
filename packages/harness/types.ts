@@ -16,6 +16,7 @@ export type {
   FilesCapability,
   HistoryAttachmentRef,
   HistoryCapability,
+  ModelsCapability,
   PermissionsCapability,
   PromptCapability,
   QuestionsCapability,

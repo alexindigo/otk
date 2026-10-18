@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 // Minimal 1.x wire types, characterized from the local 1.17.13 OpenAPI snapshot.
+// User model.variant is also confirmed by the live stock 1.18.34 schema.
 export interface Session {
   id: string;
   parentID?: string;
@@ -17,7 +18,7 @@ export interface Info {
   time: { created: number; completed?: number };
   agent: string;
   parentID?: string;
-  model?: { providerID: string; modelID: string };
+  model?: { providerID: string; modelID: string; variant?: string };
   providerID?: string;
   modelID?: string;
   cost?: number;

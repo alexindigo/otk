@@ -19,6 +19,7 @@ import {
   registerFiles,
   registerFrecency,
   registerHistory,
+  registerModels,
   registerPermissions,
   registerPrefs,
   registerPrompt,
@@ -49,6 +50,7 @@ const optional = [
   registerHistory,
   registerFiles,
   registerAgents,
+  registerModels,
   registerResources,
   registerPermissions,
   registerQuestions,
@@ -248,6 +250,7 @@ Deno.test("each optional registration contributes only its present capability an
     "history",
     "files",
     "agents",
+    "models",
     "resources",
     "permissions",
     "questions",
@@ -260,6 +263,7 @@ Deno.test("each optional registration contributes only its present capability an
     ["history.list", "history.attachment"],
     ["find.files"],
     ["agents.list"],
+    ["models.list"],
     ["resources.list"],
     ["permission.list", "permission.reply"],
     ["question.list", "question.reply", "question.reject"],
@@ -329,6 +333,12 @@ Deno.test("feature validators retain limits, optional strings, model/attachment,
       },
     },
     agents: { listAgents: () => Promise.resolve([]) },
+    models: {
+      listModels: (id) => {
+        calls.push(["models", id]);
+        return Promise.resolve({ providers: [] });
+      },
+    },
     resources: { listResources: () => Promise.resolve([]) },
     permissions: {
       listPermissions: () => Promise.resolve([]),
@@ -357,6 +367,8 @@ Deno.test("feature validators retain limits, optional strings, model/attachment,
   try {
     const invalid: [string, unknown, string][] = [
       ["session.get", {}, "Expected sessionID string"],
+      ["models.list", { sessionID: 1 }, "Expected sessionID string"],
+      ["models.list", { sessionID: "" }, "Expected sessionID string"],
       [
         "session.messages",
         { sessionID: "s", limit: 0 },
@@ -453,6 +465,9 @@ Deno.test("feature validators retain limits, optional strings, model/attachment,
       null,
     );
     assertEquals(await rpc.dispatch("find.files", { sessionID: "s" }), []);
+    assertEquals(await rpc.dispatch("models.list", { sessionID: "s" }), {
+      providers: [],
+    });
     assertEquals(await rpc.dispatch("session.abort", { sessionID: "s" }), null);
     assertEquals(
       await rpc.dispatch("question.reply", {
@@ -496,6 +511,7 @@ Deno.test("feature validators retain limits, optional strings, model/attachment,
         model,
       }],
       ["files", "s", ""],
+      ["models", "s"],
       ["abort", "s"],
       ["question", "q", [[], ["one"]]],
       ["question", "q", undefined],
