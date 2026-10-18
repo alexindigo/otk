@@ -44,8 +44,23 @@ export class OpencodeTest {
       prepare?(test: OpencodeTest): Promise<void>;
       env?: Record<string, string>;
       config?: Record<string, unknown>;
+      providers?: Record<string, {
+        fake: FakeLlm;
+        name?: string;
+        models: Record<string, Record<string, unknown>>;
+      }>;
     } = {},
   ): Promise<OpencodeTest> {
+    const providers = Object.entries(options.providers ?? {});
+    const instances = new Set([provider]);
+    for (const [id, entry] of providers) {
+      if (id === "fake" || instances.has(entry.fake)) {
+        throw new Error(
+          "Extra providers need unique IDs and FakeLlm instances",
+        );
+      }
+      instances.add(entry.fake);
+    }
     const test = new OpencodeTest();
     const state = fromFileUrl(new URL("../../.test-state/", import.meta.url));
     await Deno.mkdir(state, { recursive: true });
@@ -92,6 +107,7 @@ export class OpencodeTest {
         permission,
         ...options.config,
         provider: {
+          ...options.config?.provider as Record<string, unknown>,
           fake: {
             npm: "@ai-sdk/openai-compatible",
             options: {
@@ -103,6 +119,15 @@ export class OpencodeTest {
               "gpt-scripted": { name: "gpt-scripted" },
             },
           },
+          ...Object.fromEntries(providers.map(([id, entry]) => [id, {
+            npm: "@ai-sdk/openai-compatible",
+            ...(entry.name ? { name: entry.name } : {}),
+            options: {
+              baseURL: `http://127.0.0.1:${entry.fake.port}/v1`,
+              apiKey: "x",
+            },
+            models: entry.models,
+          }])),
         },
       }),
     );

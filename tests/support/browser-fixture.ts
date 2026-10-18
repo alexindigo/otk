@@ -33,6 +33,12 @@ export async function browserFixture(
           join(oc.root, "provider-requests.json"),
           JSON.stringify(fake.requests, null, 2),
         );
+        for (const [id, provider] of Object.entries(options?.providers ?? {})) {
+          await Deno.writeTextFile(
+            join(oc.root, `provider-${encodeURIComponent(id)}-requests.json`),
+            JSON.stringify(provider.fake.requests, null, 2),
+          );
+        }
         for (const [i, browser] of browsers.entries()) {
           await browser.dismissDialog();
           await Deno.writeTextFile(
@@ -58,6 +64,9 @@ export async function browserFixture(
         for (const server of servers) await server.stop();
         await oc.stop();
         await fake.stop();
+        for (const provider of Object.values(options?.providers ?? {})) {
+          await provider.fake.stop();
+        }
       }
       assertEquals(errors, [], "Uncaught browser exception");
     },
