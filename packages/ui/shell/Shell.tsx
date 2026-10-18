@@ -536,6 +536,7 @@ export default function Shell(
       connectionKey: () =>
         sidecars.state.list.find((s) => s.id === target.sidecarId)
           ?.connectionVersion,
+      onToolCompleted: (listener) => session.onToolCompleted(target, listener),
       sessionID: () => target.sessionID,
       directory: () => directoryFor(target),
       entry: (id) => entry(target.sidecarId, id),

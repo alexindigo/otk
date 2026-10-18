@@ -3,6 +3,9 @@ import { assert, assertEquals } from "@std/assert";
 const root = new URL("../../", import.meta.url);
 function errors(path: string, source: string): string[] {
   const result: string[] = [];
+  if (path.startsWith("packages/ui/") && /plan_exit|plan_enter/.test(source)) {
+    result.push("tool-driven agent selection belongs to the client owner");
+  }
   if (path.endsWith("ListPicker.tsx")) {
     if (
       /\brpc\b|@otk\/client|prefs\.|querySelector|\.parentElement/.test(source)
@@ -56,6 +59,8 @@ Deno.test("ListPicker uses shared owners and prompt selection flows through one 
       "packages/ui/components/Prompt.tsx",
       "packages/ui/features/prompt/agents.tsx",
       "packages/ui/features/prompt/catalog.ts",
+      "packages/ui/registries/session.tsx",
+      "packages/ui/shell/Shell.tsx",
     ]
   ) {
     const source = await Deno.readTextFile(new URL(path, root));
@@ -77,6 +82,15 @@ Deno.test("ListPicker uses shared owners and prompt selection flows through one 
     );
   }
   assert(errors("Prompt.tsx", "models.list").length);
+  assert(
+    errors(
+      "packages/ui/features/prompt/catalog.ts",
+      'part.name === "plan_exit"',
+    ).length,
+  );
+  assert(
+    errors("packages/ui/shell/Shell.tsx", 'part.name === "plan_enter"').length,
+  );
   assert(
     errors("Prompt.tsx", "nextSelection: (draft = change((value) => value))")
       .length,

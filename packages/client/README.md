@@ -106,6 +106,17 @@ favourite/recent groups). Dispose ends catalog publication and deferred draft
 intents. Captured successful normal sends can still record recency after view
 replacement.
 
+`createSession().onToolCompleted(selection, listener)` observes completed tool
+parts only from the selected session's live stream. Initial/refetch snapshots
+and older pages establish a silent baseline; completed IDs stay consumed until
+the session closes. Late subscribers can receive completions observed during
+initial loading, using the existing transcript rather than a second part store.
+`createComposerSelection` accepts this optional source and maps completed
+external `plan_exit` / `plan_enter` parts to its ordinary
+`chooseAgent("build"/"plan")` intent. Primary-agent readiness precedes the
+intent, missing agents do nothing, and disposal cancels pending switches.
+Historical completion never seeds a draft.
+
 Sidecar state exposes `connectionVersion`, incremented for every welcome,
 including reconnects, so consumers can identify the current connection even if
 reactive batching coalesces a disconnected interval.

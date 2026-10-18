@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createState, type StateFactory } from "./state.ts";
-import type { ContentOp, ContentSession } from "@otk/protocol";
+import type { ContentOp, ContentSession, Message, Part } from "@otk/protocol";
 import { isAttentionOp } from "@otk/protocol";
 import { belongsToSession } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
@@ -41,9 +41,18 @@ export interface SessionState {
   exhausted: boolean;
   error?: string;
 }
+export type ToolPart = Extract<Part, { kind: "tool" }>;
+export type ToolCompletionSource = (
+  listener: (part: ToolPart) => void,
+) => () => void;
 export interface ClientSession {
   state: SessionState;
   subscribe(listener: (state: SessionState) => void): () => void;
+  /** Live completions in this open lifetime; snapshots/paging are silent. */
+  onToolCompleted(
+    selection: Selection,
+    listener: (part: ToolPart) => void,
+  ): () => void;
   open(selection?: Selection): void;
   refetch(): Promise<void>;
   receive(sidecarId: string, frame: ServerFrame): void;
@@ -65,6 +74,38 @@ export function createSession(
   let selected: Selection | undefined, generation = 0, load = 0;
   let buffer: ContentOp[] = [], fetching = false;
   let controller: AbortController | undefined;
+  // IDs only: the selected transcript remains the sole owner of part data.
+  const completed = new Set<string>(), liveCompleted = new Set<string>();
+  const toolListeners = new Set<{
+    generation: number;
+    delivered: Set<string>;
+    listener: (part: ToolPart) => void;
+  }>();
+  const deliverTool = (part: ToolPart) => {
+    for (const observer of toolListeners) {
+      if (
+        observer.generation !== generation || observer.delivered.has(part.id)
+      ) continue;
+      observer.delivered.add(part.id);
+      observer.listener(part);
+    }
+  };
+  const notePart = (part: Part, live: boolean) => {
+    if (
+      part.kind !== "tool" || part.call.status !== "completed" ||
+      completed.has(part.id)
+    ) return;
+    completed.add(part.id);
+    if (live) {
+      liveCompleted.add(part.id);
+      deliverTool(part);
+    }
+  };
+  const baseline = (messages: Message[]) => {
+    for (const message of messages) {
+      for (const part of message.parts) notePart(part, false);
+    }
+  };
   const current = (id: number, request: number) =>
     id === generation && request === load;
   const refetch = async () => {
@@ -109,6 +150,7 @@ export function createSession(
         }, abort.signal)
         : [];
       if (!current(id, request)) return;
+      baseline(messages);
       let content: ContentState = {
         ...emptyContent(),
         messages,
@@ -150,6 +192,8 @@ export function createSession(
       connection(selected.sidecarId).subscribe(selected.sessionID, false);
     }
     selected = selection;
+    completed.clear();
+    liveCompleted.clear();
     buffer = [];
     fetching = false;
     setState((draft) => {
@@ -170,6 +214,29 @@ export function createSession(
   return {
     state,
     subscribe,
+    onToolCompleted(selection, listener) {
+      const observer = {
+        generation: selected?.sidecarId === selection.sidecarId &&
+            selected?.sessionID === selection.sessionID
+          ? generation
+          : -1,
+        delivered: new Set<string>(),
+        listener,
+      };
+      toolListeners.add(observer);
+      // Prompt bindings may mount after initial loading. Replay only completion
+      // edges received live since open, never already-completed history.
+      for (const message of state.content.messages) {
+        for (const part of message.parts) {
+          if (part.kind === "tool" && liveCompleted.has(part.id)) {
+            deliverTool(part);
+          }
+        }
+      }
+      return () => {
+        toolListeners.delete(observer);
+      };
+    },
     open,
     refetch,
     receive(sidecarId: string, frame: ServerFrame): void {
@@ -188,6 +255,8 @@ export function createSession(
           )
         ) return;
       } else if (frame.sessionID !== selected.sessionID) return;
+      if (frame.event.op === "part.upsert") notePart(frame.event.part, true);
+      if (frame.event.op === "message.upsert") baseline([frame.event.message]);
       if (fetching) buffer.push(frame.event);
       else {setState((draft) => {
           draft.content = reduce(draft.content, frame.event);
@@ -212,6 +281,7 @@ export function createSession(
           controller?.signal,
         );
         if (!current(id, request)) return;
+        baseline(messages);
         setState((draft) => {
           const existing = new Set(draft.content.messages.map((m) => m.id));
           draft.content.messages.unshift(

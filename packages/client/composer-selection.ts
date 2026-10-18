@@ -6,6 +6,7 @@ import type {
   Preferences,
 } from "@otk/protocol";
 import type { Draft, DraftChange } from "./drafts.ts";
+import type { ToolCompletionSource } from "./session.ts";
 import { createState, type StateFactory } from "./state.ts";
 import {
   chooseAgent,
@@ -58,6 +59,7 @@ export interface ComposerSelectionOptions {
     ): Promise<unknown>;
   };
   factory?: StateFactory;
+  onToolCompleted?: ToolCompletionSource;
 }
 export interface ComposerSelection {
   state: ComposerSelectionState;
@@ -253,12 +255,13 @@ export function createComposerSelection(
     writes = task.catch(() => {});
     return task;
   };
-  return {
+  const owner: ComposerSelection = {
     state,
     subscribe: (listener) => store.subscribe(() => listener(state)),
     connect,
     dispose() {
       alive = false;
+      stopTools?.();
       generation++;
       changed();
     },
@@ -367,4 +370,23 @@ export function createComposerSelection(
       );
     },
   };
+  const switched = new Set<string>();
+  const stopTools = options.onToolCompleted?.((part) => {
+    if (part.call.tool !== "external" || part.call.status !== "completed") {
+      return;
+    }
+    const name = part.call.name === "plan_exit"
+      ? "build"
+      : part.call.name === "plan_enter"
+      ? "plan"
+      : undefined;
+    if (!name || switched.has(part.id)) return;
+    switched.add(part.id);
+    // Use exactly the manual intent, including the agent's configured choices.
+    // Readiness follows reconnect generations and disposal cancels late intents.
+    void ready().then(() => {
+      if (alive) owner.chooseAgent(name);
+    });
+  });
+  return owner;
 }
