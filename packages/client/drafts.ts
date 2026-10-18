@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { PromptPart } from "@otk/protocol";
+import type { ModelRef, PromptPart } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 
 export interface Chip {
@@ -16,6 +16,9 @@ export interface Draft {
   chips: Chip[];
   mode: "normal" | "shell";
   agent?: string;
+  model?: ModelRef;
+  /** Missing means inherit; an own undefined value means explicitly Default. */
+  variant?: string;
   editor?: { text: string; chipID?: string };
 }
 export type DraftChange = Draft | ((current: Draft) => Draft);
@@ -24,6 +27,14 @@ export const emptyDraft = (): Draft => ({
   chips: [],
   mode: "normal",
 });
+
+/** Clear submitted content while retaining explicit next-prompt choices. */
+export function clearDraft(draft: Draft): Draft {
+  const next = { ...emptyDraft(), agent: draft.agent, model: draft.model };
+  return Object.hasOwn(draft, "variant")
+    ? { ...next, variant: draft.variant }
+    : next;
+}
 
 /** Browser-lifetime drafts, keyed by server and session, never session content. */
 export interface Drafts {

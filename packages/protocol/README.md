@@ -54,6 +54,14 @@ rather than library-internal module augmentation, which JSR's publication graph
 does not support. The composition names owners only, never individual keys or
 validators.
 
+The model preference owner contributes `models.recent` (max 10) and
+`models.favourite` (max 50), both initially empty arrays of unique
+`{ provider, model }` references. Runtime validation rejects malformed,
+duplicate and oversized lists; these are ordinary host-sidecar preferences, with
+no catalog-membership requirement. `registerModelPreferences` is also available
+for smaller compositions. Exported `MAX_RECENT_MODELS` and
+`MAX_FAVOURITE_MODELS` keep next-value helpers aligned with validation.
+
 `ToolKinds` and `PartKinds` are also declaration-mergeable interfaces, mapping
 typed OTK kind names to their wire shapes. `ToolCall` and `Part` derive from
 these maps plus `ExternalCall` / `ExternalPart`. Harness/MCP/plugin names live

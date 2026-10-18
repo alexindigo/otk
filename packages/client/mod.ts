@@ -14,6 +14,8 @@ export * from "./messages.ts";
 export * from "./permissions.ts";
 export * from "./history.ts";
 export * from "./drafts.ts";
+export * from "./prompt-selection.ts";
+export * from "./model-preferences.ts";
 export * from "./question-form.ts";
 export { replyMessages, replyMetadata } from "./replies.ts";
 export * from "./navigation.ts";

@@ -5,6 +5,7 @@ import { registerDiffPreferences } from "./preferences/diff.ts";
 import { registerInboxPreferences } from "./preferences/inbox.ts";
 import { registerLayoutPreferences } from "./preferences/layout.ts";
 import { registerKeymapPreferences } from "./preferences/keymap.ts";
+import { registerModelPreferences } from "./preferences/models.ts";
 import { registerNotificationPreferences } from "./preferences/notifications.ts";
 import { registerPromptPreferences } from "./preferences/prompt.ts";
 import { registerThemePreferences } from "./preferences/theme.ts";
@@ -20,6 +21,7 @@ export function createPreferences(): PreferenceRegistry {
   registerTranscriptPreferences(registry);
   registerDiffPreferences(registry);
   registerPromptPreferences(registry);
+  registerModelPreferences(registry);
   registerVisualPreferences(registry);
   registerInboxPreferences(registry);
   registerLayoutPreferences(registry);
@@ -38,6 +40,11 @@ export {
 export { registerKeymapPreferences } from "./preferences/keymap.ts";
 export { registerNotificationPreferences } from "./preferences/notifications.ts";
 export { registerPromptPreferences } from "./preferences/prompt.ts";
+export {
+  MAX_FAVOURITE_MODELS,
+  MAX_RECENT_MODELS,
+  registerModelPreferences,
+} from "./preferences/models.ts";
 export { isThemeId, registerThemePreferences } from "./preferences/theme.ts";
 export { registerTranscriptPreferences } from "./preferences/transcript.ts";
 export { registerVisualPreferences } from "./preferences/visual.ts";

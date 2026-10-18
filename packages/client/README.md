@@ -53,6 +53,32 @@ Late uploads and sends update only their originating draft; a newer edit is
 never cleared by completion of an older submission. Permission/question input
 remains owned by its UI feature and protected by navigation confirmation.
 
+`effectiveSelection(draft, { context, agents, catalog })` is the shared pure
+next-prompt projection for display and every submission path. Each field reports
+its value and source (`explicit`, `restored`, `configured`, `default`,
+`absent`); model metadata includes display/provider names, advertised variants
+and an unavailable flag without replacing a missing model. Inputs use the last
+loaded user message and primary agents in configured-default order. Context is
+never copied into the draft, so unsent explicit choices win.
+
+`chooseAgent`, `chooseModel` and `chooseVariant` return next drafts for the
+existing session-keyed writer. Choosing an agent applies its configured choices;
+choosing a model drops an unsupported explicit variant. Invalid variants resolve
+to none, not a lower-precedence fallback. A missing draft variant inherits;
+`chooseVariant(draft, undefined, context)` creates an own `variant: undefined`
+property for explicit Default, which overrides restored/configured variants
+without a wire sentinel. Preserve that distinction when spreading drafts.
+`clearDraft` clears submitted content but retains all explicit choices,
+including Default; callers retain the existing submitted-draft identity guard
+around it.
+
+`recordRecentModel(recent, sentModel)` returns a deduplicated most-recent-first
+list (max 10) after a successful send, using the submission's captured model.
+`toggleFavouriteModel(favourites, model)` toggles exact provider/model pairs,
+putting additions first (max 50; a full list keeps existing favourites). These
+helpers own no persistence: callers save `models.recent` and `models.favourite`
+through the existing host-sidecar preferences RPC.
+
 `createQuestionForm(request, factory?)` owns the framework-free question steps,
 single/multiple option picks and typed own answers. `answers()` derives the wire
 reply from that state; choosing a single option retains unselected typed text.

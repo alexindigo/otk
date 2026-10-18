@@ -3,6 +3,7 @@ import type { LayoutPreferences } from "./preferences/layout.ts";
 import type { DiffPreferences } from "./preferences/diff.ts";
 import type { InboxPreferences } from "./preferences/inbox.ts";
 import type { KeymapPreferences } from "./preferences/keymap.ts";
+import type { ModelPreferences } from "./preferences/models.ts";
 import type { NotificationPreferences } from "./preferences/notifications.ts";
 import type { PromptPreferences } from "./preferences/prompt.ts";
 import type { ThemePreferences } from "./preferences/theme.ts";
@@ -16,6 +17,7 @@ export interface Preferences
     InboxPreferences,
     LayoutPreferences,
     KeymapPreferences,
+    ModelPreferences,
     NotificationPreferences,
     PromptPreferences,
     ThemePreferences,
