@@ -3,6 +3,8 @@ import "./Diff.css" with { type: "text" };
 import { For, Show } from "solid-js";
 import type { FileDiff, Hunk } from "@otk/protocol";
 import Diagnostics from "./tools/Diagnostics.tsx";
+import ToolPath from "./tools/ToolPath.tsx";
+import { relativeTarget } from "./tools/paths.ts";
 type Line = Hunk["lines"][number];
 export function splitRows(lines: Line[]): { left?: Line; right?: Line }[] {
   const rows: { left?: Line; right?: Line }[] = [];
@@ -52,6 +54,7 @@ export default function Diff(
     paneWidth: number;
     /** The tool row already names this file; retain the accessible identity. */
     inline?: boolean;
+    directory?: string;
   },
 ): import("solid-js").Element {
   const style = () =>
@@ -71,18 +74,26 @@ export default function Diff(
       data-diff-style={style()}
       data-file-status={props.file.status}
       aria-label={`${label()} ${
-        props.file.oldPath ? `${props.file.oldPath} → ` : ""
-      }${props.file.path}`}
+        props.file.oldPath
+          ? `${relativeTarget(props.file.oldPath, props.directory)} → `
+          : ""
+      }${relativeTarget(props.file.path, props.directory)}`}
     >
       <Show when={!props.inline || props.file.oldPath}>
         <header>
           <strong>{label()}</strong>
-          <span class="otk-path">
-            {props.inline
-              ? `from ${props.file.oldPath}`
-              : `${
-                props.file.oldPath ? `${props.file.oldPath} → ` : ""
-              }${props.file.path}`}
+          <span class="otk-id">
+            <Show when={props.file.oldPath}>
+              {props.inline ? "from " : ""}
+              <ToolPath
+                path={props.file.oldPath!}
+                directory={props.directory}
+              />
+              {props.inline ? "" : " → "}
+            </Show>
+            <Show when={!props.inline}>
+              <ToolPath path={props.file.path} directory={props.directory} />
+            </Show>
           </span>
           <Show when={!props.inline}>
             <span class="otk-diff-add">+{props.file.additions}</span>

@@ -23,24 +23,36 @@ receive the same behavior. An optional third `presentation(call)` registration
 argument supplies `{icon, verb, target?, summary?, expanded?}` with the caller's
 directory as a second context argument; path-owning features supply relative
 targets. Icons accept strings or feature-owned SVG render functions. The shared
-frame has no concrete tool list. Edits/patches/writes and helper cards start
-expanded. Typed tool modules use `tools.registerTyped(kind, Component)`, whose
-call type derives from the open protocol `ToolKinds` map. Separate registration
-namespaces let an external `edit` coexist with typed OTK `edit` without either
-renderer receiving the other's shape. `parts.register(name, Component)` receives
-an external part; `parts.registerTyped(kind, Component)` derives its shape from
-the open `PartKinds` map. The same namespace separation applies to parts;
+frame has no concrete tool list. The path presenter keeps project descendants
+relative and outside paths absolute; body labels use `ToolPath` with the same
+directory input, including instruction, working-directory and diff labels.
+Structured result paths use that presenter inside `ToolOutput`; file contents
+use the same `Code` owner as writes, with native first-line numbering and
+extension-based highlighting. Grep results carry path, line and text. Custom
+tool consumers can import `ToolPath` and `relativeTarget` from the public UI
+entry to share the same body and header presentation. Edits/patches/writes and
+helper cards start expanded. Typed tool modules use
+`tools.registerTyped(kind, Component)`, whose call type derives from the open
+protocol `ToolKinds` map. Separate registration namespaces let an external
+`edit` coexist with typed OTK `edit` without either renderer receiving the
+other's shape. `parts.register(name, Component)` receives an external part;
+`parts.registerTyped(kind, Component)` derives its shape from the open
+`PartKinds` map. The same namespace separation applies to parts;
 `registerUnknownPart` supplies unsupported-part fallback. Part registrations can
 contribute `{work?, text?, hidden?}` presentation data: the message groups
 adjacent contributed work clocks into expandable folds and copies contributed
 source text without dispatching concrete part kinds or reading child DOM. Read,
 search, fetch, web search, skill and task bodies render their inherited native
-result through the same `ToolOutput` owner as bash. Structural edit, write,
-patch, todo and question bodies keep their typed result presentation; generic
-output retains its display preference and bounded preview notice. Invisible
-bookkeeping owners declare themselves hidden so wire steps cannot split a
-visible work fold. Reply metadata combines contiguous source parts for one
-whole-reply copy.
+result through the same `ToolOutput` owner as bash. The adapter's decoded
+results contain user content and metadata, not model-facing envelopes.
+Unrecognized formats retain verbatim fallback. Headers alone summarize
+operations; bodies contain results, metadata, diagnostics and
+navigation/progress actions. Row count inflection uses the shared count-label
+helper. Structural edit, write, patch, todo and question bodies keep their typed
+result presentation; generic output retains its display preference and bounded
+preview notice. Invisible bookkeeping owners declare themselves hidden so wire
+steps cannot split a visible work fold. Reply metadata combines contiguous
+source parts for one whole-reply copy.
 
 `prompt.register({ id, create(context) })` installs a per-prompt feature.
 `PromptContext` injects selection/caret/focus operations, an active-lifetime

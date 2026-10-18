@@ -74,7 +74,12 @@ retained.
 Every tool inherits optional `ToolBase.output` for native result text. Absence
 and an empty result remain distinct; typed structural results (diffs, todos and
 questions) remain available alongside it. The native adapter retains bash's ANSI
-cleanup and external tools' 64 KiB preview bound.
+cleanup and external tools' 64 KiB preview bound. `ToolBase.outputContent`
+optionally carries a decoded `ToolResult`: file text with language/native line
+range/total/ truncation, path lists with pagination metadata, grep matches
+`{path,line,text}`, skill content with directory/files, or text. `output`
+retains the complete native result for provenance and fallback when its format
+is unknown. Model-facing native envelopes are not UI result contracts.
 
 `CapabilityContracts` composes the operation contracts owned by the shared
 features in `capabilities/`. `CapabilityName` derives from its keys and

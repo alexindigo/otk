@@ -95,4 +95,11 @@ entry.
 The standalone sessions consumer and stock-server test are in `tests/reuse/` at
 the workspace root. Run `deno task test:reuse` in the dedicated OTK guest.
 Native unit tests live in this package; mixed app-consumer checks retain their
-shared app fixtures. License: LGPL-3.0-only.
+shared app fixtures. Tool mapping retains native output on the common tool
+contract. `tool-results.ts` decodes characterized stock 1.18.34 read, directory,
+glob/list, grep, skill and task formats once, into harness-neutral user results.
+File lines retain native numbering/range and total/truncation metadata; grep
+matches carry path/line/text. Model-only wrappers and instruction envelopes
+remain in raw provenance, not user content. Unknown or inconsistent formats
+retain the complete verbatim fallback. Read/write language inference has one
+shared native owner. License: LGPL-3.0-only.

@@ -14,6 +14,7 @@ export function registerPatchTool(tools: ToolRegistry): void {
         call={props.call}
         prefs={props.prefs}
         paneWidth={props.paneWidth}
+        directory={props.directory}
       />
     ),
     (call, context) => ({
@@ -31,7 +32,12 @@ export function registerPatchTool(tools: ToolRegistry): void {
   );
 }
 export default function PatchTool(
-  props: { call: PatchCall; prefs: Preferences; paneWidth: number },
+  props: {
+    call: PatchCall;
+    prefs: Preferences;
+    paneWidth: number;
+    directory?: string;
+  },
 ) {
   return (
     <>
@@ -43,6 +49,7 @@ export default function PatchTool(
             style={props.prefs.diffStyle}
             wrap={props.prefs.diffWrap}
             paneWidth={props.paneWidth}
+            directory={props.directory}
           />
         )}
       </For>

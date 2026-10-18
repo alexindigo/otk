@@ -18,7 +18,7 @@ export function relativeTarget(path: string, directory?: string): string {
     common < file.length && common < root.length &&
     file[common] === root[common]
   ) common++;
-  return [...root.slice(common).map(() => ".."), ...file.slice(common)].join(
-    "/",
-  ) || ".";
+  if (common < root.length) return path;
+  const relative = file.slice(common).join("/");
+  return relative ? relative + (path.endsWith("/") ? "/" : "") : ".";
 }

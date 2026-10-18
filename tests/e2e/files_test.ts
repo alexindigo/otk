@@ -52,6 +52,12 @@ Deno.test("R2/R3 real edit diffs, live styles/wrap, write highlights/line number
     await browser.poll(
       "!!document.querySelector('[data-tool=edit] [data-line-kind=add]') && !!document.querySelector('[data-tool=edit] [data-line-kind=del]')",
     );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector('[data-tool=edit] .otk-diff').getAttribute('aria-label')",
+      ),
+      "Modified edit.ts",
+    );
     await browser.click(".otk-display-menu > button");
     await browser.click("select[name=diffStyle]");
     await browser.key("ArrowDown");
@@ -138,6 +144,12 @@ Deno.test("R2/R3 real edit diffs, live styles/wrap, write highlights/line number
         "[...document.querySelectorAll('[data-tool=patch] .otk-diff')].map(el=>el.dataset.fileStatus)",
       ),
       ["added", "modified", "deleted", "moved"],
+    );
+    assertEquals(
+      await browser.evaluate(
+        "[...document.querySelectorAll('[data-tool=patch] .otk-diff header .otk-path')].map(el=>el.textContent)",
+      ),
+      ["created.ts", "modify.txt", "delete.txt", "move.txt", "moved.txt"],
     );
     assertEquals(
       await Deno.readTextFile(join(f.oc.directory, "modify.txt")),

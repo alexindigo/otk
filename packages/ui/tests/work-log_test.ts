@@ -42,8 +42,12 @@ Deno.test("path targets are lexical project-relative paths without corrupting pr
   for (
     const [path, directory, expected] of [
       ["/work/project/src/a.ts", "/work/project", "src/a.ts"],
-      ["/work/project-old/a.ts", "/work/project/", "../project-old/a.ts"],
-      ["/work/project/../outside/a.ts", "/work/project/.", "../outside/a.ts"],
+      ["/work/project-old/a.ts", "/work/project/", "/work/project-old/a.ts"],
+      [
+        "/work/project/../outside/a.ts",
+        "/work/project/.",
+        "/work/project/../outside/a.ts",
+      ],
       ["/work/project", "/work/project", "."],
       ["src/a.ts", "/work/project", "src/a.ts"],
       ["https://example.test/a", "/work/project", "https://example.test/a"],

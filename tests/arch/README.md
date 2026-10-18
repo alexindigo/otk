@@ -83,7 +83,19 @@ Work-log groups derive from feature-contributed part presentation; negative
 fixtures reject concrete tool/reasoning selection in the message or grouping
 hosts. Tool owners contribute their summary and initial expansion alongside
 their renderer. Browser tests prove the same renderers, draft/late-upload
-ownership and backend attention outcomes through the new composer area.
+ownership and backend attention outcomes through the new composer area. Tool
+path labels belong to `ToolPath` and the common lexical presenter. The path
+architecture check rejects raw path fields/aliases, duplicate path paint,
+feature-owned path-list formatting and missing directory inputs in tool/diff
+composition. Negative fixtures cover each bypass; browser checks compare header,
+body, loaded instruction, working directory and diff paths, including outside
+targets and reload. File/grep content stays unchanged inside decoded results
+through the shared output owner. The result architecture gate rejects repeated
+body operation summaries, per-row count inflection, native-envelope parsing in
+the UI and concrete tool dispatch in the shared output renderer. Native format
+and fallback tests belong to the adapter; browser tests observe code
+highlighting, native gutters, projected match paths and envelope-free bodies
+across reload.
 
 Layout controls emit independent field patches, never whole-layout copies from
 broadcast-backed props. Negative fixtures reject those stale replacements; the
