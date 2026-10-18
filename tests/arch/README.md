@@ -2,18 +2,19 @@
 
 Overlay registrations provide content only: DialogHost supplies the native
 Dialog, and only overlay specialisations import the internal Surface boundary.
-Negative fixtures reject native-dialog/popover bypasses, duplicate card paint,
-fieldset or legend cards and positioned overlay content, following registered
-components and anchored content dependencies. Overlay placement, resizers and
-the toast stack remain outside content. Selection has no exception: its shared
-binding owns the state class and ARIA attributes, and its pointer and inset
-underline are always-present in-flow pseudo-elements. Architecture negatives
-reject hand-written state, attribute-driven paint and positioned selection
-decoration across all UI consumers. Every CSS variable must resolve to a theme
-slot or a declared structural/component token. Browser checks measure the
-Display title in Dark/Linen/Stone, every registered dialog and menu's padded
-flow, one heading per dialog, native dismissal, focus return and existing
-actions.
+Takeover is the composer-replacement Surface specialisation; its boundary is
+checked alongside dialogs, popovers, menus and toasts. Negative fixtures reject
+native-dialog/popover bypasses, duplicate card paint, fieldset or legend cards
+and positioned overlay content, following registered components and anchored
+content dependencies. Overlay placement, resizers and the toast stack remain
+outside content. Selection has no exception: its shared binding owns the state
+class and ARIA attributes, and its pointer and inset underline are
+always-present in-flow pseudo-elements. Architecture negatives reject
+hand-written state, attribute-driven paint and positioned selection decoration
+across all UI consumers. Every CSS variable must resolve to a theme slot or a
+declared structural/component token. Browser checks measure the Display title in
+Dark/Linen/Stone, every registered dialog and menu's padded flow, one heading
+per dialog, native dismissal, focus return and existing actions.
 
 Tabs have no menu presentation; task handlers and scoped commands remain
 independent of presentation. Project rows reserve visit time and their menu

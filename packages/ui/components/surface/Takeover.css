@@ -1,0 +1,20 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+/* Box: the composer's look. Height: whatever the content needs, up to the
+   dock's share of the centre column; only the body's own scroller scrolls. */
+.otk-takeover {
+  --overlay-bg: var(--otk-bg-elevated);
+  --overlay-border: var(--otk-border);
+  --overlay-radius: var(--radius-composer);
+  --overlay-shadow: var(--otk-composer-shadow);
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  max-width: var(--lane-width);
+  max-height: 100%;
+  min-height: 0;
+  margin-inline: auto;
+}
+.otk-takeover > .otk-surface {
+  flex: 1 1 auto;
+  min-height: 0;
+}

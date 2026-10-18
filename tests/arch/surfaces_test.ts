@@ -24,7 +24,8 @@ async function sources(directory = root, prefix = ""): Promise<Sources> {
 }
 function ownershipErrors(files: Sources): string[] {
   const errors: string[] = [];
-  const owners = /^components\/surface\/(Dialog|Popover|Menu|Toast)\.tsx$/;
+  const owners =
+    /^components\/surface\/(Dialog|Popover|Menu|Toast|Takeover)\.tsx$/;
   const overlay = new Set<string>();
   for (const [name, text] of files) {
     if (
@@ -161,6 +162,7 @@ Deno.test("overlay owners enforce an internal Surface and normal-flow registered
         ".otk-popover-panel .child { position: absolute; }",
       ],
       ["components/surface/Menu.css", ".item { position: fixed; }"],
+      ["components/surface/Takeover.css", ".item { position: absolute; }"],
       ["components/surface/Dialog.css", ".otk-surface-body { top: 8px; }"],
       [
         "components/surface/Dialog.css",
@@ -168,6 +170,32 @@ Deno.test("overlay owners enforce an internal Surface and normal-flow registered
       ],
     ]
   ) assert(ownershipErrors(new Map([[name, text]])).length, text);
+  for (const owner of ["Dialog", "Popover", "Menu", "Toast", "Takeover"]) {
+    assertEquals(
+      ownershipErrors(
+        new Map([[
+          `components/surface/${owner}.tsx`,
+          'import Surface from "./Surface.tsx";',
+        ]]),
+      ),
+      [],
+    );
+  }
+  for (const owner of ["Popover", "Menu", "Toast"]) {
+    assert(
+      ownershipErrors(
+        new Map([
+          [
+            "components/Host.tsx",
+            `<${owner}><Content /></${owner}>; import Content from "./Content.tsx";`,
+          ],
+          ["components/Content.tsx", "export default function Content() {}"],
+          ["components/Content.css", ".content { position: absolute; }"],
+        ]),
+      ).length,
+      `${owner} content must stay in flow`,
+    );
+  }
   for (
     const declaration of [
       "position: absolute",

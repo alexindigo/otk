@@ -4,6 +4,9 @@ import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { selectionGeometry } from "../support/selection-geometry.ts";
+import { waitFor } from "../support/opencode.ts";
+const panel = ".otk-tabs-panel[data-active=true]";
+const tabs = ".otk-question-dock .otk-tabs-strip";
 export const questions = [
   {
     header: "Rendering",
@@ -43,15 +46,15 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
     );
     await browser.key("Enter");
     await browser.poll(
-      "document.querySelectorAll('.otk-question-tabs [role=tab]').length===3",
+      `document.querySelectorAll('${tabs} [role=tab]').length===3`,
     );
     const [pointer] = await selectionGeometry(
       browser,
-      ".otk-question-options .is-selected",
+      `${panel} [data-question-row]:first-child`,
     );
     const [tab] = await selectionGeometry(
       browser,
-      ".otk-question-tabs [aria-selected=true]",
+      `${tabs} [aria-selected=true]`,
     );
     assertEquals([pointer.w, pointer.h, tab.h], [3, 14, 2]);
     assert(pointer.centred < .5);
@@ -70,13 +73,13 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
           );
           assertEquals(
             await browser.evaluate(
-              "(()=>{const e=document.querySelector('.otk-question-options .is-selected'),p=getComputedStyle(e,'::before'),t=document.querySelector('.otk-question-tabs [aria-selected=true]');return [p.width,p.height,getComputedStyle(t,'::after').height]})()",
+              `(()=>{const e=document.querySelector('${panel} [data-question-row]'),p=getComputedStyle(e,'::before'),t=document.querySelector('${tabs} [aria-selected=true]');return [p.width,p.height,getComputedStyle(t,'::after').height]})()`,
             ),
             ["3px", "14px", "2px"],
           );
           const items = await selectionGeometry(
             browser,
-            ".otk-question-options [data-otk-selection],.otk-question-tabs [data-otk-selection]",
+            `${panel} [data-otk-selection],${tabs} [data-otk-selection]`,
           );
           assert(items.length >= 5);
           for (const item of items) {
@@ -88,7 +91,7 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
                 assertEquals(
                   item.ariaPressed,
                   "false",
-                  "The initial candidate is not a committed answer",
+                  "No answer is committed before a pick",
                 );
               }
             } else {
@@ -111,7 +114,7 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
     );
     assert(
       await browser.evaluate(
-        "document.querySelector('.otk-question-actions button:last-child').title.includes('Esc') && !document.querySelector('.otk-question-actions').textContent.includes('j/k')",
+        "document.querySelector('.otk-question-actions button:nth-child(2)').title.includes('Esc') && !document.querySelector('.otk-question-actions').textContent.includes('j/k')",
       ),
     );
     await browser.screenshot(join(f.oc.root, "p1-question-tabs.png"));
@@ -138,25 +141,33 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
     await browser.poll(
       "document.querySelector('textarea[name=prompt]').value==='' && document.querySelector('.otk-question-dock p').textContent.includes('Choose the output') && !!document.querySelector('.otk-prompt').closest('[hidden]')",
     );
-    await browser.click(".otk-question-tabs [role=tab]:first-child");
+    await browser.click(`${tabs} [role=tab]:first-child`);
     await browser.key("1");
     await browser.poll(
-      "document.querySelector('.otk-question-dock p').textContent.includes('Choose details')",
+      `document.querySelector('${panel} button').getAttribute('aria-pressed')==='true'`,
     );
+    // Picking is an intent; Answer explicitly advances to the next step.
+    await browser.click(".otk-question-actions .otk-primary");
+    await browser.poll(
+      `document.querySelector('${panel} p').textContent==='Choose details (select all that apply)'`,
+    );
+    await browser.click(`${tabs} [role=tab]:nth-child(2)`);
     await browser.key("2");
     await browser.poll(
-      "document.querySelector('.otk-question-options button:nth-child(2)').getAttribute('aria-pressed')==='true'",
+      `document.querySelector('${panel} button:nth-child(2)').getAttribute('aria-pressed')==='true'`,
     );
-    await browser.click(".otk-question-options button:last-child");
-    await browser.fill("textarea[name=question-answer]", "Custom detail");
+    await browser.click(`${panel} [data-question-row]:last-child`);
+    await browser.fill(
+      `${panel} textarea[name=question-answer]`,
+      "Custom detail",
+    );
     await browser.key("Enter");
-    await browser.key("Tab");
     await browser.poll(
-      "document.activeElement===document.querySelector('.otk-question-tabs button:first-child') && document.querySelector('.otk-question-options button:nth-child(2)').getAttribute('aria-pressed')==='true'",
+      `document.activeElement===document.querySelector('.otk-question-dock') && document.querySelector('${panel} button:nth-child(2)').getAttribute('aria-pressed')==='true'`,
     );
     await browser.key("ArrowRight");
     await browser.poll(
-      "document.querySelector('.otk-question-dock dd')?.textContent==='Typed' && document.querySelector('.otk-question-dock dl').textContent.includes('Custom detail')",
+      `document.querySelector('${panel} dd')?.textContent==='Typed' && document.querySelector('${panel} dl').textContent.includes('Tools, Custom detail')`,
     );
     await browser.screenshot(join(f.oc.root, "p1-question-confirm.png"));
     const geometry = await browser.evaluate<
@@ -179,20 +190,47 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
       geometry.actionsRight <= geometry.dockRight - .5,
       "Question actions stay within the dock; keyboard help is in titles",
     );
-    await browser.click(".otk-question-dock button[role=tab]:first-child");
+    await browser.click(`${tabs} [role=tab]:first-child`);
     await browser.key("l");
     await browser.key("h");
     await browser.key("l");
     await browser.key("l");
     await browser.poll(
-      "document.querySelector('.otk-question-tabs button:last-child').getAttribute('aria-selected')==='true'",
+      `document.querySelector('${tabs} button:last-child').getAttribute('aria-selected')==='true'`,
     );
-    await browser.click(".otk-question-dock button:not([role=tab])");
+    await browser.click(".otk-question-actions .otk-primary");
     await browser.poll(
       "!document.querySelector('.otk-question-dock') && document.querySelector('.otk-questions').textContent.includes('Typed') && document.querySelector('.otk-questions').textContent.includes('Tools, Custom detail')",
     );
     await browser.poll(
       `document.querySelector('[data-session="${session.id}"]').dataset.status==='idle'`,
+    );
+    const history = await waitFor(
+      () =>
+        f.oc.request<
+          {
+            parts: {
+              tool?: string;
+              state?: { metadata?: { answers?: string[][] } };
+            }[];
+          }[]
+        >(`/session/${session.id}/message`),
+      (rows) =>
+        rows.some((row) =>
+          row.parts.some((part) =>
+            part.tool === "question" && !!part.state?.metadata?.answers
+          )
+        ),
+    );
+    assertEquals(
+      history.flatMap((row) => row.parts).find((part) =>
+        part.tool === "question"
+      )?.state?.metadata?.answers,
+      [["Typed"], ["Tools", "Custom detail"]],
+      "Confirm sends the exact picks and own answer to opencode",
+    );
+    await browser.poll(
+      "document.querySelector('.otk-message-flow').textContent.includes('Answers recorded.')",
     );
     f.fake.queue({
       tool: { name: "question", input: { questions: [questions[0]] } },
@@ -202,12 +240,12 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
     await browser.poll("!!document.querySelector('.otk-question-dock')");
     assertEquals(
       await browser.evaluate(
-        "document.querySelectorAll('.otk-question-tabs [role=tab]').length",
+        `document.querySelectorAll('${tabs} [role=tab]').length`,
       ),
       2,
       "Single questions retain their Confirm step",
     );
-    await browser.click(".otk-question-tabs [role=tab]:first-child");
+    await browser.click(`${tabs} [role=tab]:first-child`);
     await browser.key("Escape");
     await browser.poll(
       "!document.querySelector('.otk-question-dock') && document.querySelector('[data-tool-status=denied] .otk-questions dd')?.textContent==='Dismissed'",

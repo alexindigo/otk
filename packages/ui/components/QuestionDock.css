@@ -1,22 +1,13 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
+/* Behaviour owner only (focus, keys); the Takeover surface owns box and rhythm. */
 .otk-question-dock {
-  padding: 16px;
-  max-height: 45vh;
-  overflow: auto;
-}
-.otk-question-tabs {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 4px;
-  margin-bottom: 8px;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+  width: 100%;
 }
-.otk-question-tabs button {
-  padding: 4px 8px;
-  color: var(--otk-fg-3);
-}
-.otk-question-dock > p {
-  margin: 0 0 8px;
+.otk-question-text {
   font-size: var(--text-prose);
   line-height: 24px;
 }
@@ -25,32 +16,45 @@
   flex-direction: column;
   align-items: stretch;
   gap: 4px;
-  margin-bottom: 12px;
 }
-.otk-question-options button {
+.otk-question-options > * {
   text-align: left;
-  display: flex;
+  padding-block: 8px;
+  cursor: pointer;
+}
+.otk-question-own {
+  flex: 1 1 100%;
+  min-height: 0;
+  resize: none;
+  overflow: hidden;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: var(--otk-fg);
+}
+.otk-question-own:focus-visible {
+  outline: 0;
+}
+.otk-question-peek {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.otk-question-submit {
+  margin-left: auto;
+}
+.otk-question-content {
   align-items: baseline;
   flex-wrap: wrap;
   gap: 4px 12px;
-  padding: 8px 12px;
 }
 .otk-question-options .otk-muted {
   font-size: var(--text-meta);
-}
-.otk-question-own {
-  margin-top: 4px;
-  border: 1px solid var(--otk-border);
-  color: var(--otk-fg-3);
 }
 .otk-question-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-}
-.otk-question-content {
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 12px;
 }

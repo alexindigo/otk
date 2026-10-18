@@ -5,8 +5,14 @@ import { selection } from "../components/selection.ts";
 Deno.test("selection has one shared pointer/underline owner for selected, current and pressed semantics", async () => {
   const css = await Deno.readTextFile(new URL("../theme.css", import.meta.url));
   assert(
-    css.includes("--pill-inset: 14px"),
-    "Prototype action spacing belongs to the shared control contract",
+    css.includes("--item-inset: 12px") &&
+      css.includes("--pill-inset: var(--item-inset)"),
+    "Items and action pills share the accepted item inset token",
+  );
+  assert(
+    css.includes("var(--selection-inset, var(--item-inset))") &&
+      css.includes("var(--selection-padding, 4px var(--item-inset))"),
+    "Both selection orientations consume the shared item inset",
   );
   for (const selected of [false, true]) {
     for (

@@ -1,41 +1,46 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
+/* Behaviour owner only (focus, keys); the Takeover surface owns box and rhythm. */
 .otk-permission-dock {
+  display: flex;
+  flex-direction: column;
   min-height: 0;
-  max-height: 40vh;
-  overflow: auto;
-  padding: 16px;
+  width: 100%;
   overflow-wrap: anywhere;
 }
 .otk-permission-command {
-  margin: 0 0 12px;
+  margin: 0;
   white-space: pre-wrap;
   font: 400 13px/20px var(--font-mono);
   background: var(--otk-bg-code);
   border: 1px solid var(--otk-border-code);
   border-radius: var(--radius-card);
-  padding: 8px 12px;
+  padding: 8px var(--item-inset);
 }
 .otk-permission-patterns {
   color: var(--otk-fg-3);
   font-size: var(--text-meta);
-  margin: 8px 0;
 }
-.otk-permission-patterns ul {
-  margin: 8px 0;
+.otk-permission-patterns ul,
+.otk-permission-confirm ul {
+  margin: 8px 0 0;
 }
 .otk-permission-actions {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  padding-top: 4px;
 }
-.otk-permission-dock form label {
+.otk-permission-confirm,
+.otk-permission-reject,
+.otk-permission-reject label {
   display: flex;
   flex-direction: column;
   gap: 8px;
 }
-.otk-permission-dock textarea {
+.otk-permission-confirm p {
+  margin: 0;
+}
+.otk-permission-reject textarea {
   min-height: 4rem;
 }
 .otk-rejection-reason {
@@ -43,9 +48,6 @@
   min-width: 160px;
   width: auto;
   border-radius: var(--radius-pill);
-  padding: 4px 12px;
+  padding: 4px var(--item-inset);
   background: transparent;
-}
-.otk-permission-confirm {
-  padding-top: 8px;
 }

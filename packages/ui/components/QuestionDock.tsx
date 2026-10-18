@@ -1,5 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./QuestionDock.css" with { type: "text" };
+import Takeover from "./surface/Takeover.tsx";
+import Tabs from "./Tabs.tsx";
+import QuestionAnswers from "./QuestionAnswers.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import type { DockRegistry } from "../registries/renderers.ts";
@@ -12,6 +15,8 @@ export function registerQuestionDock(docks: DockRegistry): void {
 }
 import { createSignal, For, onSettled, Show } from "solid-js";
 import type { QuestionRequest } from "@otk/protocol";
+import { createQuestionForm, forgetQuestionForm } from "@otk/client";
+import { solidState } from "../state/binding.ts";
 import TakeoverHeader from "./TakeoverHeader.tsx";
 import { useSessionPorts } from "../registries/session.tsx";
 import type {
@@ -50,11 +55,12 @@ function QuestionTakeover() {
     />
   );
 }
-import {
-  ownedAction,
-  ownedCommand,
-  useCommandPorts,
-} from "../keyboard/context.tsx";
+import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
+/**
+ * View of one question request. All answer logic lives in `createQuestionForm`;
+ * this renders its state and forwards intents. View-only state: collapse,
+ * reply progress, keyboard focus movement.
+ */
 function Request(
   props: {
     request: QuestionRequest;
@@ -64,235 +70,166 @@ function Request(
     onDirty(value: boolean): void;
   },
 ) {
-  const [tab, setTab] = createSignal(0),
-    [selected, setSelected] = createSignal(0),
-    [answers, setAnswers] = createSignal<string[][]>([]),
-    [custom, setCustom] = createSignal<string[]>([]),
-    [editing, setEditing] = createSignal(false),
+  const form = createQuestionForm(props.request, solidState);
+  const [collapsed, setCollapsed] = createSignal(false),
     [pending, setPending] = createSignal(false),
     [error, setError] = createSignal("");
-  let dock!: HTMLElement, input: HTMLTextAreaElement | undefined, active = true;
-  const question = () => props.request.questions[tab()];
-  const confirm = () => tab() === props.request.questions.length;
-  const moveTab = (next: number) => {
-    setTab(
-      (next + props.request.questions.length + 1) %
-        (props.request.questions.length + 1),
-    );
-    setSelected(0);
-    setEditing(false);
-  };
-  const reply = async (reject = false) => {
+  let card!: HTMLElement, alive = true;
+  const step = () => form.state.step;
+  const onReview = () => step() === form.review;
+  const reply = async (answers?: string[][]) => {
     if (pending()) return;
     setPending(true);
     setError("");
     try {
-      await props.onReply(
-        props.request.id,
-        reject
-          ? undefined
-          : props.request.questions.map((_, i) => answers()[i] || []),
-      );
-      if (active) props.onDirty(false);
-    } catch (error) {
-      if (active) setError((error as Error).message);
+      await props.onReply(props.request.id, answers);
+      forgetQuestionForm(props.request.id);
+      if (alive) props.onDirty(false);
+    } catch (failure) {
+      if (alive) setError((failure as Error).message);
     } finally {
-      if (active) setPending(false);
+      if (alive) setPending(false);
     }
   };
-  const pick = (label: string) => {
-    const existing = answers()[tab()] || [],
-      next = question().multiple
-        ? existing.includes(label)
-          ? existing.filter((value) => value !== label)
-          : [...existing, label]
-        : [label];
-    setAnswers(
-      answers().map((v, i) => i === tab() ? next : v).concat(
-        Array.from(
-          { length: Math.max(0, tab() + 1 - answers().length) },
-          (_, i) => i + answers().length === tab() ? next : [],
-        ),
-      ),
-    );
-    props.onDirty(true);
-    if (!question().multiple) moveTab(tab() + 1);
-  };
-  const choose = (index: number) => {
-    setSelected(index);
-    if (index < question().options.length) {
-      pick(question().options[index].label);
-    } else if (question().custom) {
-      setEditing(true);
-      requestAnimationFrame(() => input?.focus());
-    }
-  };
-  const saveCustom = () => {
-    const value = custom()[tab()]?.trim();
-    if (!value) {
-      setEditing(false);
-      return;
-    }
-    pick(value);
-    setEditing(false);
-    dock.focus();
-  };
+  const submit = () => reply(form.answers());
   const ports = useCommandPorts();
   const reject = ownedCommand(ports, {
     id: "question.reject",
     title: "Reject question",
     category: "Attention",
     enabled: () => !pending(),
-    run: () => reply(true),
+    run: () => reply(undefined),
   });
-  const answerCommand = ownedAction(
-    "question.answer",
-    (reject: boolean = false) => reply(reject),
-  );
-  const tabCommand = ownedAction("question.tab", moveTab);
-  const chooseCommand = ownedAction("question.choose", choose);
-  const customCommand = ownedAction("question.custom", saveCustom);
-  const moveChoice = ownedAction(
-    "question.move",
-    (input: { delta: number; total: number }) =>
-      setSelected((selected() + input.delta + input.total) % input.total),
-  );
-  const close = ownedCommand(ports, {
+  // Escape goes through the keyboard layer: leave the answer field, else skip.
+  ownedCommand(ports, {
     id: "question.close",
     title: "Close question layer",
     category: "Attention",
     hidden: true,
     run: () => {
-      if (editing()) {
-        setEditing(false);
-        dock.focus();
-      } else return reject();
+      if (document.activeElement instanceof HTMLTextAreaElement) card.focus();
+      else return reject();
     },
   });
+  const answer = () => (onReview() ? submit() : form.next());
+  const goTo = (target: number) => {
+    form.goTo(target);
+    setCollapsed(false);
+  };
   onSettled(() => {
+    const stopDirty = form.subscribe(() => props.onDirty(true));
     const release = ports.keyboard?.layer(
       "question.close",
-      () => editing() || dock.contains(document.activeElement),
+      () => card.contains(document.activeElement),
       20,
     );
     return () => {
+      stopDirty();
       release?.();
-      active = false;
+      alive = false;
       props.onDirty(false);
     };
   });
-  return (
-    <section
-      class="otk-question-dock"
-      tabindex="0"
-      aria-label="Pending question"
-      ref={(el) => {
-        dock = el;
-      }}
-      onKeyDown={(event) => {
-        if (pending() || !dock.contains(document.activeElement)) return;
-        const typing = event.target instanceof HTMLTextAreaElement;
-        if (typing) {
-          if (event.key === "Escape") {
-            event.preventDefault();
-            event.stopPropagation();
-            void close();
-          } else if (event.key === "Enter" && !event.shiftKey) {
-            event.preventDefault();
-            event.stopPropagation();
-            void customCommand();
-          }
-          return;
-        }
-        const key = event.key,
-          total = (question()?.options.length || 0) +
-            (question()?.custom ? 1 : 0);
-        if (
-          ![
-            "Escape",
-            "Enter",
-            "h",
-            "l",
-            "j",
-            "k",
-            "ArrowUp",
-            "ArrowDown",
-            "ArrowLeft",
-            "ArrowRight",
-          ].includes(key) && !/^\d$/.test(key)
-        ) return;
+  // Keyboard: move DOM focus between the active panel's rows; keys map to intents.
+  const rows = () => [...card.querySelectorAll<HTMLElement>(
+    ".otk-tabs-panel[data-active=true] [data-question-row]",
+  )];
+  const focusRow = (delta: number) => {
+    const list = rows();
+    if (!list.length) return;
+    const at = list.findIndex((row) => row.contains(document.activeElement));
+    const next = list[(at + delta + list.length) % list.length];
+    (next.querySelector<HTMLElement>("textarea") ?? next).focus();
+  };
+  const onKey = (event: KeyboardEvent) => {
+    if (pending()) return;
+    const typing = event.target instanceof HTMLTextAreaElement;
+    const key = event.key;
+    if (typing) {
+      if (key === "Enter" && !event.shiftKey) {
         event.preventDefault();
-        event.stopPropagation();
-        if (key === "Escape") void close();
-        else if (["h", "ArrowLeft"].includes(key)) void tabCommand(tab() - 1);
-        else if (["l", "ArrowRight"].includes(key)) {
-          void tabCommand(tab() + 1);
-        } else if (key === "Enter") {
-          if (confirm()) void answerCommand(false);
-          else void chooseCommand(selected());
-        } else if (!confirm() && total) {
-          if (["j", "ArrowDown", "k", "ArrowUp"].includes(key)) {
-            void moveChoice({
-              delta: ["k", "ArrowUp"].includes(key) ? -1 : 1,
-              total,
-            });
-          } else if (Number(key) >= 1 && Number(key) <= total) {
-            void chooseCommand(
-              Number(key) - 1,
-            );
-          }
+        card.focus();
+      }
+      return;
+    }
+    const q = form.questions[step()];
+    const handled = (() => {
+      if (["ArrowDown", "j"].includes(key)) focusRow(1);
+      else if (["ArrowUp", "k"].includes(key)) focusRow(-1);
+      else if (["ArrowLeft", "h"].includes(key)) goTo(step() - 1);
+      else if (["ArrowRight", "l"].includes(key)) goTo(step() + 1);
+      else if (q && /^[1-9]$/.test(key)) {
+        const index = Number(key) - 1;
+        if (index < q.options.length) form.pick(step(), index);
+        else if (index === q.options.length && q.custom) form.chooseOwn(step());
+        else return false;
+      } else if (key === "Enter" && event.target === card) void answer();
+      else return false;
+      return true;
+    })();
+    if (handled) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  };
+  const ownRow = (index: number) => (
+    <div
+      data-question-row
+      data-otk-selection="vertical"
+      {...selection({
+        class: "otk-question-row",
+        kind: "pressed",
+        selected: form.isOwnChosen(index),
+      })}
+      role="button"
+      tabindex="-1"
+      onClick={(event) => {
+        const field = event.currentTarget.querySelector("textarea");
+        if (event.target !== field) {
+          form.chooseOwn(index);
+          field?.focus();
         }
       }}
     >
-      <TakeoverHeader
-        title="The agent asks"
-        where={props.where}
-        childTitle={props.childTitle}
-      />
-      <div class="otk-question-tabs" role="tablist">
-        <For each={props.request.questions} keyed={false}>
-          {(q, i) => (
-            <button
-              type="button"
-              role="tab"
-              data-otk-selection="horizontal"
-              {...selection({ kind: "selected", selected: tab() === i })}
-              onClick={() => void tabCommand(i)}
-            >
-              <SelectionContent>
-                {q().header || `Question ${i + 1}`}
-              </SelectionContent>
-            </button>
-          )}
-        </For>
-        <button
-          type="button"
-          role="tab"
-          data-otk-selection="horizontal"
-          {...selection({ kind: "selected", selected: confirm() })}
-          onClick={() => void tabCommand(props.request.questions.length)}
-        >
-          <SelectionContent>Confirm</SelectionContent>
-        </button>
-      </div>
-      <Show when={!confirm()}>
-        <p>
-          {question()?.text}
-          {question()?.multiple ? " (select all that apply)" : ""}
+      <SelectionContent class="otk-question-content">
+        <span>Type your own answer</span>
+        <textarea
+          class="otk-question-own"
+          name="question-answer"
+          rows={1}
+          placeholder="Your answer…"
+          value={form.state.drafts[index].own}
+          onInput={(event) => {
+            const field = event.currentTarget;
+            field.style.height = "0px";
+            field.style.height = `${field.scrollHeight}px`;
+            form.typeOwn(index, field.value);
+          }}
+        />
+      </SelectionContent>
+    </div>
+  );
+  const questionPanel = (index: number) => {
+    const q = form.questions[index];
+    return (
+      <>
+        <p class="otk-question-text">
+          {q.text}
+          {q.multiple ? " (select all that apply)" : ""}
         </p>
         <div class="otk-question-options">
-          <For each={question()?.options || []} keyed={false}>
+          <For each={q.options} keyed={false}>
             {(option, i) => (
               <button
                 type="button"
-                {...selection({
-                  kind: "pressed",
-                  selected: answers()[tab()]?.includes(option().label) ?? false,
-                  candidate: selected() === i,
-                })}
+                data-question-row
                 data-otk-selection="vertical"
-                title={`Choose ${i + 1}`}
-                onClick={() => void chooseCommand(i)}
+                {...selection({
+                  class: "otk-question-row",
+                  kind: "pressed",
+                  selected: form.isPicked(index, i),
+                })}
+                onClick={() => form.pick(index, i)}
               >
                 <SelectionContent class="otk-question-content">
                   <span>{option().label}</span>
@@ -301,90 +238,101 @@ function Request(
               </button>
             )}
           </For>
-          <Show when={question()?.custom}>
+          <Show when={q.custom}>{ownRow(index)}</Show>
+        </div>
+      </>
+    );
+  };
+  return (
+    <section
+      class="otk-question-dock"
+      tabindex="0"
+      aria-label="Pending question"
+      ref={(el) => {
+        card = el;
+      }}
+      onKeyDown={onKey}
+    >
+      <Takeover
+        collapsed={collapsed()}
+        title={
+          <TakeoverHeader
+            title="The agent asks"
+            where={props.where}
+            childTitle={props.childTitle}
+            collapsed={collapsed()}
+            onCollapse={setCollapsed}
+          />
+        }
+        actions={
+          <div class="otk-question-actions">
             <button
               type="button"
-              onClick={() => void chooseCommand(question().options.length)}
-              data-otk-selection="vertical"
-              {...selection({
-                class: "otk-question-own",
-                kind: "candidate",
-                selected: selected() === question().options.length,
-              })}
+              class="otk-primary otk-pill"
+              disabled={pending()}
+              onClick={() => void answer()}
+              title={onReview() ? "Send the answers" : "Next step"}
             >
-              <SelectionContent>Or type your own answer</SelectionContent>
+              Answer
             </button>
-          </Show>
-        </div>
-        <Show when={editing()}>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              void customCommand();
-            }}
-          >
-            <label>
-              Custom answer<textarea
-                name="question-answer"
-                ref={(el) => {
-                  input = el;
-                }}
-                value={custom()[tab()] || ""}
-                onInput={(event) => {
-                  const values = [...custom()];
-                  values[tab()] = event.currentTarget.value;
-                  setCustom(values);
-                  props.onDirty(true);
-                }}
-              />
-            </label>
-            <button type="submit" class="otk-pill">Use answer</button>
-          </form>
-        </Show>
-        <Show when={question()?.multiple}>
-          <button type="button" onClick={() => void tabCommand(tab() + 1)}>
-            Next question
-          </button>
-        </Show>
-      </Show>
-      <Show when={confirm()}>
-        <dl>
-          <For each={props.request.questions} keyed={false}>
-            {(q, i) => (
-              <div>
-                <dt>{q().header || q().text}</dt>
-                <dd>{answers()[i]?.join(", ") || "(not answered)"}</dd>
-              </div>
-            )}
-          </For>
-        </dl>
-      </Show>
-      <div class="otk-question-actions">
-        <button
-          type="button"
-          disabled={pending()}
-          onClick={() =>
-            void (confirm()
-              ? answerCommand(false)
-              : tabCommand(props.request.questions.length))}
-          class="otk-primary otk-pill"
-          title="Answer (Enter on Confirm)"
+            <button
+              type="button"
+              class="otk-pill"
+              disabled={pending()}
+              onClick={() => void reject()}
+              title="Skip question (Esc)"
+            >
+              Skip question
+            </button>
+            <button
+              type="button"
+              class="otk-pill otk-question-submit"
+              disabled={pending()}
+              onClick={() => void submit()}
+              title="Send the answers given so far"
+            >
+              Submit
+            </button>
+          </div>
+        }
+      >
+        <Show
+          when={!collapsed()}
+          fallback={
+            <p class="otk-question-text otk-question-peek">
+              {onReview()
+                ? "Review your answers"
+                : form.questions[step()]?.text}
+            </p>
+          }
         >
-          Answer
-        </button>
-        <button
-          type="button"
-          disabled={pending()}
-          onClick={() => void reject()}
-          class="otk-pill"
-          title="Skip question (Esc)"
-        >
-          Skip question
-        </button>
-      </div>
-      <Show when={error()}>
-        <p role="alert" class="otk-error">{error()}</p>
-      </Show>
+          <Tabs
+            label="Questions"
+            tabs={[
+              ...form.questions.map((q, index) => ({
+                label: q.header || `Question ${index + 1}`,
+                panel: () => questionPanel(index),
+              })),
+              {
+                label: "Confirm",
+                panel: () => (
+                  <QuestionAnswers
+                    items={form.questions.map((q, i) => ({
+                      question: q.header || q.text,
+                      answer: form.answers()[i].join(", ") || "(not answered)",
+                    }))}
+                  />
+                ),
+              },
+            ]}
+            selected={step()}
+            onSelect={goTo}
+          />
+        </Show>
+        <Show when={error()}>
+          <p role="alert" class="otk-error">{error()}</p>
+        </Show>
+      </Takeover>
     </section>
   );
 }

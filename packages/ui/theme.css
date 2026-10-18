@@ -33,7 +33,8 @@
   --text-meta: 12px;
   /* Prototype's 46rem at its 16px root, independent of the 13px UI root. */
   --lane-width: 736px;
-  --pill-inset: 14px;
+  --item-inset: 12px;
+  --pill-inset: var(--item-inset);
   /* Prototype chrome geometry, shared by the bars that reserve its corners. */
   --corner: 12px;
   --corner-zone: calc(var(--corner) + 28px + 8px);
@@ -66,8 +67,13 @@
 body {
   margin: 0;
 }
+/* Semantic grouping elements carry no browser layout of their own; the
+   component that uses them owns their layout. */
 fieldset,
-legend {
+legend,
+dl,
+dt,
+dd {
   border: 0;
   padding: 0;
   margin: 0;
@@ -247,7 +253,8 @@ small {
 }
 :root [data-otk-selection=vertical].otk-selection-item {
   display: grid;
-  grid-template-columns: var(--selection-inset, 12px) minmax(0, 1fr);
+  grid-template-columns: var(--selection-inset, var(--item-inset)) minmax(0,
+    1fr);
   align-items: center;
   column-gap: 0;
   padding-inline-start: 0;
@@ -285,7 +292,7 @@ small {
 }
 [data-otk-selection=horizontal] > .otk-selection-content {
   justify-content: center;
-  padding: var(--selection-padding, 4px 8px);
+  padding: var(--selection-padding, 4px var(--item-inset));
 }
 :root [data-otk-selection=vertical].is-selected::before,
 :root [data-otk-selection=horizontal].is-selected::after {

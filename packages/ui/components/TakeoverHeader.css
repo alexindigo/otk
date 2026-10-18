@@ -4,7 +4,6 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 8px;
 }
 .otk-takeover-header h2 {
   margin: 0;
@@ -19,4 +18,10 @@
 }
 .otk-draft-kept {
   margin-left: auto;
+}
+.otk-takeover-collapse svg {
+  transition: transform 0.15s;
+}
+.otk-takeover-collapse[aria-expanded=false] svg {
+  transform: rotate(180deg);
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./QuestionTool.css" with { type: "text" };
-import { For } from "solid-js";
+import QuestionAnswers from "../QuestionAnswers.tsx";
 import type { QuestionCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 export function registerQuestionTool(tools: ToolRegistry): void {
@@ -15,26 +15,24 @@ export function registerQuestionTool(tools: ToolRegistry): void {
   );
 }
 export default function QuestionTool(props: { call: QuestionCall }) {
+  const pending = () =>
+    props.call.status === "denied"
+      ? "Dismissed"
+      : props.call.status === "error"
+      ? "Question failed"
+      : props.call.status === "completed"
+      ? "(no answer)"
+      : "Awaiting answer";
   return (
-    <dl class="otk-questions">
-      <For each={props.call.questions} keyed={false}>
-        {(question) => (
-          <div>
-            <dt>{question().text}</dt>
-            <dd>
-              {question().answer === undefined
-                ? props.call.status === "denied"
-                  ? "Dismissed"
-                  : props.call.status === "error"
-                  ? "Question failed"
-                  : props.call.status === "completed"
-                  ? "(no answer)"
-                  : "Awaiting answer"
-                : question().answer?.join(", ") || "(no answer)"}
-            </dd>
-          </div>
-        )}
-      </For>
-    </dl>
+    <div class="otk-questions">
+      <QuestionAnswers
+        items={props.call.questions.map((question) => ({
+          question: question.text,
+          answer: question.answer === undefined
+            ? pending()
+            : question.answer.join(", ") || "(no answer)",
+        }))}
+      />
+    </div>
   );
 }

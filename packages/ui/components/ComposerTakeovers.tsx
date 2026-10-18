@@ -12,13 +12,14 @@ export default function ComposerTakeovers(
     available().some((item) => item.active?.(session) ?? true);
   return (
     <div class="otk-composer-dock">
-      <div class="otk-composer" data-takeover={active() ? "true" : "false"}>
-        <For
-          each={available()}
-          keyed={(item) => item.id}
-        >
-          {(item) => item().component()}
-        </For>
+      <For each={available()} keyed={(item) => item.id}>
+        {(item) => item().component()}
+      </For>
+      <div
+        class="otk-composer"
+        data-takeover={active() ? "true" : "false"}
+        hidden={active()}
+      >
         {props.children?.(active)}
       </div>
     </div>

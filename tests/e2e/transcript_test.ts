@@ -413,7 +413,7 @@ Deno.test("composer takeovers retain a browser draft through permissions, questi
       body: { parts: [{ type: "text", text: "Run a separate backend turn" }] },
     });
     await b.poll(
-      "!!document.querySelector('.otk-permission-dock') && document.querySelector('.otk-composer').dataset.takeover==='true' && getComputedStyle(document.querySelector('.otk-composer')).borderTopWidth==='1px' && !!document.querySelector('.otk-prompt').closest('[hidden]') && document.querySelector('.otk-prompt button[type=submit]').disabled",
+      "!!document.querySelector('.otk-permission-dock') && document.querySelector('.otk-composer').dataset.takeover==='true' && getComputedStyle(document.querySelector('.otk-permission-dock .otk-surface')).borderTopWidth==='1px' && !!document.querySelector('.otk-prompt').closest('[hidden]') && document.querySelector('.otk-prompt button[type=submit]').disabled",
     );
     await openSession(b, other.id);
     await b.type("textarea[name=prompt]", "Other session's draft");
@@ -456,6 +456,10 @@ Deno.test("composer takeovers retain a browser draft through permissions, questi
     await b.click(".otk-question-options button");
     await b.poll(
       "document.querySelector('.otk-question-actions .otk-primary')?.textContent.trim()==='Answer'",
+    );
+    await b.click(".otk-question-actions .otk-primary");
+    await b.poll(
+      "document.querySelector('.otk-question-dock [role=tab]:last-child').getAttribute('aria-selected')==='true'",
     );
     await b.click(".otk-question-actions .otk-primary");
     await b.poll(

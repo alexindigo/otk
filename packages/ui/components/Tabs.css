@@ -1,0 +1,40 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-tabs {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  flex: 1 1 auto;
+}
+.otk-tabs-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.otk-tabs-strip button {
+  color: var(--otk-fg-3);
+}
+.otk-tabs-strip {
+  flex: none;
+}
+/* Only the panels scroll; the strip above and the actions below stay put. */
+.otk-tabs-panels {
+  display: grid;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: auto;
+}
+.otk-tabs-panel {
+  grid-area: 1 / 1;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.otk-tabs-panel[data-active=false] {
+  visibility: hidden;
+}
+.otk-tabs-panel > * {
+  margin: 0;
+}

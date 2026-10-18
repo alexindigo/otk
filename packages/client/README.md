@@ -53,6 +53,12 @@ Late uploads and sends update only their originating draft; a newer edit is
 never cleared by completion of an older submission. Permission/question input
 remains owned by its UI feature and protected by navigation confirmation.
 
+`createQuestionForm(request, factory?)` owns the framework-free question steps,
+single/multiple option picks and typed own answers. `answers()` derives the wire
+reply from that state; choosing a single option retains unselected typed text.
+The request-keyed form survives view replacement until `forgetQuestionForm(id)`
+after a successful reply. The UI owns focus, collapse and reply progress only.
+
 `replyMetadata(messages)` combines contiguous backend steps for the same reply
 using the same grouping owner as `replyMessages(messages)`. The latter supplies
 the transcript with stable first-step keys, so expanding a work log or tool is

@@ -120,7 +120,7 @@ Deno.test("transport reconnecting retains advertised features and unsent permiss
     await openSession(browser, session.id);
     await browser.click(".otk-permission-actions button:nth-child(3)");
     await browser.type("textarea[name=rejection]", "Keep permission feedback");
-    await browser.click(".otk-question-options button:last-child");
+    await browser.click(".otk-question-options [data-question-row]:last-child");
     await browser.type(
       "textarea[name=question-answer]",
       "Keep question answer",

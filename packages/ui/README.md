@@ -58,8 +58,8 @@ owners. `ComposerTakeovers` mounts capability-available components; they read
 session state from context and construct their own UI. Optional feature-owned
 `active(session)` predicates suspend the ordinary composer while attention owns
 its area. The prompt's draft survives the takeover. Permission and question
-surfaces share that composer's raised, bordered, 20px-radius surface and a
-common blocked-light header. Consumer-supplied session location names the
+surfaces replace the composer with a raised, bordered, 20px-radius Takeover and
+a common blocked-light header. Consumer-supplied session location names the
 project/task; question tabs/options use shared underline/pointer primitives.
 Static keyboard hints are in titles, Keys and the palette, not the surface.
 Permission and question owners preserve dirty state through reconnects. The
@@ -74,12 +74,12 @@ every registration in the native `Dialog` owner; optional `commandId` preserves
 feature close IDs and `dismiss(input)` routes dismissal through feature state
 when needed. Content never creates a second dialog, title or card. The internal
 `Surface` owns boundary, paint, padding and title/body/action flow; only
-`Dialog`, `Popover`, `Menu` and `Toast` specialisations may consume it.
-`Popover` owns native top-layer anchoring and outside-click/Escape dismissal,
-`Menu` supplies a normal-flow item column and `Toast` supplies the card in the
-fixed notification stack. Overlay tokens and the content/popover/dialog/toast
-layer scale live in `theme.css`. Fieldsets and legends are layout-neutral
-grouping, never cards.
+`Dialog`, `Popover`, `Menu`, `Toast` and `Takeover` specialisations may consume
+it. `Popover` owns native top-layer anchoring and outside-click/Escape
+dismissal, `Menu` supplies a normal-flow item column and `Toast` supplies the
+card in the fixed notification stack. Overlay tokens and the
+content/popover/dialog/toast layer scale live in `theme.css`. Fieldsets and
+legends are layout-neutral grouping, never cards.
 `panels.register({ id, title, icon, capability?,
 component })` contributes
 right-panel views. Icons may be strings or feature-owned render functions; the

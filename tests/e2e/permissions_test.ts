@@ -114,12 +114,12 @@ Deno.test("E3 bash permission, real Allow once click, completed output-bearing t
     await browser.poll(
       "document.querySelector('.otk-permission-command')?.textContent === 'echo otk'",
     );
-    const geometry = await browser.evaluate<{ dock: number; prompt: number }>(
-      "({dock:document.querySelector('.otk-permission-dock').getBoundingClientRect().bottom,prompt:document.querySelector('.otk-composer').getBoundingClientRect().bottom})",
+    const geometry = await browser.evaluate<{ dock: number; surface: number }>(
+      "({dock:document.querySelector('.otk-permission-dock').getBoundingClientRect().bottom,surface:document.querySelector('.otk-permission-dock .otk-surface').getBoundingClientRect().bottom})",
     );
     assert(
-      Math.abs(geometry.dock - (geometry.prompt - 1)) < .5,
-      "Takeover stays inside the composer's one-pixel border",
+      Math.abs(geometry.dock - geometry.surface) < .5,
+      "The takeover owns its surface in place of the hidden composer",
     );
     await capture(browser, f.oc.root, "e3-pending");
     await clickText(browser, "Allow once");

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./PermissionDock.css" with { type: "text" };
+import Takeover from "./surface/Takeover.tsx";
 import type { DockRegistry } from "../registries/renderers.ts";
 export function registerPermissionDock(docks: DockRegistry): void {
   docks.register({
@@ -200,69 +201,116 @@ function RequestDock(
         }
       }}
     >
-      <TakeoverHeader
-        title={props.request.detail.kind === "bash"
-          ? "Run this command?"
-          : "Allow this action?"}
-        detail={props.request.title}
-        where={props.where ?? props.request.kind}
-        childTitle={props.childTitle}
-      />
-      <Detail detail={props.request.detail} />
-      <details class="otk-permission-patterns">
-        <summary>Requested scope</summary>
-        <ul>
-          <For each={props.request.patterns} keyed={false}>
-            {(pattern) => <li class="otk-path">{pattern()}</li>}
-          </For>
-        </ul>
-      </details>
-      <Show when={error()}>
-        <p class="otk-error" role="alert">{error()}</p>
-      </Show>
-      <Switch>
-        <Match when={mode() === "normal"}>
-          <div class="otk-permission-actions">
-            <button
-              type="button"
-              disabled={pending()}
-              onClick={() => void once()}
-              class="otk-primary otk-pill"
-              title="Allow once (1 when focused)"
-            >
-              Allow once
-            </button>
-            <button
-              type="button"
-              disabled={pending()}
-              onClick={() => void always()}
-              class="otk-pill"
-              title="Review future grant (2 when focused)"
-            >
-              Always allow
-            </button>
-            <button
-              type="button"
-              disabled={pending()}
-              onClick={() => void reject()}
-              class="otk-pill"
-              title="Reject (3 when focused)"
-            >
-              Reject
-            </button>
-            <input
-              class="otk-rejection-reason"
-              aria-label="Reason for rejecting (optional)"
-              placeholder="Reason for rejecting (optional)"
-              value={message()}
-              onInput={(event) => {
-                setMessage(event.currentTarget.value);
-                props.onDirty(!!event.currentTarget.value);
-              }}
-            />
-          </div>
-        </Match>
-        <Match when={mode() === "always"}>
+      <Takeover
+        title={
+          <TakeoverHeader
+            title={props.request.detail.kind === "bash"
+              ? "Run this command?"
+              : "Allow this action?"}
+            detail={props.request.title}
+            where={props.where ?? props.request.kind}
+            childTitle={props.childTitle}
+          />
+        }
+        actions={
+          <Switch>
+            <Match when={mode() === "normal"}>
+              <div class="otk-permission-actions">
+                <button
+                  type="button"
+                  disabled={pending()}
+                  onClick={() => void once()}
+                  class="otk-primary otk-pill"
+                  title="Allow once (1 when focused)"
+                >
+                  Allow once
+                </button>
+                <button
+                  type="button"
+                  disabled={pending()}
+                  onClick={() => void always()}
+                  class="otk-pill"
+                  title="Review future grant (2 when focused)"
+                >
+                  Always allow
+                </button>
+                <button
+                  type="button"
+                  disabled={pending()}
+                  onClick={() => void reject()}
+                  class="otk-pill"
+                  title="Reject (3 when focused)"
+                >
+                  Reject
+                </button>
+                <input
+                  class="otk-rejection-reason"
+                  aria-label="Reason for rejecting (optional)"
+                  placeholder="Reason for rejecting (optional)"
+                  value={message()}
+                  onInput={(event) => {
+                    setMessage(event.currentTarget.value);
+                    props.onDirty(!!event.currentTarget.value);
+                  }}
+                />
+              </div>
+            </Match>
+            <Match when={mode() === "always"}>
+              <div class="otk-permission-actions">
+                <button
+                  type="button"
+                  disabled={pending()}
+                  onClick={() => void answerCommand("always")}
+                  class="otk-primary otk-pill"
+                >
+                  Confirm allow always
+                </button>
+                <button
+                  type="button"
+                  disabled={pending()}
+                  onClick={() => void close()}
+                  class="otk-pill"
+                >
+                  Cancel
+                </button>
+              </div>
+            </Match>
+            <Match when={mode() === "reject"}>
+              <div class="otk-permission-actions">
+                <button
+                  type="submit"
+                  form={`otk-reject-${props.request.id}`}
+                  class="otk-pill"
+                  disabled={pending()}
+                >
+                  Reject request
+                </button>
+                <button
+                  type="button"
+                  disabled={pending()}
+                  onClick={() => void close()}
+                  class="otk-pill"
+                >
+                  Cancel
+                </button>
+              </div>
+            </Match>
+          </Switch>
+        }
+      >
+        <Detail detail={props.request.detail} />
+        <details class="otk-permission-patterns">
+          <summary>Requested scope</summary>
+          <ul>
+            <For each={props.request.patterns} keyed={false}>
+              {(pattern) => <li class="otk-path">{pattern()}</li>}
+            </For>
+          </ul>
+        </details>
+        <Show when={error()}>
+          <p class="otk-error" role="alert">{error()}</p>
+        </Show>
+        <Show when={mode() === "always"}>
           <div class="otk-permission-confirm">
             <p>Allow these patterns for future requests?</p>
             <ul>
@@ -270,28 +318,12 @@ function RequestDock(
                 {(pattern) => <li>{pattern()}</li>}
               </For>
             </ul>
-            <div class="otk-permission-actions">
-              <button
-                type="button"
-                disabled={pending()}
-                onClick={() => void answerCommand("always")}
-                class="otk-primary otk-pill"
-              >
-                Confirm allow always
-              </button>
-              <button
-                type="button"
-                disabled={pending()}
-                onClick={() => void close()}
-                class="otk-pill"
-              >
-                Cancel
-              </button>
-            </div>
           </div>
-        </Match>
-        <Match when={mode() === "reject"}>
+        </Show>
+        <Show when={mode() === "reject"}>
           <form
+            id={`otk-reject-${props.request.id}`}
+            class="otk-permission-reject"
             onSubmit={(event) => {
               event.preventDefault();
               void answerCommand("reject");
@@ -308,22 +340,9 @@ function RequestDock(
                 }}
               />
             </label>
-            <div class="otk-permission-actions">
-              <button type="submit" class="otk-pill" disabled={pending()}>
-                Reject request
-              </button>
-              <button
-                type="button"
-                disabled={pending()}
-                onClick={() => void close()}
-                class="otk-pill"
-              >
-                Cancel
-              </button>
-            </div>
           </form>
-        </Match>
-      </Switch>
+        </Show>
+      </Takeover>
     </section>
   );
 }

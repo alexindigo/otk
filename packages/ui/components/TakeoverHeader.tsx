@@ -8,6 +8,8 @@ export default function TakeoverHeader(
     where?: string;
     childTitle?: string;
     detail?: string;
+    collapsed?: boolean;
+    onCollapse?(collapsed: boolean): void;
   },
 ) {
   return (
@@ -21,6 +23,29 @@ export default function TakeoverHeader(
         <span class="otk-permission-child">From {props.childTitle}</span>
       </Show>
       <span class="otk-draft-kept">Your draft is kept</span>
+      <Show when={props.onCollapse}>
+        <button
+          type="button"
+          class="otk-icon-button otk-takeover-collapse"
+          aria-expanded={props.collapsed ? "false" : "true"}
+          aria-label={props.collapsed
+            ? "Show the question"
+            : "Hide the question"}
+          title={props.collapsed ? "Show the question" : "Hide the question"}
+          onClick={() => props.onCollapse?.(!props.collapsed)}
+        >
+          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
+            <path
+              d="m6 9 6 6 6-6"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.75"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            />
+          </svg>
+        </button>
+      </Show>
     </header>
   );
 }

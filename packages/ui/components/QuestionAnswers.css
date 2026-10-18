@@ -1,0 +1,18 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-question-answers {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.otk-question-answers > div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.otk-question-answers dt {
+  font-size: var(--text-meta);
+  color: var(--otk-fg-3);
+}
+.otk-question-answers dd {
+  color: var(--otk-fg);
+}

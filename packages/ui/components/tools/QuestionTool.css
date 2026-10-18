@@ -2,10 +2,3 @@
 .otk-questions {
   margin: 8px 0;
 }
-.otk-questions dt {
-  color: var(--secondary);
-}
-.otk-questions dd {
-  margin: 4px 0 8px;
-  color: var(--fg);
-}
