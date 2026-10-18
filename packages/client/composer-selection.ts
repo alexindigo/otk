@@ -341,7 +341,7 @@ export function createComposerSelection(
         return chooseVariant(
           draft,
           variants[
-            (variants.indexOf(current.variant.value) + 1) % variants.length
+            (variants.indexOf(current.variantChoice) + 1) % variants.length
           ],
           context(),
         );

@@ -10,6 +10,8 @@
   --muted: var(--otk-border);
   --panel: var(--otk-surface);
   --secondary: var(--otk-fg-2);
+  --applied-fg: var(--otk-fg-2);
+  --control-color: var(--otk-fg-2);
   --font-ui: "IBM Plex Sans", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
   --radius-control: 8px;
@@ -91,7 +93,7 @@ button {
   border: 0;
   padding: 4px 8px;
   border-radius: var(--radius-control);
-  color: var(--otk-fg-2);
+  color: var(--control-color, var(--otk-fg-2));
   font-weight: 500;
   cursor: pointer;
 }
@@ -320,6 +322,11 @@ h6 {
 }
 .otk-age-3 {
   color: var(--otk-age-3);
+}
+/* Applied values retain the same geometry and remain fully interactive. */
+.is-applied,
+:root button.is-applied {
+  color: var(--applied-fg);
 }
 :root[data-otk-reduced-colors] :is(.otk-age-0, .otk-age-1, .otk-age-2, .otk-age-3) {
   color: var(--otk-fg);

@@ -96,6 +96,13 @@ inline/block flips only for viewport overflow. Footer labels and real chevron
 icons share flex centring; trigger accessible names include current values.
 Loading/error states do not also report an empty catalog.
 
+Backend-applied composer values use the shared `is-applied` trigger state and
+`--applied-fg` theme token, with the same text and geometry. The generic trigger
+includes its default origin in the accessible name. Explicit/restored choices
+remain unmuted. The client supplies both applied values and selected variant
+row; choosing Default can show a configured variant while the Default row
+retains its pointer and names that applied value in secondary text.
+
 `takeovers.register({ id, capability, component })` supplies composer attention
 owners. `ComposerTakeovers` mounts capability-available components; they read
 session state from context and construct their own UI. Optional feature-owned

@@ -8,6 +8,7 @@ import {
 } from "solid-js";
 import { ownedCommand, useCommandPorts } from "../../keyboard/context.tsx";
 import Surface from "./Surface.tsx";
+import { selection } from "../selection.ts";
 
 export interface PopoverControl {
   open(): void;
@@ -18,6 +19,8 @@ export interface PopoverControl {
 export default function Popover(props: {
   label: string;
   triggerLabel?: string;
+  applied?: string;
+  triggerColor?: string;
   trigger: Element;
   title?: string;
   class?: string;
@@ -48,16 +51,25 @@ export default function Popover(props: {
   onSettled(() =>
     ports.keyboard?.layer(closeId, () => panel.matches(":popover-open"), 30)
   );
+  const triggerLabel = () =>
+    `${props.triggerLabel ?? props.label}${
+      props.applied ? ` (${props.applied})` : ""
+    }`;
   return (
     <span class={`otk-popover ${props.class ?? ""}`} data-open={String(open())}>
       <button
         type="button"
-        class="otk-popover-trigger"
-        aria-label={props.triggerLabel ?? props.label}
-        title={props.triggerLabel ?? props.label}
+        {...selection({
+          kind: "candidate",
+          selected: false,
+          applied: !!props.applied,
+          class: "otk-popover-trigger",
+        })}
+        aria-label={triggerLabel()}
+        title={triggerLabel()}
         aria-expanded={open() ? "true" : "false"}
         popovertarget={anchor}
-        style={{ "anchor-name": anchor }}
+        style={{ "anchor-name": anchor, "--control-color": props.triggerColor }}
         ref={(el) => {
           trigger = el;
         }}

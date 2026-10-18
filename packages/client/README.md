@@ -55,12 +55,13 @@ remains owned by its UI feature and protected by navigation confirmation.
 
 `effectiveSelection(draft, { context, agents, catalog })` is the shared pure
 next-prompt projection for display and every submission path. Each field reports
-its value and source (`explicit`, `restored`, `configured`, `default`,
-`absent`); model metadata includes display/provider names, advertised variants
-and an unavailable flag without replacing a missing model. Inputs use the last
-loaded user message and primary agents in configured-default order. Context is
-never copied into the draft, so unsent explicit choices win. An absent catalog
-means unknown availability; only a loaded catalog can establish that a model is
+its backend-applied value, source (`explicit`, `restored`, `configured`,
+`default`, `absent`) and `userChosen` ownership (`explicit`/`restored` only);
+model metadata includes display/provider names, advertised variants and an
+unavailable flag without replacing a missing model. Inputs use the last loaded
+user message and primary agents in configured-default order. Context is never
+copied into the draft, so unsent explicit choices win. An absent catalog means
+unknown availability; only a loaded catalog can establish that a model is
 unavailable. Unknown catalog metadata also preserves a restored/explicit
 variant; validation and model-choice clearing require loaded negative
 membership. The projection's `applies` and `input` describe mode applicability
@@ -69,12 +70,17 @@ normal-mode choice.
 
 `chooseAgent`, `chooseModel` and `chooseVariant` return next drafts for the
 existing session-keyed writer. Choosing an agent applies its configured choices;
-choosing a model drops an unsupported explicit variant. Invalid variants resolve
-to none, not a lower-precedence fallback. A missing draft variant inherits;
-`chooseVariant(draft, undefined, context)` creates an own `variant: undefined`
-property for explicit Default, which overrides restored/configured variants
-without a wire sentinel. Preserve that distinction when spreading drafts.
-`clearDraft` clears submitted content but retains all explicit choices,
+choosing a model drops an unsupported explicit variant. Invalid variants omit
+the input rather than restoring an older user choice. A missing draft variant
+inherits; `chooseVariant(draft, undefined, context)` creates an own
+`variant: undefined` property for explicit Default, which suppresses restored
+input without a wire sentinel. When the backend will apply a valid configured
+variant for the agent's own effective model, `variant.value` reports it as
+configured / not user-chosen while `input.variant` stays absent. `variantChoice`
+retains the selected Default row and cycle position independently of that
+applied value. Invalid choices also omit input and therefore project that same
+native fallback when valid. Preserve the own-property distinction when spreading
+drafts. `clearDraft` clears submitted content but retains all explicit choices,
 including Default; callers retain the existing submitted-draft identity guard
 around it.
 

@@ -35,6 +35,8 @@ export interface ListPickerControl {
 export default function ListPicker<T = string>(props: {
   label: string;
   triggerLabel?: string;
+  applied?: string;
+  triggerColor?: string;
   trigger: Element;
   groups: readonly PickerGroup<T>[];
   selected?: string;
@@ -105,6 +107,8 @@ export default function ListPicker<T = string>(props: {
     <Popover
       label={props.label}
       triggerLabel={props.triggerLabel}
+      applied={props.applied}
+      triggerColor={props.triggerColor}
       trigger={props.trigger}
       class={`otk-list-picker ${props.class ?? ""}`}
       control={(control) => {

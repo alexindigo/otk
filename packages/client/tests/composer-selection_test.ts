@@ -304,7 +304,10 @@ Deno.test("composer cycles share client choice intents and shell projection omit
     variant: "high",
   });
   f.owner.cycleVariant();
-  assertEquals(f.owner.selection().variant.value, undefined);
+  assertEquals(f.owner.selection().variant.value, "high");
+  assertEquals(f.owner.selection().variant.userChosen, false);
+  assertEquals(f.owner.selection().variantChoice, undefined);
+  assertEquals(f.owner.selection().input.variant, undefined);
   f.owner.cycleVariant();
   assertEquals(f.owner.selection().variant.value, "high");
   f.write((draft) => ({ ...draft, mode: "shell" }));

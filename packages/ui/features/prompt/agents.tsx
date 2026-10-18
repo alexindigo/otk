@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./pickers.css" with { type: "text" };
 import { onSettled, Show } from "solid-js";
-import type { ComposerCatalog } from "@otk/client";
+import type { ComposerCatalog, SelectionField } from "@otk/client";
 import type { ModelRef } from "@otk/protocol";
 import type { PromptRegistry } from "../../registries/prompt.ts";
 import { ownedCommand } from "../../keyboard/context.tsx";
@@ -10,6 +10,13 @@ import ListPicker, {
 } from "../../components/ListPicker.tsx";
 import { ChevronDownIcon, StarIcon } from "../../components/ChromeIcons.tsx";
 import { bindComposerSelection } from "./catalog.ts";
+import { selection as selectionState } from "../../components/selection.ts";
+
+/** One presentation rule for every projected field, including plain labels. */
+function applied(field: SelectionField<unknown>): string | undefined {
+  if (field.userChosen || field.value === undefined) return undefined;
+  return field.source === "configured" ? "agent default" : "catalog default";
+}
 
 /** Render the client owner and bind its intents to the command/key/session ports. */
 export function registerComposerPickers(prompt: PromptRegistry): void {
@@ -118,7 +125,15 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
             <Show
               when={owner.state.agents.available}
               fallback={
-                <span>{selection().agent.value ?? "Default agent"}</span>
+                <span
+                  {...selectionState({
+                    kind: "candidate",
+                    selected: false,
+                    applied: !!applied(selection().agent),
+                  })}
+                >
+                  {selection().agent.value ?? "Default agent"}
+                </span>
               }
             >
               <ListPicker
@@ -127,12 +142,11 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                   selection().agent.value ?? "Default agent"
                 }`}
                 class="otk-agent-picker"
+                applied={applied(selection().agent)}
+                triggerColor={selection().agent.color}
                 trigger={
                   <>
-                    <span
-                      class="otk-composer-agent"
-                      style={{ color: selection().agent.color }}
-                    >
+                    <span class="otk-composer-agent">
                       {selection().agent.value ?? "Default agent"}
                     </span>
                     <ChevronDownIcon />
@@ -163,7 +177,15 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
             <Show
               when={owner.state.models.available}
               fallback={
-                <span>{selection().model.name ?? "Default model"}</span>
+                <span
+                  {...selectionState({
+                    kind: "candidate",
+                    selected: false,
+                    applied: !!applied(selection().model),
+                  })}
+                >
+                  {selection().model.name ?? "Default model"}
+                </span>
               }
             >
               <ListPicker<ModelRef>
@@ -172,6 +194,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                   selection().model.name ?? "Default model"
                 }`}
                 class="otk-model-picker"
+                applied={applied(selection().model)}
                 trigger={
                   <>
                     <span>{selection().model.name ?? "Default model"}</span>
@@ -234,6 +257,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                     selection().variant.value ?? "Default"
                   }`}
                   class="otk-variant-picker"
+                  applied={applied(selection().variant)}
                   trigger={
                     <>
                       <span>{selection().variant.value ?? "Default"}</span>
@@ -243,7 +267,14 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                   groups={[{
                     key: "variants",
                     items: [
-                      { key: "", value: undefined, label: "Default" },
+                      {
+                        key: "",
+                        value: undefined,
+                        label: "Default",
+                        description: applied(selection().variant)
+                          ? selection().variant.value
+                          : undefined,
+                      },
                       ...selection().model.variants.map((variant) => ({
                         key: variant,
                         value: variant,
@@ -251,7 +282,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                       })),
                     ],
                   }]}
-                  selected={selection().variant.value ?? ""}
+                  selected={selection().variantChoice ?? ""}
                   onPick={owner.chooseVariant}
                   focusAfterPick={ctx.focus}
                 />
@@ -260,7 +291,15 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                 when={!owner.catalogKnown() &&
                   selection().variant.value !== undefined}
               >
-                <span>{selection().variant.value}</span>
+                <span
+                  {...selectionState({
+                    kind: "candidate",
+                    selected: false,
+                    applied: !!applied(selection().variant),
+                  })}
+                >
+                  {selection().variant.value}
+                </span>
               </Show>
             </Show>
           </>

@@ -76,46 +76,65 @@ Deno.test("selection resolves explicit, restored, agent-configured, catalog-defa
   assertEquals(explicit.agent, {
     value: "build",
     source: "explicit",
+    userChosen: true,
     color: "#aabbcc",
   });
   assertEquals(explicit.model, {
     value: first,
     source: "explicit",
+    userChosen: true,
     name: "First model",
     providerName: "First provider",
     variants: ["low", "high"],
     unavailable: false,
   });
-  assertEquals(explicit.variant, { value: "high", source: "explicit" });
+  assertEquals(explicit.variant, {
+    value: "high",
+    source: "explicit",
+    userChosen: true,
+  });
   const fromMessage = effectiveSelection(emptyDraft(), restored);
   assertEquals(fromMessage.agent.value, "plan");
   assertEquals(fromMessage.agent.source, "restored");
   assertEquals(fromMessage.model.value, second);
   assertEquals(fromMessage.model.source, "restored");
-  assertEquals(fromMessage.variant, { value: "medium", source: "restored" });
+  assertEquals(fromMessage.variant, {
+    value: "medium",
+    source: "restored",
+    userChosen: true,
+  });
   const configured = effectiveSelection(emptyDraft(), context);
   assertEquals(configured.agent.source, "configured");
   assertEquals(configured.agent.value, "build");
   assertEquals(configured.model.source, "configured");
   assertEquals(configured.model.value, first);
-  assertEquals(configured.variant, { value: "low", source: "configured" });
+  assertEquals(configured.variant, {
+    value: "low",
+    source: "configured",
+    userChosen: false,
+  });
   const fallback = effectiveSelection(
     { ...emptyDraft(), agent: "review" },
     context,
   );
   assertEquals(fallback.model.source, "default");
   assertEquals(fallback.model.value, plain);
-  assertEquals(fallback.variant, { source: "absent" });
+  assertEquals(fallback.variant, { source: "absent", userChosen: false });
   const absent = effectiveSelection(emptyDraft(), { agents: [] });
-  assertEquals(absent.agent, { source: "absent", color: undefined });
+  assertEquals(absent.agent, {
+    source: "absent",
+    userChosen: false,
+    color: undefined,
+  });
   assertEquals(absent.model, {
     source: "absent",
+    userChosen: false,
     name: undefined,
     providerName: undefined,
     variants: [],
     unavailable: false,
   });
-  assertEquals(absent.variant, { source: "absent" });
+  assertEquals(absent.variant, { source: "absent", userChosen: false });
   assertEquals({ draft, restored }, before);
 });
 
@@ -130,12 +149,17 @@ Deno.test("selection resolves fields independently without overwriting explicit 
   assertEquals(result.model, {
     value: first,
     source: "restored",
+    userChosen: true,
     name: "First model",
     providerName: "First provider",
     variants: ["low", "high"],
     unavailable: false,
   });
-  assertEquals(result.variant, { value: "high", source: "restored" });
+  assertEquals(result.variant, {
+    value: "high",
+    source: "restored",
+    userChosen: true,
+  });
   assertEquals(
     effectiveSelection({ ...draft, model: second }, input).model.value,
     second,
@@ -147,11 +171,11 @@ Deno.test("selection resolves fields independently without overwriting explicit 
   );
 });
 
-Deno.test("invalid variants resolve to none without falling through to a lower-precedence variant", () => {
+Deno.test("invalid variants omit input and project only the matching native agent default", () => {
   for (const variant of ["unknown", "medium", ""]) {
     assertEquals(
       effectiveSelection({ ...emptyDraft(), variant }, context).variant,
-      { source: "absent" },
+      { value: "low", source: "configured", userChosen: false },
     );
   }
   assertEquals(
@@ -159,21 +183,21 @@ Deno.test("invalid variants resolve to none without falling through to a lower-p
       ...context,
       context: { model: first, variant: "unknown" },
     }).variant,
-    { source: "absent" },
+    { value: "low", source: "configured", userChosen: false },
   );
   assertEquals(
     effectiveSelection(emptyDraft(), {
       ...context,
       agents: [{ name: "build", model: plain, variant: "high" }],
     }).variant,
-    { source: "absent" },
+    { source: "absent", userChosen: false },
   );
   assertEquals(
     effectiveSelection(
       { ...emptyDraft(), model: plain, variant: "high" },
       context,
     ).variant,
-    { source: "absent" },
+    { source: "absent", userChosen: false },
   );
 });
 
@@ -196,7 +220,7 @@ Deno.test("unavailable explicit and restored models retain identity and display 
     assertEquals(result.model.name, "retired/model");
     assertEquals(result.model.providerName, "offline");
     assertEquals(result.model.variants, []);
-    assertEquals(result.variant, { source: "absent" });
+    assertEquals(result.variant, { source: "absent", userChosen: false });
   }
   const missingInProvider = effectiveSelection({
     ...emptyDraft(),
@@ -259,6 +283,7 @@ Deno.test("agent intent applies configured model and variant while unconfigured 
   assertEquals(effectiveSelection(changed, modelOnly).variant, {
     value: undefined,
     source: "explicit",
+    userChosen: true,
   });
   const variantOnly = {
     ...context,
@@ -273,6 +298,7 @@ Deno.test("agent intent applies configured model and variant while unconfigured 
   assertEquals(invalidChoice.variant, "low");
   assertEquals(effectiveSelection(invalidChoice, invalid).variant, {
     source: "absent",
+    userChosen: false,
   });
   // Agent metadata is retained even before catalog loading; resolution validates it.
   const loading = { agents: context.agents };
@@ -282,6 +308,7 @@ Deno.test("agent intent applies configured model and variant while unconfigured 
   assertEquals(effectiveSelection(pending, loading).variant, {
     value: "medium",
     source: "explicit",
+    userChosen: true,
   });
   assertEquals(effectiveSelection(pending, context).variant.value, "medium");
 });
@@ -301,7 +328,7 @@ Deno.test("unknown catalog preserves explicit and restored variants until loaded
     assertEquals(
       effectiveSelection(draft, { ...unknown, catalog: { providers: [] } })
         .variant,
-      { source: "absent" },
+      { source: "absent", userChosen: false },
     );
   }
   const choice = chooseModel({ ...emptyDraft(), variant: "high" }, second, {
@@ -330,6 +357,7 @@ Deno.test("model intent keeps advertised explicit variants and clears unsupporte
   assertEquals(effectiveSelection(changed, input).variant, {
     value: undefined,
     source: "explicit",
+    userChosen: true,
   });
   assertEquals(
     chooseModel({ ...draft, variant: "high" }, second, context).variant,
@@ -346,27 +374,29 @@ Deno.test("model intent keeps advertised explicit variants and clears unsupporte
   assertEquals(Object.hasOwn(unset, "variant"), false);
 });
 
-Deno.test("variant intent accepts only advertised values and explicit Default survives restore and configured fallback", () => {
+Deno.test("variant intent accepts advertised values and Default suppresses restore while projecting native configuration", () => {
   const draft = emptyDraft();
   assertStrictEquals(chooseVariant(draft, "medium", context), draft);
   const high = chooseVariant(draft, "high", context);
   assertEquals(effectiveSelection(high, context).variant, {
     value: "high",
     source: "explicit",
+    userChosen: true,
   });
   const cleared = chooseVariant(high, undefined, context);
   assertEquals(
     effectiveSelection(cleared, { ...context, context: { variant: "high" } })
       .variant,
-    { value: undefined, source: "explicit" },
+    { value: "low", source: "configured", userChosen: false },
   );
   assertEquals(effectiveSelection(cleared, context).variant, {
-    value: undefined,
-    source: "explicit",
+    value: "low",
+    source: "configured",
+    userChosen: false,
   });
   assertEquals(
     effectiveSelection(chooseModel(cleared, second, context), context).variant,
-    { value: undefined, source: "explicit" },
+    { value: undefined, source: "explicit", userChosen: true },
   );
   assertStrictEquals(
     chooseVariant({ ...draft, model: plain }, "high", context).model,
@@ -400,7 +430,7 @@ Deno.test("draft choices stay server/session keyed across content clearing, reop
   assertEquals(effectiveSelection(reopened, context).variant.value, "medium");
   assertEquals(
     effectiveSelection(clearDraft(b((current) => current)), context).variant,
-    { value: undefined, source: "explicit" },
+    { value: "low", source: "configured", userChosen: false },
   );
   assertEquals(Object.hasOwn(clearDraft(emptyDraft()), "variant"), false);
   const newer = a((current) =>

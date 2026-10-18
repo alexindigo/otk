@@ -1,6 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-prompt-context {
   --composer-control-max-width: 240px;
+  --control-color: var(--otk-fg);
 }
 .otk-prompt-context > .otk-list-picker {
   padding: 0;
@@ -11,7 +12,7 @@
   gap: 4px;
   min-width: 0;
   padding: 4px 8px;
-  color: var(--otk-fg-2);
+  color: var(--control-color, var(--otk-fg));
   font-size: var(--text-meta);
   line-height: 20px;
 }

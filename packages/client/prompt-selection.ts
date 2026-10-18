@@ -18,6 +18,8 @@ export type SelectionSource =
 export interface SelectionField<T> {
   value?: T;
   source: SelectionSource;
+  /** Explicit choices and this session's restored choices belong to the user. */
+  userChosen: boolean;
 }
 export interface PromptSelectionContext {
   /** The last loaded user message, never copied into the draft. */
@@ -37,6 +39,8 @@ export interface PromptSelection {
     unavailable: boolean;
   };
   variant: SelectionField<string>;
+  /** Selected menu row / cycle position, independent of the applied value. */
+  variantChoice?: string;
 }
 export type PromptChoices = Pick<PromptInput, "agent" | "model" | "variant">;
 type Choices =
@@ -49,13 +53,21 @@ function resolve<T>(
   configured?: T,
   fallback?: T,
 ): SelectionField<T> {
-  if (explicit !== undefined) return { value: explicit, source: "explicit" };
-  if (restored !== undefined) return { value: restored, source: "restored" };
+  if (explicit !== undefined) return field("explicit", explicit);
+  if (restored !== undefined) return field("restored", restored);
   if (configured !== undefined) {
-    return { value: configured, source: "configured" };
+    return field("configured", configured);
   }
-  if (fallback !== undefined) return { value: fallback, source: "default" };
-  return { source: "absent" };
+  if (fallback !== undefined) return field("default", fallback);
+  return field("absent");
+}
+
+function field<T>(source: SelectionSource, value?: T): SelectionField<T> {
+  return {
+    ...(value !== undefined || source === "explicit" ? { value } : {}),
+    source,
+    userChosen: source === "explicit" || source === "restored",
+  };
 }
 
 function modelInfo(model: ModelRef | undefined, catalog?: ModelCatalog) {
@@ -80,26 +92,38 @@ export function effectiveSelection(
     catalog?.default,
   );
   const { provider, info } = modelInfo(model.value, catalog);
+  const valid = (value: string | undefined) =>
+    value !== undefined &&
+    (catalog === undefined || info?.variants.includes(value));
+  // Native defaults apply only to the agent's own effective model. The same
+  // fallback applies after Default or an invalid choice omits the wire field.
+  const configuredVariant = option?.model?.provider === model.value?.provider &&
+      option?.model?.model === model.value?.model && valid(option?.variant)
+    ? option?.variant
+    : undefined;
   const variant = Object.hasOwn(draft, "variant")
-    ? { value: draft.variant, source: "explicit" as const }
-    : resolve(undefined, context?.variant, option?.variant);
+    ? field("explicit", draft.variant)
+    : resolve(undefined, context?.variant, configuredVariant);
   const applies = {
     agent: true as const,
     model: true as const,
     variant: draft.mode !== "shell",
   };
-  const effectiveVariant = !applies.variant
-    ? { source: "absent" as const }
-    : catalog === undefined || variant.value === undefined ||
-        info?.variants.includes(variant.value)
+  const requestedVariant = !applies.variant
+    ? field<string>("absent")
+    : variant.value === undefined || valid(variant.value)
     ? variant
-    : { source: "absent" as const };
+    : field<string>("absent");
+  const effectiveVariant = applies.variant &&
+      requestedVariant.value === undefined && configuredVariant !== undefined
+    ? field("configured", configuredVariant)
+    : requestedVariant;
   return {
     applies,
     input: {
       agent: agent.value,
       model: model.value,
-      ...(applies.variant ? { variant: effectiveVariant.value } : {}),
+      ...(applies.variant ? { variant: requestedVariant.value } : {}),
     },
     agent: { ...agent, color: option?.color },
     model: {
@@ -110,6 +134,7 @@ export function effectiveSelection(
       unavailable: catalog !== undefined && model.value !== undefined && !info,
     },
     variant: effectiveVariant,
+    variantChoice: requestedVariant.value,
   };
 }
 
