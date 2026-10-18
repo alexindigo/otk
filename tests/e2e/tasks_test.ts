@@ -38,12 +38,12 @@ Deno.test("R5 task progress, real child navigation, parent/history and sibling c
     await browser.type("textarea[name=prompt]", "Delegate first");
     await browser.key("Enter");
     await browser.poll(
-      "document.querySelector('[data-tool=task] .otk-task-card')?.textContent.includes('First inspection') && document.querySelector('[data-tool=task] .otk-task-card')?.textContent.includes('bash') && !!document.querySelector('.otk-permission-dock')",
+      "document.querySelector('[data-tool=task] .otk-tool-state')?.textContent.includes('First inspection') && document.querySelector('[data-tool=task] .otk-task-card')?.textContent.includes('Open task') && document.querySelector('[data-tool=task] .otk-task-card')?.textContent.includes('bash') && !!document.querySelector('.otk-permission-dock')",
     );
     await browser.screenshot(join(f.oc.root, "r5-live-task.png"));
     await browser.click(".otk-permission-actions > button:first-child");
     await browser.poll(
-      `document.querySelector('[data-tool=task][data-tool-status=completed]')?.textContent.includes('1 tool calls') && document.querySelector('[data-session="${root.id}"]').dataset.status==='idle'`,
+      `document.querySelector('[data-tool=task][data-tool-status=completed]')?.textContent.includes('1 tool call') && !document.querySelector('[data-tool=task][data-tool-status=completed]')?.textContent.includes('1 tool calls') && document.querySelector('[data-session="${root.id}"]').dataset.status==='idle'`,
       60000,
     );
     f.fake.queue(
@@ -109,7 +109,7 @@ Deno.test("R5 task progress, real child navigation, parent/history and sibling c
       `location.hash==='#/local/${root.id}' && !!document.querySelector('.otk-prompt')`,
     );
     await browser.poll(
-      "document.querySelector('[data-tool=task][data-tool-status=completed] .otk-task-card')?.textContent.includes('1 tool calls')",
+      "document.querySelector('[data-tool=task][data-tool-status=completed] .otk-task-card')?.textContent.includes('1 tool call')",
     );
     const parent = await f.oc.request<{ info: Info; parts: RawPart[] }[]>(
         `/session/${root.id}/message`,
@@ -124,7 +124,10 @@ Deno.test("R5 task progress, real child navigation, parent/history and sibling c
     const frames = await browser.evaluate<string>(
       "document.querySelector('[data-tool=task][data-tool-status=completed] .otk-task-card').textContent",
     );
-    assert(frames.includes("1 tool calls") && /\ds/.test(frames));
+    assert(
+      frames.includes("1 tool call") && !frames.includes("1 tool calls") &&
+        /\ds/.test(frames),
+    );
     await browser.screenshot(join(f.oc.root, "r5-parent-tasks.png"));
   } finally {
     await f.stop();

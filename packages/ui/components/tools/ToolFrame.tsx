@@ -39,34 +39,45 @@ export default function ToolFrame(
             {typeof props.presentation?.icon === "function"
               ? props.presentation.icon()
               : props.presentation?.icon ?? "◇"}
-          </span>
+          </span>{" "}
           <span class="otk-tool-verb">
             {props.presentation?.verb ?? props.call.tool}
-          </span>
+          </span>{" "}
           <Show when={props.presentation?.target}>
-            <span class="otk-tool-target otk-id">
+            <span
+              class="otk-tool-target otk-id"
+              title={props.presentation?.target}
+            >
               {props.presentation?.target}
             </span>
+            {" "}
           </Show>
           <Show when={props.presentation?.summary}>
-            <span class="otk-tool-brief">{props.presentation?.summary}</span>
+            <span class="otk-tool-brief" title={props.presentation?.summary}>
+              {props.presentation?.summary}
+            </span>
+            {" "}
           </Show>
           <Show when={props.presentation?.changes}>
             {(changes) => (
               <>
-                <span class="otk-tool-add">+{changes().additions}</span>
+                <span class="otk-tool-add">+{changes().additions}</span>{" "}
                 <span class="otk-tool-del">−{changes().deletions}</span>
+                {" "}
               </>
             )}
           </Show>
           <Show when={props.call.status === "running" && !props.waiting}>
             <StatusLight state="working" small activity="spinner" />
+            {" "}
           </Show>
           <Show when={props.waiting}>
             <span>Awaiting permission</span>
+            {" "}
           </Show>
           <Show when={props.call.status === "error"}>
             <span>Failed</span>
+            {" "}
           </Show>
           <Show
             when={props.call.time.start !== undefined &&

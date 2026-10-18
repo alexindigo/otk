@@ -294,7 +294,7 @@ Deno.test("web permission snapshot on reopen, focused keys, always confirmation 
     await capture(browser, f.oc.root, "permission-reject-message");
     await clickText(browser, "Reject request");
     await browser.poll(
-      "!document.querySelector('.otk-permission-dock') && !!document.querySelector('[data-tool-status=denied]') && getComputedStyle(document.querySelector('[data-tool-status=denied] .otk-tool-summary')).textDecorationLine.includes('line-through')",
+      "!document.querySelector('.otk-permission-dock') && !!document.querySelector('[data-tool-status=denied]') && getComputedStyle(document.querySelector('[data-tool-status=denied] .otk-tool-toggle')).textDecorationLine.includes('line-through')",
       60_000,
     );
     const replies = sentFrames(browser).filter(({ frame }) =>

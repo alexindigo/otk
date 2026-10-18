@@ -7,6 +7,9 @@ export { default as Message } from "./components/Message.tsx";
 export { default as ToolLine } from "./components/ToolLine.tsx";
 export { default as ToolFrame } from "./components/tools/ToolFrame.tsx";
 export { default as ToolOutput } from "./components/tools/ToolOutput.tsx";
+export { default as ToolPath } from "./components/tools/ToolPath.tsx";
+export { relativeTarget } from "./components/tools/paths.ts";
+export { countLabel } from "./components/tools/count.ts";
 export {
   default as GenericTool,
   registerGenericTool,

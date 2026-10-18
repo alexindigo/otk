@@ -3,6 +3,7 @@ import "./QuestionTool.css" with { type: "text" };
 import QuestionAnswers from "../QuestionAnswers.tsx";
 import type { QuestionCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
+import { countLabel } from "./count.ts";
 export function registerQuestionTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "question",
@@ -10,7 +11,7 @@ export function registerQuestionTool(tools: ToolRegistry): void {
     (call) => ({
       icon: "?",
       verb: "Ask",
-      summary: call.questions.map((q) => q.text).join(" · "),
+      summary: countLabel(call.questions.length, "question"),
     }),
   );
 }

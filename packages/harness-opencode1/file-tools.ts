@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { extname } from "@std/path";
+import { fileLanguage } from "./language.ts";
 import type {
   Diagnostic,
   FileDiff,
@@ -58,20 +58,12 @@ export function mapFileTool(
     };
   }
   if (part.tool === "write") {
-    const extension = extname(path).slice(1),
-      lang = ({
-        mjs: "js",
-        cjs: "js",
-        py: "python",
-        rs: "rust",
-        sh: "bash",
-      } as Record<string, string>)[extension] || extension || undefined;
     return {
       ...base,
       tool: "write",
       path,
       content: text(input.content),
-      lang,
+      lang: fileLanguage(path),
       diagnostics: mapDiagnostics(metadata.diagnostics, path),
     };
   }

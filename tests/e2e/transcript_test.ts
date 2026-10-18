@@ -124,6 +124,7 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
             ...base,
             callID: "continued",
             tool: "read",
+            output: "Unrecognized read result\n<literal>keep me</literal>",
             path: `${root}/projects/otk/source.ts`,
             loaded: [],
           },
@@ -206,6 +207,17 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
     await b.poll(
       "!document.querySelector('[data-tool=bash] .otk-tool-body').hidden && document.querySelector('[data-tool=bash] .otk-tool-output').textContent==='reported directory'",
     );
+    await b.click("[data-tool=read] .otk-tool-toggle");
+    await b.poll(
+      "!document.querySelector('[data-tool=read] .otk-tool-body').hidden && document.querySelector('[data-tool=read] .otk-tool-output').textContent==='Unrecognized read result\\n<literal>keep me</literal>'",
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('[data-tool=read] .otk-tool-output literal')",
+      ),
+      null,
+    );
+    await b.click("[data-tool=read] .otk-tool-toggle");
     await b.poll(
       "document.querySelector('[data-tool=edit] .otk-tool-toggle').getAttribute('aria-expanded')==='true' && !document.querySelector('[data-tool=edit] .otk-tool-body').hidden && document.querySelector('[data-tool=edit] .otk-diff').textContent.includes('const after = true;')",
     );

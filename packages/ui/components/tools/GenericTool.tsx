@@ -16,7 +16,6 @@ export default function GenericTool(
 ): import("solid-js").Element {
   return (
     <>
-      <div class="otk-tool-summary">{props.call.name} {props.call.summary}</div>
       <Show when={props.output}>
         <ToolOutput text={props.call.output || ""} limit={3} />
         <Show when={props.call.outputTruncated}>

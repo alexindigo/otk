@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Todo.css" with { type: "text" };
 import type { ToolRegistry } from "../registries/renderers.ts";
+import { countLabel } from "./tools/count.ts";
 export function registerTodoTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "todo",
@@ -10,7 +11,7 @@ export function registerTodoTool(tools: ToolRegistry): void {
       verb: "Update tasks",
       summary: `${
         call.items.filter((item) => item.status === "completed").length
-      }/${call.items.length} completed`,
+      }/${countLabel(call.items.length, "task")} completed`,
     }),
   );
 }

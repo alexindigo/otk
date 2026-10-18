@@ -3,35 +3,38 @@ import type { SearchCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { relativeTarget } from "./paths.ts";
 import { SearchIcon } from "../ChromeIcons.tsx";
+import ToolOutput from "./ToolOutput.tsx";
+import { countLabel } from "./count.ts";
 export function registerSearchTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "search",
-    (props) => <SearchTool call={props.call} />,
+    (props) => <SearchTool call={props.call} directory={props.directory} />,
     (call, context) => ({
       icon: SearchIcon,
       verb: call.mode === "list" ? "List" : "Search",
-      target: call.pattern ||
-        (call.path ? relativeTarget(call.path, context.directory) : undefined),
-      summary: `${call.matches} ${
-        call.mode === "list" ? "entries" : "matches"
-      }`,
+      target: call.path
+        ? relativeTarget(call.path, context.directory)
+        : undefined,
+      summary: [
+        call.mode !== "list" ? call.pattern : "",
+        call.mode === "list"
+          ? countLabel(call.matches, "entry", "entries")
+          : countLabel(call.matches, "match", "matches"),
+      ].filter(Boolean).join(" · "),
     }),
   );
 }
-export default function SearchTool(props: { call: SearchCall }) {
+export default function SearchTool(
+  props: { call: SearchCall; directory?: string },
+) {
   return (
-    <div class="otk-tool-summary" data-search-mode={props.call.mode}>
-      {props.call.mode[0].toUpperCase() + props.call.mode.slice(1)}{" "}
-      {props.call.mode !== "list" ? `"${props.call.pattern}" ` : ""}
-      {props.call.path
-        ? (
-          <>
-            in <span class="otk-path">{props.call.path}</span>
-            {" "}
-          </>
-        )
-        : ""}({props.call.matches}{" "}
-      {props.call.mode === "list" ? "entries" : "matches"})
+    <div data-search-mode={props.call.mode}>
+      <ToolOutput
+        text={props.call.output ?? ""}
+        result={props.call.outputContent}
+        directory={props.directory}
+        limit={10}
+      />
     </div>
   );
 }

@@ -4,6 +4,7 @@ import { stripVTControlCharacters } from "node:util";
 import type { RawPart } from "./types.ts";
 import { mapFileTool } from "./file-tools.ts";
 import { preview } from "./previews.ts";
+import { toolResult } from "./tool-results.ts";
 const string = (value: unknown): string | undefined =>
   typeof value === "string" ? value : undefined;
 const record = (value: unknown): Record<string, unknown> =>
@@ -45,6 +46,8 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
     error: state.error,
     time: { start: state.time?.start, end: state.time?.end },
     awaitingPermission,
+    output: state.output,
+    outputContent: toolResult(part),
   };
   const input = state.input, metadata = state.metadata ?? {};
   if (part.tool === "task") {

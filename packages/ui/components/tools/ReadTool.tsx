@@ -4,10 +4,12 @@ import type { ReadCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { relativeTarget } from "./paths.ts";
 import { FileIcon } from "./ToolIcons.tsx";
+import ToolOutput from "./ToolOutput.tsx";
+import ToolPath from "./ToolPath.tsx";
 export function registerReadTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "read",
-    (props) => <ReadTool call={props.call} />,
+    (props) => <ReadTool call={props.call} directory={props.directory} />,
     (call, context) => ({
       icon: FileIcon,
       verb: "Read",
@@ -19,23 +21,24 @@ export function registerReadTool(tools: ToolRegistry): void {
     }),
   );
 }
-export default function ReadTool(props: { call: ReadCall }) {
+export default function ReadTool(
+  props: { call: ReadCall; directory?: string },
+) {
   return (
     <>
-      <div class="otk-tool-summary">
-        Read <span class="otk-path">{props.call.path}</span>
-        {props.call.offset !== undefined
-          ? ` · offset ${props.call.offset}`
-          : ""}
-        {props.call.limit !== undefined ? ` · limit ${props.call.limit}` : ""}
-      </div>
       <For each={props.call.loaded} keyed={false}>
         {(path) => (
           <div class="otk-muted">
-            ↳ Loaded <span class="otk-path">{path()}</span>
+            ↳ Loaded <ToolPath path={path()} directory={props.directory} />
           </div>
         )}
       </For>
+      <ToolOutput
+        text={props.call.output ?? ""}
+        result={props.call.outputContent}
+        directory={props.directory}
+        limit={10}
+      />
     </>
   );
 }

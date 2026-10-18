@@ -16,7 +16,7 @@ const load = async () =>
     parent: { info: Info; parts: RawPart[] }[];
     child: { info: Info; parts: RawPart[] }[];
   };
-Deno.test("recorded task maps only OTK fields and open-parent summaries retain counts rather than child output", async () => {
+Deno.test("recorded task retains its native result while open-parent progress contains counts, not child transcripts", async () => {
   const data = await load(),
     raw = data.parent.flatMap((m) => m.parts).find((p) => p.tool === "task")!,
     call = mapTool(raw);
@@ -41,7 +41,8 @@ Deno.test("recorded task maps only OTK fields and open-parent summaries retain c
   const shaped = await tracker.shape(raw);
   assertEquals(shaped.toolCount, 1);
   assert((shaped.duration || 0) > 0);
-  assert(!JSON.stringify(shaped).includes("First child completed"));
+  assertEquals(shaped.output, raw.state!.output);
+  assert(!("parts" in shaped));
   const tool = structuredClone(
     data.child.flatMap((m) => m.parts).find((p) => p.type === "tool")!,
   );

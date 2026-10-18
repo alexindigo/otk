@@ -124,7 +124,7 @@ Deno.test("R4 real read, directory listing, glob, grep, local fetch, skill and g
       }),
     );
     await browser.poll(
-      "document.querySelector('[data-search-mode=list]')?.textContent.includes('2 entries')",
+      "document.querySelector('[data-search-mode=list]')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('2 entries')",
     );
     parts.push(
       await runTool(f, browser, s.id, {
@@ -143,7 +143,7 @@ Deno.test("R4 real read, directory listing, glob, grep, local fetch, skill and g
       }),
     );
     await browser.poll(
-      "document.querySelector('[data-search-mode=glob]')?.textContent.includes('1 matches') && document.querySelector('[data-search-mode=grep]')?.textContent.includes('1 matches')",
+      "['glob','grep'].every(mode=>document.querySelector('[data-search-mode='+mode+']')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('1 match') && !document.querySelector('[data-search-mode='+mode+']')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('1 matches'))",
     );
     const url = `http://127.0.0.1:${(http.addr as Deno.NetAddr).port}/fixture`;
     parts.push(

@@ -136,6 +136,7 @@ export default function Code(
     lang?: string;
     streaming?: boolean;
     lineNumbers?: boolean;
+    startLine?: number;
   },
 ): import("solid-js").Element {
   const block = highlightBlock(
@@ -444,7 +445,7 @@ export default function Code(
         <pre
           class="otk-code-numbers"
           aria-hidden="true"
-        >{props.text.split(/\r\n|\n|\r/).map((_, i) => i + 1).join("\n")}</pre>
+        >{props.text.split(/\r\n|\n|\r/).map((_, i) => i + (props.startLine ?? 1)).join("\n")}</pre>
       </Show>
       <pre><code>
       <For each={pieces()} keyed={piece => piece.key}>{piece => (

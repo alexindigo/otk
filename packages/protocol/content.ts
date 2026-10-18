@@ -56,6 +56,31 @@ export interface FileDiff {
   hunks: Hunk[];
   diagnostics?: Diagnostic[];
 }
+/** User-facing results decoded by the native adapter, never model envelopes. */
+export type ToolResult =
+  | {
+    kind: "file";
+    text: string;
+    lang?: string;
+    startLine: number;
+    endLine: number;
+    totalLines?: number;
+    truncated: boolean;
+  }
+  | {
+    kind: "paths";
+    paths: string[];
+    offset?: number;
+    total?: number;
+    truncated: boolean;
+  }
+  | {
+    kind: "matches";
+    matches: { path: string; line: number; text: string }[];
+    truncated: boolean;
+  }
+  | { kind: "skill"; text: string; directory: string; paths: string[] }
+  | { kind: "text"; text: string };
 export interface ToolBase {
   callID: string;
   status: "pending" | "running" | "completed" | "error" | "denied";
@@ -64,6 +89,9 @@ export interface ToolBase {
   time: { start?: number; end?: number };
   awaitingPermission: boolean;
   childSessionID?: string;
+  /** Native result text, when supplied; structural tools also retain their typed result. */
+  output?: string;
+  outputContent?: ToolResult;
 }
 export interface BashCall extends ToolBase {
   tool: "bash";

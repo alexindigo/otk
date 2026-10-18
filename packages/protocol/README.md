@@ -71,6 +71,11 @@ truncated and therefore not parseable), not unbounded native objects. The stock
 adapter caps each preview at 64 KiB UTF-8; tool summary/output bounds are
 retained.
 
+Every tool inherits optional `ToolBase.output` for native result text. Absence
+and an empty result remain distinct; typed structural results (diffs, todos and
+questions) remain available alongside it. The native adapter retains bash's ANSI
+cleanup and external tools' 64 KiB preview bound.
+
 `CapabilityContracts` composes the operation contracts owned by the shared
 features in `capabilities/`. `CapabilityName` derives from its keys and
 `Capabilities` makes those implementations optional. Harness registry/require,

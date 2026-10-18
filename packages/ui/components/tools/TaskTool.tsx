@@ -4,6 +4,8 @@ import { Show } from "solid-js";
 import type { TaskCall } from "@otk/protocol";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { ownedAction } from "../../keyboard/context.tsx";
+import ToolOutput from "./ToolOutput.tsx";
+import { countLabel } from "./count.ts";
 export function registerTaskTool(tools: ToolRegistry): void {
   tools.registerTyped(
     "task",
@@ -24,27 +26,31 @@ export default function TaskTool(
     if (props.call.childSessionID) props.onOpen(props.call.childSessionID);
   });
   return (
-    <button
-      type="button"
-      class="otk-task-card"
-      disabled={!props.call.childSessionID}
-      onClick={() => void open()}
-    >
-      <strong>
-        {props.call.agent[0]?.toUpperCase() + props.call.agent.slice(1)} task —
-        {" "}
-        {props.call.description}
-      </strong>
-      <Show when={props.call.status === "running" && props.call.currentTool}>
-        <span>↳ {props.call.currentTool}</span>
-      </Show>
-      <Show when={props.call.status === "completed"}>
-        <span>
-          {props.call.toolCount} tool calls{props.call.duration !== undefined
-            ? ` · ${(props.call.duration / 1000).toFixed(1)}s`
-            : ""}
-        </span>
-      </Show>
-    </button>
+    <>
+      <button
+        type="button"
+        class="otk-task-card"
+        disabled={!props.call.childSessionID}
+        onClick={() => void open()}
+      >
+        <strong>Open task</strong>
+        <Show when={props.call.status === "running" && props.call.currentTool}>
+          <span>↳ {props.call.currentTool}</span>
+        </Show>
+        <Show when={props.call.status === "completed"}>
+          <span>
+            {countLabel(props.call.toolCount, "tool call")}
+            {props.call.duration !== undefined
+              ? ` · ${(props.call.duration / 1000).toFixed(1)}s`
+              : ""}
+          </span>
+        </Show>
+      </button>
+      <ToolOutput
+        text={props.call.output ?? ""}
+        result={props.call.outputContent}
+        limit={10}
+      />
+    </>
   );
 }

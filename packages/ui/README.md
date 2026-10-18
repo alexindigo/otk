@@ -33,10 +33,14 @@ the open `PartKinds` map. The same namespace separation applies to parts;
 `registerUnknownPart` supplies unsupported-part fallback. Part registrations can
 contribute `{work?, text?, hidden?}` presentation data: the message groups
 adjacent contributed work clocks into expandable folds and copies contributed
-source text without dispatching concrete part kinds or reading child DOM.
-Invisible bookkeeping owners declare themselves hidden so wire steps cannot
-split a visible work fold. Reply metadata combines contiguous source parts for
-one whole-reply copy.
+source text without dispatching concrete part kinds or reading child DOM. Read,
+search, fetch, web search, skill and task bodies render their inherited native
+result through the same `ToolOutput` owner as bash. Structural edit, write,
+patch, todo and question bodies keep their typed result presentation; generic
+output retains its display preference and bounded preview notice. Invisible
+bookkeeping owners declare themselves hidden so wire steps cannot split a
+visible work fold. Reply metadata combines contiguous source parts for one
+whole-reply copy.
 
 `prompt.register({ id, create(context) })` installs a per-prompt feature.
 `PromptContext` injects selection/caret/focus operations, an active-lifetime
