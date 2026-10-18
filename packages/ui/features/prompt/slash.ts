@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { PromptRegistry } from "../../registries/prompt.ts";
+import type { PromptChoices, PromptRegistry } from "../../registries/prompt.ts";
 import { onSettled } from "solid-js";
 import {
   commandOptions,
@@ -96,23 +96,27 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
               _context,
               args: {
                 arguments?: string;
-                agent?: string;
+                selection?: PromptChoices;
                 parts?: Extract<PromptPart, { kind: "file" }>[];
               } = {},
-            ) =>
-              ctx.act(async () => {
+            ) => {
+              return ctx.act(async () => {
+                if (!args.selection) await ctx.ready();
+                const selection = args.selection ??
+                  ctx.nextSelection(ctx.change((draft) => draft)).input;
                 await ctx.rpc("session.command", {
                   sessionID: ctx.sessionID(),
                   command: name,
                   arguments: args.arguments ?? "",
-                  agent: args.agent ?? ctx.props.value.agent,
+                  ...selection,
                   parts: (await ctx.attachments(args.parts ?? [])).filter((
                     part,
                   ): part is Extract<PromptPart, { kind: "file" }> =>
                     part.kind === "file"
                   ),
                 });
-              }),
+              });
+            },
           });
           registered.set(name, { signature, release });
         }
@@ -174,7 +178,7 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
           }
           return true;
         },
-        async submit(draft, parts) {
+        async submit(draft, parts, selection) {
           const parsed = draft.mode === "normal"
             ? parseCommand(draft.input)
             : undefined;
@@ -185,7 +189,7 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
             );
           if (!command) return false;
           await ctx.commands.run(ctx.commands.resolveSlash(command.name)!, {
-            agent: draft.agent,
+            selection,
             arguments: parseCommand(
               parts.find((part) => part.kind === "text")!.text,
             )!.arguments,

@@ -2,12 +2,12 @@
 import {
   browserThemeEnvironment,
   createUiRegistries,
-  registerAgentCyclePrompt,
   registerAgentPart,
   registerAttachmentsPrompt,
   registerBashTool,
   registerCommandDialogs,
   registerCompactionPart,
+  registerComposerPickers,
   registerEditorDialog,
   registerEditorPrompt,
   registerEditTool,
@@ -76,7 +76,7 @@ export function applicationUi(): UiRegistries {
   registerAttachmentsPrompt(ui.prompt);
   registerEditorPrompt(ui.prompt);
   registerEditorDialog(ui.dialogs);
-  registerAgentCyclePrompt(ui.prompt);
+  registerComposerPickers(ui.prompt);
   registerPermissionTakeover(ui.takeovers);
   registerQuestionTakeover(ui.takeovers);
   registerCommandDialogs(ui.dialogs);

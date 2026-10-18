@@ -57,6 +57,19 @@ export const ChevronIcon = () => (
     <path d="m9 18 6-6-6-6" />
   </Icon>
 );
+export const ChevronDownIcon = () => (
+  <Icon>
+    <path d="m6 9 6 6 6-6" />
+  </Icon>
+);
+export const StarIcon = (props: { filled: boolean }) => (
+  <Icon>
+    <path
+      d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2-5.6-3-5.6 3 1.1-6.2L3 9.6l6.2-.9Z"
+      fill={props.filled ? "currentColor" : "none"}
+    />
+  </Icon>
+);
 export const SessionsIcon = () => (
   <Icon>
     <path d="M21 12h-8M21 6H8M21 18h-8M3 6v4a2 2 0 0 0 2 2h3M3 10v6a2 2 0 0 0 2 2h3" />

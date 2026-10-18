@@ -191,15 +191,15 @@ Deno.test("essential Tab cycling selects primary agents in prompt, reverse cycle
     await browser.click("textarea[name=prompt]");
     await browser.key("Tab");
     await browser.poll(
-      "document.querySelector('.otk-prompt-context > span:first-child')?.textContent==='plan'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='plan'",
     );
     await browser.key("Tab", 8);
     await browser.poll(
-      "document.querySelector('.otk-prompt-context > span:first-child')?.textContent==='build'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='build'",
     );
     await browser.key("Tab");
     await browser.poll(
-      "document.querySelector('.otk-prompt-context > span:first-child')?.textContent==='plan'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='plan'",
     );
     await browser.type("textarea[name=prompt]", "Use the selected agent");
     await browser.key("Enter", 8);
@@ -260,22 +260,22 @@ Deno.test("agent cycling honors the native configured-default primary order with
     const unselected = sentFrames(browser).find(({ frame }) =>
       frame.method === "session.prompt"
     )!.frame.params;
-    assert(!Object.hasOwn(unselected as object, "agent"));
+    assertEquals((unselected as { agent: string }).agent, "plan");
     await browser.poll(
       `document.querySelector('[data-session="${seed.id}"]').dataset.status==='idle'`,
     );
     await browser.click("textarea[name=prompt]");
     await browser.key("Tab");
     await browser.poll(
-      "document.querySelector('.otk-prompt-context > span:first-child')?.textContent==='build'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='build'",
     );
     await browser.key("Tab", 8);
     await browser.poll(
-      "document.querySelector('.otk-prompt-context > span:first-child')?.textContent==='plan'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='plan'",
     );
     await browser.key("Tab", 8);
     await browser.poll(
-      "document.querySelector('.otk-prompt-context > span:first-child')?.textContent==='build'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='build'",
     );
     await browser.type("textarea[name=prompt]", "Send the cycled agent");
     await browser.key("Enter");

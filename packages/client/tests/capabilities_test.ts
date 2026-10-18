@@ -104,6 +104,7 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
         });
         const expected = capabilities ?? legacy;
         assertEquals(sidecars.state.list[0].capabilities, expected);
+        assertEquals(sidecars.state.list[0].connectionVersion, 1);
         assertEquals(
           connection.supports("permissions"),
           expected.includes("permissions"),
@@ -134,6 +135,7 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
         Socket.current.close();
         assertEquals(await pending, "Sidecar disconnected");
         assertEquals(sidecars.state.list[0].status, "reconnecting");
+        assertEquals(sidecars.state.list[0].connectionVersion, 1);
         assertEquals(sidecars.state.list[0].capabilities, expected);
         assertEquals(connection.supports("prompt"), false);
         await connection.connect();
@@ -158,6 +160,7 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
           "subscribe",
         ]);
         assertEquals(sidecars.state.list[0].status, "connected");
+        assertEquals(sidecars.state.list[0].connectionVersion, 2);
       } finally {
         sidecars.stop();
       }

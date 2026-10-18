@@ -3,6 +3,7 @@ import type {
   AgentOption,
   ModelCatalog,
   ModelRef,
+  PromptInput,
   UserMessage,
 } from "@otk/protocol";
 import type { Draft } from "./drafts.ts";
@@ -26,6 +27,8 @@ export interface PromptSelectionContext {
   catalog?: ModelCatalog;
 }
 export interface PromptSelection {
+  applies: { agent: true; model: true; variant: boolean };
+  input: PromptChoices;
   agent: SelectionField<string> & { color?: string };
   model: SelectionField<ModelRef> & {
     name?: string;
@@ -35,7 +38,10 @@ export interface PromptSelection {
   };
   variant: SelectionField<string>;
 }
-type Choices = Pick<Draft, "agent" | "model" | "variant">;
+export type PromptChoices = Pick<PromptInput, "agent" | "model" | "variant">;
+type Choices =
+  & Pick<Draft, "agent" | "model" | "variant">
+  & Partial<Pick<Draft, "mode">>;
 
 function resolve<T>(
   explicit: T | undefined,
@@ -77,19 +83,33 @@ export function effectiveSelection(
   const variant = Object.hasOwn(draft, "variant")
     ? { value: draft.variant, source: "explicit" as const }
     : resolve(undefined, context?.variant, option?.variant);
+  const applies = {
+    agent: true as const,
+    model: true as const,
+    variant: draft.mode !== "shell",
+  };
+  const effectiveVariant = !applies.variant
+    ? { source: "absent" as const }
+    : catalog === undefined || variant.value === undefined ||
+        info?.variants.includes(variant.value)
+    ? variant
+    : { source: "absent" as const };
   return {
+    applies,
+    input: {
+      agent: agent.value,
+      model: model.value,
+      ...(applies.variant ? { variant: effectiveVariant.value } : {}),
+    },
     agent: { ...agent, color: option?.color },
     model: {
       ...model,
       name: info?.name || model.value?.model,
       providerName: provider?.name || model.value?.provider,
       variants: info?.variants ?? [],
-      unavailable: model.value !== undefined && !info,
+      unavailable: catalog !== undefined && model.value !== undefined && !info,
     },
-    variant:
-      variant.value === undefined || info?.variants.includes(variant.value)
-        ? variant
-        : { source: "absent" },
+    variant: effectiveVariant,
   };
 }
 
@@ -101,7 +121,8 @@ export function chooseModel(
 ): Draft {
   const { info } = modelInfo(model, catalog);
   const next = { ...draft, model: { ...model } };
-  return draft.variant !== undefined && !info?.variants.includes(draft.variant)
+  return catalog !== undefined && draft.variant !== undefined &&
+      !info?.variants.includes(draft.variant)
     ? { ...next, variant: undefined }
     : next;
 }
@@ -129,7 +150,7 @@ export function chooseVariant(
   context: PromptSelectionContext,
 ): Draft {
   if (
-    variant !== undefined &&
+    context.catalog !== undefined && variant !== undefined &&
     !effectiveSelection(draft, context).model.variants.includes(variant)
   ) return draft;
   return { ...draft, variant };

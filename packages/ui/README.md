@@ -53,6 +53,49 @@ overlays. Shell, mentions, slash, history, paste, attachments and editor each
 own their implementation. `Prompt` owns native input, submission identity and
 teardown; it has no feature import list.
 
+Features may contribute `settings()` content to the existing footer and one
+`selection(draft)` projection. `PromptContext.nextSelection()` reads that shared
+projection (or the client fallback for smaller compositions). Prompt captures
+`{agent, model, variant}` from the mode-aware client projection after
+contributed `ready()` work and pre-submit hooks, re-reading the current draft
+before capture, then passes it to every `submit(draft, parts, selection)` hook,
+and to the third argument of `PromptProps.onSubmit(parts, mode, selection)`.
+Successful completion clears only the identical submitted draft through
+`clearDraft`; `submitted` receives the captured selection and whether a feature
+handled the send.
+
+`registerComposerPickers` renders and binds the framework-free client composer
+owner through `solidState`, common typed session ports and the host preference
+command. `catalog.ts` binds reactive connection identity/availability and
+lifetime; catalog work, readiness, cycling and serialized preference writes stay
+in the client owner. The `connectionKey` port uses the sidecar welcome version.
+Typed session ports fetch capability-advertised catalogs initially and on
+opening; last successful data survives refresh/errors. Model search groups
+favourites, recent and connected providers; star actions and successful
+normal-prompt recent recording persist through the serving host's `prefs.set`
+command. Commands `model.choose` (Mod+'), `variant.cycle` (Alt+T) and
+`agent.choose` are discoverable in the command hub. Without the models
+capability the model stays plain text. Shell displays only agent/model, matching
+its wire projection. Unknown catalog metadata preserves and displays a restored
+variant rather than silently dropping it. Palette-native slash execution shares
+the same readiness and projection.
+
+`ListPicker` is the shared, data-injected interaction component inside
+`Popover`: typed groups/items/values, selected key, optional
+search/status/header/item action, `onPick`, `onOpen` and `focusAfterPick`. Its
+control port exposes only `open()`. Arrow keys (including held repeats),
+Home/End and Enter operate the highlighted row; selected pointers remain on the
+committed row. Groups mount only while open and release their DOM references on
+close. One selected/hover row box contains the pick and optional action button;
+callers inject action content/icons. Provider subtitles appear only in
+favourite/recent groups. Search filters labels/descriptions/search text.
+Popover's general control/open hooks keep native anchoring and dismissal
+internal, while content owns its focus. Closing a pick returns to the injected
+prompt focus port. Shared anchoring opens above the leading edge and tries
+inline/block flips only for viewport overflow. Footer labels and real chevron
+icons share flex centring; trigger accessible names include current values.
+Loading/error states do not also report an empty catalog.
+
 `takeovers.register({ id, capability, component })` supplies composer attention
 owners. `ComposerTakeovers` mounts capability-available components; they read
 session state from context and construct their own UI. Optional feature-owned
@@ -173,12 +216,14 @@ the `is-selected` state class and role-appropriate `selected`, `current` or
 `pressed` ARIA state. `candidate` marks an action the keyboard will invoke; an
 independent candidate may accompany committed multi-choice answers without
 changing their pressed state. All selection paint keys on the state class. Items
-place their children inside `SelectionContent`. Vertical items reserve a leading
-grid track with an always-present `::before`: a centred 3×14px pointer, 3px from
-the item's start. Horizontal items reserve a 2px bottom grid track with an
-always-present `::after`, inset 8px from both ends. Only the state class paints
-the marks. Neither decoration uses positioning; selection never changes box
-size. Hover alone only fills; reduced colours retains both indicators.
+may pass `highlighted` for a separate keyboard/hover fill without moving the
+committed pointer or ARIA selection. Items place their children inside
+`SelectionContent`. Vertical items reserve a leading grid track with an
+always-present `::before`: a centred 3×14px pointer, 3px from the item's start.
+Horizontal items reserve a 2px bottom grid track with an always-present
+`::after`, inset 8px from both ends. Only the state class paints the marks.
+Neither decoration uses positioning; selection never changes box size. Hover
+alone only fills; reduced colours retains both indicators.
 
 Package units live in `tests/`; real browser/app tests remain at repository
 level. Builds/tests run inside the project's assigned VM. License: LGPL-3.0-only

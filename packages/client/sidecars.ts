@@ -24,6 +24,8 @@ export interface SidecarState extends SidecarSpec {
   error?: string;
   authType?: string;
   capabilities: CapabilityName[];
+  /** Changes on each welcomed transport connection, including reconnects. */
+  connectionVersion?: number;
 }
 export const LOCAL_SIDECAR = "local";
 export function readSidecars(storage: Pick<Storage, "getItem">): SidecarSpec[] {
@@ -101,6 +103,9 @@ export function createSidecars(
           const item = draft.list.find((item) => item.id === spec.id);
           if (item) {
             item.status = status;
+            if (status === "connected") {
+              item.connectionVersion = (item.connectionVersion ?? 0) + 1;
+            }
             // Capabilities describe the backend, not transport liveness. Keep
             // feature owners (and their unsent input) mounted while reconnecting.
             item.error = error;

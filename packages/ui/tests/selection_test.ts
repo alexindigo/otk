@@ -46,6 +46,14 @@ Deno.test("selection has one shared pointer/underline owner for selected, curren
     "false",
     "Moving the candidate never commits an answer",
   );
+  const highlighted = selection({
+    kind: "selected",
+    selected: false,
+    highlighted: true,
+  });
+  assert(highlighted.class.includes("is-highlighted"));
+  assert(!highlighted.class.includes("is-selected"));
+  assertEquals(highlighted["aria-selected"], "false");
   assertMatch(
     css,
     /\[data-otk-selection=vertical\]\.otk-selection-item::before\s*\{[^}]*content: "";[^}]*width: 3px;[^}]*height: 14px;[^}]*margin-inline-start: var\(--selection-pointer-inset\);/,

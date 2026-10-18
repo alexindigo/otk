@@ -9,13 +9,22 @@ import {
 import { ownedCommand, useCommandPorts } from "../../keyboard/context.tsx";
 import Surface from "./Surface.tsx";
 
+export interface PopoverControl {
+  open(): void;
+  close(focus?: () => void): void;
+}
+
 /** Native top-layer dismissal and anchoring belong here, never to content. */
 export default function Popover(props: {
   label: string;
+  triggerLabel?: string;
   trigger: Element;
   title?: string;
   class?: string;
   dismissOnAction?: boolean;
+  control?(control: PopoverControl): void;
+  onOpen?(): void;
+  onClose?(): void;
   children: Element;
 }): Element {
   const anchor = `--otk-popover-${
@@ -24,16 +33,17 @@ export default function Popover(props: {
   const [open, setOpen] = createSignal(false);
   let panel!: HTMLDivElement, trigger!: HTMLButtonElement;
   const ports = useCommandPorts(), closeId = `${anchor}.close`;
-  const dismiss = () => {
+  const dismiss = (focus: () => void = () => trigger.focus()) => {
     panel.hidePopover();
-    trigger.focus();
+    focus();
   };
+  props.control?.({ open: () => panel.showPopover(), close: dismiss });
   ownedCommand(ports, {
     id: closeId,
     title: `Close ${props.label}`,
     category: "Controls",
     hidden: true,
-    run: dismiss,
+    run: () => dismiss(),
   });
   onSettled(() =>
     ports.keyboard?.layer(closeId, () => panel.matches(":popover-open"), 30)
@@ -43,8 +53,8 @@ export default function Popover(props: {
       <button
         type="button"
         class="otk-popover-trigger"
-        aria-label={props.label}
-        title={props.label}
+        aria-label={props.triggerLabel ?? props.label}
+        title={props.triggerLabel ?? props.label}
         aria-expanded={open() ? "true" : "false"}
         popovertarget={anchor}
         style={{ "anchor-name": anchor }}
@@ -63,8 +73,20 @@ export default function Popover(props: {
         ref={(el) => {
           panel = el;
         }}
-        onToggle={() =>
-          setOpen(panel.matches(":popover-open"))}
+        onBeforeToggle={(event) => {
+          // Closing is non-cancellable and must not disappear into coalesced
+          // toggle tasks. Opening/focus waits until the panel is actually shown.
+          if (event.newState === "closed") {
+            props.onClose?.();
+          }
+        }}
+        onToggle={() => {
+          const visible = panel.matches(":popover-open");
+          setOpen(visible);
+          if (visible) {
+            props.onOpen?.();
+          }
+        }}
         onClick={(event) => {
           const button = (event.target as HTMLElement).closest("button");
           if (props.dismissOnAction && button && !button.disabled) {

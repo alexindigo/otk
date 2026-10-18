@@ -243,7 +243,8 @@ small {
 [data-otk-selection] {
   border-radius: var(--radius-row);
 }
-[data-otk-selection]:hover {
+[data-otk-selection]:hover,
+[data-otk-selection].is-highlighted {
   background: var(--otk-hover);
 }
 [data-otk-selection].is-selected {

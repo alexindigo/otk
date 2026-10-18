@@ -55,7 +55,7 @@ function ownershipErrors(files: Sources): string[] {
       /\bpopover=["']/.test(text) && name !== "components/surface/Popover.tsx"
     ) errors.push(`${name}: native popover belongs to Popover`);
     if (
-      /dialogs\.register|<(?:Popover|Menu|Toast)\b/.test(text) &&
+      /dialogs\.register|<(?:Popover|Menu|Toast|ListPicker)\b/.test(text) &&
       !owners.test(name)
     ) overlay.add(name);
   }
@@ -63,10 +63,10 @@ function ownershipErrors(files: Sources): string[] {
   // catches new content modules, not just today's concrete overlay names.
   for (const name of overlay) {
     const text = files.get(name)!;
-    const content = /<(?:Popover|Menu|Toast)\b/.test(text)
+    const content = /<(?:Popover|Menu|Toast|ListPicker)\b/.test(text)
       ? [
         ...text.matchAll(
-          /<(?:Popover|Menu|Toast)\b[\s\S]*?<\/(?:Popover|Menu|Toast)>/g,
+          /<(?:Popover|Menu|Toast|ListPicker)\b[\s\S]*?<\/(?:Popover|Menu|Toast|ListPicker)>/g,
         ),
       ].map((m) => m[0]).join("\n")
       : text;
@@ -181,7 +181,7 @@ Deno.test("overlay owners enforce an internal Surface and normal-flow registered
       [],
     );
   }
-  for (const owner of ["Popover", "Menu", "Toast"]) {
+  for (const owner of ["Popover", "Menu", "Toast", "ListPicker"]) {
     assert(
       ownershipErrors(
         new Map([

@@ -162,16 +162,24 @@ function Consumer(): Element {
           type="button"
           data-inject
           onClick={() =>
-            ctx.change((draft) => ({ ...draft, input: "Injected draft" }))}
+            ctx.change((draft) => ({
+              ...draft,
+              input: "Injected draft",
+              agent: "external-agent",
+            }))}
         >
           Inject draft
         </button>
       ),
-      async submit(_draft, parts) {
-        await ctx.props.onSubmit([...parts, {
-          kind: "text",
-          text: "external transform",
-        }], "normal");
+      async submit(_draft, parts, selection) {
+        await ctx.props.onSubmit(
+          [...parts, {
+            kind: "text",
+            text: "external transform",
+          }],
+          "normal",
+          selection,
+        );
         return true;
       },
     }),

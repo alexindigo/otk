@@ -16,6 +16,8 @@ export interface SessionPorts {
   /** Reactive advertised features; transport loss must not unmount dirty owners. */
   supports(capability: CapabilityName): boolean;
   rpc: InboxRpc["call"];
+  /** Reactive identity of the current welcomed transport connection. */
+  connectionKey?(): unknown;
   sessionID(): string;
   directory(): Promise<string>;
   entry(id: string): IndexEntry | undefined;

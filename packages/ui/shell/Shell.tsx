@@ -533,6 +533,9 @@ export default function Shell(
             s.id === target.sidecarId && s.capabilities.includes(capability)
           ),
       rpc: (method, params) => connection.rpc.call(method, params),
+      connectionKey: () =>
+        sidecars.state.list.find((s) => s.id === target.sidecarId)
+          ?.connectionVersion,
       sessionID: () => target.sessionID,
       directory: () => directoryFor(target),
       entry: (id) => entry(target.sidecarId, id),
@@ -889,7 +892,7 @@ export default function Shell(
                           onOlder={() => commands.run("session.older")}
                           onRetry={() => commands.run("session.retry")}
                           onDraft={drafts.writer(draftKey())}
-                          onPrompt={async (parts, _mode, agent) => {
+                          onPrompt={async (parts, _mode, selection) => {
                             const { selection: target, rpc } = current
                               .context();
                             const directory = await directoryFor(target);
@@ -905,7 +908,7 @@ export default function Shell(
                                     parts,
                                     target.sidecarId,
                                   ),
-                                  ...(agent ? { agent } : {}),
+                                  ...selection,
                                 });
                               }));
                           }}

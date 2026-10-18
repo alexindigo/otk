@@ -67,8 +67,16 @@ Deno.test("R7 host preferences control real reasoning, persist on reload and pro
     );
     assertEquals(
       sentFrames(browser).filter(({ frame }) => frame.method === "prefs.set")
-        .length,
-      3,
+        .map(({ frame }) => frame.params),
+      [
+        {
+          key: "models.recent",
+          value: [{ provider: "fake", model: "scripted" }],
+        },
+        { key: "thinking", value: "show" },
+        { key: "timestamps", value: true },
+        { key: "thinking", value: "hide" },
+      ],
     );
     await browser.screenshot(join(f.oc.root, "r7-hidden-reasoning.png"));
   } finally {

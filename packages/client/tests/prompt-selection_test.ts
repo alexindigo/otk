@@ -208,7 +208,26 @@ Deno.test("unavailable explicit and restored models retain identity and display 
     agents: [],
   });
   assertEquals(loading.model.value, first);
-  assertEquals(loading.model.unavailable, true);
+  assertEquals(loading.model.unavailable, false);
+});
+
+Deno.test("model availability is unknown without a catalog and unavailable only after negative catalog membership", () => {
+  for (const explicit of [false, true]) {
+    const draft = explicit ? { ...emptyDraft(), model: first } : emptyDraft();
+    const input = {
+      agents: [],
+      context: explicit ? undefined : { model: first },
+    };
+    for (const catalog of [undefined, { providers: [] }]) {
+      const result = effectiveSelection(draft, { ...input, catalog });
+      assertEquals(result.model.value, first);
+      assertEquals(result.model.unavailable, catalog !== undefined);
+    }
+    assertEquals(
+      effectiveSelection(draft, { ...input, catalog }).model.unavailable,
+      false,
+    );
+  }
 });
 
 Deno.test("agent intent applies configured model and variant while unconfigured agents retain draft choices", () => {
@@ -261,9 +280,45 @@ Deno.test("agent intent applies configured model and variant while unconfigured 
   assertEquals(pending.model, second);
   assertEquals(pending.variant, "medium");
   assertEquals(effectiveSelection(pending, loading).variant, {
-    source: "absent",
+    value: "medium",
+    source: "explicit",
   });
   assertEquals(effectiveSelection(pending, context).variant.value, "medium");
+});
+
+Deno.test("unknown catalog preserves explicit and restored variants until loaded negative membership, and model choice does not erase unknown variants", () => {
+  for (const explicit of [true, false]) {
+    const draft = explicit
+      ? { ...emptyDraft(), model: first, variant: "high" }
+      : emptyDraft();
+    const unknown = {
+      agents: [],
+      context: explicit ? undefined : { model: first, variant: "high" },
+    };
+    const selection = effectiveSelection(draft, unknown);
+    assertEquals(selection.variant.value, "high");
+    assertEquals(selection.input.variant, "high");
+    assertEquals(
+      effectiveSelection(draft, { ...unknown, catalog: { providers: [] } })
+        .variant,
+      { source: "absent" },
+    );
+  }
+  const choice = chooseModel({ ...emptyDraft(), variant: "high" }, second, {
+    agents: [],
+  });
+  assertEquals(choice.variant, "high");
+  assertEquals(
+    effectiveSelection(choice, { agents: [] }).input.variant,
+    "high",
+  );
+  const shell = effectiveSelection({ ...choice, mode: "shell" }, {
+    agents: [],
+    catalog,
+  });
+  assertEquals(shell.applies.variant, false);
+  assertEquals(Object.hasOwn(shell.input, "variant"), false);
+  assertEquals(shell.input.model, second);
 });
 
 Deno.test("model intent keeps advertised explicit variants and clears unsupported variants across provider identity", () => {

@@ -114,6 +114,9 @@ Deno.test("independent public UI consumer renders external tools twice, updates 
     await browser.poll(
       "document.querySelector('textarea[name=prompt]').value === 'Injected draft'",
     );
+    await browser.poll(
+      "document.querySelector('.otk-prompt-context > span:first-child')?.textContent==='external-agent'",
+    );
     await browser.click(".otk-prompt button[type=submit]");
     await browser.poll(
       "document.querySelector('#submitted').textContent.includes('external transform') && document.querySelector('textarea[name=prompt]').value === ''",

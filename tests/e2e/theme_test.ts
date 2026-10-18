@@ -218,6 +218,9 @@ Deno.test("D5 actual session/code/diff paint changes with no worker work; previe
     await browser.evaluate(
       "globalThis.themeTokenNodes=[...document.querySelectorAll('.otk-code .otk-token')]",
     );
+    const writesBeforePreview = sentFrames(browser).filter(({ frame }) =>
+      frame.method === "prefs.set"
+    ).length;
     await openTheme(browser);
     await choose(browser, "otk-light");
     const light = await browser.evaluate<Record<string, unknown>>(paint);
@@ -250,7 +253,8 @@ Deno.test("D5 actual session/code/diff paint changes with no worker work; previe
     assertEquals(
       sentFrames(browser).filter(({ frame }) => frame.method === "prefs.set")
         .length,
-      0,
+      writesBeforePreview,
+      "Preview must not add any preference write after the completed prompts",
     );
     await browser.click(".otk-theme-actions button:first-child");
     await browser.poll(

@@ -16,6 +16,20 @@ declared structural/component token. Browser checks measure the Display title in
 Dark/Linen/Stone, every registered dialog and menu's padded flow, one heading
 per dialog, native dismissal, focus return and existing actions.
 
+ListPicker content follows the same recursive Surface/normal-flow checks. Its
+architecture gate requires Popover, shared selection and SelectionContent, and
+rejects networking, persistence and parent-DOM reach-through. Prompt consumes
+generic footer/projection contributions and forwards one captured selection to
+normal and feature submit paths. The selection binding also owns independent
+highlight classes; browser picker tests measure footer centrelines and selected
+pointer geometry, including while another row is highlighted. The composer
+client owner holds resource lifecycles, connection generations, cycles and
+serialized preference intents. Negatives reject those implementations and
+model-key decoding in UI adapters. Browser checks cover lazy closed DOM,
+mode-aware shell output, post-readiness snapshots, repeated arrows, leading-edge
+anchoring, label/icon centrelines and the action's inclusion in the selected
+row.
+
 Tabs have no menu presentation; task handlers and scoped commands remain
 independent of presentation. Project rows reserve visit time and their menu
 trigger in a shared flowing trailing cell. Negative fixtures reject tab menus

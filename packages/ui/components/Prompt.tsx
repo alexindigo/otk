@@ -1,12 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Prompt.css" with { type: "text" };
 import { createSignal, For, onSettled, Show } from "solid-js";
-import {
-  type DraftChange,
-  editDraft,
-  emptyDraft,
-  serialize,
-} from "./prompt/model.ts";
+import { type DraftChange, editDraft, serialize } from "./prompt/model.ts";
 import { createCompletion } from "./prompt/Completion.tsx";
 import { useUiRegistries } from "../registries/context.tsx";
 import type { PromptContext, PromptProps } from "../registries/prompt.ts";
@@ -14,6 +9,8 @@ import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import { createKeyboard } from "../keyboard/dispatcher.ts";
 import { useSessionPorts } from "../registries/session.tsx";
 import { SendIcon } from "./ChromeIcons.tsx";
+import { clearDraft, effectiveSelection } from "@otk/client";
+import type { PromptChoices } from "../registries/prompt.ts";
 
 /** Input and submission lifetime; concrete prompt concepts are injected features. */
 export default function Prompt(props: PromptProps): import("solid-js").Element {
@@ -53,6 +50,12 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     focused: () =>
       !props.suspended && document.activeElement === input &&
       !props.value.editor,
+    nextSelection: (draft = props.value) =>
+      features.find((feature) => feature.selection)?.selection?.(draft) ??
+        effectiveSelection(draft, { context: props.context, agents: [] }),
+    ready: async () => {
+      await Promise.all(features.map((feature) => feature.ready?.()));
+    },
     fail: (error) => {
       if (active) setError((error as Error).message);
     },
@@ -69,10 +72,13 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     ) ?? ctx.supports("prompt"));
   const submit = async () => {
     if (!canSubmit()) return;
-    const draft = change((current) => current);
+    await ctx.ready();
+    if (!active || !canSubmit()) return;
+    let draft = change((current) => current);
     for (const feature of features) {
       if (await feature.beforeSubmit?.(draft)) return;
     }
+    draft = change((current) => current);
     if (
       !active || !draft.input.trim() || !canSubmit() || pending() ||
       draft.chips.some((chip) => chip.pending || chip.error)
@@ -81,18 +87,20 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     setError("");
     try {
       const parts = serialize(draft);
+      const effective = ctx.nextSelection(draft);
+      const selection = effective.input;
       let handled = false;
       for (const feature of features) {
-        if (await feature.submit?.(draft, parts)) {
+        if (await feature.submit?.(draft, parts, selection)) {
           handled = true;
           break;
         }
       }
-      if (!handled) await send({ parts, mode: draft.mode, agent: draft.agent });
-      if (active) { for (const feature of features) feature.submitted?.(); }
-      change((current) =>
-        current === draft ? { ...emptyDraft(), agent: draft.agent } : current
-      );
+      if (!handled) await send({ parts, mode: draft.mode, selection });
+      change((current) => current === draft ? clearDraft(current) : current);
+      for (const feature of features) {
+        await feature.submitted?.(draft, selection, handled);
+      }
     } catch (error) {
       if (active && change((current) => current) === draft) ctx.fail(error);
     } finally {
@@ -110,9 +118,9 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       args: {
         parts: import("@otk/protocol").PromptPart[];
         mode: PromptProps["value"]["mode"];
-        agent?: string;
+        selection: PromptChoices;
       },
-    ) => props.onSubmit(args.parts, args.mode, args.agent),
+    ) => props.onSubmit(args.parts, args.mode, args.selection),
   });
   const submitCommand = ownedCommand(ports, {
     id: "prompt.submit",
@@ -265,17 +273,18 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       />
       <div class="otk-prompt-actions">
         <div class="otk-prompt-context" aria-label="Next message settings">
-          <span>
-            {props.value.agent ?? props.context?.agent ??
-              "Backend default agent"}
-          </span>
-          <span>
-            {props.context?.model
-              ? `${props.context.model.provider}/${props.context.model.model}`
-              : "Backend default model"}
-          </span>
-          <Show when={props.context?.variant}>
-            <span>{props.context?.variant}</span>
+          <Show
+            when={features.some((feature) => feature.settings)}
+            fallback={
+              <>
+                <span>
+                  {ctx.nextSelection().agent.value ?? "Default agent"}
+                </span>
+                <span>{ctx.nextSelection().model.name ?? "Default model"}</span>
+              </>
+            }
+          >
+            <For each={features}>{(feature) => feature.settings?.()}</For>
           </Show>
         </div>
         <For each={features}>{(feature) => feature.actions?.()}</For>

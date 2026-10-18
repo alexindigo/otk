@@ -2,7 +2,7 @@
 import { assert, assertEquals } from "@std/assert";
 
 function stateErrors(source: string): string[] {
-  return /\b(?:aria-selected|aria-current|aria-pressed|data-selected)\s*=|["'`](?:aria-selected|aria-current|aria-pressed|data-selected|is-selected|otk-selected)["'`]|class(?:Name)?\s*=\s*["'][^"']*\bis-selected\b/
+  return /\b(?:aria-selected|aria-current|aria-pressed|data-selected)\s*=|["'`](?:aria-selected|aria-current|aria-pressed|data-selected|is-selected|is-highlighted|otk-selected)["'`]|class(?:Name)?\s*=\s*["'][^"']*\bis-(?:selected|highlighted)\b/
       .test(source)
     ? ["selection state belongs to the shared binding"]
     : [];
@@ -88,6 +88,7 @@ Deno.test("selection state and decoration have one enforceable owner across UI c
       "<button aria-pressed={chosen}>",
       "<button data-selected={chosen}>",
       '<button class="is-selected">',
+      '<button class="is-highlighted">',
       '<button class={["row", {"is-selected": chosen}]}>',
       '<button class={["row", {"otk-selected": chosen}]}>',
       'element.setAttribute("aria-selected", "true")',

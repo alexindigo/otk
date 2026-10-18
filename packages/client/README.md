@@ -59,7 +59,13 @@ its value and source (`explicit`, `restored`, `configured`, `default`,
 `absent`); model metadata includes display/provider names, advertised variants
 and an unavailable flag without replacing a missing model. Inputs use the last
 loaded user message and primary agents in configured-default order. Context is
-never copied into the draft, so unsent explicit choices win.
+never copied into the draft, so unsent explicit choices win. An absent catalog
+means unknown availability; only a loaded catalog can establish that a model is
+unavailable. Unknown catalog metadata also preserves a restored/explicit
+variant; validation and model-choice clearing require loaded negative
+membership. The projection's `applies` and `input` describe mode applicability
+and exact wire choices: shell omits variant while retaining the draft's
+normal-mode choice.
 
 `chooseAgent`, `chooseModel` and `chooseVariant` return next drafts for the
 existing session-keyed writer. Choosing an agent applies its configured choices;
@@ -78,6 +84,31 @@ list (max 10) after a successful send, using the submission's captured model.
 putting additions first (max 50; a full list keeps existing favourites). These
 helpers own no persistence: callers save `models.recent` and `models.favourite`
 through the existing host-sidecar preferences RPC.
+
+`modelGroups(catalog, favourites, recent, current)` supplies retrieval groups
+for model pickers: favourites, recent minus favourites, then providers with
+models newest first. Deprecated models appear only when
+favourite/recent/current; unavailable references never invent catalog entries.
+`modelKey` preserves exact provider/model pair identity, including slashes in
+IDs. Neither helper owns UI, networking or persistence.
+
+`createComposerSelection({draft, change, context, connection, load, prefs, factory})`
+owns composer catalogs and intents without a UI framework. Its StateFactory
+notification uses the same revision pattern as `createDrafts`: owner-current
+snapshots expose capability/loading/error/last-good data even before a framework
+publishes its revision. `connect()` keys in-flight work to the welcomed
+connection identity, never joining or applying older work; `ready()` follows
+invalidation and waits for current work. Refresh errors retain good data and do
+not repeatedly retry on submission. `choose*`, serialized `cycleAgent`,
+`cycleVariant`, serialized `toggleFavourite` and `recordSent` share the existing
+pure helpers. `groups()` returns refs, keys, favourite flags and subtitles (only
+favourite/recent groups). Dispose ends catalog publication and deferred draft
+intents. Captured successful normal sends can still record recency after view
+replacement.
+
+Sidecar state exposes `connectionVersion`, incremented for every welcome,
+including reconnects, so consumers can identify the current connection even if
+reactive batching coalesces a disconnected interval.
 
 `createQuestionForm(request, factory?)` owns the framework-free question steps,
 single/multiple option picks and typed own answers. `answers()` derives the wire

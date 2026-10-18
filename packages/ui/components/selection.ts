@@ -6,6 +6,8 @@ export function selection(input: {
   selected: boolean;
   kind: "selected" | "current" | "pressed" | "candidate";
   candidate?: boolean;
+  /** Keyboard/hover focus without committing the selected pointer. */
+  highlighted?: boolean;
   class?: string;
 }): {
   class: string;
@@ -18,6 +20,7 @@ export function selection(input: {
       input.class,
       "otk-selection-item",
       input.selected || input.candidate ? "is-selected" : "",
+      input.highlighted ? "is-highlighted" : "",
     ].filter(Boolean).join(" "),
     "aria-selected": input.kind === "selected"
       ? (input.selected ? "true" : "false")

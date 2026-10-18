@@ -27,7 +27,7 @@ import { queuedMessages, replyMessages } from "@otk/client";
 import { followViewport } from "./viewport.ts";
 import { highlightingScope } from "../highlight/client.ts";
 import type { Draft, DraftChange } from "./prompt/model.ts";
-import type { PromptPart } from "@otk/protocol";
+import type { PromptProps } from "../registries/prompt.ts";
 import { ownedAction } from "../keyboard/context.tsx";
 export default function SessionView(props: {
   info?: ContentSession;
@@ -53,11 +53,7 @@ export default function SessionView(props: {
   onOlder(): Promise<void>;
   onRetry(): Promise<void>;
   onDraft(value: DraftChange): Draft;
-  onPrompt(
-    parts: PromptPart[],
-    mode: Draft["mode"],
-    agent?: string,
-  ): Promise<void>;
+  onPrompt: PromptProps["onSubmit"];
   onAbort(): Promise<void>;
 }): Element {
   const writeDraft = props.onDraft;
@@ -209,8 +205,8 @@ export default function SessionView(props: {
                 value={props.draft}
                 connected={props.connected}
                 onChange={writeDraft}
-                onSubmit={(parts, mode, agent) =>
-                  props.onPrompt(parts, mode, agent)}
+                onSubmit={(parts, mode, selection) =>
+                  props.onPrompt(parts, mode, selection)}
                 onAbort={() => props.onAbort()}
               />
             </div>

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Element } from "solid-js";
-import type { CommandHub } from "@otk/client";
+import type { CommandHub, PromptChoices, PromptSelection } from "@otk/client";
 import type { Keyboard } from "../keyboard/dispatcher.ts";
 import type { PromptPart } from "@otk/protocol";
 import type { SessionPorts } from "./session.tsx";
 import type { Draft, DraftChange } from "../components/prompt/model.ts";
 import type { CompletionOption } from "../components/prompt/autocomplete.ts";
 
+export type { PromptChoices } from "@otk/client";
 /** Consumer-owned prompt data and operations. Features never import a consumer. */
 export interface PromptProps {
   value: Draft;
@@ -22,7 +23,7 @@ export interface PromptProps {
   onSubmit(
     parts: PromptPart[],
     mode: Draft["mode"],
-    agent?: string,
+    selection: PromptChoices,
   ): Promise<void>;
   onAbort(): Promise<void>;
 }
@@ -38,6 +39,8 @@ export interface PromptContext extends SessionPorts {
   caret(): number;
   focus(): void;
   focused(): boolean;
+  nextSelection(draft?: Draft): PromptSelection;
+  ready(): Promise<void>;
   acceptFiles(files: File[]): Promise<void>;
   fail(error: unknown): void;
 }
@@ -57,13 +60,24 @@ export interface PromptSource {
 }
 /** Feature instances are per mounted prompt and retain their own async lifetime. */
 export interface PromptFeature {
+  ready?(): Promise<void>;
   source?: PromptSource;
   key?(event: KeyboardEvent): boolean;
   paste?(event: ClipboardEvent): void | Promise<void>;
   drop?(files: File[]): void | Promise<void>;
   beforeSubmit?(draft: Draft): boolean | Promise<boolean>;
-  submit?(draft: Draft, parts: PromptPart[]): boolean | Promise<boolean>;
-  submitted?(): void;
+  submit?(
+    draft: Draft,
+    parts: PromptPart[],
+    selection: PromptChoices,
+  ): boolean | Promise<boolean>;
+  submitted?(
+    draft: Draft,
+    selection: PromptChoices,
+    handled: boolean,
+  ): void | Promise<void>;
+  selection?(draft: Draft): PromptSelection;
+  settings?(): Element;
   enabled?(): boolean | undefined;
   label?(): string;
   placeholder?(): string;

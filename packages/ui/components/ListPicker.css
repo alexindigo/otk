@@ -1,0 +1,60 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-picker-content {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 0;
+  outline: none;
+}
+.otk-picker-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow: auto;
+  padding: var(--item-inset);
+}
+.otk-picker-groups h3 {
+  margin: 4px var(--item-inset);
+  color: var(--otk-fg-2);
+  font-size: var(--text-meta);
+  font-weight: 500;
+}
+.otk-picker-row {
+  padding-inline-end: var(--item-inset);
+}
+.otk-picker-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+  text-align: left;
+  padding: 8px 0;
+  background: transparent;
+}
+.otk-picker-option:hover {
+  background: transparent;
+}
+.otk-picker-name {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.otk-picker-name small,
+.otk-picker-tag {
+  color: var(--otk-fg-2);
+  font-size: var(--text-meta);
+  font-weight: 400;
+}
+.otk-picker-tag {
+  margin-inline-start: auto;
+}
+.otk-picker-action {
+  color: var(--otk-fg-2);
+}
+.otk-picker-empty {
+  margin: 4px var(--item-inset);
+  color: var(--otk-fg-2);
+}

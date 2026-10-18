@@ -102,7 +102,13 @@ export {
   registerEditorDialog,
   registerEditorPrompt,
 } from "./features/prompt/editor.tsx";
-export { registerAgentCyclePrompt } from "./features/prompt/agents.tsx";
+export { registerComposerPickers } from "./features/prompt/agents.tsx";
+export { default as ListPicker } from "./components/ListPicker.tsx";
+export type {
+  ListPickerControl,
+  PickerGroup,
+  PickerItem,
+} from "./components/ListPicker.tsx";
 export * from "./keyboard/keys.ts";
 export * from "./keyboard/dispatcher.ts";
 export * from "./keyboard/context.tsx";

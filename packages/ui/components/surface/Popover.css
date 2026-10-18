@@ -5,8 +5,8 @@
 }
 .otk-popover-panel {
   position: absolute;
-  position-area: bottom span-left;
-  position-try-fallbacks: flip-block, flip-inline;
+  position-area: top span-right;
+  position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
   inset: auto;
   margin: 0;
   padding: 0;

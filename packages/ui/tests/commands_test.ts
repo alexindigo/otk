@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { CommandHub } from "@otk/client";
+import { CommandHub, effectiveSelection, emptyDraft } from "@otk/client";
 import { type PromptContext, PromptRegistry } from "../registries/prompt.ts";
 import { registerSlashPrompt } from "../features/prompt/slash.ts";
 import type { CommandOption } from "@otk/protocol";
@@ -75,6 +75,8 @@ Deno.test("registered slash aliases retain canonical native names and MCP source
         params.arguments,
         params.parts,
         params.agent,
+        params.model,
+        params.variant,
       ]);
       return Promise.resolve();
     },
@@ -97,12 +99,23 @@ Deno.test("registered slash aliases retain canonical native names and MCP source
     assertEquals(options[0].command?.name, "probe");
     assertEquals(options[0].command?.source, "mcp");
     assertEquals(options[0].label, "/probe:mcp");
-    await feature.submit!({
-      input: "/shortcut a\nsecond",
-      mode: "normal",
-      chips: [],
-    }, [{ kind: "text", text: "/shortcut a\nsecond" }]);
-    assertEquals(invoked, [["probe", "a\nsecond", [], undefined]]);
+    await feature.submit!(
+      {
+        input: "/shortcut a\nsecond",
+        mode: "normal",
+        chips: [],
+      },
+      [{ kind: "text", text: "/shortcut a\nsecond" }],
+      {
+        agent: "review",
+        model: { provider: "two", model: "chosen" },
+        variant: "high",
+      },
+    );
+    assertEquals(invoked, [["probe", "a\nsecond", [], "review", {
+      provider: "two",
+      model: "chosen",
+    }, "high"]]);
   } finally {
     active = false;
     releases.forEach((release) => release());
@@ -219,5 +232,78 @@ Deno.test("superseded slash catalog failures do not reach the current command or
     );
   } finally {
     consumer.stop();
+  }
+});
+
+Deno.test("palette native slash waits for composer readiness and sends the current projected selection", async () => {
+  const commands = new CommandHub(),
+    prompt = new PromptRegistry(),
+    releases: (() => void)[] = [];
+  let draft = { ...emptyDraft(), agent: "review" }, finish!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    finish = resolve;
+  });
+  const received: unknown[] = [];
+  const model = { provider: "ready", model: "chosen" };
+  const ctx = {
+    commands,
+    own: (release: () => void) => releases.push(release),
+    active: () => true,
+    supports: () => true,
+    sessionID: () => "session",
+    attachments: (parts: unknown[]) => Promise.resolve(parts),
+    act: (action: () => Promise<unknown>) => action(),
+    ready: () => pending,
+    change: (change: (value: typeof draft) => typeof draft) => change(draft),
+    nextSelection: () =>
+      effectiveSelection(draft, {
+        agents: [],
+        catalog: {
+          providers: [{
+            id: "ready",
+            name: "Ready",
+            models: [{
+              id: "chosen",
+              name: "Chosen",
+              status: "active",
+              variants: ["high"],
+              free: false,
+            }],
+          }],
+        },
+      }),
+    rpc: (method: string, params: unknown) =>
+      method === "commands.list"
+        ? Promise.resolve([{ name: "probe", source: "server", aliases: [] }])
+        : (received.push(params), Promise.resolve()),
+    props: { connected: true, value: draft },
+    fail: (error: unknown) => {
+      throw error;
+    },
+  } as unknown as PromptContext;
+  registerSlashPrompt(prompt);
+  try {
+    await prompt.create(ctx)[0].source!.options({
+      start: 0,
+      end: 1,
+      query: "probe",
+    });
+    const sent = commands.run("server.command:probe");
+    await Promise.resolve();
+    assertEquals(received, []);
+    draft = { ...draft, model, variant: "high" } as typeof draft;
+    finish();
+    await sent;
+    assertEquals(received, [{
+      sessionID: "session",
+      command: "probe",
+      arguments: "",
+      agent: "review",
+      model,
+      variant: "high",
+      parts: [],
+    }]);
+  } finally {
+    releases.forEach((release) => release());
   }
 });
