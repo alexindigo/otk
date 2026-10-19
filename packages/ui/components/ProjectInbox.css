@@ -1,13 +1,4 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
-.otk-project-inbox {
-  position: relative;
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  background: var(--otk-bg-side);
-  border-right: 1px solid var(--otk-border);
-}
 .otk-inbox-brand {
   display: flex;
   align-items: center;
@@ -40,9 +31,6 @@
   height: 13px;
 }
 .otk-inbox-scroll {
-  flex: 1;
-  min-height: 0;
-  overflow: auto;
   padding: 0 8px;
 }
 .otk-project-row {
@@ -226,4 +214,11 @@
 }
 .otk-project-inbox[data-collapsed=true] .otk-project-content {
   justify-content: center;
+}
+.otk-project-inbox[data-collapsed=true] .otk-sidebar-commands {
+  padding-inline: 4px;
+}
+.otk-project-inbox[data-collapsed=true] .otk-inbox-search {
+  justify-content: center;
+  padding: 0;
 }

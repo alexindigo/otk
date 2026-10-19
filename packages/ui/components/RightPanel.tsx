@@ -6,6 +6,7 @@ import { createMemo, createSignal, For, Show } from "solid-js";
 import type { CapabilityName, Preferences } from "@otk/protocol";
 import { useUiRegistries } from "../registries/context.tsx";
 import { resizeDrag } from "./resize.ts";
+import SidebarRail from "./SidebarRail.tsx";
 
 /** A feature-agnostic host. Registrations own their content and read public
  * context ports; the panel owns only layout and view selection. */
@@ -32,17 +33,13 @@ export default function RightPanel(props: {
       setError((error as Error).message);
     }
   };
-  return (
-    <aside
-      class="otk-right-panel"
-      aria-label="Right panel"
-      hidden={props.layout.rightCollapsed}
-      style={{ width: `${width()}px` }}
-    >
+  function Views(input: { rail: boolean }) {
+    return (
       <div
-        class="otk-panel-icons"
+        class={input.rail ? "otk-panel-rail-icons" : "otk-panel-icons"}
         role="tablist"
         aria-label="Right panel views"
+        aria-orientation={input.rail ? "vertical" : "horizontal"}
       >
         <For each={views()} keyed={(v) => v.id}>
           {(view) => (
@@ -53,14 +50,15 @@ export default function RightPanel(props: {
                 kind: "selected",
                 selected: active()?.id === view().id,
               })}
-              data-otk-selection="horizontal"
+              data-otk-selection={input.rail ? "vertical" : "horizontal"}
               role="tab"
               title={view().title}
               aria-label={view().title}
               aria-controls="otk-panel-content"
               disabled={!props.ready}
               data-panel-view={view().id}
-              onClick={() => void save({ rightView: view().id })}
+              onClick={() =>
+                void save({ rightView: view().id, rightCollapsed: false })}
             >
               <SelectionContent>
                 <span aria-hidden="true">
@@ -74,80 +72,105 @@ export default function RightPanel(props: {
           )}
         </For>
       </div>
-      <Show when={error()}>
-        <p role="alert" class="otk-error">{error()}</p>
+    );
+  }
+  return (
+    <>
+      <Show when={props.layout.rightCollapsed}>
+        <SidebarRail
+          label="Right panel rail"
+          class="otk-right-rail"
+          side="right"
+          collapsed
+        >
+          <Views rail />
+          <Show when={error()}>
+            <p role="alert" class="otk-error">{error()}</p>
+          </Show>
+        </SidebarRail>
       </Show>
-      <Show
-        when={active()}
-        keyed
-        fallback={<p class="otk-muted">No available views.</p>}
+      <aside
+        class="otk-right-panel"
+        aria-label="Right panel"
+        hidden={props.layout.rightCollapsed}
+        style={{ width: `${width()}px` }}
       >
-        {(view) => (
-          <section
-            id="otk-panel-content"
-            class="otk-panel-content"
-            role="tabpanel"
-            aria-label={view.title}
-          >
-            <h2>{view.title}</h2>
-            <view.component />
-          </section>
-        )}
-      </Show>
-      <div
-        class="otk-panel-resizer"
-        role="separator"
-        aria-label="Right panel width"
-        aria-orientation="vertical"
-        tabindex={props.ready ? 0 : -1}
-        aria-valuemin={280}
-        aria-valuemax={480}
-        aria-valuenow={width()}
-        onKeyDown={(event) => {
-          if (
-            !props.ready ||
-            !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
-          ) return;
-          event.preventDefault();
-          const next = event.key === "Home"
-            ? 280
-            : event.key === "End"
-            ? 480
-            : Math.max(
-              280,
-              Math.min(480, width() + (event.key === "ArrowLeft" ? 8 : -8)),
-            );
-          void save({ rightWidth: next });
-        }}
-        onPointerDown={(event) => {
-          if (!props.ready) return;
-          event.currentTarget.setPointerCapture(event.pointerId);
-          drag = resizeDrag(width(), event.clientX, -1, 280, 480);
-          setDragWidth(width());
-        }}
-        onPointerMove={(event) => {
-          if (
-            !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
-          ) return;
-          setDragWidth(drag(event.clientX));
-        }}
-        onPointerUp={(event) => {
-          if (
-            !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
-          ) return;
-          const gesture = drag;
-          event.currentTarget.releasePointerCapture(event.pointerId);
-          void save({ rightWidth: gesture(event.clientX) }).finally(() => {
-            if (drag !== gesture) return;
+        <Views rail={false} />
+        <Show when={error()}>
+          <p role="alert" class="otk-error">{error()}</p>
+        </Show>
+        <Show
+          when={active()}
+          keyed
+          fallback={<p class="otk-muted">No available views.</p>}
+        >
+          {(view) => (
+            <section
+              id="otk-panel-content"
+              class="otk-panel-content"
+              role="tabpanel"
+              aria-label={view.title}
+            >
+              <h2>{view.title}</h2>
+              <view.component />
+            </section>
+          )}
+        </Show>
+        <div
+          class="otk-panel-resizer"
+          role="separator"
+          aria-label="Right panel width"
+          aria-orientation="vertical"
+          tabindex={props.ready ? 0 : -1}
+          aria-valuemin={280}
+          aria-valuemax={480}
+          aria-valuenow={width()}
+          onKeyDown={(event) => {
+            if (
+              !props.ready ||
+              !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+            ) return;
+            event.preventDefault();
+            const next = event.key === "Home"
+              ? 280
+              : event.key === "End"
+              ? 480
+              : Math.max(
+                280,
+                Math.min(480, width() + (event.key === "ArrowLeft" ? 8 : -8)),
+              );
+            void save({ rightWidth: next });
+          }}
+          onPointerDown={(event) => {
+            if (!props.ready) return;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            drag = resizeDrag(width(), event.clientX, -1, 280, 480);
+            setDragWidth(width());
+          }}
+          onPointerMove={(event) => {
+            if (
+              !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
+            ) return;
+            setDragWidth(drag(event.clientX));
+          }}
+          onPointerUp={(event) => {
+            if (
+              !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
+            ) return;
+            const gesture = drag;
+            event.currentTarget.releasePointerCapture(event.pointerId);
+            void save({ rightWidth: gesture(event.clientX) }).finally(() => {
+              if (drag !== gesture) return;
+              drag = undefined;
+              setDragWidth(undefined);
+            });
+          }}
+          onPointerCancel={() => {
             drag = undefined;
             setDragWidth(undefined);
-          });
-        }}
-        onPointerCancel={() => {
-          drag = undefined;
-          setDragWidth(undefined);
-        }}
-      />
-    </aside>
+          }}
+        />
+      </aside>
+    </>
   );
 }

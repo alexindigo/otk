@@ -60,7 +60,13 @@ for both accessibility settings, including preference restoration after reload.
 Selection's shared pointer/underline CSS contract has unit coverage and
 real-browser geometry coverage in full and reduced colours. Selected/current
 chrome controls must declare the shared orientation primitive; negative fixtures
-reject a selected button that bypasses it. Browser geometry checks span
+reject a selected button that bypasses it. Browser geometry checks span the
+actual rendered orientations. Static checks accept literal attributes, literal
+JSX expressions and simple-predicate ternaries only when both complete branches
+are literal `vertical`/`horizontal` values. Unproven expressions, arbitrary
+variables, invalid/missing branches, fallbacks and function-valued expressions
+fail closed; fixtures exercise accepted and rejected forms. Shared `selection()`
+still exclusively owns selected state and ARIA. Geometry checks span
 Dark/Linen/Stone, full/rail, right-open/closed and reduced colours; the two
 shell corner toggles retain their bounds and remain hit-testable.
 Title/navigation assertions follow the selected breadcrumb; full connection

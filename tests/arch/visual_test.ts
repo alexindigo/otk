@@ -174,11 +174,49 @@ Deno.test("continuous-motion owners require shared suppression and arbitrary ani
   }
 });
 
+/** Conservative syntax proof: accept only forms whose complete value set is
+ * literal orientations. Unknown expressions fail closed, even if well typed. */
+function selectionOrientation(tag: string): boolean {
+  const value = tag.match(
+    /\bdata-otk-selection\s*=\s*("[^"]*"|'[^']*'|\{[^{}]*\})/,
+  )?.[1];
+  if (!value) return false;
+  const literal = `(?:"(?:vertical|horizontal)"|'(?:vertical|horizontal)')`;
+  if (new RegExp(`^${literal}$`).test(value)) return true;
+  if (!value.startsWith("{")) return false;
+  const expression = value.slice(1, -1).trim();
+  if (new RegExp(`^${literal}$`).test(expression)) return true;
+  // A simple predicate (including a zero-argument read) selects two literals.
+  // Do not accept arrow functions, comma/boolean fallbacks or partial branches.
+  const predicate = String.raw`!?\s*[\w$]+(?:\.[\w$]+)*(?:\(\))?`;
+  return new RegExp(
+    `^${predicate}\\s*\\?\\s*${literal}\\s*:\\s*${literal}$`,
+  ).test(expression);
+}
+/** JSX expressions may contain > (comparisons/arrows), not a tag boundary. */
+function* selectionTags(source: string): Generator<string> {
+  for (const match of source.matchAll(/<(?:button|a)\b/g)) {
+    let depth = 0, quote = "";
+    for (let i = match.index + match[0].length; i < source.length; i++) {
+      const char = source[i];
+      if (quote) {
+        if (char === "\\") i++;
+        else if (char === quote) quote = "";
+      } else if ("\"'`".includes(char)) quote = char;
+      else if (char === "{") depth++;
+      else if (char === "}") depth--;
+      else if (char === ">" && depth === 0) {
+        yield source.slice(match.index, i + 1);
+        break;
+      }
+    }
+  }
+}
 function selectionErrors(source: string): string[] {
-  return [...source.matchAll(/<(?:button|a)\b[^>]*(?:\{[^}]*\}[^>]*)*>/g)]
-    .filter(([tag]) =>
+  return [...selectionTags(source)]
+    .filter((tag) =>
       /\b(?:aria-selected|aria-current|aria-pressed|data-selected)=|\.\.\.selection\(/
-        .test(tag) && !/data-otk-selection="(?:vertical|horizontal)"/.test(tag)
+        .test(tag) && !selectionOrientation(tag)
     )
     .map(() => "selected chrome item bypasses the shared selection primitive");
 }
@@ -215,6 +253,48 @@ Deno.test("chrome selected/current states opt into the shared orientation primit
     ),
     [],
   );
+});
+
+Deno.test("chrome orientation expressions prove every possible result is a literal orientation", () => {
+  const item = (attribute: string) =>
+    `<button ${attribute} {...selection({ kind: "selected", selected })}>`;
+  for (
+    const valid of [
+      'data-otk-selection="horizontal"',
+      "data-otk-selection='vertical'",
+      'data-otk-selection={"vertical"}',
+      "data-otk-selection={'horizontal'}",
+      'data-otk-selection={input.rail ? "vertical" : "horizontal"}',
+      "data-otk-selection={props.expanded ? 'horizontal' : 'vertical'}",
+      'data-otk-selection={!collapsed() ? "horizontal" : "vertical"}',
+      'data-otk-selection={rail ? "vertical" : "vertical"}',
+    ]
+  ) assertEquals(selectionErrors(item(valid)), [], valid);
+  for (
+    const invalid of [
+      "",
+      'data-otk-selection="diagonal"',
+      'data-otk-selection={""}',
+      "data-otk-selection={orientation}",
+      "data-otk-selection={props.orientation}",
+      'data-otk-selection={rail ? "vertical" : "diagonal"}',
+      'data-otk-selection={rail ? "diagonal" : "horizontal"}',
+      'data-otk-selection={rail ? "vertical" : undefined}',
+      'data-otk-selection={rail ? undefined : "horizontal"}',
+      'data-otk-selection={rail ? "vertical" : other}',
+      'data-otk-selection={rail ? other : "horizontal"}',
+      'data-otk-selection={rail ? "vertical" :}',
+      'data-otk-selection={orientation || "vertical"}',
+      'data-otk-selection={rail ? "vertical" : "horizontal", other}',
+      'data-otk-selection={() => rail ? "vertical" : "horizontal"}',
+      'data-otk-selection={rail ? "vertical" : nested ? "horizontal" : other}',
+      "data-otk-selection={`vertical${suffix}`}",
+    ]
+  ) {
+    assertEquals(selectionErrors(item(invalid)), [
+      "selected chrome item bypasses the shared selection primitive",
+    ], invalid);
+  }
 });
 
 function resizeErrors(source: string): string[] {

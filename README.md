@@ -20,20 +20,21 @@ another operator overlay. Unknown nodes and invalid types fail loudly.
 
 The production Solid UI merges projects across connected servers into an inbox.
 Each project has an always-visible roll-up light, unread name and visit clock;
-the column collapses to a status-light rail. Activity restores inactive
-projects. Add servers and path templates in Settings, and add empty or scanned
-projects through Add project. The centre provides ordered task tabs,
-always-visible active-session phantom tabs and a single replaceable session
-preview. Pin, double-click or send in a phantom to make a task. Task breadcrumbs
-switch sessions and their helpers; the meter shows reported token usage and
-whole-session reported cost. The collapsible right panel hosts
-feature-registered views; Sessions shows the selected project's task-grouped
-parent/child tree with status lights and title search. Click to preview or
-double-click to make a task. Panel width (280–480px) and selected view persist
-with its collapsed state per user. Open a session to stream its transcript, send
-prompts, or press Esc twice to interrupt. Message history for the previous
-session is released on switching. Web assets and fonts are bundled locally; no
-dev server or CDN is used.
+the column collapses to a status-light rail that keeps Search in place above the
+project lights. Activity restores inactive projects. Add servers and path
+templates in Settings, and add empty or scanned projects through Add project.
+The centre provides ordered task tabs, always-visible active-session phantom
+tabs and a single replaceable session preview. Pin, double-click or send in a
+phantom to make a task. Task breadcrumbs switch sessions and their helpers; the
+meter shows reported token usage and whole-session reported cost. The
+collapsible right panel hosts feature-registered views; its collapsed rail keeps
+their icons available and clicking an icon opens that view. Sessions shows the
+selected project's task-grouped parent/child tree with status lights and title
+search. Click to preview or double-click to make a task. Panel width (280–480px)
+and selected view persist with its collapsed state per user. Open a session to
+stream its transcript, send prompts, or press Esc twice to interrupt. Message
+history for the previous session is released on switching. Web assets and fonts
+are bundled locally; no dev server or CDN is used.
 
 Pending permissions for the open session and its descendants take over the
 composer. Allow once, confirm the displayed future grant patterns for Allow

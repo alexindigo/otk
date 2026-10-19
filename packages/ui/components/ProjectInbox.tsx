@@ -22,6 +22,7 @@ import {
 } from "./ChromeIcons.tsx";
 import { ownedAction, useCommandPorts } from "../keyboard/context.tsx";
 import Menu from "./surface/Menu.tsx";
+import SidebarRail from "./SidebarRail.tsx";
 export interface ProjectRow extends InboxProject {
   sidecarId: string;
   label: string;
@@ -149,182 +150,187 @@ export default function ProjectInbox(props: {
     );
   }
   return (
-    <aside
+    <SidebarRail
       class="otk-project-inbox"
-      aria-label="Projects"
-      data-collapsed={collapsed() ? "true" : "false"}
-      style={{ width: `${width()}px` }}
-    >
-      <header class="otk-inbox-brand">
-        <strong>OTK</strong>
-        <button
-          type="button"
-          class="otk-icon-button otk-add-project"
-          aria-label="Add project"
-          title="Add project"
-          onClick={() =>
-            void commands.run("dialog.open", { id: "add-project" })}
-        >
-          <PlusIcon />
-        </button>
-      </header>
-      <Show when={!collapsed()}>
+      label="Projects"
+      side="left"
+      collapsed={collapsed()}
+      width={width()}
+      bodyClass="otk-inbox-scroll"
+      header={
+        <div class="otk-inbox-brand">
+          <strong>OTK</strong>
+          <button
+            type="button"
+            class="otk-icon-button otk-add-project"
+            aria-label="Add project"
+            title="Add project"
+            onClick={() =>
+              void commands.run("dialog.open", { id: "add-project" })}
+          >
+            <PlusIcon />
+          </button>
+        </div>
+      }
+      leading={
         <nav class="otk-sidebar-commands" aria-label="Search">
           <button
             type="button"
             class="otk-inbox-search"
+            aria-label="Search commands"
             title={commandTitle("palette.open", "Search commands")}
             onClick={() => void commands.run("palette.open")}
           >
-            <SearchIcon /> Search
+            <SearchIcon />
+            <Show when={!collapsed()}>Search</Show>
           </button>
         </nav>
-      </Show>
-      <div class="otk-inbox-scroll">
-        <For each={rows()} keyed={(p) => `${p.sidecarId}/${p.directory}`}>
-          {(p) => <Row project={p()} />}
-        </For>
-        <Show when={!collapsed() && props.projects.some((p) => p.inactive)}>
+      }
+      footer={
+        <footer class="otk-inbox-footer">
           <button
             type="button"
-            class="otk-inactive-toggle"
-            aria-expanded={inactiveOpen() ? "true" : "false"}
-            onClick={() => setInactiveOpen(!inactiveOpen())}
+            class="otk-icon-button otk-settings-entry"
+            aria-label="Settings"
+            title="Settings and server connections"
+            onClick={() => void commands.run("settings.open")}
           >
-            <ChevronIcon />
-            <span>Inactive</span>
-            <span class="otk-inbox-rule" />
-            <span>({props.projects.filter((p) => p.inactive).length})</span>
+            <SettingsIcon />
           </button>
-          <Show when={inactiveOpen()}>
-            <section
-              aria-label="Inactive projects"
-              class="otk-inactive-projects"
-            >
-              <For
-                each={props.projects.filter((p) => p.inactive)}
-                keyed={(p) => `${p.sidecarId}/${p.directory}`}
-              >
-                {(p) => <Row project={p()} />}
-              </For>
-            </section>
+          <button
+            type="button"
+            class="otk-icon-button otk-keys-entry"
+            aria-label="Keyboard shortcuts"
+            title={commandTitle("help.keys", "Keyboard shortcuts")}
+            onClick={() => void commands.run("help.keys")}
+          >
+            <KeyboardIcon />
+          </button>
+          <div class="otk-server-connections" aria-label="Server connections">
+            <For each={props.servers} keyed={(s) => s.id}>
+              {(s) => (
+                <section class="otk-server-connection">
+                  <button
+                    type="button"
+                    class="otk-server-status"
+                    data-connection={s().id}
+                    aria-label={`${s().label}: ${s().status}; agent service ${s().harness}`}
+                    title={`${s().label}: ${s().status}; agent service ${s().harness}${
+                      s().error ? `; ${s().error}` : ""
+                    }`}
+                    onClick={() => void commands.run("settings.open")}
+                  >
+                    <StatusLight
+                      small
+                      label={`${s().label}: ${s().status}; agent service ${s().harness}`}
+                      state={s().status === "connected" &&
+                          s().harness === "connected"
+                        ? "finished"
+                        : s().error || s().status === "login required" ||
+                            s().status === "setup required"
+                        ? "blocked"
+                        : "idle"}
+                    />
+                    <span>{s().label}</span>
+                  </button>
+                  <Show when={s().error}>
+                    <p class="otk-error" role="alert">{s().error}</p>
+                  </Show>
+                </section>
+              )}
+            </For>
+          </div>
+          <Show when={error()}>
+            <p role="alert" class="otk-error">{error()}</p>
           </Show>
-        </Show>
-        <Show when={!collapsed() && !props.projects.length}>
-          <p class="otk-muted otk-empty">Add a project to get started.</p>
-        </Show>
-      </div>
-      <footer class="otk-inbox-footer">
-        <button
-          type="button"
-          class="otk-icon-button otk-settings-entry"
-          aria-label="Settings"
-          title="Settings and server connections"
-          onClick={() => void commands.run("settings.open")}
-        >
-          <SettingsIcon />
-        </button>
-        <button
-          type="button"
-          class="otk-icon-button otk-keys-entry"
-          aria-label="Keyboard shortcuts"
-          title={commandTitle("help.keys", "Keyboard shortcuts")}
-          onClick={() => void commands.run("help.keys")}
-        >
-          <KeyboardIcon />
-        </button>
-        <div class="otk-server-connections" aria-label="Server connections">
-          <For each={props.servers} keyed={(s) => s.id}>
-            {(s) => (
-              <section class="otk-server-connection">
-                <button
-                  type="button"
-                  class="otk-server-status"
-                  data-connection={s().id}
-                  aria-label={`${s().label}: ${s().status}; agent service ${s().harness}`}
-                  title={`${s().label}: ${s().status}; agent service ${s().harness}${
-                    s().error ? `; ${s().error}` : ""
-                  }`}
-                  onClick={() => void commands.run("settings.open")}
-                >
-                  <StatusLight
-                    small
-                    label={`${s().label}: ${s().status}; agent service ${s().harness}`}
-                    state={s().status === "connected" &&
-                        s().harness === "connected"
-                      ? "finished"
-                      : s().error || s().status === "login required" ||
-                          s().status === "setup required"
-                      ? "blocked"
-                      : "idle"}
-                  />
-                  <span>{s().label}</span>
-                </button>
-                <Show when={s().error}>
-                  <p class="otk-error" role="alert">{s().error}</p>
-                </Show>
-              </section>
-            )}
-          </For>
-        </div>
-        <Show when={error()}>
-          <p role="alert" class="otk-error">{error()}</p>
-        </Show>
-      </footer>
-      <Show when={!collapsed()}>
-        <div
-          class="otk-inbox-resizer"
-          role="separator"
-          aria-label="Project column width"
-          aria-orientation="vertical"
-          tabindex="0"
-          aria-valuemin={200}
-          aria-valuemax={360}
-          aria-valuenow={width()}
-          onKeyDown={(event) => {
-            if (
-              !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
-            ) return;
-            event.preventDefault();
-            const next = event.key === "Home"
-              ? 200
-              : event.key === "End"
-              ? 360
-              : Math.max(
-                200,
-                Math.min(360, width() + (event.key === "ArrowLeft" ? -8 : 8)),
-              );
-            void save({ leftWidth: next });
-          }}
-          onPointerDown={(event) => {
-            event.currentTarget.setPointerCapture(event.pointerId);
-            drag = resizeDrag(width(), event.clientX, 1, 200, 360);
-            setDragWidth(width());
-          }}
-          onPointerMove={(event) => {
-            if (
-              !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
-            ) return;
-            setDragWidth(drag(event.clientX));
-          }}
-          onPointerUp={(event) => {
-            if (
-              !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
-            ) return;
-            const gesture = drag;
-            event.currentTarget.releasePointerCapture(event.pointerId);
-            void save({ leftWidth: gesture(event.clientX) }).finally(() => {
-              if (drag !== gesture) return;
+        </footer>
+      }
+      resizer={
+        <Show when={!collapsed()}>
+          <div
+            class="otk-inbox-resizer"
+            role="separator"
+            aria-label="Project column width"
+            aria-orientation="vertical"
+            tabindex="0"
+            aria-valuemin={200}
+            aria-valuemax={360}
+            aria-valuenow={width()}
+            onKeyDown={(event) => {
+              if (
+                !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
+              ) return;
+              event.preventDefault();
+              const next = event.key === "Home"
+                ? 200
+                : event.key === "End"
+                ? 360
+                : Math.max(
+                  200,
+                  Math.min(360, width() + (event.key === "ArrowLeft" ? -8 : 8)),
+                );
+              void save({ leftWidth: next });
+            }}
+            onPointerDown={(event) => {
+              event.currentTarget.setPointerCapture(event.pointerId);
+              drag = resizeDrag(width(), event.clientX, 1, 200, 360);
+              setDragWidth(width());
+            }}
+            onPointerMove={(event) => {
+              if (
+                !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
+              ) return;
+              setDragWidth(drag(event.clientX));
+            }}
+            onPointerUp={(event) => {
+              if (
+                !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
+              ) return;
+              const gesture = drag;
+              event.currentTarget.releasePointerCapture(event.pointerId);
+              void save({ leftWidth: gesture(event.clientX) }).finally(() => {
+                if (drag !== gesture) return;
+                drag = undefined;
+                setDragWidth(undefined);
+              });
+            }}
+            onPointerCancel={() => {
               drag = undefined;
               setDragWidth(undefined);
-            });
-          }}
-          onPointerCancel={() => {
-            drag = undefined;
-            setDragWidth(undefined);
-          }}
-        />
+            }}
+          />
+        </Show>
+      }
+    >
+      <For each={rows()} keyed={(p) => `${p.sidecarId}/${p.directory}`}>
+        {(p) => <Row project={p()} />}
+      </For>
+      <Show when={!collapsed() && props.projects.some((p) => p.inactive)}>
+        <button
+          type="button"
+          class="otk-inactive-toggle"
+          aria-expanded={inactiveOpen() ? "true" : "false"}
+          onClick={() => setInactiveOpen(!inactiveOpen())}
+        >
+          <ChevronIcon />
+          <span>Inactive</span>
+          <span class="otk-inbox-rule" />
+          <span>({props.projects.filter((p) => p.inactive).length})</span>
+        </button>
+        <Show when={inactiveOpen()}>
+          <section aria-label="Inactive projects" class="otk-inactive-projects">
+            <For
+              each={props.projects.filter((p) => p.inactive)}
+              keyed={(p) => `${p.sidecarId}/${p.directory}`}
+            >
+              {(p) => <Row project={p()} />}
+            </For>
+          </section>
+        </Show>
       </Show>
-    </aside>
+      <Show when={!collapsed() && !props.projects.length}>
+        <p class="otk-muted otk-empty">Add a project to get started.</p>
+      </Show>
+    </SidebarRail>
   );
 }

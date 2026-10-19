@@ -197,6 +197,15 @@ preference. `registerSessionsPanel` contributes the project-local, task-grouped
 searchable parent/child tree. Its feature adapter reads common `ShellPorts`
 resources; the panel knows no views.
 
+`SidebarRail` is the shared frame for both collapsed sides: one 48px rail, 52px
+corner reservation, leading controls, scrolling body and optional footer.
+ProjectInbox also uses this frame when expanded. Search stays in its expanded
+vertical slot above the project lights; collapsing never moves their y
+positions. The right rail stacks available registered panel icons with vertical
+selection; activating one atomically selects and opens that panel through
+`onLayout`. Its expanded panel remains mounted while hidden, preserving view
+lifetime.
+
 `Shell({ theme, api })` composes the reusable three-region shell with selected
 UI registrations. `ProjectInbox` renders the shared client projection in its
 column and 48px rail; it does not recompute roll-ups, unread or ageing. Width

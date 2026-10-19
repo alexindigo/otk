@@ -30,6 +30,18 @@ Deno.test("registered panel views, width and collapsed state persist in host pre
   const f = await inboxBrowserFixture(root, [], {}, assets),
     b = await Cdp.launch(root),
     c = new WsClient(f.url);
+  const capture = async (state: string) => {
+    const shots = Deno.env.get("OTK_RAIL_SHOTS");
+    if (!shots) return;
+    await Deno.mkdir(shots, { recursive: true });
+    for (
+      const [theme, name] of [["otk-dark", "dark"], ["otk-light", "light"]]
+    ) {
+      await c.rpc("prefs.set", { key: "theme", value: theme });
+      await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
+      await b.screenshot(join(shots, `${state}-${name}.png`));
+    }
+  };
   try {
     await c.connect();
     await b.goto(f.url);
@@ -106,6 +118,54 @@ Deno.test("registered panel views, width and collapsed state persist in host pre
     );
     await b.click(".otk-panel-collapse");
     await b.poll("document.querySelector('.otk-right-panel').hidden");
+    await b.poll(
+      "!!document.querySelector('.otk-right-rail [data-panel-view=external-view]:not(:disabled)')",
+    );
+    await capture("external-rail");
+    assertEquals(
+      await b.evaluate(
+        "[...document.querySelectorAll('.otk-right-rail [data-panel-view]')].map(e=>e.dataset.panelView)",
+      ),
+      ["sessions", "external-view"],
+    );
+    assert(
+      await b.evaluate(
+        "(()=>{const rows=[...document.querySelectorAll('.otk-right-rail [data-panel-view]')].map(e=>e.getBoundingClientRect());return rows[0].y>=52 && rows[1].y>=rows[0].bottom && Math.abs(rows[0].x-rows[1].x)<.5})()",
+      ),
+    );
+    await b.click('.otk-right-rail [data-panel-view="sessions"]');
+    await b.poll(
+      "!document.querySelector('.otk-right-panel').hidden && document.querySelector('.otk-panel-content')?.getAttribute('aria-label')==='Sessions'",
+    );
+    await b.click(".otk-panel-collapse");
+    await b.poll(
+      "!!document.querySelector('.otk-right-rail [data-panel-view=external-view]')",
+    );
+    await b.evaluate(
+      "document.querySelector('.otk-right-rail [data-panel-view=external-view]').focus()",
+    );
+    // Native button activation needs Chromium's character event, unlike a
+    // keydown-owned application command. Keep this recipe local to the test.
+    await b.send("Input.dispatchKeyEvent", {
+      type: "keyDown",
+      key: "Enter",
+      code: "Enter",
+      windowsVirtualKeyCode: 13,
+      text: "\r",
+      unmodifiedText: "\r",
+    });
+    await b.send("Input.dispatchKeyEvent", {
+      type: "keyUp",
+      key: "Enter",
+      code: "Enter",
+      windowsVirtualKeyCode: 13,
+    });
+    await b.poll(
+      "!document.querySelector('.otk-right-panel').hidden && !!document.querySelector('[data-external-view]')",
+    );
+    await capture("external-open");
+    await b.click(".otk-panel-collapse");
+    await b.poll("!!document.querySelector('.otk-right-rail')");
     await b.reload();
     await b.poll(
       "document.querySelector('[aria-label=\"Open right panel\"]:not(:disabled)') && document.querySelector('.otk-right-panel').hidden",

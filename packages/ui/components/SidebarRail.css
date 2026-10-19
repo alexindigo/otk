@@ -1,0 +1,27 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-sidebar-rail {
+  position: relative;
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--otk-bg-side);
+}
+.otk-sidebar-rail[data-side=left] {
+  border-right: 1px solid var(--otk-border);
+}
+.otk-sidebar-rail[data-side=right] {
+  border-left: 1px solid var(--otk-border);
+}
+.otk-sidebar-rail[data-collapsed=true] {
+  width: 48px;
+}
+.otk-rail-header {
+  height: 52px;
+  flex: none;
+}
+.otk-rail-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}

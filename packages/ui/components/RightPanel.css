@@ -49,3 +49,21 @@
   outline: 2px solid var(--otk-action-focus);
   outline-offset: -2px;
 }
+.otk-panel-rail-icons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--chrome-gap);
+  padding: 0 4px;
+}
+.otk-panel-rail-icons .otk-icon-button {
+  width: 100%;
+  height: 32px;
+  --selection-padding: 0;
+  padding-inline-end: var(--item-inset);
+}
+.otk-panel-rail-icons .otk-selection-content {
+  justify-content: center;
+}
+.otk-panel-rail-icons .otk-selection-content > span {
+  display: flex;
+}
