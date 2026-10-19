@@ -10,6 +10,7 @@ import {
   type ProjectSelection,
   type Selection,
   sessionTree,
+  usageCost,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
 import { ChevronIcon, PlusIcon, SearchIcon } from "./ChromeIcons.tsx";
@@ -20,6 +21,7 @@ export default function ProjectSessions(props: {
   entries: MergedEntry[];
   project?: ProjectSelection;
   selected?: Selection;
+  cost?(sessionID: string): number | undefined;
   connected(id: string): boolean;
   inbox(id: string): InboxSnapshot;
   onOpen(entry: MergedEntry): void | Promise<unknown>;
@@ -51,6 +53,10 @@ export default function ProjectSessions(props: {
     props.entries.find((e) =>
       e.sidecarId === props.project?.sidecarId && e.id === id
     )!;
+  const costLabel = (id: string) => {
+    const cost = props.cost?.(id);
+    return cost === undefined ? undefined : usageCost(cost);
+  };
   return (
     <nav
       class="otk-project-sessions"
@@ -123,6 +129,10 @@ export default function ProjectSessions(props: {
                             row().parentID
                               ? `, child of ${merged(row().parentID!).title}`
                               : ""
+                          }${
+                            costLabel(row().session.id) === undefined
+                              ? ""
+                              : `, session cost ${costLabel(row().session.id)}`
                           }`}
                           onClick={() =>
                             run(open(merged(row().session.id)))}
@@ -185,6 +195,15 @@ export default function ProjectSessions(props: {
                                 aria-label="Session error"
                               >
                                 Error
+                              </span>
+                            </Show>
+                            <Show when={costLabel(row().session.id)}>
+                              <span
+                                class="otk-session-cost"
+                                aria-hidden="true"
+                                title="Session cost"
+                              >
+                                {costLabel(row().session.id)}
                               </span>
                             </Show>
                           </SelectionContent>

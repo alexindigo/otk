@@ -69,9 +69,11 @@ in the view. Display's persisted Show cost toggle defaults on; turning it off
 hides all footer/detail and context-meter cost figures while retaining tokens.
 Popover continues to own native anchoring, dismissal and keyboard focus return.
 ShellPorts exposes the same framework-free usage owner to registered panel
-adapters, so session-row costs need only bind its load/get ports and present
-total.cost. Footers and meter never sum transcript pages; unavailable metadata
-stays unknown while content remains usable.
+adapters. The Sessions adapter binds its load/get ports for the selected
+project's sessions; rows present total.cost as quiet trailing metadata using the
+shared cost formatter, including known zero. Show cost also hides these amounts
+and their accessible labels. Footers, rows and meter never sum transcript pages;
+unavailable metadata stays unknown while content remains usable.
 
 `prompt.register({ id, create(context) })` installs a per-prompt feature.
 `PromptContext` injects selection/caret/focus operations, an active-lifetime

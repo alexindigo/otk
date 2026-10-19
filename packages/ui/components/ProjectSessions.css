@@ -110,3 +110,14 @@
   height: 1px;
   background: var(--otk-border);
 }
+.otk-project-sessions .otk-row-title {
+  flex: 1;
+  min-width: 0;
+}
+.otk-session-cost {
+  flex: none;
+  color: var(--otk-fg-3);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
