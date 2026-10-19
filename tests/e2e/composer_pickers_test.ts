@@ -16,6 +16,8 @@ import { Cdp as Browser } from "../support/cdp.ts";
 import { selectionGeometry } from "../support/selection-geometry.ts";
 import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
+import { mapMessage, Opencode1Adapter } from "@otk/harness-opencode1";
+import { cfg } from "../support/config.ts";
 
 const input = "textarea[name=prompt]";
 const modelSearch = ".otk-model-picker input[type=search]";
@@ -84,10 +86,78 @@ async function footerGeometry(b: Cdp) {
   assertEquals(chevrons.length, 3);
   assert(chevrons.every((item) => item.delta < .5), JSON.stringify(chevrons));
   assertEquals(chevrons.map((item) => item.label), [
-    "Agent: reviewer",
-    "Model: Scripted with variants",
-    "Variant: high",
+    "Agent: Reviewer",
+    "Model: Second fixture provider Scripted with variants",
+    "Variant: High",
   ]);
+  const model = await b.evaluate<{
+    provider: string;
+    name: string;
+    gap: number;
+    centre: number;
+    width: number;
+    providerFull: boolean;
+    modelFull: boolean;
+    muted: boolean;
+    foreground: boolean;
+  }>(
+    `(()=>{const t=document.querySelector('.otk-model-picker > button'),p=t.querySelector('.otk-composer-provider'),m=t.querySelector('.otk-composer-model-name'),label=t.querySelector('.otk-composer-model'),a=p.getBoundingClientRect(),b=m.getBoundingClientRect(),probe=document.createElement('span');probe.style.color='var(--otk-fg-2)';document.body.append(probe);const muted=getComputedStyle(p).color===getComputedStyle(probe).color;probe.remove();return {provider:p.textContent,name:m.textContent,gap:b.left-a.right,centre:Math.abs(a.y+a.height/2-b.y-b.height/2),width:label.getBoundingClientRect().width,providerFull:p.scrollWidth<=p.clientWidth,modelFull:m.scrollWidth<=m.clientWidth,muted,foreground:getComputedStyle(m).color===getComputedStyle(t).color}})()`,
+  );
+  assertEquals(model.provider, "Second fixture provider");
+  assertEquals(model.name, "Scripted with variants");
+  assertEquals(model.gap, 8);
+  assert(
+    model.centre < .5 && model.providerFull && model.modelFull && model.muted &&
+      model.foreground,
+    JSON.stringify(model),
+  );
+}
+
+async function footerPressure(b: Cdp, shots?: string, theme = "dark") {
+  try {
+    for (
+      const [width, state] of [[1180, "provider"], [1060, "model"]] as const
+    ) {
+      await b.send("Emulation.setDeviceMetricsOverride", {
+        width,
+        height: 657,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      await b.poll(`innerWidth===${width}`);
+      const geometry = await b.evaluate<{
+        providerTruncated: boolean;
+        modelTruncated: boolean;
+        centres: number[];
+        inside: boolean;
+        overflow: boolean;
+      }>(
+        `(async()=>{await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);const footer=document.querySelector('.otk-prompt-actions'),r=footer.getBoundingClientRect(),p=document.querySelector('.otk-composer-provider'),m=document.querySelector('.otk-composer-model-name'),buttons=[...footer.querySelectorAll(':scope > button,.otk-prompt-context > .otk-popover > button')],rects=buttons.map(el=>el.getBoundingClientRect());return {providerTruncated:p.scrollWidth>p.clientWidth,modelTruncated:m.scrollWidth>m.clientWidth,centres:rects.map(b=>b.y+b.height/2),inside:rects.every(b=>b.left>=r.left-.5&&b.right<=r.right+.5),overflow:footer.scrollWidth>footer.clientWidth}})()`,
+      );
+      assertEquals(
+        geometry.providerTruncated,
+        true,
+        JSON.stringify({ width, geometry }),
+      );
+      assertEquals(
+        geometry.modelTruncated,
+        state === "model",
+        JSON.stringify({ width, geometry }),
+      );
+      assertEquals(geometry.centres.length, 6);
+      assert(
+        Math.max(...geometry.centres) - Math.min(...geometry.centres) < .5 &&
+          geometry.inside && !geometry.overflow,
+        JSON.stringify({ width, geometry }),
+      );
+      if (shots) {
+        await b.screenshot(join(shots, `P4-r2-${theme}-pressure-${state}.png`));
+      }
+    }
+  } finally {
+    await b.send("Emulation.clearDeviceMetricsOverride");
+    await b.poll("innerWidth===1280");
+  }
 }
 
 async function actionGeometry(b: Cdp) {
@@ -197,9 +267,17 @@ Deno.test("V5 composer picks reach native messages and the selected provider; re
     await b.poll(
       `!!document.querySelector('.otk-agent-picker ${option("reviewer")}')`,
     );
+    assertEquals(
+      await b.evaluate(
+        `document.querySelector('.otk-agent-picker ${
+          option("reviewer")
+        } .otk-picker-name > span').textContent`,
+      ),
+      "Reviewer",
+    );
     await b.click(`.otk-agent-picker ${option("reviewer")}`);
     await b.poll(
-      "document.querySelector('.otk-composer-agent')?.textContent==='reviewer' && document.activeElement?.name==='prompt'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='Reviewer' && document.activeElement?.name==='prompt'",
     );
     assertEquals(
       await b.evaluate(
@@ -222,9 +300,15 @@ Deno.test("V5 composer picks reach native messages and the selected provider; re
       "document.activeElement?.name==='prompt' && !!document.querySelector('.otk-variant-picker')",
     );
     await open(b, "variant");
+    assertEquals(
+      await b.evaluate(
+        "[...document.querySelectorAll('.otk-variant-picker .otk-picker-name > span')].map(el=>el.textContent)",
+      ),
+      ["Default", "Low", "High"],
+    );
     await b.click(`.otk-variant-picker ${option("high")}`);
     await b.poll(
-      "document.querySelector('.otk-variant-picker > button > span')?.textContent==='high' && document.activeElement?.name==='prompt'",
+      "document.querySelector('.otk-variant-picker > button > span')?.textContent==='High' && document.activeElement?.name==='prompt'",
     );
     await open(b, "variant");
     await b.key("Home");
@@ -275,9 +359,10 @@ Deno.test("V5 composer picks reach native messages and the selected provider; re
     );
     await b.key("Enter");
     await b.poll(
-      "document.querySelector('.otk-variant-picker > button > span')?.textContent==='high' && document.activeElement?.name==='prompt'",
+      "document.querySelector('.otk-variant-picker > button > span')?.textContent==='High' && document.activeElement?.name==='prompt'",
     );
     await footerGeometry(b);
+    await footerPressure(b);
 
     const shots = Deno.env.get("OTK_PICKER_SHOTS");
     if (shots) {
@@ -291,7 +376,9 @@ Deno.test("V5 composer picks reach native messages and the selected provider; re
             JSON.stringify(theme)
           }`,
         );
+        await footerGeometry(b);
         await b.screenshot(join(shots, `P4-r2-${name}-footer.png`));
+        await footerPressure(b, shots, name);
         await open(b, "agent");
         await pointer(b, `.otk-agent-picker ${option("reviewer")}`);
         await b.screenshot(join(shots, `P4-r2-${name}-agent.png`));
@@ -386,12 +473,12 @@ Deno.test("V5 composer picks reach native messages and the selected provider; re
     assertEquals(persisted["models.recent"][0], selected.model);
     await b.reload();
     await b.poll(
-      "document.querySelector('.otk-composer-agent')?.textContent==='reviewer' && document.querySelector('.otk-variant-picker > button > span')?.textContent==='high'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='Reviewer' && document.querySelector('.otk-variant-picker > button > span')?.textContent==='High'",
     );
     await openSession(b, other.id);
     await openSession(b, session.id);
     await b.poll(
-      "document.querySelector('.otk-model-picker > button > span')?.textContent==='Scripted with variants' && document.querySelector('.otk-variant-picker > button > span')?.textContent==='high'",
+      "document.querySelector('.otk-model-picker .otk-composer-model-name')?.textContent==='Scripted with variants' && document.querySelector('.otk-variant-picker > button > span')?.textContent==='High'",
     );
     await open(b, "model");
     await b.poll(
@@ -441,7 +528,10 @@ Deno.test("V5 composer picks reach native messages and the selected provider; re
       await b.evaluate(
         "[...document.querySelectorAll('.otk-prompt-context > .otk-popover > button')].map(el=>el.getAttribute('aria-label'))",
       ),
-      ["Agent: reviewer", "Model: Scripted with variants"],
+      [
+        "Agent: Reviewer",
+        "Model: Second fixture provider Scripted with variants",
+      ],
     );
     await b.send("Input.insertText", { text: "echo PICKER-SHELL" });
     await b.key("Enter");
@@ -483,7 +573,7 @@ Deno.test("V5 composer picks reach native messages and the selected provider; re
     );
     await b.key("Enter");
     await b.poll(
-      "!document.querySelector('.otk-variant-picker') && document.activeElement?.name==='prompt' && document.querySelector('.otk-model-picker > button > span')?.textContent==='Plain model'",
+      "!document.querySelector('.otk-variant-picker') && document.activeElement?.name==='prompt' && document.querySelector('.otk-model-picker .otk-composer-model-name')?.textContent==='Plain model'",
     );
     await b.key("'", 2);
     await b.poll(
@@ -499,7 +589,7 @@ Deno.test("V5 composer picks reach native messages and the selected provider; re
     );
     await b.key("t", 1);
     await b.poll(
-      "document.querySelector('.otk-variant-picker > button > span')?.textContent==='low'",
+      "document.querySelector('.otk-variant-picker > button > span')?.textContent==='Low'",
     );
     await b.key("k", 2);
     await b.poll("!!document.querySelector('input[name=command-search]')");
@@ -570,7 +660,7 @@ Deno.test("V5 restored missing model remains sendable; catalog loading and error
   try {
     await b.goto(`${url}/#/local/core`);
     await b.poll(
-      "document.querySelector('.otk-model-picker > button > span')?.textContent==='restored-model'",
+      "document.querySelector('.otk-model-picker .otk-composer-model-name')?.textContent==='restored-model'",
     );
     await open(b, "model");
     await b.poll(
@@ -692,7 +782,7 @@ Deno.test("round2 prompt snapshots the agent/model/variant picked while first ca
     );
     await b.click(`.otk-agent-picker ${option("review")}`);
     await b.poll(
-      "document.querySelector('.otk-composer-agent')?.textContent==='review'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='Review'",
     );
     assertEquals(sent.length, 0);
     resolve({
@@ -753,7 +843,13 @@ Deno.test("round2 failed unknown catalog preserves the restored variant in the f
   try {
     await b.goto(`${url}/#/local/core`);
     await b.poll(
-      "document.querySelector('.otk-prompt-context > span:last-child')?.textContent==='high'",
+      "document.querySelector('.otk-prompt-context > span:last-child')?.textContent==='High'",
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('.otk-composer-provider')?.textContent",
+      ),
+      "offline",
     );
     await open(b, "model");
     await b.poll(
@@ -782,5 +878,103 @@ Deno.test("round2 failed unknown catalog preserves the restored variant in the f
   } finally {
     await b.close();
     await app.stop();
+  }
+});
+
+Deno.test("U2 native null selection metadata stays absent while the model catalog is pending and at the prompt consumer", async () => {
+  const root = await fixture(), settings = cfg();
+  settings.harness.db = join(root, "absent.db");
+  const native = new Opencode1Adapter(settings, undefined, (input) => {
+    const path = new URL(String(input)).pathname;
+    return Promise.resolve(Response.json(
+      path === "/agent"
+        ? [{
+          name: "build",
+          mode: "primary",
+          description: null,
+          color: null,
+          model: null,
+          variant: null,
+        }]
+        : { directory: root },
+    ));
+  });
+  const pending = Promise.withResolvers<ModelCatalog>();
+  const sent: PromptInput[] = [];
+  const { app, url } = await coreBackendFixture(root, {
+    agents: native.capabilities.agents,
+    models: { listModels: () => pending.promise },
+    prompt: {
+      prompt: (value) => {
+        sent.push(value);
+        return Promise.resolve();
+      },
+      abort: () => Promise.resolve(),
+    },
+  });
+  app.backend.core.listMessages = () =>
+    Promise.resolve([mapMessage(JSON.parse(JSON.stringify({
+      id: "restored",
+      sessionID: "core",
+      role: "user",
+      time: { created: 1 },
+      agent: "build",
+      model: null,
+    })))]);
+  const b = await Browser.launch(root);
+  try {
+    await b.goto(`${url}/#/local/core`);
+    await b.poll(
+      "document.querySelector('.otk-composer-agent')?.textContent==='Build' && !!document.querySelector('.otk-model-picker > button')",
+    );
+    await open(b, "model");
+    await b.poll(
+      "document.querySelector('.otk-model-picker [role=status]')?.textContent==='Loading…'",
+    );
+    assertEquals(
+      await b.evaluate(
+        "!!document.querySelector('.otk-variant-picker') || !!document.querySelector('.otk-prompt-context > span:not(.otk-popover)')",
+      ),
+      false,
+    );
+    assertEquals(b.errors, []);
+    await b.key("Escape");
+    pending.resolve({
+      default: { provider: "fixture", model: "plain" },
+      providers: [{
+        id: "fixture",
+        name: "Fixture provider",
+        models: [{
+          id: "plain",
+          name: "Plain model",
+          variants: [],
+          status: "active",
+          free: false,
+        }],
+      }],
+    });
+    await b.poll(
+      "document.querySelector('.otk-composer-provider')?.textContent==='Fixture provider' && document.querySelector('.otk-composer-model-name')?.textContent==='Plain model'",
+    );
+    await b.type(input, "Send with native absence");
+    await b.key("Enter");
+    await waitFor(() => sent, (rows) => rows.length === 1);
+    assertEquals(sent[0].agent, "build");
+    assertEquals(sent[0].model, { provider: "fixture", model: "plain" });
+    assertEquals(
+      Object.hasOwn(JSON.parse(JSON.stringify(sent[0])), "variant"),
+      false,
+    );
+    assertEquals(b.errors, []);
+  } finally {
+    pending.resolve({ providers: [] });
+    await b.close();
+    await app.stop();
+    await native.core.stop();
+    assertEquals(
+      b.errors,
+      [],
+      "Native absence must not throw during rendering",
+    );
   }
 });

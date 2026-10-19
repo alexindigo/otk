@@ -4,12 +4,12 @@ import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
 interface Agent {
   name: string;
-  description?: string;
+  description?: string | null;
   mode: string;
   hidden?: boolean;
-  color?: string;
-  model?: { providerID: string; modelID: string };
-  variant?: string;
+  color?: string | null;
+  model?: { providerID: string; modelID: string } | null;
+  variant?: string | null;
 }
 export function agents(client: Client, directory: Directory): AgentsCapability {
   return {
@@ -23,17 +23,17 @@ export function agents(client: Client, directory: Directory): AgentsCapability {
       )
         .map(({ name, description, color, model, variant }) => ({
           name,
-          description,
+          description: description ?? undefined,
           color: agentColor(color),
           model: model
             ? { provider: model.providerID, model: model.modelID }
             : undefined,
-          variant,
+          variant: variant ?? undefined,
         }));
     },
   };
 }
-function agentColor(color?: string): string | undefined {
+function agentColor(color?: string | null): string | undefined {
   return color && /^#(?:[a-f\d]{3}|[a-f\d]{6}|[a-f\d]{8})$/i.test(color)
     ? color
     : color === "primary"
@@ -46,7 +46,7 @@ export async function agentColors(
   client: Client,
   directory?: string,
 ): Promise<Map<string, string>> {
-  const agents = await client.json<{ name: string; color?: string }[]>(
+  const agents = await client.json<{ name: string; color?: string | null }[]>(
     "/agent",
     { query: { directory } },
   );

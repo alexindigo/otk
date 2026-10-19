@@ -91,3 +91,8 @@ export const SendIcon = () => (
     <path d="m6 11 6-6 6 6M12 19V5" />
   </Icon>
 );
+export const PencilIcon = () => (
+  <Icon>
+    <path d="m16 4 4 4M3 21l5-1L21 7a2.8 2.8 0 0 0-4-4L4 16l-1 5Z" />
+  </Icon>
+);

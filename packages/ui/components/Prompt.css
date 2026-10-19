@@ -27,24 +27,52 @@
 .otk-prompt-actions {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   padding-top: 4px;
 }
 .otk-prompt-context {
+  flex: 0 1 auto;
+  min-width: 0;
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 4px;
   color: var(--otk-fg-2);
   font-size: var(--text-meta);
   margin-right: auto;
 }
 .otk-prompt-context > span {
+  min-width: 0;
   border-radius: var(--radius-control);
   padding: 4px 8px;
   font-weight: 500;
 }
 .otk-prompt-context > span:hover {
   background: var(--otk-hover);
+}
+.otk-composer-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.otk-composer-model > span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.otk-composer-provider {
+  flex: 1 1 0;
+  color: var(--otk-fg-2);
+}
+.otk-composer-model-name {
+  flex: 0 1 auto;
+}
+.otk-prompt-context > span > .otk-composer-model {
+  display: flex;
+}
+.otk-prompt-actions > button {
+  flex: none;
 }

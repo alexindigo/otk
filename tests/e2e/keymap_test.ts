@@ -191,15 +191,15 @@ Deno.test("essential Tab cycling selects primary agents in prompt, reverse cycle
     await browser.click("textarea[name=prompt]");
     await browser.key("Tab");
     await browser.poll(
-      "document.querySelector('.otk-composer-agent')?.textContent==='plan'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='Plan'",
     );
     await browser.key("Tab", 8);
     await browser.poll(
-      "document.querySelector('.otk-composer-agent')?.textContent==='build'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='Build'",
     );
     await browser.key("Tab");
     await browser.poll(
-      "document.querySelector('.otk-composer-agent')?.textContent==='plan'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='Plan'",
     );
     await browser.type("textarea[name=prompt]", "Use the selected agent");
     await browser.key("Enter", 8);
@@ -267,15 +267,15 @@ Deno.test("agent cycling honors the native configured-default primary order with
     await browser.click("textarea[name=prompt]");
     await browser.key("Tab");
     await browser.poll(
-      "document.querySelector('.otk-composer-agent')?.textContent==='build'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='Build'",
     );
     await browser.key("Tab", 8);
     await browser.poll(
-      "document.querySelector('.otk-composer-agent')?.textContent==='plan'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='Plan'",
     );
     await browser.key("Tab", 8);
     await browser.poll(
-      "document.querySelector('.otk-composer-agent')?.textContent==='build'",
+      "document.querySelector('.otk-composer-agent')?.textContent==='Build'",
     );
     await browser.type("textarea[name=prompt]", "Send the cycled agent");
     await browser.key("Enter");

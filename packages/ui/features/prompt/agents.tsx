@@ -11,6 +11,7 @@ import ListPicker, {
 import { ChevronDownIcon, StarIcon } from "../../components/ChromeIcons.tsx";
 import { bindComposerSelection } from "./catalog.ts";
 import { selection as selectionState } from "../../components/selection.ts";
+import { ModelLabel, selectionLabel } from "../../components/prompt/labels.tsx";
 
 /** One presentation rule for every projected field, including plain labels. */
 function applied(field: SelectionField<unknown>): string | undefined {
@@ -132,14 +133,14 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                     applied: !!applied(selection().agent),
                   })}
                 >
-                  {selection().agent.value ?? "Default agent"}
+                  {selectionLabel(selection().agent.value ?? "Default agent")}
                 </span>
               }
             >
               <ListPicker
                 label="Choose agent"
                 triggerLabel={`Agent: ${
-                  selection().agent.value ?? "Default agent"
+                  selectionLabel(selection().agent.value ?? "Default agent")
                 }`}
                 class="otk-agent-picker"
                 applied={applied(selection().agent)}
@@ -147,7 +148,9 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                 trigger={
                   <>
                     <span class="otk-composer-agent">
-                      {selection().agent.value ?? "Default agent"}
+                      {selectionLabel(
+                        selection().agent.value ?? "Default agent",
+                      )}
                     </span>
                     <ChevronDownIcon />
                   </>
@@ -157,7 +160,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                   items: (owner.state.agents.value ?? []).map((agent) => ({
                     key: agent.name,
                     value: agent.name,
-                    label: agent.name,
+                    label: selectionLabel(agent.name),
                     description: agent.description,
                     color: agent.color,
                   })),
@@ -184,20 +187,28 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                     applied: !!applied(selection().model),
                   })}
                 >
-                  {selection().model.name ?? "Default model"}
+                  <ModelLabel
+                    provider={selection().model.providerName}
+                    name={selection().model.name}
+                  />
                 </span>
               }
             >
               <ListPicker<ModelRef>
                 label="Choose model"
                 triggerLabel={`Model: ${
-                  selection().model.name ?? "Default model"
-                }`}
+                  selection().model.providerName
+                    ? `${selection().model.providerName} `
+                    : ""
+                }${selection().model.name ?? "Default model"}`}
                 class="otk-model-picker"
                 applied={applied(selection().model)}
                 trigger={
                   <>
-                    <span>{selection().model.name ?? "Default model"}</span>
+                    <ModelLabel
+                      provider={selection().model.providerName}
+                      name={selection().model.name}
+                    />
                     <ChevronDownIcon />
                   </>
                 }
@@ -254,13 +265,15 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                 <ListPicker<string | undefined>
                   label="Choose variant"
                   triggerLabel={`Variant: ${
-                    selection().variant.value ?? "Default"
+                    selectionLabel(selection().variant.value ?? "Default")
                   }`}
                   class="otk-variant-picker"
                   applied={applied(selection().variant)}
                   trigger={
                     <>
-                      <span>{selection().variant.value ?? "Default"}</span>
+                      <span>
+                        {selectionLabel(selection().variant.value ?? "Default")}
+                      </span>
                       <ChevronDownIcon />
                     </>
                   }
@@ -272,13 +285,15 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                         value: undefined,
                         label: "Default",
                         description: applied(selection().variant)
-                          ? selection().variant.value
+                          ? selectionLabel(
+                            selection().variant.value ?? "Default",
+                          )
                           : undefined,
                       },
                       ...selection().model.variants.map((variant) => ({
                         key: variant,
                         value: variant,
-                        label: variant,
+                        label: selectionLabel(variant),
                       })),
                     ],
                   }]}
@@ -298,7 +313,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                     applied: !!applied(selection().variant),
                   })}
                 >
-                  {selection().variant.value}
+                  {selectionLabel(selection().variant.value!)}
                 </span>
               </Show>
             </Show>

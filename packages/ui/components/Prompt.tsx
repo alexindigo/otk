@@ -11,6 +11,7 @@ import { useSessionPorts } from "../registries/session.tsx";
 import { SendIcon } from "./ChromeIcons.tsx";
 import { clearDraft, effectiveSelection } from "@otk/client";
 import type { PromptChoices } from "../registries/prompt.ts";
+import { ModelLabel, selectionLabel } from "./prompt/labels.tsx";
 
 /** Input and submission lifetime; concrete prompt concepts are injected features. */
 export default function Prompt(props: PromptProps): import("solid-js").Element {
@@ -278,9 +279,14 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
             fallback={
               <>
                 <span>
-                  {ctx.nextSelection().agent.value ?? "Default agent"}
+                  {selectionLabel(
+                    ctx.nextSelection().agent.value ?? "Default agent",
+                  )}
                 </span>
-                <span>{ctx.nextSelection().model.name ?? "Default model"}</span>
+                <ModelLabel
+                  provider={ctx.nextSelection().model.providerName}
+                  name={ctx.nextSelection().model.name}
+                />
               </>
             }
           >

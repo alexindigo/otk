@@ -115,6 +115,16 @@ inline/block flips only for viewport overflow. Footer labels and real chevron
 icons share flex centring; trigger accessible names include current values.
 Loading/error states do not also report an empty catalog.
 
+Composer model labels show the provider in secondary paint before the model,
+including for backend-applied and plain-label states. Full provider/model names
+remain in picker tooltips and accessible names when visible text truncates. The
+footer gives controls their natural width and shrinks the model control only
+under actual row pressure: provider text yields first, then model text. Shared
+flex sizing keeps actions on the same row without a fixed label cap. Agent and
+variant labels use display-only title case in triggers and menu rows; keys and
+submitted values retain their exact spelling. Edit prompt uses the shared 28px
+pencil icon button with its accessible name and tooltip.
+
 Backend-applied composer values use the shared `is-applied` trigger state and
 `--applied-fg` theme token, with the same text and geometry. The generic trigger
 includes its default origin in the accessible name. Explicit/restored choices

@@ -264,7 +264,7 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
       ]
     ) assert(footer.title.includes(value), value);
     await b.poll(
-      "document.querySelector('.otk-prompt-context > span:first-child')?.textContent==='build' && document.querySelector('.otk-prompt-context > span:nth-child(2)')?.textContent==='reported-model' && !!document.querySelector('[aria-label=\"Attach files\"]')",
+      "document.querySelector('.otk-prompt-context > span:first-child')?.textContent==='Build' && document.querySelector('.otk-prompt-context .otk-composer-provider')?.textContent==='test' && document.querySelector('.otk-prompt-context .otk-composer-model-name')?.textContent==='reported-model' && !!document.querySelector('[aria-label=\"Attach files\"]')",
     );
     const client = new WsClient(f.url);
     await client.connect();

@@ -129,7 +129,7 @@ export function effectiveSelection(
     model: {
       ...model,
       name: info?.name || model.value?.model,
-      providerName: provider?.name || model.value?.provider,
+      providerName: provider?.name ?? model.value?.provider,
       variants: info?.variants ?? [],
       unavailable: catalog !== undefined && model.value !== undefined && !info,
     },

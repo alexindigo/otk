@@ -837,7 +837,9 @@ export class Opencode1Adapter implements Harness {
               completedOutput ?? this.buffers.outputTime(info!.id),
             ),
             colors = await this.#colors.get(this.#directory(sessionID));
-          message.agentColor = colors.get(info!.agent);
+          if (message.agent !== undefined) {
+            message.agentColor = colors.get(message.agent);
+          }
           content({ op: "message.upsert", message });
         }
         break;

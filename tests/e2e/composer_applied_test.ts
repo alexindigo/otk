@@ -22,6 +22,7 @@ Deno.test("P6 Default shows the muted backend-applied variant at the native cons
     providers: {
       fake2: {
         fake: fake2,
+        name: "Second fixture provider",
         models: {
           scripted: {
             name: "Scripted with variants",
@@ -56,13 +57,13 @@ Deno.test("P6 Default shows the muted backend-applied variant at the native cons
     await client.connect();
     await openSession(b, session.id);
     await b.poll(
-      `document.querySelector('${trigger}')?.getAttribute('aria-label')==='Variant: high (agent default)'`,
+      `document.querySelector('${trigger}')?.getAttribute('aria-label')==='Variant: High (agent default)'`,
     );
     for (
-      const [kind, name] of [["agent", "reviewer (agent default)"], [
+      const [kind, name] of [["agent", "Reviewer (agent default)"], [
         "model",
-        "Scripted with variants (agent default)",
-      ], ["variant", "high (agent default)"]]
+        "Second fixture provider Scripted with variants (agent default)",
+      ], ["variant", "High (agent default)"]]
     ) {
       const button = `.otk-${kind}-picker > button`;
       assertEquals(
@@ -101,6 +102,26 @@ Deno.test("P6 Default shows the muted backend-applied variant at the native cons
       >(`(()=>{const buttons=[...document.querySelectorAll('.otk-prompt-actions > button, .otk-prompt-context > .otk-popover > button')],t=document.querySelector('${trigger}'),s=getComputedStyle(t),probe=document.createElement('span');probe.style.color='var(--applied-fg)';document.body.append(probe);const muted=getComputedStyle(probe).color;probe.remove();return {rects:buttons.map(el=>el.getBoundingClientRect().toJSON()),centres:buttons.map(el=>{const r=el.getBoundingClientRect();return r.y+r.height/2}),color:s.color,muted,font:s.font,text:t.textContent}})()`);
     const shots = Deno.env.get("OTK_APPLIED_SHOTS");
     if (shots) await Deno.mkdir(shots, { recursive: true });
+    const modelLabel = async (applied: boolean) => {
+      const model = await b.evaluate<{
+        provider: string;
+        name: string;
+        applied: boolean;
+        providerMuted: boolean;
+        modelMuted: boolean;
+        gap: number;
+        centre: number;
+      }>(
+        `(()=>{const t=document.querySelector('.otk-model-picker > button'),p=t.querySelector('.otk-composer-provider'),m=t.querySelector('.otk-composer-model-name'),a=p.getBoundingClientRect(),r=m.getBoundingClientRect(),probe=document.createElement('span');probe.style.color='var(--applied-fg)';document.body.append(probe);const muted=getComputedStyle(probe).color;probe.remove();return {provider:p.textContent,name:m.textContent,applied:t.classList.contains('is-applied'),providerMuted:getComputedStyle(p).color===muted,modelMuted:getComputedStyle(m).color===muted,gap:r.left-a.right,centre:Math.abs(a.y+a.height/2-r.y-r.height/2)}})()`,
+      );
+      assertEquals(model.provider, "Second fixture provider");
+      assertEquals(model.name, "Scripted with variants");
+      assertEquals(model.applied, applied);
+      assertEquals(model.providerMuted, true);
+      assertEquals(model.modelMuted, applied);
+      assertEquals(model.gap, 8);
+      assert(model.centre < .5, JSON.stringify(model));
+    };
     for (
       const [name, theme] of [["dark", "otk-dark"], ["light", "otk-light"]]
     ) {
@@ -108,15 +129,16 @@ Deno.test("P6 Default shows the muted backend-applied variant at the native cons
       await b.poll(
         `document.documentElement.dataset.otkTheme===${JSON.stringify(theme)}`,
       );
+      await modelLabel(true);
       await pick("high");
       await b.poll(
-        `document.querySelector('${trigger}').getAttribute('aria-label')==='Variant: high' && !document.querySelector('${trigger}').classList.contains('is-applied')`,
+        `document.querySelector('${trigger}').getAttribute('aria-label')==='Variant: High' && !document.querySelector('${trigger}').classList.contains('is-applied')`,
       );
       const explicit = await measure();
       if (shots) await b.screenshot(join(shots, `p6-explicit-${name}.png`));
       await pick("");
       await b.poll(
-        `document.querySelector('${trigger}').getAttribute('aria-label')==='Variant: high (agent default)' && document.querySelector('${trigger}').classList.contains('is-applied')`,
+        `document.querySelector('${trigger}').getAttribute('aria-label')==='Variant: High (agent default)' && document.querySelector('${trigger}').classList.contains('is-applied')`,
       );
       const muted = await measure();
       assertEquals(
@@ -146,7 +168,7 @@ Deno.test("P6 Default shows the muted backend-applied variant at the native cons
             JSON.stringify(row(""))
           }).querySelector('small')?.textContent`,
         ),
-        "high",
+        "High",
       );
       assertEquals(
         await b.evaluate(
@@ -201,7 +223,7 @@ Deno.test("P6 Default shows the muted backend-applied variant at the native cons
     // A reload restores the user's recorded choice, so it is stable and unmuted.
     await b.reload();
     await b.poll(
-      `document.querySelector('${trigger}')?.getAttribute('aria-label')==='Variant: high' && !document.querySelector('${trigger}').classList.contains('is-applied')`,
+      `document.querySelector('${trigger}')?.getAttribute('aria-label')==='Variant: High' && !document.querySelector('${trigger}').classList.contains('is-applied')`,
     );
     for (const kind of ["agent", "model"]) {
       assertEquals(
@@ -211,9 +233,19 @@ Deno.test("P6 Default shows the muted backend-applied variant at the native cons
         false,
       );
     }
+    for (
+      const [name, theme] of [["dark", "otk-dark"], ["light", "otk-light"]]
+    ) {
+      await client.rpc("prefs.set", { key: "theme", value: theme });
+      await b.poll(
+        `document.documentElement.dataset.otkTheme===${JSON.stringify(theme)}`,
+      );
+      await modelLabel(false);
+      if (shots) await b.screenshot(join(shots, `p6-restored-${name}.png`));
+    }
     await pick("low");
     await b.poll(
-      `document.querySelector('${trigger}').getAttribute('aria-label')==='Variant: low' && !document.querySelector('${trigger}').classList.contains('is-applied')`,
+      `document.querySelector('${trigger}').getAttribute('aria-label')==='Variant: Low' && !document.querySelector('${trigger}').classList.contains('is-applied')`,
     );
     fake2.queue({ chunks: ["Explicit low arrived."] });
     await b.type("textarea[name=prompt]", "P6-EXPLICIT");

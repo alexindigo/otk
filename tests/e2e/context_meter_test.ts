@@ -72,12 +72,12 @@ Deno.test("U1 composer and meter share exactly one models.list per session open"
     );
     pending.resolve(catalog);
     await b.poll(
-      "document.querySelector('.otk-model-picker > button > span')?.textContent==='Beam Free' && document.querySelector('.otk-context-bar')?.getAttribute('aria-valuenow')==='25'",
+      "document.querySelector('.otk-model-picker .otk-composer-model-name')?.textContent==='Beam Free' && document.querySelector('.otk-context-bar')?.getAttribute('aria-valuenow')==='25'",
     );
     assertEquals(calls, ["core"]);
     await b.reload();
     await b.poll(
-      "document.querySelector('.otk-model-picker > button > span')?.textContent==='Beam Free' && document.querySelector('.otk-context-bar')?.getAttribute('aria-valuenow')==='25'",
+      "document.querySelector('.otk-model-picker .otk-composer-model-name')?.textContent==='Beam Free' && document.querySelector('.otk-context-bar')?.getAttribute('aria-valuenow')==='25'",
     );
     assertEquals(
       calls,
@@ -249,7 +249,7 @@ Deno.test("U1 catalog context limit reaches the meter for OpenCode Beam Free", a
     }] .otk-picker-option`;
     await b.click(other);
     await b.poll(
-      "document.querySelector('.otk-model-picker > button > span')?.textContent==='Other catalog model'",
+      "document.querySelector('.otk-model-picker .otk-composer-model-name')?.textContent==='Other catalog model'",
     );
     assertEquals(
       await b.evaluate(

@@ -118,6 +118,20 @@ Deno.test("editor changes and attachment completion retain one owner-current dra
     await browser.poll(
       "editorReads.length===1 && document.querySelector('.otk-prompt-chip')?.textContent.includes('reading…')",
     );
+    assertEquals(
+      await browser.evaluate(
+        "(()=>{const button=document.querySelector('.otk-prompt-actions > button[aria-label=\"Edit prompt\"]'),r=button.getBoundingClientRect(),svg=button.querySelector('svg');return {title:button.title,text:button.textContent.trim(),iconButton:button.classList.contains('otk-icon-button'),size:[r.width,r.height],hidden:svg?.getAttribute('aria-hidden'),path:!!svg?.querySelector('path'),next:button.nextElementSibling?.getAttribute('aria-label')}})()",
+      ),
+      {
+        title: "Edit prompt",
+        text: "",
+        iconButton: true,
+        size: [28, 28],
+        hidden: "true",
+        path: true,
+        next: "Send",
+      },
+    );
     await browser.click("[aria-label='Edit prompt']");
     await browser.poll(
       "!!document.querySelector('.otk-dialog[open] .otk-editor')",

@@ -59,9 +59,9 @@ Deno.test("V7 completed plan_exit and plan_enter switch the footer and the next 
     const footer = async (agent: string, variant: string) => {
       await b.poll(
         `document.querySelector('.otk-composer-agent')?.textContent===${
-          JSON.stringify(agent)
+          JSON.stringify(agent === "plan" ? "Plan" : "Build")
         } && document.querySelector('.otk-variant-picker > button > span')?.textContent===${
-          JSON.stringify(variant)
+          JSON.stringify(variant === "low" ? "Low" : "High")
         }`,
       );
     };

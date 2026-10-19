@@ -1,6 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-prompt-context {
-  --composer-control-max-width: 240px;
   --control-color: var(--otk-fg);
 }
 .otk-prompt-context > .otk-list-picker {
@@ -20,7 +19,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  max-width: var(--composer-control-max-width);
+  min-width: 0;
+}
+.otk-prompt-context > .otk-model-picker {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+.otk-model-picker > .otk-popover-trigger {
+  width: 100%;
 }
 .otk-prompt-context .otk-popover-trigger > .otk-chrome-icon {
   color: var(--otk-fg-3);

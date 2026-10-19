@@ -3,7 +3,7 @@
 // User model.variant is also confirmed by the live stock 1.18.34 schema.
 export interface Session {
   id: string;
-  parentID?: string;
+  parentID?: string | null;
   projectID: string;
   directory: string;
   title: string;
@@ -11,14 +11,14 @@ export interface Session {
   revert?: { messageID: string; diff?: string };
   summary?: { diffs?: RawDiff[] };
 }
-export interface Info {
+interface MessageInfo {
   id: string;
   sessionID: string;
-  role: "user" | "assistant";
   time: { created: number; completed?: number };
-  agent: string;
-  parentID?: string;
-  model?: { providerID: string; modelID: string; variant?: string };
+  parentID?: string | null;
+  model?:
+    | { providerID: string; modelID: string; variant?: string | null }
+    | null;
   providerID?: string;
   modelID?: string;
   cost?: number;
@@ -30,6 +30,13 @@ export interface Info {
   };
   error?: { name: string; data: { message?: string; ref?: string } };
 }
+/** Optional native metadata can use null; the neutral mapping owns absence. */
+export type Info =
+  & MessageInfo
+  & (
+    | { role: "user"; agent?: string | null }
+    | { role: "assistant"; agent: string }
+  );
 export interface RawPart {
   id: string;
   sessionID: string;
@@ -45,7 +52,7 @@ export interface RawPart {
   cost?: number;
   tokens?: Info["tokens"];
   source?: {
-    path?: string;
+    path?: string | null;
     range?: { start: { line: number }; end: { line: number } };
   };
   metadata?: Record<string, unknown>;
@@ -68,7 +75,7 @@ export interface RawPermission {
   patterns: string[];
   always: string[];
   metadata: Record<string, unknown>;
-  tool?: { messageID: string; callID: string };
+  tool?: { messageID: string; callID: string } | null;
 }
 export interface RawDiff {
   file?: string;

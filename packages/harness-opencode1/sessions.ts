@@ -83,7 +83,9 @@ export function sessions(
       const colors = await agentColors.get(session.directory);
       const messages = await Promise.all(raw.map(async (message) => {
         const mapped = mapMessage(message.info, message.parts);
-        mapped.agentColor = colors.get(message.info.agent);
+        if (mapped.agent !== undefined) {
+          mapped.agentColor = colors.get(mapped.agent);
+        }
         for (const [i, part] of message.parts.entries()) {
           if (part.type === "tool" && part.tool === "task") {
             mapped.parts[i] = {

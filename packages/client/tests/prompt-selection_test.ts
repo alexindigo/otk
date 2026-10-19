@@ -60,6 +60,63 @@ const context: PromptSelectionContext = {
   catalog,
 };
 
+Deno.test("provider display identity comes from one catalog projection across every selection source", () => {
+  const cases = [
+    {
+      source: "explicit",
+      draft: { ...emptyDraft(), model: first },
+      input: { agents: [] },
+    },
+    {
+      source: "restored",
+      draft: emptyDraft(),
+      input: { agents: [], context: { model: first } },
+    },
+    {
+      source: "configured",
+      draft: emptyDraft(),
+      input: { agents: [{ name: "build", model: first }] },
+    },
+    { source: "default", draft: emptyDraft(), input: { agents: [] } },
+  ];
+  for (const { source, draft, input } of cases) {
+    for (const name of ["Human provider name", ""]) {
+      const selected = effectiveSelection(draft, {
+        ...input,
+        catalog: {
+          default: first,
+          providers: [{ ...catalog.providers[0], name }],
+        },
+      });
+      assertEquals(selected.model.source, source);
+      assertEquals(selected.model.providerName, name, source);
+      assertEquals(selected.model.name, "First model");
+      assertEquals(selected.input.model, first);
+    }
+    const missing = effectiveSelection(draft, {
+      ...input,
+      catalog: { default: first, providers: [] },
+    });
+    assertEquals(missing.model.providerName, first.provider, source);
+    const missingModel = effectiveSelection(draft, {
+      ...input,
+      catalog: {
+        default: first,
+        providers: [{
+          id: first.provider,
+          name: "Human provider name",
+          models: [],
+        }],
+      },
+    });
+    assertEquals(
+      missingModel.model.providerName,
+      "Human provider name",
+      source,
+    );
+  }
+});
+
 Deno.test("selection resolves explicit, restored, agent-configured, catalog-default and absent choices in order", () => {
   const restored = {
     ...context,

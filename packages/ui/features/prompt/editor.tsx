@@ -5,6 +5,7 @@ import { editorSave } from "../../components/prompt/model.ts";
 import Editor from "../../components/prompt/Editor.tsx";
 import { ownedCommand } from "../../keyboard/context.tsx";
 import type { DialogRegistry } from "../../registries/shell.ts";
+import { PencilIcon } from "../../components/ChromeIcons.tsx";
 export function registerEditorDialog(dialogs: DialogRegistry): void {
   dialogs.register<Parameters<typeof Editor>[0]>({
     id: "editor",
@@ -100,10 +101,12 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
         actions: () => (
           <button
             type="button"
+            class="otk-icon-button"
             aria-label="Edit prompt"
+            title="Edit prompt"
             onClick={() => void open().catch(ctx.fail)}
           >
-            Edit prompt
+            <PencilIcon />
           </button>
         ),
       };

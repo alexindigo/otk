@@ -21,7 +21,7 @@ import type {
 export function mapSession(session: Session): ContentSession {
   return {
     id: session.id,
-    parentID: session.parentID,
+    parentID: session.parentID ?? undefined,
     projectID: session.projectID,
     directory: session.directory,
     title: session.title,
@@ -32,7 +32,7 @@ export function mapSession(session: Session): ContentSession {
 export function mapIndex(session: Session): IndexEntry {
   return {
     id: session.id,
-    parentID: session.parentID,
+    parentID: session.parentID ?? undefined,
     projectID: session.projectID,
     directory: session.directory,
     title: session.title,
@@ -66,17 +66,17 @@ export function mapMessage(
     id: info.id,
     sessionID: info.sessionID,
     parts: parts.map((p) => mapPart(p)),
-    agent: info.agent,
   };
   if (info.role === "user") {
     return {
       ...common,
       role: "user",
+      agent: info.agent ?? undefined,
       time: { created: info.time.created },
       model: info.model
         ? { provider: info.model.providerID, model: info.model.modelID }
         : undefined,
-      variant: info.model?.variant,
+      variant: info.model?.variant ?? undefined,
     };
   }
   const ends = parts.flatMap((part) =>
@@ -92,7 +92,8 @@ export function mapMessage(
   return {
     ...common,
     role: "assistant",
-    replyTo: info.parentID,
+    agent: info.agent,
+    replyTo: info.parentID ?? undefined,
     time: {
       created: info.time.created,
       completed: info.time.completed,
@@ -140,7 +141,7 @@ export function mapPart(part: RawPart, awaitingPermission = false): Part {
         id,
         name: part.filename || part.source?.path || "file",
         mime: part.mime!,
-        path: part.source?.path,
+        path: part.source?.path ?? undefined,
         range: part.source?.range
           ? {
             start: part.source.range.start.line,

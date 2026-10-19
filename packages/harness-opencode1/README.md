@@ -70,6 +70,13 @@ present among the connected models. `agents.list` uses the same colour
 resolution as transcripts and includes configured model/variant metadata. Native
 user `info.model.variant` maps to OTK `UserMessage.variant` (stock 1.18.34).
 
+Optional native selection metadata may be null. Agent descriptions, configured
+models/variants and restored user agent/model/variant values are normalised to
+the neutral string/reference-or-absent contract here. Optional session parents,
+reply parents and attachment paths follow the same boundary convention; valid
+identifiers and empty strings retain their spelling. Consumers never inherit a
+native null sentinel.
+
 When reconnect loses a streaming seed, point-message recovery coalesces deltas
 per subscribed message at a 50 ms cadence, with one in-flight read and a
 trailing refresh only when more deltas arrive. Snapshots render only the
