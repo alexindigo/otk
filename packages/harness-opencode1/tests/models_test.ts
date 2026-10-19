@@ -24,6 +24,7 @@ function model(id: string, status = "active", input = 0) {
     name: `Name ${id}`,
     status,
     cost: { input, output: 0, cache: { read: 0, write: 0 } },
+    limit: { context: 10000, output: 1000 },
     release_date: "2026-10-17",
     variants: { low: { reasoningEffort: "low", token: secret }, high: {} },
     headers: { Authorization: secret },
@@ -87,6 +88,7 @@ Deno.test("catalog allowlists connected metadata, variants, statuses and opencod
           variants: ["low", "high"],
           status: (["alpha", "beta", "active", "deprecated"] as const)[index],
           free: id !== "paid",
+          contextLimit: 10000,
           releaseDate: "2026-10-17",
         })),
       },
@@ -131,6 +133,37 @@ Deno.test("catalog default comes only from config.model present in the connected
     const catalog = await models(client, directory).listModels("session");
     assertEquals(catalog.default, expected, String(configured));
     assertEquals("default" in catalog, expected !== undefined);
+  }
+});
+
+Deno.test("catalog keeps only finite positive native context windows", async () => {
+  for (const context of [undefined, 0, -1, NaN, Infinity, 200000]) {
+    const client = new Client(
+      settings,
+      (input) =>
+        Promise.resolve(Response.json(
+          new URL(String(input)).pathname === "/provider"
+            ? {
+              connected: ["opencode"],
+              all: [{
+                id: "opencode",
+                name: "OpenCode",
+                models: {
+                  beam: {
+                    ...model("beam"),
+                    limit: context === undefined ? undefined : { context },
+                  },
+                },
+              }],
+            }
+            : {},
+        )),
+    );
+    const catalog = await models(client, directory).listModels("session");
+    assertEquals(
+      catalog.providers[0].models[0].contextLimit,
+      context === 200000 ? context : undefined,
+    );
   }
 });
 

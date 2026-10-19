@@ -119,7 +119,20 @@ export default function Shell(
   );
   const entry = (sidecar: string, id: string) =>
     index.state.entries[sessionKey(sidecar, id)];
-  const session = createSession((id) => sidecars.connection(id), entry);
+  const session = createSession(
+    (id) => sidecars.connection(id),
+    entry,
+    (target) => {
+      const sidecar = sidecars.state.list.find((s) =>
+        s.id === target.sidecarId
+      );
+      return {
+        key: sidecar?.connectionVersion,
+        connected: sidecar?.status === "connected",
+        available: sidecar?.capabilities.includes("models") ?? false,
+      };
+    },
+  );
   const drafts = createDrafts(solidState);
   const draftKey = () => {
     const selected = session.state.selection;
@@ -537,6 +550,7 @@ export default function Shell(
         sidecars.state.list.find((s) => s.id === target.sidecarId)
           ?.connectionVersion,
       onToolCompleted: (listener) => session.onToolCompleted(target, listener),
+      modelCatalog: session.models,
       sessionID: () => target.sessionID,
       directory: () => directoryFor(target),
       entry: (id) => entry(target.sidecarId, id),
@@ -807,6 +821,9 @@ export default function Shell(
                         )}
                         inbox={inbox(project()!.sidecarId).state.inbox}
                         messages={session.state.content.messages}
+                        catalog={session.models?.state.available
+                          ? session.models.state.value
+                          : undefined}
                         exhausted={session.state.exhausted}
                         session={info()}
                         displayMenu={

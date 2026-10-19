@@ -7,6 +7,7 @@ import type {
   ContentSession,
   InboxSnapshot,
   Message,
+  ModelCatalog,
   TaskRecord,
 } from "@otk/protocol";
 import {
@@ -34,6 +35,7 @@ export default function ProjectTabs(props: {
   entries: MergedEntry[];
   inbox: InboxSnapshot;
   messages: Message[];
+  catalog?: ModelCatalog;
   exhausted: boolean;
   session?: ContentSession;
   displayMenu?: Element;
@@ -111,7 +113,7 @@ export default function ProjectTabs(props: {
       );
     }
   });
-  const meter = createMemo(() => contextMeter(props.messages));
+  const meter = createMemo(() => contextMeter(props.messages, props.catalog));
   return (
     <section class="otk-project-tabs" aria-label="Project tabs">
       <Show when={error()}>
@@ -262,13 +264,36 @@ export default function ProjectTabs(props: {
           aria-label="Session context and cost"
           title={`${
             props.exhausted ? "Loaded session" : "Loaded messages only"
-          }; latest reported context tokens; context window unavailable`}
+          }; latest reported context tokens; ${
+            meter().limit === undefined
+              ? "context window unavailable"
+              : `${meter().tokens!.toLocaleString("en-US")} of ${
+                meter().limit!.toLocaleString("en-US")
+              } tokens (${
+                (meter().tokens! / meter().limit! * 100).toFixed(1)
+              }%)`
+          }`}
           data-tokens={meter().tokens}
           data-cost={meter().cost}
+          data-limit={meter().limit}
         >
           <Show when={meter().tokens !== undefined}>
             <span>{meter().tokens!.toLocaleString("en-US")} tokens</span>
-            <span class="otk-context-bar" aria-hidden="true" />
+            <Show when={meter().fraction !== undefined}>
+              <span
+                class="otk-context-bar"
+                role="meter"
+                aria-label="Context window used"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={meter().fraction! * 100}
+                aria-valuetext={`${
+                  meter().tokens!.toLocaleString("en-US")
+                } of ${meter().limit!.toLocaleString("en-US")} tokens`}
+              >
+                <span style={{ width: `${meter().fraction! * 100}%` }} />
+              </span>
+            </Show>
           </Show>
           <Show when={meter().cost !== undefined}>
             <span>${meter().cost!.toFixed(4)}</span>

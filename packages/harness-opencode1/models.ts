@@ -15,6 +15,7 @@ interface Providers {
       variants?: Record<string, unknown>;
       status: "alpha" | "beta" | "active" | "deprecated";
       cost: { input: number };
+      limit?: { context: number };
       release_date?: string;
     }>;
   }[];
@@ -41,6 +42,10 @@ export function models(client: Client, directory: Directory): ModelsCapability {
               variants: Object.keys(model.variants ?? {}),
               status: model.status,
               free: provider.id === "opencode" && model.cost.input === 0,
+              ...(Number.isFinite(model.limit?.context) &&
+                  model.limit!.context > 0
+                ? { contextLimit: model.limit!.context }
+                : {}),
               ...(model.release_date
                 ? { releaseDate: model.release_date }
                 : {}),

@@ -12,6 +12,8 @@ export interface ModelCatalog {
       variants: string[];
       status: "alpha" | "beta" | "active" | "deprecated";
       free: boolean;
+      /** Reported context window; absent when the backend does not know it. */
+      contextLimit?: number;
       releaseDate?: string;
     }[];
   }[];

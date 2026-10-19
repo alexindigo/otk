@@ -101,12 +101,13 @@ servers.
 The optional `models` capability supplies `listModels(sessionID)` and the
 feature-owned `models.list { sessionID }` RPC. `ModelCatalog` contains only
 connected providers' IDs/names and model IDs/names, variant names, status,
-`free` and optional release date; its optional `default: ModelRef` identifies
-the configured model only when it is in that catalog. Native credentials,
-options, headers and environment data never belong in this contract. This new
-capability is not inferred for legacy servers. `AgentOption` optionally carries
-resolved `color`, configured `model: ModelRef` and `variant`; `UserMessage`
-optionally carries the recorded `variant` alongside its `model` for restoration.
+`free`, optional release date and optional reported `contextLimit`; its optional
+`default: ModelRef` identifies the configured model only when it is in that
+catalog. Native credentials, options, headers and environment data never belong
+in this contract. This new capability is not inferred for legacy servers.
+`AgentOption` optionally carries resolved `color`, configured `model: ModelRef`
+and `variant`; `UserMessage` optionally carries the recorded `variant` alongside
+its `model` for restoration.
 
 ## Example
 

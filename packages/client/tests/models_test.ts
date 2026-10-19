@@ -124,6 +124,75 @@ Deno.test("plain session generations cancel superseded loads and paging deduplic
   }
 });
 
+Deno.test("session catalog is optional, nonblocking and generation-bound across selection and reconnect", async () => {
+  const { connection, session, answer, frames } = fixture();
+  const old = { providers: [], default: { provider: "old", model: "old" } };
+  const fresh = { providers: [], default: { provider: "new", model: "new" } };
+  connection.supports = (name) => name === "models";
+  try {
+    session.open({ sidecarId: "core", sessionID: "old" });
+    await Promise.resolve();
+    session.open({ sidecarId: "core", sessionID: "new" });
+    answer("session.get", info("old"));
+    answer("session.messages", []);
+    answer("session.get", info("new"));
+    answer("session.messages", []);
+    await settle();
+    assertEquals(
+      session.state.loading,
+      false,
+      "Catalog cannot hold the transcript",
+    );
+    answer("models.list", old);
+    await settle();
+    assertEquals(session.models?.state.value, undefined);
+    answer("models.list", fresh);
+    await session.models?.ready();
+    assertEquals(session.models?.state.value, fresh);
+    session.receive("core", { t: "resync", sessionIDs: "all" });
+    assertEquals(
+      session.models?.state.value,
+      fresh,
+      "A refresh retains last good metadata",
+    );
+    await Promise.resolve();
+    answer("session.get", info("new"));
+    answer("session.messages", []);
+    answer("models.list", old);
+    await session.models?.ready();
+    assertEquals(session.models?.state.value, old);
+    session.receive("core", { t: "resync", sessionIDs: "all" });
+    await Promise.resolve();
+    answer("session.get", info("new"));
+    answer("session.messages", [message("still available")]);
+    const failed = frames.splice(
+      frames.findIndex((f) => f.method === "models.list"),
+      1,
+    )[0];
+    connection.rpc.receive({
+      t: "rpc.result",
+      id: failed.id,
+      ok: false,
+      error: { code: "backend", message: "Catalog unavailable" },
+    });
+    await session.models?.ready();
+    assertEquals(session.models?.state.value, old);
+    assertEquals(session.models?.state.error, "Catalog unavailable");
+    assertEquals(session.state.error, undefined);
+    assertEquals(session.state.content.messages[0].id, "still available");
+    connection.supports = () => false;
+    session.open({ sidecarId: "core", sessionID: "unsupported" });
+    answer("session.get", info("unsupported"));
+    answer("session.messages", []);
+    await settle();
+    assertEquals(session.models?.state.value, undefined);
+    assertEquals(session.state.loading, false);
+  } finally {
+    session.stop();
+    connection.stop();
+  }
+});
+
 Deno.test("current RPC context follows selection and history retains partial results and attachment owners", async () => {
   const one = fixture(), two = fixture();
   let selection: Selection | undefined;

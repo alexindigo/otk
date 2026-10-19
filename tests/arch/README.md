@@ -28,7 +28,10 @@ serialized preference intents. Negatives reject those implementations and
 model-key decoding in UI adapters. Browser checks cover lazy closed DOM,
 mode-aware shell output, post-readiness snapshots, repeated arrows, leading-edge
 anchoring, label/icon centrelines and the action's inclusion in the selected
-row.
+row. The session supplies one framework-free model-catalog owner to both the
+composer and context meter; consumers borrow its loading/error/last-good state
+and in-flight work. Browser tests count exactly one catalog request per session
+open and preserve the existing composer loading/error/retry test unchanged.
 
 Tabs have no menu presentation; task handlers and scoped commands remain
 independent of presentation. Project rows reserve visit time and their menu

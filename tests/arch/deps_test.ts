@@ -1186,6 +1186,6 @@ Deno.test("task actions and reported context usage stay in framework-free public
     new URL("packages/ui/components/ProjectTabs.tsx", root),
   );
   assert(ui.includes("props.model.tabs()"));
-  assert(ui.includes("contextMeter(props.messages)"));
+  assert(ui.includes("contextMeter(props.messages, props.catalog)"));
   assert(!ui.includes("rpc.call("));
 });

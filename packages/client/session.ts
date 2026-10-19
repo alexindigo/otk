@@ -7,6 +7,11 @@ import type { IndexEntry } from "@otk/protocol";
 import type { ServerFrame } from "@otk/protocol";
 import type { SidecarConnection } from "./connection.ts";
 import { type ContentState, emptyContent, reduce } from "./reduce.ts";
+import {
+  createModelCatalog,
+  type ModelCatalogConnection,
+  type ModelCatalogOwner,
+} from "./model-catalog.ts";
 
 export interface Selection {
   sidecarId: string;
@@ -47,6 +52,8 @@ export type ToolCompletionSource = (
 ) => () => void;
 export interface ClientSession {
   state: SessionState;
+  /** One catalog for the selected session/directory, borrowed by its consumers. */
+  readonly models: ModelCatalogOwner | undefined;
   subscribe(listener: (state: SessionState) => void): () => void;
   /** Live completions in this open lifetime; snapshots/paging are silent. */
   onToolCompleted(
@@ -63,6 +70,7 @@ export function createSession(
   connection: (id: string) => SidecarConnection,
   entry: (sidecarId: string, id: string) => IndexEntry | undefined,
   factory: StateFactory = createState,
+  catalogConnection?: (selection: Selection) => ModelCatalogConnection,
 ): ClientSession {
   const { state, update: setState, subscribe } = factory<SessionState>({
     content: emptyContent(),
@@ -74,6 +82,7 @@ export function createSession(
   let selected: Selection | undefined, generation = 0, load = 0;
   let buffer: ContentOp[] = [], fetching = false;
   let controller: AbortController | undefined;
+  let models: ModelCatalogOwner | undefined, catalogVersion = 0;
   // IDs only: the selected transcript remains the sole owner of part data.
   const completed = new Set<string>(), liveCompleted = new Set<string>();
   const toolListeners = new Set<{
@@ -122,6 +131,7 @@ export function createSession(
     });
     try {
       const sidecar = connection(target.sidecarId), rpc = sidecar.rpc;
+      models?.connect();
       const [info, messages, permissions, questions] = await Promise.all([
         rpc.call(
           "session.get",
@@ -188,10 +198,30 @@ export function createSession(
     generation++;
     load++;
     controller?.abort();
+    models?.dispose();
+    models = undefined;
     if (selected) {
       connection(selected.sidecarId).subscribe(selected.sessionID, false);
     }
     selected = selection;
+    if (selection) {
+      const target = { ...selection }, sidecar = connection(target.sidecarId);
+      models = createModelCatalog({
+        connection: () =>
+          catalogConnection?.(target) ?? {
+            key: catalogVersion,
+            connected: sidecar.supports("models"),
+            available: sidecar.supports("models"),
+          },
+        load: (signal) =>
+          sidecar.rpc.call(
+            "models.list",
+            { sessionID: target.sessionID },
+            signal,
+          ),
+        factory,
+      });
+    }
     completed.clear();
     liveCompleted.clear();
     buffer = [];
@@ -213,6 +243,10 @@ export function createSession(
   };
   return {
     state,
+    get models() {
+      void state.selection;
+      return models;
+    },
     subscribe,
     onToolCompleted(selection, listener) {
       const observer = {
@@ -242,6 +276,9 @@ export function createSession(
     receive(sidecarId: string, frame: ServerFrame): void {
       if (!selected || selected.sidecarId !== sidecarId) return;
       if (frame.t === "welcome" || frame.t === "resync") {
+        if (frame.t === "welcome") catalogVersion++;
+        models?.connect();
+        if (frame.t === "resync") void models?.refresh();
         void refetch();
         return;
       }

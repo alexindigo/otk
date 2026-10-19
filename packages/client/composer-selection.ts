@@ -9,6 +9,11 @@ import type { Draft, DraftChange } from "./drafts.ts";
 import type { ToolCompletionSource } from "./session.ts";
 import { createState, type StateFactory } from "./state.ts";
 import {
+  type CatalogState,
+  createModelCatalog,
+  type ModelCatalogOwner,
+} from "./model-catalog.ts";
+import {
   chooseAgent,
   chooseModel,
   chooseVariant,
@@ -34,12 +39,7 @@ export interface ComposerConnection {
   agents: boolean;
   models: boolean;
 }
-export interface ComposerCatalog<T> {
-  value?: T;
-  available: boolean;
-  loading: boolean;
-  error: string;
-}
+export type ComposerCatalog<T> = CatalogState<T>;
 export interface ComposerSelectionState {
   connected: boolean;
   agents: ComposerCatalog<AgentOption[]>;
@@ -60,6 +60,8 @@ export interface ComposerSelectionOptions {
   };
   factory?: StateFactory;
   onToolCompleted?: ToolCompletionSource;
+  /** Borrow the session's catalog; only standalone consumers create their own. */
+  modelCatalog?: ModelCatalogOwner;
 }
 export interface ComposerSelection {
   state: ComposerSelectionState;
@@ -90,10 +92,16 @@ export interface ComposerSelection {
 export function createComposerSelection(
   options: ComposerSelectionOptions,
 ): ComposerSelection {
-  const current: ComposerSelectionState = {
+  const models = options.modelCatalog ?? createModelCatalog({
+    connection: () => {
+      const c = options.connection();
+      return { key: c.key, connected: c.connected, available: c.models };
+    },
+    load: () => options.load.models(),
+  });
+  const current: Omit<ComposerSelectionState, "models"> = {
     connected: false,
     agents: { available: false, loading: false, error: "" },
-    models: { available: false, loading: false, error: "" },
   };
   // Like createDrafts, owner data is invocation-current even when a framework
   // publishes its notification later. The factory stores only invalidation.
@@ -109,10 +117,10 @@ export function createComposerSelection(
     },
     get models() {
       void store.state.revision;
-      return current.models;
+      return models.state;
     },
   };
-  const update = (change: (value: ComposerSelectionState) => void) => {
+  const update = (change: (value: typeof current) => void) => {
     change(current);
     store.update((value) => {
       value.revision++;
@@ -193,17 +201,16 @@ export function createComposerSelection(
       }),
     options.load.agents,
   );
-  const models = resource(
-    () => state.models,
-    (fn) =>
-      update((value) => {
-        value.models = { ...value.models };
-        fn(value.models);
-      }),
-    options.load.models,
-  );
+  const stopModels = models.subscribe(() => {
+    if (alive) update(() => {});
+  });
   const connect = (next = options.connection()) => {
     if (!alive) return;
+    models.connect(
+      options.modelCatalog
+        ? undefined
+        : { key: next.key, connected: next.connected, available: next.models },
+    );
     if (
       connection && Object.is(next.key, connection.key) &&
       next.connected === connection.connected &&
@@ -218,12 +225,9 @@ export function createComposerSelection(
     update((value) => {
       value.connected = next.connected;
       value.agents = { ...value.agents, available: next.agents };
-      value.models = { ...value.models, available: next.models };
     });
     agents.reset();
-    models.reset();
     void agents.refresh();
-    void models.refresh();
   };
   const context = (): PromptSelectionContext => ({
     context: options.context(),
@@ -239,7 +243,7 @@ export function createComposerSelection(
       if (!state.connected) return;
       const at = generation;
       await Promise.race([
-        Promise.all([agents.ensure(), models.ensure()]),
+        Promise.all([agents.ensure(), models.ready()]),
         invalidated,
       ]);
       connect();
@@ -261,6 +265,8 @@ export function createComposerSelection(
     connect,
     dispose() {
       alive = false;
+      stopModels();
+      if (!options.modelCatalog) models.dispose();
       stopTools?.();
       generation++;
       changed();

@@ -57,7 +57,10 @@ Deno.test("V3 models and agents expose connected public metadata over WS and pre
     });
     const native = await f.oc.request<{
       connected: string[];
-      all: { id: string; models: Record<string, { status: string }> }[];
+      all: {
+        id: string;
+        models: Record<string, { status: string; limit: { context: number } }>;
+      }[];
     }>("/provider");
     assertEquals(
       catalog.providers.map((provider) => provider.id).sort(),
@@ -77,12 +80,17 @@ Deno.test("V3 models and agents expose connected public metadata over WS and pre
             "free",
             "id",
             "name",
+            ...(model.contextLimit === undefined ? [] : ["contextLimit"]),
             ...(model.releaseDate === undefined ? [] : ["releaseDate"]),
             "status",
             "variants",
           ].sort(),
         );
         assert(model.variants.every((variant) => typeof variant === "string"));
+        const context = native.all.find((p) =>
+          p.id === provider.id
+        )!.models[model.id].limit.context;
+        assertEquals(model.contextLimit, context > 0 ? context : undefined);
       }
     }
     const second = catalog.providers.find((provider) =>

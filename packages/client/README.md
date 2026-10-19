@@ -112,6 +112,18 @@ favourite/recent groups). Dispose ends catalog publication and deferred draft
 intents. Captured successful normal sends can still record recency after view
 replacement.
 
+`createModelCatalog({connection, load, factory?})` owns one session/directory's
+model metadata: one in-flight request, invocation-current
+loading/error/last-good state, connection-generation invalidation, explicit
+refresh/retry and readiness that follows the current connection. The selected
+session exposes this owner as `createSession().models`; selection changes
+dispose it. The optional fourth `createSession` argument injects connection
+identity/advertised availability. Composer consumers pass it as `modelCatalog`
+to `createComposerSelection` and borrow the same state and work as the meter.
+Composer disposal releases its subscription, not the session's resource.
+Standalone composers create the same resource locally when none is supplied. No
+catalog is copied into another store.
+
 `createSession().onToolCompleted(selection, listener)` observes completed tool
 parts only from the selected session's live stream. Initial/refetch snapshots
 and older pages establish a silent baseline; completed IDs stay consumed until
@@ -206,12 +218,16 @@ Tab state also exposes its selected `sessionID` and an input `revision` for
 reactive bindings. `sessionFor(taskID)` resolves the remembered member/helper or
 first member; `select(selection, sessionID?)` keeps that session inside its
 task. `createTaskActions(rpc, directory)` captures server/project ownership for
-task editors before asynchronous interaction. `contextMeter(messages)` uses the
-latest reported assistant token footprint (including reasoning and caches) and
-sums reported costs for the supplied loaded messages. It supplies no guessed
-model context window or percentage; paged consumers label the cost's loaded
-scope. `taskBreadcrumbs(task, entries, selected)` preserves explicit membership
-order, expands the selected helper path and prevents cycles or duplicate grouped
+task editors before asynchronous interaction. `contextMeter(messages, catalog?)`
+uses the latest reported assistant token footprint (including reasoning and
+caches) and sums reported costs for the supplied loaded messages. When the
+catalog reports a finite positive context limit for that exact assistant
+provider/model, it also supplies the limit and a clamped fill fraction; unknown
+windows stay unknown. The session's shared catalog loads independently of the
+transcript and rejects stale results; refresh errors retain last good metadata.
+Paged consumers label the cost's loaded scope.
+`taskBreadcrumbs(task, entries, selected)` preserves explicit membership order,
+expands the selected helper path and prevents cycles or duplicate grouped
 helpers. Helper URLs retain their owning task; removing membership preserves the
 viewed session as an ungrouped tab rather than leaving transcript and task
 inconsistent.

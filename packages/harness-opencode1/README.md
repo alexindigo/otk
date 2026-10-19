@@ -62,10 +62,11 @@ directory configuration.
 
 `capabilities.models.listModels(sessionID)` reads native `GET /provider` and
 `GET /config` in that session's directory. It allowlists connected provider and
-model display metadata, never credentials/options/headers/environment fields.
-Variant names come from the model's variant keys; `free` means the `opencode`
-provider with zero input cost. Configured `model` becomes the catalog default
-only if present among the connected models. `agents.list` uses the same colour
+model display metadata, including finite positive native `limit.context` as
+`contextLimit`, never credentials/options/headers/environment fields. Variant
+names come from the model's variant keys; `free` means the `opencode` provider
+with zero input cost. Configured `model` becomes the catalog default only if
+present among the connected models. `agents.list` uses the same colour
 resolution as transcripts and includes configured model/variant metadata. Native
 user `info.model.variant` maps to OTK `UserMessage.variant` (stock 1.18.34).
 

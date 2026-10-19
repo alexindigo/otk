@@ -123,6 +123,26 @@ Deno.test("task tabs create rename reorder and close without deleting sessions; 
         "document.querySelector('.otk-context-meter').textContent",
       )).includes("%"),
     );
+    const shots = Deno.env.get("OTK_CONTEXT_SHOTS");
+    if (shots) {
+      await Deno.mkdir(shots, { recursive: true });
+      for (
+        const [name, theme] of [["dark", "otk-dark"], ["light", "otk-light"]]
+      ) {
+        await c.rpc("prefs.set", { key: "theme", value: theme });
+        await b.poll(
+          `document.documentElement.dataset.otkTheme===${
+            JSON.stringify(theme)
+          }`,
+        );
+        await b.screenshot(`${shots}/context-unknown-${name}.png`);
+      }
+    }
+    assertEquals(
+      await b.evaluate("document.querySelector('.otk-context-bar')"),
+      null,
+      "Unknown catalog windows must not draw a misleading empty track",
+    );
     assertEquals(
       await b.evaluate(
         "document.querySelector('[data-crumb=otk] .otk-status-light').getBoundingClientRect().width",

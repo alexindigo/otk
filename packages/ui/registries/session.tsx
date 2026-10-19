@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createContext, type Element, useContext } from "solid-js";
-import type { InboxRpc, ToolCompletionSource } from "@otk/client";
+import type {
+  InboxRpc,
+  ModelCatalogOwner,
+  ToolCompletionSource,
+} from "@otk/client";
 import type {
   CapabilityName,
   HistoryEntry,
@@ -19,6 +23,7 @@ export interface SessionPorts {
   /** Reactive identity of the current welcomed transport connection. */
   connectionKey?(): unknown;
   onToolCompleted?: ToolCompletionSource;
+  modelCatalog?: ModelCatalogOwner;
   sessionID(): string;
   directory(): Promise<string>;
   entry(id: string): IndexEntry | undefined;
