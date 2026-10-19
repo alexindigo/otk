@@ -17,11 +17,29 @@ async function showFileChanges(browser: Cdp) {
   await browser.poll(
     "document.querySelector('input[name=collapseFileChanges]')?.checked===true",
   );
+  const frameStart = browser.events.length;
   await browser.click("input[name=collapseFileChanges]");
   await browser.poll(
     "document.querySelector('input[name=collapseFileChanges]')?.checked===false",
   );
+  // Native checked state precedes the authoritative preference broadcast.
+  await waitFor(
+    () =>
+      browser.events.slice(frameStart).some((event) => {
+        if (event.method !== "Network.webSocketFrameReceived") return false;
+        const frame = JSON.parse(
+          (event.params.response as { payloadData: string }).payloadData,
+        );
+        return frame.t === "prefs" && frame.prefs.collapseFileChanges === false;
+      }),
+    (received) => received,
+  );
   await browser.key("Escape");
+  // Some callers configure Display before creating their first write. Any
+  // already-mounted code must also have reached its expanded consumer state.
+  await browser.poll(
+    "[...document.querySelectorAll('[data-tool=write] .otk-code code')].every(code=>!code.closest('[hidden]') && code.getBoundingClientRect().height>0)",
+  );
 }
 
 // Native source coordinates work for both preformatted text and styled rows.
