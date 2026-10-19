@@ -5,31 +5,57 @@ export function followViewport(
   flow: HTMLElement,
   older: () => void,
 ) {
-  let following = true, dragging = false, internal = false;
+  let following = true, dragging = false;
   let gesture: "toward" | "away" | undefined;
   let pressed = false, startX = 0, startY = 0;
   let disposed = false, paging = false, previousHeight = 0, pageTop = 0;
   let frame: number | undefined;
+  let position = viewport.scrollTop, intent = 0;
+  const invalidateFollow = () => {
+    intent++;
+    if (frame !== undefined) cancelAnimationFrame(frame);
+    frame = undefined;
+  };
+  const observePosition = () => {
+    const top = viewport.scrollTop;
+    // Native layout can clamp a previous position when the scroll range shrinks.
+    const expected = Math.max(
+      0,
+      Math.min(position, viewport.scrollHeight - viewport.clientHeight),
+    );
+    position = top;
+    if (top !== expected && !gesture && !dragging) {
+      // A later external position supersedes already-requested layout follow,
+      // even if its native scroll notification has not arrived yet.
+      invalidateFollow();
+      return true;
+    }
+    return false;
+  };
   const bottom = () =>
     viewport.scrollHeight - viewport.clientHeight - viewport.scrollTop < 24;
   const adjust = (top: number) => {
-    internal = true;
     viewport.scrollTop = top;
+    position = viewport.scrollTop;
   };
   const schedule = () => {
+    if (observePosition()) return;
     if (disposed || frame !== undefined || !following || paging || dragging) {
       return;
     }
+    const requested = intent;
     frame = requestAnimationFrame(() => {
+      if (requested !== intent) return;
       frame = undefined;
-      if (!disposed && following && !paging && !dragging) {
+      if (
+        !observePosition() && !disposed && following && !paging && !dragging
+      ) {
         adjust(viewport.scrollHeight);
       }
     });
   };
   const scroll = () => {
-    const own = internal;
-    internal = false;
+    observePosition();
     if (gesture || dragging) {
       // Input owns direction: a delayed notification can still describe the
       // previous programmatic position or an older layout. Neither can revoke
@@ -38,7 +64,7 @@ export function followViewport(
         ? bottom()
         : gesture === "toward" && (following || bottom());
       if (following) schedule();
-    } else if (own) { /* Layout/programmatic movement preserves intent. */ }
+    } // External programmatic movement preserves future follow intent.
     if (viewport.scrollTop < 24 && !paging) older();
   };
   const wheel = (event: WheelEvent) => {
@@ -79,7 +105,6 @@ export function followViewport(
   };
   const end = () => {
     if (!dragging) gesture = undefined;
-    internal = false;
   };
   const key = (event: KeyboardEvent) => {
     const target = event.target;
@@ -116,11 +141,12 @@ export function followViewport(
   schedule();
   return {
     reset() {
+      invalidateFollow();
+      position = viewport.scrollTop;
       following = true;
       gesture = undefined;
       dragging =
         pressed =
-        internal =
         paging =
           false;
       schedule();
