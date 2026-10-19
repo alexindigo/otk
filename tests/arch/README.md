@@ -49,15 +49,22 @@ Negative fixtures reject direct font selection, undersized text and off-grid
 spacing. Theme and contrast tests own palette data and the complete surface
 matrix (including alpha compositing, all three themes, hover and selection);
 browser tests own constructed lights and accessibility presentation. Lamp paint,
-including unlit, belongs only to StatusLight, never theme slots. Selection's
-shared pointer/underline CSS contract has unit coverage and real-browser
-geometry coverage in full and reduced colours. Selected/current chrome controls
-must declare the shared orientation primitive; negative fixtures reject a
-selected button that bypasses it. Browser geometry checks span Dark/Linen/Stone,
-full/rail, right-open/closed and reduced colours; the two shell corner toggles
-retain their bounds and remain hit-testable. Title/navigation assertions follow
-the selected breadcrumb; full connection status assertions follow Settings,
-which owns that diagnostic presentation.
+including unlit, belongs only to StatusLight, never theme slots.
+Continuous-motion owners are declared once in `visual_test.ts`: StatusLight and
+ResponseProgress. Only those owners may loop; each is checked against the real
+shared OS reduced-motion and Animations off rules, including universal element
+and pseudo-element suppression with `!important`. Negative fixtures remove each
+suppression path and still reject arbitrary infinite animations outside owners.
+ResponseProgress's browser test additionally observes static replacement text
+for both accessibility settings, including preference restoration after reload.
+Selection's shared pointer/underline CSS contract has unit coverage and
+real-browser geometry coverage in full and reduced colours. Selected/current
+chrome controls must declare the shared orientation primitive; negative fixtures
+reject a selected button that bypasses it. Browser geometry checks span
+Dark/Linen/Stone, full/rail, right-open/closed and reduced colours; the two
+shell corner toggles retain their bounds and remain hit-testable.
+Title/navigation assertions follow the selected breadcrumb; full connection
+status assertions follow Settings, which owns that diagnostic presentation.
 
 Both column resizers use the shared immutable pointer-delta gesture owner,
 independent of border width or the separator's grab point. Negative fixtures

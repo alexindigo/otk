@@ -1,13 +1,39 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 
-function visualErrors(css: string, base = false, lights = false): string[] {
+const continuousMotionOwners = new Set([
+  "components/StatusLight.css",
+  "components/ResponseProgress.css",
+]);
+
+/** Both shared rules cover elements and their pseudo-elements, with priority. */
+function motionSuppressionErrors(shared: string): string[] {
   const errors: string[] = [];
   if (
-    !lights && /\banimation(?:-iteration-count)?:[^;{}]*\binfinite\b/.test(css)
+    !/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\*,\s*\*::before,\s*\*::after\s*\{[^{}]*\banimation:\s*none\s*!important\s*;/
+      .test(shared)
+  ) errors.push("continuous motion must honour OS reduced motion");
+  if (
+    !/:root\[data-otk-animations-off\]\s+\*,\s*:root\[data-otk-animations-off\]\s+\*::before,\s*:root\[data-otk-animations-off\]\s+\*::after\s*\{[^{}]*\banimation:\s*none\s*!important\s*;/
+      .test(shared)
+  ) errors.push("continuous motion must honour Animations off");
+  return errors;
+}
+
+function visualErrors(
+  css: string,
+  base = false,
+  motionOwner = false,
+  shared = "",
+): string[] {
+  const errors: string[] = [];
+  if (
+    !motionOwner &&
+    /\banimation(?:-iteration-count)?:[^;{}]*\binfinite\b/.test(css)
   ) {
-    errors.push("continuous motion belongs to status lights");
+    errors.push("continuous motion belongs to declared owners");
   }
+  if (motionOwner) errors.push(...motionSuppressionErrors(shared));
   if (!base && /(?:font-family|font)\s*:[^;{}]*["']IBM Plex/.test(css)) {
     errors.push("font bypasses tokens");
   }
@@ -31,6 +57,9 @@ function visualErrors(css: string, base = false, lights = false): string[] {
   return errors;
 }
 Deno.test("visual typography and spacing stay behind the shared contract", async () => {
+  const ui = new URL("../../packages/ui/", import.meta.url);
+  const shared = await Deno.readTextFile(new URL("theme.css", ui));
+  const seen = new Set<string>();
   async function inspect(directory: URL): Promise<void> {
     for await (const entry of Deno.readDir(directory)) {
       const file = new URL(
@@ -40,11 +69,15 @@ Deno.test("visual typography and spacing stay behind the shared contract", async
       if (entry.isDirectory) await inspect(file);
       else if (entry.name.endsWith(".css")) {
         const css = await Deno.readTextFile(file);
+        const relative = file.pathname.slice(ui.pathname.length);
+        const motionOwner = continuousMotionOwners.has(relative);
+        if (motionOwner) seen.add(relative);
         assertEquals(
           visualErrors(
             css,
             entry.name === "theme.css",
-            entry.name === "StatusLight.css",
+            motionOwner,
+            shared,
           ),
           [],
           file.pathname,
@@ -52,7 +85,12 @@ Deno.test("visual typography and spacing stay behind the shared contract", async
       }
     }
   }
-  await inspect(new URL("../../packages/ui/", import.meta.url));
+  await inspect(ui);
+  assertEquals(
+    seen,
+    continuousMotionOwners,
+    "Every declared owner must be checked",
+  );
   const app = await Deno.readTextFile(
     new URL("../../web/src/ui/App.css", import.meta.url),
   );
@@ -77,6 +115,63 @@ Deno.test("visual typography and spacing stay behind the shared contract", async
     [],
     "User-action motion remains allowed by the spec",
   );
+});
+
+Deno.test("continuous-motion owners require shared suppression and arbitrary animations remain rejected", async () => {
+  const shared = await Deno.readTextFile(
+    new URL("../../packages/ui/theme.css", import.meta.url),
+  );
+  const continuous = ".progress { animation: shimmer 2s linear infinite; }";
+  assertEquals(visualErrors(continuous), [
+    "continuous motion belongs to declared owners",
+  ]);
+  assertEquals(
+    visualErrors(".progress { animation-iteration-count: infinite; }"),
+    ["continuous motion belongs to declared owners"],
+  );
+  assertEquals(visualErrors(continuous, false, true, shared), []);
+  for (const owner of continuousMotionOwners) {
+    const css = await Deno.readTextFile(
+      new URL(`../../packages/ui/${owner}`, import.meta.url),
+    );
+    assertEquals(visualErrors(css, false, true, shared), [], owner);
+    assertEquals(
+      visualErrors(
+        css,
+        false,
+        true,
+        shared.replace(
+          "prefers-reduced-motion: reduce",
+          "prefers-reduced-motion: no-preference",
+        ),
+      ),
+      ["continuous motion must honour OS reduced motion"],
+      owner,
+    );
+    assertEquals(
+      visualErrors(
+        css,
+        false,
+        true,
+        shared.replaceAll("[data-otk-animations-off]", "[data-other]"),
+      ),
+      ["continuous motion must honour Animations off"],
+      owner,
+    );
+    assert(
+      motionSuppressionErrors(
+        shared.replaceAll("animation: none !important;", "animation: none;"),
+      ).length === 2,
+    );
+    assert(
+      motionSuppressionErrors(shared.replaceAll("*::before", ".other::before"))
+        .length === 2,
+    );
+    assert(
+      motionSuppressionErrors(shared.replaceAll("*::after", ".other::after"))
+        .length === 2,
+    );
+  }
 });
 
 function selectionErrors(source: string): string[] {

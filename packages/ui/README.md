@@ -54,6 +54,13 @@ preview notice. Invisible bookkeeping owners declare themselves hidden so wire
 steps cannot split a visible work fold. Reply metadata combines contiguous
 source parts for one whole-reply copy.
 
+Unfinished assistant replies end with a thin in-flow glimmer beneath their last
+content and before metadata. The grouped reply's completion clock owns its
+lifetime, so continued backend steps share one indicator and terminal replies
+have none. OS reduced motion and the persisted Animations off preference replace
+the shimmer with quiet “response in progress” text between flowing rules. The
+same named status remains available to assistive technology in either mode.
+
 `prompt.register({ id, create(context) })` installs a per-prompt feature.
 `PromptContext` injects selection/caret/focus operations, an active-lifetime
 check, error reporting and `SessionProvider`'s common session ports: typed

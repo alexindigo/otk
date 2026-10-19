@@ -1,0 +1,50 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-response-progress {
+  margin-top: 8px;
+}
+.otk-response-glimmer {
+  height: 2px;
+  background: linear-gradient(
+    90deg,
+    var(--otk-border) 35%,
+    var(--otk-fg-3) 50%,
+    var(--otk-border) 65%
+  );
+  background-size: 300% 100%;
+  animation: otk-response-glimmer 2s linear infinite;
+}
+@keyframes otk-response-glimmer {
+  from {
+    background-position: 100% 0;
+  }
+  to {
+    background-position: 0% 0;
+  }
+}
+.otk-response-progress-text {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  color: var(--otk-fg-3);
+  font: 400 var(--text-meta)/20px var(--font-ui);
+}
+.otk-response-progress-text::before,
+.otk-response-progress-text::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--otk-border);
+}
+:root[data-otk-animations-off] .otk-response-glimmer {
+  display: none;
+}
+:root[data-otk-animations-off] .otk-response-progress-text {
+  display: flex;
+}
+@media (prefers-reduced-motion: reduce) {
+  .otk-response-glimmer {
+    display: none;
+  }
+  .otk-response-progress-text {
+    display: flex;
+  }
+}

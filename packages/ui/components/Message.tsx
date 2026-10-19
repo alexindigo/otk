@@ -2,6 +2,7 @@
 import "./Message.css" with { type: "text" };
 import { createMemo, For, Show } from "solid-js";
 import WorkLog from "./WorkLog.tsx";
+import ResponseProgress from "./ResponseProgress.tsx";
 import { elapsed, partGroups } from "./work-log.ts";
 import { CopyIcon } from "./ChromeIcons.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
@@ -88,6 +89,9 @@ export default function Message(
   const assistant = () =>
     props.metadata === null ? undefined : props.metadata ??
       (props.message.role === "assistant" ? props.message : undefined);
+  const streaming = () =>
+    props.message.role === "assistant" &&
+    props.message.time.completed === undefined;
   const error = () =>
     props.message.role === "assistant" && !props.message.interrupted
       ? props.message.error?.message
@@ -120,8 +124,7 @@ export default function Message(
                   paneWidth={props.paneWidth}
                   onOpenChild={props.onOpenChild}
                   user={props.message.role === "user"}
-                  streaming={props.message.role === "assistant" &&
-                    props.message.time.completed === undefined}
+                  streaming={streaming()}
                 />
               }
             >
@@ -134,13 +137,15 @@ export default function Message(
                   paneWidth={props.paneWidth}
                   onOpenChild={props.onOpenChild}
                   user={props.message.role === "user"}
-                  streaming={props.message.role === "assistant" &&
-                    props.message.time.completed === undefined}
+                  streaming={streaming()}
                 />
               </WorkLog>
             </Show>
           )}
         </For>
+        <Show when={streaming()}>
+          <ResponseProgress />
+        </Show>
       </div>
       <Show when={props.message.role === "user"}>
         <footer
