@@ -89,6 +89,11 @@ Deno.test("catalog allowlists connected metadata, variants, statuses and opencod
           status: (["alpha", "beta", "active", "deprecated"] as const)[index],
           free: id !== "paid",
           contextLimit: 10000,
+          cost: {
+            input: id === "paid" ? 1 : 0,
+            output: 0,
+            cache: { read: 0, write: 0 },
+          },
           releaseDate: "2026-10-17",
         })),
       },
@@ -133,6 +138,52 @@ Deno.test("catalog default comes only from config.model present in the connected
     const catalog = await models(client, directory).listModels("session");
     assertEquals(catalog.default, expected, String(configured));
     assertEquals("default" in catalog, expected !== undefined);
+  }
+});
+
+Deno.test("catalog prices allowlist all four finite nonnegative rates, preserving zero and rejecting unknown or malformed prices", async () => {
+  for (
+    const cost of [
+      undefined,
+      null,
+      { input: 1 },
+      { input: 1, output: -1, cache: { read: 0, write: 0 } },
+      { input: 1, output: 2, cache: { read: NaN, write: 0 } },
+      { input: 0, output: 0, cache: { read: 0, write: 0 }, secret },
+      { input: 2, output: 4, cache: { read: .5, write: 3 }, secret },
+    ]
+  ) {
+    const client = new Client(
+      settings,
+      (input) =>
+        Promise.resolve(
+          Response.json(
+            new URL(String(input)).pathname === "/provider"
+              ? {
+                connected: ["opencode"],
+                all: [{
+                  id: "opencode",
+                  name: "OpenCode",
+                  models: { priced: { ...model("priced"), cost } },
+                }],
+              }
+              : {},
+          ),
+        ),
+    );
+    const result =
+      (await models(client, directory).listModels("s")).providers[0].models[0];
+    assertEquals(
+      result.cost,
+      cost?.output === 0 || cost?.output === 4
+        ? {
+          input: cost.input,
+          output: cost.output,
+          cache: { read: cost.cache!.read, write: cost.cache!.write },
+        }
+        : undefined,
+    );
+    assert(!JSON.stringify(result).includes(secret));
   }
 });
 

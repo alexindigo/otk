@@ -3,6 +3,8 @@ import "./Message.css" with { type: "text" };
 import { createMemo, For, Show } from "solid-js";
 import WorkLog from "./WorkLog.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
+import TurnUsage from "./TurnUsage.tsx";
+import type { TurnUsage as Usage } from "@otk/client";
 import { elapsed, partGroups } from "./work-log.ts";
 import { CopyIcon } from "./ChromeIcons.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
@@ -59,6 +61,7 @@ export default function Message(
   props: {
     message: OtkMessage;
     metadata?: import("@otk/protocol").AssistantMessage | null;
+    usage?: Usage;
     prefs: Preferences;
     directory?: string;
     permissions: PermissionRequest[];
@@ -171,7 +174,6 @@ export default function Message(
               class={["otk-message-footer", {
                 "otk-time-always": props.prefs.timestamps,
               }]}
-              title={`Input ${message().tokens.input} · output ${message().tokens.output} · reasoning ${message().tokens.reasoning} · cache read ${message().tokens.cache.read} · cache write ${message().tokens.cache.write} · cost $${message().cost}`}
             >
               <span class="otk-message-details">
                 <span
@@ -201,6 +203,14 @@ export default function Message(
                       message().time.completed!,
                     )}
                 </span>
+                <Show when={props.usage}>
+                  {(usage) => (
+                    <TurnUsage
+                      usage={usage()}
+                      showCost={props.prefs.showCost}
+                    />
+                  )}
+                </Show>
                 <Show when={message().interrupted}>
                   <span>interrupted</span>
                 </Show>

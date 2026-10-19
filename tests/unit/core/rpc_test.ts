@@ -28,6 +28,7 @@ import {
   registerRevert,
   registerSessions,
   registerShell,
+  registerUsage,
   RpcRegistry,
 } from "../../../core/mod.ts";
 import { fixture } from "./support.ts";
@@ -55,6 +56,7 @@ const optional = [
   registerPermissions,
   registerQuestions,
   registerRevert,
+  registerUsage,
 ];
 
 // Compile-only checks: features extend the public interface beside their code.
@@ -255,6 +257,7 @@ Deno.test("each optional registration contributes only its present capability an
     "permissions",
     "questions",
     "revert",
+    "usage",
   ] as const;
   const methods = [
     ["session.prompt", "session.abort"],
@@ -268,6 +271,7 @@ Deno.test("each optional registration contributes only its present capability an
     ["permission.list", "permission.reply"],
     ["question.list", "question.reply", "question.reject"],
     ["session.revert"],
+    ["usage.get"],
   ];
   try {
     const core = stub(), rpc = new RpcRegistry(core, db);

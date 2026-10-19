@@ -101,13 +101,26 @@ servers.
 The optional `models` capability supplies `listModels(sessionID)` and the
 feature-owned `models.list { sessionID }` RPC. `ModelCatalog` contains only
 connected providers' IDs/names and model IDs/names, variant names, status,
-`free`, optional release date and optional reported `contextLimit`; its optional
-`default: ModelRef` identifies the configured model only when it is in that
-catalog. Native credentials, options, headers and environment data never belong
-in this contract. This new capability is not inferred for legacy servers.
+`free`, optional release date, optional reported `contextLimit` and optional
+`cost` (input/output/cache read/cache write USD per million tokens); its
+optional `default: ModelRef` identifies the configured model only when it is in
+that catalog. Native credentials, options, headers and environment data never
+belong in this contract. This new capability is not inferred for legacy servers.
 `AgentOption` optionally carries resolved `color`, configured `model: ModelRef`
 and `variant`; `UserMessage` optionally carries the recorded `variant` alongside
 its `model` for restoration.
+
+The transcript preference owner contributes `showCost`, on by default, with the
+shared Display toggle and preference command metadata. Cost visibility does not
+alter stored usage or token counts.
+
+`usage` is an optional capability, advertised only when implemented. Its
+`usage.get {sessionID}` RPC returns a SessionUsage snapshot: full session and
+user-message-keyed turn totals, per-model token categories/reported costs, and
+minimal keyed UsageMessage baselines for exact live replacement. UsageLedger is
+the dependency-free aggregation owner shared by producers and consumers; it
+stores no transcript parts. Unknown capability means unknown usage, never a
+loaded-page estimate. These additive contracts use the existing open registries.
 
 ## Example
 

@@ -25,6 +25,8 @@ export default function Popover(props: {
   title?: string;
   class?: string;
   dismissOnAction?: boolean;
+  /** Non-modal detail previews, available on hover and keyboard focus. */
+  preview?: boolean;
   control?(control: PopoverControl): void;
   onOpen?(): void;
   onClose?(): void;
@@ -35,10 +37,30 @@ export default function Popover(props: {
   }`;
   const [open, setOpen] = createSignal(false);
   let panel!: HTMLDivElement, trigger!: HTMLButtonElement;
+  let previewFocus: HTMLElement | undefined;
+  let restoringFocus = false;
   const ports = useCommandPorts(), closeId = `${anchor}.close`;
-  const dismiss = (focus: () => void = () => trigger.focus()) => {
-    panel.hidePopover();
-    focus();
+  const dismiss = (focus: () => void = () => {
+    if (props.preview && previewFocus?.isConnected) previewFocus.focus();
+    else trigger.focus();
+  }) => {
+    restoringFocus = true;
+    try {
+      panel.hidePopover();
+      focus();
+    } finally {
+      restoringFocus = false;
+    }
+  };
+  const preview = (focused = false) => {
+    if (!props.preview || restoringFocus) return;
+    if (focused) previewFocus = trigger;
+    else if (!panel.matches(":popover-open")) {
+      previewFocus = document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+    }
+    panel.showPopover();
   };
   props.control?.({ open: () => panel.showPopover(), close: dismiss });
   ownedCommand(ports, {
@@ -56,7 +78,24 @@ export default function Popover(props: {
       props.applied ? ` (${props.applied})` : ""
     }`;
   return (
-    <span class={`otk-popover ${props.class ?? ""}`} data-open={String(open())}>
+    <span
+      class={`otk-popover ${props.class ?? ""}`}
+      data-open={String(open())}
+      onMouseEnter={() => preview()}
+      onMouseLeave={(event) => {
+        if (
+          props.preview && !event.currentTarget.contains(document.activeElement)
+        ) panel.hidePopover();
+      }}
+      onFocusIn={(event) => preview(event.target === trigger)}
+      onFocusOut={(event) => {
+        if (
+          props.preview &&
+          !event.currentTarget.contains(event.relatedTarget as Node | null) &&
+          !event.currentTarget.matches(":hover")
+        ) panel.hidePopover();
+      }}
+    >
       <button
         type="button"
         {...selection({

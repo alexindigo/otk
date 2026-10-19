@@ -14,7 +14,11 @@ interface Providers {
       name: string;
       variants?: Record<string, unknown>;
       status: "alpha" | "beta" | "active" | "deprecated";
-      cost: { input: number };
+      cost?: {
+        input: number;
+        output?: number;
+        cache?: { read: number; write: number };
+      };
       limit?: { context: number };
       release_date?: string;
     }>;
@@ -41,7 +45,26 @@ export function models(client: Client, directory: Directory): ModelsCapability {
               name: model.name,
               variants: Object.keys(model.variants ?? {}),
               status: model.status,
-              free: provider.id === "opencode" && model.cost.input === 0,
+              free: provider.id === "opencode" && model.cost?.input === 0,
+              ...([
+                  model.cost?.input,
+                  model.cost?.output,
+                  model.cost?.cache?.read,
+                  model.cost?.cache?.write,
+                ].every((rate) =>
+                  typeof rate === "number" && Number.isFinite(rate) && rate >= 0
+                )
+                ? {
+                  cost: {
+                    input: model.cost!.input,
+                    output: model.cost!.output!,
+                    cache: {
+                      read: model.cost!.cache!.read,
+                      write: model.cost!.cache!.write,
+                    },
+                  },
+                }
+                : {}),
               ...(Number.isFinite(model.limit?.context) &&
                   model.limit!.context > 0
                 ? { contextLimit: model.limit!.context }

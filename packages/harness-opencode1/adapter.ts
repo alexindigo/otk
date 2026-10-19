@@ -37,6 +37,7 @@ import { mapQuestion, questions } from "./questions.ts";
 import { sessions } from "./sessions.ts";
 import { AgentColors, agents } from "./agents.ts";
 import { models } from "./models.ts";
+import { usage } from "./usage.ts";
 import { resources } from "./resources.ts";
 import { commands } from "./commands.ts";
 import { type Launch, shell } from "./shell.ts";
@@ -211,6 +212,7 @@ export class Opencode1Adapter implements Harness {
     registry.register("files", files(this.client, directory));
     registry.register("agents", agents(this.client, directory));
     registry.register("models", models(this.client, directory));
+    registry.register("usage", usage(this.#db, this.#messages, directory));
     registry.register("resources", resources(this.client, directory));
     registry.register(
       "permissions",

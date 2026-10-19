@@ -21,6 +21,19 @@ export * from "./model-groups.ts";
 export * from "./model-preferences.ts";
 export * from "./question-form.ts";
 export { replyMessages, replyMetadata } from "./replies.ts";
+export {
+  createSessionUsage,
+  type SessionUsageOwner,
+  type UsageState,
+} from "./session-usage.ts";
+export {
+  priceUsage,
+  type TurnUsage,
+  turnUsage,
+  type UsageCategory,
+  usageCost,
+  usageTokens,
+} from "./usage.ts";
 export * from "./navigation.ts";
 export * from "./current.ts";
 export * from "./commands.ts";

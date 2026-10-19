@@ -39,7 +39,7 @@ try {
 Run a consumer with Deno's network/read/environment permissions. No OTK sidecar
 is required; start a stock server separately. Empty `db` resolves through
 `XDG_DATA_HOME`/`HOME` using the native default. There are no sidecar auth/state
-inputs. All eleven optional capabilities are implemented in separate modules and
+inputs. All twelve optional capabilities are implemented in separate modules and
 share one session-directory resolver. Use `core` for lifecycle/session queries
 and `capabilities.<name>` for optional operations.
 
@@ -63,12 +63,22 @@ directory configuration.
 `capabilities.models.listModels(sessionID)` reads native `GET /provider` and
 `GET /config` in that session's directory. It allowlists connected provider and
 model display metadata, including finite positive native `limit.context` as
-`contextLimit`, never credentials/options/headers/environment fields. Variant
-names come from the model's variant keys; `free` means the `opencode` provider
-with zero input cost. Configured `model` becomes the catalog default only if
-present among the connected models. `agents.list` uses the same colour
+`contextLimit`, and all four finite nonnegative native cost rates as `cost` (USD
+per million tokens), never credentials/options/headers/environment fields.
+Missing/incomplete/invalid prices stay absent; known zero rates remain zero.
+Variant names come from the model's variant keys; `free` means the `opencode`
+provider with zero input cost. Configured `model` becomes the catalog default
+only if present among the connected models. `agents.list` uses the same colour
 resolution as transcripts and includes configured model/variant metadata. Native
 user `info.model.variant` maps to OTK `UserMessage.variant` (stock 1.18.34).
+
+`usage.getUsage(sessionID)` reads only assistant usage headers from read-only
+SQLite in100-row pages, reduced by the public UsageLedger into full session and
+user-turn totals, per-model counts/cost and exact live-replacement baselines. No
+part/text/tool-output columns are read. Missing/incompatible database schemas
+use the existing bounded Messages.scan API fallback and release each page's
+content immediately. Zero prices and reported zero costs remain distinct from
+absent catalog metadata. The owner counts reverted-but-charged stored steps too.
 
 Optional native selection metadata may be null. Agent descriptions, configured
 models/variants and restored user agent/model/variant values are normalised to

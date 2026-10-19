@@ -7,10 +7,18 @@ export interface TranscriptPreferences {
   conceal: boolean;
   genericToolOutput: boolean;
   scrollbar: boolean;
+  showCost: boolean;
 }
 export function registerTranscriptPreferences(
   registry: PreferenceRegistry,
 ): void {
+  registry.register({
+    key: "showCost",
+    default: true,
+    validate: booleanPreference,
+    label: "Show cost",
+    display: { order: 7, control: { kind: "toggle" } },
+  });
   registry.register({
     key: "timestamps",
     default: false,

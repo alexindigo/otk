@@ -26,13 +26,14 @@ projects through Add project. The centre provides ordered task tabs,
 always-visible active-session phantom tabs and a single replaceable session
 preview. Pin, double-click or send in a phantom to make a task. Task breadcrumbs
 switch sessions and their helpers; the meter shows reported token usage and
-loaded-message cost. The collapsible right panel hosts feature-registered views;
-Sessions shows the selected project's task-grouped parent/child tree with status
-lights and title search. Click to preview or double-click to make a task. Panel
-width (280–480px) and selected view persist with its collapsed state per user.
-Open a session to stream its transcript, send prompts, or press Esc twice to
-interrupt. Message history for the previous session is released on switching.
-Web assets and fonts are bundled locally; no dev server or CDN is used.
+whole-session reported cost. The collapsible right panel hosts
+feature-registered views; Sessions shows the selected project's task-grouped
+parent/child tree with status lights and title search. Click to preview or
+double-click to make a task. Panel width (280–480px) and selected view persist
+with its collapsed state per user. Open a session to stream its transcript, send
+prompts, or press Esc twice to interrupt. Message history for the previous
+session is released on switching. Web assets and fonts are bundled locally; no
+dev server or CDN is used.
 
 Pending permissions for the open session and its descendants take over the
 composer. Allow once, confirm the displayed future grant patterns for Allow
@@ -46,16 +47,18 @@ Transcript prose, code, diffs and the rounded composer share a centred 46rem
 lane. User messages are right-aligned bubbles without role labels. Expandable
 work-log folds hold compact tool rows and thinking lines; file targets are
 project-relative and a single edit's diff sits directly below its row. One
-metadata line per reply shows reported agent/model/timing, with token and cost
-details on hover. Tool summaries expand to the existing renderers; file edits
-and helper cards start expanded. Typed tool cards show bash output,
-read/search/fetch/skill operations, file diffs and diagnostics, todos, read-only
-questions and subagent progress. Click a task to open its child; the subagent
-bar returns to the parent or cycles siblings. Child sessions are read-only. Code
-highlighting runs in a shared Shiki worker with on-demand grammars; session
-changes release it. The Display menu persists preferences in the serving
-sidecar's `otk.db` and updates other connected tabs. Reverted turns show a
-file-summary banner.
+metadata line per reply shows reported agent/model/timing and charged turn
+tokens and cost. Hover or focus the usage total for input/output/reasoning/cache
+token counts and model-priced category costs. Display's Show cost toggle hides
+cost figures while keeping tokens. Tool summaries expand to the existing
+renderers; file edits and helper cards start expanded. Typed tool cards show
+bash output, read/search/fetch/skill operations, file diffs and diagnostics,
+todos, read-only questions and subagent progress. Click a task to open its
+child; the subagent bar returns to the parent or cycles siblings. Child sessions
+are read-only. Code highlighting runs in a shared Shiki worker with on-demand
+grammars; session changes release it. The Display menu persists preferences in
+the serving sidecar's `otk.db` and updates other connected tabs. Reverted turns
+show a file-summary banner.
 
 | #  | Setting                               | Environment variable                                       | Shipped value                                                                  |
 | -- | ------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |

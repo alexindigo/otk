@@ -12,8 +12,10 @@ import {
 import type {
   ContentSession,
   Message as OtkMessage,
+  ModelCatalog,
   PermissionRequest,
   RevertInfo,
+  SessionUsage,
 } from "@otk/protocol";
 import Message from "./Message.tsx";
 import Prompt from "./Prompt.tsx";
@@ -23,7 +25,7 @@ import SubagentBar from "./SubagentBar.tsx";
 import RevertBanner from "./RevertBanner.tsx";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
-import { queuedMessages, replyMessages } from "@otk/client";
+import { queuedMessages, replyMessages, turnUsage } from "@otk/client";
 import { followViewport } from "./viewport.ts";
 import { highlightingScope } from "../highlight/client.ts";
 import type { Draft, DraftChange } from "./prompt/model.ts";
@@ -33,6 +35,8 @@ export default function SessionView(props: {
   info?: ContentSession;
   label: string;
   messages: OtkMessage[];
+  catalog?: ModelCatalog;
+  usage?: SessionUsage;
   loading: boolean;
   paging: boolean;
   exhausted: boolean;
@@ -175,6 +179,7 @@ export default function SessionView(props: {
             {(message) => (
               <Message
                 message={message()}
+                usage={turnUsage(props.usage, message(), props.catalog)}
                 prefs={props.prefs}
                 directory={props.info?.directory}
                 permissions={props.permissions}

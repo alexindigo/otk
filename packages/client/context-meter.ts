@@ -2,14 +2,13 @@
 import type { Message, ModelCatalog } from "@otk/protocol";
 
 /** Latest reported context footprint, not the sum of repeated prompt inputs.
- * Cost is explicitly limited to loaded messages when history is paged. The
+ * Charged session/turn totals belong to the usage owner. The
  * denominator belongs to the same reported model, never the next prompt. */
 export function contextMeter(
   messages: readonly Message[],
   catalog?: ModelCatalog,
 ): {
   tokens?: number;
-  cost?: number;
   limit?: number;
   fraction?: number;
 } {
@@ -33,9 +32,6 @@ export function contextMeter(
     ...(tokens !== undefined && limit !== undefined && Number.isFinite(limit) &&
         limit > 0
       ? { limit, fraction: Math.min(1, Math.max(0, tokens / limit)) }
-      : {}),
-    ...(replies.length
-      ? { cost: replies.reduce((sum, m) => sum + m.cost, 0) }
       : {}),
   };
 }

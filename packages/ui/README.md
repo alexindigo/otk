@@ -61,6 +61,18 @@ have none. OS reduced motion and the persisted Animations off preference replace
 the shimmer with quiet “response in progress” text between flowing rules. The
 same named status remains available to assistive technology in either mode.
 
+Reply footers show charged turn tokens and backend-reported cost after elapsed
+time. The shared Popover's hover/focus preview reveals five token categories and
+their catalog-priced costs; unknown prices show token counts only. Category
+pricing is provided by the framework-free reply usage owner, never reconstructed
+in the view. Display's persisted Show cost toggle defaults on; turning it off
+hides all footer/detail and context-meter cost figures while retaining tokens.
+Popover continues to own native anchoring, dismissal and keyboard focus return.
+ShellPorts exposes the same framework-free usage owner to registered panel
+adapters, so session-row costs need only bind its load/get ports and present
+total.cost. Footers and meter never sum transcript pages; unavailable metadata
+stays unknown while content remains usable.
+
 `prompt.register({ id, create(context) })` installs a per-prompt feature.
 `PromptContext` injects selection/caret/focus operations, an active-lifetime
 check, error reporting and `SessionProvider`'s common session ports: typed

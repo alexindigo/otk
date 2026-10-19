@@ -30,6 +30,7 @@ export { register as registerHistory } from "./features/history.ts";
 export { register as registerFiles } from "./features/files.ts";
 export { register as registerAgents } from "./features/agents.ts";
 export { register as registerModels } from "./features/models.ts";
+export { register as registerUsage } from "./features/usage.ts";
 export { register as registerResources } from "./features/resources.ts";
 export { register as registerPermissions } from "./features/permissions.ts";
 export { register as registerQuestions } from "./features/questions.ts";

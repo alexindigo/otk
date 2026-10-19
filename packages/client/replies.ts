@@ -1,16 +1,30 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { AssistantMessage, Message } from "@otk/protocol";
 
-/** One projection owns contiguous backend reply identity, content and clocks. */
+/** One projection owns a turn's backend reply identity, content and clocks. */
 function replyGroups(
   messages: readonly Message[],
-): { firstID: string; lastID: string; message: Message }[] {
-  const result: { firstID: string; lastID: string; message: Message }[] = [];
+): {
+  firstID: string;
+  lastID: string;
+  message: Message;
+}[] {
+  const result: {
+    firstID: string;
+    lastID: string;
+    message: Message;
+  }[] = [];
+  const turns = new Map<string, number>();
   for (const message of messages) {
-    const previous = result.at(-1), group = previous?.message;
+    const key = message.role === "assistant" && message.replyTo !== undefined
+      ? JSON.stringify([message.sessionID, message.replyTo])
+      : undefined;
+    const index = key === undefined ? undefined : turns.get(key);
+    const previous = index === undefined ? undefined : result[index];
+    const group = previous?.message;
     if (
       previous && message.role === "assistant" && group?.role === "assistant" &&
-      group.replyTo && group.replyTo === message.replyTo
+      group.replyTo !== undefined && group.replyTo === message.replyTo
     ) {
       previous.lastID = message.id;
       previous.message = {
@@ -19,22 +33,19 @@ function replyGroups(
         interrupted: group.interrupted || message.interrupted,
         error: message.error ?? group.error,
         time: { ...message.time, created: group.time.created },
-        cost: group.cost + message.cost,
-        tokens: {
-          input: group.tokens.input + message.tokens.input,
-          output: group.tokens.output + message.tokens.output,
-          reasoning: group.tokens.reasoning + message.tokens.reasoning,
-          cache: {
-            read: group.tokens.cache.read + message.tokens.cache.read,
-            write: group.tokens.cache.write + message.tokens.cache.write,
-          },
-        },
       };
-    } else result.push({ firstID: message.id, lastID: message.id, message });
+    } else {
+      if (key !== undefined) turns.set(key, result.length);
+      result.push({
+        firstID: message.id,
+        lastID: message.id,
+        message,
+      });
+    }
   }
   return result;
 }
-/** One metadata record at the last step of each contiguous backend reply. */
+/** One metadata record at the last step of each backend reply. */
 export function replyMetadata(
   messages: readonly Message[],
 ): Map<string, AssistantMessage> {

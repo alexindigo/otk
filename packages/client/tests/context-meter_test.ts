@@ -2,7 +2,7 @@
 import { assertEquals } from "@std/assert";
 import { contextMeter } from "@otk/client";
 import type { AssistantMessage, ModelCatalog } from "@otk/protocol";
-Deno.test("context meter uses latest reported footprint, sums only reported loaded costs and never invents a window", () => {
+Deno.test("context meter uses latest footprint without aggregating charged usage and never invents a window", () => {
   const reply = (
     id: string,
     input: number,
@@ -22,7 +22,6 @@ Deno.test("context meter uses latest reported footprint, sums only reported load
   assertEquals(contextMeter([]), {});
   assertEquals(contextMeter([reply("a", 1000, .1), reply("b", 2000, .2)]), {
     tokens: 2128,
-    cost: .1 + .2,
   });
   const empty = reply("c", 0, 0);
   empty.tokens = {
@@ -33,7 +32,6 @@ Deno.test("context meter uses latest reported footprint, sums only reported load
   };
   assertEquals(contextMeter([reply("a", 1000, .1), empty]), {
     tokens: 1128,
-    cost: .1,
   });
 });
 
@@ -78,22 +76,20 @@ Deno.test("context window matches the reported footprint's exact provider/model,
   };
   assertEquals(contextMeter([message, empty], catalog), {
     tokens: 2500,
-    cost: 0,
     limit: 10000,
     fraction: .25,
   });
   assertEquals(
     contextMeter([message, { ...message, model: empty.model }], catalog),
-    { tokens: 2500, cost: 0, limit: 20000, fraction: .125 },
+    { tokens: 2500, limit: 20000, fraction: .125 },
   );
   for (const limit of [undefined, 0, -1, NaN, Infinity]) {
     catalog.providers[1].models[0].contextLimit = limit;
-    assertEquals(contextMeter([message], catalog), { tokens: 2500, cost: 0 });
+    assertEquals(contextMeter([message], catalog), { tokens: 2500 });
   }
   catalog.providers[1].models[0].contextLimit = 1000;
   assertEquals(contextMeter([message], catalog), {
     tokens: 2500,
-    cost: 0,
     limit: 1000,
     fraction: 1,
   });
@@ -102,7 +98,7 @@ Deno.test("context window matches the reported footprint's exact provider/model,
       ...message,
       model: { provider: "missing", model: "beam-free" },
     }], catalog),
-    { tokens: 2500, cost: 0 },
+    { tokens: 2500 },
   );
   assertEquals(contextMeter([], catalog), {});
 });

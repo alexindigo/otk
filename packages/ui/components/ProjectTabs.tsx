@@ -9,6 +9,7 @@ import type {
   Message,
   ModelCatalog,
   TaskRecord,
+  UsageTotal,
 } from "@otk/protocol";
 import {
   type ClientTabs,
@@ -36,7 +37,9 @@ export default function ProjectTabs(props: {
   inbox: InboxSnapshot;
   messages: Message[];
   catalog?: ModelCatalog;
+  usage?: UsageTotal;
   exhausted: boolean;
+  showCost?: boolean;
   session?: ContentSession;
   displayMenu?: Element;
   ready: boolean;
@@ -114,6 +117,7 @@ export default function ProjectTabs(props: {
     }
   });
   const meter = createMemo(() => contextMeter(props.messages, props.catalog));
+  const cost = () => props.usage?.cost;
   return (
     <section class="otk-project-tabs" aria-label="Project tabs">
       <Show when={error()}>
@@ -261,9 +265,11 @@ export default function ProjectTabs(props: {
         </nav>
         <output
           class="otk-context-meter"
-          aria-label="Session context and cost"
+          aria-label={props.showCost === false
+            ? "Session context"
+            : "Session context and cost"}
           title={`${
-            props.exhausted ? "Loaded session" : "Loaded messages only"
+            props.exhausted ? "Session context" : "Context from loaded messages"
           }; latest reported context tokens; ${
             meter().limit === undefined
               ? "context window unavailable"
@@ -274,7 +280,7 @@ export default function ProjectTabs(props: {
               }%)`
           }`}
           data-tokens={meter().tokens}
-          data-cost={meter().cost}
+          data-cost={props.showCost === false ? undefined : cost()}
           data-limit={meter().limit}
         >
           <Show when={meter().tokens !== undefined}>
@@ -295,11 +301,12 @@ export default function ProjectTabs(props: {
               </span>
             </Show>
           </Show>
-          <Show when={meter().cost !== undefined}>
-            <span>${meter().cost!.toFixed(4)}</span>
+          <Show when={props.showCost !== false && cost() !== undefined}>
+            <span>${cost()!.toFixed(4)}</span>
           </Show>
           <Show
-            when={meter().tokens === undefined && meter().cost === undefined}
+            when={meter().tokens === undefined &&
+              (props.showCost === false || cost() === undefined)}
           >
             <span>No usage reported</span>
           </Show>

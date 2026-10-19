@@ -723,6 +723,7 @@ export default function Shell(
         ports={{
           theme: props.theme,
           toggles,
+          usage: session.usage,
           servers: () => sidecars.state.list,
           connection: (id) => sidecars.connection(id),
           inbox,
@@ -828,10 +829,14 @@ export default function Shell(
                         )}
                         inbox={inbox(project()!.sidecarId).state.inbox}
                         messages={session.state.content.messages}
+                        usage={session.state.selection
+                          ? session.usage.get(session.state.selection)?.total
+                          : undefined}
                         catalog={session.models?.state.available
                           ? session.models.state.value
                           : undefined}
                         exhausted={session.state.exhausted}
+                        showCost={toggles.state.prefs.showCost}
                         session={info()}
                         displayMenu={
                           <DisplayMenu
@@ -906,6 +911,12 @@ export default function Shell(
                           info={info()}
                           label={selectedSidecar()?.label || "Server"}
                           messages={session.state.content.messages}
+                          usage={session.state.selection
+                            ? session.usage.get(session.state.selection)
+                            : undefined}
+                          catalog={session.models?.state.available
+                            ? session.models.state.value
+                            : undefined}
                           loading={session.state.loading}
                           paging={session.state.paging}
                           exhausted={session.state.exhausted}

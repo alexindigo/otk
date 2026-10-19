@@ -5,6 +5,7 @@ import type {
   MergedEntry,
   ProjectSelection,
   Selection,
+  SessionUsageOwner,
   SidecarConnection,
   SidecarState,
 } from "@otk/client";
@@ -15,6 +16,7 @@ export type { ProjectSelection } from "@otk/client";
 export interface ShellPorts {
   theme: ThemeEngine;
   toggles: Toggles;
+  usage: SessionUsageOwner;
   servers(): SidecarState[];
   connection(id: string): SidecarConnection;
   inbox(id: string): InboxModel;

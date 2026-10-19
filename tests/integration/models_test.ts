@@ -59,7 +59,18 @@ Deno.test("V3 models and agents expose connected public metadata over WS and pre
       connected: string[];
       all: {
         id: string;
-        models: Record<string, { status: string; limit: { context: number } }>;
+        models: Record<
+          string,
+          {
+            status: string;
+            limit: { context: number };
+            cost: {
+              input: number;
+              output: number;
+              cache: { read: number; write: number };
+            };
+          }
+        >;
       }[];
     }>("/provider");
     assertEquals(
@@ -78,6 +89,7 @@ Deno.test("V3 models and agents expose connected public metadata over WS and pre
           Object.keys(model).sort(),
           [
             "free",
+            "cost",
             "id",
             "name",
             ...(model.contextLimit === undefined ? [] : ["contextLimit"]),
@@ -91,6 +103,10 @@ Deno.test("V3 models and agents expose connected public metadata over WS and pre
           p.id === provider.id
         )!.models[model.id].limit.context;
         assertEquals(model.contextLimit, context > 0 ? context : undefined);
+        assertEquals(
+          model.cost,
+          native.all.find((p) => p.id === provider.id)!.models[model.id].cost,
+        );
       }
     }
     const second = catalog.providers.find((provider) =>
@@ -103,6 +119,7 @@ Deno.test("V3 models and agents expose connected public metadata over WS and pre
       variants: ["low", "high"],
       status: "active",
       free: false,
+      cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
       releaseDate: "2026-10-17",
     });
     assertEquals(

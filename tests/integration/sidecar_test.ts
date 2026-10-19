@@ -32,6 +32,7 @@ Deno.test("I11 message paging accepts OTK message IDs without leaking harness cu
       "resources",
       "revert",
       "shell",
+      "usage",
     ]);
     const session = await client.rpc<ContentSession>("session.create", {
       directory: f.oc.directory,

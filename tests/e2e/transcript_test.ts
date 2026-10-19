@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import type { AssistantMessage, Message } from "@otk/protocol";
+import { usageHeader, UsageLedger } from "@otk/protocol";
+import { registerUsage } from "../../core/mod.ts";
 import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
@@ -157,6 +159,20 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
   ];
   const f = await inboxBrowserFixture(root, [], { otk: messages }),
     b = await Cdp.launch(root);
+  Object.assign(f.app.backend.capabilities, {
+    usage: {
+      getUsage: (id: string) =>
+        Promise.resolve(
+          new UsageLedger(
+            id,
+            messages.filter((m): m is AssistantMessage =>
+              m.role === "assistant"
+            ).map(usageHeader),
+          ).snapshot(),
+        ),
+    },
+  });
+  registerUsage(f.app.connections.rpc, f.app.backend);
   try {
     await b.send("Emulation.setDeviceMetricsOverride", {
       width: 2000,
@@ -247,22 +263,24 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
     await b.poll(
       "document.querySelector('.otk-reasoning-body').textContent.includes('Reasoning remains available.')",
     );
-    const footer = await b.evaluate<{ text: string; title: string }>(
-      "(()=>{const e=document.querySelector('.otk-message-footer');return {text:e.textContent,title:e.title}})()",
+    const footer = await b.evaluate<{ text: string }>(
+      "(()=>{const e=document.querySelector('.otk-message-footer');return {text:e.textContent}})()",
     );
     for (
       const value of ["build", "test/reported-model", "6.0s", "interrupted"]
     ) assert(footer.text.includes(value), value);
-    for (
-      const value of [
-        "Input 20",
-        "output 40",
-        "reasoning 10",
-        "cache read 4",
-        "cache write 2",
-        "$0.25",
-      ]
-    ) assert(footer.title.includes(value), value);
+    assert(footer.text.includes("76 tokens · $0.25"));
+    await b.evaluate(
+      "document.querySelector('.otk-turn-usage > button').focus()",
+    );
+    await b.poll("!!document.querySelector('.otk-turn-usage :popover-open')");
+    assertEquals(
+      await b.evaluate(
+        "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].map(row=>row.textContent)",
+      ),
+      ["Input20", "Output40", "Reasoning10", "Cache read4", "Cache write2"],
+    );
+    await b.key("Escape");
     await b.poll(
       "document.querySelector('.otk-prompt-context > span:first-child')?.textContent==='Build' && document.querySelector('.otk-prompt-context .otk-composer-provider')?.textContent==='test' && document.querySelector('.otk-prompt-context .otk-composer-model-name')?.textContent==='reported-model' && !!document.querySelector('[aria-label=\"Attach files\"]')",
     );

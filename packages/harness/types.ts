@@ -23,6 +23,7 @@ export type {
   ResourcesCapability,
   RevertCapability,
   ShellCapability,
+  UsageCapability,
 } from "@otk/protocol";
 export interface HarnessSink {
   /** When provided, index callbacks write this same authoritative owner. */

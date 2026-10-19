@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import type { InboxSnapshot, Message, TaskRecord } from "@otk/protocol";
+import { type AssistantMessage, usageHeader, UsageLedger } from "@otk/protocol";
+import { registerUsage } from "../../core/mod.ts";
 import { createTabs, createTaskActions } from "@otk/client";
 import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
@@ -75,6 +77,20 @@ Deno.test("task tabs create rename reorder and close without deleting sessions; 
     f = await inboxBrowserFixture(root, [], messages),
     b = await Cdp.launch(root),
     c = new WsClient(f.url);
+  Object.assign(f.app.backend.capabilities, {
+    usage: {
+      getUsage: (id: string) =>
+        Promise.resolve(
+          new UsageLedger(
+            id,
+            (messages[id] ?? []).filter((m): m is AssistantMessage =>
+              m.role === "assistant"
+            ).map(usageHeader),
+          ).snapshot(),
+        ),
+    },
+  });
+  registerUsage(f.app.connections.rpc, f.app.backend);
   try {
     await c.connect();
     f.add({ ...f.entries[0], id: "second", title: "After review" });

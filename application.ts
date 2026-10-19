@@ -37,6 +37,7 @@ import {
   registerRevert,
   registerSessions,
   registerShell,
+  registerUsage,
   RpcRegistry,
   type ServiceConfig,
   startCore,
@@ -84,6 +85,7 @@ export function startApplication(
   registerFiles(rpc, backend);
   registerAgents(rpc, backend);
   registerModels(rpc, backend);
+  registerUsage(rpc, backend);
   registerResources(rpc, backend);
   registerPermissions(rpc, backend);
   registerQuestions(rpc, backend);

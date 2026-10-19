@@ -174,12 +174,17 @@ Deno.test("creation-time hover and persistent visibility, structural footer date
     await browser.click("[data-role=assistant] .otk-created-trigger");
     await browser.key("Tab");
     await browser.poll(
+      "document.activeElement===document.querySelector('.otk-turn-usage > button') && !!document.querySelector('.otk-turn-usage :popover-open')",
+    );
+    await browser.key("Tab");
+    await browser.poll(
       "document.activeElement===document.querySelector('.otk-copy-message')",
     );
     await browser.key("Tab");
     await browser.poll(
       "document.activeElement===document.querySelector('.otk-last-output-time') && getComputedStyle(document.querySelector('.otk-last-output-date')).visibility==='visible'",
     );
+    await browser.key("Tab", 8);
     await browser.key("Tab", 8);
     await browser.key("Tab", 8);
     await browser.poll(

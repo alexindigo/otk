@@ -12,6 +12,7 @@ import {
   type ModelCatalogConnection,
   type ModelCatalogOwner,
 } from "./model-catalog.ts";
+import { createSessionUsage, type SessionUsageOwner } from "./session-usage.ts";
 
 export interface Selection {
   sidecarId: string;
@@ -54,6 +55,7 @@ export interface ClientSession {
   state: SessionState;
   /** One catalog for the selected session/directory, borrowed by its consumers. */
   readonly models: ModelCatalogOwner | undefined;
+  readonly usage: SessionUsageOwner;
   subscribe(listener: (state: SessionState) => void): () => void;
   /** Live completions in this open lifetime; snapshots/paging are silent. */
   onToolCompleted(
@@ -80,6 +82,7 @@ export function createSession(
     exhausted: false,
   });
   let selected: Selection | undefined, generation = 0, load = 0;
+  const usage = createSessionUsage(connection, factory);
   let buffer: ContentOp[] = [], fetching = false;
   let controller: AbortController | undefined;
   let models: ModelCatalogOwner | undefined, catalogVersion = 0;
@@ -132,6 +135,7 @@ export function createSession(
     try {
       const sidecar = connection(target.sidecarId), rpc = sidecar.rpc;
       models?.connect();
+      void usage.load(target);
       const [info, messages, permissions, questions] = await Promise.all([
         rpc.call(
           "session.get",
@@ -243,6 +247,7 @@ export function createSession(
   };
   return {
     state,
+    usage,
     get models() {
       void state.selection;
       return models;
@@ -274,6 +279,7 @@ export function createSession(
     open,
     refetch,
     receive(sidecarId: string, frame: ServerFrame): void {
+      usage.receive(sidecarId, frame);
       if (!selected || selected.sidecarId !== sidecarId) return;
       if (frame.t === "welcome" || frame.t === "resync") {
         if (frame.t === "welcome") catalogVersion++;
@@ -338,6 +344,7 @@ export function createSession(
     },
     stop(): void {
       open();
+      usage.stop();
     },
   };
 }

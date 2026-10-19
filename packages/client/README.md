@@ -145,14 +145,32 @@ reply from that state; choosing a single option retains unselected typed text.
 The request-keyed form survives view replacement until `forgetQuestionForm(id)`
 after a successful reply. The UI owns focus, collapse and reply progress only.
 
-`replyMetadata(messages)` combines contiguous backend steps for the same reply
+`replyMetadata(messages)` combines backend steps for the same session/user reply
 using the same grouping owner as `replyMessages(messages)`. The latter supplies
 the transcript with stable first-step keys, so expanding a work log or tool is
 preserved as later backend steps stream in. Metadata is projected into one final
-metadata record, summing only reported tokens/costs and retaining the reply's
-start, final clock and interrupted state. No session content is duplicated into
-a second store; the projection also combines source parts for whole-reply
-copying. No session content is stored outside the currently loaded transcript.
+metadata record, retaining the reply's start, final clock and interrupted state.
+No session content is duplicated into a second store; the projection also
+combines source parts for whole-reply copying. No session content is stored
+outside the currently loaded transcript.
+
+`createSession().usage` is the framework-free shared SessionUsageOwner. Its
+target-keyed load/get API supplies full session and user-turn metadata from the
+optional usage capability, independently of transcript pages. Public
+`createSessionUsage(connection, factory?)` supports smaller compositions. Reads
+coalesce; live assistant headers/removals replace keyed baselines through the
+protocol UsageLedger, including events buffered during a snapshot. Duplicate
+headers and snapshots cannot add a step twice; completed baselines reject stale
+unfinished headers. Reconnect/resync rejects old reads; observed index changes
+refresh cached targets. stop releases all metadata/requests. No content parts
+are retained, and missing capability never causes a partial-page estimate.
+
+`priceUsage(total, catalog?)` prices the owner's exact per-model summaries, with
+reasoning at the output rate. Unknown prices leave category costs absent and
+known zero prices remain zero. Backend-reported totals stay authoritative,
+independent of catalog estimates. `usageTokens` and `usageCost` supply compact
+labels; detail rows retain exact counts. U5 can load/get other targets through
+the same owner and read value.total.cost without another aggregation path.
 
 ## Plain Deno example
 
@@ -220,17 +238,17 @@ first member; `select(selection, sessionID?)` keeps that session inside its
 task. `createTaskActions(rpc, directory)` captures server/project ownership for
 task editors before asynchronous interaction. `contextMeter(messages, catalog?)`
 uses the latest reported assistant token footprint (including reasoning and
-caches) and sums reported costs for the supplied loaded messages. When the
-catalog reports a finite positive context limit for that exact assistant
-provider/model, it also supplies the limit and a clamped fill fraction; unknown
-windows stay unknown. The session's shared catalog loads independently of the
-transcript and rejects stale results; refresh errors retain last good metadata.
-Paged consumers label the cost's loaded scope.
-`taskBreadcrumbs(task, entries, selected)` preserves explicit membership order,
-expands the selected helper path and prevents cycles or duplicate grouped
-helpers. Helper URLs retain their owning task; removing membership preserves the
-viewed session as an ungrouped tab rather than leaving transcript and task
-inconsistent.
+caches). Charged costs belong exclusively to the usage owner. When the catalog
+reports a finite positive context limit for that exact assistant provider/model,
+it also supplies the limit and a clamped fill fraction; unknown windows stay
+unknown. The session's shared catalog loads independently of the transcript and
+rejects stale results; refresh errors retain last good metadata. The meter binds
+the owner's whole-session reported cost directly, independently of its
+latest-context footprint. `taskBreadcrumbs(task, entries, selected)` preserves
+explicit membership order, expands the selected helper path and prevents cycles
+or duplicate grouped helpers. Helper URLs retain their owning task; removing
+membership preserves the viewed session as an ungrouped tab rather than leaving
+transcript and task inconsistent.
 
 `sessionTree(entries, tasks, directory, query?)` projects ordered task groups
 followed by “Not in a task”, with parent/child depth. Helpers inherit the
