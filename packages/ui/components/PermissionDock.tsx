@@ -10,12 +10,13 @@ export function registerPermissionDock(docks: DockRegistry): void {
   });
 }
 import { createSignal, For, Match, onSettled, Show, Switch } from "solid-js";
-import type { PermissionDetail, PermissionRequest } from "@otk/protocol";
+import type { PermissionRequest } from "@otk/protocol";
 import type { PermissionReply } from "@otk/protocol";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import { useSessionPorts } from "../registries/session.tsx";
 import { oldestPermission } from "@otk/client";
 import TakeoverHeader from "./TakeoverHeader.tsx";
+import PermissionSummary from "./PermissionSummary.tsx";
 import type {
   SurfaceRegistry,
   TakeoverDefinition,
@@ -55,49 +56,6 @@ function PermissionTakeover() {
       onDirty={(value) => session.dirty("permissions", value)}
       onReply={(input) => commands.run("permission.reply", input)}
     />
-  );
-}
-const detailOf = <K extends PermissionDetail["kind"]>(
-  detail: PermissionDetail,
-  kind: K,
-) =>
-  detail.kind === kind ? detail as PermissionDetail & { kind: K } : undefined;
-function Detail(props: { detail: PermissionDetail }) {
-  return (
-    <Switch>
-      <Match when={detailOf(props.detail, "bash")}>
-        {(detail) => (
-          <>
-            <pre class="otk-permission-command">{detail().command}</pre>
-            <Show when={detail().cwd}>
-              <p class="otk-muted otk-path">{detail().cwd}</p>
-            </Show>
-          </>
-        )}
-      </Match>
-      <Match when={detailOf(props.detail, "edit")}>
-        {(detail) => (
-          <ul>
-            <For
-              each={detail().files}
-              keyed={(file) => file.path}
-            >
-              {(file) => (
-                <li>
-                  <span class="otk-path">{file().path}</span>{" "}
-                  <span class="otk-muted">
-                    +{file().additions} / −{file().deletions}
-                  </span>
-                </li>
-              )}
-            </For>
-          </ul>
-        )}
-      </Match>
-      <Match when={detailOf(props.detail, "generic")}>
-        {(detail) => <p>{detail().summary}</p>}
-      </Match>
-    </Switch>
   );
 }
 function RequestDock(
@@ -298,15 +256,7 @@ function RequestDock(
           </Switch>
         }
       >
-        <Detail detail={props.request.detail} />
-        <details class="otk-permission-patterns">
-          <summary>Requested scope</summary>
-          <ul>
-            <For each={props.request.patterns} keyed={false}>
-              {(pattern) => <li class="otk-path">{pattern()}</li>}
-            </For>
-          </ul>
-        </details>
+        <PermissionSummary request={props.request} />
         <Show when={error()}>
           <p class="otk-error" role="alert">{error()}</p>
         </Show>

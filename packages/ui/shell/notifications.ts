@@ -6,6 +6,7 @@ import {
   notificationPolicy,
   NotificationTriggers,
   oldestPermission,
+  permissionNoteDetail,
   type Selection,
   type SidecarConnection,
 } from "@otk/client";
@@ -96,6 +97,7 @@ export function applicationNotifications(input: {
       const enriched: Note = request
         ? {
           ...incoming,
+          detail: permissionNoteDetail(request),
           actions: [...incoming.actions, {
             label: "Allow once",
             command: "permission.reply",

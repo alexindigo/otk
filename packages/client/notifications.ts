@@ -11,6 +11,8 @@ export interface Note {
   readonly sessionRef?: { readonly sidecar: string; readonly session: string };
   readonly title: string;
   readonly body?: string;
+  /** Feature-owned, structured-cloneable detail; channels may ignore it. */
+  readonly detail?: unknown;
   readonly actions: readonly NoteAction[];
 }
 /** A port belongs to this delivery, not just to a replaceable string key. */
@@ -75,6 +77,9 @@ export class NotificationHub {
     this.retract(input.id);
     const note: Note = Object.freeze({
       ...input,
+      detail: input.detail === undefined
+        ? undefined
+        : structuredClone(input.detail),
       sessionRef: input.sessionRef && Object.freeze({ ...input.sessionRef }),
       actions: Object.freeze(input.actions.map((action) =>
         Object.freeze({

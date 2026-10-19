@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Toasts.css" with { type: "text" };
-import { createSignal, For, onCleanup, Show } from "solid-js";
+import { createSignal, type Element, For, onCleanup, Show } from "solid-js";
+import type { Note } from "@otk/client";
 import type { ToastsModel } from "../features/notify/toast.ts";
 import Toast from "./surface/Toast.tsx";
 export default function Toasts(
-  props: { model: ToastsModel },
+  props: { model: ToastsModel; detail?(note: Note): Element },
 ): import("solid-js").Element {
   const [items, setItems] = createSignal(props.model.state.items);
   onCleanup(props.model.subscribe((state) => setItems(state.items)));
@@ -28,6 +29,7 @@ export default function Toasts(
                 <span>{item().note.body}</span>
               </Show>
             </button>
+            {props.detail?.(item().note)}
             <Show when={item().note.actions.length}>
               <div class="otk-toast-actions">
                 <For each={item().note.actions}>

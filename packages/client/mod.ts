@@ -13,6 +13,7 @@ export * from "./session.ts";
 export * from "./sidecars.ts";
 export * from "./messages.ts";
 export * from "./permissions.ts";
+export * from "./permission-notification.ts";
 export * from "./history.ts";
 export * from "./drafts.ts";
 export * from "./prompt-selection.ts";

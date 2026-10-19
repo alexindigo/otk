@@ -41,6 +41,7 @@ import { registerPreferenceCommands } from "@otk/client";
 import { registerSessionCommands } from "./commands/sessions.ts";
 import { registerAttentionCommands } from "./commands/attention.ts";
 import { applicationNotifications } from "./notifications.ts";
+import { permissionNotificationDetail } from "../features/permission-notification.tsx";
 import { CommandProvider } from "../keyboard/context.tsx";
 import { createIndex } from "../state/index.ts";
 import { createSession } from "../state/session.ts";
@@ -1016,7 +1017,10 @@ export default function Shell(
             }}
             onLayout={saveLayout}
           />
-          <Toasts model={notifications.toast} />
+          <Toasts
+            model={notifications.toast}
+            detail={permissionNotificationDetail}
+          />
           <DialogHost onChange={setDialog} />
         </div>
       </ShellProvider>

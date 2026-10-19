@@ -7,20 +7,6 @@
   width: 100%;
   overflow-wrap: anywhere;
 }
-.otk-permission-command {
-  margin: 0;
-  white-space: pre-wrap;
-  font: 400 13px/20px var(--font-mono);
-  background: var(--otk-bg-code);
-  border: 1px solid var(--otk-border-code);
-  border-radius: var(--radius-card);
-  padding: 8px var(--item-inset);
-}
-.otk-permission-patterns {
-  color: var(--otk-fg-3);
-  font-size: var(--text-meta);
-}
-.otk-permission-patterns ul,
 .otk-permission-confirm ul {
   margin: 8px 0 0;
 }

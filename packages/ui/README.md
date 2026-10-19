@@ -181,8 +181,14 @@ surfaces replace the composer with a raised, bordered, 20px-radius Takeover and
 a common blocked-light header. Consumer-supplied session location names the
 project/task; question tabs/options use shared underline/pointer primitives.
 Static keyboard hints are in titles, Keys and the palette, not the surface.
-Permission and question owners preserve dirty state through reconnects. The
-legacy `Docks` API remains independently reusable for existing consumers.
+Permission takeovers and notification toasts share one PermissionSummary: exact
+tool, command/working directory, edit file paths/counts or generic target and
+requested patterns. Notification enrichment carries the neutral request
+alongside its originating action through the hub's opaque detail port. A
+permission-owned adapter supplies injected toast content; the generic hub and
+toast host know no permission schema. Permission and question owners preserve
+dirty state through reconnects. The legacy `Docks` API remains independently
+reusable for existing consumers.
 
 `dialogs.register({ id, title, component })` installs feature-owned dialog
 content. A single `DialogHost` handles `dialog.open({ id, input? })` through the

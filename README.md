@@ -40,9 +40,11 @@ Pending permissions for the open session and its descendants take over the
 composer. Allow once, confirm the displayed future grant patterns for Allow
 always, or reject with optional feedback. Child requests retain their
 originating title. Questions use the same composer area and an Answer action.
-Each session retains its unsent browser draft across takeovers, session/tab
-switches and history navigation. The browser title follows the selected project
-and session.
+Background permission notifications show the same exact command, file targets
+and requested scope as the approval takeover, before Allow once is used. Each
+session retains its unsent browser draft across takeovers, session/tab switches
+and history navigation. The browser title follows the selected project and
+session.
 
 Transcript prose, code, diffs and the rounded composer share a centred 46rem
 lane. User messages are right-aligned bubbles without role labels. Expandable
