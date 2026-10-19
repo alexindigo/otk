@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { NotificationHub } from "@otk/client";
+import { countLabel, type NotificationHub } from "@otk/client";
 /** One favicon owner, counting root-session keys rather than delivery events. */
 export function registerBadgeChannel(hub: NotificationHub): () => void {
   const ids = new Set<string>();
@@ -26,7 +26,9 @@ export function registerBadgeChannel(hub: NotificationHub): () => void {
           : ""
       }</svg>`;
     icon.href = "data:image/svg+xml," + encodeURIComponent(svg);
-    icon.title = count ? `${count} sessions need attention` : "OTK";
+    icon.title = count
+      ? countLabel(count, "session needs attention", "sessions need attention")
+      : "OTK";
   };
   const observer = new MutationObserver(paint);
   observer.observe(document.documentElement, {

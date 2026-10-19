@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export { registerPreferenceCommands } from "./preference-commands.ts";
+export { countLabel } from "./count.ts";
 export * from "./project-navigation.ts";
 /** Framework-free OTK transport, observable state and navigation models. */
 export * from "./auth.ts";

@@ -68,7 +68,7 @@ Deno.test("D6 focused background completion opens while retaining the previous s
         toast(b.id)
       }")?.textContent.includes('Session done')`,
     );
-    await browser.poll(`${badge}==='1 sessions need attention'`);
+    await browser.poll(`${badge}==='1 session needs attention'`);
     assert(
       await browser.evaluate(`(() => {
       const surface=document.querySelector("${toast(b.id)} .otk-surface");
@@ -177,7 +177,7 @@ Deno.test("D7 real hidden/granted Notification tag replacement, session favicon 
       "notificationEvidence.notes[1].instance.dispatchEvent(new Event('click',{cancelable:true}))",
     );
     await browser.poll(
-      `location.hash.endsWith('/${b.id}') && ${badge}==='1 sessions need attention'`,
+      `location.hash.endsWith('/${b.id}') && ${badge}==='1 session needs attention'`,
     );
     await openSession(browser, a.id);
     assertEquals(
@@ -186,13 +186,13 @@ Deno.test("D7 real hidden/granted Notification tag replacement, session favicon 
       ),
       "Keep OS draft",
     );
-    assertEquals(await browser.evaluate(badge), "1 sessions need attention");
+    assertEquals(await browser.evaluate(badge), "1 session needs attention");
     await openSession(browser, b.id);
     await browser.poll(
       `location.hash.endsWith('/${b.id}') && [...document.querySelectorAll('[data-role=assistant] .otk-text')].some(el=>el.textContent==='Replacement completed')`,
     );
     await browser.poll(
-      `notificationEvidence.notes.every(n=>n.closed) && ${badge}==='1 sessions need attention'`,
+      `notificationEvidence.notes.every(n=>n.closed) && ${badge}==='1 session needs attention'`,
     );
     await assertBadgeAsset(browser, 1);
     await openSession(browser, c.id);
@@ -253,7 +253,7 @@ Deno.test("D8 OS opt-in calls actual denied browser permission, persists host ch
     await browser.poll(
       `!document.querySelector("${
         toast(b.id)
-      }") && ${badge}==='1 sessions need attention'`,
+      }") && ${badge}==='1 session needs attention'`,
     );
     await openSession(browser, b.id);
     await browser.poll(`${badge}==='OTK'`);

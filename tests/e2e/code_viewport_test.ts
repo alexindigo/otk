@@ -10,6 +10,20 @@ const source = Array.from(
   (_, i) => i % 127 === 126 ? "" : `const viewport${i}: number = ${i};`,
 ).join("\n");
 
+// These tests measure expanded write content. Exercise that Display mode while
+// the dedicated disclosure tests retain coverage of the default collapsed mode.
+async function showFileChanges(browser: Cdp) {
+  await browser.click(".otk-display-menu > button");
+  await browser.poll(
+    "document.querySelector('input[name=collapseFileChanges]')?.checked===true",
+  );
+  await browser.click("input[name=collapseFileChanges]");
+  await browser.poll(
+    "document.querySelector('input[name=collapseFileChanges]')?.checked===false",
+  );
+  await browser.key("Escape");
+}
+
 // Native source coordinates work for both preformatted text and styled rows.
 // A logical unstyled line need not be represented by a separate element.
 const sourceGeometry = String.raw`(code,index)=>{
@@ -460,6 +474,7 @@ Deno.test("real downward wheel retains follow intent when transcript growth prec
         (messages) => messages.some((message) => !!message.info.time.completed),
       );
       await openSession(browser, session.id);
+      if (numbered) await showFileChanges(browser);
       await browser.poll(
         `document.querySelector('.otk-code code')?.textContent===${
           JSON.stringify(source)
@@ -636,6 +651,7 @@ Deno.test("native raw source at a nested pane's leading clip requests its genuin
     });
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await openSession(browser, session.id);
+    await showFileChanges(browser);
     f.fake.queue({
       tool: {
         name: "write",
@@ -822,6 +838,7 @@ Deno.test("code viewport projection preserves complete text, selection/copy, rea
     );
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await openSession(browser, markdown.id);
+    await showFileChanges(browser);
     await browser.poll(
       `document.querySelector('.otk-code code')?.textContent===${
         JSON.stringify(source)
@@ -1158,6 +1175,9 @@ Deno.test("numbered source retains natural empty, blank and terminal geometry th
         body: { title: "Natural shape " + index },
       });
       await openSession(browser, session.id);
+      if (index === 0) {
+        await showFileChanges(browser);
+      }
       await browser.evaluate(
         `shapeSamples=[];heldShape=[];holdShape=true;shapeExpected=${
           JSON.stringify(content)

@@ -27,6 +27,7 @@ import { ChevronIcon, PlusIcon } from "./ChromeIcons.tsx";
 import { ownedAction, useCommandPorts } from "../keyboard/context.tsx";
 import Menu from "./surface/Menu.tsx";
 import { createTaskControls } from "../features/task-controls.ts";
+import { countLabel } from "./tools/count.ts";
 
 /** Presentation and injected actions only; the framework-free tabs owner decides
  * which mandatory, preview and selected-idle tabs exist. */
@@ -118,6 +119,15 @@ export default function ProjectTabs(props: {
   });
   const meter = createMemo(() => contextMeter(props.messages, props.catalog));
   const cost = () => props.usage?.cost;
+  const contextRange = () =>
+    countLabel(
+      meter().limit!,
+      "token",
+      undefined,
+      `${meter().tokens!.toLocaleString("en-US")} of ${
+        meter().limit!.toLocaleString("en-US")
+      }`,
+    );
   return (
     <section class="otk-project-tabs" aria-label="Project tabs">
       <Show when={error()}>
@@ -273,9 +283,7 @@ export default function ProjectTabs(props: {
           }; latest reported context tokens; ${
             meter().limit === undefined
               ? "context window unavailable"
-              : `${meter().tokens!.toLocaleString("en-US")} of ${
-                meter().limit!.toLocaleString("en-US")
-              } tokens (${
+              : `${contextRange()} (${
                 (meter().tokens! / meter().limit! * 100).toFixed(1)
               }%)`
           }`}
@@ -284,7 +292,14 @@ export default function ProjectTabs(props: {
           data-limit={meter().limit}
         >
           <Show when={meter().tokens !== undefined}>
-            <span>{meter().tokens!.toLocaleString("en-US")} tokens</span>
+            <span>
+              {countLabel(
+                meter().tokens!,
+                "token",
+                undefined,
+                meter().tokens!.toLocaleString("en-US"),
+              )}
+            </span>
             <Show when={meter().fraction !== undefined}>
               <span
                 class="otk-context-bar"
@@ -293,9 +308,7 @@ export default function ProjectTabs(props: {
                 aria-valuemin={0}
                 aria-valuemax={100}
                 aria-valuenow={meter().fraction! * 100}
-                aria-valuetext={`${
-                  meter().tokens!.toLocaleString("en-US")
-                } of ${meter().limit!.toLocaleString("en-US")} tokens`}
+                aria-valuetext={contextRange()}
               >
                 <span style={{ width: `${meter().fraction! * 100}%` }} />
               </span>

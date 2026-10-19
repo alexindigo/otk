@@ -2,10 +2,13 @@
 import "./RevertBanner.css" with { type: "text" };
 import { For } from "solid-js";
 import type { RevertInfo } from "@otk/protocol";
+import { countLabel } from "./tools/count.ts";
 export default function RevertBanner(props: { revert: RevertInfo }) {
   return (
     <aside class="otk-revert-banner" aria-label="Reverted messages">
-      <strong>{props.revert.messageCount} messages reverted</strong>
+      <strong>
+        {countLabel(props.revert.messageCount, "message")} reverted
+      </strong>
       <For each={props.revert.files} keyed={false}>
         {(file) => (
           <div>

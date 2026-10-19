@@ -21,3 +21,20 @@ Deno.test("row count labels share zero, singular and plural forms", () => {
   assertEquals(countLabel(1, "file"), "1 file");
   assertEquals(countLabel(2, "file"), "2 files");
 });
+
+Deno.test("formatted count labels inflect the numeric value, not compact or locale display text", () => {
+  assertEquals(countLabel(0, "token"), "0 tokens");
+  assertEquals(countLabel(1, "token"), "1 token");
+  assertEquals(countLabel(1000, "token", undefined, "1K"), "1K tokens");
+  assertEquals(countLabel(1234, "token", undefined, "1,234"), "1,234 tokens");
+  assertEquals(countLabel(1, "token", undefined, "1 of 1"), "1 of 1 token");
+  assertEquals(countLabel(2, "token", undefined, "1 of 2"), "1 of 2 tokens");
+  assertEquals(
+    countLabel(1, "session needs attention", "sessions need attention"),
+    "1 session needs attention",
+  );
+  assertEquals(
+    countLabel(2, "session needs attention", "sessions need attention"),
+    "2 sessions need attention",
+  );
+});

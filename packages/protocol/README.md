@@ -110,9 +110,11 @@ belong in this contract. This new capability is not inferred for legacy servers.
 and `variant`; `UserMessage` optionally carries the recorded `variant` alongside
 its `model` for restoration.
 
-The transcript preference owner contributes `showCost`, on by default, with the
-shared Display toggle and preference command metadata. Cost visibility does not
-alter stored usage or token counts.
+The transcript preference owner contributes `showCost` and
+`collapseFileChanges`, both on by default, with shared Display toggles and
+preference command metadata. Cost visibility does not alter stored usage or
+token counts. File-change disclosure is presentation-only and does not change
+tool results.
 
 `usage` is an optional capability, advertised only when implemented. Its
 `usage.get {sessionID}` RPC returns a SessionUsage snapshot: full session and

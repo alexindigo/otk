@@ -26,7 +26,7 @@ export function registerEditTool(tools: ToolRegistry): void {
         additions: call.files.reduce((n, file) => n + file.additions, 0),
         deletions: call.files.reduce((n, file) => n + file.deletions, 0),
       },
-      expanded: true,
+      expanded: context.prefs?.collapseFileChanges === false,
     }),
   );
 }

@@ -5,9 +5,14 @@ import {
   editorSave,
   emptyDraft,
   insertChip,
+  pasteLabel,
   serialize,
 } from "../components/prompt/model.ts";
 import { summarizePaste } from "../components/prompt/paste.ts";
+Deno.test("paste count labels inflect one long line and multiple lines", () => {
+  assertEquals(pasteLabel("x".repeat(200)), "[Pasted ~1 line]");
+  assertEquals(pasteLabel("a\nb"), "[Pasted ~2 lines]");
+});
 Deno.test("editor whole-token round trip keeps attachments and paste saves expand changed bytes", () => {
   const upload = insertChip(emptyDraft(), 0, 0, "[Image 1]", {
     kind: "file",

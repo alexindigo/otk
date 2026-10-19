@@ -3,15 +3,21 @@ import "./TurnUsage.css" with { type: "text" };
 import { For, Show } from "solid-js";
 import { type TurnUsage as Usage, usageCost, usageTokens } from "@otk/client";
 import Popover from "./surface/Popover.tsx";
+import { countLabel } from "./tools/count.ts";
 
 /** Presentation only; the reply owner supplies the charged turn's projection. */
 export default function TurnUsage(
   props: { usage: Usage; showCost: boolean },
 ): import("solid-js").Element {
   const summary = () =>
-    `${usageTokens(props.usage.tokens)} tokens${
-      props.showCost ? ` · ${usageCost(props.usage.cost)}` : ""
-    }`;
+    `${
+      countLabel(
+        props.usage.tokens,
+        "token",
+        undefined,
+        usageTokens(props.usage.tokens),
+      )
+    }${props.showCost ? ` · ${usageCost(props.usage.cost)}` : ""}`;
   return (
     <Popover
       class="otk-turn-usage"

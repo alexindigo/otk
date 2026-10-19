@@ -133,14 +133,14 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                     applied: !!applied(selection().agent),
                   })}
                 >
-                  {selectionLabel(selection().agent.value ?? "Default agent")}
+                  {selectionLabel(selection().agent.value, "Default agent")}
                 </span>
               }
             >
               <ListPicker
                 label="Choose agent"
                 triggerLabel={`Agent: ${
-                  selectionLabel(selection().agent.value ?? "Default agent")
+                  selectionLabel(selection().agent.value, "Default agent")
                 }`}
                 class="otk-agent-picker"
                 applied={applied(selection().agent)}
@@ -149,7 +149,8 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                   <>
                     <span class="otk-composer-agent">
                       {selectionLabel(
-                        selection().agent.value ?? "Default agent",
+                        selection().agent.value,
+                        "Default agent",
                       )}
                     </span>
                     <ChevronDownIcon />
@@ -265,14 +266,14 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                 <ListPicker<string | undefined>
                   label="Choose variant"
                   triggerLabel={`Variant: ${
-                    selectionLabel(selection().variant.value ?? "Default")
+                    selectionLabel(selection().variant.value, "Default")
                   }`}
                   class="otk-variant-picker"
                   applied={applied(selection().variant)}
                   trigger={
                     <>
                       <span>
-                        {selectionLabel(selection().variant.value ?? "Default")}
+                        {selectionLabel(selection().variant.value, "Default")}
                       </span>
                       <ChevronDownIcon />
                     </>
@@ -286,7 +287,8 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                         label: "Default",
                         description: applied(selection().variant)
                           ? selectionLabel(
-                            selection().variant.value ?? "Default",
+                            selection().variant.value,
+                            "Default",
                           )
                           : undefined,
                       },

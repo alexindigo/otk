@@ -37,7 +37,7 @@ const reply = (id: string): AssistantMessage => ({
   parts: [],
 });
 
-Deno.test("reading column, open renderer summaries, default edit diffs, reply metadata, reported composer settings, retry and tab title", async () => {
+Deno.test("reading column, renderer disclosures, reply metadata, reported composer settings, retry and tab title", async () => {
   const root = await fixture();
   const base = {
     callID: "call",
@@ -225,6 +225,10 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
     );
     await b.click("[data-tool=read] .otk-tool-toggle");
     await b.poll(
+      "document.querySelector('[data-tool=edit] .otk-tool-body').hidden",
+    );
+    await b.click("[data-tool=edit] .otk-tool-toggle");
+    await b.poll(
       "!document.querySelector('[data-tool=read] .otk-tool-body').hidden && document.querySelector('[data-tool=read] .otk-tool-output').textContent==='Unrecognized read result\\n<literal>keep me</literal>'",
     );
     assertEquals(
@@ -354,6 +358,10 @@ Deno.test("reading column, open renderer summaries, default edit diffs, reply me
         "(()=>{const s=document.querySelector('.otk-messages'),c=getComputedStyle(s),lane=document.querySelector('.otk-message-flow').getBoundingClientRect(),composer=document.querySelector('.otk-composer').getBoundingClientRect();return Math.abs(lane.width-Math.min(736,s.clientWidth-parseFloat(c.paddingLeft)-parseFloat(c.paddingRight)))<.5 && Math.abs(lane.width-composer.width)<.5 && Math.abs(lane.left-composer.left)<.5})()",
       );
     }
+    await b.click("[data-tool=patch] .otk-tool-toggle");
+    await b.poll(
+      "!document.querySelector('[data-tool=patch] .otk-tool-body').hidden",
+    );
     assertEquals(
       await b.evaluate(
         "document.querySelector('[data-tool=patch] .otk-tool-target').textContent",

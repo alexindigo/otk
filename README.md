@@ -51,14 +51,16 @@ metadata line per reply shows reported agent/model/timing and charged turn
 tokens and cost. Hover or focus the usage total for input/output/reasoning/cache
 token counts and model-priced category costs. Display's Show cost toggle hides
 cost figures while keeping tokens. Tool summaries expand to the existing
-renderers; file edits and helper cards start expanded. Typed tool cards show
-bash output, read/search/fetch/skill operations, file diffs and diagnostics,
-todos, read-only questions and subagent progress. Click a task to open its
-child; the subagent bar returns to the parent or cycles siblings. Child sessions
-are read-only. Code highlighting runs in a shared Shiki worker with on-demand
-grammars; session changes release it. The Display menu persists preferences in
-the serving sidecar's `otk.db` and updates other connected tabs. Reverted turns
-show a file-summary banner.
+renderers; file changes start collapsed with their path and reported change
+counts in the header. Display's Collapse file changes toggle restores expanded
+defaults; helper cards start expanded. Typed tool cards show bash output,
+read/search/fetch/skill operations, file diffs and diagnostics, todos, read-only
+questions and subagent progress. Click a task to open its child; the subagent
+bar returns to the parent or cycles siblings. Child sessions are read-only. Code
+highlighting runs in a shared Shiki worker with on-demand grammars; session
+changes release it. The Display menu persists preferences in the serving
+sidecar's `otk.db` and updates other connected tabs. Reverted turns show a
+file-summary banner.
 
 | #  | Setting                               | Environment variable                                       | Shipped value                                                                  |
 | -- | ------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |

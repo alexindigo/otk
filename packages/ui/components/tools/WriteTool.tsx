@@ -13,7 +13,7 @@ export function registerWriteTool(tools: ToolRegistry): void {
       icon: EditIcon,
       verb: "Write",
       target: relativeTarget(call.path, context.directory),
-      expanded: true,
+      expanded: context.prefs?.collapseFileChanges === false,
     }),
   );
 }

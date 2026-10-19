@@ -8,10 +8,18 @@ export interface TranscriptPreferences {
   genericToolOutput: boolean;
   scrollbar: boolean;
   showCost: boolean;
+  collapseFileChanges: boolean;
 }
 export function registerTranscriptPreferences(
   registry: PreferenceRegistry,
 ): void {
+  registry.register({
+    key: "collapseFileChanges",
+    default: true,
+    validate: booleanPreference,
+    label: "Collapse file changes",
+    display: { order: 5, control: { kind: "toggle" } },
+  });
   registry.register({
     key: "showCost",
     default: true,

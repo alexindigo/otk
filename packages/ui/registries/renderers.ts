@@ -42,6 +42,7 @@ export interface ToolPresentation {
 }
 export interface PresentationContext {
   directory?: string;
+  prefs?: Preferences;
 }
 export type ToolRenderProps<K extends keyof ToolKinds> =
   & Omit<ToolProps, "call">

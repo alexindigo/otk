@@ -38,6 +38,10 @@ Deno.test("R2/R3 real edit diffs, live styles/wrap, write highlights/line number
     });
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await openSession(browser, s.id);
+    // This renderer suite exercises the expanded display mode; U6 covers default disclosure.
+    await browser.click(".otk-display-menu > button");
+    await browser.click("input[name=collapseFileChanges]");
+    await browser.click(".otk-display-menu > button");
     const parts: RawPart[] = [];
     parts.push(
       await runTool(f, browser, s.id, {

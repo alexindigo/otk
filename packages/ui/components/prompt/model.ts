@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PromptPart } from "@otk/protocol";
 import type { Draft } from "@otk/client";
+import { countLabel } from "../tools/count.ts";
 export {
   type Chip,
   type Draft,
@@ -102,4 +103,4 @@ export function editorSave(draft: Draft): Draft {
   return { ...draft, input: editor.text, chips, editor: undefined };
 }
 export const pasteLabel = (text: string): string =>
-  `[Pasted ~${text.split("\n").length} lines]`;
+  `[Pasted ~${countLabel(text.split("\n").length, "line")}]`;

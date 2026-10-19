@@ -280,7 +280,8 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
               <>
                 <span>
                   {selectionLabel(
-                    ctx.nextSelection().agent.value ?? "Default agent",
+                    ctx.nextSelection().agent.value,
+                    "Default agent",
                   )}
                 </span>
                 <ModelLabel

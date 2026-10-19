@@ -30,8 +30,11 @@ Structured result paths use that presenter inside `ToolOutput`; file contents
 use the same `Code` owner as writes, with native first-line numbering and
 extension-based highlighting. Grep results carry path, line and text. Custom
 tool consumers can import `ToolPath` and `relativeTarget` from the public UI
-entry to share the same body and header presentation. Edits/patches/writes and
-helper cards start expanded. Typed tool modules use
+entry to share the same body and header presentation. The presentation context
+also supplies preferences: edit/patch/write owners start collapsed unless
+Display's persisted Collapse file changes toggle is off. Headers retain paths
+and reported change counts; explicit disclosure choices stay owned by the shared
+frame. Helper cards start expanded. Typed tool modules use
 `tools.registerTyped(kind, Component)`, whose call type derives from the open
 protocol `ToolKinds` map. Separate registration namespaces let an external
 `edit` coexist with typed OTK `edit` without either renderer receiving the
@@ -47,12 +50,14 @@ result through the same `ToolOutput` owner as bash. The adapter's decoded
 results contain user content and metadata, not model-facing envelopes.
 Unrecognized formats retain verbatim fallback. Headers alone summarize
 operations; bodies contain results, metadata, diagnostics and
-navigation/progress actions. Row count inflection uses the shared count-label
-helper. Structural edit, write, patch, todo and question bodies keep their typed
-result presentation; generic output retains its display preference and bounded
-preview notice. Invisible bookkeeping owners declare themselves hidden so wire
-steps cannot split a visible work fold. Reply metadata combines contiguous
-source parts for one whole-reply copy.
+navigation/progress actions. All UI noun-count labels use the shared count-label
+helper, including tokens, reverted messages, pastes and favicon attention.
+Optional display text preserves compact/locale formatting while the numeric
+value owns inflection. Structural edit, write, patch, todo and question bodies
+keep their typed result presentation; generic output retains its display
+preference and bounded preview notice. Invisible bookkeeping owners declare
+themselves hidden so wire steps cannot split a visible work fold. Reply metadata
+combines contiguous source parts for one whole-reply copy.
 
 Unfinished assistant replies end with a thin in-flow glimmer beneath their last
 content and before metadata. The grouped reply's completion clock owns its
@@ -142,9 +147,10 @@ remain in picker tooltips and accessible names when visible text truncates. The
 footer gives controls their natural width and shrinks the model control only
 under actual row pressure: provider text yields first, then model text. Shared
 flex sizing keeps actions on the same row without a fixed label cap. Agent and
-variant labels use display-only title case in triggers and menu rows; keys and
-submitted values retain their exact spelling. Edit prompt uses the shared 28px
-pencil icon button with its accessible name and tooltip.
+variant names use display-only title case in triggers and menu rows; literal
+fallback phrases stay sentence case through the same name/fallback formatter.
+Keys and submitted values retain their exact spelling. Edit prompt uses the
+shared 28px pencil icon button with its accessible name and tooltip.
 
 Backend-applied composer values use the shared `is-applied` trigger state and
 `--applied-fg` theme token, with the same text and geometry. The generic trigger

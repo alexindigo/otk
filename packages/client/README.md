@@ -172,6 +172,11 @@ independent of catalog estimates. `usageTokens` and `usageCost` supply compact
 labels; detail rows retain exact counts. U5 can load/get other targets through
 the same owner and read value.total.cost without another aggregation path.
 
+`countLabel(count, singular, plural?, display?)` is the shared noun-count
+formatter for views and framework-free notification channels. The numeric count
+owns singular/plural even when optional display text is compact or localised.
+The UI's existing public countLabel export delegates to this same owner.
+
 ## Plain Deno example
 
 [`example.ts`](./example.ts) connects to the main OTK core and prints reduced
