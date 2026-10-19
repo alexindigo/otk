@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Chips.css" with { type: "text" };
-import { For } from "solid-js";
+import { For, Show } from "solid-js";
 import type { Chip } from "./model.ts";
 import { ownedAction } from "../../keyboard/context.tsx";
 function title(chip: Chip): string | undefined {
   const part = chip.part;
   return chip.error ||
     (part.kind === "file" && part.source !== "path" ? part.name : undefined);
+}
+function thumbnail(chip: Chip): string | undefined {
+  const part = chip.part;
+  return part.kind === "file" && part.source === "upload" &&
+      part.mime.startsWith("image/") && part.dataBase64
+    ? `data:${part.mime};base64,${part.dataBase64}`
+    : undefined;
 }
 export default function Chips(
   props: {
@@ -30,6 +37,13 @@ export default function Chips(
               title={title(chip())}
               onClick={() => void open(chip())}
             >
+              <Show when={thumbnail(chip())}>
+                <img
+                  class="otk-prompt-thumbnail"
+                  src={thumbnail(chip())}
+                  alt=""
+                />
+              </Show>
               {chip().label}
               {chip().pending
                 ? " reading…"

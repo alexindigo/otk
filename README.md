@@ -63,6 +63,12 @@ changes release it. The Display menu persists preferences in the serving
 sidecar's `otk.db` and updates other connected tabs. Reverted turns show a
 file-summary banner.
 
+Pasted or dropped images appear once as thumbnail attachment chips, separate
+from prompt text. Image-only prompts can be sent directly. Sent images render as
+transcript thumbnails; click one to open its original in the shared image
+dialog. Other files retain their file chips. Editing prompt text preserves
+independent image attachments until they are explicitly removed or sent.
+
 | #  | Setting                               | Environment variable                                       | Shipped value                                                                  |
 | -- | ------------------------------------- | ---------------------------------------------------------- | ------------------------------------------------------------------------------ |
 | 1  | Listener                              | `OTK_SERVER_HOST`, `OTK_SERVER_PORT`                       | `127.0.0.1`, `1502`                                                            |

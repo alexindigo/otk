@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Prompt.css" with { type: "text" };
 import { createSignal, For, onSettled, Show } from "solid-js";
-import { type DraftChange, editDraft, serialize } from "./prompt/model.ts";
+import {
+  type DraftChange,
+  editDraft,
+  hasDraftContent,
+  serialize,
+} from "./prompt/model.ts";
 import { createCompletion } from "./prompt/Completion.tsx";
 import { useUiRegistries } from "../registries/context.tsx";
 import type { PromptContext, PromptProps } from "../registries/prompt.ts";
@@ -81,7 +86,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     }
     draft = change((current) => current);
     if (
-      !active || !draft.input.trim() || !canSubmit() || pending() ||
+      !active || !hasDraftContent(draft) || !canSubmit() || pending() ||
       draft.chips.some((chip) => chip.pending || chip.error)
     ) return;
     setPending(true);
@@ -304,7 +309,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
             : "Send (Enter); Shift+Enter for newline; Esc twice to interrupt"}
           disabled={pending() ||
             props.value.chips.some((chip) => chip.pending || chip.error) ||
-            !canSubmit() || !props.value.input.trim()}
+            !canSubmit() || !hasDraftContent(props.value)}
         >
           <SendIcon />
         </button>

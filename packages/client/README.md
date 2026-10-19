@@ -53,6 +53,12 @@ Late uploads and sends update only their originating draft; a newer edit is
 never cleared by completion of an older submission. Permission/question input
 remains owned by its UI feature and protected by navigation confirmation.
 
+`Chip.start`/`end` are paired optional text coordinates: present for inline
+tokens, absent for independent attachments. Independent image chips are not
+textarea placeholders and survive text/editor replacement. Their bytes stay in
+the session-bound draft and late upload updates retain the existing writer
+identity checks; removing a chip prevents a late completion from restoring it.
+
 `effectiveSelection(draft, { context, agents, catalog })` is the shared pure
 next-prompt projection for display and every submission path. Each field reports
 its backend-applied value, source (`explicit`, `restored`, `configured`,

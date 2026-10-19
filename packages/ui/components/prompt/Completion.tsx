@@ -9,6 +9,7 @@ import type {
 import type { CompletionOption } from "./autocomplete.ts";
 import Autocomplete from "./Autocomplete.tsx";
 import { ownedCommand } from "../../keyboard/context.tsx";
+import { inlineChip } from "./model.ts";
 
 /** Coordinate injected sources without knowing any concrete trigger or feature. */
 export function createCompletion(
@@ -37,7 +38,7 @@ export function createCompletion(
     if (
       connected && mode === "normal" &&
       !ctx.props.value.chips.some((chip) =>
-        caret >= chip.start && caret <= chip.end
+        inlineChip(chip) && caret >= chip.start && caret <= chip.end
       )
     ) {
       for (const feature of features) {

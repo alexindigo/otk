@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PromptPart } from "@otk/protocol";
-import type { Draft } from "@otk/client";
+import type { Chip, Draft } from "@otk/client";
 import { countLabel } from "../tools/count.ts";
 export {
   type Chip,
@@ -10,6 +10,35 @@ export {
 } from "@otk/client";
 // The owner applies transforms synchronously to its latest proposed draft and
 // returns that draft, even when rendered inputs still show a committed snapshot.
+export function inlineChip(
+  chip: Chip,
+): chip is Chip & { start: number; end: number } {
+  return chip.start !== undefined && chip.end !== undefined;
+}
+export function attachChip(
+  draft: Draft,
+  label: string,
+  part: PromptPart,
+): Draft {
+  return {
+    ...draft,
+    chips: [...draft.chips, { id: crypto.randomUUID(), label, part }],
+  };
+}
+export function removeChip(draft: Draft, id: string): Draft {
+  const chip = draft.chips.find((chip) => chip.id === id);
+  if (!chip) return draft;
+  return inlineChip(chip)
+    ? editDraft(
+      draft,
+      draft.input.slice(0, chip.start) + draft.input.slice(chip.end),
+    )
+    : { ...draft, chips: draft.chips.filter((chip) => chip.id !== id) };
+}
+export function hasDraftContent(draft: Draft): boolean {
+  return !!draft.input.trim() ||
+    (draft.mode === "normal" && draft.chips.length > 0);
+}
 export function editDraft(draft: Draft, input: string): Draft {
   let start = 0, oldEnd = draft.input.length, end = input.length;
   while (start < oldEnd && start < end && draft.input[start] === input[start]) {
@@ -26,6 +55,7 @@ export function editDraft(draft: Draft, input: string): Draft {
     ...draft,
     input,
     chips: draft.chips.flatMap((chip) => {
+      if (!inlineChip(chip)) return [chip];
       if (chip.end <= start) return [chip];
       if (chip.start >= oldEnd) {
         return [{ ...chip, start: chip.start + delta, end: chip.end + delta }];
@@ -53,13 +83,13 @@ export function insertChip(
       part,
       start,
       end: start + label.length,
-    }].sort((a, b) => a.start - b.start),
+    }].sort((a, b) => (a.start ?? Infinity) - (b.start ?? Infinity)),
   };
 }
 export function serialize(draft: Draft): PromptPart[] {
   let input = draft.input;
   for (const chip of [...draft.chips].reverse()) {
-    if (chip.part.kind === "text") {
+    if (chip.part.kind === "text" && inlineChip(chip)) {
       input = input.slice(0, chip.start) + chip.part.text +
         input.slice(chip.end);
     }
@@ -76,7 +106,9 @@ export function editorSave(draft: Draft): Draft {
   if (!editor) return draft;
   if (editor.chipID) {
     const chip = draft.chips.find((chip) => chip.id === editor.chipID);
-    if (!chip) throw new Error("Edited paste was removed from the prompt");
+    if (!chip || !inlineChip(chip)) {
+      throw new Error("Edited paste was removed from the prompt");
+    }
     const label = pasteLabel(editor.text),
       next = editDraft(
         draft,
@@ -90,11 +122,12 @@ export function editorSave(draft: Draft): Draft {
         label,
         end: chip.start + label.length,
         part: { kind: "text" as const, text: editor.text },
-      }].sort((a, b) => a.start - b.start),
+      }].sort((a, b) => (a.start ?? Infinity) - (b.start ?? Infinity)),
     };
   }
   let cursor = 0;
   const chips = draft.chips.flatMap((chip) => {
+    if (!inlineChip(chip)) return [chip];
     const start = editor.text.indexOf(chip.label, cursor);
     if (start < 0) return [];
     cursor = start + chip.label.length;

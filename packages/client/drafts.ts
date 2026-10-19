@@ -5,8 +5,9 @@ import { createState, type StateFactory } from "./state.ts";
 export interface Chip {
   id: string;
   label: string;
-  start: number;
-  end: number;
+  /** Paired coordinates for an inline token; absent for independent attachments. */
+  start?: number;
+  end?: number;
   part: PromptPart;
   pending?: boolean;
   error?: string;

@@ -1,0 +1,15 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-file-image {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  margin-block: 8px;
+  border-radius: var(--radius-control);
+  overflow: hidden;
+}
+.otk-file-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 160px;
+  object-fit: contain;
+}

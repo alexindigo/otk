@@ -90,7 +90,10 @@ export { registerQuestionTool } from "./components/tools/QuestionTool.tsx";
 export { registerTextPart } from "./components/parts/TextPart.tsx";
 export { registerReasoningPart } from "./components/parts/ReasoningPart.tsx";
 export { registerToolPart } from "./components/parts/ToolPart.tsx";
-export { registerFilePart } from "./components/parts/FilePart.tsx";
+export {
+  registerFilePart,
+  registerImageDialog,
+} from "./components/parts/FilePart.tsx";
 export { registerAgentPart } from "./components/parts/AgentPart.tsx";
 export { registerCompactionPart } from "./components/parts/CompactionPart.tsx";
 export { registerUnknownPart } from "./components/parts/UnknownPart.tsx";

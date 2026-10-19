@@ -50,6 +50,12 @@ bytes; `capabilities.history.attachment({ messageID, partID })` retrieves those
 bytes asynchronously. Missing/incompatible databases degrade to empty history
 without creating or writing them.
 
+Native image file parts retain their original URL in the neutral transcript
+mapping, shared by snapshots and live updates. Uploaded image data URLs
+therefore reach the browser without a second retrieval path. Non-image file
+metadata does not gain upload bytes. History listings still exclude upload bytes
+and fetch them only through the existing attachment operation.
+
 Core and connector share one `SessionIndex` through `HarnessSink.index`; a
 standalone consumer may omit it and use the adapter's default owner. A malformed
 event or failed event follow-up is logged without reconnecting unrelated

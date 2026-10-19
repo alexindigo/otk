@@ -124,6 +124,11 @@ the dependency-free aggregation owner shared by producers and consumers; it
 stores no transcript parts. Unknown capability means unknown usage, never a
 loaded-page estimate. These additive contracts use the existing open registries.
 
+File parts optionally carry their original `url` display source. Image renderers
+can use that source for both a thumbnail and the original image; unavailable
+sources remain absent rather than being inferred from backend filesystem paths.
+History entries remain metadata-only and resolve upload bytes separately.
+
 ## Example
 
 Within the OTK workspace, Deno resolves the package by its name:

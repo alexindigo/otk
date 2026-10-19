@@ -95,6 +95,19 @@ overlays. Shell, mentions, slash, history, paste, attachments and editor each
 own their implementation. `Prompt` owns native input, submission identity and
 teardown; it has no feature import list.
 
+Image uploads contribute independent chips: one contained thumbnail beside the
+label and explicit remove button, without inserting a textarea token. Shared
+draft transforms preserve them across text/editor changes; normal image-only
+drafts are sendable. New history image entries do not manufacture text markers,
+and history bytes retain their lazy send-time resolution.
+
+`registerFilePart` renders source-bearing image parts as contained thumbnail
+buttons; other files keep the existing chip. Consumers also select
+`registerImageDialog(dialogs)` to open the original source via `dialog.open`.
+Registered ImageView supplies only flowing image content; DialogHost and Dialog
+own the card, title, keyboard dismissal and return focus. Images use their
+original aspect ratio and semantic role radii in both themes.
+
 Features may contribute `settings()` content to the existing footer and one
 `selection(draft)` projection. `PromptContext.nextSelection()` reads that shared
 projection (or the client fallback for smaller compositions). Prompt captures

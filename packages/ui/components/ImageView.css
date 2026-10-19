@@ -1,0 +1,11 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-image-view {
+  display: grid;
+  justify-items: center;
+}
+.otk-image-view img {
+  display: block;
+  max-width: 100%;
+  max-height: 75vh;
+  object-fit: contain;
+}

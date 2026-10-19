@@ -16,4 +16,13 @@
   padding: 4px 8px;
   min-width: 0;
   overflow-wrap: anywhere;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.otk-prompt-thumbnail {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: var(--radius-control);
 }

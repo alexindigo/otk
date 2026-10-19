@@ -141,6 +141,7 @@ export function mapPart(part: RawPart, awaitingPermission = false): Part {
         id,
         name: part.filename || part.source?.path || "file",
         mime: part.mime!,
+        url: part.mime?.startsWith("image/") ? part.url : undefined,
         path: part.source?.path ?? undefined,
         range: part.source?.range
           ? {

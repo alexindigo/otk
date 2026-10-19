@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { type HistoryEntry, sameHistory } from "@otk/protocol";
 import type { PromptPart } from "@otk/protocol";
-import { type Draft, emptyDraft, serialize } from "./model.ts";
+import { type Draft, emptyDraft, hasDraftContent, serialize } from "./model.ts";
 function label(part: PromptPart, count: number): string {
   if (part.kind === "agent") return `@${part.name}`;
   if (part.kind === "text") return part.text;
@@ -41,6 +41,16 @@ export function historyDraft(entry: HistoryEntry): Draft {
     const count = (counts.get(category) || 0) + 1;
     counts.set(category, count);
     const token = label(part, count);
+    // History is metadata-only: images remain independent without fetching bytes
+    // or manufacturing a text token that was not in the user's prompt.
+    if (
+      part.kind === "file" &&
+      (part.source === "upload" || part.source === "history") &&
+      part.mime.startsWith("image/") && !draft.input.includes(token)
+    ) {
+      draft.chips.push({ id: crypto.randomUUID(), label: token, part });
+      continue;
+    }
     let start = draft.input.indexOf(token, cursor);
     if (start < 0) {
       start = draft.input.length;
@@ -68,7 +78,7 @@ export class PromptHistory {
     return this.#index === -1;
   }
   canMove(draft: Draft): boolean {
-    return !draft.input ||
+    return !hasDraftContent(draft) ||
       (!!this.#last &&
         sameHistory({ ...draft, parts: serialize(draft) }, {
           ...this.#last,

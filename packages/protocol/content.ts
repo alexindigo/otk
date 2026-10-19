@@ -226,6 +226,8 @@ export interface PartKinds {
     id: string;
     name: string;
     mime: string;
+    /** Original display source, when supplied by the backend. */
+    url?: string;
     path?: string;
     range?: { start: number; end: number };
   };

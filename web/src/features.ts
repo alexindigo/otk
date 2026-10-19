@@ -15,6 +15,7 @@ import {
   registerFilePart,
   registerGenericTool,
   registerHistoryPrompt,
+  registerImageDialog,
   registerMentionsPrompt,
   registerMetadataParts,
   registerOtkThemes,
@@ -64,6 +65,7 @@ export function applicationUi(): UiRegistries {
   registerReasoningPart(ui.parts);
   registerToolPart(ui.parts);
   registerFilePart(ui.parts);
+  registerImageDialog(ui.dialogs);
   registerAgentPart(ui.parts);
   registerCompactionPart(ui.parts);
   registerUnknownPart(ui.parts);

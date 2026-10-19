@@ -2,9 +2,10 @@
 import { onSettled } from "solid-js";
 import type { PromptRegistry } from "../../registries/prompt.ts";
 import {
+  attachChip,
   type Chip,
-  editDraft,
   insertChip,
+  removeChip,
 } from "../../components/prompt/model.ts";
 import { upload } from "../../components/prompt/attachments.ts";
 import Chips from "../../components/prompt/Chips.tsx";
@@ -63,16 +64,7 @@ export function registerAttachmentsPrompt(prompt: PromptRegistry): void {
                 })
                 : ctx.focus()}
             onRemove={(chip) =>
-              ctx.change((current) => {
-                const found = current.chips.find((item) => item.id === chip.id);
-                return found
-                  ? editDraft(
-                    current,
-                    current.input.slice(0, found.start) +
-                      current.input.slice(found.end),
-                  )
-                  : current;
-              })}
+              ctx.change((current) => removeChip(current, chip.id))}
           />
         ),
         async drop(items) {
@@ -94,19 +86,22 @@ export function registerAttachmentsPrompt(prompt: PromptRegistry): void {
               const before = new Set(draft.chips.map((chip) =>
                 chip.id
               ));
-              draft = insertChip(
-                draft,
-                caret,
-                index ? caret : end,
-                `[${label} ${count}]`,
-                {
-                  kind: "file",
-                  source: "upload",
-                  name: file.name,
-                  mime: file.type || "application/octet-stream",
-                  dataBase64: "",
-                },
-              );
+              const part = {
+                kind: "file",
+                source: "upload",
+                name: file.name,
+                mime: file.type || "application/octet-stream",
+                dataBase64: "",
+              } as const;
+              draft = label === "Image"
+                ? attachChip(draft, `[${label} ${count}]`, part)
+                : insertChip(
+                  draft,
+                  caret,
+                  index ? caret : end,
+                  `[${label} ${count}]`,
+                  part,
+                );
               const chip = draft.chips.find((chip) => !before.has(chip.id))!;
               draft = {
                 ...draft,
@@ -115,7 +110,7 @@ export function registerAttachmentsPrompt(prompt: PromptRegistry): void {
                 ),
               };
               uploads.push({ file, id: chip.id });
-              caret = chip.end + 1;
+              if (chip.end !== undefined) caret = chip.end + 1;
             }
             return draft;
           });
