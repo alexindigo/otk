@@ -516,17 +516,24 @@ export default function Shell(
         : { rootID: selected.rootID || selected.sessionID }),
     });
   };
+  const creationTarget = (input?: ProjectSelection) =>
+    input ?? session.state.selection ?? project();
   onCleanup(registerSessionCommands(commands, {
-    available: (input) =>
-      input
-        ? sidecars.state.list.find((s) => s.id === input.sidecarId)?.status ===
-          "connected"
-        : !!project() &&
-          sidecars.state.list.find((s) => s.id === project()?.sidecarId)
-              ?.status === "connected",
+    available: (input) => {
+      const target = creationTarget(input);
+      return !!target &&
+        sidecars.state.list.some((s) =>
+          s.id === target.sidecarId && s.status === "connected"
+        );
+    },
     create: async (input) => {
-      const target = input ?? project();
-      if (target) await create(target.sidecarId, target.directory);
+      const target = creationTarget(input);
+      if (!target) return;
+      const sidecarId = target.sidecarId, revision = navigationRevision;
+      const directory = "directory" in target
+        ? target.directory
+        : await directoryFor(target);
+      if (revision === navigationRevision) await create(sidecarId, directory);
     },
     open: navigate,
     child: openChild,
