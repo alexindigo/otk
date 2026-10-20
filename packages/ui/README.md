@@ -172,8 +172,10 @@ remain unmuted. The client supplies both applied values and selected variant
 row; choosing Default can show a configured variant while the Default row
 retains its pointer and names that applied value in secondary text.
 
-`registerAutoApprovePrompt` contributes a28px Auto-approve shield in the footer,
-with the shared pressed/underline binding, accessible name and state tooltip.
+`registerAutoApprovePrompt` contributes a28px Auto-approve shield, selected
+before the variable-width pickers in application composition to lead the footer.
+Its enabled state uses the theme's action-text accent through the shared
+pressed/underline binding; its accessible name and state tooltip remain stable.
 The shell selects the same server-owned approval resource for session ports,
 tabs and panels. `permission.auto` captures its writable session at invocation,
 has the Mod+Shift+A binding and remains discoverable in palette/Keys; enabling

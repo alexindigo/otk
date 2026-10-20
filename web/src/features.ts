@@ -80,8 +80,8 @@ export function applicationUi(): UiRegistries {
   registerAttachmentsPrompt(ui.prompt);
   registerEditorPrompt(ui.prompt);
   registerEditorDialog(ui.dialogs);
-  registerComposerPickers(ui.prompt);
   registerAutoApprovePrompt(ui.prompt);
+  registerComposerPickers(ui.prompt);
   registerPermissionTakeover(ui.takeovers);
   registerQuestionTakeover(ui.takeovers);
   registerCommandDialogs(ui.dialogs);
