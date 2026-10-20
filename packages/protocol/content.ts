@@ -83,6 +83,8 @@ export type ToolResult =
   | { kind: "text"; text: string };
 export interface ToolBase {
   callID: string;
+  /** Original tool label when a source operation is normalized to a shared kind. */
+  sourceName?: string;
   status: "pending" | "running" | "completed" | "error" | "denied";
   title?: string;
   error?: string;

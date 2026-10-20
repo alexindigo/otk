@@ -5,6 +5,8 @@ import {
   usageHeader,
   UsageLedger,
   type UsageMessage,
+  type UsageTool,
+  usageTool,
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import type { SidecarConnection } from "./connection.ts";
@@ -12,7 +14,10 @@ import type { Selection } from "./session.ts";
 import { sessionKey } from "./index.ts";
 
 type Target = Pick<Selection, "sidecarId" | "sessionID">;
-type UsageChange = { message: UsageMessage } | { remove: string };
+type UsageChange = { message: UsageMessage } | { remove: string } | {
+  messageID: string;
+  tool: UsageTool;
+} | { messageID: string; removeTool: string };
 export interface UsageState {
   entries: Record<
     string,
@@ -55,7 +60,9 @@ export function createSessionUsage(
     });
   const apply = (ledger: UsageLedger, event: UsageChange) => {
     if ("message" in event) ledger.upsert(event.message);
-    else ledger.remove(event.remove);
+    else if ("remove" in event) ledger.remove(event.remove);
+    else if ("tool" in event) ledger.tool(event.messageID, event.tool);
+    else ledger.removeTool(event.messageID, event.removeTool);
   };
   const load = (target: Target, refresh = false): Promise<void> => {
     const key = sessionKey(target.sidecarId, target.sessionID);
@@ -142,10 +149,17 @@ export function createSessionUsage(
           resource = resources.get(key);
         if (!resource) return;
         const event = frame.event;
-        const change = event.op === "message.remove"
+        const tool = event.op === "part.upsert"
+          ? usageTool(event.part)
+          : undefined;
+        const change: UsageChange | undefined = event.op === "message.remove"
           ? { remove: event.messageID }
           : event.op === "message.upsert" && event.message.role === "assistant"
           ? { message: usageHeader(event.message) }
+          : event.op === "part.upsert" && tool
+          ? { messageID: event.messageID, tool }
+          : event.op === "part.remove"
+          ? { messageID: event.messageID, removeTool: event.partID }
           : undefined;
         if (!change) return;
         if (resource.pending) resource.events.push(change);

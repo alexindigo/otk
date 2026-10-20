@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import {
+  type Part,
   type SessionUsage,
   UsageLedger,
   type UsageMessage,
@@ -14,6 +15,74 @@ const header = (input: number, completed = false): UsageMessage => ({
   tokens: { input, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
   cost: input * .1,
   completed,
+});
+Deno.test("usage resource merges buffered tool labels, header-only updates and removals through the same ledger", async () => {
+  const gate = Promise.withResolvers<SessionUsage>();
+  const owner = createSessionUsage(() =>
+    ({
+      supports: () => true,
+      rpc: { call: () => gate.promise },
+    }) as unknown as SidecarConnection
+  );
+  const pending = owner.load(target);
+  await Promise.resolve();
+  const part: Part = {
+    kind: "tool",
+    id: "tool",
+    call: {
+      tool: "search",
+      sourceName: "glob",
+      callID: "c",
+      title: "Find files",
+      status: "completed",
+      awaitingPermission: false,
+      time: {},
+      mode: "glob",
+      pattern: "**/*",
+      matches: 3,
+    },
+  };
+  owner.receive("local", {
+    t: "content",
+    sessionID: "s",
+    event: { op: "part.upsert", messageID: "step", part },
+  });
+  gate.resolve(new UsageLedger("s", [header(3)]).snapshot());
+  await pending;
+  assertEquals(owner.get(target)?.messages[0].tools, [{
+    id: "tool",
+    name: "glob",
+    summary: "Find files",
+  }]);
+  owner.receive("local", {
+    t: "content",
+    sessionID: "s",
+    event: {
+      op: "message.upsert",
+      message: {
+        id: "step",
+        sessionID: "s",
+        role: "assistant",
+        replyTo: "user",
+        agent: "build",
+        model: header(4).model,
+        tokens: header(4).tokens,
+        cost: .4,
+        interrupted: false,
+        time: { created: 1, completed: 10 },
+        parts: [],
+      },
+    },
+  });
+  assertEquals(owner.get(target)?.messages[0].tools?.length, 1);
+  assertEquals(owner.get(target)?.turns.user.time, { start: 1, end: 10 });
+  owner.receive("local", {
+    t: "content",
+    sessionID: "s",
+    event: { op: "part.remove", messageID: "step", partID: "tool" },
+  });
+  assertEquals(owner.get(target)?.messages[0].tools, []);
+  owner.stop();
 });
 const target = { sidecarId: "local", sessionID: "s" };
 Deno.test("full usage resource coalesces reads and replaces buffered/duplicate live headers without counting snapshots twice", async () => {

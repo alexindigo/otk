@@ -119,10 +119,16 @@ tool results.
 `usage` is an optional capability, advertised only when implemented. Its
 `usage.get {sessionID}` RPC returns a SessionUsage snapshot: full session and
 user-message-keyed turn totals, per-model token categories/reported costs, and
-minimal keyed UsageMessage baselines for exact live replacement. UsageLedger is
-the dependency-free aggregation owner shared by producers and consumers; it
-stores no transcript parts. Unknown capability means unknown usage, never a
-loaded-page estimate. These additive contracts use the existing open registries.
+minimal keyed UsageMessage baselines for exact live replacement, ordered call
+clocks and existing tool-name/title metadata. ToolBase.sourceName preserves an
+original operation label when the adapter normalizes it to a shared tool kind.
+UsageLedger is the dependency-free aggregation owner shared by producers and
+consumers; it stores no transcript parts, tool inputs or outputs. Each total's
+optional time is the first call's start to the last call's end; an unfinished
+call leaves the end absent. Keyed part updates preserve labels across
+header-only replacements; published baselines are detached. Unknown capability
+means unknown usage, never a loaded-page estimate. These additive contracts use
+the existing open registries.
 
 File parts optionally carry their original `url` display source. Image renderers
 can use that source for both a thumbnail and the original image; unavailable

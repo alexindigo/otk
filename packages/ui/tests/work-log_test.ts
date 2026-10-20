@@ -29,8 +29,14 @@ Deno.test("work groups preserve ordering, external ownership, missing clocks and
     groups.map((group) => [group.work, group.parts.map((part) => part.id)]),
     [[false, ["a"]], [true, ["b", "c"]], [false, ["d"]], [true, ["e"]]],
   );
-  assertEquals(groups[1].time, { start: 10, end: 30 });
-  assertEquals(groups[3].time, { start: 40 });
+  // Grouping owns layout only. Turn clocks belong to the complete usage ledger,
+  // not to a competing span reconstructed from the currently loaded tool parts.
+  assertEquals(groups.map((group) => Object.hasOwn(group, "time")), [
+    false,
+    false,
+    false,
+    false,
+  ]);
   assertEquals(
     partGroups(input, (part) => other.presentation(part, DEFAULT_PREFS))
       .length,

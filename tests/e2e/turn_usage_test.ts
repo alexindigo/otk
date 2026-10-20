@@ -47,18 +47,20 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
         "Generate a title for this conversation:",
       );
       const n = title ? 1 : ++step;
-      const tool = !title && n === 1;
+      const tool = !title && n <= 2;
       const delta = tool
         ? {
           tool_calls: [{
             index: 0,
-            id: "call_usage",
+            id: `call_usage_${n}`,
             type: "function",
             function: {
               name: "bash",
               arguments: JSON.stringify({
-                command: "pwd",
-                description: "Read the directory",
+                command: n === 1 ? "pwd" : "ls -la",
+                description: n === 1
+                  ? "Read the directory"
+                  : "List directory files",
               }),
             },
           }],
@@ -66,7 +68,7 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
         : {
           content: title
             ? "Usage"
-            : n === 2
+            : n === 3
             ? "Turn usage includes both steps."
             : "Another turn has its own usage.",
         };
@@ -144,7 +146,7 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
     const steps = stored.filter((m): m is AssistantMessage =>
       m.role === "assistant"
     );
-    assertEquals(steps.length, 2);
+    assertEquals(steps.length, 3);
     const native = await f.oc.request<
       {
         info: {
@@ -168,7 +170,7 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
     const total = sums.reduce((a, n) => a + n, 0),
       cost = steps.reduce((a, m) => a + m.cost, 0);
     assert(total > 300000 && cost > 0);
-    const text = `${
+    const text = `3 model calls · ${
       new Intl.NumberFormat("en-US", {
         notation: "compact",
         maximumFractionDigits: 1,
@@ -194,21 +196,69 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
     const rows = await b.evaluate<string[][]>(
       "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].map(row=>[...row.children].map(cell=>cell.textContent))",
     );
-    assertEquals(
-      rows.map((r) => r[1]),
-      sums.map((n) => n.toLocaleString("en-US")),
+    assertEquals(rows.length, 3);
+    assertEquals(rows.map((r) => r[0]), ["1", "2", "3"]);
+    assertEquals(rows.map((r) => r[1]), [
+      "bash: pwd",
+      "bash: ls -la",
+      "answered",
+    ]);
+    for (const [i, message] of steps.entries()) {
+      assertEquals(
+        rows[i].slice(2, 7),
+        categories(message).map((n) => n.toLocaleString("en-US")),
+      );
+      assertAlmostEquals(
+        Number(rows[i][7].replace(/[$,]/g, "")),
+        message.cost,
+        .005,
+      );
+      assertEquals(
+        rows[i][8],
+        `${
+          ((message.time.completed! - message.time.created) / 1000).toFixed(1)
+        }s`,
+      );
+    }
+    const totals = await b.evaluate<string[]>(
+      "[...document.querySelector('.otk-usage-breakdown tfoot tr').children].map(cell=>cell.textContent)",
     );
+    assertEquals(totals[0], "Total");
     for (const [i, rate] of [2, 4, 4, .5, 3].entries()) {
       assertAlmostEquals(
-        Number(rows[i][2].replace(/[$,]/g, "")),
+        Number(totals[i + 1].split("$")[1].replace(/,/g, "")),
         sums[i] * rate / 1e6,
         .005,
       );
     }
+    const turnTime = `${
+      ((steps.at(-1)!.time.completed! - steps[0].time.created) / 1000).toFixed(
+        1,
+      )
+    }s`;
+    assertEquals(
+      await b.evaluate("document.querySelector('.otk-turn-time').textContent"),
+      turnTime,
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('.otk-work-fold span').textContent",
+      ),
+      `Worked for ${turnTime}`,
+    );
     const geometry = await b.evaluate<{ before: boolean; centre: number }>(
       "(()=>{const u=document.querySelector('.otk-turn-usage'),e=u.previousElementSibling,a=u.getBoundingClientRect(),r=e.getBoundingClientRect();return {before:r.right<=a.left,centre:Math.abs(r.y+r.height/2-a.y-a.height/2)}})()",
     );
     assert(geometry.before && geometry.centre <= .5, JSON.stringify(geometry));
+    const tableGeometry = await b.evaluate<
+      { inside: boolean; aligned: boolean; bounds: number[] }
+    >(
+      "(()=>{const table=document.querySelector('.otk-usage-breakdown'),panel=table.closest('.otk-popover-panel').getBoundingClientRect(),rows=[...table.querySelectorAll('tbody tr')];return {inside:panel.left>=0 && panel.right<=innerWidth,aligned:rows.every(row=>[...row.children].slice(2).every((cell,i)=>Math.abs(cell.getBoundingClientRect().right-rows[0].children[i+2].getBoundingClientRect().right)<=.5)),bounds:[panel.left,panel.right,innerWidth]}})()",
+    );
+    assert(
+      tableGeometry.inside && tableGeometry.aligned,
+      JSON.stringify(tableGeometry),
+    );
     // Hover did not move focus out of the composer. Escape must dismiss the
     // preview without focusing its trigger and reopening it via focus-in.
     await b.key("Escape");
@@ -270,7 +320,7 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
     await b.click('input[name="showCost"]');
     await b.poll(
       `document.querySelector(${JSON.stringify(trigger)})?.textContent===${
-        JSON.stringify(text.split(" · ")[0])
+        JSON.stringify(text.slice(0, text.lastIndexOf(" · ")))
       } && !document.querySelector('.otk-context-meter').textContent.includes('$')`,
     );
     assertEquals(
@@ -281,13 +331,13 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
     await b.reload();
     await b.poll(
       `document.querySelector(${JSON.stringify(trigger)})?.textContent===${
-        JSON.stringify(text.split(" · ")[0])
+        JSON.stringify(text.slice(0, text.lastIndexOf(" · ")))
       }`,
     );
     // Transcript loads independently of metadata; compare the settled cost-off
     // state, not the intentionally unknown-window/catalog-loading frame.
     await b.poll(
-      "document.querySelector('.otk-context-meter')?.dataset.limit==='1000000' && document.querySelector('.otk-context-bar')?.getAttribute('aria-valuenow')==='22'",
+      "document.querySelector('.otk-context-meter')?.dataset.limit==='1000000' && document.querySelector('.otk-context-bar')?.getAttribute('aria-valuenow')==='33'",
     );
     for (
       const [name, theme] of [["dark", "otk-dark"], ["light", "otk-light"]]
@@ -301,7 +351,7 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
         await b.evaluate(
           "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].map(row=>row.children.length)",
         ),
-        [2, 2, 2, 2, 2],
+        [8, 8, 8],
       );
       assertEquals(
         await b.evaluate(
@@ -380,7 +430,7 @@ Deno.test("U4 unknown model prices show all five charged token categories withou
     await b.poll(
       `document.querySelector(${
         JSON.stringify(trigger)
-      })?.textContent==='240 tokens · $0.43'`,
+      })?.textContent==='1 model call · 240 tokens · $0.43'`,
     );
     await hover(b, trigger);
     await b.poll("!!document.querySelector('.otk-turn-usage :popover-open')");
@@ -388,7 +438,7 @@ Deno.test("U4 unknown model prices show all five charged token categories withou
       await b.evaluate(
         "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].map(row=>row.textContent)",
       ),
-      ["Input100", "Output20", "Reasoning30", "Cache read40", "Cache write50"],
+      ["1answered10020304050$0.430.0s"],
     );
     const shots = Deno.env.get("OTK_USAGE_SHOTS");
     if (shots) {
@@ -480,7 +530,7 @@ Deno.test("U4 queued prompts do not split a turn and category costs use each ste
     await b.poll(
       `document.querySelector(${
         JSON.stringify(trigger)
-      })?.textContent==='480K tokens · $0.86'`,
+      })?.textContent==='2 model calls · 480K tokens · $0.86'`,
     );
     assertEquals(
       await b.evaluate("document.querySelectorAll('.otk-turn-usage').length"),
@@ -490,14 +540,17 @@ Deno.test("U4 queued prompts do not split a turn and category costs use each ste
     await b.poll("!!document.querySelector('.otk-turn-usage :popover-open')");
     assertEquals(
       await b.evaluate(
-        "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].map(row=>[...row.children].map(cell=>cell.textContent))",
+        "[...document.querySelector('.otk-usage-breakdown tfoot tr').children].map(cell=>cell.textContent)",
       ),
       [
-        ["Input", "200,000", "$0.60"],
-        ["Output", "40,000", "$0.24"],
-        ["Reasoning", "60,000", "$0.36"],
-        ["Cache read", "80,000", "$0.06"],
-        ["Cache write", "100,000", "$0.45"],
+        "Total",
+        "200,000$0.60",
+        "40,000$0.24",
+        "60,000$0.36",
+        "80,000$0.06",
+        "100,000$0.45",
+        "$0.86",
+        "0.0s",
       ],
     );
     assertEquals(b.errors, []);

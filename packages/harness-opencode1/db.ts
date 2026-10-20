@@ -135,7 +135,7 @@ export class BootstrapDb {
       return;
     }
   }
-  /** Only usage headers, bounded at100 rows; no message bodies or part reads. */
+  /** Bounded usage headers and existing tool labels; never bodies/inputs/output. */
   usageMessages(id: string): Iterable<UsageMessage> | undefined {
     if (!this.#db) return;
     try {
@@ -145,15 +145,37 @@ export class BootstrapDb {
         json_extract(data, '$.modelID') AS model,
         json_extract(data, '$.tokens') AS tokens,
         json_extract(data, '$.cost') AS cost,
+        json_extract(data, '$.time.created') AS created,
         json_extract(data, '$.time.completed') AS completed
         FROM message WHERE session_id = ? AND id > ?
         AND json_extract(data, '$.role') = 'assistant' ORDER BY id LIMIT 100`);
+      const tools = this.#db.prepare(`SELECT id,
+        json_extract(data, '$.tool') AS name,
+        json_extract(data, '$.state.title') AS summary
+        FROM part WHERE session_id = ? AND message_id = ? AND id > ?
+        AND json_extract(data, '$.type') = 'tool' ORDER BY id LIMIT 100`);
       return (function* () {
         let after = "";
         while (true) {
           const rows = query.all(id, after);
           if (!rows.length) break;
           for (const row of rows) {
+            const labels: NonNullable<UsageMessage["tools"]> = [];
+            let partAfter = "";
+            while (true) {
+              const parts = tools.all(id, String(row.id), partAfter);
+              if (!parts.length) break;
+              for (const part of parts) {
+                labels.push({
+                  id: String(part.id),
+                  name: String(part.name),
+                  ...(part.summary == null
+                    ? {}
+                    : { summary: String(part.summary) }),
+                });
+              }
+              partAfter = String(parts.at(-1)!.id);
+            }
             yield {
               id: String(row.id),
               turnID: row.parent == null ? String(row.id) : String(row.parent),
@@ -171,6 +193,13 @@ export class BootstrapDb {
                 : JSON.parse(String(row.tokens)),
               cost: Number(row.cost ?? 0),
               completed: row.completed != null,
+              time: {
+                start: Number(row.created),
+                ...(row.completed == null
+                  ? {}
+                  : { end: Number(row.completed) }),
+              },
+              tools: labels,
             };
           }
           after = String(rows.at(-1)!.id);

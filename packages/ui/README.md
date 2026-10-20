@@ -66,18 +66,23 @@ have none. OS reduced motion and the persisted Animations off preference replace
 the shimmer with quiet “response in progress” text between flowing rules. The
 same named status remains available to assistive technology in either mode.
 
-Reply footers show charged turn tokens and backend-reported cost after elapsed
-time. The shared Popover's hover/focus preview reveals five token categories and
-their catalog-priced costs; unknown prices show token counts only. Category
-pricing is provided by the framework-free reply usage owner, never reconstructed
-in the view. Display's persisted Show cost toggle defaults on; turning it off
-hides all footer/detail and context-meter cost figures while retaining tokens.
-Popover continues to own native anchoring, dismissal and keyboard focus return.
-ShellPorts exposes the same framework-free usage owner to registered panel
-adapters. The Sessions adapter binds its load/get ports for the selected
-project's sessions; rows present total.cost as quiet trailing metadata using the
-shared cost formatter, including known zero. Show cost also hides these amounts
-and their accessible labels. Footers, rows and meter never sum transcript pages;
+Reply footers show model-call count, charged turn tokens and backend-reported
+cost after elapsed time. Work-log headers and footers bind one complete
+usage-owner turn range, with the grouped reply projection shared when usage is
+unavailable. The shared Popover's hover/focus preview reveals an ordered
+per-call table: existing tool labels or answered, five token categories,
+reported cost and time. The Total row retains category tokens and catalog-priced
+costs; unknown category prices show token counts only. Category pricing is
+provided by the framework-free reply usage owner, never reconstructed in the
+view. Display's persisted Show cost toggle defaults on; turning it off hides all
+footer/detail and context-meter cost figures while retaining tokens. Popover's
+generic wide size accommodates comparison tables; it continues to own native
+anchoring, dismissal, Surface scrolling and keyboard focus return. ShellPorts
+exposes the same framework-free usage owner to registered panel adapters. The
+Sessions adapter binds its load/get ports for the selected project's sessions;
+rows present total.cost as quiet trailing metadata using the shared cost
+formatter, including known zero. Show cost also hides these amounts and their
+accessible labels. Footers, rows and meter never sum transcript pages;
 unavailable metadata stays unknown while content remains usable.
 
 `prompt.register({ id, create(context) })` installs a per-prompt feature.

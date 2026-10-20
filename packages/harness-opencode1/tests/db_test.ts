@@ -7,6 +7,8 @@ import { usage } from "../usage.ts";
 import { Client } from "../client.ts";
 import { Messages } from "../messages.ts";
 import { sessionDirectory } from "../directory.ts";
+import { mapPart } from "../map.ts";
+import { usageTool } from "@otk/protocol";
 
 async function fixture(): Promise<string> {
   const root = fromFileUrl(new URL("../../../.test-state/", import.meta.url));
@@ -75,10 +77,10 @@ Deno.test("bootstrap DB degrades on missing schema without creating a missing da
   degraded.close();
 });
 
-Deno.test("usage reads every bounded metadata page without parts or writes; API fallback produces the same full summaries", async () => {
+Deno.test("usage reads every bounded metadata page and tool labels without content or writes; API fallback produces the same full summaries", async () => {
   const file = await fixture(), db = new DatabaseSync(file);
   db.exec(
-    "CREATE TABLE session(id TEXT,directory TEXT,time_updated INTEGER); CREATE TABLE message(id TEXT,session_id TEXT,data TEXT)",
+    "CREATE TABLE session(id TEXT,directory TEXT,time_updated INTEGER); CREATE TABLE message(id TEXT,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT,session_id TEXT,message_id TEXT,data TEXT)",
   );
   const rows = Array.from({ length: 103 }, (_, i) => ({
     info: {
@@ -89,7 +91,7 @@ Deno.test("usage reads every bounded metadata page without parts or writes; API 
       agent: "build",
       providerID: i % 2 ? "two" : "one",
       modelID: "same",
-      time: { created: 1, completed: 2 },
+      time: { created: i * 1000, completed: i * 1000 + 500 },
       tokens: {
         input: 1,
         output: 2,
@@ -100,10 +102,30 @@ Deno.test("usage reads every bounded metadata page without parts or writes; API 
       cost: .01,
       private: "secret-content",
     },
-    parts: [{ type: "text", text: "secret-content" }],
+    parts: [
+      {
+        id: `tool-${i}`,
+        sessionID: "s",
+        messageID: `m${String(i).padStart(3, "0")}`,
+        type: "tool",
+        tool: "glob",
+        state: {
+          status: "completed",
+          title: "Find source files",
+          input: { pattern: "secret-input" },
+          output: "secret-output",
+        },
+      },
+      { type: "text", text: "secret-content" },
+    ],
   }));
   const put = db.prepare("INSERT INTO message VALUES(?,?,?)");
-  for (const row of rows) put.run(row.info.id, "s", JSON.stringify(row.info));
+  const putPart = db.prepare("INSERT INTO part VALUES(?,?,?,?)");
+  for (const row of rows) {
+    put.run(row.info.id, "s", JSON.stringify(row.info));
+    const part = row.parts[0];
+    putPart.run(part.id!, "s", row.info.id, JSON.stringify(part));
+  }
   db.close();
   const before = await Deno.readFile(file),
     reader = new BootstrapDb(file),
@@ -140,6 +162,33 @@ Deno.test("usage reads every bounded metadata page without parts or writes; API 
     assertEquals(sql.turns.user.tokens.input, 102);
     assertEquals(sql.total.tokens.cache.write, 515);
     assert(!JSON.stringify(sql).includes("secret-content"));
+    assert(!JSON.stringify(sql).includes("secret-input"));
+    assert(!JSON.stringify(sql).includes("secret-output"));
+    assertEquals(sql.turns.user.time, { start: 0, end: 101500 });
+    assertEquals(sql.messages[0].tools, [{
+      id: "tool-0",
+      name: "glob",
+      summary: "Find source files",
+    }]);
+    const live = mapPart({
+      id: "tool-0",
+      sessionID: "s",
+      messageID: "m000",
+      type: "tool",
+      tool: "glob",
+      callID: "call",
+      state: {
+        status: "completed",
+        title: "Find source files",
+        input: { pattern: "**/*" },
+      },
+    });
+    assert(live.kind === "tool" && live.call.tool === "search");
+    assertEquals(
+      usageTool(live),
+      sql.messages[0].tools![0],
+      "Normalized live kinds retain exactly the SQL/API source labels",
+    );
     assert(!JSON.stringify(sql).includes('"total":15'));
     const fallback = await usage(missing, messages, directory).getUsage("s");
     assertEquals(calls, [100, 100]);

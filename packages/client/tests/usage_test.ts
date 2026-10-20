@@ -147,6 +147,68 @@ Deno.test("authoritative turn lookup rejects wrong-session, absent and inherited
   );
 });
 
+Deno.test("complete call metadata orders rows by start, owns one turn span and prices each stored call without tool-output retention", () => {
+  const a = { ...step("z"), time: { created: 1000, completed: 3000 } };
+  const b = { ...step("a", "two"), time: { created: 4000, completed: 7000 } };
+  const c = { ...step("final"), time: { created: 8000, completed: 12000 } };
+  a.parts = [{
+    kind: "tool",
+    id: "tool",
+    call: {
+      tool: "bash",
+      callID: "call",
+      title: "Inspect files",
+      command: "ls -la",
+      output: "secret-output",
+      status: "completed",
+      awaitingPermission: false,
+      time: { start: 1500, end: 2000 },
+    },
+  }];
+  const ledger = new UsageLedger("s", [b, c, a].map(usageHeader));
+  const snapshot = ledger.snapshot();
+  const turn = turnUsage(snapshot, c, catalog)!;
+  assertEquals(turn.time, { start: 1000, end: 12000 });
+  assertEquals(turn.calls.map((call) => call.id), ["z", "a", "final"]);
+  assertEquals(turn.calls.map((call) => call.activity), [
+    "bash: Inspect files",
+    "answered",
+    "answered",
+  ]);
+  assertEquals(turn.calls.map((call) => call.time), [
+    { start: 1000, end: 3000 },
+    { start: 4000, end: 7000 },
+    { start: 8000, end: 12000 },
+  ]);
+  assertEquals(turn.calls.map((call) => call.tokens), [240000, 240000, 240000]);
+  assertAlmostEquals(turn.calls[1].categories[0].cost!, .4);
+  assertAlmostEquals(
+    turn.cost,
+    turn.calls.reduce((sum, call) => sum + call.cost, 0),
+  );
+  assertEquals(JSON.stringify(snapshot).includes("secret-output"), false);
+  ledger.tool("z", { id: "tool", name: "bash", summary: "Updated label" });
+  ledger.upsert(usageHeader({ ...a, parts: [] }));
+  assertEquals(
+    snapshot.messages[0].tools?.[0].summary,
+    "Inspect files",
+    "Published snapshots stay detached",
+  );
+  assertEquals(
+    turnUsage(ledger.snapshot(), c)?.calls[0].activity,
+    "bash: Updated label",
+  );
+  ledger.removeTool("z", "tool");
+  assertEquals(turnUsage(ledger.snapshot(), c)?.calls[0].activity, "answered");
+  ledger.upsert(usageHeader({ ...step("live"), time: { created: 13000 } }));
+  assertEquals(ledger.snapshot().turns.user.time, {
+    start: 1000,
+    end: undefined,
+  });
+  ledger.remove("live");
+  assertEquals(ledger.snapshot().turns.user.time, { start: 1000, end: 12000 });
+});
+
 Deno.test("a queued user message cannot split the charged turn, and session identity isolates matching parent IDs", () => {
   const messages = [
     step("a"),

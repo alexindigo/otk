@@ -1,5 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { AssistantMessage, ModelRef, Tokens } from "./content.ts";
+import type { AssistantMessage, ModelRef, Part, Tokens } from "./content.ts";
+
+/** Existing tool labels only, never inputs, output or transcript parts. */
+export interface UsageTool {
+  id: string;
+  name: string;
+  summary?: string;
+}
+export interface UsageTime {
+  start: number;
+  end?: number;
+}
 
 /** Usage headers only. Exact baselines make snapshot/live replacement idempotent. */
 export interface UsageMessage {
@@ -9,6 +20,8 @@ export interface UsageMessage {
   tokens: Tokens;
   cost: number;
   completed: boolean;
+  time?: UsageTime;
+  tools?: UsageTool[];
 }
 export interface ModelUsage {
   model: ModelRef;
@@ -19,6 +32,7 @@ export interface UsageTotal {
   tokens: Tokens;
   cost: number;
   models: ModelUsage[];
+  time?: UsageTime;
 }
 export interface SessionUsage {
   sessionID: string;
@@ -37,6 +51,25 @@ export function usageHeader(message: AssistantMessage): UsageMessage {
     tokens: message.tokens,
     cost: message.cost,
     completed: message.time.completed !== undefined,
+    time: { start: message.time.created, end: message.time.completed },
+    ...(message.parts.length
+      ? {
+        tools: message.parts.flatMap((part) => {
+          const tool = usageTool(part);
+          return tool ? [tool] : [];
+        }),
+      }
+      : {}),
+  };
+}
+/** Project the same title/summary already supplied to tool presentation. */
+export function usageTool(part: Part): UsageTool | undefined {
+  if (part.kind !== "tool") return;
+  return {
+    id: part.id,
+    name: part.call.sourceName ??
+      (part.call.tool === "external" ? part.call.name : part.call.tool),
+    summary: part.call.title,
   };
 }
 function empty(): Tokens {
@@ -67,6 +100,10 @@ export class UsageLedger {
       model: { provider: message.model.provider, model: message.model.model },
       cost: message.cost,
       completed: message.completed,
+      time: message.time ? { ...message.time } : previous?.time,
+      tools: (message.tools ?? previous?.tools ?? []).map((tool) => ({
+        ...tool,
+      })),
       tokens: {
         input: message.tokens.input,
         output: message.tokens.output,
@@ -81,11 +118,35 @@ export class UsageLedger {
   remove(id: string): void {
     this.#messages.delete(id);
   }
+  tool(messageID: string, tool: UsageTool): void {
+    const message = this.#messages.get(messageID);
+    if (!message) return;
+    const tools = new Map(message.tools?.map((item) => [item.id, item]));
+    tools.set(tool.id, { ...tool });
+    message.tools = [...tools.values()].sort((a, b) =>
+      a.id.localeCompare(b.id)
+    );
+  }
+  removeTool(messageID: string, id: string): void {
+    const message = this.#messages.get(messageID);
+    if (message) {
+      message.tools = message.tools?.filter((tool) => tool.id !== id);
+    }
+  }
   snapshot(): SessionUsage {
     const summarize = (messages: Iterable<UsageMessage>): UsageTotal => {
       const tokens = empty(), models = new Map<string, ModelUsage>();
-      let cost = 0;
+      let cost = 0, count = 0, start = Infinity, end = -Infinity;
+      let known = true, finished = true;
       for (const message of messages) {
+        count++;
+        if (!message.time) known = false;
+        else {
+          start = Math.min(start, message.time.start);
+          if (!message.completed || message.time.end === undefined) {
+            finished = false;
+          } else end = Math.max(end, message.time.end);
+        }
         add(tokens, message.tokens);
         cost += message.cost;
         const key = JSON.stringify([
@@ -105,6 +166,9 @@ export class UsageLedger {
       return {
         tokens,
         cost,
+        ...(count && known
+          ? { time: { start, end: finished ? end : undefined } }
+          : {}),
         models: [...models.values()].sort((a, b) =>
           JSON.stringify(a.model).localeCompare(JSON.stringify(b.model))
         ),
@@ -125,8 +189,8 @@ export class UsageLedger {
         ) => [id, summarize(messages)]),
       ),
       messages: [...this.#messages.values()].sort((a, b) =>
-        a.id.localeCompare(b.id)
-      ),
+        (a.time?.start ?? 0) - (b.time?.start ?? 0) || a.id.localeCompare(b.id)
+      ).map((message) => structuredClone(message)),
     };
   }
 }

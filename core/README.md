@@ -46,9 +46,10 @@ provider/config requests and credential filtering belong to the adapter.
 
 `usage.get` delegates to the optional usage capability. Its whole-session and
 user-turn summaries include source-model totals and keyed message-usage
-baselines, never transcript parts. The public UsageLedger owns aggregation and
-idempotent live replacement; transcript pagination never limits charged usage
-totals.
+baselines, call clocks and small existing tool labels, never transcript parts or
+tool inputs/output. The public UsageLedger owns aggregation and the complete
+turn range, and idempotent live replacement; transcript pagination never limits
+charged usage totals.
 
 The existing `welcome.sidecar.harness` wire shape gains a `capabilities` array
 advertising present backend capabilities. Consumers gate optional features on

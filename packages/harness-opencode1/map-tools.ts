@@ -37,6 +37,7 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
   const state = part.state!;
   const base: ToolBase = {
     callID: part.callID!,
+    sourceName: part.tool,
     status: state.status === "error" &&
         /QuestionRejectedError|rejected permission|specified a rule|user dismissed/i
           .test(state.error || "")

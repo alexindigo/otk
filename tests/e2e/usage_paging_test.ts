@@ -29,7 +29,7 @@ Deno.test("U4 complete102-step turn and session totals survive paging, duplicate
       replyTo: "user",
       agent: "build",
       model: { provider: "test", model: "test" },
-      time: { created: i + 2, completed: i + 3 },
+      time: { created: i * 1000 + 2, completed: i * 1000 + 1002 },
       tokens: {
         input: 1,
         output: 0,
@@ -89,7 +89,7 @@ Deno.test("U4 complete102-step turn and session totals survive paging, duplicate
       replyTo: "next-user",
       agent: "build",
       model: { provider: "test", model: "test" },
-      time: { created: 1000, ...(completed ? { completed: 2000 } : {}) },
+      time: { created: 200000, ...(completed ? { completed: 201000 } : {}) },
       tokens: { input, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
       cost: input * .01,
       interrupted: false,
@@ -112,11 +112,75 @@ Deno.test("U4 complete102-step turn and session totals survive paging, duplicate
   try {
     await b.goto(`${f.url}/#/local/core`);
     await b.poll(
-      `${visible}==='102 tokens · $1.02' && Math.abs(Number(${cost})-1.02)<.000001`,
+      `${visible}==='102 model calls · 102 tokens · $1.02' && Math.abs(Number(${cost})-1.02)<.000001`,
     );
     assertEquals(calls, [{ limit: 100, before: undefined }]);
     await b.reload();
-    await b.poll(`${visible}==='102 tokens · $1.02'`);
+    await b.poll(`${visible}==='102 model calls · 102 tokens · $1.02'`);
+    const point = await b.evaluate<{ x: number; y: number }>(
+      "(()=>{const trigger=document.querySelector('.otk-turn-usage > button');trigger.scrollIntoView({block:'center'});const r=trigger.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
+    );
+    await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
+    await b.poll("!!document.querySelector('.otk-turn-usage :popover-open')");
+    assertEquals(
+      await b.evaluate(
+        "document.querySelectorAll('.otk-usage-breakdown tbody tr').length",
+      ),
+      102,
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelectorAll('.otk-usage-breakdown tfoot tr').length",
+      ),
+      1,
+    );
+    assertEquals(
+      await b.evaluate(
+        "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].reduce((sum,row)=>sum+Number(row.children[2].textContent),0)",
+      ),
+      102,
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('.otk-usage-breakdown tfoot tr').children[1].firstChild.textContent",
+      ),
+      "102",
+    );
+    assertEquals(
+      await b.evaluate(
+        "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].reduce((sum,row)=>sum+Number(row.children[7].textContent.replace('$','')),0).toFixed(2)",
+      ),
+      "1.02",
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('.otk-usage-breakdown tfoot tr').children[6].textContent",
+      ),
+      "$1.02",
+    );
+    // The first two calls are outside the loaded100-message page. Their clocks
+    // must still own the footer's complete first-start/last-end range.
+    assertEquals(
+      await b.evaluate("document.querySelector('.otk-turn-time').textContent"),
+      "102.0s",
+    );
+    const scrollPoint = await b.evaluate<{ x: number; y: number }>(
+      "(()=>{const r=document.querySelector('.otk-turn-usage .otk-surface-body').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
+    );
+    await b.send("Input.dispatchMouseEvent", {
+      type: "mouseWheel",
+      ...scrollPoint,
+      deltaX: 0,
+      deltaY: 5000,
+    });
+    await b.poll(
+      "(()=>{const body=document.querySelector('.otk-turn-usage .otk-surface-body'),foot=body.querySelector('tfoot').getBoundingClientRect(),bounds=body.getBoundingClientRect();return body.scrollTop>0 && foot.top>=bounds.top && foot.bottom<=bounds.bottom})()",
+    );
+    await b.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      x: 1,
+      y: 1,
+    });
     assertEquals(calls, [{ limit: 100, before: undefined }, {
       limit: 100,
       before: undefined,
@@ -143,11 +207,11 @@ Deno.test("U4 complete102-step turn and session totals survive paging, duplicate
     emit(2);
     emit(2);
     await b.poll(
-      `${last}==='2 tokens · $0.02' && Math.abs(Number(${cost})-1.04)<.000001`,
+      `${last}==='1 model call · 2 tokens · $0.02' && Math.abs(Number(${cost})-1.04)<.000001`,
     );
     emit(5);
     await b.poll(
-      `${last}==='5 tokens · $0.05' && Math.abs(Number(${cost})-1.07)<.000001`,
+      `${last}==='1 model call · 5 tokens · $0.05' && Math.abs(Number(${cost})-1.07)<.000001`,
     );
     hold = Promise.withResolvers<SessionUsage>();
     await b.reload();
@@ -160,16 +224,16 @@ Deno.test("U4 complete102-step turn and session totals survive paging, duplicate
     hold.resolve(ledger.snapshot());
     hold = undefined;
     await b.poll(
-      `${last}==='7 tokens · $0.07' && Math.abs(Number(${cost})-1.09)<.000001`,
+      `${last}==='1 model call · 7 tokens · $0.07' && Math.abs(Number(${cost})-1.09)<.000001`,
     );
     emit(9, true);
     emit(9, true);
     await b.poll(
-      `${last}==='9 tokens · $0.09' && Math.abs(Number(${cost})-1.11)<.000001`,
+      `${last}==='1 model call · 9 tokens · $0.09' && Math.abs(Number(${cost})-1.11)<.000001`,
     );
     await b.reload();
     await b.poll(
-      `${last}==='9 tokens · $0.09' && Math.abs(Number(${cost})-1.11)<.000001`,
+      `${last}==='1 model call · 9 tokens · $0.09' && Math.abs(Number(${cost})-1.11)<.000001`,
     );
     assertEquals(calls.length, 4, "Usage reads never page transcript content");
     assertEquals(b.errors, []);

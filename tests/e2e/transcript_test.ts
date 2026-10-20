@@ -280,9 +280,9 @@ Deno.test("reading column, renderer disclosures, reply metadata, reported compos
     await b.poll("!!document.querySelector('.otk-turn-usage :popover-open')");
     assertEquals(
       await b.evaluate(
-        "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].map(row=>row.textContent)",
+        "[...document.querySelector('.otk-usage-breakdown tfoot tr').children].slice(1,6).map(cell=>cell.textContent)",
       ),
-      ["Input20", "Output40", "Reasoning10", "Cache read4", "Cache write2"],
+      ["20", "40", "10", "4", "2"],
     );
     await b.key("Escape");
     await b.poll(

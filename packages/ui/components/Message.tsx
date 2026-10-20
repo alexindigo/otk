@@ -95,6 +95,15 @@ export default function Message(
   const streaming = () =>
     props.message.role === "assistant" &&
     props.message.time.completed === undefined;
+  // Select one turn range for both consumers; complete usage metadata wins over
+  // the loaded-page reply projection. Unsupported backends share that projection.
+  const time = () =>
+    props.usage?.time ?? {
+      start: props.message.time.created,
+      end: props.message.role === "assistant"
+        ? props.message.time.completed
+        : undefined,
+    };
   const error = () =>
     props.message.role === "assistant" && !props.message.interrupted
       ? props.message.error?.message
@@ -131,7 +140,7 @@ export default function Message(
                 />
               }
             >
-              <WorkLog time={group().time}>
+              <WorkLog time={time()}>
                 <PartsView
                   parts={group().parts}
                   prefs={props.prefs}
@@ -195,13 +204,11 @@ export default function Message(
                 <span>
                   {message().model.provider}/{message().model.model}
                 </span>
-                <span>
-                  {message().time.completed === undefined
-                    ? "streaming"
-                    : elapsed(
-                      message().time.created,
-                      message().time.completed!,
-                    )}
+                <span class="otk-turn-time">
+                  {time().end === undefined ? "streaming" : elapsed(
+                    time().start,
+                    time().end!,
+                  )}
                 </span>
                 <Show when={props.usage}>
                   {(usage) => (

@@ -311,13 +311,13 @@ Deno.test("U6 one-token labels and literal fallback phrases reach plain and pick
         await b.evaluate(
           "document.querySelector('.otk-turn-usage > button').textContent",
         ),
-        "1 token · $0.00",
+        "1 model call · 1 token · $0.00",
       );
       assertEquals(
         await b.evaluate(
           "document.querySelector('.otk-turn-usage > button').getAttribute('aria-label')",
         ),
-        "Turn usage: 1 token · $0.00",
+        "Turn usage: 1 model call · 1 token · $0.00",
       );
       assertEquals(
         await b.evaluate(

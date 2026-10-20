@@ -95,11 +95,14 @@ user `info.model.variant` maps to OTK `UserMessage.variant` (stock 1.18.34).
 
 `usage.getUsage(sessionID)` reads only assistant usage headers from read-only
 SQLite in100-row pages, reduced by the public UsageLedger into full session and
-user-turn totals, per-model counts/cost and exact live-replacement baselines. No
-part/text/tool-output columns are read. Missing/incompatible database schemas
-use the existing bounded Messages.scan API fallback and release each page's
-content immediately. Zero prices and reported zero costs remain distinct from
-absent catalog metadata. The owner counts reverted-but-charged stored steps too.
+user-turn totals, per-model counts/cost, call clocks and exact live-replacement
+baselines. Bounded tool projections retain only IDs, original tool names and
+existing titles; text, tool inputs and tool output are never read. Live mapping
+preserves the same source name alongside the normalized tool kind.
+Missing/incompatible database schemas use the existing bounded Messages.scan API
+fallback and release each page's content immediately. Zero prices and reported
+zero costs remain distinct from absent catalog metadata. The owner counts
+reverted-but-charged stored steps too.
 
 Optional native selection metadata may be null. Agent descriptions, configured
 models/variants and restored user agent/model/variant values are normalised to

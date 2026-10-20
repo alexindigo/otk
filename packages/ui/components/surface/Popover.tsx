@@ -23,6 +23,7 @@ export default function Popover(props: {
   triggerColor?: string;
   trigger: Element;
   title?: string;
+  size?: "wide";
   class?: string;
   dismissOnAction?: boolean;
   /** Non-modal detail previews, available on hover and keyboard focus. */
@@ -116,7 +117,9 @@ export default function Popover(props: {
         {props.trigger}
       </button>
       <div
-        class="otk-popover-panel"
+        class={["otk-popover-panel", {
+          "otk-popover-wide": props.size === "wide",
+        }]}
         id={anchor}
         popover="auto"
         aria-label={props.title ?? props.label}

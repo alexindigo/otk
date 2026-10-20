@@ -1,13 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Part } from "@otk/protocol";
 
-import type { PartPresentation, WorkTime } from "../registries/renderers.ts";
+import type { PartPresentation } from "../registries/renderers.ts";
 export type { WorkTime } from "../registries/renderers.ts";
 export interface PartGroup {
   id: string;
   parts: Part[];
   work: boolean;
-  time: WorkTime;
 }
 /** Layout groups follow feature contributions, never a central part-kind list. */
 export function partGroups(
@@ -18,24 +17,13 @@ export function partGroups(
   for (const part of parts) {
     const value = presentation(part);
     if (value.hidden) continue;
-    const time = value.work, previous = groups.at(-1);
-    if (time && previous?.work) {
+    const work = !!value.work, previous = groups.at(-1);
+    if (work && previous?.work) {
       previous.parts.push(part);
-      if (time.start !== undefined) {
-        previous.time.start = Math.min(
-          previous.time.start ?? time.start,
-          time.start,
-        );
-      }
-      previous.time.end =
-        time.end !== undefined && previous.time.end !== undefined
-          ? Math.max(previous.time.end, time.end)
-          : undefined;
     } else {groups.push({
         id: part.id,
         parts: [part],
-        work: !!time,
-        time: { ...time },
+        work,
       });}
   }
   return groups;

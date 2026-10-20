@@ -4,6 +4,7 @@ import type {
   ModelCatalog,
   SessionUsage,
   Tokens,
+  UsageTime,
   UsageTotal,
 } from "@otk/protocol";
 
@@ -13,11 +14,20 @@ export interface UsageCategory {
   /** Catalog-priced USD; omitted when a contributing model's price is unknown. */
   cost?: number;
 }
-export interface TurnUsage {
+export interface PricedUsage {
   tokens: number;
   /** The backend's reported cost, never replaced by catalog estimates. */
   cost: number;
   categories: UsageCategory[];
+}
+export interface CallUsage extends PricedUsage {
+  id: string;
+  activity: string;
+  time?: UsageTime;
+}
+export interface TurnUsage extends PricedUsage {
+  calls: CallUsage[];
+  time?: UsageTime;
 }
 
 /** Select an authoritative turn by identity, never by transcript-page contents. */
@@ -31,16 +41,34 @@ export function turnUsage(
     snapshot.sessionID !== message.sessionID
   ) return;
   const key = message.replyTo ?? message.id;
-  return Object.hasOwn(snapshot.turns, key)
-    ? priceUsage(snapshot.turns[key], catalog)
-    : undefined;
+  if (!Object.hasOwn(snapshot.turns, key)) return;
+  const total = snapshot.turns[key];
+  return {
+    ...priceUsage(total, catalog),
+    time: total.time,
+    calls: snapshot.messages.filter((call) => call.turnID === key).map((
+      call,
+    ) => ({
+      ...priceUsage(
+        { tokens: call.tokens, cost: call.cost, models: [call] },
+        catalog,
+      ),
+      id: call.id,
+      activity: call.tools?.length
+        ? call.tools.map((tool) =>
+          tool.summary ? `${tool.name}: ${tool.summary}` : tool.name
+        ).join(", ")
+        : "answered",
+      time: call.time,
+    })),
+  };
 }
 
 /** Price authoritative per-model summaries. Never aggregate transcript content. */
 export function priceUsage(
   total: UsageTotal,
   catalog?: ModelCatalog,
-): TurnUsage {
+): PricedUsage {
   const categories: UsageCategory[] = [
     "Input",
     "Output",

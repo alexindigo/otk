@@ -20,3 +20,9 @@
   overflow: visible;
   z-index: var(--layer-popover);
 }
+.otk-popover-wide {
+  position-area: top span-all;
+  justify-self: center;
+  width: min(80rem, calc(100vw - 16px));
+  max-width: min(80rem, calc(100vw - 16px));
+}

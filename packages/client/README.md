@@ -166,17 +166,23 @@ optional usage capability, independently of transcript pages. Public
 `createSessionUsage(connection, factory?)` supports smaller compositions. Reads
 coalesce; live assistant headers/removals replace keyed baselines through the
 protocol UsageLedger, including events buffered during a snapshot. Duplicate
-headers and snapshots cannot add a step twice; completed baselines reject stale
-unfinished headers. Reconnect/resync rejects old reads; observed index changes
-refresh cached targets. stop releases all metadata/requests. No content parts
-are retained, and missing capability never causes a partial-page estimate.
+headers and snapshots cannot add a step twice; tool-label upserts/removals merge
+through that same ledger and header-only updates preserve them. Completed
+baselines reject stale unfinished headers. Reconnect/resync rejects old reads;
+observed index changes refresh cached targets. stop releases all
+metadata/requests. No content parts are retained, only call clocks and existing
+tool labels; missing capability never causes a partial-page estimate. The ledger
+supplies the complete turn's first start/last end independently of transcript
+pages.
 
 `priceUsage(total, catalog?)` prices the owner's exact per-model summaries, with
 reasoning at the output rate. Unknown prices leave category costs absent and
 known zero prices remain zero. Backend-reported totals stay authoritative,
 independent of catalog estimates. `usageTokens` and `usageCost` supply compact
-labels; detail rows retain exact counts. U5 can load/get other targets through
-the same owner and read value.total.cost without another aggregation path.
+labels; `turnUsage` projects ordered per-call rows with exact counts, reported
+costs, activity labels and clocks plus the ledger's one turn range. Detail Total
+cells retain category prices. U5 can load/get other targets through the same
+owner and read value.total.cost without another aggregation path.
 
 `countLabel(count, singular, plural?, display?)` is the shared noun-count
 formatter for views and framework-free notification channels. The numeric count

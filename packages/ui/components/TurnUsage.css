@@ -16,7 +16,7 @@
   text-align: right;
   white-space: nowrap;
 }
-.otk-usage-breakdown th:first-child {
+.otk-usage-breakdown tfoot th:first-child {
   text-align: left;
   padding-inline-start: 0;
 }
@@ -27,8 +27,22 @@
   color: var(--otk-fg-3);
 }
 .otk-usage-note {
-  max-width: 28ch;
   margin: 8px 0 0;
   font-size: var(--text-meta);
   color: var(--otk-fg-3);
+}
+.otk-usage-breakdown .otk-usage-activity,
+.otk-usage-breakdown thead th:nth-child(2) {
+  text-align: left;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  min-width: 16ch;
+}
+.otk-usage-breakdown tfoot {
+  border-top: 1px solid var(--otk-border);
+}
+.otk-usage-category-cost {
+  display: block;
+  color: var(--otk-fg-3);
+  font: inherit;
 }

@@ -31,6 +31,8 @@ export {
   type UsageState,
 } from "./session-usage.ts";
 export {
+  type CallUsage,
+  type PricedUsage,
   priceUsage,
   type TurnUsage,
   turnUsage,

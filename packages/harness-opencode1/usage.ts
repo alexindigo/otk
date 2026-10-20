@@ -18,7 +18,20 @@ export function usage(
         ) {
           if (row.info.role !== "assistant") continue;
           const message = mapMessage(row.info);
-          if (message.role === "assistant") ledger.upsert(usageHeader(message));
+          if (message.role === "assistant") {
+            ledger.upsert({
+              ...usageHeader(message),
+              tools: row.parts.filter((part) => part.type === "tool").map((
+                part,
+              ) => ({
+                id: part.id,
+                name: part.tool!,
+                ...(part.state?.title == null
+                  ? {}
+                  : { summary: part.state.title }),
+              })),
+            });
+          }
         }}
       return ledger.snapshot();
     },

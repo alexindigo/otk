@@ -162,7 +162,7 @@ Deno.test("U5 Sessions rows present whole-session usage for unopened sessions an
     await c.rpc("prefs.set", { key: "animationsOff", value: true });
     await b.goto(`${f.url}/#/local/core`);
     await b.poll(
-      "document.querySelectorAll('.otk-session-row').length===4 && document.querySelector('.otk-turn-usage > button')?.textContent==='102 tokens · $1.02'",
+      "document.querySelectorAll('.otk-session-row').length===4 && document.querySelector('.otk-turn-usage > button')?.textContent==='102 model calls · 102 tokens · $1.02'",
     );
     await b.click('[aria-label="Open right panel"]');
     await b.poll("!document.querySelector('.otk-right-panel').hidden");
@@ -254,7 +254,7 @@ Deno.test("U5 Sessions rows present whole-session usage for unopened sessions an
     assertEquals((await c.rpc<Preferences>("prefs.get", {})).showCost, false);
     await b.reload();
     await b.poll(
-      "document.querySelectorAll('.otk-session-row').length===4 && document.querySelector('.otk-turn-usage > button')?.textContent==='103 tokens'",
+      "document.querySelectorAll('.otk-session-row').length===4 && document.querySelector('.otk-turn-usage > button')?.textContent==='103 model calls · 103 tokens'",
     );
     assertEquals(
       await b.evaluate(
