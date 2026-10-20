@@ -16,6 +16,8 @@ export interface UsageCategory {
 }
 export interface PricedUsage {
   tokens: number;
+  /** Full prompt: uncached input plus cache read and cache write. */
+  context: number;
   /** The backend's reported cost, never replaced by catalog estimates. */
   cost: number;
   categories: UsageCategory[];
@@ -70,7 +72,7 @@ export function priceUsage(
   catalog?: ModelCatalog,
 ): PricedUsage {
   const categories: UsageCategory[] = [
-    "Input",
+    "New input",
     "Output",
     "Reasoning",
     "Cache read",
@@ -111,6 +113,8 @@ export function priceUsage(
   }
   return {
     tokens: categories.reduce((sum, c) => sum + c.tokens, 0),
+    context: total.tokens.input + total.tokens.cache.read +
+      total.tokens.cache.write,
     cost: total.cost,
     categories,
   };

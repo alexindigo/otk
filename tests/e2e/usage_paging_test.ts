@@ -148,13 +148,27 @@ Deno.test("U4 complete102-step turn and session totals survive paging, duplicate
     );
     assertEquals(
       await b.evaluate(
-        "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].reduce((sum,row)=>sum+Number(row.children[7].textContent.replace('$','')),0).toFixed(2)",
+        "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].every(row=>Number(row.children[2].textContent)===Number(row.children[3].textContent)+Number(row.children[6].textContent)+Number(row.children[7].textContent))",
+      ),
+      true,
+      "All calls, including those beyond the transcript page, retain full context",
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('.otk-usage-breakdown tfoot tr').children[2].firstChild.textContent",
+      ),
+      "102",
+      "The new input category remains independent of the Context total",
+    );
+    assertEquals(
+      await b.evaluate(
+        "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].reduce((sum,row)=>sum+Number(row.children[8].textContent.replace('$','')),0).toFixed(2)",
       ),
       "1.02",
     );
     assertEquals(
       await b.evaluate(
-        "document.querySelector('.otk-usage-breakdown tfoot tr').children[6].textContent",
+        "document.querySelector('.otk-usage-breakdown tfoot tr').children[7].textContent",
       ),
       "$1.02",
     );

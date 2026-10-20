@@ -193,6 +193,23 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
     assertEquals(price, { input: 2, output: 4, cache: { read: .5, write: 3 } });
     await hover(b, trigger);
     await b.poll("!!document.querySelector('.otk-turn-usage :popover-open')");
+    assertEquals(
+      await b.evaluate(
+        "[...document.querySelectorAll('.otk-usage-breakdown thead th')].map(cell=>cell.textContent)",
+      ),
+      [
+        "Call",
+        "Activity",
+        "Context",
+        "New input",
+        "Output",
+        "Reasoning",
+        "Cache read",
+        "Cache write",
+        "Cost",
+        "Time",
+      ],
+    );
     const rows = await b.evaluate<string[][]>(
       "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].map(row=>[...row.children].map(cell=>cell.textContent))",
     );
@@ -205,16 +222,26 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
     ]);
     for (const [i, message] of steps.entries()) {
       assertEquals(
-        rows[i].slice(2, 7),
+        rows[i].slice(3, 8),
         categories(message).map((n) => n.toLocaleString("en-US")),
       );
+      const context = message.tokens.input + message.tokens.cache.read +
+        message.tokens.cache.write;
+      assertEquals(rows[i][2], context.toLocaleString("en-US"));
+      if (i) {
+        assert(
+          Number(rows[i][2].replaceAll(",", "")) >=
+            Number(rows[i - 1][2].replaceAll(",", "")),
+          "The fixture's full prompt grows across calls",
+        );
+      }
       assertAlmostEquals(
-        Number(rows[i][7].replace(/[$,]/g, "")),
+        Number(rows[i][8].replace(/[$,]/g, "")),
         message.cost,
         .005,
       );
       assertEquals(
-        rows[i][8],
+        rows[i][9],
         `${
           ((message.time.completed! - message.time.created) / 1000).toFixed(1)
         }s`,
@@ -224,9 +251,19 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
       "[...document.querySelector('.otk-usage-breakdown tfoot tr').children].map(cell=>cell.textContent)",
     );
     assertEquals(totals[0], "Total");
+    assertEquals(
+      totals[1],
+      (sums[0] + sums[3] + sums[4]).toLocaleString("en-US"),
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('.otk-usage-context-note').textContent",
+      ),
+      "New input + Cache read + Cache write = Context.",
+    );
     for (const [i, rate] of [2, 4, 4, .5, 3].entries()) {
       assertAlmostEquals(
-        Number(totals[i + 1].split("$")[1].replace(/,/g, "")),
+        Number(totals[i + 2].split("$")[1].replace(/,/g, "")),
         sums[i] * rate / 1e6,
         .005,
       );
@@ -349,9 +386,16 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
       await b.poll("!!document.querySelector('.otk-turn-usage :popover-open')");
       assertEquals(
         await b.evaluate(
+          "[...document.querySelectorAll('.otk-turn-usage > button')].every(button=>!button.hasAttribute('title') && document.getElementById(button.getAttribute('aria-describedby'))?.id===button.getAttribute('popovertarget'))",
+        ),
+        true,
+        "Preview surfaces replace native tooltips and retain their accessible detail link",
+      );
+      assertEquals(
+        await b.evaluate(
           "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].map(row=>row.children.length)",
         ),
-        [8, 8, 8],
+        [9, 9, 9],
       );
       assertEquals(
         await b.evaluate(
@@ -436,9 +480,20 @@ Deno.test("U4 unknown model prices show all five charged token categories withou
     await b.poll("!!document.querySelector('.otk-turn-usage :popover-open')");
     assertEquals(
       await b.evaluate(
+        "(()=>{const trigger=document.querySelector('.otk-turn-usage > button'),panel=document.getElementById(trigger.getAttribute('popovertarget'));return {nativeTooltip:!!trigger.closest('[title]'),label:trigger.getAttribute('aria-label'),description:document.getElementById(trigger.getAttribute('aria-describedby'))===panel,open:panel.matches(':popover-open')}})()",
+      ),
+      {
+        nativeTooltip: false,
+        label: "Turn usage: 1 model call · 240 tokens · $0.43",
+        description: true,
+        open: true,
+      },
+    );
+    assertEquals(
+      await b.evaluate(
         "[...document.querySelectorAll('.otk-usage-breakdown tbody tr')].map(row=>row.textContent)",
       ),
-      ["1answered10020304050$0.430.0s"],
+      ["1answered19010020304050$0.430.0s"],
     );
     const shots = Deno.env.get("OTK_USAGE_SHOTS");
     if (shots) {
@@ -544,6 +599,7 @@ Deno.test("U4 queued prompts do not split a turn and category costs use each ste
       ),
       [
         "Total",
+        "380,000",
         "200,000$0.60",
         "40,000$0.24",
         "60,000$0.36",

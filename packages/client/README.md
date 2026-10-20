@@ -180,7 +180,10 @@ reasoning at the output rate. Unknown prices leave category costs absent and
 known zero prices remain zero. Backend-reported totals stay authoritative,
 independent of catalog estimates. `usageTokens` and `usageCost` supply compact
 labels; `turnUsage` projects ordered per-call rows with exact counts, reported
-costs, activity labels and clocks plus the ledger's one turn range. Detail Total
+costs, activity labels and clocks plus the ledger's one turn range. The shared
+priced projection also supplies `context`: New input plus cache read and write,
+for each call and the total. It is a prompt subtotal, not another charged token
+category; `tokens` still includes each of the five categories once. Detail Total
 cells retain category prices. U5 can load/get other targets through the same
 owner and read value.total.cost without another aggregation path.
 

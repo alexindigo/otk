@@ -106,7 +106,8 @@ export default function Popover(props: {
           class: "otk-popover-trigger",
         })}
         aria-label={triggerLabel()}
-        title={triggerLabel()}
+        title={props.preview ? undefined : triggerLabel()}
+        aria-describedby={props.preview ? anchor : undefined}
         aria-expanded={open() ? "true" : "false"}
         popovertarget={anchor}
         style={{ "anchor-name": anchor, "--control-color": props.triggerColor }}

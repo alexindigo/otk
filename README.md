@@ -64,19 +64,22 @@ project-relative and a single edit's diff sits directly below its row. One
 metadata line per reply shows reported agent/model/timing and charged turn
 model-call count, tokens and cost. Work-log headers and reply footers share the
 complete turn's first-call start to last-call end. Hover or focus usage for an
-ordered model-call table with tool labels, input/output/reasoning/cache tokens,
-reported cost and call time. Its Total row retains model-priced category costs.
-Display's Show cost toggle hides cost figures while keeping tokens. Tool
-summaries expand to the existing renderers; file changes start collapsed with
-their path and reported change counts in the header. Display's Collapse file
-changes toggle restores expanded defaults; helper cards start expanded. Typed
-tool cards show bash output, read/search/fetch/skill operations, file diffs and
-diagnostics, todos, read-only questions and subagent progress. Click a task to
-open its child; the subagent bar returns to the parent or cycles siblings. Child
-sessions are read-only. Code highlighting runs in a shared Shiki worker with
-on-demand grammars; session changes release it. The Display menu persists
-preferences in the serving sidecar's `otk.db` and updates other connected tabs.
-Reverted turns show a file-summary banner.
+ordered model-call table with tool labels, full prompt Context, New input,
+output/reasoning/cache tokens, reported cost and call time. Context is New input
+plus Cache read and Cache write; its Total sums every call's prompt. The Total
+row retains model-priced category costs without counting Context twice in
+charged tokens. Hover/focus detail replaces the native usage tooltip. Display's
+Show cost toggle hides cost figures while keeping tokens. Tool summaries expand
+to the existing renderers; file changes start collapsed with their path and
+reported change counts in the header. Display's Collapse file changes toggle
+restores expanded defaults; helper cards start expanded. Typed tool cards show
+bash output, read/search/fetch/skill operations, file diffs and diagnostics,
+todos, read-only questions and subagent progress. Click a task to open its
+child; the subagent bar returns to the parent or cycles siblings. Child sessions
+are read-only. Code highlighting runs in a shared Shiki worker with on-demand
+grammars; session changes release it. The Display menu persists preferences in
+the serving sidecar's `otk.db` and updates other connected tabs. Reverted turns
+show a file-summary banner.
 
 Pasted or dropped images appear once as thumbnail attachment chips, separate
 from prompt text. Image-only prompts can be sent directly. Sent images render as

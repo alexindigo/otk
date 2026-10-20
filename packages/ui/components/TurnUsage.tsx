@@ -36,6 +36,7 @@ export default function TurnUsage(
           <tr>
             <th scope="col">Call</th>
             <th scope="col">Activity</th>
+            <th scope="col">Context</th>
             <For
               each={props.usage.categories}
               keyed={(category) => category.label}
@@ -54,6 +55,7 @@ export default function TurnUsage(
               <tr data-call={call().id}>
                 <th scope="row">{index() + 1}</th>
                 <td class="otk-usage-activity">{call().activity}</td>
+                <td>{call().context.toLocaleString("en-US")}</td>
                 <For
                   each={call().categories}
                   keyed={(category) => category.label}
@@ -73,6 +75,7 @@ export default function TurnUsage(
         <tfoot>
           <tr>
             <th scope="row" colspan="2">Total</th>
+            <td>{props.usage.context.toLocaleString("en-US")}</td>
             <For
               each={props.usage.categories}
               keyed={(category) => category.label}
@@ -95,6 +98,9 @@ export default function TurnUsage(
           </tr>
         </tfoot>
       </table>
+      <p class="otk-usage-note otk-usage-context-note">
+        New input + Cache read + Cache write = Context.
+      </p>
       <Show
         when={props.showCost &&
           props.usage.categories.some((category) =>

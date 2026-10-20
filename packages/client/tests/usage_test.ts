@@ -123,6 +123,38 @@ Deno.test("usage retains reported cost and tokens when prices are unknown, and d
   );
   assertEquals(usageFor([unknown]).tokens, 240000);
 });
+Deno.test("full prompt context includes new input and both caches without double-counting charged tokens", () => {
+  const first = step("first");
+  const second = {
+    ...step("second", "two"),
+    tokens: {
+      input: 80000,
+      output: 40000,
+      reasoning: 20000,
+      cache: { read: 150000, write: 60000 },
+    },
+  };
+  const ledger = new UsageLedger("s", [first, second].map(usageHeader));
+  const turn = turnUsage(ledger.snapshot(), first, catalog)!;
+  assertEquals(turn.calls.map((call) => call.context), [
+    190000,
+    290000,
+  ]);
+  assertEquals(turn.context, 480000);
+  assertEquals(turn.tokens, 590000);
+  assertEquals(turn.cost, .86);
+  assertEquals(turn.categories.map((category) => category.label), [
+    "New input",
+    "Output",
+    "Reasoning",
+    "Cache read",
+    "Cache write",
+  ]);
+  assertAlmostEquals(turn.categories[0].cost!, .52);
+  assertAlmostEquals(turn.categories[3].cost!, .17);
+  assertAlmostEquals(turn.categories[4].cost!, .51);
+  assertEquals(usageFor([first, second]).context, 480000);
+});
 Deno.test("usage labels compact large counts while preserving small nonzero charges", () => {
   assertEquals(usageTokens(812000), "812K");
   assertEquals(usageTokens(0), "0");
