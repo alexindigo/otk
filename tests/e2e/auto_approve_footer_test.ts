@@ -41,7 +41,8 @@ Deno.test("U10 auto-approve leads the footer, uses the theme accent when on and 
         pickerLefts: number[];
         centres: number[];
         toggle: { width: number; height: number };
-        selected: boolean;
+        on: boolean;
+        selectionMark: boolean;
         named: boolean;
         colour: string;
         primary: string;
@@ -67,7 +68,8 @@ Deno.test("U10 auto-approve leads the footer, uses the theme accent when on and 
           pickerLefts:pickers.map(e=>e.getBoundingClientRect().left),
           centres:controls.map(e=>{const r=e.getBoundingClientRect();return r.y+r.height/2}),
           toggle:{width:rect.width,height:rect.height},
-          selected:toggle.classList.contains('is-selected'),
+          on:toggle.classList.contains('is-on'),
+          selectionMark:toggle.classList.contains('is-selected') || toggle.classList.contains('otk-selection-item') || toggle.hasAttribute('data-otk-selection') || ['::before','::after'].some(p=>!['none','normal'].includes(getComputedStyle(toggle,p).content)),
           named:toggle.getAttribute('aria-label')==='Auto-approve',
           colour:getComputedStyle(toggle).color,primary,quiet,
           inside:controls.every(e=>{const r=e.getBoundingClientRect();return r.width>0&&r.left>=bounds.left&&r.right<=bounds.right})&&footer.scrollWidth<=footer.clientWidth
@@ -121,7 +123,12 @@ Deno.test("U10 auto-approve leads the footer, uses the theme accent when on and 
         assertEquals(state.toggle, { width: 28, height: 28 });
         assert(state.named && state.inside, JSON.stringify(state));
         assert(Math.max(...state.centres) - Math.min(...state.centres) < .5);
-        assertEquals(state.selected, index === 1);
+        assertEquals(state.on, index === 1);
+        assertEquals(
+          state.selectionMark,
+          false,
+          "A toggle is on, never selected",
+        );
         assertEquals(state.colour, index === 1 ? state.primary : state.quiet);
       }
       assertEquals(on.pickerLefts, off.pickerLefts);

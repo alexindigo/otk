@@ -4,6 +4,3 @@
   color: var(--otk-fg-3);
   font-size: var(--text-meta);
 }
-:root .otk-auto-approve-toggle.is-selected {
-  color: var(--otk-action-text);
-}

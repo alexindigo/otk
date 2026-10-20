@@ -180,14 +180,15 @@ retains its pointer and names that applied value in secondary text.
 `registerAutoApprovePrompt` contributes a28px Auto-approve shield, selected
 before the variable-width pickers in application composition to lead the footer.
 Its enabled state uses the theme's action-text accent through the shared
-pressed/underline binding; its accessible name and state tooltip remain stable.
-The shell selects the same server-owned approval resource for session ports,
-tabs and panels. `permission.auto` captures its writable session at invocation,
-has the Mod+Shift+A binding and remains discoverable in palette/Keys; enabling
-asks before superseding dirty permission feedback. The browser never runs an
-approval loop or clears the form optimistically. Helpers remain read-only and
-inherit their session's policy. One AutoMark component presents enabled policy
-in task/session tabs, breadcrumbs and session rows independently of Show cost.
+`toggle({on})` binding: `is-on` and `aria-pressed`, without selection marks. Its
+accessible name and state tooltip remain stable. The shell selects the same
+server-owned approval resource for session ports, tabs and panels.
+`permission.auto` captures its writable session at invocation, has the
+Mod+Shift+A binding and remains discoverable in palette/Keys; enabling asks
+before superseding dirty permission feedback. The browser never runs an approval
+loop or clears the form optimistically. Helpers remain read-only and inherit
+their session's policy. One AutoMark component presents enabled policy in
+task/session tabs, breadcrumbs and session rows independently of Show cost.
 Parent controls include the policy in their accessible names; the visible Auto
 span is decorative. The shared client attention projection keeps covered pending
 requests quiet while linked: an in-flow “Auto-approving…” status accompanies the
@@ -345,6 +346,13 @@ Horizontal items reserve a 2px bottom grid track with an always-present
 `::after`, inset 8px from both ends. Only the state class paints the marks.
 Neither decoration uses positioning; selection never changes box size. Hover
 alone only fills; reduced colours retains both indicators.
+
+Binary buttons use the same state-binding module's `toggle({on, class?})`, which
+owns `is-on` and `aria-pressed` together. Shared theme paint supplies the
+on-state accent, without selection classes, orientation, pointer or underline.
+Native checkboxes retain checked semantics; disclosures retain expanded
+semantics. Panel tabs and question choices remain collection selections with
+their marks.
 
 Package units live in `tests/`; real browser/app tests remain at repository
 level. Builds/tests run inside the project's assigned VM. License: LGPL-3.0-only

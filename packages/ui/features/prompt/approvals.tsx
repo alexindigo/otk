@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { Show } from "solid-js";
 import type { PromptRegistry } from "../../registries/prompt.ts";
-import { selection } from "../../components/selection.ts";
-import SelectionContent from "../../components/SelectionContent.tsx";
+import { toggle } from "../../components/selection.ts";
 import { ShieldCheckIcon } from "../../components/ChromeIcons.tsx";
 import "./approvals.css" with { type: "text" };
 
@@ -15,11 +14,9 @@ export function registerAutoApprovePrompt(prompt: PromptRegistry): void {
           <Show when={ctx.approvals?.state.ready}>
             <button
               type="button"
-              data-otk-selection="horizontal"
-              {...selection({
+              {...toggle({
                 class: "otk-auto-approve-toggle otk-icon-button",
-                kind: "pressed",
-                selected: !!ctx.approvals?.owner(ctx.sessionID()),
+                on: !!ctx.approvals?.owner(ctx.sessionID()),
               })}
               aria-label="Auto-approve"
               title={`Auto-approve ${
@@ -28,9 +25,7 @@ export function registerAutoApprovePrompt(prompt: PromptRegistry): void {
               onClick={() =>
                 void ctx.commands.run("permission.auto").catch(ctx.fail)}
             >
-              <SelectionContent>
-                <ShieldCheckIcon />
-              </SelectionContent>
+              <ShieldCheckIcon />
             </button>
           </Show>
         ),

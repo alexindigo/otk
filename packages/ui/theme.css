@@ -229,6 +229,10 @@ small {
   border-radius: var(--radius-control);
   color: var(--otk-fg-3);
 }
+/* On is a binary state, never a pointer or underline selection. */
+:root .otk-toggle.is-on {
+  color: var(--otk-action-text);
+}
 .otk-chrome-icon {
   width: 16px;
   height: 16px;

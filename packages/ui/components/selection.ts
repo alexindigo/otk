@@ -1,4 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+/** Binary on/off state is distinct from choosing an item in a collection. */
+export function toggle(input: { on: boolean; class?: string }): {
+  class: string;
+  "aria-pressed": "true" | "false";
+} {
+  return {
+    class: [input.class, "otk-toggle", input.on ? "is-on" : ""].filter(Boolean)
+      .join(" "),
+    "aria-pressed": input.on ? "true" : "false",
+  };
+}
+
 /** Selection is declared once; accessibility and visual state cannot diverge.
  * A keyboard candidate may coexist with committed selections (multi-choice).
  */
