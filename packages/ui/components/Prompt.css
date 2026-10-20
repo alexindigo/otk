@@ -1,5 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-prompt {
+  --prompt-input-min-height: 48px;
+  --prompt-input-max-height: 240px;
   padding: 12px 16px 8px;
 }
 .otk-prompt > label {
@@ -10,9 +12,11 @@
   clip-path: inset(50%);
 }
 .otk-prompt > textarea {
-  min-height: 48px;
-  max-height: 16rem;
-  resize: vertical;
+  field-sizing: content;
+  min-height: var(--prompt-input-min-height);
+  max-height: var(--prompt-input-max-height);
+  overflow-y: auto;
+  resize: none;
   line-height: 24px;
   font: 400 var(--text-prose)/24px var(--font-ui);
   background: transparent;

@@ -105,6 +105,13 @@ overlays. Shell, mentions, slash, history, paste, attachments and editor each
 own their implementation. `Prompt` owns native input, submission identity and
 teardown; it has no feature import list.
 
+The prompt textarea uses native content sizing, retaining its 48px minimum and
+growing in 24px prose lines to the component's named 240px cap. It then scrolls
+internally with the caret; deleting text or clearing a sent draft shrinks it.
+The footer stays in flow beneath the input as the dock gives space back to the
+transcript above. Editor/history replacements use the same textarea value path,
+and automatic sizing has no manual resize grip or per-caller sizing logic.
+
 Image uploads contribute independent chips: one contained thumbnail beside the
 label and explicit remove button, without inserting a textarea token. Shared
 draft transforms preserve them across text/editor changes; normal image-only
