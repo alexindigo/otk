@@ -13,7 +13,7 @@ import { createSignal, For, Match, onSettled, Show, Switch } from "solid-js";
 import type { PermissionRequest } from "@otk/protocol";
 import type { PermissionReply } from "@otk/protocol";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
-import { useSessionPorts } from "../registries/session.tsx";
+import { type SessionPorts, useSessionPorts } from "../registries/session.tsx";
 import { oldestPermission } from "@otk/client";
 import TakeoverHeader from "./TakeoverHeader.tsx";
 import PermissionSummary from "./PermissionSummary.tsx";
@@ -30,32 +30,50 @@ export function registerPermissionTakeover(
     component: PermissionTakeover,
     active: (session) =>
       !!oldestPermission(
-        session.permissions(),
+        waitingPermissions(session),
         session.sessionID(),
         session.entry,
       ),
   });
 }
+function waitingPermissions(session: SessionPorts) {
+  return session.approvals
+    ? session.approvals.attention(session.connected?.() ?? false).permissions(
+      session.permissions(),
+    )
+    : session.permissions();
+}
 function PermissionTakeover() {
   const session = useSessionPorts(), { commands } = useCommandPorts();
   const request = () =>
-    oldestPermission(session.permissions(), session.sessionID(), session.entry);
+    oldestPermission(
+      waitingPermissions(session),
+      session.sessionID(),
+      session.entry,
+    );
+  const automatic = () =>
+    session.permissions().length - waitingPermissions(session).length;
   return (
-    <PermissionDock
-      request={request()}
-      where={request()
-        ? `${request()!.kind} in ${
-          session.location?.(request()!.sessionID) ??
-            session.entry(request()!.sessionID)?.title ?? request()!.sessionID
-        }`
-        : undefined}
-      childTitle={request()?.sessionID !== session.sessionID()
-        ? session.entry(request()?.sessionID ?? "")?.title ||
-          request()?.sessionID
-        : undefined}
-      onDirty={(value) => session.dirty("permissions", value)}
-      onReply={(input) => commands.run("permission.reply", input)}
-    />
+    <>
+      <Show when={automatic() > 0 && !request()}>
+        <p class="otk-auto-approving" role="status">Auto-approving…</p>
+      </Show>
+      <PermissionDock
+        request={request()}
+        where={request()
+          ? `${request()!.kind} in ${
+            session.location?.(request()!.sessionID) ??
+              session.entry(request()!.sessionID)?.title ?? request()!.sessionID
+          }`
+          : undefined}
+        childTitle={request()?.sessionID !== session.sessionID()
+          ? session.entry(request()?.sessionID ?? "")?.title ||
+            request()?.sessionID
+          : undefined}
+        onDirty={(value) => session.dirty("permissions", value)}
+        onReply={(input) => commands.run("permission.reply", input)}
+      />
+    </>
   );
 }
 function RequestDock(

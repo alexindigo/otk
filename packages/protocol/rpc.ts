@@ -12,6 +12,7 @@ import type { InboxRpcMethods } from "./inbox.ts";
 import type { LayoutRpcMethods } from "./preferences/layout.ts";
 import type { ModelsRpcMethods } from "./models.ts";
 import type { UsageRpcMethods } from "./usage.ts";
+import type { ApprovalRpcMethods } from "./approvals.ts";
 export type PromptPart =
   | { kind: "text"; text: string }
   | {
@@ -108,7 +109,12 @@ export interface CommandInput {
 }
 /** Wire contracts. Features extend this interface through module augmentation. */
 export interface RpcMethods
-  extends InboxRpcMethods, LayoutRpcMethods, ModelsRpcMethods, UsageRpcMethods {
+  extends
+    InboxRpcMethods,
+    LayoutRpcMethods,
+    ModelsRpcMethods,
+    UsageRpcMethods,
+    ApprovalRpcMethods {
   "session.get": { params: { sessionID: string }; result: ContentSession };
   "session.children": {
     params: { sessionID: string };

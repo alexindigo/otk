@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  type ApprovalModel,
   type CommandHub,
   type Note,
   NotificationHub,
@@ -23,6 +24,7 @@ export function applicationNotifications(input: {
   viewing(): boolean;
   connection(sidecar: string): SidecarConnection;
   entry(sidecar: string, session: string): IndexEntry | undefined;
+  attention(sidecar: string): ReturnType<ApprovalModel["attention"]>;
 }) {
   const context = () => {
     const selected = input.selection();
@@ -72,53 +74,62 @@ export function applicationNotifications(input: {
     candidates.delete(id);
     hub.retract(id);
   };
-  const triggers = new NotificationTriggers((incoming) => {
-    candidates.set(incoming.id, incoming);
-    const ref = incoming.sessionRef!;
-    if (
-      incoming.kind !== "permission" ||
-      !input.connection(ref.sidecar).supports("permissions")
-    ) {
-      publish(incoming);
-      return;
-    }
-    // Resolve action ownership before channel delivery. This schedules the input
-    // tone once and constructs one OS note, without an enrichment replay.
-    void input.connection(ref.sidecar).rpc.call(
-      "permission.list",
-      { sessionID: ref.session },
-    ).then((requests) => {
-      if (candidates.get(incoming.id) !== incoming) return;
-      const request = oldestPermission(
-        requests,
-        ref.session,
-        (id) => input.entry(ref.sidecar, id),
-      );
-      const enriched: Note = request
-        ? {
-          ...incoming,
-          detail: permissionNoteDetail(request),
-          actions: [...incoming.actions, {
-            label: "Allow once",
-            command: "permission.reply",
-            args: {
-              sidecarId: ref.sidecar,
-              sessionID: request.sessionID,
-              requestID: request.id,
-              reply: "once",
-            },
-          }],
+  const triggers = new NotificationTriggers(
+    (incoming) => {
+      candidates.set(incoming.id, incoming);
+      const ref = incoming.sessionRef!;
+      if (
+        incoming.kind !== "permission" ||
+        !input.connection(ref.sidecar).supports("permissions")
+      ) {
+        publish(incoming);
+        return;
+      }
+      // Resolve action ownership before channel delivery. This schedules the input
+      // tone once and constructs one OS note, without an enrichment replay.
+      void input.connection(ref.sidecar).rpc.call(
+        "permission.list",
+        { sessionID: ref.session },
+      ).then((requests) => {
+        if (candidates.get(incoming.id) !== incoming) return;
+        const request = oldestPermission(
+          input.attention(ref.sidecar).permissions(requests),
+          ref.session,
+          (id) => input.entry(ref.sidecar, id),
+        );
+        if (!request) {
+          retract(incoming.id);
+          return;
         }
-        : incoming;
-      candidates.set(incoming.id, enriched);
-      publish(enriched);
-    }, (error) => {
-      if (candidates.get(incoming.id) !== incoming) return;
-      publish(incoming);
-      message("error", (error as Error).message);
-    });
-  }, retract);
+        const enriched: Note = request
+          ? {
+            ...incoming,
+            detail: permissionNoteDetail(request),
+            actions: [...incoming.actions, {
+              label: "Allow once",
+              command: "permission.reply",
+              args: {
+                sidecarId: ref.sidecar,
+                sessionID: request.sessionID,
+                requestID: request.id,
+                reply: "once",
+              },
+            }],
+          }
+          : incoming;
+        candidates.set(incoming.id, enriched);
+        publish(enriched);
+      }, (error) => {
+        if (candidates.get(incoming.id) !== incoming) return;
+        publish(incoming);
+        message("error", (error as Error).message);
+      });
+    },
+    retract,
+    (sidecar, entries) => input.attention(sidecar).entries(entries),
+  );
   const update = () => {
+    for (const sidecar of observed) triggers.refresh(sidecar);
     os.refresh();
     const ctx = context();
     if (ctx.focused && ctx.visible) {
@@ -135,6 +146,7 @@ export function applicationNotifications(input: {
     }
     hub.refresh();
   };
+  const observed = new Set<string>();
   return {
     hub,
     toast: toast.model,
@@ -143,6 +155,7 @@ export function applicationNotifications(input: {
     info: (text: string) => message("info", text),
     error: (error: unknown) => message("error", (error as Error).message),
     receive(sidecar: string, frame: ServerFrame) {
+      observed.add(sidecar);
       if (frame.t === "welcome") {
         triggers.reset(sidecar);
         hub.removeSidecar(sidecar);
@@ -150,6 +163,9 @@ export function applicationNotifications(input: {
       if (frame.t === "index.snapshot" || frame.t === "index.patch") {
         triggers
           .receive(sidecar, frame);
+      }
+      if (frame.t === "approvals" || frame.t === "harness") {
+        triggers.refresh(sidecar);
       }
       if (frame.t === "rpc.result" && !frame.ok) {
         message(
@@ -160,6 +176,7 @@ export function applicationNotifications(input: {
       if (frame.t === "error") message("error", frame.message || frame.code);
     },
     remove(sidecar: string) {
+      observed.delete(sidecar);
       triggers.reset(sidecar);
       hub.removeSidecar(sidecar);
     },

@@ -6,6 +6,8 @@ import {
   Frecency,
   frecencyMigrations,
   OtkDb,
+  permissionMigrations,
+  PermissionStore,
   Prefs,
   prefsMigrations,
   Projects,
@@ -43,6 +45,7 @@ import {
   startCore,
 } from "./core/mod.ts";
 import { InboxFeature } from "./core/features/inbox.ts";
+import { PermissionFeature } from "./core/features/approvals.ts";
 
 /** Shipped application features, independent of the selected native backend. */
 export function startApplication(
@@ -58,6 +61,7 @@ export function startApplication(
     seenMigrations,
     finishesMigrations,
     projectTemplatesMigrations,
+    permissionMigrations,
   ]);
   const prefs = new Prefs(store, prefsOptions);
   const rpc = new RpcRegistry(backend, store);
@@ -87,7 +91,19 @@ export function startApplication(
   registerModels(rpc, backend);
   registerUsage(rpc, backend);
   registerResources(rpc, backend);
-  registerPermissions(rpc, backend);
+  const approvals = backend.capabilities.permissions
+    ? new PermissionFeature(
+      new PermissionStore(store),
+      index,
+      backend.capabilities.permissions,
+    )
+    : undefined;
+  approvals?.register(rpc);
+  registerPermissions(
+    rpc,
+    backend,
+    approvals && ((input) => approvals.reply(input)),
+  );
   registerQuestions(rpc, backend);
   registerRevert(rpc, backend);
   return startCore({
@@ -98,6 +114,6 @@ export function startApplication(
     rpc,
     staticRoot,
     index,
-    sources: [inbox],
+    sources: [inbox, ...(approvals ? [approvals] : [])],
   });
 }

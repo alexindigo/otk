@@ -37,3 +37,9 @@
   padding: 4px var(--item-inset);
   background: transparent;
 }
+.otk-auto-approving {
+  margin: 0;
+  padding: 4px 12px;
+  color: var(--secondary);
+  font-size: var(--text-meta);
+}

@@ -17,12 +17,18 @@ const questions = (e: IndexEntry) =>
 export class NotificationTriggers {
   #connections = new Map<
     string,
-    { rev: number; entries: Map<string, IndexEntry> }
+    {
+      rev: number;
+      raw: Map<string, IndexEntry>;
+      entries: Map<string, IndexEntry>;
+    }
   >();
   #kinds = new Map<string, Note["kind"]>();
   constructor(
     readonly emit: (note: Note) => void,
     readonly retract: (id: string) => void,
+    readonly project: (sidecar: string, entries: IndexEntry[]) => IndexEntry[] =
+      (_sidecar, entries) => entries,
   ) {}
   reset(sidecar: string): void {
     this.#connections.delete(sidecar);
@@ -33,22 +39,37 @@ export class NotificationTriggers {
       }
     }
   }
+  refresh(sidecar: string): void {
+    const state = this.#connections.get(sidecar);
+    if (state) {
+      this.receive(sidecar, {
+        t: "index.snapshot",
+        rev: state.rev,
+        entries: [...state.raw.values()],
+      });
+    }
+  }
   receive(sidecar: string, frame: IndexFrame): boolean {
     const previous = this.#connections.get(sidecar);
     if (!acceptsPatch(previous?.rev, frame)) return false;
-    const entries = frame.t === "index.snapshot"
+    const raw = frame.t === "index.snapshot"
       ? new Map(
         frame.entries.map((entry) => [entry.id, structuredClone(entry)]),
       )
-      : new Map(previous!.entries);
+      : new Map(previous!.raw);
     if (frame.t === "index.patch") {
       for (const op of frame.ops) {
         if (op.op === "upsert") {
-          entries.set(op.entry.id, structuredClone(op.entry));
-        } else entries.delete(op.id);
+          raw.set(op.entry.id, structuredClone(op.entry));
+        } else raw.delete(op.id);
       }
     }
-    this.#connections.set(sidecar, { rev: frame.rev, entries });
+    const entries = new Map(
+      this.project(sidecar, [...raw.values()]).map((
+        entry,
+      ) => [entry.id, entry]),
+    );
+    this.#connections.set(sidecar, { rev: frame.rev, raw, entries });
     if (!previous) return true; // first snapshot after every welcome is baseline
     for (const old of previous.entries.values()) {
       const entry = entries.get(old.id), id = sessionKey(sidecar, old.id);

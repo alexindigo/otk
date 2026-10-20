@@ -13,6 +13,7 @@ import {
   usageCost,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
+import AutoMark from "./AutoMark.tsx";
 import { ChevronIcon, PlusIcon, SearchIcon } from "./ChromeIcons.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
 
@@ -22,6 +23,7 @@ export default function ProjectSessions(props: {
   project?: ProjectSelection;
   selected?: Selection;
   cost?(sessionID: string): number | undefined;
+  auto?(sessionID: string): boolean;
   connected(id: string): boolean;
   inbox(id: string): InboxSnapshot;
   onOpen(entry: MergedEntry): void | Promise<unknown>;
@@ -133,6 +135,10 @@ export default function ProjectSessions(props: {
                             costLabel(row().session.id) === undefined
                               ? ""
                               : `, session cost ${costLabel(row().session.id)}`
+                          }${
+                            props.auto?.(row().session.id)
+                              ? ", auto-approve on"
+                              : ""
                           }`}
                           onClick={() =>
                             run(open(merged(row().session.id)))}
@@ -197,6 +203,9 @@ export default function ProjectSessions(props: {
                                 Error
                               </span>
                             </Show>
+                            <AutoMark
+                              active={!!props.auto?.(row().session.id)}
+                            />
                             <Show when={costLabel(row().session.id)}>
                               <span
                                 class="otk-session-cost"

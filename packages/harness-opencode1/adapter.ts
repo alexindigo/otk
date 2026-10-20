@@ -41,7 +41,7 @@ import { usage } from "./usage.ts";
 import { resources } from "./resources.ts";
 import { commands } from "./commands.ts";
 import { type Launch, shell } from "./shell.ts";
-import { permissions } from "./permissions.ts";
+import { type PendingPermission, permissions } from "./permissions.ts";
 import { revert } from "./revert.ts";
 import { sessionDirectory } from "./directory.ts";
 import { Messages } from "./messages.ts";
@@ -82,10 +82,7 @@ export class Opencode1Adapter implements Harness {
     (id) => this.#sink.indexRemove(id),
     (id) => this.#index.descendants(id),
   );
-  #permissions = new Map<
-    string,
-    { sessionID: string; callID?: string; time: number }
-  >();
+  #permissions = new Map<string, PendingPermission>();
   #questions = new Map<string, string>();
   #stopped = true;
   #commands = new Map<
@@ -220,7 +217,7 @@ export class Opencode1Adapter implements Harness {
         this.client,
         directory,
         (id) => this.#index.get(id),
-        (id) => this.#permissions.get(id)?.time,
+        () => this.#permissions.values(),
       ),
     );
     registry.register(
@@ -494,8 +491,8 @@ export class Opencode1Adapter implements Harness {
       cursor = next;
     } while (cursor);
     const previousPermissions = new Map(this.#permissions);
-    this.#permissions.clear();
-    this.#questions.clear();
+    const nextPermissions = new Map<string, PendingPermission>();
+    const nextQuestions = new Map<string, string>();
     for (const directory of this.#db.possiblyRunningDirectories(since)) {
       const [statuses, permissions, questions] = await Promise.all([
         this.client.json<
@@ -529,19 +526,29 @@ export class Opencode1Adapter implements Harness {
         }
       }
       for (const request of permissions) {
-        this.#permissions.set(request.id, {
-          sessionID: request.sessionID,
-          callID: request.tool?.callID,
-          time: previousPermissions.get(request.id)?.time ?? Date.now(),
-        });
+        nextPermissions.set(
+          request.id,
+          {
+            directory,
+            request: mapPermission(
+              request,
+              previousPermissions.get(request.id)?.request.time ?? Date.now(),
+            ),
+          },
+        );
       }
       for (const request of questions) {
-        this.#questions.set(request.id, request.sessionID);
+        nextQuestions.set(request.id, request.sessionID);
       }
+    }
+    this.#permissions = nextPermissions;
+    this.#questions.clear();
+    for (const [id, sessionID] of nextQuestions) {
+      this.#questions.set(id, sessionID);
     }
     this.#attention.reset(
       [...entries.values()],
-      [...this.#permissions.values()].map((request) => request.sessionID),
+      [...this.#permissions.values()].map(({ request }) => request.sessionID),
       this.#questions.values(),
     );
     this.#sink.indexReset([...entries.values()]);
@@ -679,17 +686,21 @@ export class Opencode1Adapter implements Harness {
       if (typeof request.id !== "string" || !request.id) {
         throw new Error("Malformed permission.asked: request id missing");
       }
-      const time = this.#permissions.get(request.id)?.time ?? Date.now();
+      const time = this.#permissions.get(request.id)?.request.time ??
+        Date.now();
       const mapped = mapPermission(request, time);
-      const previous = this.#permissions.get(request.id)?.sessionID;
+      const previous = this.#permissions.get(request.id)?.request.sessionID;
       this.#permissions.set(request.id, {
-        sessionID,
-        callID: request.tool?.callID,
-        time,
+        request: mapped,
+        directory: event.directory,
       });
       if (previous !== sessionID) {
         if (previous) this.#attention.change(previous, "permissions", -1);
         this.#attention.change(sessionID, "permissions", 1);
+      } else if (entry) {
+        // Changed request metadata must wake the same server index observer even
+        // when the number of pending requests did not change.
+        this.#sink.indexUpsert(entry);
       }
       this.#sink.content(sessionID, {
         op: "permission.upsert",
@@ -701,7 +712,7 @@ export class Opencode1Adapter implements Harness {
       const previous = this.#permissions.get(String(p.requestID));
       this.#permissions.delete(String(p.requestID));
       if (previous) {
-        this.#attention.change(previous.sessionID, "permissions", -1);
+        this.#attention.change(previous.request.sessionID, "permissions", -1);
       }
       this.#sink.content(sessionID, {
         op: "permission.remove",
@@ -850,8 +861,8 @@ export class Opencode1Adapter implements Harness {
         break;
       case "message.part.updated": {
         if (!raw) break;
-        const waiting = [...this.#permissions.values()].some((request) =>
-          request.callID === raw.callID && request.sessionID === sessionID
+        const waiting = [...this.#permissions.values()].some(({ request }) =>
+          request.toolCall === raw.callID && request.sessionID === sessionID
         );
         const part = this.buffers.snapshot(raw.id)?.part ||
           mapPart(raw, waiting);

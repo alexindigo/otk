@@ -172,6 +172,28 @@ remain unmuted. The client supplies both applied values and selected variant
 row; choosing Default can show a configured variant while the Default row
 retains its pointer and names that applied value in secondary text.
 
+`registerAutoApprovePrompt` contributes a28px Auto-approve shield in the footer,
+with the shared pressed/underline binding, accessible name and state tooltip.
+The shell selects the same server-owned approval resource for session ports,
+tabs and panels. `permission.auto` captures its writable session at invocation,
+has the Mod+Shift+A binding and remains discoverable in palette/Keys; enabling
+asks before superseding dirty permission feedback. The browser never runs an
+approval loop or clears the form optimistically. Helpers remain read-only and
+inherit their session's policy. One AutoMark component presents enabled policy
+in task/session tabs, breadcrumbs and session rows independently of Show cost.
+Parent controls include the policy in their accessible names; the visible Auto
+span is decorative. The shared client attention projection keeps covered pending
+requests quiet while linked: an in-flow “Auto-approving…” status accompanies the
+ordinary composer, with no takeover or manual reply actions. Losing the serving
+or native link restores user attention through the same projection used by
+notifications and chrome counts.
+
+`registerActivityPanel` contributes the session Activity view through the open
+panel registry. Its thin adapter forwards idempotent selection to the client
+owner. PermissionActivity receives data/actions, shows manual and automatic
+reply outcomes with the same PermissionSummary as approval surfaces, and offers
+earlier-page loading. The panel host knows no permission implementation.
+
 `takeovers.register({ id, capability, component })` supplies composer attention
 owners. `ComposerTakeovers` mounts capability-available components; they read
 session state from context and construct their own UI. Optional feature-owned

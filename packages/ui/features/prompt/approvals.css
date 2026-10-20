@@ -1,0 +1,6 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-auto-approve-toggle {
+  flex: 0 0 auto;
+  color: var(--otk-fg-3);
+  font-size: var(--text-meta);
+}

@@ -292,6 +292,29 @@ release ownership.
 
 ## Notifications
 
+`createApprovals(rpc, lookup, factory?)` is a per-sidecar authoritative policy
+and activity resource. Welcome invalidates older operations; `approvals` frames
+own explicit enabled IDs and revisions. `owner(sessionID)` uses the shared
+ancestor projection, and `setAuto` never applies an optimistic browser policy or
+lets a stale RPC result replace a newer broadcast. `selectActivity` is an
+idempotent selection intent, distinct from explicit `loadActivity` refresh and
+earlier-page loading: reactive render delivery cannot refetch itself. Metadata
+invalidation frames name the stored affected families and coalesce only the
+selected family's activity. Policy revisions never invalidate journal reads.
+Reconnect refreshes the selection and rejects previous-generation reads. Old
+session and connection reads cannot publish into replacements. The owner retains
+reply metadata only, never transcript parts.
+
+`approvalAttention(enabled, lookup, linked)` is the shared waiting-for-user
+projection for permission requests and index attention.
+`createApprovals().attention` binds the authoritative policy. Covered requests
+are automatic only while both serving transport and native link are live;
+disconnected requests wait again. Index projection subtracts covered subtrees
+without losing manual sibling attention or changing native metadata.
+NotificationTriggers accepts this same projection and `refresh` compares
+policy/link changes against its retained raw index. Shell, rows, tabs, badges,
+toasts and takeovers consume that projection.
+
 `NotificationHub(policy, run, error)` is an empty framework-free registry.
 Owners register a `NotificationChannel` through `registerChannel`, returning an
 identity-bound release. A data-only `Note` has an ID, kind, optional

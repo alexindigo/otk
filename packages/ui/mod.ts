@@ -20,6 +20,8 @@ export { default as Shell } from "./shell/Shell.tsx";
 export { default as ProjectSessions } from "./components/ProjectSessions.tsx";
 export { default as RightPanel } from "./components/RightPanel.tsx";
 export { registerSessionsPanel } from "./features/sessions.tsx";
+export { registerActivityPanel } from "./features/approvals.tsx";
+export { registerAutoApprovePrompt } from "./features/prompt/approvals.tsx";
 export { default as ProjectTabs } from "./components/ProjectTabs.tsx";
 export { registerTaskDialogs, type TaskNameInput } from "./features/tasks.tsx";
 export { registerCommandDialogs } from "./features/dialogs.tsx";

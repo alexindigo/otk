@@ -144,6 +144,35 @@ UI preference state still follows authoritative broadcasts without optimistic
 copies. Invalid patches cannot partially persist. Explicit `prefs.set`
 replacement remains available for complete preference values.
 
+`PermissionFeature` is selected by application composition only for a backend
+with permissions. Its independent store holds explicit session auto-approve
+policies and a durable reply journal. It observes the same authoritative index
+as the backend and lists pending families on attention and enabling, including
+bootstrap/reconnect; browser subscriptions are irrelevant. Cycle-safe ancestry
+and current policy are checked immediately before each automatic Allow once.
+Manual and automatic replies share request serialization and journal intent,
+confirmation and failure; shutdown leaves unacknowledged intent unconfirmed. The
+existing permissions registration accepts this injected reply owner.
+
+The reply journal captures family membership at dispatch; historical activity
+does not depend on the current live index window. Pending helpers also schedule
+their enabled ancestor when that ancestor's own index entry is absent. The
+feature contributes `permission.auto` and paged `permission.activity`, and uses
+the existing FrameSource lifetime for authoritative `approvals` snapshots. It is
+not a global preference or a native permanent grant. Its metadata stream
+contains explicit session IDs/revision, not transcripts; activity is read on
+demand in pages of100 for the selected family. Turning a policy off and reading
+its journal remain available while the native backend is offline; enabling
+validates the session through the existing backend lookup. Enabling validates
+root-only eligibility on authoritative backend metadata; helpers inherit and
+cannot acquire an explicit policy by direct RPC. Explicit index removals delete
+stored policy, including IDs outside the current window; snapshot window
+eviction alone does not. Failed automatic requests are memoized by normalized
+request fingerprint until it changes or a successful index snapshot starts
+another connection generation. Unrelated index updates cannot repeat a failed
+attempt or journal row. Policy revisions and affected-family activity
+invalidations are separate feature-owned frames.
+
 Core tests live in `tests/unit/core/`; application integration/e2e tests stay at
 root. They cover config, auth/index, RPC validation/capability absence and
 actual HTTP/WS/browser behavior. Library units stay in their packages. Core is

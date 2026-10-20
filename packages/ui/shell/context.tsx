@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createContext, type Element, useContext } from "solid-js";
 import type {
+  ApprovalModel,
   InboxModel,
   MergedEntry,
   ProjectSelection,
@@ -20,6 +21,7 @@ export interface ShellPorts {
   servers(): SidecarState[];
   connection(id: string): SidecarConnection;
   inbox(id: string): InboxModel;
+  approvals(id: string): ApprovalModel;
   openProject(project: ProjectSelection): void;
   project(): ProjectSelection | undefined;
   entries(): MergedEntry[];

@@ -4,7 +4,11 @@ import type { PermissionReply } from "@otk/protocol";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { text } from "../ws/params.ts";
 
-export function register(rpc: RpcRegistry, harness: Harness): void {
+export function register(
+  rpc: RpcRegistry,
+  harness: Harness,
+  reply?: (input: PermissionReply) => Promise<void>,
+): void {
   const capability = harness.capabilities.permissions;
   if (!capability) return;
   rpc.register("permission.list", {
@@ -24,7 +28,7 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
       };
     },
     async handler(_ctx, input) {
-      await capability.replyPermission(input);
+      await (reply ? reply(input) : capability.replyPermission(input));
       return null;
     },
   });

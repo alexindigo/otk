@@ -43,6 +43,9 @@ export function registerSessionsPanel(
           project={shell.project()}
           entries={shell.entries()}
           selected={shell.selection()}
+          auto={(id) =>
+            !!shell.project() &&
+            !!shell.approvals(shell.project()!.sidecarId).owner(id)}
           cost={(sessionID) => {
             const project = shell.project();
             return shell.toggles.state.prefs.showCost && project

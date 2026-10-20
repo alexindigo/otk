@@ -15,8 +15,10 @@ import {
   type ShellLayout,
 } from "@otk/protocol";
 import {
+  type ApprovalModel,
   type ClientTabs,
   CommandHub,
+  createApprovals,
   createCurrentClient,
   createDrafts,
   createInbox,
@@ -40,6 +42,7 @@ import {
 import { registerPreferenceCommands } from "@otk/client";
 import { registerSessionCommands } from "./commands/sessions.ts";
 import { registerAttentionCommands } from "./commands/attention.ts";
+import { registerApprovalCommands } from "./commands/approvals.ts";
 import { applicationNotifications } from "./notifications.ts";
 import { permissionNotificationDetail } from "../features/permission-notification.tsx";
 import { CommandProvider } from "../keyboard/context.tsx";
@@ -73,12 +76,23 @@ export default function Shell(
   props: { theme: ThemeEngine; api: URL },
 ): import("solid-js").Element {
   const index = createIndex(), inboxes = new Map<string, InboxModel>();
+  const approvalModels = new Map<string, ApprovalModel>();
+  const approvals = (id: string) => {
+    let model = approvalModels.get(id);
+    if (!model) {
+      model = createApprovals(
+        sidecars.connection(id).rpc,
+        (sessionID) => entry(id, sessionID),
+        solidState,
+      );
+      approvalModels.set(id, model);
+    }
+    return model;
+  };
   const tabModels = new Map<string, ClientTabs>();
   const tabInput = (p: ProjectSelection) => ({
     directory: p.directory,
-    entries: Object.values(index.state.entries).filter((e) =>
-      e.sidecarId === p.sidecarId
-    ),
+    entries: entries().filter((e) => e.sidecarId === p.sidecarId),
     inbox: inbox(p.sidecarId).state.inbox,
   });
   const tabsFor = (p: ProjectSelection) => {
@@ -107,6 +121,7 @@ export default function Shell(
   };
   const sidecars: ReturnType<typeof createSidecars> = createSidecars(
     (id, frame) => {
+      approvals(id).receive(frame);
       if (frame.t === "index.snapshot" || frame.t === "index.patch") {
         if (!index.receive(id, frame)) {
           sidecars.connection(id).send({ t: "resnapshot" });
@@ -120,6 +135,12 @@ export default function Shell(
   );
   const entry = (sidecar: string, id: string) =>
     index.state.entries[sessionKey(sidecar, id)];
+  const linked = (id: string) =>
+    sidecars.state.list.some((server) =>
+      server.id === id && server.status === "connected" &&
+      server.harness === "connected"
+    );
+  const attention = (id: string) => approvals(id).attention(linked(id));
   const session = createSession(
     (id) => sidecars.connection(id),
     entry,
@@ -179,10 +200,19 @@ export default function Shell(
     viewing: () => !settings(),
     connection: (id) => sidecars.connection(id),
     entry,
+    attention,
   });
   onCleanup(() => notifications.stop());
   createEffect(
-    () => [toggles.state.prefs, session.state.selection, settings()] as const,
+    () =>
+      [
+        toggles.state.prefs,
+        session.state.selection,
+        settings(),
+        sidecars.state.list.map((
+          s,
+        ) => [s.id, s.status, s.harness, approvals(s.id).state.snapshot]),
+      ] as const,
     () => notifications.update(),
   );
   createEffect(() => error(), (text) => {
@@ -337,6 +367,25 @@ export default function Shell(
     }
     return true;
   };
+  onCleanup(registerApprovalCommands(commands, {
+    current: () => {
+      const target = session.state.selection;
+      if (!target || !approvals(target.sidecarId).canEnable(target.sessionID)) {
+        return undefined;
+      }
+      const server = sidecars.state.list.find((s) => s.id === target.sidecarId);
+      return {
+        model: approvals(target.sidecarId),
+        sessionID: target.sessionID,
+        connected: server?.status === "connected",
+      };
+    },
+    beforeEnable: () =>
+      !dirty.get("permissions") ||
+      globalThis.confirm(
+        "Discard unsaved permission input before enabling auto-approve for this session and its helpers?",
+      ),
+  }));
   const applyRoute = (hash: string) => {
     const target = route(hash),
       projectTarget = projectRoute(hash),
@@ -557,8 +606,10 @@ export default function Shell(
       connectionKey: () =>
         sidecars.state.list.find((s) => s.id === target.sidecarId)
           ?.connectionVersion,
+      connected: () => linked(target.sidecarId),
       onToolCompleted: (listener) => session.onToolCompleted(target, listener),
       modelCatalog: session.models,
+      approvals: approvals(target.sidecarId),
       sessionID: () => target.sessionID,
       directory: () => directoryFor(target),
       entry: (id) => entry(target.sidecarId, id),
@@ -590,7 +641,14 @@ export default function Shell(
       attachments: (parts) => attachments(parts, target.sidecarId),
     };
   };
-  const entries = () => Object.values(index.state.entries);
+  const entries = () =>
+    sidecars.state.list.flatMap((server) =>
+      attention(server.id).entries(
+        Object.values(index.state.entries).filter((e) =>
+          e.sidecarId === server.id
+        ),
+      )
+    );
   createEffect(() => {
     const p = project();
     if (!p) return undefined;
@@ -700,6 +758,12 @@ export default function Shell(
       command: "help.keys",
       key: "?",
     });
+    const unbindAuto = keyboard.keymap.bind({
+      id: "permission.auto",
+      command: "permission.auto",
+      key: "Mod+Shift+a",
+      inPrompt: true,
+    });
     const timer = setInterval(() => setNow(Date.now()), 30_000);
     navigation.start();
     sidecars.start();
@@ -709,8 +773,10 @@ export default function Shell(
       stopKeyboard();
       unbindPalette();
       unbindHelp();
+      unbindAuto();
       navigation.stop();
       session.stop();
+      for (const model of approvalModels.values()) model.stop();
       sidecars.stop();
     };
   });
@@ -728,6 +794,7 @@ export default function Shell(
           servers: () => sidecars.state.list,
           connection: (id) => sidecars.connection(id),
           inbox,
+          approvals,
           openProject,
           project,
           entries,
@@ -838,6 +905,8 @@ export default function Shell(
                           : undefined}
                         exhausted={session.state.exhausted}
                         showCost={toggles.state.prefs.showCost}
+                        auto={(id) =>
+                          !!approvals(project()!.sidecarId).owner(id)}
                         session={info()}
                         displayMenu={
                           <DisplayMenu

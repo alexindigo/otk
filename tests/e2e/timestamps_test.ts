@@ -230,6 +230,7 @@ Deno.test("creation-time hover and persistent visibility, structural footer date
         [
           { feature: "finishes", version: 1 },
           { feature: "frecency", version: 1 },
+          { feature: "permissions", version: 1 },
           { feature: "prefs", version: 1 },
           { feature: "project-templates", version: 1 },
           { feature: "projects", version: 1 },

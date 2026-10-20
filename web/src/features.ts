@@ -2,8 +2,10 @@
 import {
   browserThemeEnvironment,
   createUiRegistries,
+  registerActivityPanel,
   registerAgentPart,
   registerAttachmentsPrompt,
+  registerAutoApprovePrompt,
   registerBashTool,
   registerCommandDialogs,
   registerCompactionPart,
@@ -79,12 +81,14 @@ export function applicationUi(): UiRegistries {
   registerEditorPrompt(ui.prompt);
   registerEditorDialog(ui.dialogs);
   registerComposerPickers(ui.prompt);
+  registerAutoApprovePrompt(ui.prompt);
   registerPermissionTakeover(ui.takeovers);
   registerQuestionTakeover(ui.takeovers);
   registerCommandDialogs(ui.dialogs);
   registerProjectDialogs(ui.dialogs);
   registerTaskDialogs(ui.dialogs);
   registerSessionsPanel(ui.panels);
+  registerActivityPanel(ui.panels);
   return ui;
 }
 

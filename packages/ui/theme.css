@@ -36,6 +36,7 @@
   /* Prototype's 46rem at its 16px root, independent of the 13px UI root. */
   --lane-width: 736px;
   --item-inset: 12px;
+  --panel-inset: 20px;
   --pill-inset: var(--item-inset);
   /* Prototype chrome geometry, shared by the bars that reserve its corners. */
   --corner: 12px;

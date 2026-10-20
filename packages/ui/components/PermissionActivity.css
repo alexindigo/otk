@@ -1,0 +1,41 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-permission-activity {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 12px var(--panel-inset);
+  min-width: 0;
+}
+.otk-permission-activity ol {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+.otk-permission-activity li {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--otk-border);
+}
+.otk-permission-activity header {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: space-between;
+}
+.otk-permission-activity time {
+  color: var(--otk-fg-3);
+  font-size: var(--text-meta);
+}
+.otk-permission-activity p {
+  margin: 0;
+}

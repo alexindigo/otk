@@ -11,6 +11,12 @@ export { type TaskRecord, Tasks, tasksMigrations } from "./features/tasks.ts";
 export { Seen, seenMigrations } from "./features/seen.ts";
 export { Finishes, finishesMigrations } from "./features/finishes.ts";
 export {
+  type PermissionChange,
+  permissionMigrations,
+  type PermissionRecord,
+  PermissionStore,
+} from "./features/permissions.ts";
+export {
   ProjectTemplates,
   projectTemplatesMigrations,
 } from "./features/project-templates.ts";

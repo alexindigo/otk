@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createContext, type Element, useContext } from "solid-js";
 import type {
+  ApprovalModel,
   InboxRpc,
   ModelCatalogOwner,
   ToolCompletionSource,
@@ -22,8 +23,11 @@ export interface SessionPorts {
   rpc: InboxRpc["call"];
   /** Reactive identity of the current welcomed transport connection. */
   connectionKey?(): unknown;
+  /** Both serving transport and native link are live; unknown is not live. */
+  connected?(): boolean;
   onToolCompleted?: ToolCompletionSource;
   modelCatalog?: ModelCatalogOwner;
+  approvals?: ApprovalModel;
   sessionID(): string;
   directory(): Promise<string>;
   entry(id: string): IndexEntry | undefined;

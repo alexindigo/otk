@@ -129,6 +129,20 @@ can use that source for both a thumbnail and the original image; unavailable
 sources remain absent rather than being inferred from backend filesystem paths.
 History entries remain metadata-only and resolve upload bytes separately.
 
+`ApprovalSnapshot` carries explicitly enabled session IDs and a
+server-generation revision. `autoApproveOwner` supplies the shared cycle-safe
+inheritance lookup; descendants inherit an enabled ancestor without creating
+another policy row. `permission.auto` changes one session's boolean, and
+`permission.activity` returns at most100 newest-first reply records with an
+exclusive earlier-page cursor. Records distinguish manual/auto source, requested
+action/target and started/confirmed/failed outcome. These server-owned contracts
+are independent of browser preferences and native permanent permission grants.
+`canAutoApprove` defines root-only explicit policy eligibility; the server
+applies it to authoritative backend session metadata, and clients reflect it.
+Policy revisions are separate from `approval.activity` invalidations, which name
+the affected stored session families without carrying transcript or journal
+rows.
+
 ## Example
 
 Within the OTK workspace, Deno resolves the package by its name:

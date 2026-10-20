@@ -75,6 +75,18 @@ export const SessionsIcon = () => (
     <path d="M21 12h-8M21 6H8M21 18h-8M3 6v4a2 2 0 0 0 2 2h3M3 10v6a2 2 0 0 0 2 2h3" />
   </Icon>
 );
+export const ActivityIcon = () => (
+  <Icon>
+    <circle cx="12" cy="12" r="8" />
+    <path d="M12 7v5l3 2" />
+  </Icon>
+);
+export const ShieldCheckIcon = () => (
+  <Icon>
+    <path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6l8-3Z" />
+    <path d="m8 12 3 3 5-6" />
+  </Icon>
+);
 export const CopyIcon = () => (
   <Icon>
     <rect x="9" y="9" width="12" height="12" rx="2" />

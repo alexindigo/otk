@@ -88,5 +88,19 @@ consumers. Feature listeners run after committed writes. Composite preference
 defaults are detached on every read.
 
 Use Deno read/write permissions for the state directory and packaged SQL.
+
+`PermissionStore` / `permissionMigrations` independently contribute explicit
+session enablement and the permission reply journal. The application supplies
+request JSON; storage imports no protocol. Intents commit before remote I/O, and
+later outcome updates distinguish confirmation, failure and an interrupted
+unconfirmed attempt. Family queries accept session IDs and return at most101
+rows, allowing the application to expose100-row cursor pages. Journal intents
+and their indexed family membership commit together, so old helper activity
+remains visible after its live index entry expires. Confirmed request identity
+is indexed for duplicate-send suppression; no transcript is stored. Listeners
+distinguish actual policy changes from journal changes. Journal notifications
+carry their persisted family IDs, including for outcome updates; unrelated
+families need no refresh. Repeating an unchanged policy emits nothing.
+
 License: LGPL-3.0-only. Validate with `deno task test:unit` and
 `deno task test:arch` from the workspace, or `deno task test` in this package.

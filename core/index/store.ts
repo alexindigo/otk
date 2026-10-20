@@ -51,7 +51,6 @@ export class IndexStore extends SessionIndex {
     this.#queue({ op: "upsert", entry: copy });
   }
   override remove(id: string): void {
-    if (!this.get(id)) return;
     super.remove(id);
     this.#queue({ op: "remove", id });
   }

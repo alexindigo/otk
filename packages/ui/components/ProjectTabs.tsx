@@ -23,6 +23,7 @@ import {
   taskBreadcrumbs,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
+import AutoMark from "./AutoMark.tsx";
 import { ChevronIcon, PlusIcon } from "./ChromeIcons.tsx";
 import { ownedAction, useCommandPorts } from "../keyboard/context.tsx";
 import Menu from "./surface/Menu.tsx";
@@ -41,6 +42,7 @@ export default function ProjectTabs(props: {
   usage?: UsageTotal;
   exhausted: boolean;
   showCost?: boolean;
+  auto?(sessionID: string): boolean;
   session?: ContentSession;
   displayMenu?: Element;
   ready: boolean;
@@ -159,6 +161,13 @@ export default function ProjectTabs(props: {
                   })}
                   data-otk-selection="horizontal"
                   title={tab().title}
+                  aria-label={`${tab().title || "Session"}${
+                    tab().sessions.some((id) => !!props.auto?.(id))
+                      ? tab().kind === "task"
+                        ? ", Auto-approve is on for a session in this task"
+                        : ", Auto-approve on"
+                      : ""
+                  }`}
                   data-tab={tab().id}
                   data-status={entry(props.model.state.sessionID ?? "")?.status}
                   onClick={() => run(select(tab()))}
@@ -168,6 +177,12 @@ export default function ProjectTabs(props: {
                   <SelectionContent>
                     <StatusLight small state={tab().status} />
                     <span>{tab().title || "Session"}</span>
+                    <AutoMark
+                      active={tab().sessions.some((id) => !!props.auto?.(id))}
+                      label={tab().kind === "task"
+                        ? "Auto-approve is on for a session in this task"
+                        : undefined}
+                    />
                     <Show when={tab().preview}>
                       <span class="otk-preview-label">Preview</span>
                     </Show>
@@ -215,9 +230,13 @@ export default function ProjectTabs(props: {
                               selected: props.model.state.sessionID === c().id,
                             })}
                             onClick={() => run(openCrumb(c().id))}
+                            aria-label={`${entry(c().id)?.title ?? c().id}${
+                              props.auto?.(c().id) ? ", Auto-approve on" : ""
+                            }`}
                           >
                             <SelectionContent>
                               {entry(c().id)?.title ?? c().id}
+                              <AutoMark active={!!props.auto?.(c().id)} />
                             </SelectionContent>
                           </button>
                         )}
@@ -244,6 +263,11 @@ export default function ProjectTabs(props: {
                     data-helper={String(crumb().helper)}
                     data-depth={crumb().depth}
                     data-crumb={crumb().id}
+                    aria-label={`${
+                      props.session?.id === crumb().id
+                        ? props.session.title
+                        : entry(crumb().id)?.title ?? "Session unavailable"
+                    }${props.auto?.(crumb().id) ? ", Auto-approve on" : ""}`}
                     onClick={() => run(openCrumb(crumb().id))}
                   >
                     <SelectionContent>
@@ -258,6 +282,7 @@ export default function ProjectTabs(props: {
                           ? props.session.title
                           : entry(crumb().id)?.title ?? "Session unavailable"}
                       </span>
+                      <AutoMark active={!!props.auto?.(crumb().id)} />
                     </SelectionContent>
                   </button>
                 </span>

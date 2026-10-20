@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-auto-mark {
+  flex: 0 0 auto;
+  color: var(--otk-fg-2);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  font-style: normal;
+}

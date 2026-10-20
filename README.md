@@ -46,6 +46,17 @@ session retains its unsent browser draft across takeovers, session/tab switches
 and history navigation. The browser title follows the selected project and
 session.
 
+The composer's Auto-approve shield toggles server-owned permission replies for
+that session and its helpers. It is off by default, persists in `otk.db` and
+continues with no browser open; each request receives Allow once, not a
+permanent backend grant. Auto marks in tabs, breadcrumbs and session rows show
+the active policy. The Activity panel records manual and automatic replies,
+their exact targets and confirmed, failed or unconfirmed outcomes. The command
+palette and `Ctrl/Cmd+Shift+A` expose the same session toggle. While linked,
+pending covered requests show a quiet Auto-approving status instead of asking
+the browser for a competing reply. Helpers inherit policy; only the parent
+session can enable it. Deleting a session removes its saved policy.
+
 Transcript prose, code, diffs and the rounded composer share a centred 46rem
 lane. User messages are right-aligned bubbles without role labels. Expandable
 work-log folds hold compact tool rows and thinking lines; file targets are

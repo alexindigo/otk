@@ -66,6 +66,21 @@ parents. Agent colours share one in-flight/cache entry per directory until
 native instance disposal or stop. Reconnecting alone does not invalidate
 directory configuration.
 
+The connector's pending-permission owner retains normalized requests from
+bootstrap and global permission events. Family list readers, attention counts
+and tool waiting state use that same owner, including with no content
+subscriber; replies remove entries through the native event. Readers receive
+detached values rather than making another live HTTP inventory request.
+Bootstrap replaces its pending metadata atomically only after the snapshot
+succeeds. This avoids losing an otherwise valid event request when
+stock1.18.34's live inventory encoder rejects optional tool metadata (observed
+websearch metadata.livecrawl). Each pending entry also retains its
+asking-instance directory from the global event envelope or per-directory
+bootstrap listing. Replies route to that instance, falling back to the shared
+asynchronous directory resolver when no pending route exists; directory is never
+omitted. This routing metadata stays internal rather than becoming part of the
+neutral request returned to readers.
+
 `capabilities.models.listModels(sessionID)` reads native `GET /provider` and
 `GET /config` in that session's directory. It allowlists connected provider and
 model display metadata, including finite positive native `limit.context` as
