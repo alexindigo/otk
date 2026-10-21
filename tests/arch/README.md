@@ -16,6 +16,14 @@ declared structural/component token. Browser checks measure the Display title in
 Dark/Linen/Stone, every registered dialog and menu's padded flow, one heading
 per dialog, native dismissal, focus return and existing actions.
 
+Shared focus paint admits only semantic controls and explicitly marked visible
+content; landmarks, dock sections, scroll regions, tab panels and native overlay
+containers have no ring. Negative fixtures reject universal/layout selectors and
+replacing content opt-in with bare tabindex; dock landmarks cannot become Tab
+stops. Real-browser question/permission transitions assert visible-control
+focus, and composer focus is painted on its rounded border, never the inner
+textarea.
+
 ListPicker content follows the same recursive Surface/normal-flow checks. Its
 architecture gate requires Popover, shared selection and SelectionContent, and
 rejects networking, persistence and parent-DOM reach-through. Prompt consumes

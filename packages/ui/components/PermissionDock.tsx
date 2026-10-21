@@ -9,7 +9,15 @@ export function registerPermissionDock(docks: DockRegistry): void {
     render: (inputs) => inputs.permissions,
   });
 }
-import { createSignal, For, Match, onSettled, Show, Switch } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  For,
+  Match,
+  onSettled,
+  Show,
+  Switch,
+} from "solid-js";
 import type { PermissionRequest } from "@otk/protocol";
 import type { PermissionReply } from "@otk/protocol";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
@@ -91,7 +99,13 @@ function RequestDock(
   const [message, setMessage] = createSignal(""),
     [pending, setPending] = createSignal(false),
     [error, setError] = createSignal("");
-  let active = true;
+  let active = true, card!: HTMLElement;
+  createEffect(mode, (_value, previous) => {
+    if (previous !== undefined) {
+      card.querySelector<HTMLButtonElement>(".otk-permission-actions button")
+        ?.focus();
+    }
+  });
   onSettled(() => () => {
     active = false;
     props.onDirty(false);
@@ -157,7 +171,10 @@ function RequestDock(
   return (
     <section
       class="otk-permission-dock"
-      tabindex="0"
+      tabindex="-1"
+      ref={(element) => {
+        card = element;
+      }}
       aria-label="Pending permission"
       onKeyDown={(event) => {
         if (event.key === "Escape" && mode() !== "normal") {

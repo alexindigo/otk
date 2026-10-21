@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Prompt.css" with { type: "text" };
-import { createSignal, For, onSettled, Show } from "solid-js";
+import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
 import {
   type DraftChange,
   editDraft,
@@ -71,6 +71,13 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   };
   const features = useUiRegistries().prompt.create(ctx);
   const completion = createCompletion(ctx, features);
+  // The input owns its focus port. Resume only when the replacing surface has
+  // released focus, preserving a reader's newer focus elsewhere in the shell.
+  createEffect(() => props.suspended, (suspended, previous) => {
+    if (previous && !suspended && document.activeElement === document.body) {
+      ctx.focus();
+    }
+  });
   const canSubmit = () =>
     !props.suspended && props.connected &&
     (features.map((feature) => feature.enabled?.()).find((value) =>

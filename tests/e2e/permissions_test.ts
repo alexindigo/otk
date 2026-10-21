@@ -280,6 +280,17 @@ Deno.test("web permission snapshot on reopen, focused keys, always confirmation 
     await browser.click(".otk-permission-dock h2");
     await browser.key("3");
     await browser.poll("!!document.querySelector('textarea[name=rejection]')");
+    await browser.poll(
+      "document.activeElement===document.querySelector('.otk-permission-actions button')",
+    );
+    await browser.key("Escape");
+    await browser.poll(
+      "!document.querySelector('textarea[name=rejection]') && document.activeElement===document.querySelector('.otk-permission-actions button')",
+    );
+    await browser.key("3");
+    await browser.poll(
+      "!!document.querySelector('textarea[name=rejection]') && document.activeElement===document.querySelector('.otk-permission-actions button')",
+    );
     await browser.type(
       "textarea[name=rejection]",
       "Please use another approach",

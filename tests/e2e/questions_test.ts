@@ -163,7 +163,7 @@ Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmatio
     );
     await browser.key("Enter");
     await browser.poll(
-      `document.activeElement===document.querySelector('.otk-question-dock') && document.querySelector('${panel} button:nth-child(2)').getAttribute('aria-pressed')==='true'`,
+      `document.activeElement===document.querySelector('.otk-question-actions .otk-primary') && document.querySelector('${panel} button:nth-child(2)').getAttribute('aria-pressed')==='true'`,
     );
     await browser.key("ArrowRight");
     await browser.poll(

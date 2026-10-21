@@ -13,7 +13,7 @@ export function registerQuestionDock(docks: DockRegistry): void {
     render: (inputs) => inputs.questions,
   });
 }
-import { createSignal, For, onSettled, Show } from "solid-js";
+import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
 import type { QuestionRequest } from "@otk/protocol";
 import { createQuestionForm, forgetQuestionForm } from "@otk/client";
 import { solidState } from "../state/binding.ts";
@@ -74,7 +74,9 @@ function Request(
   const [collapsed, setCollapsed] = createSignal(false),
     [pending, setPending] = createSignal(false),
     [error, setError] = createSignal("");
-  let card!: HTMLElement, alive = true;
+  let card!: HTMLElement, advance!: HTMLButtonElement, alive = true;
+  const rowRefs: HTMLElement[][] = form.questions.map(() => []);
+  const ownFields: HTMLTextAreaElement[] = [];
   const step = () => form.state.step;
   const onReview = () => step() === form.review;
   const reply = async (answers?: string[][]) => {
@@ -107,8 +109,9 @@ function Request(
     category: "Attention",
     hidden: true,
     run: () => {
-      if (document.activeElement instanceof HTMLTextAreaElement) card.focus();
-      else return reject();
+      if (document.activeElement instanceof HTMLTextAreaElement) {
+        focusCurrent(true);
+      } else return reject();
     },
   });
   const answer = () => (onReview() ? submit() : form.next());
@@ -116,6 +119,28 @@ function Request(
     form.goTo(target);
     setCollapsed(false);
   };
+  // One projection for every step/collapse transition, after DOM visibility has
+  // settled. Arrival itself does not move focus into an answer action.
+  const rows = () => rowRefs[step()]?.filter((row) => row.isConnected) ?? [];
+  const focus = (row: HTMLElement) =>
+    (row instanceof HTMLButtonElement ? row : ownFields[step()])?.focus();
+  const focusCurrent = (action = false) => {
+    // Collapsing keeps native focus on the persistent header control. The
+    // question owns every row reference; Tabs owns its own panel DOM.
+    if (collapsed()) return;
+    focus(action || onReview() ? advance : rows()[0] ?? advance);
+  };
+  createEffect(
+    () => ({ step: step(), collapsed: collapsed() }),
+    (value, previous) => {
+      if (
+        previous &&
+        (value.step !== previous.step || value.collapsed !== previous.collapsed)
+      ) {
+        focusCurrent();
+      }
+    },
+  );
   onSettled(() => {
     const stopDirty = form.subscribe(() => props.onDirty(true));
     const release = ports.keyboard?.layer(
@@ -131,15 +156,12 @@ function Request(
     };
   });
   // Keyboard: move DOM focus between the active panel's rows; keys map to intents.
-  const rows = () => [...card.querySelectorAll<HTMLElement>(
-    ".otk-tabs-panel[data-active=true] [data-question-row]",
-  )];
   const focusRow = (delta: number) => {
     const list = rows();
     if (!list.length) return;
     const at = list.findIndex((row) => row.contains(document.activeElement));
     const next = list[(at + delta + list.length) % list.length];
-    (next.querySelector<HTMLElement>("textarea") ?? next).focus();
+    focus(next);
   };
   const onKey = (event: KeyboardEvent) => {
     if (pending()) return;
@@ -148,7 +170,7 @@ function Request(
     if (typing) {
       if (key === "Enter" && !event.shiftKey) {
         event.preventDefault();
-        card.focus();
+        focusCurrent(true);
       }
       return;
     }
@@ -175,6 +197,9 @@ function Request(
   const ownRow = (index: number) => (
     <div
       data-question-row
+      ref={(element) => {
+        rowRefs[index][form.questions[index].options.length] = element;
+      }}
       data-otk-selection="vertical"
       {...selection({
         class: "otk-question-row",
@@ -184,7 +209,7 @@ function Request(
       role="button"
       tabindex="-1"
       onClick={(event) => {
-        const field = event.currentTarget.querySelector("textarea");
+        const field = ownFields[index];
         if (event.target !== field) {
           form.chooseOwn(index);
           field?.focus();
@@ -194,6 +219,9 @@ function Request(
       <SelectionContent class="otk-question-content">
         <span>Type your own answer</span>
         <textarea
+          ref={(element) => {
+            ownFields[index] = element;
+          }}
           class="otk-question-own"
           name="question-answer"
           rows={1}
@@ -223,6 +251,9 @@ function Request(
               <button
                 type="button"
                 data-question-row
+                ref={(element) => {
+                  rowRefs[index][i] = element;
+                }}
                 data-otk-selection="vertical"
                 {...selection({
                   class: "otk-question-row",
@@ -246,7 +277,7 @@ function Request(
   return (
     <section
       class="otk-question-dock"
-      tabindex="0"
+      tabindex="-1"
       aria-label="Pending question"
       ref={(el) => {
         card = el;
@@ -269,6 +300,9 @@ function Request(
             <button
               type="button"
               class="otk-primary otk-pill"
+              ref={(element) => {
+                advance = element;
+              }}
               disabled={pending()}
               onClick={() => void answer()}
               title={onReview() ? "Send the answers" : "Next step"}

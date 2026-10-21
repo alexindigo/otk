@@ -139,6 +139,21 @@ Deno.test("independent public UI consumer renders external tools twice, updates 
     await browser.poll(
       "document.querySelector('.otk-prompt-context > span:first-child')?.textContent==='External-Agent'",
     );
+    await browser.click("textarea[name=prompt]");
+    await browser.poll(
+      "document.activeElement===document.querySelector('textarea[name=prompt]')",
+    );
+    assertEquals(
+      await browser.evaluate("document.activeElement.closest('.otk-composer')"),
+      null,
+    );
+    assertEquals(
+      await browser.evaluate(
+        "getComputedStyle(document.activeElement).outlineStyle",
+      ),
+      "solid",
+      "A standalone Prompt retains its own visible field focus",
+    );
     await browser.click(".otk-prompt button[type=submit]");
     await browser.poll(
       "document.querySelector('#submitted').textContent.includes('external transform') && document.querySelector('textarea[name=prompt]').value === ''",

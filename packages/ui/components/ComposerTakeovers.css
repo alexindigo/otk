@@ -8,6 +8,7 @@
   max-height: 75%;
 }
 .otk-composer {
+  --prompt-input-outline: none;
   width: 100%;
   max-width: var(--lane-width);
   margin-inline: auto;
@@ -20,4 +21,7 @@
 }
 .otk-composer[hidden] {
   display: none;
+}
+.otk-composer:focus-within {
+  border-color: var(--otk-action-focus);
 }

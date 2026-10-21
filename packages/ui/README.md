@@ -241,14 +241,25 @@ surfaces replace the composer with a raised, bordered, 20px-radius Takeover and
 a common blocked-light header. Consumer-supplied session location names the
 project/task; question tabs/options use shared underline/pointer primitives.
 Static keyboard hints are in titles, Keys and the palette, not the surface.
-Permission takeovers and notification toasts share one PermissionSummary: exact
-tool, command/working directory, edit file paths/counts or generic target and
-requested patterns. Notification enrichment carries the neutral request
-alongside its originating action through the hub's opaque detail port. A
-permission-owned adapter supplies injected toast content; the generic hub and
-toast host know no permission schema. Permission and question owners preserve
-dirty state through reconnects. The legacy `Docks` API remains independently
-reusable for existing consumers.
+Question step/collapse changes focus a visible option or review action; leaving
+an own-answer field focuses Answer. Arrival does not focus an answer action.
+Takeover layout sections are programmatic-only landmarks, not Tab stops. The
+prompt restores its own input when a takeover releases focus to the document,
+while preserving focus the reader moved elsewhere. Shared focus paint admits
+semantic controls and explicitly marked visible content (message/date reveals),
+never layout wrappers or programmatic-only targets, including browser-focusable
+scroll containers. Actual keyboard controls retain visible focus. The composer's
+rounded border owns focus-within rather than a second textarea rectangle;
+own-answer input focuses its visible row. ComposerTakeovers delegates field
+paint through `--prompt-input-outline`; without that enclosing box, a standalone
+Prompt retains its own field focus outline. Permission takeovers and
+notification toasts share one PermissionSummary: exact tool, command/working
+directory, edit file paths/counts or generic target and requested patterns.
+Notification enrichment carries the neutral request alongside its originating
+action through the hub's opaque detail port. A permission-owned adapter supplies
+injected toast content; the generic hub and toast host know no permission
+schema. Permission and question owners preserve dirty state through reconnects.
+The legacy `Docks` API remains independently reusable for existing consumers.
 
 `dialogs.register({ id, title, component })` installs feature-owned dialog
 content. A single `DialogHost` handles `dialog.open({ id, input? })` through the

@@ -122,6 +122,7 @@ export default function Message(
           ? "otk-user-bubble otk-created-trigger"
           : "otk-message-content"}
         tabindex={props.message.role === "user" ? "0" : undefined}
+        data-otk-focus={props.message.role === "user" ? "content" : undefined}
       >
         <For each={groups()} keyed={(group) => group.id}>
           {(group) => (
@@ -188,6 +189,7 @@ export default function Message(
                 <span
                   class="otk-message-agent otk-created-trigger"
                   tabindex="0"
+                  data-otk-focus="content"
                   style={{
                     "--message-agent-color": message().agentColor ||
                       "var(--otk-fg-3)",
@@ -239,6 +241,7 @@ export default function Message(
                 <time
                   class="otk-last-output-time"
                   tabindex="0"
+                  data-otk-focus="content"
                   aria-label="Last output time"
                   datetime={new Date(
                     message().time.lastOutput ?? message().time.created,

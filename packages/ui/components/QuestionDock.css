@@ -36,6 +36,10 @@
 .otk-question-own:focus-visible {
   outline: 0;
 }
+.otk-question-row:has(.otk-question-own:focus-visible) {
+  outline: 2px solid var(--control-focus);
+  outline-offset: var(--focus-ring-offset);
+}
 .otk-question-peek {
   overflow: hidden;
   white-space: nowrap;

@@ -12,6 +12,7 @@
   --secondary: var(--otk-fg-2);
   --applied-fg: var(--otk-fg-2);
   --control-color: var(--otk-fg-2);
+  --control-focus: var(--otk-action-focus);
   --font-ui: "IBM Plex Sans", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
   --radius-control: 8px;
@@ -46,6 +47,8 @@
   --project-inset: 12px;
   --project-gap: 8px;
   --selection-pointer-inset: 3px;
+  /* Keep keyboard focus wholly inside controls, including scrollport edges. */
+  --focus-ring-offset: -2px;
   /* Genuine Shiki css-variables categories. No tokens or worker work change. */
   --otk-syntax-foreground: var(--otk-code-variable);
   --otk-syntax-background: var(--otk-bg);
@@ -110,8 +113,13 @@ button:disabled {
   cursor: default;
 }
 :focus-visible {
-  outline: 2px solid var(--otk-action-focus);
-  outline-offset: 2px;
+  outline: none;
+}
+/* Focus paint belongs to visible controls/content, never navigation landmarks,
+   scrolling regions or programmatic-only layout targets. */
+:where(button, input, textarea, select, a[href], summary, [contenteditable="true"], [role="button"], [role="tab"], [role="separator"], [data-otk-focus="content"]):focus-visible:not([tabindex="-1"]) {
+  outline: 2px solid var(--control-focus);
+  outline-offset: var(--focus-ring-offset);
 }
 /* Field geometry belongs to text/value editors, never native compact controls.
    Unknown/missing types retain HTML's default text-field semantics. Keep this
@@ -184,6 +192,7 @@ p {
 }
 .otk-primary,
 .otk-primary:hover {
+  --control-focus: var(--otk-action-on);
   color: var(--otk-action-on);
   background: var(--otk-action);
   border-color: var(--otk-action);

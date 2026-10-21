@@ -26,7 +26,7 @@
   box-shadow: none;
 }
 .otk-prompt > textarea:focus-visible {
-  outline-offset: 4px;
+  outline: var(--prompt-input-outline, 2px solid var(--control-focus));
 }
 .otk-prompt-actions {
   display: flex;
