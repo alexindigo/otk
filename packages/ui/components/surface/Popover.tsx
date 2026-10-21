@@ -4,6 +4,7 @@ import {
   createSignal,
   createUniqueId,
   type Element,
+  onCleanup,
   onSettled,
 } from "solid-js";
 import { ownedCommand, useCommandPorts } from "../../keyboard/context.tsx";
@@ -40,11 +41,15 @@ export default function Popover(props: {
   let panel!: HTMLDivElement, trigger!: HTMLButtonElement;
   let previewFocus: HTMLElement | undefined;
   let restoringFocus = false;
+  let leaveTimer: ReturnType<typeof setTimeout> | undefined;
+  const cancelLeave = () => clearTimeout(leaveTimer);
+  onCleanup(cancelLeave);
   const ports = useCommandPorts(), closeId = `${anchor}.close`;
   const dismiss = (focus: () => void = () => {
     if (props.preview && previewFocus?.isConnected) previewFocus.focus();
     else trigger.focus();
   }) => {
+    cancelLeave();
     restoringFocus = true;
     try {
       panel.hidePopover();
@@ -54,6 +59,7 @@ export default function Popover(props: {
     }
   };
   const preview = (focused = false) => {
+    cancelLeave();
     if (!props.preview || restoringFocus) return;
     if (focused) previewFocus = trigger;
     else if (!panel.matches(":popover-open")) {
@@ -84,9 +90,18 @@ export default function Popover(props: {
       data-open={String(open())}
       onMouseEnter={() => preview()}
       onMouseLeave={(event) => {
-        if (
-          props.preview && !event.currentTarget.contains(document.activeElement)
-        ) panel.hidePopover();
+        if (!props.preview) return;
+        const owner = event.currentTarget;
+        cancelLeave();
+        // Permit pointer travel across the anchored surface's edge without
+        // making content responsible for its parent's preview lifetime.
+        leaveTimer = setTimeout(() => {
+          if (
+            !owner.matches(":hover") && !owner.contains(document.activeElement)
+          ) {
+            panel.hidePopover();
+          }
+        }, 120);
       }}
       onFocusIn={(event) => preview(event.target === trigger)}
       onFocusOut={(event) => {

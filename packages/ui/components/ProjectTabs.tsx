@@ -24,6 +24,7 @@ import {
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
 import AutoMark from "./AutoMark.tsx";
+import UsageCost from "./UsageCost.tsx";
 import { ChevronIcon, PlusIcon } from "./ChromeIcons.tsx";
 import { ownedAction, useCommandPorts } from "../keyboard/context.tsx";
 import Menu from "./surface/Menu.tsx";
@@ -340,7 +341,7 @@ export default function ProjectTabs(props: {
             </Show>
           </Show>
           <Show when={props.showCost !== false && cost() !== undefined}>
-            <span>${cost()!.toFixed(4)}</span>
+            <UsageCost value={cost()!} />
           </Show>
           <Show
             when={meter().tokens === undefined &&

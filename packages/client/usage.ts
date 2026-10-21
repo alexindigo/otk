@@ -29,6 +29,8 @@ export interface CallUsage extends PricedUsage {
 }
 export interface TurnUsage extends PricedUsage {
   calls: CallUsage[];
+  /** Largest individual prompt, distinct from the sum of prompts or last call. */
+  contextPeak: number;
   time?: UsageTime;
 }
 
@@ -45,24 +47,26 @@ export function turnUsage(
   const key = message.replyTo ?? message.id;
   if (!Object.hasOwn(snapshot.turns, key)) return;
   const total = snapshot.turns[key];
+  const calls = snapshot.messages.filter((call) => call.turnID === key).map((
+    call,
+  ) => ({
+    ...priceUsage(
+      { tokens: call.tokens, cost: call.cost, models: [call] },
+      catalog,
+    ),
+    id: call.id,
+    activity: call.tools?.length
+      ? call.tools.map((tool) =>
+        tool.summary ? `${tool.name}: ${tool.summary}` : tool.name
+      ).join(", ")
+      : "answered",
+    time: call.time,
+  }));
   return {
     ...priceUsage(total, catalog),
     time: total.time,
-    calls: snapshot.messages.filter((call) => call.turnID === key).map((
-      call,
-    ) => ({
-      ...priceUsage(
-        { tokens: call.tokens, cost: call.cost, models: [call] },
-        catalog,
-      ),
-      id: call.id,
-      activity: call.tools?.length
-        ? call.tools.map((tool) =>
-          tool.summary ? `${tool.name}: ${tool.summary}` : tool.name
-        ).join(", ")
-        : "answered",
-      time: call.time,
-    })),
+    calls,
+    contextPeak: calls.reduce((peak, call) => Math.max(peak, call.context), 0),
   };
 }
 
@@ -127,13 +131,27 @@ export function usageTokens(tokens: number): string {
     maximumFractionDigits: 1,
   }).format(tokens);
 }
-/** Keep small nonzero charges visible without adding noise to ordinary totals. */
-export function usageCost(cost: number): string {
-  if (cost > 0 && cost < .000001) return "<$0.000001";
-  return new Intl.NumberFormat("en-US", {
+const costFormats = {
+  display: new Intl.NumberFormat("en-US", {
     style: "currency",
     currency: "USD",
     minimumFractionDigits: 2,
-    maximumFractionDigits: cost !== 0 && Math.abs(cost) < .01 ? 6 : 2,
-  }).format(cost);
+    maximumFractionDigits: 2,
+  }),
+  exact: new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+    maximumSignificantDigits: 21,
+  }),
+};
+/** One USD rule for every consumer; exact mode retains the reported value for AT. */
+export function usageCost(
+  cost: number,
+  mode: "display" | "exact" = "display",
+): string {
+  const value = cost === 0 ? 0 : cost;
+  if (mode === "display" && value !== 0 && Math.abs(value) < .01) {
+    return value > 0 ? "<$0.01" : ">-$0.01";
+  }
+  return costFormats[mode].format(value);
 }

@@ -14,6 +14,7 @@ import {
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
 import AutoMark from "./AutoMark.tsx";
+import UsageCost from "./UsageCost.tsx";
 import { ChevronIcon, PlusIcon, SearchIcon } from "./ChromeIcons.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
 
@@ -58,6 +59,12 @@ export default function ProjectSessions(props: {
   const costLabel = (id: string) => {
     const cost = props.cost?.(id);
     return cost === undefined ? undefined : usageCost(cost);
+  };
+  const costDescription = (id: string) => {
+    const cost = props.cost?.(id);
+    return cost === undefined
+      ? undefined
+      : `Exact session cost: ${usageCost(cost, "exact")}`;
   };
   return (
     <nav
@@ -127,6 +134,7 @@ export default function ProjectSessions(props: {
                           data-status={row().session.status}
                           style={{ "--session-depth": row().depth }}
                           title={row().session.title}
+                          aria-description={costDescription(row().session.id)}
                           aria-label={`${row().session.title}${
                             row().parentID
                               ? `, child of ${merged(row().parentID!).title}`
@@ -212,7 +220,9 @@ export default function ProjectSessions(props: {
                                 aria-hidden="true"
                                 title="Session cost"
                               >
-                                {costLabel(row().session.id)}
+                                <UsageCost
+                                  value={props.cost!(row().session.id)!}
+                                />
                               </span>
                             </Show>
                           </SelectionContent>

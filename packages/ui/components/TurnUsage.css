@@ -6,7 +6,12 @@
   white-space: nowrap;
 }
 .otk-usage-breakdown {
-  border-collapse: collapse;
+  --usage-call-width: 48px;
+  --usage-activity-width: 200px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  min-width: 984px;
   width: 100%;
   font-size: var(--text-meta);
   font-variant-numeric: tabular-nums;
@@ -18,7 +23,7 @@
 }
 .otk-usage-breakdown tfoot th:first-child {
   text-align: left;
-  padding-inline-start: 0;
+  z-index: 3;
 }
 .otk-usage-breakdown th {
   font-weight: 500;
@@ -27,22 +32,129 @@
   color: var(--otk-fg-3);
 }
 .otk-usage-note {
-  margin: 8px 0 0;
+  margin: 0;
   font-size: var(--text-meta);
   color: var(--otk-fg-3);
 }
 .otk-usage-breakdown .otk-usage-activity,
 .otk-usage-breakdown thead th:nth-child(2) {
   text-align: left;
-  white-space: normal;
-  overflow-wrap: anywhere;
-  min-width: 16ch;
 }
-.otk-usage-breakdown tfoot {
-  border-top: 1px solid var(--otk-border);
+.otk-usage-breakdown tfoot :is(th, td) {
+  border-block-start: 1px solid var(--otk-border);
+  font-weight: 500;
 }
 .otk-usage-category-cost {
   display: block;
   color: var(--otk-fg-3);
   font: inherit;
+}
+.otk-usage-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  overflow: hidden;
+}
+.otk-usage-summary {
+  flex: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 32px;
+  padding: 4px 8px 8px;
+  font-variant-numeric: tabular-nums;
+}
+.otk-usage-summary > div {
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 4px;
+}
+.otk-usage-summary dt {
+  color: var(--otk-fg-3);
+  font-size: var(--text-meta);
+}
+.otk-usage-summary dd {
+  font-size: var(--text-heading);
+  line-height: 24px;
+  font-weight: 600;
+}
+.otk-usage-scroll {
+  overflow: auto;
+  max-height: 320px;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+.otk-usage-breakdown thead th {
+  position: sticky;
+  inset-block-start: 0;
+  z-index: 2;
+  border-block-end: 1px solid var(--otk-border);
+}
+.otk-usage-breakdown tfoot :is(th, td) {
+  position: sticky;
+  inset-block-end: 0;
+  z-index: 2;
+}
+.otk-usage-breakdown :is(thead, tfoot) :is(th, td),
+.otk-usage-breakdown tbody :is(th, .otk-usage-activity) {
+  background: var(--overlay-bg);
+}
+.otk-usage-breakdown :is(thead, tbody) th:first-child {
+  min-width: var(--usage-call-width);
+  width: var(--usage-call-width);
+  position: sticky;
+  inset-inline-start: 0;
+  z-index: 1;
+}
+.otk-usage-breakdown :is(thead, tbody) > tr > :nth-child(2) {
+  min-width: var(--usage-activity-width);
+  width: var(--usage-activity-width);
+  max-width: var(--usage-activity-width);
+  position: sticky;
+  inset-inline-start: var(--usage-call-width);
+  z-index: 1;
+}
+.otk-usage-breakdown .otk-usage-activity > span {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.otk-usage-breakdown thead > tr > :nth-child(-n+2) {
+  z-index: 3;
+}
+.otk-usage-breakdown tfoot th {
+  inset-inline-start: 0;
+}
+.otk-usage-breakdown thead th:nth-child(3) {
+  width: 144px;
+}
+.otk-usage-context {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+}
+.otk-usage-context > span:first-child {
+  grid-column: 2;
+  grid-row: 1;
+}
+.otk-usage-context-bar {
+  grid-column: 1;
+  grid-row: 1;
+  width: 48px;
+  height: 4px;
+  flex: none;
+  background: var(--otk-border);
+}
+.otk-usage-context-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--otk-fg-2);
+}
+.otk-usage-notes {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-inline: 8px;
 }

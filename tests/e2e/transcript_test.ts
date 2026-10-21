@@ -277,7 +277,9 @@ Deno.test("reading column, renderer disclosures, reply metadata, reported compos
     await b.evaluate(
       "document.querySelector('.otk-turn-usage > button').focus()",
     );
-    await b.poll("!!document.querySelector('.otk-turn-usage :popover-open')");
+    await b.poll(
+      "!!document.querySelector('.otk-turn-usage :popover-open') && !!document.querySelector('.otk-usage-breakdown tfoot tr')",
+    );
     assertEquals(
       await b.evaluate(
         "[...document.querySelector('.otk-usage-breakdown tfoot tr').children].slice(2,7).map(cell=>cell.textContent)",

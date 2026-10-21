@@ -179,7 +179,7 @@ Deno.test("U4 complete102-step turn and session totals survive paging, duplicate
       "102.0s",
     );
     const scrollPoint = await b.evaluate<{ x: number; y: number }>(
-      "(()=>{const r=document.querySelector('.otk-turn-usage .otk-surface-body').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
+      "(()=>{const r=document.querySelector('.otk-usage-scroll').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
     );
     await b.send("Input.dispatchMouseEvent", {
       type: "mouseWheel",
@@ -188,7 +188,7 @@ Deno.test("U4 complete102-step turn and session totals survive paging, duplicate
       deltaY: 5000,
     });
     await b.poll(
-      "(()=>{const body=document.querySelector('.otk-turn-usage .otk-surface-body'),foot=body.querySelector('tfoot').getBoundingClientRect(),bounds=body.getBoundingClientRect();return body.scrollTop>0 && foot.top>=bounds.top && foot.bottom<=bounds.bottom})()",
+      "(()=>{const body=document.querySelector('.otk-usage-scroll'),foot=body.querySelector('tfoot').getBoundingClientRect(),bounds=body.getBoundingClientRect();return body.scrollTop>0 && foot.top>=bounds.top && foot.bottom<=bounds.bottom})()",
     );
     await b.send("Input.dispatchMouseEvent", {
       type: "mouseMoved",

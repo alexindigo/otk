@@ -263,9 +263,13 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
     );
     for (const [i, rate] of [2, 4, 4, .5, 3].entries()) {
       assertAlmostEquals(
-        Number(totals[i + 2].split("$")[1].replace(/,/g, "")),
+        Number(
+          (await b.evaluate<string[]>(
+            "[...document.querySelectorAll('.otk-usage-category-cost .otk-usage-cost')].map(e=>e.getAttribute('aria-description').split('$')[1].replaceAll(',',''))",
+          ))[i],
+        ),
         sums[i] * rate / 1e6,
-        .005,
+        1e-9,
       );
     }
     const turnTime = `${
@@ -484,7 +488,8 @@ Deno.test("U4 unknown model prices show all five charged token categories withou
       ),
       {
         nativeTooltip: false,
-        label: "Turn usage: 1 model call · 240 tokens · $0.43",
+        label:
+          "Turn usage: 1 model call · 240 tokens · $0.43; exact cost $0.43",
         description: true,
         open: true,
       },

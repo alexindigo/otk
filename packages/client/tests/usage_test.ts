@@ -160,8 +160,50 @@ Deno.test("usage labels compact large counts while preserving small nonzero char
   assertEquals(usageTokens(0), "0");
   assertEquals(usageCost(.43), "$0.43");
   assertEquals(usageCost(0), "$0.00");
-  assertEquals(usageCost(.000025), "$0.000025");
-  assertEquals(usageCost(.00000005), "<$0.000001");
+  assertEquals(usageCost(.000025), "<$0.01");
+  assertEquals(usageCost(.00000005), "<$0.01");
+});
+
+Deno.test("one money rule uses cents everywhere and never rounds a positive charge to zero", () => {
+  for (
+    const [value, label] of [
+      [0, "$0.00"],
+      [Number.MIN_VALUE, "<$0.01"],
+      [.00000005, "<$0.01"],
+      [.00045, "<$0.01"],
+      [.0096, "<$0.01"],
+      [.00999999, "<$0.01"],
+      [.01, "$0.01"],
+      [.014, "$0.01"],
+      [.019, "$0.02"],
+      [.04, "$0.04"],
+      [1.2, "$1.20"],
+      [11.62, "$11.62"],
+      [1234.567, "$1,234.57"],
+    ] as const
+  ) {
+    assertEquals(usageCost(value), label, String(value));
+  }
+});
+
+Deno.test("exact money preserves sub-cent amounts and full reported precision without false zero", () => {
+  for (
+    const [value, label] of [
+      [.00000005, "$0.00000005"],
+      [.00045, "$0.00045"],
+      [.0096, "$0.0096"],
+      [.014, "$0.014"],
+      [1234.567, "$1,234.567"],
+      [1.2345678901234567, "$1.2345678901234567"],
+    ] as const
+  ) assertEquals(usageCost(value, "exact"), label);
+  assertEquals(
+    Number(usageCost(Number.MIN_VALUE, "exact").replace(/[$,]/g, "")),
+    Number.MIN_VALUE,
+  );
+  assertEquals(usageCost(-0), "$0.00");
+  assertEquals(usageCost(-.00045), ">-$0.01");
+  assertEquals(usageCost(-.00045, "exact"), "-$0.00045");
 });
 
 Deno.test("authoritative turn lookup rejects wrong-session, absent and inherited keys without page fallbacks", () => {
@@ -264,4 +306,28 @@ Deno.test("a queued user message cannot split the charged turn, and session iden
     "elsewhere",
   ]);
   assertEquals([...replyMetadata(messages).keys()], ["b", "elsewhere"]);
+});
+
+Deno.test("turn context peak includes both caches and survives a smaller final prompt", () => {
+  const a = step("a"), b = step("b"), c = step("c");
+  b.tokens = {
+    input: 300000,
+    output: 1,
+    reasoning: 1,
+    cache: { read: 40000, write: 50000 },
+  };
+  c.tokens = {
+    input: 1,
+    output: 500000,
+    reasoning: 2,
+    cache: { read: 0, write: 0 },
+  };
+  const ledger = new UsageLedger("s", [a, b, c].map(usageHeader));
+  const turn = turnUsage(ledger.snapshot(), c)!;
+  assertEquals(turn.contextPeak, 390000);
+  assertEquals(turn.calls[2].context, 1);
+  assertEquals(
+    turn.context,
+    a.tokens.input + a.tokens.cache.read + a.tokens.cache.write + 390001,
+  );
 });

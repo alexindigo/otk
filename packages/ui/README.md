@@ -79,16 +79,33 @@ the framework-free reply usage owner, never reconstructed in the view. Display's
 persisted Show cost toggle defaults on; turning it off hides all footer/detail
 and context-meter cost figures while retaining tokens. Popover's generic wide
 size accommodates comparison tables; it continues to own native anchoring,
-dismissal, Surface scrolling and keyboard focus return. Hover/focus previews
-have no native title tooltip; their accessible trigger label and linked detail
-description are supplied by that same owner. Click-only controls retain their
-name tooltips. ShellPorts exposes the same framework-free usage owner to
+available-side viewport bounds, dismissal and keyboard focus return. Hover/focus
+previews have no native title tooltip; their accessible trigger label and linked
+detail description are supplied by that same owner. Click-only controls retain
+their name tooltips. ShellPorts exposes the same framework-free usage owner to
 registered panel adapters. The Sessions adapter binds its load/get ports for the
 selected project's sessions; rows present total.cost as quiet trailing metadata
 using the shared cost formatter, including known zero. Show cost also hides
 these amounts and their accessible labels. Footers, rows and meter never sum
 transcript pages; unavailable metadata stays unknown while content remains
 usable.
+
+All money uses the public client usageCost formatter: two decimals, `<$0.01` for
+positive sub-cent amounts and `$0.00` only for actual zero. UsageCost is the
+shared data-only text component for overlay, meter and session amounts, with the
+exact amount in its title-free accessible description. Parent-owned footer and
+session-row accessible text uses that formatter's exact mode too. Cost off
+removes both visible and accessible amounts.
+
+Turn detail mounts only while open. Its overview keeps model-call count, peak
+individual prompt Context, charged tokens and reported cost visible above a
+bounded ledger. Exact comma-separated ledger counts retain the audit trail;
+overview counts use the shared compact formatter with exact accessible values.
+In-flow Context bars share the peak scale, exposing growth and resets. Activity
+truncates with full accessible text. The ledger scrolls internally, with column
+headers and Total pinned vertically; Call and Activity remain pinned during
+horizontal scrolling at narrow widths. Pointer travel into preview surfaces and
+focus inside them retain the preview, with Escape returning opening focus.
 
 `prompt.register({ id, create(context) })` installs a per-prompt feature.
 `PromptContext` injects selection/caret/focus operations, an active-lifetime
@@ -166,10 +183,11 @@ callers inject action content/icons. Provider subtitles appear only in
 favourite/recent groups. Search filters labels/descriptions/search text.
 Popover's general control/open hooks keep native anchoring and dismissal
 internal, while content owns its focus. Closing a pick returns to the injected
-prompt focus port. Shared anchoring opens above the leading edge and tries
-inline/block flips only for viewport overflow. Footer labels and real chevron
-icons share flex centring; trigger accessible names include current values.
-Loading/error states do not also report an empty catalog.
+prompt focus port. Shared anchoring aligns with the leading edge and chooses the
+roomier vertical side, with inline/block fallbacks for viewport overflow. Footer
+labels and real chevron icons share flex centring; trigger accessible names
+include current values. Loading/error states do not also report an empty
+catalog.
 
 Composer model labels show the provider in secondary paint before the model,
 including for backend-applied and plain-label states. Full provider/model names

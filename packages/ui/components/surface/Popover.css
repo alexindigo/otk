@@ -7,6 +7,7 @@
   position: absolute;
   position-area: top span-right;
   position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+  position-try-order: most-height;
   inset: auto;
   margin: 0;
   padding: 0;
@@ -14,11 +15,19 @@
   background: transparent;
   color: var(--otk-fg);
   width: min(28rem, calc(100vw - 16px));
-  min-width: 200px;
+  min-width: min(200px, calc(100vw - 16px));
   max-width: min(28rem, calc(100vw - 16px));
-  max-height: 65vh;
+  max-height: min(65vh, calc(100% - 8px), calc(100dvh - 16px));
   overflow: visible;
   z-index: var(--layer-popover);
+}
+.otk-popover-panel:popover-open {
+  display: flex;
+  flex-direction: column;
+}
+.otk-popover-panel > .otk-surface {
+  min-height: 0;
+  max-height: none;
 }
 .otk-popover-wide {
   position-area: top span-all;
