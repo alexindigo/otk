@@ -12,6 +12,7 @@ export function registerSearchTool(tools: ToolRegistry): void {
     (call, context) => ({
       icon: SearchIcon,
       verb: call.mode === "list" ? "List" : "Search",
+      copy: { path: call.path },
       target: call.path
         ? relativeTarget(call.path, context.directory)
         : undefined,

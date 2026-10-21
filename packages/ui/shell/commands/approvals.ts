@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ApprovalModel, CommandHub } from "@otk/client";
+import type { SessionContextTarget } from "../../features/session-context.ts";
 
 export interface ApprovalCommandTarget {
   model: ApprovalModel;
@@ -8,19 +9,29 @@ export interface ApprovalCommandTarget {
 }
 /** Capture the invocation target once; a late RPC never toggles another session. */
 export function registerApprovalCommands(commands: CommandHub, ports: {
-  current(): ApprovalCommandTarget | undefined;
+  current(input?: SessionContextTarget): ApprovalCommandTarget | undefined;
   beforeEnable(target: ApprovalCommandTarget): boolean;
 }): () => void {
   return commands.register({
     id: "permission.auto",
     title: "Toggle session auto-approve",
     category: "Attention",
-    enabled: () => {
-      const target = ports.current();
+    context: {
+      kind: "session",
+      title: (input: SessionContextTarget) => {
+        const target = ports.current(input);
+        return target?.model.owner(target.sessionID)
+          ? "Turn auto-approve off"
+          : "Turn auto-approve on";
+      },
+      order: 30,
+    },
+    enabled: (_ctx, input?: SessionContextTarget) => {
+      const target = ports.current(input);
       return !!target?.connected && target.model.state.ready;
     },
-    async run() {
-      const target = ports.current();
+    async run(_ctx, input?: SessionContextTarget) {
+      const target = ports.current(input);
       if (!target?.connected) {
         throw new Error("Session approvals are unavailable");
       }

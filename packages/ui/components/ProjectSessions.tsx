@@ -17,6 +17,7 @@ import AutoMark from "./AutoMark.tsx";
 import UsageCost from "./UsageCost.tsx";
 import { ChevronIcon, PlusIcon, SearchIcon } from "./ChromeIcons.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
+import { contextTarget } from "./context-target.ts";
 
 /** Reusable presentation of the client-owned task/session hierarchy. */
 export default function ProjectSessions(props: {
@@ -122,6 +123,14 @@ export default function ProjectSessions(props: {
                       <li data-depth={row().depth} data-parent={row().parentID}>
                         <button
                           type="button"
+                          ref={contextTarget(() => ({
+                            kind: "session",
+                            data: {
+                              ...props.project!,
+                              sessionID: row().session.id,
+                              title: row().session.title,
+                            },
+                          }))}
                           {...selection({
                             class: "otk-session-row",
                             kind: "current",

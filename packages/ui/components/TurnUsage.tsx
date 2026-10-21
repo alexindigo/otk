@@ -6,12 +6,20 @@ import Popover from "./surface/Popover.tsx";
 import { countLabel } from "./tools/count.ts";
 import { elapsed } from "./work-log.ts";
 import UsageCost from "./UsageCost.tsx";
+import {
+  contentOwner,
+  useContentIdentity,
+} from "../features/transcript-context.tsx";
+import type { PopoverControl } from "./surface/Popover.tsx";
 
 /** Presentation only; the usage owner supplies every call, price and clock. */
 export default function TurnUsage(
   props: { usage: Usage; showCost: boolean },
 ): import("solid-js").Element {
   const [opened, setOpened] = createSignal(false);
+  let popover!: PopoverControl;
+  const identity = useContentIdentity();
+  contentOwner(() => identity, { usage: () => popover.open() });
   const summary = () =>
     `${countLabel(props.usage.calls.length, "model call")} · ${
       countLabel(
@@ -35,6 +43,9 @@ export default function TurnUsage(
       title="Turn usage"
       size="wide"
       preview
+      control={(control) => {
+        popover = control;
+      }}
       trigger={<span>{summary()}</span>}
       onOpen={() => setOpened(true)}
       onClose={() => setOpened(false)}

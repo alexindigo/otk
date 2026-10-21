@@ -36,7 +36,7 @@
 .otk-project-row {
   display: flex;
   align-items: center;
-  height: 32px;
+  min-height: 32px;
   color: var(--otk-fg-2);
 }
 .otk-project-open {
@@ -64,6 +64,11 @@
 }
 .otk-project-content {
   gap: 0;
+  flex-wrap: wrap;
+}
+.otk-project-error {
+  flex-basis: 100%;
+  padding-block-end: 4px;
 }
 .otk-project-name {
   font-size: 13px;

@@ -13,6 +13,7 @@ export function registerWriteTool(tools: ToolRegistry): void {
       icon: EditIcon,
       verb: "Write",
       target: relativeTarget(call.path, context.directory),
+      copy: { path: call.path },
       expanded: context.prefs?.collapseFileChanges === false,
     }),
   );

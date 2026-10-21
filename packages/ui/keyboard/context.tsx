@@ -39,12 +39,14 @@ export function ownedCommand<A = void, R = void>(
 export function ownedAction<A = void, R = void>(
   name: string,
   run: (args: A) => R | Promise<R>,
+  options: Pick<Command<A, R>, "context" | "enabled"> = {},
 ): (args: A) => Promise<R> {
   return ownedCommand(useCommandPorts(), {
     id: `${name}:${crypto.randomUUID()}`,
     title: name,
     category: "Controls",
     hidden: true,
+    ...options,
     run: (_ctx, args: A) => run(args),
   });
 }

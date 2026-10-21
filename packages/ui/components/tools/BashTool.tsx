@@ -14,6 +14,7 @@ export function registerBashTool(tools: ToolRegistry): void {
       verb: "Run",
       target: call.command,
       summary: call.description,
+      copy: { command: call.command },
     }),
   );
 }

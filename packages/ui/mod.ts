@@ -66,6 +66,12 @@ export { solidState } from "./state/binding.ts";
 export { selection } from "./components/selection.ts";
 export { contextTarget } from "./components/context-target.ts";
 export { default as ContextMenu } from "./components/ContextMenu.tsx";
+export {
+  type ContentIdentity,
+  ContentIdentityProvider,
+  type ContentTarget,
+  TranscriptContext,
+} from "./features/transcript-context.tsx";
 export { default as SelectionContent } from "./components/SelectionContent.tsx";
 export * from "./registries/renderers.ts";
 export * from "./registries/prompt.ts";

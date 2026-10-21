@@ -474,6 +474,35 @@ same close owner. Dismissal, owner teardown and removal of the active Portal
 host release captured references and command-menu state. Preview lifetime
 includes both the trigger and the portalled panel.
 
+Session tabs, breadcrumb chips (including folded chips) and Sessions rows
+declare one `session` kind with captured sidecar/session/directory/title data.
+Existing navigation and approval command owners provide Open, Pin as task/Open
+as task, Auto-approve and Copy session title. ProjectTabs contributes available
+one `task.add` contribution with stable-keyed destination items through its
+captured project/task ports, plus Rename task and Close task for task tabs.
+Session tabs have no Close action: phantom tabs leave on their own when idle and
+seen. Project rows share their existing Mark active / Mark inactive command with
+the visible project CommandMenu projection, including shared invocation and row
+error feedback. Project/task kinds carry sidecar, directory and task identities
+instead of component-specific kinds.
+
+`TranscriptContext` registers each `prompt`, `reply`, `code`, `diff` and `tool`
+action once, independent of transcript length. Targets carry sidecar/session,
+message, part/call and directory identity plus source data. Features can
+contribute to these shared kinds without editing Message. The few stateful
+actions bind lifetime-owned ports keyed by that identity; source text and DOM
+are never retained in that owner map. SessionView selects the feature;
+independent consumers can compose the same public provider. Prompt/reply copy
+uses the part registry's source projection, including a complete grouped reply;
+code copy uses its source, never rendered gutters or highlighted DOM. Diff code
+copy uses the new-side hunk under the pointer (old-side text for a deleted
+file). Tool features contribute optional `presentation.copy` command/path/paths
+sources; the shared frame adds available output and disclosure actions without
+dispatching concrete tools. A reply's Show usage breakdown invokes TurnUsage's
+existing Popover control and renders its existing usage table. Empty output has
+no copy action. All target bindings use callback refs, composing with other refs
+through Solid's ref array.
+
 ## Semantic themes
 
 `ThemeRegistry` owns immutable data registrations; it imports no themes. A

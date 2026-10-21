@@ -21,8 +21,9 @@ import {
   SettingsIcon,
 } from "./ChromeIcons.tsx";
 import { ownedAction, useCommandPorts } from "../keyboard/context.tsx";
-import Menu from "./surface/Menu.tsx";
+import CommandMenu from "./CommandMenu.tsx";
 import SidebarRail from "./SidebarRail.tsx";
+import { contextTarget } from "./context-target.ts";
 export interface ProjectRow extends InboxProject {
   sidecarId: string;
   label: string;
@@ -61,26 +62,43 @@ export default function ProjectInbox(props: {
     }
   };
   const open = ownedAction("project.open", props.onOpen);
-  const inactive = ownedAction(
+  ownedAction(
     "project.inactive",
-    async (input: { project: ProjectRow; value: boolean }) => {
-      try {
-        await props.onInactive(input.project, input.value);
-      } catch (error) {
-        setError((error as Error).message);
-      }
+    (input: { sidecarId: string; directory: string; value: boolean }) =>
+      props.onInactive(input, input.value),
+    {
+      context: {
+        kind: "project",
+        title: (input) => input.value ? "Mark inactive" : "Mark active",
+      },
+      enabled: (_ctx, input) =>
+        props.ready && !!input &&
+        props.projects.some((project) =>
+          project.sidecarId === input.sidecarId &&
+          project.directory === input.directory
+        ),
     },
   );
   const rows = () =>
     collapsed() ? props.projects : props.projects.filter((p) => !p.inactive);
   function Row(row: { project: ProjectRow }) {
+    const [rowError, setRowError] = createSignal("");
     const project = () => row.project;
+    const target = () => ({
+      kind: "project",
+      data: {
+        sidecarId: project().sidecarId,
+        directory: project().directory,
+        value: !project().inactive,
+      },
+    });
     const name = () => projectName(project().directory);
     const duplicate = () =>
       props.projects.filter((p) => projectName(p.directory) === name()).length >
         1;
     return (
       <div
+        ref={contextTarget(target)}
         {...selection({
           class: "otk-project-row",
           kind: "current",
@@ -127,23 +145,20 @@ export default function ProjectInbox(props: {
               <time class="otk-project-visit" title="Since last visit">
                 {project().visitText}
               </time>
-              <Menu
+              <CommandMenu
                 class="otk-project-menu"
                 label={`Project menu for ${name()}`}
                 trigger="⋯"
-              >
-                <button
-                  type="button"
-                  onClick={() =>
-                    void inactive({
-                      project: project(),
-                      value: !project().inactive,
-                    })}
-                >
-                  {project().inactive ? "Mark active" : "Mark inactive"}
-                </button>
-              </Menu>
+                targets={() => [target()]}
+                beforeRun={() => setRowError("")}
+                onError={setRowError}
+              />
             </div>
+          </Show>
+          <Show when={rowError()}>
+            <span class="otk-error otk-project-error" role="alert">
+              {rowError()}
+            </span>
           </Show>
         </SelectionContent>
       </div>

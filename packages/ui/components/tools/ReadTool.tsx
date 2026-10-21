@@ -14,6 +14,7 @@ export function registerReadTool(tools: ToolRegistry): void {
       icon: FileIcon,
       verb: "Read",
       target: relativeTarget(call.path, context.directory),
+      copy: { path: call.path },
       summary: [
         call.offset !== undefined ? `offset ${call.offset}` : "",
         call.limit !== undefined ? `limit ${call.limit}` : "",

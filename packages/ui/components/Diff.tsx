@@ -5,6 +5,8 @@ import type { FileDiff, Hunk } from "@otk/protocol";
 import Diagnostics from "./tools/Diagnostics.tsx";
 import ToolPath from "./tools/ToolPath.tsx";
 import { relativeTarget } from "./tools/paths.ts";
+import { contextTarget } from "./context-target.ts";
+import { useContentIdentity } from "../features/transcript-context.tsx";
 type Line = Hunk["lines"][number];
 export function splitRows(lines: Line[]): { left?: Line; right?: Line }[] {
   const rows: { left?: Line; right?: Line }[] = [];
@@ -57,6 +59,13 @@ export default function Diff(
     directory?: string;
   },
 ): import("solid-js").Element {
+  const identity = useContentIdentity();
+  const source = (hunk: Hunk) =>
+    hunk.lines.filter((line) =>
+      props.file.status === "deleted"
+        ? line.kind !== "add"
+        : line.kind !== "del"
+    ).map((line) => line.text).join("\n");
   const style = () =>
     props.style === "auto"
       ? (props.paneWidth >= 1200 ? "split" : "unified")
@@ -103,7 +112,18 @@ export default function Diff(
       </Show>
       <For each={props.file.hunks} keyed={false}>
         {(hunk) => (
-          <div class="otk-diff-content">
+          <div
+            class="otk-diff-content"
+            ref={contextTarget(() => ({
+              kind: "diff",
+              data: {
+                ...identity,
+                path: props.file.path,
+                hunk: { oldStart: hunk().oldStart, newStart: hunk().newStart },
+                text: source(hunk()),
+              },
+            }))}
+          >
             <div class="otk-hunk-header">
               @@ −{hunk().oldStart},{hunk().oldLines}{" "}
               +{hunk().newStart},{hunk().newLines} @@

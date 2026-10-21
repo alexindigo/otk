@@ -37,7 +37,6 @@ Deno.test("tab chrome has no menus and project row actions share an in-flow trai
       "task.rename",
       "task.reorder",
       "task.close",
-      "task.add",
     ]
   ) {
     assert(
@@ -45,11 +44,13 @@ Deno.test("tab chrome has no menus and project row actions share an in-flow trai
       `${name}: keep the command owner`,
     );
   }
+  assert(/ownedCommand\([\s\S]*?id: "task.add"/.test(tabs));
+  assert(!tabs.includes("function AddToTask"));
   const row = await Deno.readTextFile(
     new URL("components/ProjectInbox.tsx", ui),
   );
   assert(
-    /class="otk-project-trailing"[\s\S]*?<time\b[\s\S]*?<Menu\b[\s\S]*?<\/Menu>\s*<\/div>/
+    /class="otk-project-trailing"[\s\S]*?<time\b[\s\S]*?<CommandMenu\b[\s\S]*?\/\>\s*<\/div>/
       .test(row),
   );
   assertEquals(

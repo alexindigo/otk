@@ -20,6 +20,9 @@ export function registerPatchTool(tools: ToolRegistry): void {
     (call, context) => ({
       icon: EditIcon,
       verb: "Patch",
+      copy: call.files.length === 1
+        ? { path: call.files[0].path }
+        : { paths: call.files.map((file) => file.path).join("\n") },
       target: call.files.map((file) =>
         relativeTarget(file.path, context.directory)
       ).join(", "),

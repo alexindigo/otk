@@ -71,6 +71,7 @@ import { PanelLeftIcon, PanelRightIcon } from "../components/ChromeIcons.tsx";
 import { type SessionPorts, SessionProvider } from "../registries/session.tsx";
 import { ShellProvider } from "./context.tsx";
 import ContextMenu from "../components/ContextMenu.tsx";
+import type { SessionContextTarget } from "../features/session-context.ts";
 
 /** Reusable application shell; web/src selects modules and the API address. */
 export default function Shell(
@@ -378,8 +379,8 @@ export default function Shell(
     return true;
   };
   onCleanup(registerApprovalCommands(commands, {
-    current: () => {
-      const target = session.state.selection;
+    current: (input) => {
+      const target = input ?? session.state.selection;
       if (!target || !approvals(target.sidecarId).canEnable(target.sessionID)) {
         return undefined;
       }
@@ -390,7 +391,11 @@ export default function Shell(
         connected: server?.status === "connected",
       };
     },
-    beforeEnable: () =>
+    beforeEnable: (target) =>
+      target.model !==
+        (session.state.selection &&
+          approvals(session.state.selection.sidecarId)) ||
+      target.sessionID !== session.state.selection?.sessionID ||
       !dirty.get("permissions") ||
       globalThis.confirm(
         "Discard unsaved permission input before enabling auto-approve for this session and its helpers?",
@@ -700,6 +705,9 @@ export default function Shell(
       title: "Preview session",
       category: "Session",
       hidden: true,
+      context: { kind: "session", title: () => "Open", order: 0 },
+      enabled: (_ctx, target?: Selection) =>
+        !!target && !!entry(target.sidecarId, target.sessionID),
       run: (_ctx, target: Selection) => {
         if (!navigate(target)) return false;
         const directory = entry(target.sidecarId, target.sessionID)?.directory;
@@ -717,6 +725,31 @@ export default function Shell(
     title: "Open session as task",
     category: "Session",
     hidden: true,
+    context: {
+      kind: "session",
+      title: (target: Selection) => {
+        const value = entry(target.sidecarId, target.sessionID);
+        const family = [
+          target.sessionID,
+          ...sessionAncestors(
+            target.sessionID,
+            (id) => entry(target.sidecarId, id),
+          ),
+        ];
+        return inbox(target.sidecarId).state.inbox.tasks.some((task) =>
+            task.directory === value?.directory &&
+            task.sessions.some((id) => family.includes(id))
+          )
+          ? "Open as task"
+          : "Pin as task";
+      },
+      order: 10,
+    },
+    enabled: (_ctx, target?: Selection) =>
+      !!target && !!entry(target.sidecarId, target.sessionID) &&
+      sidecars.state.list.some((server) =>
+        server.id === target.sidecarId && server.status === "connected"
+      ),
     run: async (_ctx, target: Selection) => {
       if (!navigate(target)) return false;
       const directory = entry(target.sidecarId, target.sessionID)?.directory;
@@ -728,6 +761,16 @@ export default function Shell(
       await model.pin(target.sessionID);
       return true;
     },
+  }));
+  onCleanup(commands.register({
+    id: "session.title.copy",
+    title: "Copy session title",
+    category: "Session",
+    hidden: true,
+    context: { kind: "session", order: 40 },
+    enabled: (_ctx, target?: SessionContextTarget) => !!target,
+    run: (_ctx, target: SessionContextTarget) =>
+      navigator.clipboard.writeText(target.title),
   }));
   const projects = createMemo(() =>
     sidecars.state.list.flatMap((s) =>
@@ -972,6 +1015,7 @@ export default function Shell(
                     >
                       <SessionProvider ports={sessionPorts()}>
                         <SessionView
+                          sidecarId={session.state.selection?.sidecarId}
                           revert={session.state.content.revert}
                           busy={!!session.state.selection &&
                             entry(

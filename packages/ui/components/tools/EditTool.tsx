@@ -22,6 +22,7 @@ export function registerEditTool(tools: ToolRegistry): void {
       icon: EditIcon,
       verb: "Edit",
       target: relativeTarget(call.path, context.directory),
+      copy: { path: call.path },
       changes: {
         additions: call.files.reduce((n, file) => n + file.additions, 0),
         deletions: call.files.reduce((n, file) => n + file.deletions, 0),

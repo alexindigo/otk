@@ -31,7 +31,23 @@ alongside the panel; point and focused-element anchors share native CSS
 placement/flipping with triggers. Browser checks cover non-overlap at all four
 element-rect corners, body focus with an unrelated selection, live contribution
 release, callback-ref composition, Tab focus return, menu-internal right click,
-pointer cancellation and host/owner teardown.
+pointer cancellation and host/owner teardown. Transcript views declare shared
+prompt/reply/code/diff/tool targets and keyed state ports; one feature owner
+contributes their commands. Browser tests grow the real transcript from1 to40
+messages with a constant context-command count and invoke an independently
+contributed reply action with captured identity. Task choices share one
+stable-keyed task.add command; tests choose the second destination and inspect
+saved membership. Project dots and context targets use one CommandMenu
+projection and failure path; row feedback geometry stays below the action line
+and inside the row. Source-copy checks cover empty tool output, multi-path
+patches and the particular diff hunk under the pointer.
+
+Feature-target browser checks exercise session tabs/chips/rows, captured title
+copy, task promotion/membership/rename/close and the project row's shared active
+toggle. Content checks read the actual clipboard for prompt, grouped reply,
+code, diff and contributed tool sources and observe disclosure changes. Stock
+backend checks target a background session's approval policy without changing
+the viewed session, and open the existing reply usage ledger from its menu.
 
 Shared focus paint admits only semantic controls and explicitly marked visible
 content; landmarks, dock sections, scroll regions, tab panels and native overlay

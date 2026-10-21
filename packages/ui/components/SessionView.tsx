@@ -31,7 +31,9 @@ import { highlightingScope } from "../highlight/client.ts";
 import type { Draft, DraftChange } from "./prompt/model.ts";
 import type { PromptProps } from "../registries/prompt.ts";
 import { ownedAction } from "../keyboard/context.tsx";
+import { TranscriptContext } from "../features/transcript-context.tsx";
 export default function SessionView(props: {
+  sidecarId?: string;
   info?: ContentSession;
   label: string;
   messages: OtkMessage[];
@@ -111,113 +113,120 @@ export default function SessionView(props: {
     };
   });
   return (
-    <section
-      class="otk-session-view"
-      aria-label="Session"
-      ref={(element) => {
-        view = element;
-      }}
-    >
-      {props.displayMenu}
-      <Show when={props.info?.parentID}>
-        <SubagentBar
-          info={props.info!}
-          siblings={props.siblings}
-          onOpen={props.onOpenChild}
-        />
-      </Show>
-      <div
-        class={["otk-messages", {
-          "otk-scrollbar-hidden": !props.prefs.scrollbar,
-        }]}
+    <TranscriptContext>
+      <section
+        class="otk-session-view"
+        aria-label="Session"
         ref={(element) => {
-          list = element;
+          view = element;
         }}
       >
-        <Show when={props.loading}>
-          <p class="otk-muted">Loading messages…</p>
+        {props.displayMenu}
+        <Show when={props.info?.parentID}>
+          <SubagentBar
+            info={props.info!}
+            siblings={props.siblings}
+            onOpen={props.onOpenChild}
+          />
         </Show>
         <div
-          class="otk-message-flow"
+          class={["otk-messages", {
+            "otk-scrollbar-hidden": !props.prefs.scrollbar,
+          }]}
           ref={(element) => {
-            flow = element;
+            list = element;
           }}
         >
-          <Show when={props.revert}>
-            {(revert) => <RevertBanner revert={revert()} />}
+          <Show when={props.loading}>
+            <p class="otk-muted">Loading messages…</p>
           </Show>
-          <Show when={!props.exhausted && props.messages.length}>
-            <button
-              type="button"
-              class="otk-load-older"
-              disabled={props.paging || props.loading}
-              onClick={() => void older()}
+          <div
+            class="otk-message-flow"
+            ref={(element) => {
+              flow = element;
+            }}
+          >
+            <Show when={props.revert}>
+              {(revert) => <RevertBanner revert={revert()} />}
+            </Show>
+            <Show when={!props.exhausted && props.messages.length}>
+              <button
+                type="button"
+                class="otk-load-older"
+                disabled={props.paging || props.loading}
+                onClick={() => void older()}
+              >
+                {props.paging ? "Loading…" : "Load older messages"}
+              </button>
+            </Show>
+            <Show when={props.error}>
+              <p role="alert" class="otk-error">{props.error}</p>
+              <button type="button" onClick={() => void retry()}>
+                Retry messages
+              </button>
+            </Show>
+            <SessionError state={props.errorState} error={props.sessionError} />
+            <Show when={props.retryState}>
+              {(retry) => (
+                <div class="otk-retry-banner" role="status">
+                  <strong>Retrying · attempt {retry().attempt}</strong>
+                  <p>{retry().message}</p>
+                  <span>
+                    Next attempt in{" "}
+                    {Math.max(0, Math.ceil((retry().next - now()) / 1000))}s
+                  </span>
+                </div>
+              )}
+            </Show>
+            <For
+              each={messages()}
+              keyed={(message) =>
+                `${props.sidecarId}/${message.sessionID}/${message.id}`}
             >
-              {props.paging ? "Loading…" : "Load older messages"}
-            </button>
-          </Show>
-          <Show when={props.error}>
-            <p role="alert" class="otk-error">{props.error}</p>
-            <button type="button" onClick={() => void retry()}>
-              Retry messages
-            </button>
-          </Show>
-          <SessionError state={props.errorState} error={props.sessionError} />
-          <Show when={props.retryState}>
-            {(retry) => (
-              <div class="otk-retry-banner" role="status">
-                <strong>Retrying · attempt {retry().attempt}</strong>
-                <p>{retry().message}</p>
-                <span>
-                  Next attempt in{" "}
-                  {Math.max(0, Math.ceil((retry().next - now()) / 1000))}s
-                </span>
+              {(message) => (
+                <Message
+                  sidecarId={props.sidecarId}
+                  message={message()}
+                  usage={turnUsage(props.usage, message(), props.catalog)}
+                  prefs={props.prefs}
+                  directory={props.info?.directory}
+                  permissions={props.permissions}
+                  paneWidth={paneWidth()}
+                  onOpenChild={props.onOpenChild}
+                  queued={queued().has(message().id)}
+                />
+              )}
+            </For>
+            <Show
+              when={!props.loading && !props.messages.length && !props.error &&
+                !props.sessionError}
+            >
+              <p class="otk-muted otk-empty">Start a conversation below.</p>
+            </Show>
+          </div>
+        </div>
+        <Show when={!props.child}>
+          <ComposerTakeovers>
+            {(active) => (
+              <div hidden={active()} inert={active()}>
+                <Prompt
+                  suspended={active()}
+                  context={props.messages.findLast((message) =>
+                    message.role === "user"
+                  ) as import("@otk/protocol").UserMessage | undefined}
+                  busy={props.busy}
+                  value={props.draft}
+                  connected={props.connected}
+                  onChange={writeDraft}
+                  onSubmit={(parts, mode, selection) =>
+                    props.onPrompt(parts, mode, selection)}
+                  onAbort={() => props.onAbort()}
+                />
               </div>
             )}
-          </Show>
-          <For each={messages()} keyed={(message) => message.id}>
-            {(message) => (
-              <Message
-                message={message()}
-                usage={turnUsage(props.usage, message(), props.catalog)}
-                prefs={props.prefs}
-                directory={props.info?.directory}
-                permissions={props.permissions}
-                paneWidth={paneWidth()}
-                onOpenChild={props.onOpenChild}
-                queued={queued().has(message().id)}
-              />
-            )}
-          </For>
-          <Show
-            when={!props.loading && !props.messages.length && !props.error &&
-              !props.sessionError}
-          >
-            <p class="otk-muted otk-empty">Start a conversation below.</p>
-          </Show>
-        </div>
-      </div>
-      <Show when={!props.child}>
-        <ComposerTakeovers>
-          {(active) => (
-            <div hidden={active()} inert={active()}>
-              <Prompt
-                suspended={active()}
-                context={props.messages.findLast((message) =>
-                  message.role === "user"
-                ) as import("@otk/protocol").UserMessage | undefined}
-                busy={props.busy}
-                value={props.draft}
-                connected={props.connected}
-                onChange={writeDraft}
-                onSubmit={(parts, mode, selection) =>
-                  props.onPrompt(parts, mode, selection)}
-                onAbort={() => props.onAbort()}
-              />
-            </div>
-          )}
-        </ComposerTakeovers>
-      </Show>
-    </section>
+          </ComposerTakeovers>
+        </Show>
+      </section>
+    </TranscriptContext>
   );
 }

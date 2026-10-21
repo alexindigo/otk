@@ -19,6 +19,9 @@ function errors(name: string, source: string): string[] {
   if (/data-context-(?:kind|target)|oncontextmenu/i.test(source)) {
     errors.push("targets use the shared contextTarget binding");
   }
+  if (/\{\s*\.\.\.contextTarget\s*[<(]/.test(source)) {
+    errors.push("contextTarget is a composable callback ref");
+  }
   return errors;
 }
 async function inspect(directory: URL, prefix = ""): Promise<string[]> {
@@ -69,9 +72,30 @@ Deno.test("context menus have one shell-root listener owner and declarative targ
       'if (event.shiftKey && event.key === "F10") open()',
       'if (["ContextMenu", "F10"].includes(event.key)) open()',
       '<div data-context-kind="session"/>',
+      "<div {...contextTarget(() => target)} />",
     ]
   ) {
     assert(errors("components/Other.tsx", source).length, source);
     assert(errors("web/src/ui/Other.tsx", source).length, source);
   }
+});
+
+Deno.test("transcript views declare targets and state ports while one feature owns context contributions", async () => {
+  const ui = new URL("../../packages/ui/", import.meta.url);
+  for (
+    const name of ["Message", "Code", "Diff", "TurnUsage", "tools/ToolFrame"]
+  ) {
+    const source = await Deno.readTextFile(
+      new URL(`components/${name}.tsx`, ui),
+    );
+    assert(
+      !/\bcontext\s*:/.test(source),
+      `${name}: context commands belong to the transcript feature`,
+    );
+  }
+  const feature = await Deno.readTextFile(
+    new URL("features/transcript-context.tsx", ui),
+  );
+  assert(feature.includes("ownedCommand(ports"));
+  assert(!feature.includes("randomUUID"));
 });

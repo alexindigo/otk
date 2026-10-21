@@ -39,6 +39,8 @@ export interface ToolPresentation {
   summary?: string;
   changes?: { additions: number; deletions: number };
   expanded?: boolean;
+  /** Feature-owned copy sources; the frame never dispatches concrete tools. */
+  copy?: { command?: string; path?: string; paths?: string };
 }
 export interface PresentationContext {
   directory?: string;

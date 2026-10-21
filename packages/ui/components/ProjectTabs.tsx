@@ -26,10 +26,19 @@ import StatusLight from "./StatusLight.tsx";
 import AutoMark from "./AutoMark.tsx";
 import UsageCost from "./UsageCost.tsx";
 import { ChevronIcon, PlusIcon } from "./ChromeIcons.tsx";
-import { ownedAction, useCommandPorts } from "../keyboard/context.tsx";
+import {
+  ownedAction,
+  ownedCommand,
+  useCommandPorts,
+} from "../keyboard/context.tsx";
 import Menu from "./surface/Menu.tsx";
 import { createTaskControls } from "../features/task-controls.ts";
 import { countLabel } from "./tools/count.ts";
+import { contextTarget } from "./context-target.ts";
+import type { SessionContextTarget } from "../features/session-context.ts";
+interface TaskContextTarget extends ProjectSelection {
+  taskID: string;
+}
 
 /** Presentation and injected actions only; the framework-free tabs owner decides
  * which mandatory, preview and selected-idle tabs exist. */
@@ -89,10 +98,66 @@ export default function ProjectTabs(props: {
     onEmpty: () => props.onEmpty(),
   });
   const pin = ownedAction("task.pin", controls.pin);
-  const rename = ownedAction("task.rename", controls.rename);
+  const taskAvailable = (target: TaskContextTarget) =>
+    target.sidecarId === props.project.sidecarId &&
+    target.directory === props.project.directory &&
+    tasks().some((task) => task.id === target.taskID);
+  const renameTask = (target?: TaskContextTarget) =>
+    controls.rename(
+      target ? tasks().find((task) => task.id === target.taskID)! : undefined,
+    );
+  const rename = ownedAction("task.rename", renameTask, {
+    context: { kind: "task", title: () => "Rename task" },
+    enabled: (_ctx, target) =>
+      props.ready && (!target || taskAvailable(target)),
+  });
   ownedAction("task.reorder", controls.move);
-  ownedAction("task.close", controls.close);
-  ownedAction("task.add", controls.add);
+  const closeTask = (target: TaskContextTarget) =>
+    controls.close(target.taskID);
+  ownedAction("task.close", closeTask, {
+    context: { kind: "task", title: () => "Close task", destructive: true },
+    enabled: (_ctx, target) => props.ready && !!target && taskAvailable(target),
+  });
+  ownedCommand(useCommandPorts(), {
+    id: "task.add",
+    title: "Add to task",
+    category: "Session",
+    hidden: true,
+    context: {
+      kind: "session",
+      items: (target: SessionContextTarget & { taskID?: string }) =>
+        tasks().filter((task) => !task.sessions.includes(target.sessionID)).map(
+          (task) => ({
+            key: task.id,
+            title: `Add to task: ${task.name}`,
+            args: { ...target, taskID: task.id },
+          }),
+        ),
+      order: 20,
+    },
+    enabled: (_ctx, target?: SessionContextTarget & { taskID?: string }) =>
+      props.ready &&
+      target?.sidecarId === props.project.sidecarId &&
+      target.directory === props.project.directory &&
+      tasks().some((task) =>
+        task.id === target.taskID && !task.sessions.includes(target.sessionID)
+      ),
+    run: (_ctx, target: SessionContextTarget & { taskID?: string }) =>
+      controls.add({
+        task: tasks().find((task) => task.id === target.taskID)!,
+        sessionID: target.sessionID,
+      }),
+  });
+  const sessionTarget = (id: string) => ({
+    kind: "session",
+    data: {
+      ...props.project,
+      sessionID: id,
+      title: props.session?.id === id
+        ? props.session.title
+        : entry(id)?.title ?? "Session",
+    },
+  });
   const createSession = ownedAction(
     "task.session.new",
     () => props.onCreateSession(active()),
@@ -149,6 +214,15 @@ export default function ProjectTabs(props: {
             {(tab) => (
               <div
                 class="otk-tab"
+                ref={contextTarget<SessionContextTarget | TaskContextTarget>(
+                  () =>
+                    tab().kind === "task"
+                      ? {
+                        kind: "task",
+                        data: { ...props.project, taskID: tab().id },
+                      }
+                      : sessionTarget(tab().id),
+                )}
                 data-kind={tab().kind}
                 data-preview={String(tab().preview)}
               >
@@ -225,6 +299,7 @@ export default function ProjectTabs(props: {
                         {(c) => (
                           <button
                             type="button"
+                            ref={contextTarget(() => sessionTarget(c().id))}
                             data-otk-selection="vertical"
                             {...selection({
                               kind: "current",
@@ -254,6 +329,7 @@ export default function ProjectTabs(props: {
                   </Show>
                   <button
                     type="button"
+                    ref={contextTarget(() => sessionTarget(crumb().id))}
                     {...selection({
                       class: "otk-session-crumb",
                       kind: "current",
