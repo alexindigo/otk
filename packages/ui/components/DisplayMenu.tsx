@@ -10,18 +10,16 @@ import {
 import { ownedAction } from "../keyboard/context.tsx";
 import { SettingsIcon } from "./ChromeIcons.tsx";
 import Popover from "./surface/Popover.tsx";
-export default function DisplayMenu(props: {
+export interface DisplayMenuProps {
   prefs: Preferences;
   ready: boolean;
   error: string;
   registry?: PreferenceRegistry;
   onSet(key: PreferenceKey, value: Preferences[PreferenceKey]): Promise<void>;
-}): import("solid-js").Element {
-  const set = ownedAction(
-    "display.set",
-    (input: { key: PreferenceKey; value: Preferences[PreferenceKey] }) =>
-      props.onSet(input.key, input.value),
-  );
+}
+export default function DisplayMenu(
+  props: DisplayMenuProps,
+): import("solid-js").Element {
   return (
     <Popover
       class="otk-display-menu"
@@ -29,6 +27,22 @@ export default function DisplayMenu(props: {
       title="Display preferences"
       trigger={<SettingsIcon />}
     >
+      <DisplayPreferences {...props} />
+    </Popover>
+  );
+}
+
+/** Identical preference controls in the anchored menu and app-level dialog. */
+export function DisplayPreferences(
+  props: DisplayMenuProps,
+): import("solid-js").Element {
+  const set = ownedAction(
+    "display.set",
+    (input: { key: PreferenceKey; value: Preferences[PreferenceKey] }) =>
+      props.onSet(input.key, input.value),
+  );
+  return (
+    <div class="otk-display-preferences">
       <fieldset disabled={!props.ready}>
         <For each={(props.registry ?? preferences).display()} keyed={false}>
           {(item) => {
@@ -81,6 +95,6 @@ export default function DisplayMenu(props: {
       <Show when={props.error}>
         <p class="otk-error" role="alert">{props.error}</p>
       </Show>
-    </Popover>
+    </div>
   );
 }

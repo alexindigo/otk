@@ -70,6 +70,7 @@ import ProjectTabs from "../components/ProjectTabs.tsx";
 import { PanelLeftIcon, PanelRightIcon } from "../components/ChromeIcons.tsx";
 import { type SessionPorts, SessionProvider } from "../registries/session.tsx";
 import { ShellProvider } from "./context.tsx";
+import ContextMenu from "../components/ContextMenu.tsx";
 
 /** Reusable application shell; web/src selects modules and the API address. */
 export default function Shell(
@@ -174,6 +175,7 @@ export default function Shell(
   const [project, setProject] = createSignal<ProjectSelection>();
   const [now, setNow] = createSignal(Date.now());
   const dirty = new Map<string, boolean>();
+  let root!: HTMLDivElement;
   let navigationRevision = 0;
   const fail = (error: unknown) => setError((error as Error).message);
   const commands = new CommandHub(
@@ -225,12 +227,20 @@ export default function Shell(
         title: "Open command palette",
         category: "Commands",
         dialog: "palette",
+        context: { kind: "app" },
       },
       {
         id: "help.keys",
         title: "Keyboard shortcuts",
         category: "Commands",
         dialog: "keys",
+      },
+      {
+        id: "display.open",
+        title: "Display preferences",
+        category: "Display",
+        dialog: "display",
+        context: { kind: "app" },
       },
       {
         id: "theme.open",
@@ -803,6 +813,9 @@ export default function Shell(
       >
         <div
           class="otk-app"
+          ref={(element) => {
+            root = element;
+          }}
           data-right-collapsed={String(layout().rightCollapsed)}
         >
           <button
@@ -1091,6 +1104,7 @@ export default function Shell(
             detail={permissionNotificationDetail}
           />
           <DialogHost onChange={setDialog} />
+          <ContextMenu root={root} />
         </div>
       </ShellProvider>
     </CommandProvider>

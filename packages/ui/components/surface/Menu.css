@@ -1,13 +1,33 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
-.otk-menu > .otk-popover-panel {
-  width: max-content;
-}
 .otk-menu-items {
+  --menu-row-height: 28px;
+  --menu-item-inset: 8px;
+  --menu-block-inset: 4px;
+  --menu-row-gap: 0px;
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--menu-row-gap);
 }
 .otk-menu-items button {
   text-align: left;
-  padding: 8px;
+  min-height: var(--menu-row-height);
+  padding: var(--menu-block-inset) var(--menu-item-inset);
+}
+.otk-menu-items [role="group"] {
+  display: flex;
+  flex-direction: column;
+  gap: var(--menu-row-gap);
+}
+.otk-menu-items hr {
+  align-self: stretch;
+  margin: var(--menu-block-inset) 0;
+  border: 0;
+  border-top: 1px solid var(--overlay-border);
+}
+.otk-menu-items .otk-menu-destructive {
+  color: var(--otk-status-error);
+}
+.otk-menu-items + [role="alert"] {
+  max-width: 28rem;
+  margin: 0;
 }

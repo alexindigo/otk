@@ -89,6 +89,7 @@ function ownershipErrors(files: Sources): string[] {
   }
   const allowedPositions = new Set([
     "components/surface/Popover.css:.otk-popover-panel", // The anchored overlay itself, never content.
+    "components/surface/Popover.css:.otk-popover-anchor", // Rect geometry owned by the same overlay boundary.
     "components/ProjectInbox.css:.otk-inbox-resizer",
     "components/Toasts.css:.otk-toasts", // Existing fixed notification stack.
   ]);

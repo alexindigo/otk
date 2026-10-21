@@ -15,6 +15,7 @@ export function registerSessionCommands(commands: CommandHub, actions: {
       title: "New session",
       category: "Session",
       slash: ["new"],
+      context: { kind: "app", order: -10 },
       enabled: (_ctx, input?: { sidecarId: string; directory: string }) =>
         actions.available(input),
       run: (_ctx, input?: { sidecarId: string; directory: string }) =>

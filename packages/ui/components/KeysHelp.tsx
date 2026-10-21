@@ -104,6 +104,11 @@ export default function KeysHelp(props: {
         Text fields keep their keys unless a binding opts in. Mod is Ctrl, or ⌘
         on macOS. Esc closes the top layer first.
       </p>
+      <p class="otk-muted">
+        Right click opens the app context menu. Shift + right click opens the
+        browser menu. Use the ContextMenu key or Shift+F10 for the focused item;
+        arrow keys, Home, End and typing navigate its actions.
+      </p>
       <div class="otk-keys-list">
         <For each={rows()} keyed={(row) => row.id}>
           {(row) => (

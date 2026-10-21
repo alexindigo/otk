@@ -35,3 +35,10 @@
   width: min(80rem, calc(100vw - 16px));
   max-width: min(80rem, calc(100vw - 16px));
 }
+.otk-popover-content {
+  width: max-content;
+}
+.otk-popover-anchor {
+  position: fixed;
+  pointer-events: none;
+}

@@ -108,6 +108,7 @@
 .otk-project-row:is(:hover, :focus-within) .otk-project-visit,
 .otk-project-row:has(.otk-project-menu[data-open=true]) .otk-project-visit {
   opacity: 0;
+  visibility: hidden;
 }
 .otk-project-menu > .otk-popover-trigger {
   cursor: pointer;

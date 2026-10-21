@@ -16,6 +16,23 @@ declared structural/component token. Browser checks measure the Display title in
 Dark/Linen/Stone, every registered dialog and menu's padded flow, one heading
 per dialog, native dismissal, focus return and existing actions.
 
+Context-menu targets use the shared contextTarget binding; only ContextMenu owns
+a contextmenu listener, installed in capture at the shell root. Architecture
+negatives reject per-element listeners and target data attributes. Client units
+observe available command contributions, captured args, bounded nested grouping,
+destructive ordering and invocation-time availability. Trusted browser tests
+exercise point bounds, keyboard navigation/focus return, native passthrough,
+clipboard/editing effects, built-in semantic targets and independent feature
+contributions through the public entries. Client tests distinguish no-target app
+fallback from target groups, including unavailable targets. Browser checks cover
+pointer-container versus keyboard-item focus and compact shared row geometry
+across context, project and folded-session menus. Rect anchors belong to Popover
+alongside the panel; point and focused-element anchors share native CSS
+placement/flipping with triggers. Browser checks cover non-overlap at all four
+element-rect corners, body focus with an unrelated selection, live contribution
+release, callback-ref composition, Tab focus return, menu-internal right click,
+pointer cancellation and host/owner teardown.
+
 Shared focus paint admits only semantic controls and explicitly marked visible
 content; landmarks, dock sections, scroll regions, tab panels and native overlay
 containers have no ring. Negative fixtures reject universal/layout selectors and

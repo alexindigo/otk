@@ -20,6 +20,8 @@ export default function DialogHost(
     title: "Open dialog",
     category: "Dialogs",
     hidden: true,
+    enabled: (_ctx, request?: { id: string; input?: unknown }) =>
+      !request || !!dialogs.resolve(request.id),
     run: (_ctx, request: { id: string; input?: unknown }) => {
       if (!dialogs.resolve(request.id)) {
         throw new Error(`Unknown dialog: ${request.id}`);

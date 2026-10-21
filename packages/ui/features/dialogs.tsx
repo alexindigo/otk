@@ -2,11 +2,27 @@
 import Palette from "../components/Palette.tsx";
 import KeysHelp from "../components/KeysHelp.tsx";
 import ThemePicker from "../components/ThemePicker.tsx";
+import { DisplayPreferences } from "../components/DisplayMenu.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import { useShellPorts } from "../shell/context.tsx";
 import type { DialogRegistry } from "../registries/shell.ts";
 import { LOCAL_SIDECAR } from "@otk/client";
 export function registerCommandDialogs(dialogs: DialogRegistry): void {
+  dialogs.register({
+    id: "display",
+    title: "Display preferences",
+    component: () => {
+      const shell = useShellPorts(), { commands } = useCommandPorts();
+      return (
+        <DisplayPreferences
+          prefs={shell.toggles.state.prefs}
+          ready={shell.toggles.state.ready}
+          error={shell.toggles.state.error}
+          onSet={(key, value) => commands.run("prefs.set", { key, value })}
+        />
+      );
+    },
+  });
   dialogs.register({
     id: "palette",
     title: "Commands",

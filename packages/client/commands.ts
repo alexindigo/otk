@@ -15,6 +15,15 @@ export interface CommandMetadata {
   readonly hidden?: boolean;
 }
 export interface Command<A = unknown, R = unknown> extends CommandMetadata {
+  /** Feature-owned context contribution; args are the target's captured data. */
+  context?: {
+    kind: string;
+    title?(args: A): string;
+    /** One feature registration may project several invocation-specific choices. */
+    items?(args: A): { key?: string; title: string; args: A }[];
+    destructive?: boolean;
+    order?: number;
+  };
   enabled?(context: CommandContext, args?: A): boolean;
   run(context: CommandContext, args: A): R | Promise<R>;
 }
@@ -36,6 +45,10 @@ function commandMetadata(command: CommandMetadata): CommandMetadata {
 export class CommandHub {
   #commands = new Map<string, Command>();
   #listeners = new Set<() => void>();
+  #actions = new WeakMap<
+    ContextAction,
+    { command: Command; target: ContextTarget }
+  >();
   constructor(
     readonly context: () => CommandContext = () => ({}),
     readonly keys: (id: string) => string[] = () => [],
@@ -44,7 +57,11 @@ export class CommandHub {
     if (!command.id || this.#commands.has(command.id)) {
       throw new Error(`Duplicate or empty command: ${command.id}`);
     }
-    const copy = Object.freeze({ ...command, slash: command.slash?.slice() });
+    const copy = Object.freeze({
+      ...command,
+      slash: command.slash?.slice(),
+      context: command.context && Object.freeze({ ...command.context }),
+    });
     this.#commands.set(command.id, copy as Command);
     this.#changed();
     return () => {
@@ -79,6 +96,49 @@ export class CommandHub {
     }
     return await command.run(context, args) as R;
   }
+  /** Context execution is bound to the contributing owner and current item list. */
+  async runContext<R = void>(action: ContextAction): Promise<R> {
+    const source = this.#actions.get(action);
+    if (!source || this.#commands.get(action.id) !== source.command) {
+      throw new Error("This action is no longer available.");
+    }
+    const current = this.contextActions(source.target).find((item) =>
+      item.key === action.key
+    );
+    if (!current) throw new Error("This action is no longer available.");
+    return await this.run<R>(current.id, current.args);
+  }
+  /** Data-only menu projection; execution always rechecks the ordinary command. */
+  contextActions(target: ContextTarget): ContextAction[] {
+    const context = this.context();
+    return [...this.#commands.values()].filter((command) =>
+      command.context?.kind === target.kind
+    ).sort((a, b) =>
+      Number(a.context?.destructive ?? false) -
+        Number(b.context?.destructive ?? false) ||
+      (a.context?.order ?? 0) - (b.context?.order ?? 0)
+    ).flatMap((command) => {
+      const items = command.context?.items?.(target.data) ??
+        (command.context?.items ? [] : [{
+          key: "",
+          title: command.context?.title?.(target.data) ?? command.title,
+          args: target.data,
+        }]);
+      return items.filter((item) =>
+        this.enabled(command.id, context, item.args)
+      ).map((item) => {
+        const action = {
+          id: command.id,
+          key: JSON.stringify([command.id, item.key ?? item.title]),
+          title: item.title,
+          args: item.args,
+          destructive: command.context?.destructive ?? false,
+        };
+        this.#actions.set(action, { command, target });
+        return action;
+      });
+    });
+  }
   list(context: CommandContext = this.context()): ListedCommand[] {
     return [...this.#commands.values()].filter((cmd) => !cmd.hidden).map((
       cmd,
@@ -101,4 +161,31 @@ export class CommandHub {
   #changed(): void {
     for (const listener of this.#listeners) listener();
   }
+}
+
+export interface ContextTarget<T = unknown> {
+  kind: string;
+  data: T;
+}
+export interface ContextAction {
+  id: string;
+  key: string;
+  title: string;
+  args: unknown;
+  destructive: boolean;
+}
+/** At most two target groups; app actions are only the no-target fallback. */
+export function contextGroups(
+  commands: CommandHub,
+  targets: readonly ContextTarget[],
+): ContextAction[][] {
+  const concrete = targets.filter((target) => target.kind !== "app");
+  if (concrete.length) {
+    return concrete.map((
+      target,
+    ) => commands.contextActions(target)).filter((actions) => actions.length)
+      .slice(0, 2);
+  }
+  const app = commands.contextActions({ kind: "app", data: undefined });
+  return app.length ? [app] : [];
 }

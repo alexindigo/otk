@@ -425,6 +425,55 @@ bindings are Tab/reverse agent cycle, Enter submission, Mod+K palette,
 outside-text `?` help and top-layer Esc before double-Esc interrupt. Shift+Enter
 inserts a newline through the prompt-owned input port.
 
+## Context menus
+
+`ContextMenu({root})` owns the shell root's single capture-phase contextmenu
+listener. Right click opens the shared Menu at a point anchor; Shift + right
+click leaves the native browser action alone. ContextMenu and Shift+F10 use the
+focused element's full bounds; body focus uses the no-target app fallback.
+Features attach `ref={contextTarget(() => ({kind, data}))}` to declare current
+identity/data without installing listeners. Compose with another ref through
+Solid's array form: `ref={[elementRef, contextTarget(target)]}`. Commands
+contribute the same kind through their public client context metadata; the owner
+resolves the composed path innermost first. The client groups available actions,
+and the UI separates target groups and trailing destructive actions. At most two
+target groups are shown; app actions appear only when the pointer/focused
+element has no target. Built-in selection, editable, link and image targets
+require no binding.
+
+Menu owns role/menuitem semantics, roving focus with arrows/Home/End, type-ahead
+and Enter/Space activation for all consumers. Tab closes and restores origin
+focus; Popover alone owns Escape and its focus return. `CommandMenu` shares hub
+projection, registration-change subscription, invocation-time reprojection and
+owner-bound execution between pointer and visible-trigger menus. Failed actions
+use a sibling alert described by the corresponding item, outside `role=menu`,
+with an optional injected error callback for row feedback. Pointer opening
+focuses the programmatic-only menu container, without a ring; the first arrow
+moves focus to an item. Keyboard opening focuses the first item with the shared
+focus paint. Popover carries that opening reason for both native triggers and
+its control port, including modal re-hosting. All Menu callers share one compact
+token set: 28px rows, 8px inline/4px block inset and no inter-row gap. Popover
+owns point placement, viewport flipping and focus return through its
+`open(anchor, reason)` control port. A rect anchor supplies x/y, optional
+width/height (zero for a point), origin and a focus callback. One Popover-owned
+anchor box uses the same CSS position-area and native flip fallbacks as
+triggered popovers; it needs no resize listener/ResizeObserver. Content never
+measures or positions its parent. Clipboard reads and native editing go through
+browser-owned commands with captured ranges; failed Paste reports the browser's
+refusal in the menu. App fallback actions use the existing session, palette and
+registered display-settings command owners. DisplayPreferences shares one
+control body between the anchored Display menu and the registered app-level
+dialog.
+
+Every Popover resolves its layer host once on show from the origin: the
+containing active modal dialog, otherwise its normal root. A Solid Portal owns
+that mount without duplicating the panel or its state. Native triggers enter the
+same show path after native button activation. The popover Escape layer outranks
+a containing Dialog; isolated consumers without a keyboard dispatcher use the
+same close owner. Dismissal, owner teardown and removal of the active Portal
+host release captured references and command-menu state. Preview lifetime
+includes both the trigger and the portalled panel.
+
 ## Semantic themes
 
 `ThemeRegistry` owns immutable data registrations; it imports no themes. A
