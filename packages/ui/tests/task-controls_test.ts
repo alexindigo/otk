@@ -72,6 +72,10 @@ function project(directory: string) {
       calls.push(["add", task.id, id]);
       return Promise.resolve();
     },
+    remove(task, id) {
+      calls.push(["remove", task.id, id]);
+      return Promise.resolve();
+    },
   };
   return { calls, input, model, actions };
 }

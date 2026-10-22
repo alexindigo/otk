@@ -6,7 +6,8 @@ export interface TaskActions {
   rename(id: string, name: string): Promise<void>;
   reorder(ids: string[]): Promise<void>;
   close(id: string): Promise<void>;
-  add(task: TaskRecord, sessionID: string): Promise<void>;
+  add(task: Pick<TaskRecord, "id">, sessionID: string): Promise<void>;
+  remove(task: Pick<TaskRecord, "id">, sessionID: string): Promise<void>;
 }
 /** Capture the owning server/project before an asynchronous editor opens. */
 export function createTaskActions(
@@ -25,9 +26,15 @@ export function createTaskActions(
       await rpc.call("tasks.close", { id });
     },
     async add(task, sessionID) {
-      await rpc.call("tasks.sessions", {
+      await rpc.call("tasks.addSession", {
         id: task.id,
-        sessions: [...task.sessions, sessionID],
+        sessionID,
+      });
+    },
+    async remove(task, sessionID) {
+      await rpc.call("tasks.removeSession", {
+        id: task.id,
+        sessionID,
       });
     },
   };

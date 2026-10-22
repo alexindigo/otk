@@ -278,6 +278,14 @@ or duplicate grouped helpers. Helper URLs retain their owning task; removing
 membership preserves the viewed session as an ungrouped tab rather than leaving
 transcript and task inconsistent.
 
+Task actions `add(task, sessionID)` and `remove(task, sessionID)` need only the
+task's ID. They send `tasks.addSession` / `tasks.removeSession` intents;
+captured membership never crosses this mutation boundary. The server applies
+each intent to current persisted membership, so concurrent additions and
+unrelated removals survive delayed metadata delivery and session creation.
+Repeating an intent is idempotent; adding a member owned by another task still
+rejects rather than moving it implicitly.
+
 `sessionTree(entries, tasks, directory, query?)` projects ordered task groups
 followed by “Not in a task”, with parent/child depth. Helpers inherit the
 nearest explicitly grouped ancestor; explicit helper membership takes

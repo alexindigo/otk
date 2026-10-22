@@ -193,6 +193,27 @@ export class InboxFeature implements FrameSource {
         return null;
       },
     });
+    const member = (p: Record<string, unknown>) => ({
+      id: text(p, "id")!,
+      sessionID: text(p, "sessionID")!,
+    });
+    rpc.register("tasks.addSession", {
+      params: member,
+      async handler(ctx, p) {
+        const directory = s.tasks.get(p.id).directory;
+        if (await ctx.sessionDirectory(p.sessionID) !== directory) {
+          throw new HarnessError(
+            "params",
+            "Session belongs to another project",
+          );
+        }
+        return s.tasks.addSession(p.id, p.sessionID);
+      },
+    });
+    rpc.register("tasks.removeSession", {
+      params: member,
+      handler: (_ctx, p) => s.tasks.removeSession(p.id, p.sessionID),
+    });
     rpc.register("tasks.sessions", {
       params: (p) => ({ id: text(p, "id")!, sessions: strings(p, "sessions") }),
       async handler(ctx, p) {

@@ -19,12 +19,14 @@ Deno.test("task action editors retain the owning RPC connection and directory", 
   await actions.rename(task.id, "Build");
   await actions.reorder([task.id]);
   await actions.add(task, "s");
+  await actions.remove(task, "s");
   await actions.close(task.id);
   assertEquals(calls, [
     ["tasks.create", { directory: "/owner", name: "Plan" }],
     ["tasks.rename", { id: "t", name: "Build" }],
     ["tasks.reorder", { directory: "/owner", ids: ["t"] }],
-    ["tasks.sessions", { id: "t", sessions: ["s"] }],
+    ["tasks.addSession", { id: "t", sessionID: "s" }],
+    ["tasks.removeSession", { id: "t", sessionID: "s" }],
     ["tasks.close", { id: "t" }],
   ]);
 });

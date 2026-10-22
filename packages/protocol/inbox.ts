@@ -45,6 +45,15 @@ export interface InboxRpcMethods {
     result: TaskRecord[];
   };
   "tasks.close": { params: { id: string }; result: null };
+  "tasks.addSession": {
+    params: { id: string; sessionID: string };
+    result: TaskRecord;
+  };
+  "tasks.removeSession": {
+    params: { id: string; sessionID: string };
+    result: TaskRecord;
+  };
+  /** Intentional complete replacement, not an add/remove intent. */
   "tasks.sessions": {
     params: { id: string; sessions: string[] };
     result: TaskRecord;

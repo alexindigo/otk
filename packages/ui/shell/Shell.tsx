@@ -542,16 +542,15 @@ export default function Shell(
   ) => {
     if (!discardDraft()) return;
     const revision = ++navigationRevision;
+    const rpc = sidecars.connection(sidecarId).rpc;
+    const actions = createTaskActions(rpc, directory);
     try {
-      const created = await sidecars.connection(sidecarId).rpc.call(
+      const created = await rpc.call(
         "session.create",
         { directory },
       );
       if (task) {
-        await sidecars.connection(sidecarId).rpc.call("tasks.sessions", {
-          id: task.id,
-          sessions: [...task.sessions, created.id],
-        });
+        await actions.add(task, created.id);
       }
       if (revision === navigationRevision) {
         navigate({ sidecarId, sessionID: created.id });

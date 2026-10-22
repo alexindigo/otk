@@ -140,6 +140,13 @@ The smaller [`example.ts`](./example.ts) is retained as an alternate
 composition; its core-only routes and absence of optional RPCs are covered by
 the service test.
 
+`tasks.addSession` validates the session's authoritative project, then applies
+the single-member intent in the task store's transaction; `tasks.removeSession`
+removes only that task/member pair, even if the backend no longer has the
+session. Both operations are idempotent and broadcast committed metadata through
+the same inbox source. `tasks.sessions` remains explicit full membership
+replacement for callers intentionally replacing or reordering the complete list.
+
 `registerLayout(rpc, prefs)` contributes `layout.patch` for shell field intents.
 It synchronously merges each patch into the latest persisted `shellLayout`, then
 uses the existing complete-value validator, save and preference broadcast. Rapid

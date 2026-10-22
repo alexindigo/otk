@@ -83,9 +83,13 @@ server-scoped. Project discovery preserves first-appearance order, including
 directories not explicitly added. Inactive marks freeze visit clocks; clearing a
 mark excludes the paused interval. Task membership is ordered and exclusive per
 session; replacement and creation with initial sessions are atomic. Closing a
-task deletes only its grouping. Clocks can be injected for deterministic
-consumers. Feature listeners run after committed writes. Composite preference
-defaults are detached on every read.
+task deletes only its grouping. `Tasks.addSession` appends only a missing member
+and `Tasks.removeSession` deletes only that task/member pair, each in an
+immediate transaction against current membership. Repeats preserve ordering;
+another task's exclusive membership is never stolen or removed. `Tasks.sessions`
+remains an intentional complete replacement, not an add/remove helper. Clocks
+can be injected for deterministic consumers. Feature listeners run after
+committed writes. Composite preference defaults are detached on every read.
 
 Use Deno read/write permissions for the state directory and packaged SQL.
 

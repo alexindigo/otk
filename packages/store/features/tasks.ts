@@ -92,6 +92,26 @@ export class Tasks extends MetadataChanges {
     });
     return this.get(id);
   }
+  addSession(id: string, sessionID: string): TaskRecord {
+    key(sessionID);
+    this.#transaction(() => {
+      this.get(id);
+      this.db.connection.prepare(
+        "INSERT INTO task_sessions SELECT ?,?,COALESCE(MAX(position)+1,0) FROM task_sessions WHERE task=? ON CONFLICT(task,session) DO NOTHING",
+      ).run(id, sessionID, id);
+    });
+    return this.get(id);
+  }
+  removeSession(id: string, sessionID: string): TaskRecord {
+    key(sessionID);
+    this.#transaction(() => {
+      this.get(id);
+      this.db.connection.prepare(
+        "DELETE FROM task_sessions WHERE task=? AND session=?",
+      ).run(id, sessionID);
+    });
+    return this.get(id);
+  }
   close(id: string): void {
     this.get(id);
     this.#transaction(() => {
