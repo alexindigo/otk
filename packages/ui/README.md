@@ -112,15 +112,20 @@ focus inside them retain the preview, with Escape returning opening focus.
 check, error reporting and `SessionProvider`'s common session ports: typed
 `rpc(method, params)`, `supports(capability)`, session ID, directory,
 preferences, history, attachment resolution, dirty-state and successful-action
-callbacks. There are no per-feature callbacks or capability flags on `Prompt`.
-The session `supports` port reads reactive advertised capabilities: an initial
-welcome activates already-mounted consumers, and reconnecting retains feature
-owners and their unsent input. Transport readiness is a separate input to
-actions. Features can provide triggers and autocomplete sources, key handling,
-paste/drop, submission transforms, completion hooks, chips, actions and
-overlays. Shell, mentions, slash, history, paste, attachments and editor each
-own their implementation. `Prompt` owns native input, submission identity and
-teardown; it has no feature import list.
+callbacks. The common `submit(action)` port owns task promotion and successful
+inbox-action bookkeeping for normal, shell and native-command submissions;
+features supply only their mode-specific RPC callback. Native-command execution
+uses it whether invoked by typed slash or the palette. `act(action)` is for
+non-submitting actions such as attention replies. There are no per-feature
+callbacks or capability flags on `Prompt`. The session `supports` port reads
+reactive advertised capabilities: an initial welcome activates already-mounted
+consumers, and reconnecting retains feature owners and their unsent input.
+Transport readiness is a separate input to actions. Features can provide
+triggers and autocomplete sources, key handling, paste/drop, submission
+transforms, completion hooks, chips, actions and overlays. Shell, mentions,
+slash, history, paste, attachments and editor each own their implementation.
+`Prompt` owns native input, submission identity and teardown; it has no feature
+import list.
 
 The prompt textarea uses native content sizing, retaining its 48px minimum and
 growing in 24px prose lines to the component's named 240px cap. It then scrolls

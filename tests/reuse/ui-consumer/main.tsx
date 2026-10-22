@@ -357,6 +357,7 @@ function Consumer(): Element {
               prefs,
               dirty: () => {},
               act: (action) => action(),
+              submit: (action) => action(),
               history: () => Promise.resolve([]),
               attachments: (parts) => Promise.resolve(parts),
             }}

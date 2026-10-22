@@ -23,6 +23,7 @@ import {
   createDrafts,
   createInbox,
   createNavigation,
+  createSessionSubmission,
   createTabs,
   createTaskActions,
   hashFor,
@@ -346,6 +347,13 @@ export default function Shell(
     const directory = await directoryFor(target);
     return await inbox(target.sidecarId).act(directory, action);
   };
+  const submitFor = (target: Selection) =>
+    createSessionSubmission({
+      sessionID: target.sessionID,
+      directory: () => directoryFor(target),
+      inbox: inbox(target.sidecarId),
+      tabs: (directory) => tabsFor({ sidecarId: target.sidecarId, directory }),
+    });
   onCleanup(registerAttentionCommands(commands, {
     permission: async (input) => {
       const { sidecarId, ...reply } = input;
@@ -649,6 +657,7 @@ export default function Shell(
         dirty.set(owner, value);
       },
       act: (action) => act(target, action),
+      submit: submitFor(target),
       history: () =>
         loadHistory(
           sidecars.state.list.filter((s) =>
@@ -1057,22 +1066,17 @@ export default function Shell(
                           onPrompt={async (parts, _mode, selection) => {
                             const { selection: target, rpc } = current
                               .context();
-                            const directory = await directoryFor(target);
-                            await tabsFor({
-                              sidecarId: target.sidecarId,
-                              directory,
-                            }).send(target.sessionID, () =>
-                              act(target, async () => {
-                                await rpc.call("session.prompt", {
-                                  sessionID: target.sessionID,
-                                  mode: "normal",
-                                  parts: await attachments(
-                                    parts,
-                                    target.sidecarId,
-                                  ),
-                                  ...selection,
-                                });
-                              }));
+                            await submitFor(target)(async () => {
+                              await rpc.call("session.prompt", {
+                                sessionID: target.sessionID,
+                                mode: "normal",
+                                parts: await attachments(
+                                  parts,
+                                  target.sidecarId,
+                                ),
+                                ...selection,
+                              });
+                            });
                           }}
                           onAbort={async () => {
                             const { selection: target, rpc } = current

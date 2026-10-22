@@ -4,6 +4,7 @@ import type {
   ApprovalModel,
   InboxRpc,
   ModelCatalogOwner,
+  SessionSubmission,
   ToolCompletionSource,
 } from "@otk/client";
 import type {
@@ -38,6 +39,8 @@ export interface SessionPorts {
   prefs(): Preferences;
   dirty(owner: string, value: boolean): void;
   act<T>(action: () => Promise<T>): Promise<T>;
+  /** Submission admission: promote to a task, then record a successful action. */
+  submit: SessionSubmission;
   history(): Promise<HistoryEntry[]>;
   attachments(parts: PromptPart[]): Promise<PromptPart[]>;
 }

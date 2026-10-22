@@ -48,6 +48,7 @@ export * from "./notification-policy.ts";
 export * from "./notification-triggers.ts";
 export * from "./inbox.ts";
 export * from "./tabs.ts";
+export * from "./session-submission.ts";
 export {
   belongsToSession,
   isAttentionOp,

@@ -222,7 +222,16 @@ checks in the assigned OTK VM.
 `createInbox(rpc, factory?)` receives connection-local `inbox` frames, including
 the snapshot sent on every hello. `openProject`, `openSession` and `act` reset
 the server-owned visit clock; opening a session also records its seen timestamp.
-Wrap sends, approvals, answers and interrupts in `act(directory, callback)`.
+Wrap sends, approvals, answers and interrupts in `act(directory, callback)`. For
+submissions, `createSessionSubmission({sessionID, directory, inbox, tabs})` is
+the shared session-bound admission port: it resolves the captured project's
+directory, enters the existing tab `send` promotion, then runs the mode-specific
+callback through inbox `act`. Normal prompts, shell commands and native commands
+(including palette execution) use this same port. Promotion failure prevents
+native admission; action failure propagates without recording a successful
+visit. Concurrent submissions reuse the tab owner's promotion, independently of
+metadata broadcast delivery. Approvals, answers and interrupts use `act`
+directly, without promoting a session merely for responding to it.
 `promote(session)` creates a title-named task with its initial session
 atomically. These are UI-independent ports: callers own navigation guards,
 action callbacks and failure presentation.

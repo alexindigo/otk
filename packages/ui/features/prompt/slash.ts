@@ -100,7 +100,7 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
                 parts?: Extract<PromptPart, { kind: "file" }>[];
               } = {},
             ) => {
-              return ctx.act(async () => {
+              return ctx.submit(async () => {
                 if (!args.selection) await ctx.ready();
                 const selection = args.selection ??
                   ctx.nextSelection(ctx.change((draft) => draft)).input;

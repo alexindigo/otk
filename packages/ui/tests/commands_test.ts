@@ -60,7 +60,7 @@ Deno.test("registered slash aliases retain canonical native names and MCP source
     supports: () => true,
     sessionID: () => "session",
     attachments: (parts: unknown[]) => Promise.resolve(parts),
-    act: (action: () => Promise<unknown>) => action(),
+    submit: (action: () => Promise<unknown>) => action(),
     rpc: (method: string, params: Record<string, unknown>) => {
       if (method === "commands.list") {
         return Promise.resolve([{
@@ -252,7 +252,7 @@ Deno.test("palette native slash waits for composer readiness and sends the curre
     supports: () => true,
     sessionID: () => "session",
     attachments: (parts: unknown[]) => Promise.resolve(parts),
-    act: (action: () => Promise<unknown>) => action(),
+    submit: (action: () => Promise<unknown>) => action(),
     ready: () => pending,
     change: (change: (value: typeof draft) => typeof draft) => change(draft),
     nextSelection: () =>
