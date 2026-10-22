@@ -7,19 +7,20 @@ Framework-free OTK networking, RPC and state. Production code depends only on
 
 Import only `@otk/client` (the `mod.ts` entry).
 
-| #  | API                                                             | Purpose                                                                                                              |
-| -- | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 1  | `SidecarConnection`, `Rpc`                                      | Auth discovery/login/setup, hello/welcome, heartbeat, reconnect/backoff, subscriptions, cancellable size-bounded RPC |
-| 2  | `apiBase`, `normalizeBase`, `request`                           | Prefix-aware HTTP API and cookie-based browser requests                                                              |
-| 3  | `createIndex`, `sessionKey`, `projectGroups`, `liveSessionInfo` | Multi-connection index merging with revision-gap detection                                                           |
-| 4  | `createSession`, `emptyContent`, `reduce`, `queuedMessages`     | Snapshot/live replay, paging, stream versions, error revisions and visible-output clocks                             |
-| 5  | `oldestPermission`, `belongsToSession`, `isAttentionOp`         | Permission/question family ownership and ordering                                                                    |
-| 6  | `loadHistory`, `mergeHistory`, `sameHistory`, `sameParts`       | Partial-success cross-connection history with attachment ownership                                                   |
-| 7  | `createNavigation`, `route`, `hashFor`                          | Selection and accepted-history traversal with dirty-state callbacks                                                  |
-| 8  | `createCurrentClient`                                           | Invocation-time selected connection/RPC context and session-scoped calls                                             |
-| 9  | `createState`, `StateFactory`, `StateStore`                     | Synchronous observable state or an injected framework binding                                                        |
-| 10 | `createSidecars`, `readSidecars`, `LOCAL_SIDECAR`               | Connection collection and persisted browser sources                                                                  |
-| 11 | `createServerResources`, `ServerResources`, `FrameObserver`     | Per-server inbox, approval and project-tab resources, live projections and ordered frame observers                   |
+| #  | API                                                                                        | Purpose                                                                                                              |
+| -- | ------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------- |
+| 1  | `SidecarConnection`, `Rpc`                                                                 | Auth discovery/login/setup, hello/welcome, heartbeat, reconnect/backoff, subscriptions, cancellable size-bounded RPC |
+| 2  | `apiBase`, `normalizeBase`, `request`                                                      | Prefix-aware HTTP API and cookie-based browser requests                                                              |
+| 3  | `createIndex`, `sessionKey`, `projectGroups`, `liveSessionInfo`                            | Multi-connection index merging with revision-gap detection                                                           |
+| 4  | `createSession`, `emptyContent`, `reduce`, `queuedMessages`                                | Snapshot/live replay, paging, stream versions, error revisions and visible-output clocks                             |
+| 5  | `oldestPermission`, `belongsToSession`, `isAttentionOp`                                    | Permission/question family ownership and ordering                                                                    |
+| 6  | `loadHistory`, `mergeHistory`, `sameHistory`, `sameParts`                                  | Partial-success cross-connection history with attachment ownership                                                   |
+| 7  | `createNavigation`, `route`, `hashFor`                                                     | Selection and accepted-history traversal with dirty-state callbacks                                                  |
+| 8  | `createCurrentClient`                                                                      | Invocation-time selected connection/RPC context and session-scoped calls                                             |
+| 9  | `createState`, `StateFactory`, `StateStore`                                                | Synchronous observable state or an injected framework binding                                                        |
+| 10 | `createSidecars`, `readSidecars`, `LOCAL_SIDECAR`                                          | Connection collection and persisted browser sources                                                                  |
+| 11 | `createServerResources`, `ServerResources`, `FrameObserver`                                | Per-server inbox, approval and project-tab resources, live projections and ordered frame observers                   |
+| 12 | `createSessionActions`, `SessionActions`, `sessionFamily`, `familyTask`, `familySelection` | Shared session-target operations and pure family projections                                                         |
 
 Models expose `state` and `subscribe(listener)`; subscriptions return an
 unsubscribe function and notify after updates, without an initial notification.
@@ -219,6 +220,20 @@ integration/e2e tests stay at root; client units live in `tests/`. Run project
 checks in the assigned OTK VM.
 
 ## Inbox metadata and tabs
+
+`createSessionActions({resources, session, current})` owns session-target
+directory resolution (index, matching selected info, then authoritative lookup),
+non-submitting actions and the shared submission port. Prompts resolve the
+invocation-current target before admission and preserve each history
+attachment's server ownership. Abort and attention replies use `act` without tab
+promotion. Its live info/key projections are framework-free; memoisation stays
+with the UI.
+
+The hierarchy owner also exports `sessionFamily`, `familyTask` and
+`familySelection`. Shell's location projection intentionally matches only the
+requested ID and the selected root without filtering directories; its task
+membership predicate uses full ancestry and the indexed directory. These remain
+distinct call shapes of the same pure task projection.
 
 `createServerResources({sidecars, index, factory?})` constructs its sidecar
 collection through the injected receiver factory and owns lazily cached inbox,

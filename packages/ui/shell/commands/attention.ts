@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { CommandHub } from "@otk/client";
+import type { CommandHub, SessionActions } from "@otk/client";
 import type { PermissionReply } from "@otk/protocol";
-export function registerAttentionCommands(commands: CommandHub, actions: {
-  permission(input: PermissionReply & { sidecarId?: string }): Promise<void>;
-  question(input: { requestID: string; answers?: string[][] }): Promise<void>;
-}): () => void {
+export function registerAttentionCommands(
+  commands: CommandHub,
+  actions: Pick<SessionActions, "permission" | "question">,
+): () => void {
   const releases = [
     commands.register({
       id: "permission.reply",

@@ -41,6 +41,31 @@ function errors(path: string, source: string): string[] {
     /\bfunction\s+createServerResources\s*\(/.test(source)
   ) errors.push("server resources have one client owner");
   if (
+    path.endsWith("/Shell.tsx") &&
+    /createSessionSubmission\(|\bsessionAncestors\b|["']session\.(?:prompt|abort)["']|history\.attachment|\.tasks\.(?:find|some)|function sessionPorts|sessionPorts = /
+      .test(source)
+  ) {
+    errors.push("session target operations belong to the client owner");
+  }
+  if (
+    path !== "packages/client/session-actions.ts" &&
+    /\bfunction\s+createSessionActions\s*\(/.test(source)
+  ) {
+    errors.push("session actions have one client owner");
+  }
+  if (
+    path.startsWith("packages/ui/") &&
+    /\bfunction\s+directoryFor\s*\(/.test(source)
+  ) {
+    errors.push("session directory lookup belongs to client");
+  }
+  if (
+    /^packages\/ui\/(?:shell\/session-ports|state\/shell)\.ts$/.test(path) &&
+    /rpc\.call\(|new Map</.test(source)
+  ) {
+    errors.push("shell bindings delegate operations and own no caches");
+  }
+  if (
     path.startsWith("packages/ui/") &&
     /\.\.\.\s*layout\(\)|key:\s*["']shellLayout["']|onLayout\(\w+:\s*Preferences\["shellLayout"\]/
       .test(source)
@@ -52,7 +77,11 @@ function errors(path: string, source: string): string[] {
   ) {
     errors.push("panel host owns a concrete view or its data");
   }
-  if (path.endsWith("/Shell.tsx") && /\.supports\(/.test(source)) {
+  if (
+    (path.endsWith("/Shell.tsx") ||
+      /^packages\/ui\/(?:shell\/session-ports|state\/shell)\.ts$/.test(path)) &&
+    /\.supports\(/.test(source)
+  ) {
     errors.push(
       "shell feature availability bypasses reactive advertised state",
     );
@@ -329,4 +358,58 @@ Deno.test("shell delegates server resources to one framework-free owner", async 
       path,
     );
   }
+});
+
+Deno.test("shell delegates session operations and ports without private capability or RPC bypasses", async () => {
+  for (
+    const path of [
+      "packages/ui/shell/Shell.tsx",
+      "packages/ui/shell/session-ports.ts",
+    ]
+  ) {
+    assertEquals(
+      errors(path, await Deno.readTextFile(new URL(path, root))),
+      [],
+      path,
+    );
+  }
+  for (
+    const source of [
+      "createSessionSubmission(options)",
+      "sessionAncestors(id)",
+      'rpc.call("session.prompt", p)',
+      'rpc.call("session.abort", p)',
+      'rpc.call("history.attachment", p)',
+      "inbox.tasks.find(predicate)",
+      "inbox.tasks.some(predicate)",
+      "function sessionPorts() {}",
+      "const sessionPorts = factory",
+      "function createSessionActions(o) {}",
+      "function directoryFor(t) {}",
+    ]
+  ) {
+    assert(errors("packages/ui/shell/Shell.tsx", source).length > 0, source);
+  }
+  for (
+    const path of [
+      "packages/ui/shell/session-ports.ts",
+      "packages/ui/state/shell.ts",
+    ]
+  ) {
+    for (
+      const source of [
+        'connection.rpc.call("models.list", p)',
+        "new Map<string, unknown>()",
+        "connection.supports(capability)",
+      ]
+    ) {
+      assert(errors(path, source).length > 0, source);
+    }
+  }
+  assert(
+    errors(
+      "packages/client/duplicate.ts",
+      "function createSessionActions(o) {}",
+    ).length > 0,
+  );
 });

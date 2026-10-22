@@ -1,5 +1,34 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { IndexEntry, TaskRecord } from "@otk/protocol";
+import {
+  type IndexEntry,
+  sessionAncestors,
+  type SessionLookup,
+  type TaskRecord,
+} from "@otk/protocol";
+import type { Selection } from "./session.ts";
+
+export function sessionFamily(id: string, lookup: SessionLookup): string[] {
+  return [id, ...sessionAncestors(id, lookup)];
+}
+export function familyTask(
+  tasks: readonly TaskRecord[],
+  family: readonly string[],
+  directory?: string,
+): TaskRecord | undefined {
+  return tasks.find((task) =>
+    (directory === undefined || task.directory === directory) &&
+    task.sessions.some((id) => family.includes(id))
+  );
+}
+export function familySelection(
+  selection: Selection,
+  lookup: SessionLookup,
+): Selection {
+  const ancestors = sessionAncestors(selection.sessionID, lookup);
+  return ancestors.length
+    ? { ...selection, rootID: ancestors.at(-1) }
+    : selection;
+}
 
 export interface SessionTreeRow {
   session: IndexEntry;

@@ -8,21 +8,15 @@ import {
   onSettled,
   Show,
 } from "solid-js";
-import {
-  DEFAULT_PREFS,
-  type PromptPart,
-  sessionAncestors,
-} from "@otk/protocol";
+import { DEFAULT_PREFS } from "@otk/protocol";
 import {
   CommandHub,
   createCurrentClient,
   createDrafts,
   createNavigation,
   createServerResources,
-  createSessionSubmission,
+  createSessionActions,
   hashFor,
-  liveSessionInfo,
-  loadHistory,
   LOCAL_SIDECAR,
   projectHash,
   projectName,
@@ -64,7 +58,8 @@ import ProjectInbox from "../components/ProjectInbox.tsx";
 import RightPanel from "../components/RightPanel.tsx";
 import ProjectTabs from "../components/ProjectTabs.tsx";
 import { PanelLeftIcon, PanelRightIcon } from "../components/ChromeIcons.tsx";
-import { type SessionPorts, SessionProvider } from "../registries/session.tsx";
+import { SessionProvider } from "../registries/session.tsx";
+import { sessionPorts } from "./session-ports.ts";
 import { ShellProvider } from "./context.tsx";
 import ContextMenu from "../components/ContextMenu.tsx";
 import type { SessionContextTarget } from "../features/session-context.ts";
@@ -85,7 +80,6 @@ export default function Shell(
     inbox,
     approvals,
     entry,
-    linked,
     attention,
     entries,
     tabs: tabsFor,
@@ -105,15 +99,13 @@ export default function Shell(
     },
   );
   const drafts = createDrafts(solidState);
-  const draftKey = () => {
-    const selected = session.state.selection;
-    return selected ? sessionKey(selected.sidecarId, selected.sessionID) : "";
-  };
-  const draft = () => drafts.get(draftKey());
   const current = createCurrentClient(
     () => session.state.selection,
     (id) => sidecars.connection(id),
   );
+  const actions = createSessionActions({ resources, session, current });
+  const draftKey = actions.key;
+  const draft = () => drafts.get(draftKey());
   const toggles = createToggles(resources.setPreference);
   const [settings, setSettings] = createSignal(false),
     [error, setError] = createSignal("");
@@ -276,57 +268,8 @@ export default function Shell(
   const selectedSidecar = createMemo(() =>
     resources.server(session.state.selection?.sidecarId ?? "")
   );
-  const info = createMemo(() => {
-    const selected = session.state.selection;
-    return liveSessionInfo(
-      session.state.info,
-      selected ? entry(selected.sidecarId, selected.sessionID) : undefined,
-    );
-  });
-  const directoryFor = async (target: Selection): Promise<string> => {
-    const known = entry(target.sidecarId, target.sessionID);
-    if (known) return known.directory;
-    const selected = info();
-    if (
-      selected?.id === target.sessionID &&
-      session.state.selection?.sidecarId === target.sidecarId
-    ) return selected.directory;
-    return (await sidecars.connection(target.sidecarId).rpc.call(
-      "session.get",
-      { sessionID: target.sessionID },
-    )).directory;
-  };
-  const act = async <T,>(target: Selection, action: () => Promise<T>) => {
-    const directory = await directoryFor(target);
-    return await inbox(target.sidecarId).act(directory, action);
-  };
-  const submitFor = (target: Selection) =>
-    createSessionSubmission({
-      sessionID: target.sessionID,
-      directory: () => directoryFor(target),
-      inbox: inbox(target.sidecarId),
-      tabs: (directory) => tabsFor({ sidecarId: target.sidecarId, directory }),
-    });
-  onCleanup(registerAttentionCommands(commands, {
-    permission: async (input) => {
-      const { sidecarId, ...reply } = input;
-      const id = sidecarId ?? current.context().selection.sidecarId;
-      await act(
-        { sidecarId: id, sessionID: reply.sessionID },
-        () => sidecars.connection(id).rpc.call("permission.reply", reply),
-      );
-    },
-    question: async (input) => {
-      const { selection: target, rpc } = current.context();
-      await act(
-        target,
-        () =>
-          input.answers
-            ? rpc.call("question.reply", { ...input, answers: input.answers })
-            : rpc.call("question.reject", input),
-      );
-    },
-  }));
+  const info = createMemo(actions.info);
+  onCleanup(registerAttentionCommands(commands, actions));
   const discardDraft = () => {
     // Solid batches rendered reads during input events; guards use the same
     // owner-current update port as Prompt, not the previous painted value.
@@ -409,15 +352,7 @@ export default function Shell(
     },
   });
   const navigate = (selection: Selection) => {
-    // Navigation owns family identity. Callers may know only an immediate
-    // parent; every entry point still writes the same root-based session URL.
-    const ancestors = sessionAncestors(
-      selection.sessionID,
-      (id) => entry(selection.sidecarId, id),
-    );
-    if (ancestors.length) {
-      selection = { ...selection, rootID: ancestors.at(-1) };
-    }
+    selection = actions.family(selection);
     const previous = session.state.selection;
     if (navigation.open(hashFor(selection))) {
       setSettings(false);
@@ -426,7 +361,7 @@ export default function Shell(
         previous?.sidecarId === selection.sidecarId &&
         previous.sessionID === selection.sessionID && !session.state.loading
       ) {
-        void directoryFor(selection).then((directory) =>
+        void actions.directory(selection).then((directory) =>
           inbox(selection.sidecarId).openSession(selection.sessionID, directory)
         ).catch(fail);
       }
@@ -520,29 +455,8 @@ export default function Shell(
       if (revision === navigationRevision) fail(error);
     }
   };
-  const attachments = (
-    parts: PromptPart[],
-    sidecarID: string,
-  ): Promise<PromptPart[]> =>
-    Promise.all(
-      parts.map((part) =>
-        part.kind === "file" && part.source === "history"
-          ? sidecars.connection(part.sidecarID || sidecarID).rpc.call(
-            "history.attachment",
-            { messageID: part.messageID, partID: part.partID },
-          )
-          : part
-      ),
-    );
   const openChild = (id: string) => {
-    const selected = session.state.selection!;
-    navigate({
-      sidecarId: selected.sidecarId,
-      sessionID: id,
-      ...(entry(selected.sidecarId, id)
-        ? {}
-        : { rootID: selected.rootID || selected.sessionID }),
-    });
+    navigate(actions.child(id));
   };
   const creationTarget = (input?: ProjectSelection) =>
     input ?? session.state.selection ?? project();
@@ -558,7 +472,7 @@ export default function Shell(
       const sidecarId = target.sidecarId, revision = navigationRevision;
       const directory = "directory" in target
         ? target.directory
-        : await directoryFor(target);
+        : await actions.directory(target);
       if (revision === navigationRevision) await create(sidecarId, directory);
     },
     open: navigate,
@@ -566,47 +480,6 @@ export default function Shell(
     older: () => session.older(),
     retry: () => session.refetch(),
   }));
-  const sessionPorts = (): SessionPorts => {
-    const target = { ...session.state.selection! },
-      connection = sidecars.connection(target.sidecarId);
-    return {
-      supports: (capability) =>
-        capability === "history"
-          ? resources.anyAdvertised(capability)
-          : resources.declares(target.sidecarId, capability),
-      rpc: (method, params) => connection.rpc.call(method, params),
-      connectionKey: () => resources.connectionKey(target.sidecarId),
-      connected: () => linked(target.sidecarId),
-      onToolCompleted: (listener) => session.onToolCompleted(target, listener),
-      modelCatalog: session.models,
-      approvals: approvals(target.sidecarId),
-      sessionID: () => target.sessionID,
-      directory: () => directoryFor(target),
-      entry: (id) => entry(target.sidecarId, id),
-      location: (id) => {
-        const value = entry(target.sidecarId, id),
-          tasks = inbox(target.sidecarId).state.inbox.tasks;
-        const task = tasks.find((task) =>
-          task.sessions.includes(id) ||
-          task.sessions.includes(target.rootID ?? target.sessionID)
-        );
-        return [
-          value && projectName(value.directory),
-          task?.name ?? value?.title,
-        ].filter(Boolean).join(", ");
-      },
-      permissions: () => session.state.content.permissions,
-      questions: () => session.state.content.questions,
-      prefs: () => toggles.state.prefs,
-      dirty: (owner, value) => {
-        dirty.set(owner, value);
-      },
-      act: (action) => act(target, action),
-      submit: submitFor(target),
-      history: () => loadHistory(resources.historySources()),
-      attachments: (parts) => attachments(parts, target.sidecarId),
-    };
-  };
   createEffect(() => {
     const p = project();
     if (!p) return undefined;
@@ -624,20 +497,7 @@ export default function Shell(
     current: () => session.state.selection,
     exists: (target) => !!entry(target.sidecarId, target.sessionID),
     connected: (target) => resources.connected(target.sidecarId),
-    inTask: (target) => {
-      const value = entry(target.sidecarId, target.sessionID);
-      const family = [
-        target.sessionID,
-        ...sessionAncestors(
-          target.sessionID,
-          (id) => entry(target.sidecarId, id),
-        ),
-      ];
-      return inbox(target.sidecarId).state.inbox.tasks.some((task) =>
-        task.directory === value?.directory &&
-        task.sessions.some((id) => family.includes(id))
-      );
-    },
+    inTask: actions.inTask,
     open: (target) => {
       if (!navigate(target)) return false;
       const directory = entry(target.sidecarId, target.sessionID)?.directory;
@@ -905,7 +765,20 @@ export default function Shell(
                         </div>
                       }
                     >
-                      <SessionProvider ports={sessionPorts()}>
+                      <SessionProvider
+                        ports={sessionPorts({
+                          target: session.state.selection!,
+                          resources,
+                          actions,
+                          session,
+                          guard: {
+                            mark: (owner, value) => {
+                              dirty.set(owner, value);
+                            },
+                          },
+                          prefs: () => toggles.state.prefs,
+                        })}
+                      >
                         <SessionView
                           sidecarId={session.state.selection?.sidecarId}
                           revert={session.state.content.revert}
@@ -947,29 +820,9 @@ export default function Shell(
                           onOlder={() => commands.run("session.older")}
                           onRetry={() => commands.run("session.retry")}
                           onDraft={drafts.writer(draftKey())}
-                          onPrompt={async (parts, _mode, selection) => {
-                            const { selection: target, rpc } = current
-                              .context();
-                            await submitFor(target)(async () => {
-                              await rpc.call("session.prompt", {
-                                sessionID: target.sessionID,
-                                mode: "normal",
-                                parts: await attachments(
-                                  parts,
-                                  target.sidecarId,
-                                ),
-                                ...selection,
-                              });
-                            });
-                          }}
-                          onAbort={async () => {
-                            const { selection: target, rpc } = current
-                              .context();
-                            await act(target, () =>
-                              rpc.call("session.abort", {
-                                sessionID: target.sessionID,
-                              }));
-                          }}
+                          onPrompt={(parts, _mode, selection) =>
+                            actions.prompt(parts, selection)}
+                          onAbort={actions.abort}
                         />
                       </SessionProvider>
                     </Show>

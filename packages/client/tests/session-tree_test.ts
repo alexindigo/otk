@@ -2,6 +2,7 @@
 import { assertEquals } from "@std/assert";
 import type { IndexEntry, TaskRecord } from "@otk/protocol";
 import { sessionTree } from "../session-tree.ts";
+import * as client from "@otk/client";
 const entry = (id: string, parentID?: string): IndexEntry => ({
   id,
   title: id,
@@ -83,5 +84,52 @@ Deno.test("session title search retains matching ancestry, excludes unrelated de
       g.rows.map((r) => r.session.id)
     ).sort(),
     entries.map((e) => e.id).sort(),
+  );
+});
+
+Deno.test("session family projections preserve ancestry, task order and optional directory semantics", () => {
+  const rows = [
+    entry("root"),
+    entry("middle", "root"),
+    entry("leaf", "middle"),
+    entry("a", "b"),
+    entry("b", "a"),
+  ];
+  const lookup = (id: string) => rows.find((e) => e.id === id);
+  assertEquals(client.sessionFamily("leaf", lookup), [
+    "leaf",
+    "middle",
+    "root",
+  ]);
+  assertEquals(client.sessionFamily("missing", lookup), ["missing"]);
+  assertEquals(
+    new Set(client.sessionFamily("a", lookup)).size,
+    client.sessionFamily("a", lookup).length,
+  );
+  const tasks = [
+    { ...task("foreign", ["root"]), directory: "/elsewhere" },
+    task("middle", ["middle"]),
+  ];
+  assertEquals(client.familyTask(tasks, ["leaf", "root"])?.id, "foreign");
+  assertEquals(
+    client.familyTask(tasks, client.sessionFamily("leaf", lookup), "/project")
+      ?.id,
+    "middle",
+  );
+  assertEquals(
+    client.familySelection({
+      sidecarId: "s",
+      sessionID: "leaf",
+      rootID: "middle",
+    }, lookup),
+    { sidecarId: "s", sessionID: "leaf", rootID: "root" },
+  );
+  assertEquals(
+    client.familySelection({
+      sidecarId: "s",
+      sessionID: "missing",
+      rootID: "hint",
+    }, lookup),
+    { sidecarId: "s", sessionID: "missing", rootID: "hint" },
   );
 });

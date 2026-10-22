@@ -120,12 +120,19 @@ non-submitting actions such as attention replies. There are no per-feature
 callbacks or capability flags on `Prompt`. The session `supports` port reads
 reactive advertised capabilities: an initial welcome activates already-mounted
 consumers, and reconnecting retains feature owners and their unsent input.
-Transport readiness is a separate input to actions. Features can provide
-triggers and autocomplete sources, key handling, paste/drop, submission
-transforms, completion hooks, chips, actions and overlays. Shell, mentions,
-slash, history, paste, attachments and editor each own their implementation.
-`Prompt` owns native input, submission identity and teardown; it has no feature
-import list.
+Transport readiness is a separate input to actions.
+
+The plain `shell/session-ports.ts` binding captures a selection once and
+delegates session operations to the client SessionActions owner. Its ordinary
+capabilities follow declared metadata through reconnects; history requires an
+advertised capability on at least one connected server. All resource reads
+remain live.
+
+Features can provide triggers and autocomplete sources, key handling,
+paste/drop, submission transforms, completion hooks, chips, actions and
+overlays. Shell, mentions, slash, history, paste, attachments and editor each
+own their implementation. `Prompt` owns native input, submission identity and
+teardown; it has no feature import list.
 
 The prompt textarea uses native content sizing, retaining its 48px minimum and
 growing in 24px prose lines to the component's named 240px cap. It then scrolls

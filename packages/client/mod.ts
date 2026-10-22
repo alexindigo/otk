@@ -50,6 +50,7 @@ export * from "./notification-triggers.ts";
 export * from "./inbox.ts";
 export * from "./tabs.ts";
 export * from "./session-submission.ts";
+export * from "./session-actions.ts";
 export {
   belongsToSession,
   isAttentionOp,
@@ -59,6 +60,9 @@ export { contextMeter } from "./context-meter.ts";
 export { createTaskActions, type TaskActions } from "./task-actions.ts";
 export { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
 export {
+  familySelection,
+  familyTask,
+  sessionFamily,
   sessionTree,
   type SessionTreeGroup,
   type SessionTreeRow,
