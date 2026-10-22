@@ -45,16 +45,18 @@ export class Client {
     if (options.body !== undefined) {
       headers.set("Content-Type", "application/json");
     }
+    let signal = options.signal;
+    if (!options.stream && options.timeout !== null) {
+      const deadline = AbortSignal.timeout(options.timeout ?? 15_000);
+      signal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+    }
     const response = await this.fetcher(this.url(path, options.query), {
       method: options.method || "GET",
       headers,
       body: options.body === undefined
         ? undefined
         : JSON.stringify(options.body),
-      signal: options.signal ??
-        (options.stream || options.timeout === null
-          ? undefined
-          : AbortSignal.timeout(options.timeout ?? 15_000)),
+      signal,
     });
     if (!response.ok) {
       const text = await response.text();

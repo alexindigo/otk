@@ -84,15 +84,17 @@ export class Opencode1Adapter implements Harness {
   );
   #permissions = new Map<string, PendingPermission>();
   #questions = new Map<string, string>();
-  #stopped = true;
+  get #stopped(): boolean {
+    return !this.#run || this.#run.controller.signal.aborted;
+  }
   #commands = new Map<
     AbortController,
     { sessionID: string; task: Promise<void> }
   >();
   #errors = new SessionErrors((id, state) => this.#publishErrors(id, state));
   #controller?: AbortController;
-  #run?: Promise<void>;
-  #wake?: () => void;
+  #run?: { controller: AbortController; task: Promise<void> };
+  #stopping?: Promise<void>;
   #db: BootstrapDb;
   #history: History;
   #tasks: TaskProgress;
@@ -239,6 +241,11 @@ export class Opencode1Adapter implements Harness {
     >;
   }
   #start(sink: HarnessSink): Promise<void> {
+    if (this.#run || this.#stopping) {
+      return Promise.reject(
+        new HarnessError("started", "Harness is already started"),
+      );
+    }
     this.#index = sink.index ?? new SessionIndex();
     // Standalone consumers need no index implementation. In core, callbacks
     // already mutate the injected owner; never maintain a mirrored map.
@@ -257,22 +264,32 @@ export class Opencode1Adapter implements Harness {
         sink.indexRemove(id);
       },
     };
-    this.#stopped = false;
+    const run = this.#run = {
+      controller: new AbortController(),
+      task: Promise.resolve(),
+    };
+    run.task = Promise.resolve().then(() => this.#loop(run.controller.signal));
     sink.connection("connecting");
-    this.#run = this.#loop();
     return Promise.resolve();
   }
-  async #stop(): Promise<void> {
-    this.#stopped = true;
+  #stop(): Promise<void> {
+    if (this.#stopping) return this.#stopping;
+    this.#run?.controller.abort();
     this.#controller?.abort();
+    this.#stopping = this.#shutdown().finally(() => {
+      this.#run = undefined;
+      this.#stopping = undefined;
+    });
+    return this.#stopping;
+  }
+  async #shutdown(): Promise<void> {
     this.#abortCommands();
     this.#errors.reset();
-    this.#wake?.();
     this.buffers.stop();
     this.#tasks.release();
     await this.#recovery.stop();
     this.#colors.clear();
-    await this.#run;
+    await this.#run?.task;
     await Promise.all(
       [...this.#commands.values()].map((request) => request.task),
     );
@@ -389,44 +406,65 @@ export class Opencode1Adapter implements Harness {
     if (error) entry.attention.error = error;
     else delete entry.attention.error;
   }
-  async #loop(): Promise<void> {
+  #current(controller: AbortController): boolean {
+    return !this.#stopped && this.#controller === controller &&
+      !controller.signal.aborted;
+  }
+  async #loop(signal: AbortSignal): Promise<void> {
     const backoff = new Backoff(this.cfg.harness.reconnectmax);
-    while (!this.#stopped) {
+    while (!signal.aborted) {
       const controller = this.#controller = new AbortController();
+      controller.signal.addEventListener("abort", () => {
+        this.#recovery.release();
+        this.#tasks.release();
+        this.buffers.reset();
+      }, { once: true });
       const watchdog = new Watchdog(
         this.cfg.harness.heartbeattimeout * 1000,
         () => controller.abort(),
       );
-      let chain = Promise.resolve(), ready = false;
+      let chain = Promise.resolve(), ready = false, bootstrapping = false;
       const buffered: Envelope[] = [];
       try {
         const health = await this.client.json<{ version: string }>(
           "/global/health",
+          { signal: controller.signal },
         );
+        controller.signal.throwIfAborted();
         this.version = health.version;
         watchdog.touch();
         const response = await this.client.request("/global/event", {
           signal: controller.signal,
           stream: true,
         });
+        if (!this.#current(controller)) {
+          await response.body?.cancel();
+          controller.signal.throwIfAborted();
+        }
         await consumeEvents(response, () => watchdog.touch(), (event) => {
+          if (!this.#current(controller)) return;
           if (event.payload.type === "server.connected") {
+            if (bootstrapping) return;
+            bootstrapping = true;
             backoff.connected();
-            chain = this.#bootstrap().then(async () => {
+            chain = this.#bootstrap(controller).then(async () => {
+              if (!this.#current(controller)) return;
               ready = true;
               this.#sink.connection("connected");
+              if (!this.#current(controller)) return;
               this.#sink.resync("all");
               for (const pending of buffered.splice(0)) {
-                await this.#handle(pending);
+                if (!this.#current(controller)) break;
+                await this.#handle(pending, controller);
               }
             }).catch((error) => {
-              console.warn("bootstrap:", error);
+              if (this.#current(controller)) console.warn("bootstrap:", error);
               controller.abort();
             });
           } else if (event.payload.type !== "server.heartbeat") {
             if (!ready) buffered.push(event);
             else {
-              chain = chain.then(() => this.#handle(event));
+              chain = chain.then(() => this.#handle(event, controller));
               // Once bootstrap is ready, the parser owns at most the event being
               // forwarded, rather than accumulating content in a promise queue.
               return chain;
@@ -441,30 +479,34 @@ export class Opencode1Adapter implements Harness {
           return false;
         });
       } catch (error) {
-        if (!this.#stopped) {
+        if (this.#current(controller)) {
           console.warn(`harness stream: ${(error as Error).message}`);
         }
       } finally {
         watchdog.stop();
         controller.abort();
-        this.#recovery.release();
         await chain;
+        buffered.length = 0;
         this.#recovery.release();
+        this.#controller = undefined;
       }
-      if (this.#stopped) break;
+      if (signal.aborted) break;
       this.buffers.reset();
       this.#sink.connection("reconnecting");
       await new Promise<void>((resolve) => {
-        const timer = setTimeout(resolve, backoff.next());
-        this.#wake = () => {
+        const wake = () => {
           clearTimeout(timer);
+          signal.removeEventListener("abort", wake);
           resolve();
         };
+        const timer = setTimeout(wake, backoff.next());
+        signal.addEventListener("abort", wake, { once: true });
+        if (signal.aborted) wake();
       });
-      this.#wake = undefined;
     }
   }
-  async #bootstrap(): Promise<void> {
+  async #bootstrap(controller: AbortController): Promise<void> {
+    if (!this.#current(controller)) return;
     this.#recovery.release();
     this.#reverts.clear();
     this.#tasks.release();
@@ -477,11 +519,16 @@ export class Opencode1Adapter implements Harness {
     do {
       const response = await this.client.request("/experimental/session", {
         query: { start: since, limit: 200, cursor },
+        signal: controller.signal,
       });
-      for (const session of await response.json() as Session[]) {
-        this.#errors.register(session.id);
+      if (!this.#current(controller)) {
+        await response.body?.cancel();
+        return;
+      }
+      const sessions = await response.json() as Session[];
+      if (!this.#current(controller)) return;
+      for (const session of sessions) {
         const entry = mapIndex(session);
-        this.#errorEntry(entry);
         entries.set(session.id, entry);
       }
       const next = response.headers.get("x-next-cursor") ?? undefined;
@@ -500,7 +547,7 @@ export class Opencode1Adapter implements Harness {
       ...this.#db.possiblyRunningDirectories(since),
     ]);
     for (const directory of directories) {
-      const [statuses, permissions, questions] = await Promise.all([
+      const reads = [
         this.client.json<
           Record<
             string,
@@ -511,14 +558,28 @@ export class Opencode1Adapter implements Harness {
               next?: number;
             }
           >
-        >("/session/status", { query: { directory } }),
+        >("/session/status", {
+          query: { directory },
+          signal: controller.signal,
+        }),
         this.client.json<RawPermission[]>("/permission", {
           query: { directory },
+          signal: controller.signal,
         }),
         this.client.json<{ id: string; sessionID: string }[]>("/question", {
           query: { directory },
+          signal: controller.signal,
         }),
-      ]);
+      ] as const;
+      const [statuses, permissions, questions] = await Promise.all(reads).catch(
+        async (error) => {
+          if (this.#current(controller)) console.warn("bootstrap:", error);
+          controller.abort();
+          await Promise.allSettled(reads);
+          throw error;
+        },
+      );
+      if (!this.#current(controller)) return;
       for (const [id, status] of Object.entries(statuses)) {
         const entry = entries.get(id);
         if (!entry) continue;
@@ -547,6 +608,11 @@ export class Opencode1Adapter implements Harness {
         nextQuestions.set(request.id, request.sessionID);
       }
     }
+    if (!this.#current(controller)) return;
+    for (const entry of entries.values()) {
+      this.#errors.register(entry.id);
+      this.#errorEntry(entry);
+    }
     this.#permissions = nextPermissions;
     this.#questions.clear();
     for (const [id, sessionID] of nextQuestions) {
@@ -568,15 +634,17 @@ export class Opencode1Adapter implements Harness {
       this.#attention.change(session, "questions", 1);
     } else this.#questions.delete(id);
   }
-  async #handle(event: Envelope): Promise<void> {
+  async #handle(event: Envelope, controller: AbortController): Promise<void> {
     try {
-      await this.#event(event);
+      await this.#event(event, controller);
     } catch (error) {
-      console.warn("harness event:", event.payload?.type, error);
+      if (this.#current(controller)) {
+        console.warn("harness event:", event.payload?.type, error);
+      }
     }
   }
-  async #event(event: Envelope): Promise<void> {
-    if (this.#stopped) return;
+  async #event(event: Envelope, controller: AbortController): Promise<void> {
+    if (!this.#current(controller)) return;
     const { type, properties: p } = event.payload;
     // The 1.x bridge emits both the legacy event and its durable "sync"
     // companion. The latter has syncEvent, not properties; do not apply twice.
@@ -590,13 +658,13 @@ export class Opencode1Adapter implements Harness {
       this.#errors.reset();
       this.#colors.clear();
       try {
-        await this.#bootstrap();
+        await this.#bootstrap(controller);
       } catch (error) {
         // A failed authoritative bootstrap remains a connection-level failure.
-        this.#controller?.abort();
+        controller.abort();
         throw error;
       }
-      this.#sink.resync("all");
+      if (this.#current(controller)) this.#sink.resync("all");
       return;
     }
     const info = p.info as Info | undefined;
@@ -624,6 +692,7 @@ export class Opencode1Adapter implements Harness {
         (session.revert || this.#reverts.has(session.id))
       ) {
         const revert = await this.#revertInfo(session);
+        if (!this.#current(controller)) return;
         this.#sink.content(session.id, {
           op: "session.revert",
           messageID: revert?.messageID,
@@ -760,7 +829,11 @@ export class Opencode1Adapter implements Harness {
     if (
       type === "message.updated" && info?.role === "assistant" &&
       info.time.completed !== undefined
-    ) this.buffers.complete(info.id, (id, op) => this.#sink.content(id, op));
+    ) {
+      this.buffers.complete(info.id, (id, op) => {
+        if (this.#current(controller)) this.#sink.content(id, op);
+      });
+    }
     if (type === "message.updated" && info?.time.completed !== undefined) {
       this.#recovery.message(info.id);
     }
@@ -773,13 +846,16 @@ export class Opencode1Adapter implements Harness {
         `/session/${encodeURIComponent(sessionID)}/message/${
           encodeURIComponent(info.id)
         }`,
-        { query: { directory: this.#directory(sessionID) } },
+        {
+          query: { directory: this.#directory(sessionID) },
+          signal: controller.signal,
+        },
       );
       const message = mapMessage(info, finished.parts);
       if (message.role === "assistant") {
         completedOutput = message.time.lastOutput;
       }
-      if (this.#stopped) return;
+      if (!this.#current(controller)) return;
     }
     if (
       type === "message.updated" && info?.role === "assistant" &&
@@ -832,7 +908,9 @@ export class Opencode1Adapter implements Harness {
       this.buffers.append(
         String(p.partID),
         String(p.delta),
-        (id, op) => this.#sink.content(id, op),
+        (id, op) => {
+          if (this.#current(controller)) this.#sink.content(id, op);
+        },
       )
     ) return;
     if (type === "message.updated" || type === "message.part.updated") {
@@ -843,7 +921,7 @@ export class Opencode1Adapter implements Harness {
       messageID = info?.id || raw?.messageID || String(p.messageID || "");
     if (cutoff && messageID && messageID >= cutoff) return;
     const content = (op: ContentOp) => {
-      if (!this.#stopped && this.buffers.subscribed(sessionID)) {
+      if (this.#current(controller) && this.buffers.subscribed(sessionID)) {
         this.#sink.content(sessionID, op);
       }
     };
@@ -856,6 +934,7 @@ export class Opencode1Adapter implements Harness {
               completedOutput ?? this.buffers.outputTime(info!.id),
             ),
             colors = await this.#colors.get(this.#directory(sessionID));
+          if (!this.#current(controller)) return;
           if (message.agent !== undefined) {
             message.agentColor = colors.get(message.agent);
           }
@@ -874,6 +953,7 @@ export class Opencode1Adapter implements Harness {
           mapPart(raw, waiting);
         if (part.kind === "tool" && raw.tool === "task") {
           part.call = await this.#tasks.shape(raw);
+          if (!this.#current(controller)) return;
         }
         const lastOutput = this.buffers.outputTime(raw.messageID);
         content({
@@ -891,7 +971,9 @@ export class Opencode1Adapter implements Harness {
           !this.buffers.append(
             id,
             String(p.delta),
-            (id, op) => this.#sink.content(id, op),
+            (id, op) => {
+              if (this.#current(controller)) this.#sink.content(id, op);
+            },
           )
         ) {
           this.#recovery.touch(sessionID, String(p.messageID), id);

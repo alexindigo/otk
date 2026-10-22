@@ -87,6 +87,17 @@ snapshot. Read-only SQLite hints may contribute additional asking instances, but
 never filter that coverage. Missing or incompatible SQLite therefore cannot hide
 already-running or blocked sessions on connection or instance resync.
 
+Each start owns one reconnect loop; a repeated start rejects without replacing
+its sink, including while stop is pending. Stop cancels and joins that lifetime
+before another start is accepted. Each connection owns health, paginated
+bootstrap, native inventories and ordered event work with one cancellation
+signal. Finite native reads retain their deadline alongside caller cancellation;
+streams and explicitly unbounded requests retain their existing timeout policy.
+Cancelled generations cannot publish snapshots, readiness, resyncs or late event
+results. Bootstrap failure cancels and joins sibling inventory reads, and
+repeated connected frames cannot launch overlapping snapshots. Instance-disposal
+resync uses the same connection owner and cancellation fences.
+
 `capabilities.models.listModels(sessionID)` reads native `GET /provider` and
 `GET /config` in that session's directory. It allowlists connected provider and
 model display metadata, including finite positive native `limit.context` as
