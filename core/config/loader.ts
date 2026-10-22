@@ -174,9 +174,9 @@ export function loadServiceConfig(
     envOverridden: envOverridden.sort(),
   };
 }
-export function statePath(
+function statePath(
   cfg: ServiceConfig,
-  env: Record<string, string> = Deno.env.toObject(),
+  env: Record<string, string>,
 ): string {
   return cfg.state.path ||
     join(
@@ -188,9 +188,10 @@ export function statePath(
 export function config(sources: Omit<LoadSources, "authState">): ServiceConfig {
   const { env } = sources;
   const initial = loadServiceConfig(sources).config;
+  const path = statePath(initial, env);
   const errors: string[] = [];
   const authState = read(
-    join(statePath(initial, env), "auth.toml"),
+    join(path, "auth.toml"),
     false,
     errors,
   );
@@ -199,6 +200,7 @@ export function config(sources: Omit<LoadSources, "authState">): ServiceConfig {
     ...sources,
     authState: authState ?? undefined,
   });
+  result.config.state.path = path;
   for (const p of result.loaded) console.info(`config: loaded ${p}`);
   if (result.envOverridden.length) {
     console.info(`config: env overrides ${result.envOverridden.join(", ")}`);

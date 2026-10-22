@@ -2,7 +2,6 @@
 import { join } from "@std/path";
 import { stringify } from "@std/toml";
 import type { ServiceConfig } from "../config/schema.ts";
-import { statePath } from "../config/loader.ts";
 import { hashPassword, LocalAuth } from "./local.ts";
 export class AuthState {
   local: LocalAuth | null;
@@ -51,7 +50,7 @@ export class AuthState {
           (b) => b.toString(16).padStart(2, "0"),
         ).join(""),
       };
-      const dir = statePath(this.cfg);
+      const dir = this.cfg.state.path;
       await Deno.mkdir(dir, { recursive: true, mode: 0o700 });
       await Deno.chmod(dir, 0o700);
       const file = await Deno.open(join(dir, "auth.toml"), {

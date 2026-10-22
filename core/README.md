@@ -60,16 +60,19 @@ explicit empty/subset advertisements remain authoritative. Both browser
 consumers use the protocol's shared normalization. Feature metadata stays cached
 while transport reconnects so dirty permission/question owners remain mounted.
 
-`loadServiceConfig` takes explicit defaults/overlay/auth-state/environment
-inputs. `config(sources)` additionally loads generated auth state and resolves
-its state directory; root bootstrap owns memoization and default paths.
-`AuthState`, `LocalAuth`, password helpers and `allowedOrigin` retain
-cookie/origin/JWT/TOTP behavior. `Connections`, `IndexStore`, `serve`,
-`staticResponse`, `promptParts`, `object` and `text` are shared core
-implementation helpers. `IndexStore` extends the harness-neutral `SessionIndex`
-owner and adds wire revisions/batching. Core passes that same owner in the
-backend sink, so directory, family, attention and transport reads share one
-authoritative metadata index.
+`loadServiceConfig` layers explicit defaults/overlay/auth-state/environment
+inputs; its state path may still contain the empty default sentinel.
+`config(sources)` is the service-ready boundary: it resolves the state directory
+once from those supplied inputs, loads generated auth state there and publishes
+that same path as `cfg.state.path`. Authentication and every store composition
+consume this value without consulting the process environment again. Root
+bootstrap owns memoization and default paths. `AuthState`, `LocalAuth`, password
+helpers and `allowedOrigin` retain cookie/origin/JWT/TOTP behavior.
+`Connections`, `IndexStore`, `serve`, `staticResponse`, `promptParts`, `object`
+and `text` are shared core implementation helpers. `IndexStore` extends the
+harness-neutral `SessionIndex` owner and adds wire revisions/batching. Core
+passes that same owner in the backend sink, so directory, family, attention and
+transport reads share one authoritative metadata index.
 
 ## Example
 
