@@ -601,7 +601,7 @@ test("I9 password cookie, WS authentication, Origin, logout and CORS", async () 
     await f.stop();
   }
 });
-test("I13 a server.origins override keeps the fixture's own port and applies the origin", async () => {
+test("I14 a server.origins override keeps the fixture's own port and applies the origin", async () => {
   const f = await fixture();
   try {
     const extraOrigin = "http://127.0.0.1:31503";

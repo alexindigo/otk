@@ -60,7 +60,7 @@ test("V2 default fixture preserves its config and exact connected providers", as
   }
 });
 
-test("V2 extra provider advertises variants and exclusively receives its selected prompt", async () => {
+test("V4 extra provider advertises variants and exclusively receives its selected prompt", async () => {
   const fake2 = new FakeLlm();
   const f = await browserFixture(undefined, {
     providers: {
