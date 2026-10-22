@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { relative, resolve, toFileUrl } from "@std/path";
 import type { PromptPart } from "@otk/protocol";
-import { statMatch } from "./files.ts";
 import { HarnessError, type PromptCapability } from "@otk/harness";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
@@ -43,8 +42,8 @@ export async function mapPromptParts(
   parts: PromptPart[],
   directory: string,
 ): Promise<RawPromptPart[]> {
-  return (await Promise.all(
-    parts.map(async (part): Promise<RawPromptPart | undefined> => {
+  return await Promise.all(
+    parts.map(async (part): Promise<RawPromptPart> => {
       if (part.kind === "text") return { type: "text", text: part.text };
       if (part.kind === "agent") return { type: "agent", name: part.name };
       if (part.source === "upload") {
@@ -80,8 +79,7 @@ export async function mapPromptParts(
         );
       }
       const path = resolve(directory, part.path), url = toFileUrl(path);
-      const info = await statMatch(path);
-      if (!info) return undefined;
+      const info = await requiredAttachment(path, part.path);
       const isDirectory = info.isDirectory;
       if (part.range && !isDirectory) {
         url.searchParams.set("start", String(part.range.start));
@@ -101,5 +99,29 @@ export async function mapPromptParts(
         url: url.href,
       };
     }),
-  )).filter((part) => part !== undefined);
+  );
+}
+
+/** Submission requires readable paths; discovery's no-match policy cannot apply. */
+async function requiredAttachment(
+  path: string,
+  label: string,
+): Promise<Deno.FileInfo> {
+  try {
+    const info = await Deno.stat(path);
+    if (info.isDirectory) {
+      // Check listing access without collecting the directory's contents.
+      for await (const _entry of Deno.readDir(path)) break;
+    } else {
+      using _file = await Deno.open(path, { read: true });
+    }
+    return info;
+  } catch {
+    throw new HarnessError(
+      "attachment",
+      `Cannot read attachment ${
+        JSON.stringify(label)
+      }. Restore access or remove it before sending.`,
+    );
+  }
 }

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { cfg, fixture } from "../../../tests/support/config.ts";
 import { Opencode1Adapter } from "../mod.ts";
+import { HarnessError } from "@otk/harness";
 import { StreamBuffers } from "@otk/content";
 import { mapPromptParts } from "../mod.ts";
 
@@ -26,7 +27,7 @@ function adapterFor(root: string) {
   });
 }
 
-Deno.test("permission-denied stat candidates are no-match in both find and prompt mapping", async () => {
+Deno.test("permission-denied discovery candidates are skipped but explicit prompt files reject", async () => {
   const root = await fixture();
   await Deno.mkdir(join(root, "src"));
   await Deno.mkdir(join(root, "blocked"));
@@ -49,13 +50,15 @@ Deno.test("permission-denied stat candidates are no-match in both find and promp
       assert(files.some((file) => file.path === query && !file.directory));
       assert(!files.some((file) => file.path === "blocked/file.ts"));
     }
-    assertEquals(
-      await mapPromptParts([{ kind: "text", text: "keep text" }, {
-        kind: "file",
-        source: "path",
-        path: "blocked/file.ts",
-      }], root),
-      [{ type: "text", text: "keep text" }],
+    await assertRejects(
+      () =>
+        mapPromptParts([{ kind: "text", text: "keep text" }, {
+          kind: "file",
+          source: "path",
+          path: "blocked/file.ts",
+        }], root),
+      HarnessError,
+      'Cannot read attachment "blocked/file.ts"',
     );
   } finally {
     await Deno.chmod(join(root, "blocked"), 0o700);

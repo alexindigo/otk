@@ -50,6 +50,14 @@ bytes; `capabilities.history.attachment({ messageID, partID })` retrieves those
 bytes asynchronously. Missing/incompatible databases degrade to empty history
 without creating or writing them.
 
+Explicit path attachments are required: normal prompts and slash commands
+resolve every selected path and check file-read or directory-list access before
+native admission. A missing or unreadable path rejects the whole send with an
+`attachment` error naming that path, so the caller retains its draft and chips.
+The mapper never omits a submitted part. Only best-effort file discovery may
+skip unavailable candidates. Paths remain native file references; these checks
+do not copy file contents or prevent subsequent external filesystem changes.
+
 Native image file parts retain their original URL in the neutral transcript
 mapping, shared by snapshots and live updates. Uploaded image data URLs
 therefore reach the browser without a second retrieval path. Non-image file

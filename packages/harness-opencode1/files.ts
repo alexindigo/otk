@@ -31,8 +31,8 @@ export function files(client: Client, directory: Directory): FilesCapability {
     },
   };
 }
-/** A filesystem candidate is a match only while its metadata is readable. */
-export async function statMatch(
+/** Discovery alone may skip candidates whose metadata is no longer readable. */
+async function statMatch(
   path: string,
 ): Promise<Deno.FileInfo | undefined> {
   try {
