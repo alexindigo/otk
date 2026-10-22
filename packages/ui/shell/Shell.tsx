@@ -12,23 +12,15 @@ import {
   DEFAULT_PREFS,
   type PromptPart,
   sessionAncestors,
-  type ShellLayout,
 } from "@otk/protocol";
 import {
-  type ApprovalModel,
-  type ClientTabs,
   CommandHub,
-  createApprovals,
   createCurrentClient,
   createDrafts,
-  createInbox,
   createNavigation,
+  createServerResources,
   createSessionSubmission,
-  createTabs,
-  createTaskActions,
   hashFor,
-  type InboxModel,
-  inboxProjects,
   liveSessionInfo,
   loadHistory,
   LOCAL_SIDECAR,
@@ -81,72 +73,23 @@ import type { SessionContextTarget } from "../features/session-context.ts";
 export default function Shell(
   props: { theme: ThemeEngine; api: URL },
 ): import("solid-js").Element {
-  const index = createIndex(), inboxes = new Map<string, InboxModel>();
-  const approvalModels = new Map<string, ApprovalModel>();
-  const approvals = (id: string) => {
-    let model = approvalModels.get(id);
-    if (!model) {
-      model = createApprovals(
-        sidecars.connection(id).rpc,
-        (sessionID) => entry(id, sessionID),
-        solidState,
-      );
-      approvalModels.set(id, model);
-    }
-    return model;
-  };
-  const tabModels = new Map<string, ClientTabs>();
-  const tabInput = (p: ProjectSelection) => ({
-    directory: p.directory,
-    entries: entries().filter((e) => e.sidecarId === p.sidecarId),
-    inbox: inbox(p.sidecarId).state.inbox,
+  const index = createIndex();
+  const resources = createServerResources({
+    index,
+    factory: solidState,
+    sidecars: (receive) =>
+      createSidecars(receive, { connection: { api: props.api } }),
   });
-  const tabsFor = (p: ProjectSelection) => {
-    const key = `${p.sidecarId}/${p.directory}`;
-    let model = tabModels.get(key);
-    if (!model) {
-      model = createTabs(inbox(p.sidecarId).promote, solidState, {
-        input: () => tabInput(p),
-        session: (sessionID) =>
-          sidecars.connection(p.sidecarId).rpc.call("session.get", {
-            sessionID,
-          }),
-      });
-      model.update(tabInput(p));
-      tabModels.set(key, model);
-    }
-    return model;
-  };
-  const inbox = (id: string) => {
-    let model = inboxes.get(id);
-    if (!model) {
-      model = createInbox(sidecars.connection(id).rpc, solidState);
-      inboxes.set(id, model);
-    }
-    return model;
-  };
-  const sidecars: ReturnType<typeof createSidecars> = createSidecars(
-    (id, frame) => {
-      approvals(id).receive(frame);
-      if (frame.t === "index.snapshot" || frame.t === "index.patch") {
-        if (!index.receive(id, frame)) {
-          sidecars.connection(id).send({ t: "resnapshot" });
-        } else notifications.receive(id, frame);
-      } else notifications.receive(id, frame);
-      inbox(id).receive(frame);
-      session.receive(id, frame);
-      if (id === LOCAL_SIDECAR) toggles.receive(frame);
-    },
-    { connection: { api: props.api } },
-  );
-  const entry = (sidecar: string, id: string) =>
-    index.state.entries[sessionKey(sidecar, id)];
-  const linked = (id: string) =>
-    sidecars.state.list.some((server) =>
-      server.id === id && server.status === "connected" &&
-      server.harness === "connected"
-    );
-  const attention = (id: string) => approvals(id).attention(linked(id));
+  const {
+    sidecars,
+    inbox,
+    approvals,
+    entry,
+    linked,
+    attention,
+    entries,
+    tabs: tabsFor,
+  } = resources;
   const session = createSession(
     (id) => sidecars.connection(id),
     entry,
@@ -171,9 +114,7 @@ export default function Shell(
     () => session.state.selection,
     (id) => sidecars.connection(id),
   );
-  const toggles = createToggles((key, value) =>
-    sidecars.connection(LOCAL_SIDECAR).rpc.call("prefs.set", { key, value })
-  );
+  const toggles = createToggles(resources.setPreference);
   const [settings, setSettings] = createSignal(false),
     [error, setError] = createSignal("");
   const [dialog, setDialog] = createSignal("");
@@ -209,6 +150,20 @@ export default function Shell(
     entry,
     attention,
   });
+  onCleanup(resources.observe({
+    frame: (id, frame, accepted) => {
+      if (accepted) notifications.receive(id, frame);
+    },
+    removed: (id) => notifications.remove(id),
+  }));
+  onCleanup(
+    resources.observe({ frame: (id, frame) => session.receive(id, frame) }),
+  );
+  onCleanup(resources.observe({
+    frame: (id, frame) => {
+      if (id === LOCAL_SIDECAR) toggles.receive(frame);
+    },
+  }));
   onCleanup(() => notifications.stop());
   createEffect(
     () =>
@@ -317,11 +272,9 @@ export default function Shell(
       },
     }),
   );
-  const local = createMemo(() =>
-    sidecars.state.list.find((s) => s.id === LOCAL_SIDECAR)!
-  );
+  const local = createMemo(() => resources.server(LOCAL_SIDECAR)!);
   const selectedSidecar = createMemo(() =>
-    sidecars.state.list.find((s) => s.id === session.state.selection?.sidecarId)
+    resources.server(session.state.selection?.sidecarId ?? "")
   );
   const info = createMemo(() => {
     const selected = session.state.selection;
@@ -395,7 +348,7 @@ export default function Shell(
       if (!target || !approvals(target.sidecarId).canEnable(target.sessionID)) {
         return undefined;
       }
-      const server = sidecars.state.list.find((s) => s.id === target.sidecarId);
+      const server = resources.server(target.sidecarId);
       return {
         model: approvals(target.sidecarId),
         sessionID: target.sessionID,
@@ -551,7 +504,7 @@ export default function Shell(
     if (!discardDraft()) return;
     const revision = ++navigationRevision;
     const rpc = sidecars.connection(sidecarId).rpc;
-    const actions = createTaskActions(rpc, directory);
+    const actions = resources.taskActions({ sidecarId, directory });
     try {
       const created = await rpc.call(
         "session.create",
@@ -597,9 +550,7 @@ export default function Shell(
     available: (input) => {
       const target = creationTarget(input);
       return !!target &&
-        sidecars.state.list.some((s) =>
-          s.id === target.sidecarId && s.status === "connected"
-        );
+        resources.connected(target.sidecarId);
     },
     create: async (input) => {
       const target = creationTarget(input);
@@ -621,16 +572,10 @@ export default function Shell(
     return {
       supports: (capability) =>
         capability === "history"
-          ? sidecars.state.list.some((s) =>
-            s.status === "connected" && s.capabilities.includes(capability)
-          )
-          : sidecars.state.list.some((s) =>
-            s.id === target.sidecarId && s.capabilities.includes(capability)
-          ),
+          ? resources.anyAdvertised(capability)
+          : resources.declares(target.sidecarId, capability),
       rpc: (method, params) => connection.rpc.call(method, params),
-      connectionKey: () =>
-        sidecars.state.list.find((s) => s.id === target.sidecarId)
-          ?.connectionVersion,
+      connectionKey: () => resources.connectionKey(target.sidecarId),
       connected: () => linked(target.sidecarId),
       onToolCompleted: (listener) => session.onToolCompleted(target, listener),
       modelCatalog: session.models,
@@ -658,65 +603,27 @@ export default function Shell(
       },
       act: (action) => act(target, action),
       submit: submitFor(target),
-      history: () =>
-        loadHistory(
-          sidecars.state.list.filter((s) =>
-            s.status === "connected" && s.capabilities.includes("history")
-          ).map((s) => ({ id: s.id, connection: sidecars.connection(s.id) })),
-        ),
+      history: () => loadHistory(resources.historySources()),
       attachments: (parts) => attachments(parts, target.sidecarId),
     };
   };
-  const entries = () =>
-    sidecars.state.list.flatMap((server) =>
-      attention(server.id).entries(
-        Object.values(index.state.entries).filter((e) =>
-          e.sidecarId === server.id
-        ),
-      )
-    );
   createEffect(() => {
     const p = project();
     if (!p) return undefined;
-    const metadata = inbox(p.sidecarId).state.inbox;
     return {
       p,
-      entries: entries().filter((e) => e.sidecarId === p.sidecarId).map((
-        e,
-      ) => ({ ...e, attention: { ...e.attention } })),
-      metadata: {
-        ...metadata,
-        tasks: metadata.tasks.map((t) => ({ ...t, sessions: [...t.sessions] })),
-        seen: { ...metadata.seen },
-        finishes: { ...metadata.finishes },
-      },
+      input: resources.tabSnapshot(p),
       selected: session.state.selection,
     };
   }, (value) => {
     if (!value) return;
-    const model = tabsFor(value.p);
-    model.update({
-      directory: value.p.directory,
-      entries: value.entries,
-      inbox: value.metadata,
-    });
-    const id = value.selected?.sessionID;
-    if (
-      id && value.entries.some((e) =>
-        e.id === id && e.directory === value.p.directory
-      ) && (model.state.sessionID !== id || !model.state.selected)
-    ) {
-      model.preview(id);
-    }
+    resources.syncTabs(value.p, value.input, value.selected);
   });
   // Session targets share one transition-aware command owner across all views.
   onCleanup(registerSessionTargetCommands(commands, {
     current: () => session.state.selection,
     exists: (target) => !!entry(target.sidecarId, target.sessionID),
-    connected: (target) =>
-      sidecars.state.list.some((server) =>
-        server.id === target.sidecarId && server.status === "connected"
-      ),
+    connected: (target) => resources.connected(target.sidecarId),
     inTask: (target) => {
       const value = entry(target.sidecarId, target.sessionID);
       const family = [
@@ -764,14 +671,7 @@ export default function Shell(
       navigator.clipboard.writeText(target.title),
   }));
   const projects = createMemo(() =>
-    sidecars.state.list.flatMap((s) =>
-      inboxProjects(
-        entries().filter((e) => e.sidecarId === s.id),
-        inbox(s.id).state.inbox,
-        now(),
-        toggles.state.prefs.projectAgeing,
-      ).map((p) => ({ ...p, sidecarId: s.id, label: s.label }))
-    )
+    resources.projects(now(), toggles.state.prefs.projectAgeing)
   );
   const originalTitle = document.title;
   createEffect(
@@ -820,14 +720,11 @@ export default function Shell(
       unbindAuto();
       navigation.stop();
       session.stop();
-      for (const model of approvalModels.values()) model.stop();
-      sidecars.stop();
+      resources.stop();
     };
   });
   const layout = () => toggles.state.prefs.shellLayout;
-  const saveLayout = async (patch: Partial<ShellLayout>) => {
-    await sidecars.connection(LOCAL_SIDECAR).rpc.call("layout.patch", patch);
-  };
+  const saveLayout = resources.layout;
   for (const side of ["projects", "panel"] as const) {
     const collapsed = () =>
       side === "projects" ? layout().leftCollapsed : layout().rightCollapsed;
@@ -912,12 +809,7 @@ export default function Shell(
             prefs={toggles.state.prefs}
             ready={toggles.state.ready}
             onOpen={openProject}
-            onInactive={async (p, inactive) => {
-              await sidecars.connection(p.sidecarId).rpc.call(
-                "projects.inactive",
-                { directory: p.directory, inactive },
-              );
-            }}
+            onInactive={resources.inactive}
             onLayout={saveLayout}
           />
           <main class="otk-main">
@@ -955,10 +847,7 @@ export default function Shell(
                       <ProjectTabs
                         project={project()!}
                         model={tabsFor(project()!)}
-                        entries={entries().filter((e) =>
-                          e.sidecarId === project()!.sidecarId &&
-                          e.directory === project()!.directory
-                        )}
+                        entries={resources.projectEntries(project()!)}
                         inbox={inbox(project()!.sidecarId).state.inbox}
                         messages={session.state.content.messages}
                         usage={session.state.selection
@@ -981,9 +870,7 @@ export default function Shell(
                               commands.run("prefs.set", { key, value })}
                           />
                         }
-                        ready={sidecars.state.list.find((s) =>
-                          s.id === project()!.sidecarId
-                        )?.status === "connected"}
+                        ready={resources.connected(project()!.sidecarId)}
                         onOpen={(id) => {
                           return navigate({
                             sidecarId: project()!.sidecarId,
@@ -997,10 +884,7 @@ export default function Shell(
                             project()!.directory,
                             task,
                           )}
-                        actions={createTaskActions(
-                          sidecars.connection(project()!.sidecarId).rpc,
-                          project()!.directory,
-                        )}
+                        actions={resources.taskActions(project()!)}
                       />
                     </Show>
                     <Show
@@ -1116,17 +1000,14 @@ export default function Shell(
                 }
                 sidecars={sidecars.state.list}
                 onAdd={async (url, label) => {
-                  await sidecars.add(url, label);
+                  await resources.add(url, label);
                   notifications.info("Server added");
                 }}
                 onRemove={(id) => {
                   if (project()?.sidecarId === id && !navigation.open("")) {
                     return;
                   }
-                  index.remove(id);
-                  notifications.remove(id);
-                  inboxes.delete(id);
-                  sidecars.remove(id);
+                  resources.remove(id);
                 }}
                 onLogin={(id, input) => sidecars.connection(id).login(input)}
                 onSetup={(input) =>
@@ -1138,12 +1019,8 @@ export default function Shell(
           <RightPanel
             layout={layout()}
             ready={toggles.state.ready}
-            supports={(capability) => {
-              const id = project()?.sidecarId;
-              const server = sidecars.state.list.find((s) => s.id === id);
-              return server?.status === "connected" &&
-                server.capabilities.includes(capability);
-            }}
+            supports={(capability) =>
+              resources.advertised(project()?.sidecarId ?? "", capability)}
             onLayout={saveLayout}
           />
           <Toasts

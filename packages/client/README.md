@@ -19,6 +19,7 @@ Import only `@otk/client` (the `mod.ts` entry).
 | 8  | `createCurrentClient`                                           | Invocation-time selected connection/RPC context and session-scoped calls                                             |
 | 9  | `createState`, `StateFactory`, `StateStore`                     | Synchronous observable state or an injected framework binding                                                        |
 | 10 | `createSidecars`, `readSidecars`, `LOCAL_SIDECAR`               | Connection collection and persisted browser sources                                                                  |
+| 11 | `createServerResources`, `ServerResources`, `FrameObserver`     | Per-server inbox, approval and project-tab resources, live projections and ordered frame observers                   |
 
 Models expose `state` and `subscribe(listener)`; subscriptions return an
 unsubscribe function and notify after updates, without an initial notification.
@@ -218,6 +219,23 @@ integration/e2e tests stay at root; client units live in `tests/`. Run project
 checks in the assigned OTK VM.
 
 ## Inbox metadata and tabs
+
+`createServerResources({sidecars, index, factory?})` constructs its sidecar
+collection through the injected receiver factory and owns lazily cached inbox,
+approval and project-tab models. Its getters read live state; callers keep
+framework memoisation at their binding boundary. `tabSnapshot(project)` supplies
+the detached nested reads for a tracking scope; `syncTabs` applies them and
+previews the selected project session only when needed. Tabs retain both
+owner-current inputs and authoritative session lookup for readiness.
+
+Frames reduce approvals, index and inbox before ordered observers run. An index
+gap requests a resnapshot and reaches observers with `accepted=false`, so
+notification consumers can skip it while session consumers retain delivery.
+Removal clears the index, notifies observers, evicts the inbox, then removes the
+connection. Existing approval/tab cache retention is unchanged. `stop()` stops
+approval models before sidecars. Server-scoped task actions, live capability and
+history-source projections, labelled projects and the local layout/preference
+RPC ports share this owner.
 
 `createInbox(rpc, factory?)` receives connection-local `inbox` frames, including
 the snapshot sent on every hello. `openProject`, `openSession` and `act` reset

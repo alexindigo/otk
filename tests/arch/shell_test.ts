@@ -26,10 +26,20 @@ function errors(path: string, source: string): string[] {
     /promote\s*[:(][^;{]*\bsession:\s*IndexEntry/.test(source)
   ) errors.push("tab promotion depends on a replicated status row");
   if (
-    path.endsWith("/Shell.tsx") && source.includes("createTabs(") &&
-    !/createTabs\([\s\S]*?\binput:\s*\(\)\s*=>\s*tabInput\(p\),\s*session:/
-      .test(source)
+    path === "packages/client/server-resources.ts" &&
+    (!source.includes("createTabs(") ||
+      !/createTabs\([\s\S]*?\binput:\s*\(\)\s*=>\s*tabInput\(p\),\s*session:/
+        .test(source))
   ) errors.push("shell tabs lack owner-current inputs and session resolution");
+  if (
+    path.endsWith("/Shell.tsx") &&
+    /createInbox\(|createApprovals\(|createTabs\(|\binboxes\b|\bapprovalModels\b|\btabModels\b|inboxProjects\(|rpc\.call\("(?:layout\.patch|projects\.inactive|prefs\.set)"/
+      .test(source)
+  ) errors.push("server resources belong to the client owner");
+  if (
+    path !== "packages/client/server-resources.ts" &&
+    /\bfunction\s+createServerResources\s*\(/.test(source)
+  ) errors.push("server resources have one client owner");
   if (
     path.startsWith("packages/ui/") &&
     /\.\.\.\s*layout\(\)|key:\s*["']shellLayout["']|onLayout\(\w+:\s*Preferences\["shellLayout"\]/
@@ -182,6 +192,7 @@ Deno.test("tab commands own readiness and the shell injects current inputs and a
     const path of [
       "packages/client/tabs.ts",
       "packages/client/inbox.ts",
+      "packages/client/server-resources.ts",
       "packages/ui/shell/Shell.tsx",
     ]
   ) {
@@ -202,7 +213,7 @@ Deno.test("tab commands own readiness and the shell injects current inputs and a
         "promote(session: IndexEntry): Promise<TaskRecord>;",
       ],
       [
-        "packages/ui/shell/Shell.tsx",
+        "packages/client/server-resources.ts",
         "createTabs(inbox(p.sidecarId).promote, solidState);",
       ],
     ]
@@ -230,7 +241,7 @@ Deno.test("layout controls send field intents to the authoritative persistence o
     ) assert(errors(path, source).length > 0, source);
   }
   const shell = await Deno.readTextFile(
-    new URL("packages/ui/shell/Shell.tsx", root),
+    new URL("packages/client/server-resources.ts", root),
   );
   assert(shell.includes('rpc.call("layout.patch", patch)'));
   const owner = await Deno.readTextFile(
@@ -253,4 +264,69 @@ Deno.test("shell feature ports observe advertised state rather than transport-pr
       "supports: (capability) => sidecars.connection(id).supports(capability)",
     ]
   ) assert(errors(path, source).length > 0, source);
+});
+
+Deno.test("shell delegates server resources to one framework-free owner", async () => {
+  const shell = "packages/ui/shell/Shell.tsx";
+  assertEquals(
+    errors(shell, await Deno.readTextFile(new URL(shell, root))),
+    [],
+  );
+  for (
+    const source of [
+      "createInbox(rpc)",
+      "createApprovals(rpc)",
+      "createTabs(promote)",
+      "const inboxes = cache",
+      "const approvalModels = cache",
+      "const tabModels = cache",
+      "inboxProjects(entries)",
+      'rpc.call("layout.patch", patch)',
+      'rpc.call("projects.inactive", input)',
+      'rpc.call("prefs.set", input)',
+      "function createServerResources(options) {}",
+    ]
+  ) assert(errors(shell, source).length > 0, source);
+  assertEquals(errors(shell, 'commands.run("prefs.set", input)'), []);
+  assert(
+    errors(
+      "packages/client/duplicate.ts",
+      "function createServerResources(options) {}",
+    ).length > 0,
+  );
+  const scan = async (directory: string): Promise<void> => {
+    for await (
+      const file of Deno.readDir(
+        new URL(
+          directory.split("/").map(encodeURIComponent).join("/") + "/",
+          root,
+        ),
+      )
+    ) {
+      const path = `${directory}/${file.name}`;
+      if (file.isDirectory && file.name !== "tests") await scan(path);
+      else if (file.isFile && /\.tsx?$/.test(path)) {
+        assertEquals(
+          errors(
+            path,
+            await Deno.readTextFile(
+              new URL(path.split("/").map(encodeURIComponent).join("/"), root),
+            ),
+          ),
+          [],
+          path,
+        );
+      }
+    }
+  };
+  await scan("packages");
+  await scan("core");
+  await scan("web/src");
+  for (const path of ["main.ts", "application.ts"]) {
+    assertEquals(
+      errors(path, await Deno.readTextFile(new URL(path, root))),
+      [],
+      path,
+    );
+  }
 });

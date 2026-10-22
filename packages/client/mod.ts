@@ -11,6 +11,7 @@ export * from "./reduce.ts";
 export * from "./index.ts";
 export * from "./session.ts";
 export * from "./sidecars.ts";
+export * from "./server-resources.ts";
 export * from "./messages.ts";
 export * from "./permissions.ts";
 export * from "./approvals.ts";
