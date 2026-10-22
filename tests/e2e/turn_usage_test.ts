@@ -294,7 +294,7 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
     const tableGeometry = await b.evaluate<
       { inside: boolean; aligned: boolean; bounds: number[] }
     >(
-      "(()=>{const table=document.querySelector('.otk-usage-breakdown'),panel=table.closest('.otk-popover-panel').getBoundingClientRect(),rows=[...table.querySelectorAll('tbody tr')];return {inside:panel.left>=0 && panel.right<=innerWidth,aligned:rows.every(row=>[...row.children].slice(2).every((cell,i)=>Math.abs(cell.getBoundingClientRect().right-rows[0].children[i+2].getBoundingClientRect().right)<=.5)),bounds:[panel.left,panel.right,innerWidth]}})()",
+      "(()=>{const table=document.querySelector('.otk-usage-breakdown'),panel=table.closest('.otk-surface').getBoundingClientRect(),rows=[...table.querySelectorAll('tbody tr')];return {inside:panel.width>0 && panel.height>0 && panel.left>=0 && panel.right<=innerWidth,aligned:rows.every(row=>[...row.children].slice(2).every((cell,i)=>Math.abs(cell.getBoundingClientRect().right-rows[0].children[i+2].getBoundingClientRect().right)<=.5)),bounds:[panel.left,panel.right,innerWidth]}})()",
     );
     assert(
       tableGeometry.inside && tableGeometry.aligned,

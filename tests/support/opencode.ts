@@ -157,14 +157,7 @@ export class OpencodeTest {
     test.process.stdout!.on("data", log);
     test.process.stderr!.on("data", log);
     try {
-      await waitFor(
-        async () =>
-          (await fetch(test.url + "/global/health", {
-            signal: AbortSignal.timeout(5000),
-          })).json(),
-        (health) => health.healthy === true,
-        60_000,
-      );
+      await test.#ready();
     } catch (error) {
       await test.stop();
       throw new Error(`${error}\n${test.log}`);
@@ -210,6 +203,11 @@ export class OpencodeTest {
     this.process.stderr!.on("data", (chunk) => {
       this.log += chunk.toString();
     });
+    await this.#ready();
+  }
+  /** HTTP admission is earlier than native custom-tool dependency completion. */
+  async #ready(): Promise<void> {
+    const deadline = Date.now() + 60_000;
     await waitFor(
       async () =>
         (await fetch(this.url + "/global/health", {
@@ -218,6 +216,25 @@ export class OpencodeTest {
       (health) => health.healthy === true,
       60_000,
     );
+    const url = new URL(this.url + "/experimental/tool/ids");
+    url.searchParams.set("directory", this.directory);
+    const response = await fetch(url, {
+      signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),
+    });
+    if (!response.ok) {
+      throw new Error(
+        `Native tool readiness ${response.status}: ${await response.text()}`,
+      );
+    }
+    const tools: unknown = await response.json();
+    if (
+      !Array.isArray(tools) || !tools.length ||
+      !tools.every((tool) => typeof tool === "string")
+    ) {
+      throw new Error(
+        "Native tool registry returned an invalid readiness snapshot",
+      );
+    }
   }
   async stop(): Promise<void> {
     if (!this.process?.pid || this.process.exitCode !== null) return;

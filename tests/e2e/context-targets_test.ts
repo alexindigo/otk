@@ -16,6 +16,7 @@ import {
   waitForReply,
 } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { menuReady } from "../support/menu.ts";
 
 const menu = ':popover-open [role="menu"][aria-label="Context menu"]';
 const panelArea = ["New session", "Find a session", "Collapse right panel"];
@@ -50,9 +51,10 @@ async function rightClick(b: Cdp, selector: string) {
       clickCount: 1,
     });
   }
-  await b.poll(`!!document.querySelector('${menu}')`);
+  await menuReady(b, menu);
 }
 async function labels(b: Cdp) {
+  await menuReady(b, menu);
   return await b.evaluate<string[]>(
     `[...document.querySelectorAll('${menu} button')].map(el=>el.textContent)`,
   );

@@ -8,6 +8,7 @@ import { WsClient } from "../support/ws-client.ts";
 import { join } from "@std/path";
 import { waitFor } from "../support/opencode.ts";
 import type { TaskRecord } from "@otk/protocol";
+import { menuReady } from "../support/menu.ts";
 
 const menuRoot = '[role="menu"][aria-label="Context menu"]';
 const menu = `:popover-open ${menuRoot}`;
@@ -37,7 +38,7 @@ async function pointer(
   }
 }
 async function labels(browser: Cdp) {
-  await browser.poll(`!!document.querySelector('${menu}')`);
+  await menuReady(browser, menu);
   return browser.evaluate<string[]>(
     `[...document.querySelectorAll('${menu} button')].map(el=>el.textContent)`,
   );
@@ -166,7 +167,7 @@ Deno.test("context menu: trusted right click, native escape hatch, keyboard navi
         await pointer(browser, { x, y });
         await labels(browser);
         await browser.poll(
-          `(() => { const p=document.querySelector('${menu}').closest('.otk-popover-panel'); const r=p.getBoundingClientRect(); return r.left>=0 && r.top>=0 && r.right<=innerWidth+.5 && r.bottom<=innerHeight+.5; })()`,
+          `(() => { const p=document.querySelector('${menu}').closest('.otk-surface'); const r=p.getBoundingClientRect(); return r.width>0 && r.height>0 && r.left>=0 && r.top>=0 && r.right<=innerWidth+.5 && r.bottom<=innerHeight+.5; })()`,
         );
         if (Deno.env.get("OTK_CONTEXT_SCREENSHOTS")) {
           await browser.screenshot(`${root}/${theme}-${name}.png`);
@@ -605,7 +606,7 @@ Deno.test("context binding: external command contributions, live target data, ne
       await browser.key("ContextMenu");
       await labels(browser);
       await browser.poll(
-        `(()=>{const a=document.querySelector('#inner').getBoundingClientRect(),r=document.querySelector('${menu}').closest('.otk-popover-panel').getBoundingClientRect();return r.left>=0&&r.top>=0&&r.right<=innerWidth+.5&&r.bottom<=innerHeight+.5&&(r.bottom<=a.top+.5||r.top>=a.bottom-.5||r.right<=a.left+.5||r.left>=a.right-.5)})()`,
+        `(()=>{const a=document.querySelector('#inner').getBoundingClientRect(),r=document.querySelector('${menu}').closest('.otk-surface').getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=0&&r.top>=0&&r.right<=innerWidth+.5&&r.bottom<=innerHeight+.5&&(r.bottom<=a.top+.5||r.top>=a.bottom-.5||r.right<=a.left+.5||r.left>=a.right-.5)})()`,
       );
       await capture(browser, root, `rect-${corner}`);
       await browser.key("Escape");
@@ -784,7 +785,7 @@ Deno.test("round 2: all shared Menu callers distinguish pointer and keyboard ope
     );
     assertEquals(
       await browser.evaluate(
-        `(()=>{const items=document.querySelector('${selector}').getBoundingClientRect(),panel=document.querySelector('${selector}').closest('.otk-popover-panel').getBoundingClientRect();return Math.abs((items.top-panel.top)-(panel.bottom-items.bottom))<.5})()`,
+        `(()=>{const items=document.querySelector('${selector}').getBoundingClientRect(),panel=document.querySelector('${selector}').closest('.otk-surface').getBoundingClientRect();return Math.abs((items.top-panel.top)-(panel.bottom-items.bottom))<.5})()`,
       ),
       true,
       "A menu without status has balanced block padding around its item column",

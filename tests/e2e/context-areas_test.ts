@@ -7,6 +7,7 @@ import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { menuReady } from "../support/menu.ts";
 
 const menu = ':popover-open [role="menu"][aria-label="Context menu"]';
 const app = ["New session", "Open command palette", "Display preferences"];
@@ -18,7 +19,7 @@ const areas = {
   composer: ".otk-prompt-actions",
 };
 async function groups(b: Cdp) {
-  await b.poll(`!!document.querySelector('${menu}')`);
+  await menuReady(b, menu);
   return await b.evaluate<string[][]>(
     `[...document.querySelectorAll('${menu} > [role=group]')].map(group=>[...group.querySelectorAll('button')].map(item=>item.textContent))`,
   );
@@ -76,9 +77,9 @@ async function rightClick(
       clickCount: 1,
     });
   }
-  await b.poll(`!!document.querySelector('${menu}')`);
+  await menuReady(b, menu);
   const geometry = await b.evaluate<{ inside: boolean; rows: number[] }>(
-    `(()=>{const panel=document.querySelector('${menu}').closest('.otk-popover-panel'),r=panel.getBoundingClientRect();return {inside:r.left>=0&&r.top>=0&&r.right<=innerWidth+.5&&r.bottom<=innerHeight+.5,rows:[...panel.querySelectorAll('[role=menuitem]')].map(el=>el.getBoundingClientRect().height)}})()`,
+    `(()=>{const panel=document.querySelector('${menu}').closest('.otk-surface'),r=panel.getBoundingClientRect();return {inside:r.width>0&&r.height>0&&r.left>=0&&r.top>=0&&r.right<=innerWidth+.5&&r.bottom<=innerHeight+.5,rows:[...panel.querySelectorAll('[role=menuitem]')].map(el=>el.getBoundingClientRect().height)}})()`,
   );
   assert(geometry.inside, JSON.stringify(geometry));
   assert(

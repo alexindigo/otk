@@ -7,7 +7,10 @@ export interface Script {
 }
 export class FakeLlm {
   readonly requests: Record<string, unknown>[] = [];
-  #queue: (Script & { finish?: Promise<void> })[] = [];
+  #queue: (Script & {
+    finish?: Promise<void>;
+    beforeChunk?: (index: number) => Promise<void>;
+  })[] = [];
   #holds = new Set<() => void>();
   readonly server: Deno.HttpServer;
   readonly port: number;
@@ -31,10 +34,12 @@ export class FakeLlm {
           message.role === "user" && typeof message.content === "string" &&
           message.content.startsWith("Generate a title for this conversation:")
         );
-        const script: Script & { finish?: Promise<void> } =
-          body.stream && !titleRequest
-            ? this.#queue.shift() ?? { chunks: ["Completed."] }
-            : { chunks: ["OTK session"] };
+        const script: Script & {
+          finish?: Promise<void>;
+          beforeChunk?: (index: number) => Promise<void>;
+        } = body.stream && !titleRequest
+          ? this.#queue.shift() ?? { chunks: ["Completed."] }
+          : { chunks: ["OTK session"] };
         const id = `chatcmpl-${crypto.randomUUID()}`;
         if (!body.stream) {
           return Response.json({
@@ -93,7 +98,8 @@ export class FakeLlm {
                 }],
               });
             }
-            for (const chunk of script.chunks ?? []) {
+            for (const [index, chunk] of (script.chunks ?? []).entries()) {
+              await script.beforeChunk?.(index);
               await new Promise((r) => setTimeout(r, script.delay ?? 5));
               if (cancelled) return;
               send({ content: chunk });
@@ -130,6 +136,28 @@ export class FakeLlm {
     this.#holds.add(release);
     this.#queue.push({ ...script, finish: gate.promise });
     return { release };
+  }
+  /** Consumer-acknowledged chunk delivery; no scheduler-sized observation window. */
+  queueStepped(script: Script): { next(): void } {
+    const gates = (script.chunks ?? []).map(() =>
+      Promise.withResolvers<void>()
+    );
+    let index = 0;
+    const release = () => {
+      this.#holds.delete(release);
+      for (const gate of gates) gate.resolve();
+    };
+    this.#holds.add(release);
+    this.#queue.push({ ...script, beforeChunk: (n) => gates[n].promise });
+    return {
+      next: () => {
+        if (index >= gates.length) {
+          throw new Error("No remaining scripted chunk");
+        }
+        gates[index++].resolve();
+        if (index === gates.length) this.#holds.delete(release);
+      },
+    };
   }
   async stop(): Promise<void> {
     for (const release of this.#holds) release();

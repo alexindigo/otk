@@ -42,7 +42,7 @@ const open = async (b: Cdp, kind: string) => {
   const geometry = await b.evaluate<
     { panel: DOMRect; trigger: DOMRect; viewport: [number, number] }
   >(
-    `(()=>{const p=document.querySelector('.otk-${kind}-picker .otk-popover-panel'),s=getComputedStyle(p),t=document.querySelector('.otk-${kind}-picker > button');return {panel:p.getBoundingClientRect().toJSON(),position:s.position,area:s.positionArea,anchor:s.positionAnchor,trigger:t.getBoundingClientRect().toJSON(),anchorName:getComputedStyle(t).anchorName,scrollHeight:document.documentElement.scrollHeight,clientHeight:document.documentElement.clientHeight,scrollY,viewport:[innerWidth,innerHeight]}})()`,
+    `(()=>{const p=document.querySelector('.otk-${kind}-picker .otk-popover-panel'),s=getComputedStyle(p),t=document.querySelector('.otk-${kind}-picker > button');return {panel:p.querySelector('.otk-surface').getBoundingClientRect().toJSON(),position:s.position,area:s.positionArea,anchor:s.positionAnchor,trigger:t.getBoundingClientRect().toJSON(),anchorName:getComputedStyle(t).anchorName,scrollHeight:document.documentElement.scrollHeight,clientHeight:document.documentElement.clientHeight,scrollY,viewport:[innerWidth,innerHeight]}})()`,
   );
   assertEquals(
     after,

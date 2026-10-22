@@ -3,6 +3,7 @@ import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { runTool } from "../support/rendering.ts";
+import { highlightedRange } from "../support/highlight.ts";
 
 Deno.test("typed results show highlighted native file ranges, paths and grep matches without model envelopes or repeated headers, including reload", async () => {
   const source =
@@ -86,6 +87,13 @@ Deno.test("typed results show highlighted native file ranges, paths and grep mat
           JSON.stringify(item.selector + " " + item.content)
         })?.textContent===${JSON.stringify(item.expected)}`,
       );
+      if (item.name === "read" && item.content === ".otk-code code") {
+        await highlightedRange(
+          browser,
+          `${item.selector} .otk-code[data-language=ts] code`,
+          "otk_result_marker",
+        );
+      }
       assertEquals(
         await browser.evaluate(
           `document.querySelector(${
@@ -103,11 +111,10 @@ Deno.test("typed results show highlighted native file ranges, paths and grep mat
         null,
       );
     }
-    await browser.evaluate(
-      "document.querySelector('[data-tool=read] .otk-code').scrollIntoView({block:'center',behavior:'instant'})",
-    );
-    await browser.poll(
-      "document.querySelector('[data-tool=read] .otk-code[data-language=ts] .otk-token')",
+    await highlightedRange(
+      browser,
+      "[data-tool=read] .otk-code[data-language=ts] code",
+      "otk_result_marker",
     );
     assertEquals(
       await browser.evaluate(
@@ -154,7 +161,19 @@ Deno.test("typed results show highlighted native file ranges, paths and grep mat
           JSON.stringify(item.selector + " " + item.content)
         })?.textContent===${JSON.stringify(item.expected)}`,
       );
+      if (item.name === "read" && item.content === ".otk-code code") {
+        await highlightedRange(
+          browser,
+          `${item.selector} .otk-code[data-language=ts] code`,
+          "otk_result_marker",
+        );
+      }
     }
+    await highlightedRange(
+      browser,
+      "[data-tool=read] .otk-code[data-language=ts] code",
+      "otk_result_marker",
+    );
     assertEquals(
       await browser.evaluate(
         "document.querySelector('[data-tool=read] .otk-code-numbers').textContent",

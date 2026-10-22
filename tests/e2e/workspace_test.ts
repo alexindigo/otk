@@ -12,6 +12,11 @@ import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { FreezeProxy } from "../support/freeze-proxy.ts";
 import type { Cdp } from "../support/cdp.ts";
+import {
+  assertContentLoaded,
+  assertContentReleased,
+  sessionHeap,
+} from "../support/heap.ts";
 
 async function capture(browser: Cdp, root: string, name: string) {
   const path = join(root, name + ".png");
@@ -362,7 +367,7 @@ Deno.test("E7 add authenticated second sidecar, merged groups, prompt and persis
     await f.stop();
   }
 });
-Deno.test("E8 switch releases >=2 MB session, unsubscribes, DOM and heap return to baseline", async () => {
+Deno.test("E8 switch releases >=2 MB session objects, unsubscribes and removes its DOM", async () => {
   const f = await browserFixture();
   try {
     const a = await f.oc.request<{ id: string }>("/session", {
@@ -400,29 +405,30 @@ Deno.test("E8 switch releases >=2 MB session, unsubscribes, DOM and heap return 
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await openSession(browser, b.id);
     await browser.poll("document.fonts.status === 'loaded'");
-    await browser.send("HeapProfiler.collectGarbage");
-    const baseline = (await browser.send("Runtime.getHeapUsage"))
-      .usedSize as number;
-    await openSession(browser, a.id);
-    await browser.poll(
-      "(document.querySelector('[data-role=assistant] .otk-text')?.textContent.length || 0) >= 2097152",
-    );
-    await browser.send("HeapProfiler.collectGarbage");
-    const opened = (await browser.send("Runtime.getHeapUsage"))
-      .usedSize as number;
-    assert(
-      opened - baseline >= 2 * 1024 * 1024,
-      `Large reply was not retained while visible: baseline=${baseline}, opened=${opened}, delta=${
-        opened - baseline
-      }`,
-    );
-    await openSession(browser, b.id);
-    await browser.poll(
-      "document.querySelector('.otk-messages').textContent.includes('Small session text')",
-    );
-    await browser.send("HeapProfiler.collectGarbage");
-    const after = (await browser.send("Runtime.getHeapUsage"))
-      .usedSize as number;
+    // Three equivalent navigation cycles: every loaded snapshot is a positive
+    // control, followed by one fixed post-disposal snapshot, never heap polling.
+    for (let cycle = 0; cycle < 3; cycle++) {
+      await openSession(browser, a.id);
+      await browser.poll(
+        "(document.querySelector('[data-role=assistant] .otk-text')?.textContent.length || 0) >= 2097152",
+      );
+      const loaded = await sessionHeap(browser, a.id, "OTK_LARGE_SESSION_A_");
+      assertContentLoaded(loaded);
+      await openSession(browser, b.id);
+      await browser.poll(
+        "document.querySelector('.otk-messages').textContent.includes('Small session text')",
+      );
+      await browser.evaluate(
+        "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+      );
+      const released = await sessionHeap(browser, a.id, "OTK_LARGE_SESSION_A_");
+      console.info("E8 session content identities", {
+        cycle,
+        loaded,
+        released,
+      });
+      assertContentReleased(released);
+    }
     assert(
       sentFrames(browser).some(({ frame }) =>
         frame.t === "unsubscribe" && frame.sessionID === a.id
@@ -434,11 +440,6 @@ Deno.test("E8 switch releases >=2 MB session, unsubscribes, DOM and heap return 
       ),
       false,
     );
-    assert(
-      after <= baseline + 1024 * 1024,
-      `Heap retained: baseline=${baseline}, opened=${opened}, after=${after}`,
-    );
-    console.info("Browser footprint bytes:", { baseline, opened, after });
   } finally {
     await f.stop();
   }
