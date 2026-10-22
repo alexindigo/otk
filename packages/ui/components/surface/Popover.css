@@ -6,7 +6,11 @@
 .otk-popover-panel {
   position: absolute;
   position-area: top span-right;
-  position-try-fallbacks: flip-inline, flip-block, flip-block flip-inline;
+  position-try-fallbacks:
+    --otk-popover-bounded,
+    --otk-popover-bounded flip-inline,
+    --otk-popover-bounded flip-block,
+    --otk-popover-bounded flip-block flip-inline;
   position-try-order: most-height;
   inset: auto;
   margin: 0;
@@ -17,7 +21,7 @@
   width: min(28rem, calc(100vw - 16px));
   min-width: min(200px, calc(100vw - 16px));
   max-width: min(28rem, calc(100vw - 16px));
-  max-height: min(65vh, calc(100% - 8px), calc(100dvh - 16px));
+  max-height: min(65vh, calc(100dvh - 16px));
   overflow: visible;
   z-index: var(--layer-popover);
 }
@@ -41,4 +45,9 @@
 .otk-popover-anchor {
   position: fixed;
   pointer-events: none;
+}
+/* Try the Surface's natural size before clipping to an available side. An empty
+   side must cause native fallback, not make an empty positioning box fit. */
+@position-try --otk-popover-bounded {
+  max-height: min(65vh, calc(100% - 8px), calc(100dvh - 16px));
 }

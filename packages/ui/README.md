@@ -484,6 +484,12 @@ registered display-settings command owners. DisplayPreferences shares one
 control body between the anchored Display menu and the registered app-level
 dialog.
 
+Native placement first tries the painted Surface's viewport-bounded natural
+size. A shared bounded position-try fallback applies available-side clipping
+only after overflow, so an empty side cannot falsely fit an empty positioning
+box. The positioned box follows the Surface's actual bounds; tall content
+scrolls inside the Surface body. Every Popover uses this same sizing contract.
+
 Every Popover resolves its layer host once on show from the origin: the
 containing active modal dialog, otherwise its normal root. A Solid Portal owns
 that mount without duplicating the panel or its state. Native triggers enter the
