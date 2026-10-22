@@ -27,7 +27,7 @@ export class BootstrapDb {
     } catch (e) {
       this.close();
       console.warn(
-        `harness db: degraded bootstrap (events only): ${(e as Error).message}`,
+        `harness db: using API fallback: ${(e as Error).message}`,
       );
     }
   }

@@ -43,6 +43,12 @@ for (const method of ["shell", "command"] as const) {
       if (url.pathname === "/experimental/session") {
         return Promise.resolve(Response.json([session]));
       }
+      if (url.pathname === "/session/status") {
+        return Promise.resolve(Response.json({}));
+      }
+      if (url.pathname === "/permission" || url.pathname === "/question") {
+        return Promise.resolve(Response.json([]));
+      }
       if (url.pathname === "/agent") {
         return Promise.resolve(
           Response.json([{ name: "build", mode: "primary" }]),
@@ -152,6 +158,12 @@ for (const method of ["shell", "command"] as const) {
         }
         if (url.pathname === "/experimental/session") {
           return Promise.resolve(Response.json([session]));
+        }
+        if (url.pathname === "/session/status") {
+          return Promise.resolve(Response.json({}));
+        }
+        if (url.pathname === "/permission" || url.pathname === "/question") {
+          return Promise.resolve(Response.json([]));
         }
         if (url.pathname === "/session/owned-command") {
           return Promise.resolve(Response.json(session));

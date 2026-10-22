@@ -81,6 +81,9 @@ Deno.test("bootstrap permission reply retains its listing instance even when ses
         );
       }
       if (url.pathname === "/permission") {
+        if (url.searchParams.get("directory") === "/metadata-directory") {
+          return Promise.resolve(Response.json([]));
+        }
         assertEquals(url.searchParams.get("directory"), "/asking-bootstrap");
         return Promise.resolve(
           Response.json([{

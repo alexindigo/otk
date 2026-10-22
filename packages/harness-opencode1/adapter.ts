@@ -493,7 +493,13 @@ export class Opencode1Adapter implements Harness {
     const previousPermissions = new Map(this.#permissions);
     const nextPermissions = new Map<string, PendingPermission>();
     const nextQuestions = new Map<string, string>();
-    for (const directory of this.#db.possiblyRunningDirectories(since)) {
+    // Session metadata defines inventory coverage. SQLite hints may add asking
+    // instances, but cannot exclude running or blocked work from the snapshot.
+    const directories = new Set([
+      ...[...entries.values()].map((entry) => entry.directory),
+      ...this.#db.possiblyRunningDirectories(since),
+    ]);
+    for (const directory of directories) {
       const [statuses, permissions, questions] = await Promise.all([
         this.client.json<
           Record<

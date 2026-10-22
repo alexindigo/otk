@@ -77,6 +77,12 @@ export async function observationFixture() {
     if (path === "/experimental/session") {
       return Promise.resolve(Response.json(sessions));
     }
+    if (path === "/session/status") {
+      return Promise.resolve(Response.json({}));
+    }
+    if (path === "/permission" || path === "/question") {
+      return Promise.resolve(Response.json([]));
+    }
     if (path === "/agent") {
       return Promise.resolve(
         Response.json([{ name: "build", mode: "primary" }]),

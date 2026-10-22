@@ -76,6 +76,12 @@ async function recording(
         Response.json([{ name: "build", color: "#abcdef" }]),
       );
     }
+    if (url.pathname === "/session/status") {
+      return Promise.resolve(Response.json({}));
+    }
+    if (url.pathname === "/permission" || url.pathname === "/question") {
+      return Promise.resolve(Response.json([]));
+    }
     assertEquals(url.pathname, "/global/event");
     streams++;
     return Promise.resolve(

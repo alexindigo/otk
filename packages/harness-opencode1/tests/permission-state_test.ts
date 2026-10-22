@@ -39,12 +39,19 @@ Deno.test("native pending permission events own normalized family reads and remo
     }
     if (path === "/permission") {
       reads++;
+      if (reads === 1) return Promise.resolve(Response.json([]));
       return Promise.resolve(
         new Response(
           "Expected JSON value, got undefined at metadata.livecrawl",
           { status: 400 },
         ),
       );
+    }
+    if (path === "/session/status") {
+      return Promise.resolve(Response.json({}));
+    }
+    if (path === "/question") {
+      return Promise.resolve(Response.json([]));
     }
     assertEquals(path, "/global/event");
     return Promise.resolve(
@@ -116,7 +123,11 @@ Deno.test("native pending permission events own normalized family reads and remo
     assertEquals((await port.listPermissions("root"))[0].patterns, [
       "exact query",
     ]);
-    assertEquals(reads, 0);
+    assertEquals(
+      reads,
+      1,
+      "Family reads must not repeat the bootstrap inventory",
+    );
     await port.replyPermission({
       sessionID: "child",
       requestID: "request",

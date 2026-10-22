@@ -81,6 +81,12 @@ asynchronous directory resolver when no pending route exists; directory is never
 omitted. This routing metadata stays internal rather than becoming part of the
 neutral request returned to readers.
 
+Before publishing connection readiness, bootstrap inventories status,
+permissions and questions in every directory from the paginated native session
+snapshot. Read-only SQLite hints may contribute additional asking instances, but
+never filter that coverage. Missing or incompatible SQLite therefore cannot hide
+already-running or blocked sessions on connection or instance resync.
+
 `capabilities.models.listModels(sessionID)` reads native `GET /provider` and
 `GET /config` in that session's directory. It allowlists connected provider and
 model display metadata, including finite positive native `limit.context` as

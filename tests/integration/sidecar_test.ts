@@ -432,13 +432,30 @@ Deno.test("I7 opencode restart reconnects and resnapshots", async () => {
     await f.stop();
   }
 });
-Deno.test("I8 bootstrap makes no instance queries for idle projects", async () => {
-  const f = await fixture(), proxy = new FreezeProxy(f.oc.port);
+Deno.test("I8 bootstrap inventories each distinct session directory exactly once and preserves idle projects", async () => {
+  const f = await fixture(), controller = new AbortController();
+  const requests: { path: string; directory: string | null }[] = [];
+  const proxy = Deno.serve(
+    { hostname: "127.0.0.1", port: 0, onListen() {} },
+    (request) => {
+      const url = new URL(request.url);
+      assertEquals(request.method, "GET");
+      requests.push({
+        path: url.pathname,
+        directory: url.searchParams.get("directory"),
+      });
+      return fetch(new URL(url.pathname + url.search, f.oc.url), {
+        headers: request.headers,
+        signal: controller.signal,
+      });
+    },
+  );
   try {
     const second = join(f.oc.root, "second");
     await Deno.mkdir(second);
+    const directories = [f.oc.directory, second];
     const sessions: { id: string }[] = [];
-    for (const directory of [f.oc.directory, second]) {
+    for (const directory of [...directories, f.oc.directory]) {
       sessions.push(
         await f.oc.request<{ id: string }>("/session", {
           method: "POST",
@@ -448,24 +465,41 @@ Deno.test("I8 bootstrap makes no instance queries for idle projects", async () =
       );
     }
     const server = await f.sidecar({
-        harness: { url: `http://127.0.0.1:${proxy.port}`, db: f.oc.db },
+        harness: { url: `http://127.0.0.1:${proxy.addr.port}`, db: f.oc.db },
       }),
       client = await f.client(server);
-    await client.wait((frame) =>
+    const snapshot = await client.wait((frame) =>
       frame.t === "index.snapshot" &&
       sessions.every((session) =>
         frame.entries.some((entry) => entry.id === session.id)
       )
     );
-    assert(
-      !proxy.requests.some((request) =>
-        /^GET \/(session\/status|permission|question)(\?| )/.test(request)
-      ),
-      JSON.stringify(proxy.requests),
+    assert(snapshot.t === "index.snapshot");
+    for (const session of sessions) {
+      const entry = snapshot.entries.find((entry) => entry.id === session.id)!;
+      assertEquals(entry.status, "idle");
+      assertEquals([
+        entry.attention.permissions,
+        entry.attention.questions,
+        entry.attention.childPermissions,
+        entry.attention.childQuestions,
+      ], [0, 0, 0, 0]);
+    }
+    const inventories = ["/session/status", "/permission", "/question"];
+    assertEquals(
+      requests.filter(({ path }) => inventories.includes(path))
+        .map(({ path, directory }) => [directory, path]).sort(),
+      directories.flatMap((directory) =>
+        inventories.map((path) => [directory, path])
+      ).sort(),
     );
   } finally {
-    await proxy.stop();
-    await f.stop();
+    try {
+      await f.stop();
+    } finally {
+      controller.abort();
+      await proxy.shutdown();
+    }
   }
 });
 Deno.test("I9 password cookie, WS authentication, Origin, logout and CORS", async () => {

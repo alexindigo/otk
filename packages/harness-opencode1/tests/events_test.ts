@@ -279,6 +279,12 @@ Deno.test("adapter replays bootstrap events and invalidates streaming ownership 
         Response.json([{ ...session, title: "After reload" }]),
       );
     }
+    if (path === "/session/status") {
+      return Promise.resolve(Response.json({}));
+    }
+    if (path === "/permission" || path === "/question") {
+      return Promise.resolve(Response.json([]));
+    }
     assertEquals(path, "/global/event");
     return Promise.resolve(
       new Response(
