@@ -14,10 +14,12 @@ export default function SidebarRail(props: {
   footer?: Element;
   resizer?: Element;
   bodyClass?: string;
+  ref?(element: HTMLElement): void;
   children: Element;
 }): Element {
   return (
     <aside
+      ref={props.ref}
       class={`otk-sidebar-rail ${props.class ?? ""}`}
       aria-label={props.label}
       data-side={props.side}

@@ -46,6 +46,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
         id: "agent.choose",
         title: "Choose agent",
         category: "Prompt",
+        context: { kind: "composer", order: 0 },
         enabled: () => enabled() && owner.state.agents.available,
         run: () => agentPicker.open(),
       });
@@ -53,6 +54,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
         id: "model.choose",
         title: "Choose model",
         category: "Prompt",
+        context: { kind: "composer", order: 10 },
         enabled: () => enabled() && owner.state.models.available,
         run: () => modelPicker.open(),
       });

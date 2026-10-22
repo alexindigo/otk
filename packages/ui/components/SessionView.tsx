@@ -32,6 +32,7 @@ import type { Draft, DraftChange } from "./prompt/model.ts";
 import type { PromptProps } from "../registries/prompt.ts";
 import { ownedAction } from "../keyboard/context.tsx";
 import { TranscriptContext } from "../features/transcript-context.tsx";
+import { contextTarget } from "./context-target.ts";
 export default function SessionView(props: {
   sidecarId?: string;
   info?: ContentSession;
@@ -133,9 +134,21 @@ export default function SessionView(props: {
           class={["otk-messages", {
             "otk-scrollbar-hidden": !props.prefs.scrollbar,
           }]}
-          ref={(element) => {
-            list = element;
-          }}
+          ref={[
+            (element) => {
+              list = element;
+            },
+            contextTarget(() => ({
+              kind: "session",
+              area: true,
+              data: props.info && {
+                sidecarId: props.sidecarId,
+                sessionID: props.info.id,
+                directory: props.info.directory,
+                title: props.info.title,
+              },
+            })),
+          ]}
         >
           <Show when={props.loading}>
             <p class="otk-muted">Loading messages…</p>

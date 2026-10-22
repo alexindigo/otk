@@ -25,6 +25,7 @@ export function registerEditorPrompt(prompt: PromptRegistry): void {
         id: "prompt.editor",
         title: "Edit prompt",
         category: "Prompt",
+        context: { kind: "composer", order: 20 },
         slash: ["editor"],
         enabled: () => !ctx.props.suspended,
         run: () => {

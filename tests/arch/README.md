@@ -49,6 +49,22 @@ code, diff and contributed tool sources and observe disclosure changes. Stock
 backend checks target a background session's approval policy without changing
 the viewed session, and open the existing reply usage ledger from its menu.
 
+Area context targets use the same declaration binding, with a generic `area`
+marker interpreted by the client resolver. Consumer checks observe two inner
+groups followed by the area's actions, and app actions only without an inner
+target. Empty projects/panel/transcript/composer space, nested project/message
+targets and Dark/Linen menu bounds are exercised with trusted right clicks. Area
+actions share the existing visible controls' command owners; browser
+observations include persisted layout patches, inactive-row disclosure, actual
+search focus/filtering, session creation/task membership, picker/editor opening,
+native attachment picking and resulting attachment chips. Activity has no
+session search action; the generic panel host imports no concrete view.
+Session-context transition checks omit Open across current transcript, message,
+tab, breadcrumb and row targets, retain background and cross-server Open, and
+omit task-opening no-ops for an already-grouped current session. Browser
+observations follow background navigation and persisted task membership; stale
+projected items cannot execute after that transition.
+
 Shared focus paint admits only semantic controls and explicitly marked visible
 content; landmarks, dock sections, scroll regions, tab panels and native overlay
 containers have no ring. Negative fixtures reject universal/layout selectors and

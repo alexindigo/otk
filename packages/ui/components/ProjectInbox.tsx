@@ -20,7 +20,11 @@ import {
   SearchIcon,
   SettingsIcon,
 } from "./ChromeIcons.tsx";
-import { ownedAction, useCommandPorts } from "../keyboard/context.tsx";
+import {
+  ownedAction,
+  ownedCommand,
+  useCommandPorts,
+} from "../keyboard/context.tsx";
 import CommandMenu from "./CommandMenu.tsx";
 import SidebarRail from "./SidebarRail.tsx";
 import { contextTarget } from "./context-target.ts";
@@ -43,7 +47,30 @@ export default function ProjectInbox(props: {
   const [dragWidth, setDragWidth] = createSignal<number>();
   let drag: ReturnType<typeof resizeDrag> | undefined;
   const [error, setError] = createSignal("");
-  const { commands } = useCommandPorts();
+  const ports = useCommandPorts(), { commands } = ports;
+  const add = ownedCommand(ports, {
+    id: "project.add",
+    title: "Add project",
+    category: "Projects",
+    context: { kind: "projects", order: 0 },
+    enabled: () =>
+      commands.enabled("dialog.open", undefined, { id: "add-project" }),
+    run: () => commands.run("dialog.open", { id: "add-project" }),
+  });
+  const inactive = ownedCommand(ports, {
+    id: "projects.inactive",
+    title: "Show inactive projects",
+    category: "Projects",
+    context: {
+      kind: "projects",
+      order: 30,
+      title: () =>
+        inactiveOpen() ? "Hide inactive projects" : "Show inactive projects",
+    },
+    enabled: () =>
+      !collapsed() && props.projects.some((project) => project.inactive),
+    run: () => setInactiveOpen(!inactiveOpen()),
+  });
   const commandTitle = (id: string, label: string) => {
     props.prefs.keymap;
     const keys = commands.list().find((row) => row.cmd.id === id)?.keys.join(
@@ -166,6 +193,11 @@ export default function ProjectInbox(props: {
   }
   return (
     <SidebarRail
+      ref={contextTarget(() => ({
+        kind: "projects",
+        area: true,
+        data: undefined,
+      }))}
       class="otk-project-inbox"
       label="Projects"
       side="left"
@@ -181,7 +213,7 @@ export default function ProjectInbox(props: {
             aria-label="Add project"
             title="Add project"
             onClick={() =>
-              void commands.run("dialog.open", { id: "add-project" })}
+              void add().catch((error) => setError((error as Error).message))}
           >
             <PlusIcon />
           </button>
@@ -325,7 +357,10 @@ export default function ProjectInbox(props: {
           type="button"
           class="otk-inactive-toggle"
           aria-expanded={inactiveOpen() ? "true" : "false"}
-          onClick={() => setInactiveOpen(!inactiveOpen())}
+          onClick={() =>
+            void inactive().catch((error) =>
+              setError((error as Error).message)
+            )}
         >
           <ChevronIcon />
           <span>Inactive</span>

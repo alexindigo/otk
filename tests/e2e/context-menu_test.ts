@@ -83,7 +83,7 @@ async function capture(browser: Cdp, root: string, name: string) {
 Deno.test("context menu: trusted right click, native escape hatch, keyboard navigation, fallback effects and four viewport corners", async () => {
   const { browser, client, f, root, stop } = await setup();
   try {
-    await rightClick(browser, ".otk-messages");
+    await rightClick(browser, ".otk-tabs-project");
     assertEquals(await labels(browser), [
       "New session",
       "Open command palette",
@@ -128,7 +128,7 @@ Deno.test("context menu: trusted right click, native escape hatch, keyboard navi
     await browser.evaluate(
       `document.querySelector('.otk-app').addEventListener('contextmenu',e=>globalThis.contextPrevented=e.defaultPrevented,{once:true})`,
     );
-    await rightClick(browser, ".otk-messages", 8);
+    await rightClick(browser, ".otk-tabs-project", 8);
     await browser.poll("globalThis.contextPrevented === false");
     await closed(browser);
     await browser.key("Escape");
@@ -175,7 +175,7 @@ Deno.test("context menu: trusted right click, native escape hatch, keyboard navi
         await closed(browser);
       }
       await capture(browser, root, `${theme}-app-before`);
-      await rightClick(browser, ".otk-messages");
+      await rightClick(browser, ".otk-tabs-project");
       await labels(browser);
       if (Deno.env.get("OTK_CONTEXT_SCREENSHOTS")) {
         await browser.screenshot(`${root}/${theme}-app.png`);
@@ -223,7 +223,7 @@ Deno.test("context menu: trusted right click, native escape hatch, keyboard navi
       await browser.poll("!document.querySelector('dialog[open]')");
     }
     const before = f.entries.length;
-    await rightClick(browser, ".otk-messages");
+    await rightClick(browser, ".otk-tabs-project");
     await action(browser, "session.new");
     await browser.poll(
       'location.hash && !location.hash.endsWith("/otk") && document.querySelector("textarea[name=prompt]")',
@@ -250,6 +250,8 @@ Deno.test("context menu: editing uses captured ranges and the real clipboard, pa
       "Copy",
       "Paste",
       "Select all",
+      "Edit prompt",
+      "Attach files",
     ]);
     await action(browser, "context.editable.copy");
     await closed(browser);
@@ -292,12 +294,22 @@ Deno.test("context menu: editing uses captured ranges and the real clipboard, pa
         `(()=>{const el=document.createElement('input');el.type='${type}';el.id='edit-${type}';el.value='${original}';el.addEventListener('input',()=>el.dataset.observed=el.value);document.querySelector('.otk-messages').prepend(el)})()`,
       );
       await rightClick(browser, `#edit-${type}`);
-      assertEquals(await labels(browser), ["Paste", "Select all"]);
+      assertEquals(await labels(browser), [
+        "Paste",
+        "Select all",
+        "Pin as task",
+        "Copy session title",
+      ]);
       await action(browser, "context.editable.selectAll");
       await closed(browser);
       await browser.evaluate(`navigator.clipboard.writeText('${replacement}')`);
       await rightClick(browser, `#edit-${type}`);
-      assertEquals(await labels(browser), ["Paste", "Select all"]);
+      assertEquals(await labels(browser), [
+        "Paste",
+        "Select all",
+        "Pin as task",
+        "Copy session title",
+      ]);
       await action(browser, "context.editable.paste");
       await closed(browser);
       await browser.poll(
@@ -367,6 +379,8 @@ Deno.test("context menu: editing uses captured ranges and the real clipboard, pa
     assertEquals(await labels(browser), [
       "Open link in new tab",
       "Copy link address",
+      "Pin as task",
+      "Copy session title",
     ]);
     await action(browser, "context.link.copy");
     await closed(browser);
@@ -390,6 +404,8 @@ Deno.test("context menu: editing uses captured ranges and the real clipboard, pa
     assertEquals(await labels(browser), [
       "Open image",
       "Copy image address",
+      "Pin as task",
+      "Copy session title",
     ]);
     await action(browser, "context.image.copy");
     await closed(browser);
@@ -422,6 +438,8 @@ Deno.test("context menu: editing uses captured ranges and the real clipboard, pa
       "Copy image address",
       "Open link in new tab",
       "Copy link address",
+      "Pin as task",
+      "Copy session title",
     ]);
     await browser.key("Escape");
     await closed(browser);
@@ -433,6 +451,8 @@ Deno.test("context menu: editing uses captured ranges and the real clipboard, pa
       "Copy",
       "Open link in new tab",
       "Copy link address",
+      "Pin as task",
+      "Copy session title",
     ]);
     await action(browser, "context.selection.copy");
     await closed(browser);
@@ -449,6 +469,8 @@ Deno.test("context menu: editing uses captured ranges and the real clipboard, pa
       "Copy",
       "Paste",
       "Select all",
+      "Pin as task",
+      "Copy session title",
     ]);
     await action(browser, "context.editable.cut");
     await closed(browser);
@@ -814,6 +836,8 @@ Deno.test("round 2: all shared Menu callers distinguish pointer and keyboard ope
         "Copy",
         "Paste",
         "Select all",
+        "Edit prompt",
+        "Attach files",
       ]);
       await pointerFocus(menu);
       await density(menu);

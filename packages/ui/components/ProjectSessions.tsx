@@ -16,7 +16,11 @@ import StatusLight from "./StatusLight.tsx";
 import AutoMark from "./AutoMark.tsx";
 import UsageCost from "./UsageCost.tsx";
 import { ChevronIcon, PlusIcon, SearchIcon } from "./ChromeIcons.tsx";
-import { ownedAction } from "../keyboard/context.tsx";
+import {
+  ownedAction,
+  ownedCommand,
+  useCommandPorts,
+} from "../keyboard/context.tsx";
 import { contextTarget } from "./context-target.ts";
 
 /** Reusable presentation of the client-owned task/session hierarchy. */
@@ -34,6 +38,17 @@ export default function ProjectSessions(props: {
 }): import("solid-js").Element {
   const [query, setQuery] = createSignal("");
   const [error, setError] = createSignal("");
+  let search!: HTMLInputElement;
+  ownedCommand(useCommandPorts(), {
+    id: "session.find",
+    title: "Find a session",
+    category: "Session",
+    context: { kind: "panel", order: 10 },
+    enabled: () =>
+      !!props.project && search?.isConnected &&
+      !!search.getClientRects().length,
+    run: () => search.focus(),
+  });
   const open = ownedAction("project.session.open", props.onOpen);
   const pin = ownedAction(
     "project.session.pin",
@@ -86,6 +101,9 @@ export default function ProjectSessions(props: {
           <label class="otk-session-search">
             <SearchIcon />
             <input
+              ref={(element) => {
+                search = element;
+              }}
               type="search"
               aria-label="Search sessions by title"
               placeholder="Find a session"

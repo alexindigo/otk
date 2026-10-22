@@ -17,6 +17,7 @@ import { SendIcon } from "./ChromeIcons.tsx";
 import { clearDraft, effectiveSelection } from "@otk/client";
 import type { PromptChoices } from "../registries/prompt.ts";
 import { ModelLabel, selectionLabel } from "./prompt/labels.tsx";
+import { contextTarget } from "./context-target.ts";
 
 /** Input and submission lifetime; concrete prompt concepts are injected features. */
 export default function Prompt(props: PromptProps): import("solid-js").Element {
@@ -238,6 +239,11 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   });
   return (
     <form
+      ref={contextTarget(() => ({
+        kind: "composer",
+        area: true,
+        data: undefined,
+      }))}
       class="otk-prompt"
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {

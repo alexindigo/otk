@@ -308,23 +308,28 @@ public entry to update independent selected counters, resolve aliases and
 release ownership.
 
 Commands may contribute `context: {kind, title?, items?, order?, destructive?}`.
-The kind is feature-owned, and the optional title projects a captured target's
-data. A contribution can instead return `items(data) → [{key?, title, args}]` to
-offer several choices through one registration. Give choices stable keys when
-their order can change. The ordinary enabled predicate and run handler receive
-each choice's args (or the target data for a single action).
-`contextActions({kind, data})` exposes data-only available actions, including
-hidden commands, without exposing callbacks. `contextGroups(hub, targets)` keeps
-the first two nonempty innermost target groups. The app group is only a fallback
-when there is no target; an unavailable target does not turn into app space.
-Destructive actions sort last; numeric order breaks ties inside each section.
-`runContext(action)` binds invocation to the exact registration that projected
-the action, then reprojects the current choices and rechecks availability before
-ordinary execution. A released owner cannot invoke a replacement with the same
-command ID. Subscribe and reproject captured targets while a menu is open; data
-and availability can change independently of a command's ID. The hub retains no
-DOM, selection, clipboard or target state outside the returned action's weak
-owner metadata.
+The kind is feature-owned (a string or a list of shared kinds for one action),
+and the optional title projects a captured target's data. A contribution can
+instead return `items(data) → [{key?, title, args}]` to offer several choices
+through one registration. Give choices stable keys when their order can change.
+The ordinary enabled predicate and run handler receive each choice's args (or
+the target data for a single action). `contextActions({kind, data})` exposes
+data-only available actions, including hidden commands, without exposing
+callbacks. Targets may declare `area: true` for an enclosing application region,
+through the same target contract and kinds. `contextGroups(hub, targets)` keeps
+the first two nonempty innermost non-area groups, followed by the nearest area's
+group. The app group follows only when no non-area target was hit, including on
+area-only empty space. An unavailable non-area target still suppresses app
+actions. Empty groups are omitted. Shared action keys appear only in their most
+specific group, so an action available both in an area and the app (such as New
+session) is listed once. Destructive actions sort last; numeric order breaks
+ties inside each section. `runContext(action)` binds invocation to the exact
+registration that projected the action, then reprojects the current choices and
+rechecks availability before ordinary execution. A released owner cannot invoke
+a replacement with the same command ID. Subscribe and reproject captured targets
+while a menu is open; data and availability can change independently of a
+command's ID. The hub retains no DOM, selection, clipboard or target state
+outside the returned action's weak owner metadata.
 
 ## Notifications
 

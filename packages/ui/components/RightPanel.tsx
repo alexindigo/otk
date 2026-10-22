@@ -7,6 +7,7 @@ import type { CapabilityName, Preferences } from "@otk/protocol";
 import { useUiRegistries } from "../registries/context.tsx";
 import { resizeDrag } from "./resize.ts";
 import SidebarRail from "./SidebarRail.tsx";
+import { contextTarget } from "./context-target.ts";
 
 /** A feature-agnostic host. Registrations own their content and read public
  * context ports; the panel owns only layout and view selection. */
@@ -78,6 +79,11 @@ export default function RightPanel(props: {
     <>
       <Show when={props.layout.rightCollapsed}>
         <SidebarRail
+          ref={contextTarget(() => ({
+            kind: "panel",
+            area: true,
+            data: undefined,
+          }))}
           label="Right panel rail"
           class="otk-right-rail"
           side="right"
@@ -90,6 +96,11 @@ export default function RightPanel(props: {
         </SidebarRail>
       </Show>
       <aside
+        ref={contextTarget(() => ({
+          kind: "panel",
+          area: true,
+          data: undefined,
+        }))}
         class="otk-right-panel"
         aria-label="Right panel"
         hidden={props.layout.rightCollapsed}

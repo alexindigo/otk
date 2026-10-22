@@ -18,6 +18,8 @@ import {
 import { WsClient } from "../support/ws-client.ts";
 
 const menu = ':popover-open [role="menu"][aria-label="Context menu"]';
+const panelArea = ["New session", "Find a session", "Collapse right panel"];
+const transcriptArea = ["Pin as task", "Copy session title"];
 const captureOrigins = new WeakMap<
   Cdp,
   { selector: string; theme: string; before: string }
@@ -138,7 +140,6 @@ Deno.test("C2 session targets: tabs, chips, rows, task actions and project menu 
     });
     await b.poll(`!!document.querySelector('[data-tab="${task.id}"]')`);
     const expected = [
-      "Open",
       "Pin as task",
       "Add to task: Review",
       "Add to task: Delivery",
@@ -152,7 +153,10 @@ Deno.test("C2 session targets: tabs, chips, rows, task actions and project menu 
       ]
     ) {
       await rightClick(b, selector);
-      assertEquals(await labels(b), expected);
+      const rows = name === "session-row"
+        ? [...expected, ...panelArea]
+        : expected;
+      assertEquals(await labels(b), rows);
       assertEquals(
         await b.evaluate(
           `[...document.querySelectorAll('${menu} button')].filter(el=>el.textContent.startsWith('Add to task:')).map(el=>el.dataset.contextCommand)`,
@@ -172,7 +176,7 @@ Deno.test("C2 session targets: tabs, chips, rows, task actions and project menu 
         await b.evaluate(
           `[...document.querySelectorAll('${menu} button')].map(el=>el.getBoundingClientRect().height)`,
         ),
-        [28, 28, 28, 28, 28],
+        rows.map(() => 28),
       );
       for (const theme of ["otk-dark", "otk-light"]) {
         await client.rpc("prefs.set", { key: "theme", value: theme });
@@ -187,7 +191,7 @@ Deno.test("C2 session targets: tabs, chips, rows, task actions and project menu 
     for (const key of ["ContextMenu", "F10"]) {
       await b.key(key, key === "F10" ? 8 : 0);
       await b.poll(
-        `document.activeElement?.textContent==='Open' && !!document.activeElement?.closest('${menu}')`,
+        `document.activeElement?.textContent==='Pin as task' && !!document.activeElement?.closest('${menu}')`,
       );
       await b.key("End");
       await b.poll(
@@ -215,6 +219,7 @@ Deno.test("C2 session targets: tabs, chips, rows, task actions and project menu 
       "Open as task",
       "Add to task: Review",
       "Copy session title",
+      ...panelArea,
     ]);
     await invoke(b, "Open as task");
     await b.poll(
@@ -298,7 +303,11 @@ Deno.test("C2 session targets: tabs, chips, rows, task actions and project menu 
       await client.rpc("prefs.set", { key: "theme", value: theme });
       await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
       await rightClick(b, '[data-project-sessions~="otk"] .otk-project-open');
-      assertEquals(await labels(b), ["Mark inactive"]);
+      assertEquals(await labels(b), [
+        "Mark inactive",
+        "Add project",
+        "Collapse projects",
+      ]);
       await capture(b, root, `${theme}-project`);
       await dismiss(b);
     }
@@ -309,7 +318,12 @@ Deno.test("C2 session targets: tabs, chips, rows, task actions and project menu 
       `!!document.querySelector('[data-project-sessions~="otk"][data-inactive="true"]')`,
     );
     await rightClick(b, '[data-project-sessions~="otk"] .otk-project-open');
-    assertEquals(await labels(b), ["Mark active"]);
+    assertEquals(await labels(b), [
+      "Mark active",
+      "Add project",
+      "Hide inactive projects",
+      "Collapse projects",
+    ]);
     await invoke(b, "Mark active");
     await b.poll(
       `!!document.querySelector('[data-project-sessions~="otk"][data-inactive="false"]')`,
@@ -734,7 +748,7 @@ Deno.test("C2 content targets: prompt, whole reply, nested code/diff and feature
         ] as const
       ) {
         await rightClick(b, selector);
-        assertEquals(await labels(b), [...expected]);
+        assertEquals(await labels(b), [...expected, ...transcriptArea]);
         await capture(b, root, `${theme}-${name}`);
         await invoke(b, pick);
         await clipboard(b, copied);
@@ -747,6 +761,7 @@ Deno.test("C2 content targets: prompt, whole reply, nested code/diff and feature
       "Copy output",
       "Expand",
       "Copy reply",
+      ...transcriptArea,
     ]);
     await invoke(b, "Copy command");
     await clipboard(b, "printf context-output");
@@ -761,6 +776,7 @@ Deno.test("C2 content targets: prompt, whole reply, nested code/diff and feature
       "Copy output",
       "Collapse",
       "Copy reply",
+      ...transcriptArea,
     ]);
     await invoke(b, "Copy output");
     await clipboard(b, "context-output");
@@ -782,11 +798,17 @@ Deno.test("C2 content targets: prompt, whole reply, nested code/diff and feature
       "Copy output",
       "Expand",
       "Copy reply",
+      ...transcriptArea,
     ]);
     await invoke(b, "Copy path");
     await clipboard(b, "/project/source.txt");
     await rightClick(b, '[data-tool="edit"] .otk-tool-toggle');
-    assertEquals(await labels(b), ["Copy path", "Expand", "Copy reply"]);
+    assertEquals(await labels(b), [
+      "Copy path",
+      "Expand",
+      "Copy reply",
+      ...transcriptArea,
+    ]);
     await invoke(b, "Expand");
     await b.poll(
       `!document.querySelector('[data-tool="edit"] .otk-tool-body').hidden`,
@@ -795,7 +817,12 @@ Deno.test("C2 content targets: prompt, whole reply, nested code/diff and feature
       await client.rpc("prefs.set", { key: "theme", value: theme });
       await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
       await rightClick(b, ".otk-diff .otk-diff-text");
-      assertEquals(await labels(b), ["Copy code", "Copy path", "Collapse"]);
+      assertEquals(await labels(b), [
+        "Copy code",
+        "Copy path",
+        "Collapse",
+        ...transcriptArea,
+      ]);
       await capture(b, root, `${theme}-diff`);
       await invoke(b, "Copy code");
       await clipboard(b, "// keep\nconst newValue = 2;");
@@ -811,7 +838,12 @@ Deno.test("C2 content targets: prompt, whole reply, nested code/diff and feature
       await invoke(b, "Copy code");
       await clipboard(b, "const current = true;");
       await rightClick(b, '[data-tool="patch"] .otk-tool-toggle');
-      assertEquals(await labels(b), ["Copy paths", "Expand", "Copy reply"]);
+      assertEquals(await labels(b), [
+        "Copy paths",
+        "Expand",
+        "Copy reply",
+        ...transcriptArea,
+      ]);
       await capture(b, root, `${theme}-multiple-paths`);
       await invoke(b, "Copy paths");
       await clipboard(b, "/project/main.ts\n/project/other.ts");
@@ -847,6 +879,7 @@ Deno.test("C2 stock capabilities: targeted auto-approve and reply usage menu rea
       "Pin as task",
       "Turn auto-approve on",
       "Copy session title",
+      ...panelArea,
     ]);
     for (const theme of ["otk-dark", "otk-light"]) {
       await client.rpc("prefs.set", { key: "theme", value: theme });
@@ -878,7 +911,12 @@ Deno.test("C2 stock capabilities: targeted auto-approve and reply usage menu rea
     await waitForReply(b, first.id, "Usage menu reply.");
     await b.poll(`!!document.querySelector('.otk-turn-usage > button')`);
     await rightClick(b, '[data-role="assistant"] .otk-text p');
-    assertEquals(await labels(b), ["Copy reply", "Show usage breakdown"]);
+    assertEquals(await labels(b), [
+      "Copy reply",
+      "Show usage breakdown",
+      "Turn auto-approve on",
+      "Copy session title",
+    ]);
     for (const theme of ["otk-dark", "otk-light"]) {
       await client.rpc("prefs.set", { key: "theme", value: theme });
       await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);

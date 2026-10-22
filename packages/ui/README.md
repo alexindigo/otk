@@ -437,9 +437,11 @@ Solid's array form: `ref={[elementRef, contextTarget(target)]}`. Commands
 contribute the same kind through their public client context metadata; the owner
 resolves the composed path innermost first. The client groups available actions,
 and the UI separates target groups and trailing destructive actions. At most two
-target groups are shown; app actions appear only when the pointer/focused
-element has no target. Built-in selection, editable, link and image targets
-require no binding.
+non-area target groups are shown, then the nearest enclosing area group. Areas
+declare `area: true` through the same binding. App actions follow on empty area
+space or no target, but never when a non-area target was hit, even when that
+target has no available actions. Shared area/app actions appear once. Built-in
+selection, editable, link and image targets require no binding.
 
 Menu owns role/menuitem semantics, roving focus with arrows/Home/End, type-ahead
 and Enter/Space activation for all consumers. Tab closes and restores origin
@@ -479,11 +481,17 @@ declare one `session` kind with captured sidecar/session/directory/title data.
 Existing navigation and approval command owners provide Open, Pin as task/Open
 as task, Auto-approve and Copy session title. ProjectTabs contributes available
 one `task.add` contribution with stable-keyed destination items through its
-captured project/task ports, plus Rename task and Close task for task tabs.
-Session tabs have no Close action: phantom tabs leave on their own when idle and
-seen. Project rows share their existing Mark active / Mark inactive command with
-the visible project CommandMenu projection, including shared invocation and row
-error feedback. Project/task kinds carry sidecar, directory and task identities
+captured project/task ports, plus Rename task and Close task for task tabs. The
+shared session command owner projects transitions against the currently shown
+sidecar/session: Open is absent for that session in every view. Pin as task
+remains for an ungrouped current session; an already-grouped current session has
+no task-opening item. Background grouped sessions offer Open as task, using the
+same guarded navigation and task owner. Ordinary visible-control reselection
+remains available independently of context projection. Session tabs have no
+Close action: phantom tabs leave on their own when idle and seen. Project rows
+share their existing Mark active / Mark inactive command with the visible
+project CommandMenu projection, including shared invocation and row error
+feedback. Project/task kinds carry sidecar, directory and task identities
 instead of component-specific kinds.
 
 `TranscriptContext` registers each `prompt`, `reply`, `code`, `diff` and `tool`
@@ -502,6 +510,16 @@ dispatching concrete tools. A reply's Show usage breakdown invokes TurnUsage's
 existing Popover control and renders its existing usage table. Empty output has
 no copy action. All target bindings use callback refs, composing with other refs
 through Solid's ref array.
+
+Projects, the right panel and the composer declare shared `projects`, `panel`
+and `composer` area kinds. Transcript space declares the existing `session` kind
+with captured sidecar/session/directory/title data, so session feature
+contributions also appear after message groups. Area actions reuse the commands
+behind visible controls: Add project, inactive-project disclosure, layout
+toggles, session search, agent/model pickers, prompt editor and file picker. The
+panel host knows no concrete view: the Sessions component contributes its own
+search command while mounted and visible. The sidebar's Search control opens the
+command palette; it has no project-search field or separate scan control.
 
 ## Semantic themes
 

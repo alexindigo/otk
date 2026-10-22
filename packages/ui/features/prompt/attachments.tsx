@@ -10,11 +10,20 @@ import {
 import { upload } from "../../components/prompt/attachments.ts";
 import Chips from "../../components/prompt/Chips.tsx";
 import { AttachIcon } from "../../components/ChromeIcons.tsx";
+import { ownedCommand } from "../../keyboard/context.tsx";
 export function registerAttachmentsPrompt(prompt: PromptRegistry): void {
   prompt.register({
     id: "attachments",
     create: (ctx) => {
       let picker!: HTMLInputElement;
+      const attach = ownedCommand(ctx, {
+        id: "prompt.attach",
+        title: "Attach files",
+        category: "Prompt",
+        context: { kind: "composer", order: 30 },
+        enabled: () => !ctx.props.suspended,
+        run: () => picker.click(),
+      });
       onSettled(() => () => {
         picker.value = "";
       });
@@ -40,7 +49,7 @@ export function registerAttachmentsPrompt(prompt: PromptRegistry): void {
               aria-label="Attach files"
               title="Attach files"
               class="otk-icon-button"
-              onClick={() => picker.click()}
+              onClick={() => void attach().catch(ctx.fail)}
             >
               <AttachIcon />
             </button>

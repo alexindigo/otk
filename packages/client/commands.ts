@@ -17,7 +17,7 @@ export interface CommandMetadata {
 export interface Command<A = unknown, R = unknown> extends CommandMetadata {
   /** Feature-owned context contribution; args are the target's captured data. */
   context?: {
-    kind: string;
+    kind: string | readonly string[];
     title?(args: A): string;
     /** One feature registration may project several invocation-specific choices. */
     items?(args: A): { key?: string; title: string; args: A }[];
@@ -60,7 +60,12 @@ export class CommandHub {
     const copy = Object.freeze({
       ...command,
       slash: command.slash?.slice(),
-      context: command.context && Object.freeze({ ...command.context }),
+      context: command.context && Object.freeze({
+        ...command.context,
+        kind: typeof command.context.kind === "string"
+          ? command.context.kind
+          : Object.freeze([...command.context.kind]),
+      }),
     });
     this.#commands.set(command.id, copy as Command);
     this.#changed();
@@ -112,7 +117,9 @@ export class CommandHub {
   contextActions(target: ContextTarget): ContextAction[] {
     const context = this.context();
     return [...this.#commands.values()].filter((command) =>
-      command.context?.kind === target.kind
+      typeof command.context?.kind === "string"
+        ? command.context.kind === target.kind
+        : command.context?.kind.includes(target.kind)
     ).sort((a, b) =>
       Number(a.context?.destructive ?? false) -
         Number(b.context?.destructive ?? false) ||
@@ -166,6 +173,8 @@ export class CommandHub {
 export interface ContextTarget<T = unknown> {
   kind: string;
   data: T;
+  /** An enclosing application area, rather than a thing inside that area. */
+  area?: boolean;
 }
 export interface ContextAction {
   id: string;
@@ -174,18 +183,29 @@ export interface ContextAction {
   args: unknown;
   destructive: boolean;
 }
-/** At most two target groups; app actions are only the no-target fallback. */
+/** Two innermost thing groups, then the nearest area; app only without a thing. */
 export function contextGroups(
   commands: CommandHub,
   targets: readonly ContextTarget[],
 ): ContextAction[][] {
-  const concrete = targets.filter((target) => target.kind !== "app");
-  if (concrete.length) {
-    return concrete.map((
-      target,
-    ) => commands.contextActions(target)).filter((actions) => actions.length)
-      .slice(0, 2);
+  const concrete = targets.filter((target) =>
+    target.kind !== "app" && !target.area
+  );
+  const groups = concrete.map((target) => commands.contextActions(target))
+    .filter((actions) => actions.length).slice(0, 2);
+  const area = targets.find((target) => target.area);
+  if (area) groups.push(commands.contextActions(area));
+  if (!concrete.length) {
+    groups.push(commands.contextActions({ kind: "app", data: undefined }));
   }
-  const app = commands.contextActions({ kind: "app", data: undefined });
-  return app.length ? [app] : [];
+  // A shared action (e.g. New session in a panel and app) appears once, in its
+  // most specific group. Preserve different choices of a multi-item command.
+  const seen = new Set<string>();
+  return groups.map((group) =>
+    group.filter((action) => {
+      if (seen.has(action.key)) return false;
+      seen.add(action.key);
+      return true;
+    })
+  ).filter((group) => group.length);
 }

@@ -148,3 +148,90 @@ Deno.test("context invocation: released or replaced command owners cannot consum
   );
   assertEquals(received, "");
 });
+
+Deno.test("context areas: inner groups precede their area, app follows only area-only hits, unavailable things never become app space", async () => {
+  const commands = new CommandHub();
+  for (
+    const kind of [
+      "code",
+      "reply",
+      "project",
+      "session",
+      "projects",
+      "panel",
+      "composer",
+      "app",
+    ]
+  ) {
+    commands.register({
+      id: kind,
+      title: kind,
+      category: "Test",
+      context: { kind },
+      run: (_ctx, data: unknown) => data,
+    });
+  }
+  const ids = (targets: Parameters<typeof contextGroups>[1]) =>
+    contextGroups(commands, targets).map((group) =>
+      group.map((action) => action.id)
+    );
+  const area = (kind: string) => ({ kind, area: true, data: "captured" });
+  for (const kind of ["projects", "panel", "session", "composer"]) {
+    assertEquals(ids([area(kind)]), [[kind], ["app"]]);
+  }
+  assertEquals(ids([{ kind: "project", data: {} }, area("projects")]), [[
+    "project",
+  ], ["projects"]]);
+  assertEquals(
+    ids([
+      { kind: "code", data: {} },
+      { kind: "reply", data: {} },
+      area("session"),
+    ]),
+    [["code"], ["reply"], ["session"]],
+  );
+  assertEquals(ids([{ kind: "missing", data: {} }, area("projects")]), [[
+    "projects",
+  ]]);
+  assertEquals(ids([area("missing")]), [["app"]]);
+  assertEquals(ids([area("projects"), area("panel")]), [["projects"], ["app"]]);
+  const [action] = contextGroups(commands, [area("session")])[0];
+  assertEquals(await commands.runContext<string>(action), "captured");
+});
+
+Deno.test("context areas: one command serves several kinds and shared app actions appear only in the most specific group", async () => {
+  const commands = new CommandHub();
+  const kinds = ["panel", "app"];
+  let calls = 0;
+  commands.register({
+    id: "new",
+    title: "New session",
+    category: "Test",
+    context: { kind: kinds },
+    run: () => ++calls,
+  });
+  kinds.length = 0;
+  commands.register({
+    id: "palette",
+    title: "Palette",
+    category: "Test",
+    context: { kind: "app" },
+    run: () => {},
+  });
+  const groups = contextGroups(commands, [{
+    kind: "panel",
+    area: true,
+    data: undefined,
+  }]);
+  assertEquals(groups.map((group) => group.map((action) => action.id)), [[
+    "new",
+  ], ["palette"]]);
+  await commands.runContext(groups[0][0]);
+  assertEquals(calls, 1);
+  assertEquals(
+    commands.contextActions({ kind: "app", data: undefined }).map((action) =>
+      action.id
+    ),
+    ["new", "palette"],
+  );
+});

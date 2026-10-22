@@ -40,7 +40,10 @@ import {
   sessionKey,
 } from "@otk/client";
 import { registerPreferenceCommands } from "@otk/client";
-import { registerSessionCommands } from "./commands/sessions.ts";
+import {
+  registerSessionCommands,
+  registerSessionTargetCommands,
+} from "./commands/sessions.ts";
 import { registerAttentionCommands } from "./commands/attention.ts";
 import { registerApprovalCommands } from "./commands/approvals.ts";
 import { applicationNotifications } from "./notifications.ts";
@@ -698,59 +701,39 @@ export default function Shell(
       model.preview(id);
     }
   });
-  // R5's Sessions view calls this port; it never reaches into tab UI internals.
-  onCleanup(
-    commands.register({
-      id: "session.preview",
-      title: "Preview session",
-      category: "Session",
-      hidden: true,
-      context: { kind: "session", title: () => "Open", order: 0 },
-      enabled: (_ctx, target?: Selection) =>
-        !!target && !!entry(target.sidecarId, target.sessionID),
-      run: (_ctx, target: Selection) => {
-        if (!navigate(target)) return false;
-        const directory = entry(target.sidecarId, target.sessionID)?.directory;
-        if (directory) {
-          tabsFor({ sidecarId: target.sidecarId, directory }).preview(
-            target.sessionID,
-          );
-        }
-        return true;
-      },
-    }),
-  );
-  onCleanup(commands.register({
-    id: "session.pin",
-    title: "Open session as task",
-    category: "Session",
-    hidden: true,
-    context: {
-      kind: "session",
-      title: (target: Selection) => {
-        const value = entry(target.sidecarId, target.sessionID);
-        const family = [
-          target.sessionID,
-          ...sessionAncestors(
-            target.sessionID,
-            (id) => entry(target.sidecarId, id),
-          ),
-        ];
-        return inbox(target.sidecarId).state.inbox.tasks.some((task) =>
-            task.directory === value?.directory &&
-            task.sessions.some((id) => family.includes(id))
-          )
-          ? "Open as task"
-          : "Pin as task";
-      },
-      order: 10,
-    },
-    enabled: (_ctx, target?: Selection) =>
-      !!target && !!entry(target.sidecarId, target.sessionID) &&
+  // Session targets share one transition-aware command owner across all views.
+  onCleanup(registerSessionTargetCommands(commands, {
+    current: () => session.state.selection,
+    exists: (target) => !!entry(target.sidecarId, target.sessionID),
+    connected: (target) =>
       sidecars.state.list.some((server) =>
         server.id === target.sidecarId && server.status === "connected"
       ),
-    run: async (_ctx, target: Selection) => {
+    inTask: (target) => {
+      const value = entry(target.sidecarId, target.sessionID);
+      const family = [
+        target.sessionID,
+        ...sessionAncestors(
+          target.sessionID,
+          (id) => entry(target.sidecarId, id),
+        ),
+      ];
+      return inbox(target.sidecarId).state.inbox.tasks.some((task) =>
+        task.directory === value?.directory &&
+        task.sessions.some((id) => family.includes(id))
+      );
+    },
+    open: (target) => {
+      if (!navigate(target)) return false;
+      const directory = entry(target.sidecarId, target.sessionID)?.directory;
+      if (directory) {
+        tabsFor({ sidecarId: target.sidecarId, directory }).preview(
+          target.sessionID,
+        );
+      }
+      return true;
+    },
+    pin: async (target) => {
       if (!navigate(target)) return false;
       const directory = entry(target.sidecarId, target.sessionID)?.directory;
       if (!directory) return false;
@@ -837,6 +820,27 @@ export default function Shell(
   const saveLayout = async (patch: Partial<ShellLayout>) => {
     await sidecars.connection(LOCAL_SIDECAR).rpc.call("layout.patch", patch);
   };
+  for (const side of ["projects", "panel"] as const) {
+    const collapsed = () =>
+      side === "projects" ? layout().leftCollapsed : layout().rightCollapsed;
+    const title = () =>
+      side === "projects"
+        ? (collapsed() ? "Expand projects" : "Collapse projects")
+        : (collapsed() ? "Open right panel" : "Collapse right panel");
+    onCleanup(commands.register({
+      id: `layout.${side}.toggle`,
+      title: title(),
+      category: "Layout",
+      context: { kind: side, title, order: 100 },
+      enabled: () => toggles.state.ready,
+      run: () =>
+        saveLayout(
+          side === "projects"
+            ? { leftCollapsed: !collapsed() }
+            : { rightCollapsed: !collapsed() },
+        ),
+    }));
+  }
   return (
     <CommandProvider commands={commands} keyboard={keyboard}>
       <ShellProvider
@@ -873,9 +877,7 @@ export default function Shell(
               : "Collapse projects"}
             disabled={!toggles.state.ready}
             onClick={() =>
-              void saveLayout({ leftCollapsed: !layout().leftCollapsed }).catch(
-                fail,
-              )}
+              void commands.run("layout.projects.toggle").catch(fail)}
           >
             <PanelLeftIcon />
           </button>
@@ -890,9 +892,7 @@ export default function Shell(
               ? "Open right panel"
               : "Collapse right panel"}
             disabled={!toggles.state.ready}
-            onClick={() =>
-              void saveLayout({ rightCollapsed: !layout().rightCollapsed })
-                .catch(fail)}
+            onClick={() => void commands.run("layout.panel.toggle").catch(fail)}
           >
             <PanelRightIcon />
           </button>
