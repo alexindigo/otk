@@ -21,6 +21,8 @@ Import only `@otk/client` (the `mod.ts` entry).
 | 10 | `createSidecars`, `readSidecars`, `LOCAL_SIDECAR`                                          | Connection collection and persisted browser sources                                                                  |
 | 11 | `createServerResources`, `ServerResources`, `FrameObserver`                                | Per-server inbox, approval and project-tab resources, live projections and ordered frame observers                   |
 | 12 | `createSessionActions`, `SessionActions`, `sessionFamily`, `familyTask`, `familySelection` | Shared session-target operations and pure family projections                                                         |
+| 13 | `createInputGuard`, `InputGuard`                                                           | Owner-current draft release and dirty-input permission checks                                                        |
+| 14 | `createShellNavigation`, `ShellNavigation`, `shellTitle`                                   | Guarded routes, creation revisions, project/settings state and seen/visit bookkeeping                                |
 
 Models expose `state` and `subscribe(listener)`; subscriptions return an
 unsubscribe function and notify after updates, without an initial notification.
@@ -220,6 +222,23 @@ integration/e2e tests stay at root; client units live in `tests/`. Run project
 checks in the assigned OTK VM.
 
 ## Inbox metadata and tabs
+
+`createInputGuard({drafts, key, confirm})` owns dirty-input marks and
+confirmation policy. Release reads the invocation-current draft through its
+writer and clears only an accepted editor, preserving the prompt and choices;
+navigation clears attention marks only when the session identity changes.
+`permit` checks a single input owner without consuming its dirty state.
+
+`createShellNavigation({resources, actions, guard, session, presence,
+environment?, factory?})`
+owns project/settings/error state, accepted routing, guarded preview/pin/open,
+creation revisions and seen/visit bookkeeping. It wraps the existing
+injected-history navigation owner. Later intents supersede pending creation
+navigation and errors, while captured task actions retain their server and
+project. View observations record first visits after content readiness;
+subsequent finish observations mark seen only while focused and visible. Browser
+confirmation, history and presence remain injectable. `shellTitle` is the pure
+session/project/application title projection.
 
 `createSessionActions({resources, session, current})` owns session-target
 directory resolution (index, matching selected info, then authoritative lookup),

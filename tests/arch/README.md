@@ -145,6 +145,12 @@ single client owner, with a plain typed UI ports binding. Negatives reject
 duplicated transactions, inline ports, transport-private capability reads and
 RPC/cache implementation in the binding.
 
+Guarded routing, creation, input release and seen bookkeeping belong to the
+client navigation/guard owners. Negative fixtures reject browser policy, RPCs,
+caches and route/creation transactions in Shell, duplicate client constructors,
+and policy implementations in UI modules. The Solid shell binding contains
+construction and split reactive compute/apply effects only.
+
 Web's App is public-entry composition only; notification and command checks
 follow their new reusable owners. Inbox/browser tests observe the new column and
 centre navigation rather than the retired application sidebar. The right-panel

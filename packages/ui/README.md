@@ -309,10 +309,14 @@ selection; activating one atomically selects and opens that panel through
 `onLayout`. Its expanded panel remains mounted while hidden, preserving view
 lifetime.
 
-`Shell({ theme, api })` composes the reusable three-region shell with selected
-UI registrations. `ProjectInbox` renders the shared client projection in its
-column and 48px rail; it does not recompute roll-ups, unread or ageing. Width
-(200–360px, 248 default) and collapsed states follow the serving server's
+`Shell({ theme, api })` binds `createShellState({api})` and composes the
+reusable three-region shell with selected UI registrations. The thin Solid
+binding constructs client resource, session-action, input-guard and
+shell-navigation owners, injects browser confirmation/presence and installs
+split view/tab effects. Shell registers commands, observes frames and renders
+chrome through those ports. `ProjectInbox` renders the shared client projection
+in its column and 48px rail; it does not recompute roll-ups, unread or ageing.
+Width (200–360px, 248 default) and collapsed states follow the serving server's
 `shellLayout` preference. Controls pass independent `Partial<ShellLayout>` field
 intents through `onLayout`; the shell sends `layout.patch`, whose core owner
 merges against persisted state before validation/save/broadcast. No control

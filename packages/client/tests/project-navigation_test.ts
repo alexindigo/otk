@@ -6,6 +6,7 @@ import {
   projectRoute,
 } from "../project-navigation.ts";
 import { route } from "../session.ts";
+import * as client from "@otk/client";
 Deno.test("project-only routes preserve server and literal paths without colliding with session routes", () => {
   const project = {
     sidecarId: "remote agent",
@@ -17,4 +18,16 @@ Deno.test("project-only routes preserve server and literal paths without collidi
   assertEquals(projectRoute("#/local/session"), undefined);
   assertEquals(projectRoute("#project/local/%"), undefined);
   assertEquals(projectName(project.directory), "a #b");
+});
+
+Deno.test("shell title preserves session, project and application join semantics", () => {
+  assertEquals(
+    client.shellTitle("Session", { sidecarId: "s", directory: "/p/project" }),
+    "Session — project — OTK",
+  );
+  assertEquals(
+    client.shellTitle(undefined, { sidecarId: "s", directory: "/" }),
+    "/ — OTK",
+  );
+  assertEquals(client.shellTitle("", undefined), "OTK");
 });

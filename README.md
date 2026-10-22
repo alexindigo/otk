@@ -163,15 +163,15 @@ or Web Push is required.
 
 ## Application ownership
 
-| # | Entry or area                                               | Responsibility                                                                                                                  |
-| - | ----------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------- |
-| 1 | `main.ts`, `defaults/otk.toml`                              | Layered operator/auth-state config, selected native backend and content buffers, bundled asset path, process signal lifetime    |
-| 2 | `application.ts`                                            | Backend-neutral shipped composition: public store migrations/services and feature-owned core RPC registrations                  |
-| 3 | `core/`                                                     | Config/auth, reflective HTTP adapters, WS/RPC transport, session index and backend-neutral service lifetime                     |
-| 4 | `web/index.html`, `web/src/main.tsx`, `web/src/features.ts` | Browser bootstrap, fonts/provider and public UI feature selection                                                               |
-| 5 | `packages/ui/shell/`, `web/src/ui/App.tsx`                  | Reusable shell owns chrome, guarded navigation, draft and metadata bindings; web only composes its public entry and API address |
-| 6 | `tests/`                                                    | Application units, integration/e2e, shared fixtures, architectural boundaries and standalone reuse consumers                    |
-| 7 | `packages/*/tests/`                                         | Library-owned units; application support stays at root                                                                          |
+| # | Entry or area                                                            | Responsibility                                                                                                                                                           |
+| - | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| 1 | `main.ts`, `defaults/otk.toml`                                           | Layered operator/auth-state config, selected native backend and content buffers, bundled asset path, process signal lifetime                                             |
+| 2 | `application.ts`                                                         | Backend-neutral shipped composition: public store migrations/services and feature-owned core RPC registrations                                                           |
+| 3 | `core/`                                                                  | Config/auth, reflective HTTP adapters, WS/RPC transport, session index and backend-neutral service lifetime                                                              |
+| 4 | `web/index.html`, `web/src/main.tsx`, `web/src/features.ts`              | Browser bootstrap, fonts/provider and public UI feature selection                                                                                                        |
+| 5 | `packages/ui/shell/`, `packages/ui/state/shell.ts`, `web/src/ui/App.tsx` | Reusable shell binds framework-free client resource, session-action, input-guard and navigation owners and renders chrome; web composes the public entry and API address |
+| 6 | `tests/`                                                                 | Application units, integration/e2e, shared fixtures, architectural boundaries and standalone reuse consumers                                                             |
+| 7 | `packages/*/tests/`                                                      | Library-owned units; application support stays at root                                                                                                                   |
 
 Application fixtures use the same composition as production: subprocesses launch
 `main.ts`; external-backend fixtures call `startApplication`. Config, wire names

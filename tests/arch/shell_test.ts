@@ -42,6 +42,28 @@ function errors(path: string, source: string): string[] {
   ) errors.push("server resources have one client owner");
   if (
     path.endsWith("/Shell.tsx") &&
+    /\.rpc\.|rpc\.call\(|new Map<|createTaskActions\(|createNavigation\(|\broute\(|projectRoute\(|hashFor\(|projectHash\(|confirm\(|\bnavigationRevision\b|document\.hasFocus/
+      .test(source)
+  ) {
+    errors.push("guarded navigation and creation belong to client owners");
+  }
+  for (
+    const [name, owner] of [["createInputGuard", "input-guard"], [
+      "createShellNavigation",
+      "shell-navigation",
+    ]]
+  ) {
+    if (
+      path !== `packages/client/${owner}.ts` &&
+      new RegExp(`\\bfunction\\s+${name}\\s*\\(`).test(source)
+    ) errors.push("guard/navigation have one client owner");
+  }
+  if (
+    path.startsWith("packages/ui/") &&
+    /\bfunction\s+(?:applyRoute|discardDraft)\s*\(/.test(source)
+  ) errors.push("route/input policy belongs to client");
+  if (
+    path.endsWith("/Shell.tsx") &&
     /createSessionSubmission\(|\bsessionAncestors\b|["']session\.(?:prompt|abort)["']|history\.attachment|\.tasks\.(?:find|some)|function sessionPorts|sessionPorts = /
       .test(source)
   ) {
@@ -412,4 +434,43 @@ Deno.test("shell delegates session operations and ports without private capabili
       "function createSessionActions(o) {}",
     ).length > 0,
   );
+});
+
+Deno.test("shell binds guarded navigation without browser policy, transactions or caches", async () => {
+  for (
+    const path of ["packages/ui/shell/Shell.tsx", "packages/ui/state/shell.ts"]
+  ) {
+    assertEquals(
+      errors(path, await Deno.readTextFile(new URL(path, root))),
+      [],
+      path,
+    );
+  }
+  for (
+    const source of [
+      'connection.rpc.call("session.create", input)',
+      "new Map<string, boolean>()",
+      "createTaskActions(rpc, path)",
+      "createNavigation(options)",
+      "route(hash)",
+      "projectRoute(hash)",
+      "hashFor(target)",
+      "projectHash(project)",
+      "globalThis.confirm(message)",
+      "navigationRevision++",
+      "document.hasFocus()",
+      "function applyRoute(hash) {}",
+      "function discardDraft() {}",
+      "function createInputGuard(o) {}",
+      "function createShellNavigation(o) {}",
+    ]
+  ) {
+    assert(errors("packages/ui/shell/Shell.tsx", source).length > 0, source);
+  }
+  for (const name of ["createInputGuard", "createShellNavigation"]) {
+    assert(
+      errors("packages/client/duplicate.ts", `function ${name}(o) {}`).length >
+        0,
+    );
+  }
 });

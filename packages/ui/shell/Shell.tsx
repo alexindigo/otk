@@ -9,23 +9,7 @@ import {
   Show,
 } from "solid-js";
 import { DEFAULT_PREFS } from "@otk/protocol";
-import {
-  CommandHub,
-  createCurrentClient,
-  createDrafts,
-  createNavigation,
-  createServerResources,
-  createSessionActions,
-  hashFor,
-  LOCAL_SIDECAR,
-  projectHash,
-  projectName,
-  projectRoute,
-  type ProjectSelection,
-  route,
-  type Selection,
-  sessionKey,
-} from "@otk/client";
+import { CommandHub, LOCAL_SIDECAR, shellTitle } from "@otk/client";
 import { registerPreferenceCommands } from "@otk/client";
 import {
   registerSessionCommands,
@@ -36,10 +20,7 @@ import { registerApprovalCommands } from "./commands/approvals.ts";
 import { applicationNotifications } from "./notifications.ts";
 import { permissionNotificationDetail } from "../features/permission-notification.tsx";
 import { CommandProvider } from "../keyboard/context.tsx";
-import { createIndex } from "../state/index.ts";
-import { createSession } from "../state/session.ts";
-import { createSidecars } from "../state/sidecars.ts";
-import { solidState } from "../state/binding.ts";
+import { createShellState } from "../state/shell.ts";
 import { createKeyboard } from "../keyboard/dispatcher.ts";
 import { createToggles } from "../components/Toggles.ts";
 import DisplayMenu from "../components/DisplayMenu.tsx";
@@ -68,13 +49,8 @@ import type { SessionContextTarget } from "../features/session-context.ts";
 export default function Shell(
   props: { theme: ThemeEngine; api: URL },
 ): import("solid-js").Element {
-  const index = createIndex();
-  const resources = createServerResources({
-    index,
-    factory: solidState,
-    sidecars: (receive) =>
-      createSidecars(receive, { connection: { api: props.api } }),
-  });
+  const { resources, session, drafts, actions, guard, navigation } =
+    createShellState({ api: props.api });
   const {
     sidecars,
     inbox,
@@ -84,38 +60,16 @@ export default function Shell(
     entries,
     tabs: tabsFor,
   } = resources;
-  const session = createSession(
-    (id) => sidecars.connection(id),
-    entry,
-    (target) => {
-      const sidecar = sidecars.state.list.find((s) =>
-        s.id === target.sidecarId
-      );
-      return {
-        key: sidecar?.connectionVersion,
-        connected: sidecar?.status === "connected",
-        available: sidecar?.capabilities.includes("models") ?? false,
-      };
-    },
-  );
-  const drafts = createDrafts(solidState);
-  const current = createCurrentClient(
-    () => session.state.selection,
-    (id) => sidecars.connection(id),
-  );
-  const actions = createSessionActions({ resources, session, current });
   const draftKey = actions.key;
   const draft = () => drafts.get(draftKey());
   const toggles = createToggles(resources.setPreference);
-  const [settings, setSettings] = createSignal(false),
-    [error, setError] = createSignal("");
+  const settings = () => navigation.state.settings;
+  const error = () => navigation.state.error;
+  const project = () => navigation.state.project;
+  const { fail, navigate, openProject } = navigation;
   const [dialog, setDialog] = createSignal("");
-  const [project, setProject] = createSignal<ProjectSelection>();
   const [now, setNow] = createSignal(Date.now());
-  const dirty = new Map<string, boolean>();
   let root!: HTMLDivElement;
-  let navigationRevision = 0;
-  const fail = (error: unknown) => setError((error as Error).message);
   const commands = new CommandHub(
     () => ({
       sidecar: session.state.selection?.sidecarId,
@@ -236,10 +190,7 @@ export default function Shell(
       id: "settings.open",
       title: "Settings",
       category: "Connections",
-      run: () => {
-        navigationRevision++;
-        setSettings(true);
-      },
+      run: navigation.showSettings,
     }),
   );
   onCleanup(
@@ -248,7 +199,7 @@ export default function Shell(
       title: "Close settings",
       category: "Connections",
       hidden: true,
-      run: () => setSettings(false),
+      run: navigation.closeSettings,
     }),
   );
   onCleanup(
@@ -270,21 +221,6 @@ export default function Shell(
   );
   const info = createMemo(actions.info);
   onCleanup(registerAttentionCommands(commands, actions));
-  const discardDraft = () => {
-    // Solid batches rendered reads during input events; guards use the same
-    // owner-current update port as Prompt, not the previous painted value.
-    const current = drafts.writer(draftKey())((value) => value);
-    if (!current.editor && ![...dirty.values()].some(Boolean)) return true;
-    if (
-      !globalThis.confirm(
-        "Discard unsaved editor or attention input before switching sessions?",
-      )
-    ) return false;
-    if (current.editor) {
-      drafts.writer(draftKey())((value) => ({ ...value, editor: undefined }));
-    }
-    return true;
-  };
   onCleanup(registerApprovalCommands(commands, {
     current: (input) => {
       const target = input ?? session.state.selection;
@@ -303,222 +239,27 @@ export default function Shell(
         (session.state.selection &&
           approvals(session.state.selection.sidecarId)) ||
       target.sessionID !== session.state.selection?.sessionID ||
-      !dirty.get("permissions") ||
-      globalThis.confirm(
+      guard.permit(
+        "permissions",
         "Discard unsaved permission input before enabling auto-approve for this session and its helpers?",
       ),
   }));
-  const applyRoute = (hash: string) => {
-    const target = route(hash),
-      projectTarget = projectRoute(hash),
-      previous = session.state.selection;
-    const changes = target?.sidecarId !== previous?.sidecarId ||
-      target?.sessionID !== previous?.sessionID;
-    const server = target?.sidecarId ?? projectTarget?.sidecarId;
-    if (server && !sidecars.state.list.some((s) => s.id === server)) {
-      setError("The URL refers to an unknown server. Add it in Settings.");
-      session.open();
-      setProject(undefined);
-    } else {
-      setError("");
-      session.open(target);
-      setProject(
-        projectTarget ??
-          (target && entry(target.sidecarId, target.sessionID)
-            ? {
-              sidecarId: target.sidecarId,
-              directory: entry(target.sidecarId, target.sessionID)!.directory,
-            }
-            : undefined),
-      );
-      if (projectTarget) {
-        void inbox(projectTarget.sidecarId).openProject(projectTarget.directory)
-          .catch(fail);
-      }
-    }
-    if (changes) {
-      dirty.clear();
-    }
-  };
-  const navigation = createNavigation({
-    intent: () => {
-      navigationRevision++;
-    },
-    apply: applyRoute,
-    accept: (hash) => {
-      const target = route(hash), previous = session.state.selection;
-      return (target?.sidecarId === previous?.sidecarId &&
-        target?.sessionID === previous?.sessionID) || discardDraft();
-    },
-  });
-  const navigate = (selection: Selection) => {
-    selection = actions.family(selection);
-    const previous = session.state.selection;
-    if (navigation.open(hashFor(selection))) {
-      setSettings(false);
-      // An accepted click is a visit even when history keeps the same URL.
-      if (
-        previous?.sidecarId === selection.sidecarId &&
-        previous.sessionID === selection.sessionID && !session.state.loading
-      ) {
-        void actions.directory(selection).then((directory) =>
-          inbox(selection.sidecarId).openSession(selection.sessionID, directory)
-        ).catch(fail);
-      }
-      return true;
-    }
-    return false;
-  };
-  const openProject = (target: ProjectSelection) => {
-    if (
-      project()?.sidecarId === target.sidecarId &&
-      project()?.directory === target.directory
-    ) {
-      setSettings(false);
-      void inbox(target.sidecarId).openProject(target.directory).catch(fail);
-      if (session.state.selection) return;
-    }
-    const existing = Object.values(index.state.entries).find((entry) =>
-      entry.sidecarId === target.sidecarId &&
-      entry.directory === target.directory && !entry.parentID
-    );
-    if (existing) {
-      navigate({ sidecarId: target.sidecarId, sessionID: existing.id });
-      return;
-    }
-    if (navigation.open(projectHash(target))) setSettings(false);
-  };
-  // Navigation marks seen only after content actually reaches the viewed session.
-  let viewed = "", viewedFinish = 0;
-  createEffect(() => {
-    const selected = session.state.selection, data = info();
-    return {
-      selected,
-      directory: data?.directory,
-      loading: session.state.loading,
-      settings: settings(),
-      connected: selectedSidecar()?.status === "connected",
-      finish: selected
-        ? inbox(selected.sidecarId).state.inbox.finishes[selected.sessionID] ??
-          0
-        : 0,
-    };
-  }, (value) => {
-    if (
-      !value.selected || !value.directory || value.loading || value.settings ||
-      !value.connected
-    ) {
-      if (!value.selected) viewed = "";
-      return;
-    }
-    const target = value.selected,
-      key = sessionKey(target.sidecarId, target.sessionID);
-    setProject({ sidecarId: target.sidecarId, directory: value.directory });
-    if (viewed !== key) {
-      viewed = key;
-      viewedFinish = value.finish;
-      void inbox(target.sidecarId).openSession(
-        target.sessionID,
-        value.directory,
-      ).catch(fail);
-    } else if (
-      value.finish > viewedFinish && document.hasFocus() &&
-      document.visibilityState === "visible"
-    ) {
-      viewedFinish = value.finish;
-      void sidecars.connection(target.sidecarId).rpc.call("sessions.seen", {
-        sessionID: target.sessionID,
-      }).catch(fail);
-    }
-  });
-  const create = async (
-    sidecarId: string,
-    directory: string,
-    task?: import("@otk/protocol").TaskRecord,
-  ) => {
-    if (!discardDraft()) return;
-    const revision = ++navigationRevision;
-    const rpc = sidecars.connection(sidecarId).rpc;
-    const actions = resources.taskActions({ sidecarId, directory });
-    try {
-      const created = await rpc.call(
-        "session.create",
-        { directory },
-      );
-      if (task) {
-        await actions.add(task, created.id);
-      }
-      if (revision === navigationRevision) {
-        navigate({ sidecarId, sessionID: created.id });
-      }
-    } catch (error) {
-      if (revision === navigationRevision) fail(error);
-    }
-  };
-  const openChild = (id: string) => {
-    navigate(actions.child(id));
-  };
-  const creationTarget = (input?: ProjectSelection) =>
-    input ?? session.state.selection ?? project();
   onCleanup(registerSessionCommands(commands, {
-    available: (input) => {
-      const target = creationTarget(input);
-      return !!target &&
-        resources.connected(target.sidecarId);
-    },
-    create: async (input) => {
-      const target = creationTarget(input);
-      if (!target) return;
-      const sidecarId = target.sidecarId, revision = navigationRevision;
-      const directory = "directory" in target
-        ? target.directory
-        : await actions.directory(target);
-      if (revision === navigationRevision) await create(sidecarId, directory);
-    },
+    available: navigation.available,
+    create: navigation.create,
     open: navigate,
-    child: openChild,
+    child: navigation.openChild,
     older: () => session.older(),
     retry: () => session.refetch(),
   }));
-  createEffect(() => {
-    const p = project();
-    if (!p) return undefined;
-    return {
-      p,
-      input: resources.tabSnapshot(p),
-      selected: session.state.selection,
-    };
-  }, (value) => {
-    if (!value) return;
-    resources.syncTabs(value.p, value.input, value.selected);
-  });
   // Session targets share one transition-aware command owner across all views.
   onCleanup(registerSessionTargetCommands(commands, {
     current: () => session.state.selection,
     exists: (target) => !!entry(target.sidecarId, target.sessionID),
     connected: (target) => resources.connected(target.sidecarId),
     inTask: actions.inTask,
-    open: (target) => {
-      if (!navigate(target)) return false;
-      const directory = entry(target.sidecarId, target.sessionID)?.directory;
-      if (directory) {
-        tabsFor({ sidecarId: target.sidecarId, directory }).preview(
-          target.sessionID,
-        );
-      }
-      return true;
-    },
-    pin: async (target) => {
-      if (!navigate(target)) return false;
-      const directory = entry(target.sidecarId, target.sessionID)?.directory;
-      if (!directory) return false;
-      const model = tabsFor({ sidecarId: target.sidecarId, directory });
-      model.preview(target.sessionID);
-      // A helper already belongs to its ancestor's task. Do not duplicate it.
-      if (model.state.selected?.kind === "task") return true;
-      await model.pin(target.sessionID);
-      return true;
-    },
+    open: navigation.preview,
+    pin: navigation.pin,
   }));
   onCleanup(commands.register({
     id: "session.title.copy",
@@ -537,12 +278,7 @@ export default function Shell(
   createEffect(
     () => [info()?.title, project()] as const,
     ([title, selected]) => {
-      document.title = [
-        title,
-        selected && projectName(selected.directory),
-        "OTK",
-      ]
-        .filter(Boolean).join(" — ");
+      document.title = shellTitle(title, selected);
     },
   );
   onCleanup(() => {
@@ -737,9 +473,9 @@ export default function Shell(
                             sessionID: id,
                           });
                         }}
-                        onEmpty={() => navigation.open(projectHash(project()!))}
+                        onEmpty={navigation.projectHome}
                         onCreateSession={(task) =>
-                          create(
+                          navigation.createIn(
                             project()!.sidecarId,
                             project()!.directory,
                             task,
@@ -771,11 +507,7 @@ export default function Shell(
                           resources,
                           actions,
                           session,
-                          guard: {
-                            mark: (owner, value) => {
-                              dirty.set(owner, value);
-                            },
-                          },
+                          guard,
                           prefs: () => toggles.state.prefs,
                         })}
                       >
@@ -852,16 +584,10 @@ export default function Shell(
                   />
                 }
                 sidecars={sidecars.state.list}
-                onAdd={async (url, label) => {
-                  await resources.add(url, label);
+                onAdd={(url, label) => resources.add(url, label).then(() => {
                   notifications.info("Server added");
-                }}
-                onRemove={(id) => {
-                  if (project()?.sidecarId === id && !navigation.open("")) {
-                    return;
-                  }
-                  resources.remove(id);
-                }}
+                })}
+                onRemove={(id) => navigation.removeServer(id)}
                 onLogin={(id, input) => sidecars.connection(id).login(input)}
                 onSetup={(input) =>
                   sidecars.connection(LOCAL_SIDECAR).setup(input)}

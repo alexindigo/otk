@@ -23,3 +23,11 @@ export function projectRoute(hash: string): ProjectSelection | undefined {
 export function projectName(directory: string): string {
   return directory.split(/[\\/]/).filter(Boolean).at(-1) || directory;
 }
+export function shellTitle(
+  title: string | undefined,
+  project: ProjectSelection | undefined,
+): string {
+  return [title, project && projectName(project.directory), "OTK"].filter(
+    Boolean,
+  ).join(" — ");
+}
