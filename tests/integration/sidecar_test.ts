@@ -601,6 +601,34 @@ test("I9 password cookie, WS authentication, Origin, logout and CORS", async () 
     await f.stop();
   }
 });
+test("I13 a server.origins override keeps the fixture's own port and applies the origin", async () => {
+  const f = await fixture();
+  try {
+    const extraOrigin = "http://127.0.0.1:31503";
+    const server = await f.sidecar({ server: { origins: [extraOrigin] } });
+    assert(
+      server.port !== 1502,
+      `sidecar landed on default port ${server.port}`,
+    );
+    assertEquals(server.url, `http://127.0.0.1:${server.port}`);
+    const preflight = await fetch(server.url + "/api/login", {
+      method: "OPTIONS",
+      headers: {
+        Origin: extraOrigin,
+        "Access-Control-Request-Method": "POST",
+        "Access-Control-Request-Headers": "Content-Type",
+      },
+    });
+    assertEquals(preflight.status, 204);
+    assertEquals(
+      preflight.headers.get("access-control-allow-origin"),
+      extraOrigin,
+    );
+    await preflight.text();
+  } finally {
+    await f.stop();
+  }
+});
 test("I10 total sidecar RSS stays within 1 GiB after a complete 2 MB reply", async () => {
   const f = await fixture();
   try {

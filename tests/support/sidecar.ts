@@ -2,7 +2,12 @@
 import type { ChildProcess } from "node:child_process";
 import { fromFileUrl, join } from "@std/path";
 import { stringify } from "@std/toml";
-import { loadServiceConfig, type ServiceConfig } from "../../core/mod.ts";
+import {
+  loadServiceConfig,
+  mergeLeafWise,
+  type ServiceConfig,
+  type Tree,
+} from "../../core/mod.ts";
 import { freePort, type OpencodeTest, waitFor } from "./opencode.ts";
 import { acquire } from "./resources.ts";
 import { ownedProcess } from "./process.ts";
@@ -44,13 +49,15 @@ export class SidecarTest {
       instance.port = await freePort();
       instance.url = `http://127.0.0.1:${instance.port}`;
       const root = fromFileUrl(new URL("../../", import.meta.url));
-      const overlay = {
+      const overlay: Tree = {
         server: { port: instance.port },
         auth: { type: "none" },
         state: { path: join(oc.root, `otk-${instance.port}`) },
         harness: { url: oc.url, db: oc.db },
-        ...overrides,
       };
+      // Overrides merge leaf-wise at every nesting level (the loader's own tree
+      // merge), so naming one leaf keeps the fixture's other leaves.
+      mergeLeafWise(overlay, overrides as unknown as Tree);
       // Let the production loader apply defaults and validate the overlay.
       const file = join(oc.root, `sidecar-${instance.port}.toml`);
       await Deno.writeTextFile(file, stringify(overlay));
@@ -59,6 +66,13 @@ export class SidecarTest {
         overlayPath: file,
         env: {},
       }).config;
+      // The sidecar binds the fixture's allocated port unless a caller names one.
+      const expectedPort = overrides.server?.port ?? instance.port;
+      if (config.server.port !== expectedPort) {
+        throw new Error(
+          `sidecar fixture resolved server.port ${config.server.port}, expected ${expectedPort}`,
+        );
+      }
       instance.port = config.server.port;
       instance.url = `http://127.0.0.1:${instance.port}`;
       const env: Record<string, string> = {};
