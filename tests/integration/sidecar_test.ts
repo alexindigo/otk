@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
+import { serve } from "../support/http.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type { ContentSession, Message } from "@otk/protocol";
@@ -7,13 +9,13 @@ import { markdown } from "@otk/content";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
-import { WsClient } from "../support/ws-client.ts";
+import { ownSocket, WsClient } from "../support/ws-client.ts";
 import { FreezeProxy } from "../support/freeze-proxy.ts";
 // @deno-types="npm:@types/ws@8.18.1"
 import WebSocket from "ws";
 import { PROTOCOL_VERSION } from "@otk/protocol";
 
-Deno.test("I11 message paging accepts OTK message IDs without leaking harness cursors", async () => {
+test("I11 message paging accepts OTK message IDs without leaking harness cursors", async () => {
   const f = await fixture();
   try {
     const server = await f.sidecar(), client = await f.client(server);
@@ -159,7 +161,7 @@ async function completed(client: WsClient, id: string): Promise<Message[]> {
   );
 }
 
-Deno.test("I1 startup snapshot includes existing idle sessions", async () => {
+test("I1 startup snapshot includes existing idle sessions", async () => {
   const f = await fixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -177,7 +179,7 @@ Deno.test("I1 startup snapshot includes existing idle sessions", async () => {
     await f.stop();
   }
 });
-Deno.test("I2 streaming blocks, busy/idle index, final history and adapter boundary", async () => {
+test("I2 streaming blocks, busy/idle index, final history and adapter boundary", async () => {
   const f = await fixture();
   try {
     const server = await f.sidecar(), client = await f.client(server);
@@ -233,7 +235,7 @@ Deno.test("I2 streaming blocks, busy/idle index, final history and adapter bound
     await f.stop();
   }
 });
-Deno.test("I3 unsubscribed client receives index but no content", async () => {
+test("I3 unsubscribed client receives index but no content", async () => {
   const f = await fixture();
   try {
     const server = await f.sidecar(),
@@ -252,7 +254,7 @@ Deno.test("I3 unsubscribed client receives index but no content", async () => {
     await f.stop();
   }
 });
-Deno.test("I4 bash permission round trip and completed typed output", async () => {
+test("I4 bash permission round trip and completed typed output", async () => {
   const f = await fixture();
   try {
     const server = await f.sidecar(), client = await f.client(server);
@@ -301,7 +303,7 @@ Deno.test("I4 bash permission round trip and completed typed output", async () =
     await f.stop();
   }
 });
-Deno.test("I5 child permission rolls up to root", async () => {
+test("I5 child permission rolls up to root", async () => {
   const f = await fixture();
   try {
     const server = await f.sidecar(), client = await f.client(server);
@@ -359,7 +361,7 @@ Deno.test("I5 child permission rolls up to root", async () => {
     await f.stop();
   }
 });
-Deno.test("I6 silent drop recovers idle snapshot, resync and complete reply", async () => {
+test("I6 silent drop recovers idle snapshot, resync and complete reply", async () => {
   const f = await fixture(), proxy = new FreezeProxy(f.oc.port);
   try {
     const server = await f.sidecar({
@@ -413,7 +415,7 @@ Deno.test("I6 silent drop recovers idle snapshot, resync and complete reply", as
     await f.stop();
   }
 });
-Deno.test("I7 opencode restart reconnects and resnapshots", async () => {
+test("I7 opencode restart reconnects and resnapshots", async () => {
   const f = await fixture();
   try {
     const server = await f.sidecar(), client = await f.client(server);
@@ -432,10 +434,10 @@ Deno.test("I7 opencode restart reconnects and resnapshots", async () => {
     await f.stop();
   }
 });
-Deno.test("I8 bootstrap inventories each distinct session directory exactly once and preserves idle projects", async () => {
+test("I8 bootstrap inventories each distinct session directory exactly once and preserves idle projects", async () => {
   const f = await fixture(), controller = new AbortController();
   const requests: { path: string; directory: string | null }[] = [];
-  const proxy = Deno.serve(
+  const proxy = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     (request) => {
       const url = new URL(request.url);
@@ -502,7 +504,7 @@ Deno.test("I8 bootstrap inventories each distinct session directory exactly once
     }
   }
 });
-Deno.test("I9 password cookie, WS authentication, Origin, logout and CORS", async () => {
+test("I9 password cookie, WS authentication, Origin, logout and CORS", async () => {
   const f = await fixture();
   try {
     const extraOrigin = "http://127.0.0.1:31502";
@@ -599,7 +601,7 @@ Deno.test("I9 password cookie, WS authentication, Origin, logout and CORS", asyn
     await f.stop();
   }
 });
-Deno.test("I10 total sidecar RSS stays within 1 GiB after a complete 2 MB reply", async () => {
+test("I10 total sidecar RSS stays within 1 GiB after a complete 2 MB reply", async () => {
   const f = await fixture();
   try {
     const server = await f.sidecar(), client = await f.client(server);
@@ -664,7 +666,7 @@ Deno.test("I10 total sidecar RSS stays within 1 GiB after a complete 2 MB reply"
   }
 });
 
-Deno.test("I12 JSON heartbeat pings every 20 seconds, retains pong clients and closes silence at 60", async () => {
+test("I12 JSON heartbeat pings every 20 seconds, retains pong clients and closes silence at 60", async () => {
   const f = await fixture();
   let silent: WebSocket | undefined;
   try {
@@ -673,6 +675,7 @@ Deno.test("I12 JSON heartbeat pings every 20 seconds, retains pong clients and c
     silent = new WebSocket(server.url.replace(/^http/, "ws") + "/api/ws", {
       headers: { Origin: server.url },
     });
+    ownSocket(silent);
     const socket = silent;
     const closed = new Promise<
       { elapsed: number; code: number; reason: string }

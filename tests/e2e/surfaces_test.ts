@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
@@ -7,7 +8,7 @@ import { fixture } from "../support/config.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import type { TaskRecord } from "@otk/protocol";
 
-Deno.test("Display preferences title flows fully inside its surface in every theme", async () => {
+test("Display preferences title flows fully inside its surface in every theme", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
@@ -101,7 +102,7 @@ async function command(browser: Cdp, title: string, id: string) {
   await browser.fill("input[name=command-search]", title);
   await browser.click(`[data-command='${id}']`);
 }
-Deno.test("every registered dialog and anchored menu shares contained flow and native dismissal", async () => {
+test("every registered dialog and anchored menu shares contained flow and native dismissal", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     browser = await Cdp.launch(root),

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { tempDir, test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import type { ContentOp } from "@otk/protocol";
@@ -28,7 +29,7 @@ for (
     "generation reset",
   ] as const
 ) {
-  Deno.test(`adapter recorded stream buffers: ${outcome}`, async () => {
+  test(`adapter recorded stream buffers: ${outcome}`, async () => {
     // Recorded from the real 1.18.34 scripted provider in the named M1 guest.
     const frames: Envelope[] = JSON.parse(
       await Deno.readTextFile(
@@ -45,9 +46,7 @@ for (
       ),
       env: {},
     }).config;
-    const root = fromFileUrl(new URL("../../../.test-state/", import.meta.url));
-    await Deno.mkdir(root, { recursive: true });
-    cfg.harness.db = join(await Deno.makeTempDir({ dir: root }), "missing.db");
+    cfg.harness.db = join(await tempDir("native-buffers-"), "missing.db");
     let controller: ReadableStreamDefaultController<Uint8Array>;
     const fetcher: typeof fetch = (input, options) => {
       const url = new URL(String(input));

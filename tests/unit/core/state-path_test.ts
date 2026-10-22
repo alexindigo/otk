@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type { Harness } from "@otk/harness";
@@ -19,7 +20,7 @@ for (
     "empty env path",
   ]
 ) {
-  Deno.test(`configuration publishes one state path for ${scenario}`, async () => {
+  test(`configuration publishes one state path for ${scenario}`, async () => {
     const root = await fixture();
     try {
       const env: Record<string, string> = {
@@ -91,7 +92,7 @@ for (
     root: string,
   ) => serveBackend(backend, settings, root)]] as const
 ) {
-  Deno.test(`${name} starts with default state path and restores setup from the database directory`, async () => {
+  test(`${name} starts with default state path and restores setup from the database directory`, async () => {
     const root = await fixture();
     const cwd = Deno.cwd();
     const processStateHome = Deno.env.get("XDG_STATE_HOME");

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals, assertRejects } from "@std/assert";
 import { createTaskActions } from "@otk/client";
 import type { TaskRecord } from "@otk/protocol";
@@ -7,7 +8,7 @@ import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
 
 for (const change of ["add", "remove"]) {
-  Deno.test(`captured task actions preserve concurrent ${change} from another connection`, async () => {
+  test(`captured task actions preserve concurrent ${change} from another connection`, async () => {
     const root = await fixture(), f = await inboxBrowserFixture(root);
     const a = new WsClient(f.url), b = new WsClient(f.url);
     try {
@@ -62,7 +63,7 @@ for (const change of ["add", "remove"]) {
   });
 }
 
-Deno.test("task member operations are idempotent, ordered, exclusive, validated and durable", async () => {
+test("task member operations are idempotent, ordered, exclusive, validated and durable", async () => {
   const root = await fixture();
   let f = await inboxBrowserFixture(root), c = new WsClient(f.url);
   try {
@@ -130,7 +131,7 @@ Deno.test("task member operations are idempotent, ordered, exclusive, validated 
   }
 });
 
-Deno.test("task membership validation cannot publish into a task closed while awaiting the backend", async () => {
+test("task membership validation cannot publish into a task closed while awaiting the backend", async () => {
   const root = await fixture(), f = await inboxBrowserFixture(root);
   const a = new WsClient(f.url), b = new WsClient(f.url);
   const entered = Promise.withResolvers<void>(),

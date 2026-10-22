@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
+import { serve } from "../support/http.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -9,7 +11,7 @@ import {
 import { recordTools, runTool } from "../support/rendering.ts";
 import { waitFor } from "../support/opencode.ts";
 import type { RawPart } from "@otk/harness-opencode1";
-Deno.test("R1 bash output is ten lines, expands to thirty, and displays differing cwd", async () => {
+test("R1 bash output is ten lines, expands to thirty, and displays differing cwd", async () => {
   const f = await browserFixture({ bash: "allow" }, {
     prepare: async (oc) => {
       await Deno.mkdir(join(oc.directory, "sub"));
@@ -54,8 +56,8 @@ Deno.test("R1 bash output is ten lines, expands to thirty, and displays differin
     await f.stop();
   }
 });
-Deno.test("R4 real read, directory listing, glob, grep, local fetch, skill and generic output forms", async () => {
-  const http = Deno.serve(
+test("R4 real read, directory listing, glob, grep, local fetch, skill and generic output forms", async () => {
+  const http = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     () =>
       new Response("OTK fetch fixture", {
@@ -187,7 +189,7 @@ Deno.test("R4 real read, directory listing, glob, grep, local fetch, skill and g
     await f.stop();
   }
 });
-Deno.test("tool permission warning, denied strikethrough and expandable errors use one state contract", async () => {
+test("tool permission warning, denied strikethrough and expandable errors use one state contract", async () => {
   const f = await browserFixture({ bash: "ask", websearch: "ask" }, {
     env: { OPENCODE_ENABLE_EXA: "1" },
   });

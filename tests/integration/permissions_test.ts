@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import type { ContentSession, PermissionRequest } from "@otk/protocol";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
-Deno.test("I13 permission list and originating child events reach parent subscribers only", async () => {
+test("I13 permission list and originating child events reach parent subscribers only", async () => {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
   let server: SidecarTest | undefined,
     rootClient: WsClient | undefined,

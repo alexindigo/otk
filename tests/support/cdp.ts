@@ -1,13 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 // Adapted from kosmozoo/tests/e2e/cdp.cjs: raw CDP, no browser npm dependency.
-import { type ChildProcess, spawn } from "node:child_process";
 import { join } from "@std/path";
 import { freePort, waitFor } from "./opencode.ts";
+import { acquire, bounded, resources } from "./resources.ts";
+import { ownedProcess } from "./process.ts";
 
 type Json = Record<string, unknown>;
 export class Cdp {
   #socket!: WebSocket;
-  #child!: ChildProcess;
+  #stop: () => Promise<void> = () => Promise.resolve();
+  #closing?: Promise<void>;
   #next = 0;
   #pending = new Map<number, {
     resolve: (value: Json) => void;
@@ -18,55 +20,78 @@ export class Cdp {
   errors: unknown[] = [];
 
   static async launch(root: string): Promise<Cdp> {
-    const cdp = new Cdp(), port = freePort();
-    cdp.#child = spawn("/usr/bin/chromium", [
-      "--headless=new",
-      "--no-sandbox",
-      "--disable-dev-shm-usage",
-      "--disable-gpu",
-      "--window-size=1280,800",
-      `--remote-debugging-port=${port}`,
-      `--user-data-dir=${join(root, "chromium-" + port)}`,
-      "about:blank",
-    ], { stdio: "ignore" });
-    try {
-      const target = await waitFor(async () => {
-        const list: { type: string; webSocketDebuggerUrl: string }[] = await (
-          await fetch(`http://127.0.0.1:${port}/json/list`, {
-            signal: AbortSignal.timeout(2000),
-          })
-        ).json();
-        return list.find((item) => item.type === "page");
-      }, (target) => !!target);
-      cdp.#socket = new WebSocket(target!.webSocketDebuggerUrl);
-      await new Promise<void>((resolve, reject) => {
-        cdp.#socket.onopen = () => resolve();
-        cdp.#socket.onerror = () => reject(new Error("CDP connection failed"));
-      });
-      cdp.#socket.onmessage = ({ data }) => {
-        const message = JSON.parse(data);
-        if (message.method) {
-          cdp.events.push(message);
-          if (message.method === "Runtime.exceptionThrown") {
-            cdp.errors.push(message.params.exceptionDetails);
+    return await acquire("Chromium fixture", async () => {
+      const cdp = new Cdp(), port = freePort();
+      const tmp = join(root, `chromium-tmp-${port}`);
+      await Deno.mkdir(tmp);
+      const owner = ownedProcess("/usr/bin/chromium", [
+        "--headless=new",
+        "--no-sandbox",
+        "--disable-dev-shm-usage",
+        "--disable-gpu",
+        "--window-size=1280,800",
+        `--remote-debugging-port=${port}`,
+        `--user-data-dir=${join(root, "chromium-" + port)}`,
+        "about:blank",
+      ], { stdio: "ignore", env: { ...Deno.env.toObject(), TMPDIR: tmp } });
+      cdp.#stop = owner.stop;
+      resources().defer("CDP transport", () => cdp.close());
+      try {
+        const target = await waitFor(async () => {
+          const list: { type: string; webSocketDebuggerUrl: string }[] = await (
+            await fetch(`http://127.0.0.1:${port}/json/list`, {
+              signal: AbortSignal.timeout(2000),
+            })
+          ).json();
+          return list.find((item) => item.type === "page");
+        }, (target) => !!target);
+        cdp.#socket = new WebSocket(target!.webSocketDebuggerUrl);
+        await bounded(
+          "CDP open",
+          new Promise<void>((resolve, reject) => {
+            cdp.#socket.onopen = () => resolve();
+            cdp.#socket.onerror = () =>
+              reject(new Error("CDP connection failed"));
+            cdp.#socket.onclose = () =>
+              reject(new Error("CDP closed before open"));
+          }),
+        );
+        cdp.#socket.onclose = () =>
+          cdp.#rejectPending(new Error("CDP transport closed"));
+        cdp.#socket.onerror = () =>
+          cdp.#rejectPending(new Error("CDP transport failed"));
+        cdp.#socket.onmessage = ({ data }) => {
+          const message = JSON.parse(data);
+          if (message.method) {
+            cdp.events.push(message);
+            if (message.method === "Runtime.exceptionThrown") {
+              cdp.errors.push(message.params.exceptionDetails);
+            }
           }
-        }
-        const pending = cdp.#pending.get(message.id);
-        if (pending) {
-          clearTimeout(pending.timer);
-          cdp.#pending.delete(message.id);
-          if (message.error) pending.reject(new Error(message.error.message));
-          else pending.resolve(message.result);
-        }
-      };
-      await cdp.send("Runtime.enable");
-      await cdp.send("Page.enable");
-      await cdp.send("Network.enable");
-      return cdp;
-    } catch (error) {
-      await cdp.close();
-      throw error;
+          const pending = cdp.#pending.get(message.id);
+          if (pending) {
+            clearTimeout(pending.timer);
+            cdp.#pending.delete(message.id);
+            if (message.error) pending.reject(new Error(message.error.message));
+            else pending.resolve(message.result);
+          }
+        };
+        await cdp.send("Runtime.enable");
+        await cdp.send("Page.enable");
+        await cdp.send("Network.enable");
+        return cdp;
+      } catch (error) {
+        await cdp.close();
+        throw error;
+      }
+    });
+  }
+  #rejectPending(error: Error): void {
+    for (const pending of this.#pending.values()) {
+      clearTimeout(pending.timer);
+      pending.reject(error);
     }
+    this.#pending.clear();
   }
   send(method: string, params: Json = {}): Promise<Json> {
     return new Promise((resolve, reject) => {
@@ -76,7 +101,13 @@ export class Cdp {
         reject(new Error(`CDP timeout: ${method}`));
       }, 30_000);
       this.#pending.set(id, { resolve, reject, timer });
-      this.#socket.send(JSON.stringify({ id, method, params }));
+      try {
+        this.#socket.send(JSON.stringify({ id, method, params }));
+      } catch (error) {
+        clearTimeout(timer);
+        this.#pending.delete(id);
+        reject(error);
+      }
     });
   }
   async evaluate<T = unknown>(expression: string): Promise<T> {
@@ -217,26 +248,17 @@ export class Cdp {
     await Deno.writeFile(path, bytes);
   }
   async close(): Promise<void> {
-    if (this.#socket?.readyState === WebSocket.OPEN) {
-      try {
-        await this.send("Browser.close");
-      } catch { /* Browser already closed. */ }
-    }
-    this.#socket?.close();
-    for (const pending of this.#pending.values()) {
-      clearTimeout(pending.timer);
-      pending.reject(new Error("CDP closed"));
-    }
-    this.#pending.clear();
-    if (
-      this.#child?.pid && this.#child.exitCode === null &&
-      this.#child.signalCode === null
-    ) {
-      const exited = new Promise<void>((resolve) =>
-        this.#child.once("exit", () => resolve())
-      );
-      this.#child.kill("SIGTERM");
-      await exited;
-    }
+    await (this.#closing ??= (async () => {
+      this.#rejectPending(new Error("CDP closed"));
+      const socket = this.#socket;
+      if (socket && socket.readyState !== WebSocket.CLOSED) {
+        const closed = new Promise<void>((resolve) =>
+          socket.addEventListener("close", () => resolve(), { once: true })
+        );
+        socket.close();
+        await this.#stop();
+        await bounded("CDP socket close", closed, 2000);
+      } else await this.#stop();
+    })());
   }
 }

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type { PromptInput } from "@otk/protocol";
@@ -16,7 +17,7 @@ const trigger = ".otk-variant-picker > button";
 const row = (key: string) =>
   `.otk-variant-picker [data-picker-key=${JSON.stringify(key)}]`;
 
-Deno.test("P6 Default shows the muted backend-applied variant at the native consumer; explicit and restored choices are unmuted", async () => {
+test("P6 Default shows the muted backend-applied variant at the native consumer; explicit and restored choices are unmuted", async () => {
   const fake2 = new FakeLlm();
   const f = await browserFixture({}, {
     providers: {

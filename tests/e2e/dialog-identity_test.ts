@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
+import { serve } from "../support/http.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { fixture } from "../support/config.ts";
@@ -23,7 +25,7 @@ async function consumer(run: (browser: Cdp, root: string) => Promise<void>) {
     stderr: "piped",
   }).output();
   assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
-  const server = Deno.serve(
+  const server = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {
       const path = join(
@@ -63,7 +65,7 @@ async function consumer(run: (browser: Cdp, root: string) => Promise<void>) {
   }
 }
 
-Deno.test("same-type dialog replacement mounts a fresh task form with its own save callback", () =>
+test("same-type dialog replacement mounts a fresh task form with its own save callback", () =>
   consumer(async (browser) => {
     await browser.evaluate("dialogTest.task('First task')");
     await browser.poll(
@@ -94,7 +96,7 @@ Deno.test("same-type dialog replacement mounts a fresh task form with its own sa
     );
   }));
 
-Deno.test("late task save cannot close its same-type replacement", () =>
+test("late task save cannot close its same-type replacement", () =>
   consumer(async (browser, root) => {
     await browser.evaluate("dialogTest.task('Saving task')");
     await browser.poll("!!document.querySelector('dialog[open] input')");
@@ -131,7 +133,7 @@ Deno.test("late task save cannot close its same-type replacement", () =>
     );
   }));
 
-Deno.test("dialog invocation owns content input, dismiss, teardown and returned close handles across replacements", () =>
+test("dialog invocation owns content input, dismiss, teardown and returned close handles across replacements", () =>
   consumer(async (browser) => {
     await browser.evaluate(
       "dialogTest.probe('First').then(handle=>globalThis.firstDialog=handle)",

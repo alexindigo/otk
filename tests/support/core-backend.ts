@@ -3,12 +3,14 @@ import { fromFileUrl, join } from "@std/path";
 import type { Capabilities, Harness } from "@otk/harness";
 import { startApplication } from "../../application.ts";
 import { cfg } from "./config.ts";
+import { resources } from "./resources.ts";
 
 /** Real core composition with caller-supplied optional backend capabilities. */
 export async function coreBackendFixture(
   root: string,
   capabilities: Capabilities = {},
 ) {
+  const scope = resources();
   const settings = cfg();
   settings.auth.type = "none";
   settings.server.port = 0;
@@ -74,5 +76,7 @@ export async function coreBackendFixture(
     backend,
     fromFileUrl(new URL("../../web/dist/", import.meta.url)),
   );
+  const stop = app.stop.bind(app);
+  app.stop = scope.defer("core backend application", stop);
   return { app, session, url: `http://127.0.0.1:${app.server.addr.port}` };
 }

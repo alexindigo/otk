@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
-Deno.test("P7/P8 200-line paste and whole-prompt editor save/cancel preserve chips and emit expanded text", async () => {
+test("P7/P8 200-line paste and whole-prompt editor save/cancel preserve chips and emit expanded text", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -103,7 +104,7 @@ Deno.test("P7/P8 200-line paste and whole-prompt editor save/cancel preserve chi
   }
 });
 
-Deno.test("editor changes and attachment completion retain one owner-current draft and submitted bytes", async () => {
+test("editor changes and attachment completion retain one owner-current draft and submitted bytes", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {

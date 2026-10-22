@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { fixture } from "../support/config.ts";
@@ -6,7 +7,7 @@ import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("U7 shared rails keep Search and project light geometry, open Sessions and restore collapsed layout", async () => {
+test("U7 shared rails keep Search and project light geometry, open Sessions and restore collapsed layout", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),

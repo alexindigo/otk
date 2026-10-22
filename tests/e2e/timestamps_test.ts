@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
@@ -17,7 +18,7 @@ const renderedColors = `
     return [...ctx.getImageData(0,0,1,1).data].slice(0,3);
   };
 `;
-Deno.test("creation-time hover and persistent visibility, structural footer date/clock, native final time and completed restart", async () => {
+test("creation-time hover and persistent visibility, structural footer date/clock, native final time and completed restart", async () => {
   const f = await browserFixture();
   let server: SidecarTest | undefined;
   try {

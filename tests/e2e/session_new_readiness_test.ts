@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import {
   browserFixture,
@@ -7,7 +8,7 @@ import {
 } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 
-Deno.test("new-session slash and palette pointer/keyboard invocations resolve their directory while initial project loads are pending", async () => {
+test("new-session slash and palette pointer/keyboard invocations resolve their directory while initial project loads are pending", async () => {
   const f = await browserFixture();
   try {
     const seed = await f.oc.request<{ id: string }>("/session", {

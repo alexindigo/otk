@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { DEFAULT_PREFS, type Preferences } from "@otk/protocol";
 import { fixture } from "../support/config.ts";
@@ -6,7 +7,7 @@ import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("rapid layout gestures preserve independent fields through broadcast and reload", async () => {
+test("rapid layout gestures preserve independent fields through broadcast and reload", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     browser = await Cdp.launch(root),

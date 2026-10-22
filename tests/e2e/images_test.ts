@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -10,7 +11,7 @@ import {
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("U8 pasted and dropped images have one independent chip, persist as loaded message thumbnails and open the original in Dialog", async () => {
+test("U8 pasted and dropped images have one independent chip, persist as loaded message thumbnails and open the original in Dialog", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
@@ -232,7 +233,7 @@ Deno.test("U8 pasted and dropped images have one independent chip, persist as lo
   }
 });
 
-Deno.test("U8 a pending image stays with its session draft and explicit removal cannot be undone by a late upload", async () => {
+test("U8 a pending image stays with its session draft and explicit removal cannot be undone by a late upload", async () => {
   const f = await browserFixture();
   try {
     const a = await f.oc.request<{ id: string }>("/session", {

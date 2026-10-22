@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -8,7 +9,7 @@ import {
 } from "../support/browser-fixture.ts";
 import { McpFixture } from "../support/mcp.ts";
 import { waitFor } from "../support/opencode.ts";
-Deno.test("empty completion results leave Enter, native ArrowUp and normal Escape owned by the prompt", async () => {
+test("empty completion results leave Enter, native ArrowUp and normal Escape owned by the prompt", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -72,7 +73,7 @@ Deno.test("empty completion results leave Enter, native ArrowUp and normal Escap
     await f.stop();
   }
 });
-Deno.test("P3/P4 file ranges, persisted frecency, directories, agent and MCP resource mentions reach stock harness", async () => {
+test("P3/P4 file ranges, persisted frecency, directories, agent and MCP resource mentions reach stock harness", async () => {
   const mcp = new McpFixture(),
     f = await browserFixture(undefined, {
       config: {

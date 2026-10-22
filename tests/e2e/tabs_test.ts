@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { resources, test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import type { InboxSnapshot, Message, TaskRecord } from "@otk/protocol";
 import { type AssistantMessage, usageHeader, UsageLedger } from "@otk/protocol";
@@ -15,14 +16,16 @@ import {
 
 const tab = (id: string) => `[data-tab=${JSON.stringify(id)}]`;
 async function evidence(b: Cdp, root: string) {
-  const state = await b.evaluate(
-    "({hash:location.hash,tabs:document.querySelector('.otk-project-tabs')?.outerHTML,error:document.querySelector('.otk-global-error')?.textContent,html:document.documentElement.outerHTML})",
-  );
-  await Deno.writeTextFile(
-    `${root}/tabs-state.json`,
-    JSON.stringify({ state, errors: b.errors, events: b.events }, null, 2),
-  );
-  console.info("Tabs browser evidence:", root);
+  await resources().observe("tabs browser evidence", async () => {
+    const state = await b.evaluate(
+      "({hash:location.hash,tabs:document.querySelector('.otk-project-tabs')?.outerHTML,error:document.querySelector('.otk-global-error')?.textContent,html:document.documentElement.outerHTML})",
+    );
+    await Deno.writeTextFile(
+      `${root}/tabs-state.json`,
+      JSON.stringify({ state, errors: b.errors, events: b.events }, null, 2),
+    );
+    console.info("Tabs browser evidence:", root);
+  });
 }
 /** Public client owners drive real RPC while tabs have no menu entry point.
  * Package-local units cover the retained UI handlers; return these drivers to
@@ -53,7 +56,7 @@ async function createTask(b: Cdp, name: string) {
   await b.click("dialog button[type=submit]");
   await b.poll("!document.querySelector('dialog')");
 }
-Deno.test("task tabs create rename reorder and close without deleting sessions; ordered crumbs nest helpers and meter matches backend", async () => {
+test("task tabs create rename reorder and close without deleting sessions; ordered crumbs nest helpers and meter matches backend", async () => {
   const root = await fixture(),
     messages: Record<string, Message[]> = {
       otk: [{
@@ -278,7 +281,7 @@ Deno.test("task tabs create rename reorder and close without deleting sessions; 
   }
 });
 
-Deno.test("long task chains fold in the middle, reveal a chosen session and preserve reduced-colour crumb lights", async () => {
+test("long task chains fold in the middle, reveal a chosen session and preserve reduced-colour crumb lights", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),
@@ -329,7 +332,7 @@ Deno.test("long task chains fold in the middle, reveal a chosen session and pres
   }
 });
 
-Deno.test("all four phantom rules render through preview pin double-click send and idle-seen departure", async () => {
+test("all four phantom rules render through preview pin double-click send and idle-seen departure", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),
@@ -410,7 +413,7 @@ Deno.test("all four phantom rules render through preview pin double-click send a
   }
 });
 
-Deno.test("axiom 1: working blocked and unseen-finished ungrouped tabs and rail light stay on-screen after inactive activity and reload", async () => {
+test("axiom 1: working blocked and unseen-finished ungrouped tabs and rail light stay on-screen after inactive activity and reload", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),

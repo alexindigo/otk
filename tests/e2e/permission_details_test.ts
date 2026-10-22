@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
@@ -6,7 +7,7 @@ import { focusNotifications } from "../support/notification-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { waitFor } from "../support/opencode.ts";
 
-Deno.test("U9 permission toast and takeover share exact bash, generic and edit summaries before approval", async () => {
+test("U9 permission toast and takeover share exact bash, generic and edit summaries before approval", async () => {
   const f = await browserFixture({ bash: "ask", read: "ask", edit: "ask" });
   let client: WsClient | undefined;
   const shots = Deno.env.get("OTK_PERMISSION_SHOTS");

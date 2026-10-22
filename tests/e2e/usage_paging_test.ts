@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import {
   type AssistantMessage,
@@ -12,7 +13,7 @@ import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("U4 complete102-step turn and session totals survive paging, duplicate live updates, held snapshots and reload", async () => {
+test("U4 complete102-step turn and session totals survive paging, duplicate live updates, held snapshots and reload", async () => {
   const root = await fixture();
   const messages: Message[] = [
     {

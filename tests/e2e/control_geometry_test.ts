@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
+import { serve } from "../support/http.ts";
 import { assert, assertEquals } from "@std/assert";
 import { preferences } from "@otk/protocol";
 import { join } from "@std/path";
@@ -8,7 +10,7 @@ import { fixture } from "../support/config.ts";
 
 // No consumer width/padding escape hatch: exercise the owning stylesheet with
 // native inputs, including HTML's default/invalid text state and mixed-case types.
-Deno.test("shared field geometry excludes native compact inputs without consumer overrides", async () => {
+test("shared field geometry excludes native compact inputs without consumer overrides", async () => {
   const root = await fixture();
   const css = await Deno.readTextFile("packages/ui/theme.css");
   const fields = [
@@ -55,7 +57,7 @@ Deno.test("shared field geometry excludes native compact inputs without consumer
     ).join("")
   }
     <input type="hidden"><div id="native"></div></main>`;
-  const server = Deno.serve(
+  const server = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     () => new Response(html, { headers: { "content-type": "text/html" } }),
   );
@@ -190,7 +192,7 @@ Deno.test("shared field geometry excludes native compact inputs without consumer
   }
 });
 
-Deno.test("Display and Markdown consumers retain native checkbox bounds and field/select semantics", async () => {
+test("Display and Markdown consumers retain native checkbox bounds and field/select semantics", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {

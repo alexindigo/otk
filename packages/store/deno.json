@@ -10,6 +10,6 @@
   },
   "tasks": {
     "check": "deno check mod.ts",
-    "test": "deno test --allow-read --allow-write tests/"
+    "test": "deno test --allow-read --allow-write --allow-env=TMPDIR,OTK_TEST_ARTIFACTS tests/"
   }
 }

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
+import { serve } from "../support/http.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
@@ -8,11 +10,11 @@ import {
   reloadErrorConsumer,
 } from "../support/error-consumer.ts";
 
-Deno.test("HTTP-only failure is visible with real transport provenance, current draft and reload without requiring an event", async () => {
+test("HTTP-only failure is visible with real transport provenance, current draft and reload without requiring an event", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
   let refused = 0;
-  const proxy = Deno.serve({
+  const proxy = serve({
     hostname: "127.0.0.1",
     port: 0,
     onListen: () => {},
@@ -77,7 +79,7 @@ Deno.test("HTTP-only failure is visible with real transport provenance, current 
   }
 });
 
-Deno.test("native-only failure from an independently invoked stock operation reaches all same-state consumers without a fake HTTP request identity", async () => {
+test("native-only failure from an independently invoked stock operation reaches all same-state consumers without a fake HTTP request identity", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
@@ -130,10 +132,10 @@ Deno.test("native-only failure from an independently invoked stock operation rea
   }
 });
 
-Deno.test("native detail remains current when its independently delivered stock HTTP diagnostic arrives later, with both sources and draft preserved", async () => {
+test("native detail remains current when its independently delivered stock HTTP diagnostic arrives later, with both sources and draft preserved", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined, release: (() => void) | undefined;
-  const proxy = Deno.serve({
+  const proxy = serve({
     hostname: "127.0.0.1",
     port: 0,
     onListen: () => {},

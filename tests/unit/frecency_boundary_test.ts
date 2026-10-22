@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals, assertThrows } from "@std/assert";
 import { join } from "@std/path";
 import { cfg, fixture } from "../support/config.ts";
@@ -17,7 +18,7 @@ import { HarnessError } from "@otk/harness";
 import { Opencode1Adapter } from "@otk/harness-opencode1";
 import { StreamBuffers } from "@otk/content";
 
-Deno.test("frecency RPC uses authoritative session directory instead of a client-claimed project", async () => {
+test("frecency RPC uses authoritative session directory instead of a client-claimed project", async () => {
   const root = await fixture(),
     db = new OtkDb(root, [prefsMigrations, frecencyMigrations]),
     store = new Frecency(db, frecencyOptions);

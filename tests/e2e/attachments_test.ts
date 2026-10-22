@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -7,7 +8,7 @@ import {
   sentFrames,
 } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
-Deno.test("P9 client drop and image paste reach stock opencode as file parts; paths become references", async () => {
+test("P9 client drop and image paste reach stock opencode as file parts; paths become references", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -73,7 +74,7 @@ Deno.test("P9 client drop and image paste reach stock opencode as file parts; pa
   }
 });
 
-Deno.test("P9 oversized combined uploads show an immediate error without sending or losing the draft", async () => {
+test("P9 oversized combined uploads show an immediate error without sending or losing the draft", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {

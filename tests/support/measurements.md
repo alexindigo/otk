@@ -15,8 +15,9 @@ while its native custom-tool dependencies are held, and that its actual custom
 tool appears after release. The controlled V7 probe identifies the pending
 package as `@opencode-ai/plugin`, not the bundled provider SDK: holding those
 config-directory installs prevents the first question and all provider requests;
-releasing them lets the original browser flow complete. Dependency caching and
-fixture cleanup remain separate responsibilities.
+releasing them lets the original browser flow complete. Package preparation and
+resource disposal use the separate contracts below; preparation never replaces
+the actual native readiness join.
 
 ## Native menus
 
@@ -90,3 +91,88 @@ The measurement-control browser test deliberately retains identifiable content
 alongside an unrelated large allocation, proves retention is rejected, then
 releases only the content and proves the unrelated allocation cannot cause a
 false leak report.
+
+## Fixture lifetime
+
+Tests that acquire fixtures import `test` from `tests/support/resources.ts`. It
+runs the ordinary Deno test, with its existing operation/resource sanitizers,
+inside one async resource scope. There is no global Deno-test patch. A
+standalone helper such as the showcase uses `withResources` around the same
+lifetime.
+
+The scope owns every temporary directory and immediately registered service
+disposer. `TMPDIR` must already exist on the assigned VM's project disk; unset,
+relative and OS temporary/runtime paths are rejected. Child opencode and
+Chromium processes receive private TMPDIR children so extracted libraries,
+browser sockets and profiles disappear with the owning fixture. Package-local
+temp factories use the same owner. Temporary-directory paths stay readable until
+test completion, including explicit post-stop evidence readers.
+
+Acquisition transfers a child scope only after setup completes; rejection
+unwinds that child before returning. Restart registers a fresh process lifetime
+and stops it on readiness failure. A process group remains owned after its
+leader exits; stop sends TERM, escalates to KILL if needed, joins the leader and
+observes that no live group members remain. CDP closes pending calls on
+transport loss or send failure; socket open/close and teardown have failure
+bounds.
+
+Every disposer is idempotent and joined. Explicit finally cleanup records errors
+in its scope rather than overwriting a test-body failure. Evidence collection
+and reverse-order disposal attempt all owners, even when a capture or disposer
+fails; the eventual error retains both primary and cleanup failures.
+Native/browser and raw HTTP/WS fixtures register their listener/transport
+lifetime immediately.
+
+Before scratch removal, root-level JSON, HTML, PNG, log and heap-snapshot
+evidence is exported to `OTK_TEST_ARTIFACTS`, or `.test-state/artifacts` by
+default. Each export has its test identity and failure metadata. XDG databases,
+dependency trees and Chromium profiles are scratch, not exported evidence. A
+fresh run root owns its artifact retention; the test never deletes an earlier
+run's evidence.
+
+Lifetime measurements compare complete before/after TMPDIR and fixture-directory
+inventories, process identities (PID plus start time) and listeners around both
+a focused run and the full canonical gate. The acceptance result is zero new
+scratch, run-owned processes and listeners; explicitly exported evidence is
+accounted for separately. Process ownership follows the runner's descendants and
+their owned process groups, including descendants reparented after a leader
+exits. The dedicated supervisor unit's inherited cgroup retains that ownership
+across double forks and sampling gaps. Complete global process inventories and
+external-service replacements are retained as separate observations; an
+unrelated desktop-session service restarted by its own supervisor cannot fail
+the run's process-lifetime check. A passing test process is insufficient: the
+failed-acquisition control also attempts to bind the acquired provider's actual
+port before diagnostic cleanup, observing a listener that ordinary Deno test
+exit can hide.
+
+## Shared native packages
+
+Prepare dependencies explicitly once, inside the assigned OTK VM, before the
+test suite:
+
+```sh
+deno run -A tests/support/prepare-provider-cache.ts
+```
+
+This uses a real custom-tool registry read to populate stock1.18.34's config and
+project dependency path. With no custom tool, the registry can return built-ins
+before that path exists; health or built-in IDs alone are not cache preparation.
+The native SDK used by the scripted provider is bundled; the characterized live
+install is `@opencode-ai/plugin` and its transitive provider dependencies.
+
+`OTK_TEST_PROVIDER_CACHE` optionally selects the prepared cache; the default is
+`provider-cache/opencode-1.18.34` beside TMPDIR, outside disposable scratch.
+Preparation uses an exclusive directory lock and atomic publication; a present
+but invalid cache fails with preparation instructions, without a live-install
+fallback. Native health and the prepared plugin/lock versions must match1.18.34.
+
+Each fixture copies the two package manifests into its own global and project
+config directories and links only the prepared dependency tree. Auth, config,
+state, data and native cache directories remain isolated. Ordinary fixtures
+cannot populate a missing package cache from npm. Only explicit preparation and
+the dedicated uncached readiness barrier select `packageCache: false`.
+
+The offline regression starts two independent native instances with a denied
+registry. Each must expose its actual custom tool and finish a scripted provider
+reply, while the registry receives zero requests. Native tool-registry readiness
+and the existing first-question assertions remain independent requirements.

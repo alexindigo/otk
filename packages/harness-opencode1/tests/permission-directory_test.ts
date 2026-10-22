@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { Client } from "../client.ts";
 import { permissions } from "../permissions.ts";
@@ -8,7 +9,7 @@ import { DatabaseSync } from "node:sqlite";
 import { Opencode1Adapter } from "../adapter.ts";
 import { waitFor } from "../../../tests/support/opencode.ts";
 
-Deno.test("permission reply without pending instance resolves and always sends a directory", async () => {
+test("permission reply without pending instance resolves and always sends a directory", async () => {
   let resolved = 0;
   const client = new Client(
     { ...cfg().harness, url: "http://native" },
@@ -40,7 +41,7 @@ Deno.test("permission reply without pending instance resolves and always sends a
   assertEquals(resolved, 1);
 });
 
-Deno.test("bootstrap permission reply retains its listing instance even when session metadata names another directory", async () => {
+test("bootstrap permission reply retains its listing instance even when session metadata names another directory", async () => {
   const settings = cfg(), path = join(await fixture(), "native.db");
   const db = new DatabaseSync(path);
   db.exec(

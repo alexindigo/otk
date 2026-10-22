@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -12,7 +13,7 @@ import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("U14 r2 one money rule and exact title-free accessibility reach overlay, footer, meter and session rows", async () => {
+test("U14 r2 one money rule and exact title-free accessibility reach overlay, footer, meter and session rows", async () => {
   const root = await fixture();
   let amount = 0;
   const message = (): AssistantMessage => ({

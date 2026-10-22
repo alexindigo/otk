@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import {
   type AssistantMessage,
@@ -18,7 +19,7 @@ const row = (id: string) => `.otk-session-row[data-session="${id}"]`;
 const cost = (id: string) =>
   `document.querySelector('${row(id)} .otk-session-cost')?.textContent`;
 
-Deno.test("U5 Sessions rows present whole-session usage for unopened sessions and helpers, refresh live and respect persisted Show cost", async () => {
+test("U5 Sessions rows present whole-session usage for unopened sessions and helpers, refresh live and respect persisted Show cost", async () => {
   const root = await fixture();
   const step = (
     sessionID: string,

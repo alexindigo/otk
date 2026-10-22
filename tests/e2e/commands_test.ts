@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
@@ -9,7 +10,7 @@ import {
   assertErrorConsumer,
   reloadErrorConsumer,
 } from "../support/error-consumer.ts";
-Deno.test("P5 project, MCP and skill slash commands run with multiline arguments; builtins preserve dirty navigation", async () => {
+test("P5 project, MCP and skill slash commands run with multiline arguments; builtins preserve dirty navigation", async () => {
   const mcp = new McpFixture(),
     f = await browserFixture(undefined, {
       config: {
@@ -120,7 +121,7 @@ Deno.test("P5 project, MCP and skill slash commands run with multiline arguments
     await mcp.stop();
   }
 });
-Deno.test("long slash admission clears the sent draft and keeps a new draft usable until the real turn completes", async () => {
+test("long slash admission clears the sent draft and keeps a new draft usable until the real turn completes", async () => {
   const f = await browserFixture(undefined, {
     async prepare(oc) {
       await Deno.mkdir(join(oc.directory, ".opencode/command"), {
@@ -173,7 +174,7 @@ Deno.test("long slash admission clears the sent draft and keeps a new draft usab
     await f.stop();
   }
 });
-Deno.test("deferred slash failure reaches the session consumer and reload while preserving the new draft", async () => {
+test("deferred slash failure reaches the session consumer and reload while preserving the new draft", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "./resources.ts";
 // Explicit fixture capture, run once inside the named OTK VM before history gates.
 import { assertEquals } from "@std/assert";
 import { FakeLlm } from "./fake-llm.ts";
@@ -8,7 +9,7 @@ import { fromFileUrl } from "@std/path";
 import { History } from "@otk/harness-opencode1";
 const pixel =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
-Deno.test("capture prompt history fixture from real opencode 1.18.34", async () => {
+test("capture prompt history fixture from real opencode 1.18.34", async () => {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
   let stopped = false;
   try {

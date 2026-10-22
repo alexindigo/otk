@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -51,7 +52,7 @@ async function finish(
     parts: [{ kind: "text", text: "Run notification completion" }],
   });
 }
-Deno.test("D6 focused background completion opens while retaining the previous session draft; selected completion stays silent", async () => {
+test("D6 focused background completion opens while retaining the previous session draft; selected completion stays silent", async () => {
   const f = await browserFixture();
   let ws: WsClient | undefined;
   try {
@@ -119,7 +120,7 @@ Deno.test("D6 focused background completion opens while retaining the previous s
     await f.stop();
   }
 });
-Deno.test("D7 real hidden/granted Notification tag replacement, session favicon count, guarded default action and focus retraction", async () => {
+test("D7 real hidden/granted Notification tag replacement, session favicon count, guarded default action and focus retraction", async () => {
   const f = await browserFixture();
   let ws: WsClient | undefined, restore: (() => Promise<void>) | undefined;
   try {
@@ -207,7 +208,7 @@ Deno.test("D7 real hidden/granted Notification tag replacement, session favicon 
     await f.stop();
   }
 });
-Deno.test("D8 OS opt-in calls actual denied browser permission, persists host choice, exposes blocked status and hidden toast fallback", async () => {
+test("D8 OS opt-in calls actual denied browser permission, persists host choice, exposes blocked status and hidden toast fallback", async () => {
   const f = await browserFixture();
   let ws: WsClient | undefined, restore: (() => Promise<void>) | undefined;
   try {
@@ -263,7 +264,7 @@ Deno.test("D8 OS opt-in calls actual denied browser permission, persists host ch
     await f.stop();
   }
 });
-Deno.test("granted but unsupported Notification constructor exposes unavailability and uses in-page fallback", async () => {
+test("granted but unsupported Notification constructor exposes unavailability and uses in-page fallback", async () => {
   const f = await browserFixture();
   let ws: WsClient | undefined, restore: (() => Promise<void>) | undefined;
   try {
@@ -301,7 +302,7 @@ Deno.test("granted but unsupported Notification constructor exposes unavailabili
     await f.stop();
   }
 });
-Deno.test("D9 background child Allow once targets originating remote family and produces actual stock tool/file outcome", async () => {
+test("D9 background child Allow once targets originating remote family and produces actual stock tool/file outcome", async () => {
   const local = await browserFixture(), remote = await browserFixture();
   let ws: WsClient | undefined;
   try {
@@ -431,7 +432,7 @@ Deno.test("D9 background child Allow once targets originating remote family and 
     await remote.stop();
   }
 });
-Deno.test("Web Audio gesture unlock schedules distinct running done/input tone graphs; notification preference reloads", async () => {
+test("Web Audio gesture unlock schedules distinct running done/input tone graphs; notification preference reloads", async () => {
   const f = await browserFixture();
   let ws: WsClient | undefined;
   try {

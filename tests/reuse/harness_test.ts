@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { Opencode1Adapter, type Opencode1Config } from "@otk/harness-opencode1";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest } from "../support/opencode.ts";
 import { listSessions } from "./harness-consumer.ts";
 
-Deno.test("standalone harness consumer lists stock-server sessions without a sidecar", async () => {
+test("standalone harness consumer lists stock-server sessions without a sidecar", async () => {
   const fake = new FakeLlm();
   const oc = await OpencodeTest.start(fake);
   const config: Opencode1Config = {

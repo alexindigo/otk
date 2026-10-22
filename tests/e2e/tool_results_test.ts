@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { runTool } from "../support/rendering.ts";
 import { highlightedRange } from "../support/highlight.ts";
 
-Deno.test("typed results show highlighted native file ranges, paths and grep matches without model envelopes or repeated headers, including reload", async () => {
+test("typed results show highlighted native file ranges, paths and grep matches without model envelopes or repeated headers, including reload", async () => {
   const source =
     "// first\nexport const otk_result_marker = 1;\nexport const third = 2;\n// fourth\n";
   const f = await browserFixture({
@@ -185,7 +186,7 @@ Deno.test("typed results show highlighted native file ranges, paths and grep mat
   }
 });
 
-Deno.test("empty result pages retain offset and total without inverted ranges or false empty-file claims", async () => {
+test("empty result pages retain offset and total without inverted ranges or false empty-file claims", async () => {
   const f = await browserFixture({ read: "allow" }, {
     prepare: async (oc) => {
       await Deno.mkdir(join(oc.directory, "src"));

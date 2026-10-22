@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
+import { serve } from "../support/http.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
 
-Deno.test("independent public UI consumer renders external tools twice, updates live, routes callbacks and retains isolated fallback", async () => {
+test("independent public UI consumer renders external tools twice, updates live, routes callbacks and retains isolated fallback", async () => {
   const root = await fixture(), dist = join(root, "dist");
   const build = await new Deno.Command(Deno.execPath(), {
     args: [
@@ -23,7 +25,7 @@ Deno.test("independent public UI consumer renders external tools twice, updates 
     stderr: "piped",
   }).output();
   assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
-  const server = Deno.serve(
+  const server = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {
       const pathname = new URL(request.url).pathname;

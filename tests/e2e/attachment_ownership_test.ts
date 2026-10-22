@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 
-Deno.test("P9 upload completions preserve edits, removals, concurrent work and replaced session drafts", async () => {
+test("P9 upload completions preserve edits, removals, concurrent work and replaced session drafts", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {

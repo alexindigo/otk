@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
@@ -9,7 +10,7 @@ import { waitFor } from "../../../tests/support/opencode.ts";
 import { Opencode1Adapter } from "../adapter.ts";
 
 for (const database of ["missing", "incompatible", "no hints"] as const) {
-  Deno.test(`bootstrap inventories paged session directories before readiness with ${database} SQLite`, async () => {
+  test(`bootstrap inventories paged session directories before readiness with ${database} SQLite`, async () => {
     const settings = cfg(), root = await fixture();
     settings.harness.db = join(root, "native.db");
     if (database !== "missing") {

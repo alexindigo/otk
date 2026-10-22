@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import type { Info, RawPart } from "@otk/harness-opencode1";
-Deno.test("R5 task progress, real child navigation, parent/history and sibling cycle preserve navigation ownership", async () => {
+test("R5 task progress, real child navigation, parent/history and sibling cycle preserve navigation ownership", async () => {
   const f = await browserFixture({ bash: "ask", task: "allow" });
   try {
     const root = await f.oc.request<{ id: string }>("/session", {

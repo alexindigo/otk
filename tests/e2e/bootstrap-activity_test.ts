@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -8,7 +9,7 @@ import {
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("native bootstrap without SQLite keeps already-working and blocked phantom tabs visible after reload with collapsed panels", async () => {
+test("native bootstrap without SQLite keeps already-working and blocked phantom tabs visible after reload with collapsed panels", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
   const held = f.fake.queueHeld({ chunks: ["Working before OTK connects"] });

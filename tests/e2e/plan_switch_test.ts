@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -10,7 +11,7 @@ import {
 import { FakeLlm } from "../support/fake-llm.ts";
 import { waitFor } from "../support/opencode.ts";
 
-Deno.test("V7 completed plan_exit and plan_enter switch the footer and the next prompt agent, configured model and variant at the native consumer", async () => {
+test("V7 completed plan_exit and plan_enter switch the footer and the next prompt agent, configured model and variant at the native consumer", async () => {
   const provider = new FakeLlm();
   const f = await browserFixture({ "*": "allow" }, {
     env: { OPENCODE_CLIENT: "cli", OPENCODE_EXPERIMENTAL_PLAN_MODE: "true" },

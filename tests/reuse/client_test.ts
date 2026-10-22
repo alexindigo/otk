@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { observeReply } from "./client-consumer.ts";
 
-Deno.test("standalone client consumes real core RPC and reduces live ops in plain Deno", async () => {
+test("standalone client consumes real core RPC and reduces live ops in plain Deno", async () => {
   const fake = new FakeLlm();
   const oc = await OpencodeTest.start(fake);
   let core: SidecarTest | undefined;

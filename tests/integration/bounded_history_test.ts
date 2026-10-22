@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -16,7 +17,7 @@ import {
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest } from "../support/opencode.ts";
 
-Deno.test("stock WAL metadata and bounded API fallback reach revert, task cards and authoritative @ ranking", async () => {
+test("stock WAL metadata and bounded API fallback reach revert, task cards and authoritative @ ranking", async () => {
   const fake = new FakeLlm();
   const oc = await OpencodeTest.start(fake);
   const adapters: Opencode1Adapter[] = [];

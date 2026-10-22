@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -23,7 +24,7 @@ async function capture(browser: Cdp, root: string, name: string) {
   await browser.screenshot(path);
   console.info("Browser capture:", path);
 }
-Deno.test("E1 project inbox and Sessions tree scoped by directory, descendants nested, SPA assets and API boundary", async () => {
+test("E1 project inbox and Sessions tree scoped by directory, descendants nested, SPA assets and API boundary", async () => {
   const f = await browserFixture();
   try {
     const root = await f.oc.request<{ id: string }>("/session", {
@@ -125,7 +126,7 @@ Deno.test("E1 project inbox and Sessions tree scoped by directory, descendants n
     await f.stop();
   }
 });
-Deno.test("E2 new session, trusted prompt, incremental structured markdown and idle outcome", async () => {
+test("E2 new session, trusted prompt, incremental structured markdown and idle outcome", async () => {
   const f = await browserFixture();
   try {
     const seed = await f.oc.request<{ id: string }>("/session", {
@@ -194,7 +195,7 @@ Deno.test("E2 new session, trusted prompt, incremental structured markdown and i
     await f.stop();
   }
 });
-Deno.test("E5 Esc confirmation then abort yields interrupted footer and idle session", async () => {
+test("E5 Esc confirmation then abort yields interrupted footer and idle session", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -238,7 +239,7 @@ Deno.test("E5 Esc confirmation then abort yields interrupted footer and idle ses
     await f.stop();
   }
 });
-Deno.test("E6 frozen harness stream resyncs complete reply and idle without reload", async () => {
+test("E6 frozen harness stream resyncs complete reply and idle without reload", async () => {
   const f = await browserFixture(), proxy = new FreezeProxy(f.oc.port);
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -289,7 +290,7 @@ Deno.test("E6 frozen harness stream resyncs complete reply and idle without relo
     await f.stop();
   }
 });
-Deno.test("E7 add authenticated second sidecar, merged groups, prompt and persistence", async () => {
+test("E7 add authenticated second sidecar, merged groups, prompt and persistence", async () => {
   const f = await browserFixture(),
     fake2 = new FakeLlm(),
     oc2 = await OpencodeTest.start(fake2);
@@ -367,7 +368,7 @@ Deno.test("E7 add authenticated second sidecar, merged groups, prompt and persis
     await f.stop();
   }
 });
-Deno.test("E8 switch releases >=2 MB session objects, unsubscribes and removes its DOM", async () => {
+test("E8 switch releases >=2 MB session objects, unsubscribes and removes its DOM", async () => {
   const f = await browserFixture();
   try {
     const a = await f.oc.request<{ id: string }>("/session", {
@@ -444,7 +445,7 @@ Deno.test("E8 switch releases >=2 MB session objects, unsubscribes and removes i
     await f.stop();
   }
 });
-Deno.test("E9 serving-sidecar wrong password error then correct login", async () => {
+test("E9 serving-sidecar wrong password error then correct login", async () => {
   const f = await browserFixture();
   try {
     await f.oc.request("/session", {
@@ -484,7 +485,7 @@ Deno.test("E9 serving-sidecar wrong password error then correct login", async ()
     await f.stop();
   }
 });
-Deno.test("E10 75-second idle browser stays connected and sends JSON pongs at 20-second intervals", async () => {
+test("E10 75-second idle browser stays connected and sends JSON pongs at 20-second intervals", async () => {
   const f = await browserFixture();
   try {
     const server = await f.sidecar(), browser = await f.browser(server.url);
@@ -523,7 +524,7 @@ Deno.test("E10 75-second idle browser stays connected and sends JSON pongs at 20
     await f.stop();
   }
 });
-Deno.test("web setup persists auth choice and routes back/forward select the correct session", async () => {
+test("web setup persists auth choice and routes back/forward select the correct session", async () => {
   const f = await browserFixture();
   try {
     const a = await f.oc.request<{ id: string }>("/session", {
@@ -572,7 +573,7 @@ Deno.test("web setup persists auth choice and routes back/forward select the cor
   }
 });
 
-Deno.test("web history paging preserves viewport and autoscroll follows only the bottom", async () => {
+test("web history paging preserves viewport and autoscroll follows only the bottom", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -656,7 +657,7 @@ Deno.test("web history paging preserves viewport and autoscroll follows only the
   }
 });
 
-Deno.test("web history navigation retains each session's draft and keeps URL and content together", async () => {
+test("web history navigation retains each session's draft and keeps URL and content together", async () => {
   const f = await browserFixture();
   try {
     const a = await f.oc.request<{ id: string }>("/session", {
@@ -687,7 +688,7 @@ Deno.test("web history navigation retains each session's draft and keeps URL and
   }
 });
 
-Deno.test("web sidecar restart resubscribes open session and refetches final content without reload", async () => {
+test("web sidecar restart resubscribes open session and refetches final content without reload", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -729,7 +730,7 @@ Deno.test("web sidecar restart resubscribes open session and refetches final con
   }
 });
 
-Deno.test("web renders all remaining markdown block and inline kinds from the real adapter", async () => {
+test("web renders all remaining markdown block and inline kinds from the real adapter", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
+import { serve } from "../support/http.ts";
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import type { ModelCatalog } from "@otk/protocol";
 import {
@@ -11,7 +13,7 @@ import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 
-Deno.test("U1 composer and meter share exactly one models.list per session open", async () => {
+test("U1 composer and meter share exactly one models.list per session open", async () => {
   const root = await fixture(), pending = Promise.withResolvers<ModelCatalog>();
   const catalog: ModelCatalog = {
     default: { provider: "opencode", model: "beam-free" },
@@ -92,10 +94,10 @@ Deno.test("U1 composer and meter share exactly one models.list per session open"
   }
 });
 
-Deno.test("U1 catalog context limit reaches the meter for OpenCode Beam Free", async () => {
+test("U1 catalog context limit reaches the meter for OpenCode Beam Free", async () => {
   // Stock opencode consumes a credential-free local provider, including reported
   // usage. Keep its catalog in the real native path, rather than injecting UI data.
-  const provider = Deno.serve(
+  const provider = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {
       await request.json();

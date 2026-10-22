@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type { ContentOp } from "@otk/protocol";
@@ -7,7 +8,7 @@ import { StreamBuffers } from "@otk/content";
 import { cfg, fixture } from "../../../tests/support/config.ts";
 import { waitFor } from "../../../tests/support/opencode.ts";
 
-Deno.test("native pending permission events own normalized family reads and removal without a second live HTTP list", async () => {
+test("native pending permission events own normalized family reads and removal without a second live HTTP list", async () => {
   const settings = cfg();
   settings.harness.db = join(await fixture(), "missing.db");
   const root = {

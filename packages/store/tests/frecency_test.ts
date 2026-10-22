@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { Frecency, OtkDb } from "@otk/store";
 import { fixture, frecencyOptions, migrations } from "./support.ts";
 
-Deno.test("frecency stores canonical project paths, increments and survives reopen", async () => {
+test("frecency stores canonical project paths, increments and survives reopen", async () => {
   const root = await fixture(),
     db = new OtkDb(root, migrations),
     store = new Frecency(db, frecencyOptions);
@@ -24,7 +25,7 @@ Deno.test("frecency stores canonical project paths, increments and survives reop
   }
 });
 
-Deno.test("frecency persists at most 1000 canonical entries across projects", async () => {
+test("frecency persists at most 1000 canonical entries across projects", async () => {
   const root = await fixture(),
     db = new OtkDb(root, migrations),
     store = new Frecency(db, frecencyOptions);
@@ -48,7 +49,7 @@ Deno.test("frecency persists at most 1000 canonical entries across projects", as
   }
 });
 
-Deno.test("frecency rejects oversized keys before persisting them", async () => {
+test("frecency rejects oversized keys before persisting them", async () => {
   const root = await fixture(),
     db = new OtkDb(root, migrations),
     store = new Frecency(db, frecencyOptions);

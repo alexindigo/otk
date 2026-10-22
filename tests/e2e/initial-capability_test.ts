@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
@@ -47,7 +48,7 @@ const visiblePermission = `(() => {
     !!owner.querySelector('button:not(:disabled)');
 })()`;
 
-Deno.test("initial direct route and reload render an already pending native permission without switching sessions", async () => {
+test("initial direct route and reload render an already pending native permission without switching sessions", async () => {
   const f = await browserFixture({ bash: "ask" });
   let browser: Cdp | undefined;
   try {
@@ -105,7 +106,7 @@ Deno.test("initial direct route and reload render an already pending native perm
   }
 });
 
-Deno.test("initial advertised session capabilities activate question and prompt consumers after welcome and reload", async () => {
+test("initial advertised session capabilities activate question and prompt consumers after welcome and reload", async () => {
   const root = await fixture();
   const rejected: string[] = [];
   const { app, url } = await coreBackendFixture(root, {

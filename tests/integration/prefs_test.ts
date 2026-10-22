@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { DEFAULT_PREFS, type Preferences } from "@otk/protocol";
@@ -6,7 +7,7 @@ import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
-Deno.test("prefs RPC persists across sidecar restart and broadcasts to other connections", async () => {
+test("prefs RPC persists across sidecar restart and broadcasts to other connections", async () => {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
   const clients: WsClient[] = [], servers: SidecarTest[] = [];
   try {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture } from "../support/browser-fixture.ts";
@@ -6,7 +7,7 @@ import { WsClient } from "../support/ws-client.ts";
 import type { CommandOption } from "@otk/protocol";
 import type { Message } from "@otk/protocol";
 import { waitFor } from "../support/opencode.ts";
-Deno.test("custom command RPC returns normalized catalog and records expanded multiline content", async () => {
+test("custom command RPC returns normalized catalog and records expanded multiline content", async () => {
   const f = await browserFixture(undefined, {
     async prepare(oc) {
       await Deno.mkdir(join(oc.directory, ".opencode/command"), {

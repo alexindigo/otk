@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assertEquals, assertThrows } from "@std/assert";
 import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
@@ -46,7 +47,7 @@ const shippedVersions = [
   { feature: "prefs", version: 1 },
 ];
 
-Deno.test("original version 1 and 2 databases preserve schema, timestamps and data", async () => {
+test("original version 1 and 2 databases preserve schema, timestamps and data", async () => {
   for (const version of [1, 2]) {
     const root = await fixture(), path = join(root, "otk.db");
     const original = new DatabaseSync(path);
@@ -127,7 +128,7 @@ Deno.test("original version 1 and 2 databases preserve schema, timestamps and da
   }
 });
 
-Deno.test("feature upgrade lists reject gaps, duplicates and reordering before mutation", async () => {
+test("feature upgrade lists reject gaps, duplicates and reordering before mutation", async () => {
   const root = await fixture(), db = new OtkDb(root, migrations);
   db.connection.prepare("INSERT INTO prefs VALUES(?,?,?)").run(
     "timestamps",
@@ -181,7 +182,7 @@ Deno.test("feature upgrade lists reject gaps, duplicates and reordering before m
   }
 });
 
-Deno.test("a failed feature rolls back all pending SQL and versions, releases connection and can retry", async () => {
+test("a failed feature rolls back all pending SQL and versions, releases connection and can retry", async () => {
   const root = await fixture();
   const failed: readonly FeatureMigrations[] = [
     {
@@ -241,7 +242,7 @@ Deno.test("a failed feature rolls back all pending SQL and versions, releases co
   }
 });
 
-Deno.test("public database accepts independent features and never reads or replays applied SQL", async () => {
+test("public database accepts independent features and never reads or replays applied SQL", async () => {
   const root = await fixture();
   const db = new OtkDb(root, [{
     feature: "custom",
@@ -273,7 +274,7 @@ Deno.test("public database accepts independent features and never reads or repla
   }
 });
 
-Deno.test("fresh features start at v1, compose in any order and upgrade without editing others", async () => {
+test("fresh features start at v1, compose in any order and upgrade without editing others", async () => {
   const root = await fixture();
   const first = new OtkDb(root, [frecencyMigrations]);
   new Frecency(first, frecencyOptions).bump("/project", "README.md");
@@ -340,7 +341,7 @@ Deno.test("fresh features start at v1, compose in any order and upgrade without 
   reordered.close();
 });
 
-Deno.test("unknown or noncontiguous applied versions reject every selected feature before pending SQL", async () => {
+test("unknown or noncontiguous applied versions reject every selected feature before pending SQL", async () => {
   for (const invalid of [0, 2, 3]) {
     const root = await fixture(), db = new OtkDb(root, migrations);
     db.connection.exec("DELETE FROM otk_migrations WHERE feature='prefs'");
@@ -378,7 +379,7 @@ Deno.test("unknown or noncontiguous applied versions reject every selected featu
   }
 });
 
-Deno.test("unsupported legacy versions fail without mapping or data changes", async () => {
+test("unsupported legacy versions fail without mapping or data changes", async () => {
   for (const version of [-1, 3, 99]) {
     const root = await fixture(),
       original = new DatabaseSync(join(root, "otk.db"));
@@ -412,7 +413,7 @@ Deno.test("unsupported legacy versions fail without mapping or data changes", as
   }
 });
 
-Deno.test("legacy mapping records all old features even for a smaller composition and runs only once", async () => {
+test("legacy mapping records all old features even for a smaller composition and runs only once", async () => {
   const root = await fixture(),
     original = new DatabaseSync(join(root, "otk.db"));
   original.exec(`${legacyPrefs} ${legacyFrecency} PRAGMA user_version=2`);

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type { ModelCatalog, Preferences, PromptInput } from "@otk/protocol";
@@ -203,7 +204,7 @@ async function pointer(b: Cdp, selector: string) {
   );
 }
 
-Deno.test("V5 composer picks reach native messages and the selected provider; restore, favourites, keyboard, slash and shell keep the same selection", async () => {
+test("V5 composer picks reach native messages and the selected provider; restore, favourites, keyboard, slash and shell keep the same selection", async () => {
   const fake2 = new FakeLlm();
   const f = await browserFixture({ bash: "allow" }, {
     providers: {
@@ -609,7 +610,7 @@ Deno.test("V5 composer picks reach native messages and the selected provider; re
   }
 });
 
-Deno.test("V5 restored missing model remains sendable; catalog loading and errors are unknown, Retry establishes unavailability", async () => {
+test("V5 restored missing model remains sendable; catalog loading and errors are unknown, Retry establishes unavailability", async () => {
   const root = await fixture();
   let reject!: (error: Error) => void, calls = 0;
   const sent: PromptInput[] = [];
@@ -723,7 +724,7 @@ Deno.test("V5 restored missing model remains sendable; catalog loading and error
   }
 });
 
-Deno.test("V5 backend without model capability renders a plain model label and makes no catalog request", async () => {
+test("V5 backend without model capability renders a plain model label and makes no catalog request", async () => {
   const root = await fixture(), { app, url } = await coreBackendFixture(root);
   const b = await Browser.launch(root);
   try {
@@ -745,7 +746,7 @@ Deno.test("V5 backend without model capability renders a plain model label and m
   }
 });
 
-Deno.test("round2 prompt snapshots the agent/model/variant picked while first catalog readiness is pending", async () => {
+test("round2 prompt snapshots the agent/model/variant picked while first catalog readiness is pending", async () => {
   const root = await fixture(), sent: PromptInput[] = [];
   let resolve!: (catalog: ModelCatalog) => void;
   const pending = new Promise<ModelCatalog>((done) => {
@@ -815,7 +816,7 @@ Deno.test("round2 prompt snapshots the agent/model/variant picked while first ca
   }
 });
 
-Deno.test("round2 failed unknown catalog preserves the restored variant in the footer and at the prompt consumer", async () => {
+test("round2 failed unknown catalog preserves the restored variant in the footer and at the prompt consumer", async () => {
   const root = await fixture(), sent: PromptInput[] = [];
   const { app, url } = await coreBackendFixture(root, {
     models: { listModels: () => Promise.reject(new Error("Catalog offline")) },
@@ -881,7 +882,7 @@ Deno.test("round2 failed unknown catalog preserves the restored variant in the f
   }
 });
 
-Deno.test("U2 native null selection metadata stays absent while the model catalog is pending and at the prompt consumer", async () => {
+test("U2 native null selection metadata stays absent while the model catalog is pending and at the prompt consumer", async () => {
   const root = await fixture(), settings = cfg();
   settings.harness.db = join(root, "absent.db");
   const native = new Opencode1Adapter(settings, undefined, (input) => {

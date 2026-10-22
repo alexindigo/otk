@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type { Preferences, TaskRecord } from "@otk/protocol";
@@ -95,7 +96,7 @@ async function rightClick(
   }
 }
 
-Deno.test("C3 round 2: session menus omit current-place no-ops while background Open and task promotion still act", async () => {
+test("C3 round 2: session menus omit current-place no-ops while background Open and task promotion still act", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),
@@ -204,7 +205,7 @@ Deno.test("C3 round 2: session menus omit current-place no-ops while background 
   }
 });
 
-Deno.test("C3 areas: empty regions, inner groups and shared control commands reach their consumers", async () => {
+test("C3 areas: empty regions, inner groups and shared control commands reach their consumers", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),
@@ -414,7 +415,7 @@ Deno.test("C3 areas: empty regions, inner groups and shared control commands rea
   }
 });
 
-Deno.test("C3 stock areas: picker and approval commands, Activity panel and Dark/Linen menu geometry", async () => {
+test("C3 stock areas: picker and approval commands, Activity panel and Dark/Linen menu geometry", async () => {
   const f = await browserFixture({ bash: "allow" });
   let client: WsClient | undefined;
   try {

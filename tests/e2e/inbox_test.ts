@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type { InboxSnapshot } from "@otk/protocol";
@@ -24,7 +25,7 @@ async function visible(browser: Cdp, selector: string) {
     });if(!e)return false;const r=e.getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight&&getComputedStyle(e).visibility!=='hidden'})()`,
   );
 }
-Deno.test("inbox activity returns inactive projects and all three required lights remain on-screen across reload and the rail", async () => {
+test("inbox activity returns inactive projects and all three required lights remain on-screen across reload and the rail", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     browser = await Cdp.launch(root),
@@ -133,7 +134,7 @@ Deno.test("inbox activity returns inactive projects and all three required light
   }
 });
 
-Deno.test("inbox mocked-clock ageing, reduced-colour underlines, visit resets on opening and acting, and inactive clock pause", async () => {
+test("inbox mocked-clock ageing, reduced-colour underlines, visit resets on opening and acting, and inactive clock pause", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     browser = await Cdp.launch(root),
@@ -252,7 +253,7 @@ Deno.test("inbox mocked-clock ageing, reduced-colour underlines, visit resets on
   }
 });
 
-Deno.test("inbox adds empty and scanned projects, persists layout bounds and keeps centre navigation guarded", async () => {
+test("inbox adds empty and scanned projects, persists layout bounds and keeps centre navigation guarded", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     browser = await Cdp.launch(root),
@@ -340,7 +341,7 @@ Deno.test("inbox adds empty and scanned projects, persists layout bounds and kee
     await f.app.stop();
   }
 });
-Deno.test("inbox merges servers with duplicate-name machine labels and stable order through status changes", async () => {
+test("inbox merges servers with duplicate-name machine labels and stable order through status changes", async () => {
   const root = await fixture(),
     a = await inboxBrowserFixture(join(root, "first")),
     b = await inboxBrowserFixture(join(root, "second"), [a.url]),
@@ -399,7 +400,7 @@ Deno.test("inbox merges servers with duplicate-name machine labels and stable or
     await a.app.stop();
   }
 });
-Deno.test("opening the already-selected session resets its visit without replacing the URL or draft", async () => {
+test("opening the already-selected session resets its visit without replacing the URL or draft", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     browser = await Cdp.launch(root),

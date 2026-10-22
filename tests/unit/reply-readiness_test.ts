@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { FakeLlm } from "../support/fake-llm.ts";
 
-Deno.test("held provider replies deliver content but cannot finish before release", async () => {
+test("held provider replies deliver content but cannot finish before release", async () => {
   const fake = new FakeLlm();
   try {
     const reply = fake.queueHeld({ chunks: ["Held content."] });
@@ -43,7 +44,7 @@ Deno.test("held provider replies deliver content but cannot finish before releas
   }
 });
 
-Deno.test("provider teardown releases outstanding held replies", async () => {
+test("provider teardown releases outstanding held replies", async () => {
   const fake = new FakeLlm();
   fake.queueHeld({ chunks: ["Teardown content."] });
   const response = await fetch(

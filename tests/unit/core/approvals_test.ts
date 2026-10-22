@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { OtkDb, permissionMigrations, PermissionStore } from "@otk/store";
 import type { Harness } from "@otk/harness";
@@ -74,7 +75,7 @@ const deferred = <T>() => {
   return { promise, resolve };
 };
 
-Deno.test("server-owned auto-approve can be turned off and its activity read while the backend is offline", async () => {
+test("server-owned auto-approve can be turned off and its activity read while the backend is offline", async () => {
   const db = new OtkDb(await fixture(), [permissionMigrations]),
     store = new PermissionStore(db),
     index = new IndexStore();
@@ -131,7 +132,7 @@ Deno.test("server-owned auto-approve can be turned off and its activity read whi
   }
 });
 
-Deno.test("server session auto-approve rechecks off after held lists, isolates ancestry and serializes automatic/manual replies without browser subscriptions", async () => {
+test("server session auto-approve rechecks off after held lists, isolates ancestry and serializes automatic/manual replies without browser subscriptions", async () => {
   const root = await fixture(),
     db = new OtkDb(root, [permissionMigrations]),
     store = new PermissionStore(db),
@@ -278,7 +279,7 @@ Deno.test("server session auto-approve rechecks off after held lists, isolates a
   }
 });
 
-Deno.test("automatic Allow once is kind-agnostic for bash, edit and optional-metadata generic permissions", async () => {
+test("automatic Allow once is kind-agnostic for bash, edit and optional-metadata generic permissions", async () => {
   const db = new OtkDb(await fixture(), [permissionMigrations]),
     store = new PermissionStore(db),
     index = new IndexStore();
@@ -332,7 +333,7 @@ Deno.test("automatic Allow once is kind-agnostic for bash, edit and optional-met
   }
 });
 
-Deno.test("permission activity journals manual outcomes, errors and shutdown uncertainty, and pages complete family metadata", async () => {
+test("permission activity journals manual outcomes, errors and shutdown uncertainty, and pages complete family metadata", async () => {
   const db = new OtkDb(await fixture(), [permissionMigrations]),
     store = new PermissionStore(db, () => 123),
     index = new IndexStore();

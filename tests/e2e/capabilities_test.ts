@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type { PermissionRequest, QuestionRequest } from "@otk/protocol";
@@ -7,7 +8,7 @@ import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { openSession, sentFrames } from "../support/browser-fixture.ts";
 
-Deno.test("core-only welcome loads a session without optional RPCs and preserves a draft while unavailable prompt features stay inactive", async () => {
+test("core-only welcome loads a session without optional RPCs and preserves a draft while unavailable prompt features stay inactive", async () => {
   const root = await fixture();
   const { app, session, url } = await coreBackendFixture(root);
   let browser: Cdp | undefined;
@@ -81,7 +82,7 @@ Deno.test("core-only welcome loads a session without optional RPCs and preserves
   }
 });
 
-Deno.test("transport reconnecting retains advertised features and unsent permission/question input", async () => {
+test("transport reconnecting retains advertised features and unsent permission/question input", async () => {
   const root = await fixture();
   const permission: PermissionRequest = {
     id: "permission",

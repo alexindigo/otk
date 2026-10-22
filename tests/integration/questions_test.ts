@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import type { QuestionRequest } from "@otk/protocol";
 import { browserFixture } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { waitFor } from "../support/opencode.ts";
-Deno.test("question snapshot, originating descendant events, reply and rejection use only the root family", async () => {
+test("question snapshot, originating descendant events, reply and rejection use only the root family", async () => {
   const f = await browserFixture();
   let rootClient: WsClient | undefined, otherClient: WsClient | undefined;
   try {

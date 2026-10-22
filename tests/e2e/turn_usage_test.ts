@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
+import { serve } from "../support/http.ts";
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type {
@@ -37,9 +39,9 @@ const categories = (
   m.tokens.cache.write,
 ];
 
-Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus split; Display cost off persists after reload", async () => {
+test("U4 stored multi-step turn usage reaches the footer and hover/focus split; Display cost off persists after reload", async () => {
   let step = 0;
-  const provider = Deno.serve(
+  const provider = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {
       const body = await request.json();
@@ -439,7 +441,7 @@ Deno.test("U4 stored multi-step turn usage reaches the footer and hover/focus sp
   }
 });
 
-Deno.test("U4 unknown model prices show all five charged token categories without inventing costs", async () => {
+test("U4 unknown model prices show all five charged token categories without inventing costs", async () => {
   const root = await fixture(),
     f = await coreBackendFixture(root, {
       usage: {
@@ -526,7 +528,7 @@ Deno.test("U4 unknown model prices show all five charged token categories withou
   }
 });
 
-Deno.test("U4 queued prompts do not split a turn and category costs use each step's exact provider", async () => {
+test("U4 queued prompts do not split a turn and category costs use each step's exact provider", async () => {
   const root = await fixture();
   const catalog: ModelCatalog = {
     providers: ["first", "second"].map((id, i) => ({

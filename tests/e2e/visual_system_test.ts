@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
+import { serve } from "../support/http.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
@@ -7,7 +9,7 @@ import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { selectionGeometry } from "../support/selection-geometry.ts";
 
-Deno.test("appearance settings persist, broadcast and paint real session status lights", async () => {
+test("appearance settings persist, broadcast and paint real session status lights", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
@@ -84,7 +86,7 @@ Deno.test("appearance settings persist, broadcast and paint real session status 
   }
 });
 
-Deno.test("public lights render all states, fixed gel colours, sizing, event blink, breathing and motion suppression; reduced colours shapes and ageing", async () => {
+test("public lights render all states, fixed gel colours, sizing, event blink, breathing and motion suppression; reduced colours shapes and ageing", async () => {
   const root = await fixture(), dist = join(root, "dist");
   const build = await new Deno.Command(Deno.execPath(), {
     args: [
@@ -103,7 +105,7 @@ Deno.test("public lights render all states, fixed gel colours, sizing, event bli
     stderr: "piped",
   }).output();
   assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
-  const server = Deno.serve(
+  const server = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {
       const pathname = new URL(request.url).pathname;

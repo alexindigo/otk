@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../support/resources.ts";
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import {
   createPreferences,
@@ -37,7 +38,7 @@ function contribute(registry: PreferenceRegistry): void {
     },
   });
 }
-Deno.test("feature contribution owns default, validation, display metadata and executable preference commands", async () => {
+test("feature contribution owns default, validation, display metadata and executable preference commands", async () => {
   const registry = createPreferences();
   contribute(registry);
   const root = await fixture(), db = new OtkDb(root, [prefsMigrations]);
@@ -127,7 +128,7 @@ Deno.test("feature contribution owns default, validation, display metadata and e
     false,
   );
 });
-Deno.test("preference registries reject invalid contributions and isolate selected owners", () => {
+test("preference registries reject invalid contributions and isolate selected owners", () => {
   const registry = new PreferenceRegistry();
   assertEquals(registry.list(), []);
   contribute(registry);

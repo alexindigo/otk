@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -12,7 +13,7 @@ const input = "textarea[name=prompt]";
 const lines = (count: number) =>
   Array.from({ length: count }, (_, i) => `Draft line ${i + 1}`).join("\n");
 
-Deno.test("U13 prompt grows line by line up to its cap, keeps the caret and footer visible, shrinks and clears after send", async () => {
+test("U13 prompt grows line by line up to its cap, keeps the caret and footer visible, shrinks and clears after send", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
   const shots = Deno.env.get("OTK_PROMPT_SIZE_SHOTS");

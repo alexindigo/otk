@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
@@ -7,7 +8,7 @@ import {
   assertErrorConsumer,
   reloadErrorConsumer,
 } from "../support/error-consumer.ts";
-Deno.test("a pasted literal bang remains prompt text when subsequent ordinary characters are typed", async () => {
+test("a pasted literal bang remains prompt text when subsequent ordinary characters are typed", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -43,7 +44,7 @@ Deno.test("a pasted literal bang remains prompt text when subsequent ordinary ch
     await f.stop();
   }
 });
-Deno.test("P2 shell mode emits bash output without permission, exits locally, and survives long commands", async () => {
+test("P2 shell mode emits bash output without permission, exits locally, and survives long commands", async () => {
   const f = await browserFixture({ bash: "deny" });
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -107,7 +108,7 @@ Deno.test("P2 shell mode emits bash output without permission, exits locally, an
   }
 });
 
-Deno.test("deferred shell failure reaches the session consumer and reload without changing its new draft", async () => {
+test("deferred shell failure reaches the session consumer and reload without changing its new draft", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {

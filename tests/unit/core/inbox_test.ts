@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import {
   Finishes,
@@ -18,7 +19,7 @@ import { InboxFeature } from "../../../core/features/inbox.ts";
 import { IndexStore } from "../../../core/index/store.ts";
 import { fixture } from "../../support/config.ts";
 
-Deno.test("core records real status edges at the single index owner and clears persisted inactive marks for working, blocked and unread activity", async () => {
+test("core records real status edges at the single index owner and clears persisted inactive marks for working, blocked and unread activity", async () => {
   const db = new OtkDb(await fixture(), [
     projectsMigrations,
     tasksMigrations,
@@ -93,7 +94,7 @@ Deno.test("core records real status edges at the single index owner and clears p
   }
 });
 
-Deno.test("synchronous index observers see committed detached metadata on reset and every same-batch transition", () => {
+test("synchronous index observers see committed detached metadata on reset and every same-batch transition", () => {
   const index = new IndexStore(), transitions: string[] = [];
   const entry: IndexEntry = {
     id: "s",

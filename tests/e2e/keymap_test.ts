@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import {
   browserFixture,
@@ -7,7 +8,7 @@ import {
 } from "../support/browser-fixture.ts";
 const palette = "dialog[aria-label=Commands][open]";
 const keys = "dialog[aria-label='Keyboard shortcuts'][open]";
-Deno.test("D1 palette, project button and slash create sessions through the same registered command", async () => {
+test("D1 palette, project button and slash create sessions through the same registered command", async () => {
   const f = await browserFixture();
   try {
     const seed = await f.oc.request<{ id: string }>("/session", {
@@ -55,7 +56,7 @@ Deno.test("D1 palette, project button and slash create sessions through the same
     await f.stop();
   }
 });
-Deno.test("D3 Esc closes palette before permission confirmation and real double Esc interrupts", async () => {
+test("D3 Esc closes palette before permission confirmation and real double Esc interrupts", async () => {
   const f = await browserFixture();
   try {
     const seed = await f.oc.request<{ id: string }>("/session", {
@@ -119,7 +120,7 @@ Deno.test("D3 Esc closes palette before permission confirmation and real double 
     await f.stop();
   }
 });
-Deno.test("D4 production rebind UI rejects conflicts, applies the new key, persists on reload and resets", async () => {
+test("D4 production rebind UI rejects conflicts, applies the new key, persists on reload and resets", async () => {
   const f = await browserFixture();
   try {
     const seed = await f.oc.request<{ id: string }>("/session", {
@@ -179,7 +180,7 @@ Deno.test("D4 production rebind UI rejects conflicts, applies the new key, persi
     await f.stop();
   }
 });
-Deno.test("essential Tab cycling selects primary agents in prompt, reverse cycles and sent messages carry selection", async () => {
+test("essential Tab cycling selects primary agents in prompt, reverse cycles and sent messages carry selection", async () => {
   const f = await browserFixture();
   try {
     const seed = await f.oc.request<{ id: string }>("/session", {
@@ -236,7 +237,7 @@ Deno.test("essential Tab cycling selects primary agents in prompt, reverse cycle
     await f.stop();
   }
 });
-Deno.test("agent cycling honors the native configured-default primary order without changing an unselected prompt", async () => {
+test("agent cycling honors the native configured-default primary order without changing an unselected prompt", async () => {
   const f = await browserFixture(undefined, {
     config: { default_agent: "plan" },
   });

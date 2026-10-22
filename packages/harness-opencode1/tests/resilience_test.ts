@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { SessionIndex } from "@otk/harness";
@@ -148,7 +149,7 @@ async function recording(
   };
 }
 
-Deno.test("SSE contains bad JSON, bad envelopes and rejected consumers without losing subsequent frames", async () => {
+test("SSE contains bad JSON, bad envelopes and rejected consumers without losing subsequent frames", async () => {
   const failures: unknown[] = [], received: string[] = [];
   await consumeEvents(
     new Response(
@@ -171,7 +172,7 @@ Deno.test("SSE contains bad JSON, bad envelopes and rejected consumers without l
   assertEquals(received, ["healthy"]);
 });
 
-Deno.test("adapter contains buffered and live poisoned events and failed follow-up reads to their session", async () => {
+test("adapter contains buffered and live poisoned events and failed follow-up reads to their session", async () => {
   let reads = 0;
   const record = await recording(
     (url) => {
@@ -254,7 +255,7 @@ Deno.test("adapter contains buffered and live poisoned events and failed follow-
   }
 });
 
-Deno.test("connector and core use the same index owner, including authoritative directory changes", async () => {
+test("connector and core use the same index owner, including authoritative directory changes", async () => {
   const directories: string[] = [];
   const record = await recording((url) => {
     if (url.pathname === "/agent") {
@@ -283,7 +284,7 @@ Deno.test("connector and core use the same index owner, including authoritative 
   }
 });
 
-Deno.test("colour cache shares in-flight directory lookups, retries failures and invalidates on disposal", async () => {
+test("colour cache shares in-flight directory lookups, retries failures and invalidates on disposal", async () => {
   let calls = 0, release!: () => void;
   const held = new Promise<void>((resolve) => release = resolve);
   const colors = new AgentColors(
@@ -310,7 +311,7 @@ Deno.test("colour cache shares in-flight directory lookups, retries failures and
   assertEquals(calls, 3);
 });
 
-Deno.test("recovery coalesces parts within one message and cancels scheduled reads before they start", async () => {
+test("recovery coalesces parts within one message and cancels scheduled reads before they start", async () => {
   let reads = 0, release!: () => void;
   const held = new Promise<void>((resolve) => release = resolve);
   const received: string[][] = [];
@@ -344,7 +345,7 @@ Deno.test("recovery coalesces parts within one message and cancels scheduled rea
   }
 });
 
-Deno.test("attention changes only the affected ancestor path and handles duplicates, moves and late parents", () => {
+test("attention changes only the affected ancestor path and handles duplicates, moves and late parents", () => {
   const index = new SessionIndex();
   const entries = Array.from(
     { length: 2000 },
@@ -392,7 +393,7 @@ Deno.test("attention changes only the affected ancestor path and handles duplica
   assertEquals(index.get("a")!.attention.childPermissions, 0);
 });
 
-Deno.test("attention request replay is idempotent and moving owners updates only their families", async () => {
+test("attention request replay is idempotent and moving owners updates only their families", async () => {
   const record = await recording(undefined, [
     session("root"),
     session("other"),
@@ -422,7 +423,7 @@ Deno.test("attention request replay is idempotent and moving owners updates only
   }
 });
 
-Deno.test("reconnect coalesces unseeded deltas with one trailing snapshot and authoritative updates end recovery", async () => {
+test("reconnect coalesces unseeded deltas with one trailing snapshot and authoritative updates end recovery", async () => {
   let reads = 0, collections = 0, inFlight = 0, maximum = 0;
   let release!: () => void;
   const held = new Promise<void>((resolve) => release = resolve);
@@ -525,7 +526,7 @@ Deno.test("reconnect coalesces unseeded deltas with one trailing snapshot and au
   }
 });
 
-Deno.test("agent colours are shared per directory across sessions, pages, events and reconnect", async () => {
+test("agent colours are shared per directory across sessions, pages, events and reconnect", async () => {
   const lookups = new Map<string, number>();
   const record = await recording((url) => {
     if (url.pathname === "/agent") {
@@ -584,7 +585,7 @@ Deno.test("agent colours are shared per directory across sessions, pages, events
   }
 });
 
-Deno.test("disconnect while bootstrap drains cannot start recovery in the retired generation", async () => {
+test("disconnect while bootstrap drains cannot start recovery in the retired generation", async () => {
   let reads = 0;
   const record = await recording(
     (url) => {
@@ -629,7 +630,7 @@ for (
     "stop",
   ] as const
 ) {
-  Deno.test(`unseeded recovery cancels pending reads and suppresses stale output on ${ending}`, async () => {
+  test(`unseeded recovery cancels pending reads and suppresses stale output on ${ending}`, async () => {
     let release!: () => void, started = false, aborted = false;
     const held = new Promise<void>((resolve) => release = resolve);
     const record = await recording((url, options) => {

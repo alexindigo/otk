@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { authenticator } from "otplib";
@@ -14,13 +15,13 @@ import {
 import type { IndexEntry, ServerFrame } from "@otk/protocol";
 import { cfg, fixture } from "./support.ts";
 
-Deno.test("PBKDF2 round-trip, incorrect password and malformed digest", async () => {
+test("PBKDF2 round-trip, incorrect password and malformed digest", async () => {
   const hash = await hashPassword("test-password");
   assert(await verifyPassword("test-password", hash));
   assert(!await verifyPassword("wrong", hash));
   assert(!await verifyPassword("test-password", "pbkdf2_sha256$0$00$00"));
 });
-Deno.test("JWT expiry and identity validation", async () => {
+test("JWT expiry and identity validation", async () => {
   const settings = {
     ...cfg().auth,
     type: "password",
@@ -36,7 +37,7 @@ Deno.test("JWT expiry and identity validation", async () => {
   await assertRejects(() => auth.validateToken(token));
   await assertRejects(() => auth.login("another", "password"));
 });
-Deno.test("TOTP accepts adjacent time window and rejects replay", async () => {
+test("TOTP accepts adjacent time window and rejects replay", async () => {
   const now = 1_791_360_000_000,
     settings = {
       ...cfg().auth,
@@ -55,7 +56,7 @@ Deno.test("TOTP accepts adjacent time window and rejects replay", async () => {
   await auth.login("tester", "password" + code);
   await assertRejects(() => auth.login("tester", "password" + code));
 });
-Deno.test("Origin rejects missing, foreign and null even in none mode", () => {
+test("Origin rejects missing, foreign and null even in none mode", () => {
   const settings = cfg();
   settings.auth.type = "none";
   settings.server.origins = ["https://remote"];
@@ -80,7 +81,7 @@ Deno.test("Origin rejects missing, foreign and null even in none mode", () => {
     );
   }
 });
-Deno.test("setup stores hashed password and private state, refuses repeat", async () => {
+test("setup stores hashed password and private state, refuses repeat", async () => {
   const settings = cfg();
   settings.state.path = join(await fixture(), "private");
   const auth = new AuthState(settings);
@@ -101,7 +102,7 @@ Deno.test("setup stores hashed password and private state, refuses repeat", asyn
   );
   await assertRejects(() => auth.setup({ type: "none" }));
 });
-Deno.test("index coalesces mutations, revisions and reset invalidates pending patches", async () => {
+test("index coalesces mutations, revisions and reset invalidates pending patches", async () => {
   const store = new IndexStore(), frames: ServerFrame[] = [];
   const entry: IndexEntry = {
     id: "ses_root",

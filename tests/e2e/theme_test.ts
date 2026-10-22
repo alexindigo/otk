@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { WsClient } from "../support/ws-client.ts";
 import { join } from "@std/path";
@@ -10,7 +11,7 @@ import {
 } from "../support/browser-fixture.ts";
 import type { Cdp } from "../support/cdp.ts";
 const picker = "dialog[aria-label=Theme][open]";
-Deno.test("unknown persisted theme paints the base in both browsers and after reload without rewriting identity", async () => {
+test("unknown persisted theme paints the base in both browsers and after reload without rewriting identity", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
@@ -67,7 +68,7 @@ const paint = `(() => {
     wordmark:getComputedStyle(document.querySelector('.otk-inbox-brand strong')).color,
     work:globalThis.themeWorkerEvidence };
 })()`;
-Deno.test("System light preference saves from the picker, broadcasts, survives reload and safely falls back for unavailable identities", async () => {
+test("System light preference saves from the picker, broadcasts, survives reload and safely falls back for unavailable identities", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
@@ -152,7 +153,7 @@ async function openTheme(browser: Cdp) {
   await browser.click("[data-command='theme.open']");
   await browser.poll(`!!document.querySelector('${picker}')`);
 }
-Deno.test("D5 actual session/code/diff paint changes with no worker work; preview/cancel, host save/reload/broadcast and live System", async () => {
+test("D5 actual session/code/diff paint changes with no worker work; preview/cancel, host save/reload/broadcast and live System", async () => {
   const f = await browserFixture({ edit: "allow" }, {
     prepare: async (oc) => {
       await Deno.writeTextFile(
@@ -350,7 +351,7 @@ Deno.test("D5 actual session/code/diff paint changes with no worker work; previe
   }
 });
 
-Deno.test("theme save rejection stays visible, retains preview and never replaces host committed state", async () => {
+test("theme save rejection stays visible, retains preview and never replaces host committed state", async () => {
   const f = await browserFixture();
   try {
     const server = await f.sidecar(), browser = await f.browser("about:blank");

@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../support/resources.ts";
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { join } from "@std/path";
 import { ConfigError, loadServiceConfig } from "../../../core/mod.ts";
 import { cfg, defaultsPath, fixture } from "./support.ts";
 
-Deno.test("config collects unknown, missing and wrong-type diagnostics with env names", async () => {
+test("config collects unknown, missing and wrong-type diagnostics with env names", async () => {
   const root = await fixture(), file = join(root, "bad.toml");
   await Deno.writeTextFile(file, '[server]\nport = "bad"\nextra = 1\n');
   const error = assertThrows(
@@ -27,7 +28,7 @@ Deno.test("config collects unknown, missing and wrong-type diagnostics with env 
     ),
   );
 });
-Deno.test("config defaults -> state -> overlay -> env preserves explicit empty list", async () => {
+test("config defaults -> state -> overlay -> env preserves explicit empty list", async () => {
   const root = await fixture(), overlayPath = join(root, "overlay.toml");
   await Deno.writeTextFile(
     overlayPath,
@@ -48,7 +49,7 @@ Deno.test("config defaults -> state -> overlay -> env preserves explicit empty l
   assertEquals(result.config.auth.username, "env");
   assertEquals(result.config.auth.type, "password");
 });
-Deno.test("config rejects unknown env, section variables and fractional integers", () => {
+test("config rejects unknown env, section variables and fractional integers", () => {
   const error = assertThrows(
     () =>
       loadServiceConfig({
@@ -59,7 +60,7 @@ Deno.test("config rejects unknown env, section variables and fractional integers
   );
   assertEquals(error.problems.length, 3);
 });
-Deno.test("config explicit inputs leave process env untouched and retain shipped defaults", () => {
+test("config explicit inputs leave process env untouched and retain shipped defaults", () => {
   const before = Deno.env.toObject();
   const overridden =
     loadServiceConfig({ defaultsPath, env: { OTK_SERVER_PORT: "7777" } })
@@ -69,7 +70,7 @@ Deno.test("config explicit inputs leave process env untouched and retain shipped
   assertEquals(cfg().server.port, 1502);
   assertEquals(Deno.env.toObject(), before);
 });
-Deno.test("config rejects inherited property names as unknown schema nodes", () => {
+test("config rejects inherited property names as unknown schema nodes", () => {
   const error = assertThrows(
     () =>
       loadServiceConfig({

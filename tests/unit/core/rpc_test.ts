@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../support/resources.ts";
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { type Capabilities, type Harness, HarnessError } from "@otk/harness";
 import { createCurrentClient, Rpc, SidecarConnection } from "@otk/client";
@@ -97,7 +98,7 @@ export function typeContract(
   });
 }
 
-Deno.test("feature-owned RPC augmentation reaches direct and invocation-time selected clients", async () => {
+test("feature-owned RPC augmentation reaches direct and invocation-time selected clients", async () => {
   const db = new OtkDb(await fixture(), []);
   const registry = new RpcRegistry(stub(), db);
   registry.register("extension.measure", {
@@ -189,7 +190,7 @@ export function stub(
   };
 }
 
-Deno.test("registry accepts external handlers with shared context, rejects duplicates and preserves error identity", async () => {
+test("registry accepts external handlers with shared context, rejects duplicates and preserves error identity", async () => {
   const db = new OtkDb(await fixture(), []),
     harness = stub(),
     rpc = new RpcRegistry(harness, db);
@@ -243,7 +244,7 @@ Deno.test("registry accepts external handlers with shared context, rejects dupli
   }
 });
 
-Deno.test("each optional registration contributes only its present capability and core sessions stay usable", async () => {
+test("each optional registration contributes only its present capability and core sessions stay usable", async () => {
   const db = new OtkDb(await fixture(), []);
   const names = [
     "prompt",
@@ -303,7 +304,7 @@ Deno.test("each optional registration contributes only its present capability an
   }
 });
 
-Deno.test("feature validators retain limits, optional strings, model/attachment, question and permission contracts", async () => {
+test("feature validators retain limits, optional strings, model/attachment, question and permission contracts", async () => {
   const calls: unknown[] = [],
     record = (...args: unknown[]) => {
       calls.push(args);

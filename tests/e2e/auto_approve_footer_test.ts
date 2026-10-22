@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("U10 auto-approve leads the footer, uses the theme accent when on and preserves picker geometry", async () => {
+test("U10 auto-approve leads the footer, uses the theme accent when on and preserves picker geometry", async () => {
   const f = await browserFixture(undefined, {
     config: { model: "polish/scripted" },
     providers: {

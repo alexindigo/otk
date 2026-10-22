@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { tempDir, test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import type { ContentOp } from "@otk/protocol";
@@ -9,16 +10,14 @@ import { StreamBuffers } from "@otk/content";
 import type { Envelope } from "../types.ts";
 import { cfg, fixture } from "../../../tests/support/config.ts";
 
-Deno.test("adapter maps legacy event chain while ignoring its captured durable sync companion", async () => {
+test("adapter maps legacy event chain while ignoring its captured durable sync companion", async () => {
   const cfg = loadServiceConfig({
     defaultsPath: fromFileUrl(
       new URL("../../../defaults/otk.toml", import.meta.url),
     ),
     env: {},
   }).config;
-  const state = fromFileUrl(new URL("../../../.test-state/", import.meta.url));
-  await Deno.mkdir(state, { recursive: true });
-  cfg.harness.db = join(await Deno.makeTempDir({ dir: state }), "missing.db");
+  cfg.harness.db = join(await tempDir("native-events-"), "missing.db");
   const session = {
     id: "ses_fixture",
     projectID: "global",
@@ -253,7 +252,7 @@ Deno.test("adapter maps legacy event chain while ignoring its captured durable s
   }
 });
 
-Deno.test("adapter replays bootstrap events and invalidates streaming ownership on instance disposal", async () => {
+test("adapter replays bootstrap events and invalidates streaming ownership on instance disposal", async () => {
   const settings = cfg();
   settings.harness.db = join(await fixture(), "missing.db");
   const session = {

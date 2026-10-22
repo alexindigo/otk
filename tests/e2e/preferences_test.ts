@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -7,7 +8,7 @@ import {
   sentFrames,
   waitForReply,
 } from "../support/browser-fixture.ts";
-Deno.test("R7 host preferences control real reasoning, persist on reload and propagate to an independent browser", async () => {
+test("R7 host preferences control real reasoning, persist on reload and propagate to an independent browser", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {

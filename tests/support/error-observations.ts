@@ -7,6 +7,7 @@ import { StreamBuffers } from "@otk/content";
 import type { IndexEntry } from "@otk/protocol";
 import type { ContentOp } from "@otk/protocol";
 import type { Session } from "@otk/harness-opencode1";
+import { resources, tempDir, test } from "./resources.ts";
 
 export interface Observation {
   id: string;
@@ -47,9 +48,7 @@ export async function observationFixture() {
     ),
     env: {},
   }).config;
-  const root = fromFileUrl(new URL("../../.test-state/", import.meta.url));
-  await Deno.mkdir(root, { recursive: true });
-  cfg.harness.db = join(await Deno.makeTempDir({ dir: root }), "missing.db");
+  cfg.harness.db = join(await tempDir("observation-"), "missing.db");
   const sessions: Session[] = ["case-a", "case-b"].map((id) => ({
     id,
     projectID: "project",
@@ -138,6 +137,12 @@ export async function observationFixture() {
     });
   };
   const adapter = new Opencode1Adapter(cfg, new StreamBuffers(), fetcher);
+  const stop = resources().defer("error observation adapter", async () => {
+    const stopped = adapter.core.stop();
+    for (const request of requests) request.release(Response.json({}));
+    releaseGet?.();
+    await stopped;
+  });
   const wait = async (read: () => boolean) => {
     const deadline = Date.now() + 5000;
     while (!read()) {
@@ -249,10 +254,7 @@ export async function observationFixture() {
       ignoreAbort = true;
     },
     async stop() {
-      const stopped = adapter.core.stop();
-      for (const request of requests) request.release(Response.json({}));
-      releaseGet?.();
-      await stopped;
+      await stop();
     },
     async coherent(sessionID = "case-a") {
       const query = await adapter.core.getSession(sessionID);
@@ -281,7 +283,7 @@ export async function observationFixture() {
 }
 
 export function errorObservationCases(method: "shell" | "command") {
-  Deno.test(`${method} cancelling a local HTTP watcher cannot clear an independently observed native abort failure`, async () => {
+  test(`${method} cancelling a local HTTP watcher cannot clear an independently observed native abort failure`, async () => {
     const f = await observationFixture();
     try {
       f.allowLateResponse();
@@ -306,7 +308,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.stop();
     }
   });
-  Deno.test(`${method} native busy clears the current message while retaining independently observed HTTP provenance`, async () => {
+  test(`${method} native busy clears the current message while retaining independently observed HTTP provenance`, async () => {
     const f = await observationFixture();
     try {
       await f.submit(method);
@@ -348,7 +350,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.stop();
     }
   });
-  Deno.test(`${method} HTTP-only failure remains visible with exact detail and actual provenance`, async () => {
+  test(`${method} HTTP-only failure remains visible with exact detail and actual provenance`, async () => {
     const f = await observationFixture();
     try {
       const message = "HTTP-only diagnostic " + "detail ".repeat(180);
@@ -380,7 +382,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.stop();
     }
   });
-  Deno.test(`${method} event-only failure has native detail without invented request correlation`, async () => {
+  test(`${method} event-only failure has native detail without invented request correlation`, async () => {
     const f = await observationFixture();
     try {
       f.native("Native-only detail");
@@ -400,7 +402,7 @@ export function errorObservationCases(method: "shell" | "command") {
     }
   });
   for (const order of ["http-first", "event-first"] as const) {
-    Deno.test(`${method} ${order} keeps distinct HTTP and native observations at one coherent revision`, async () => {
+    test(`${method} ${order} keeps distinct HTTP and native observations at one coherent revision`, async () => {
       const f = await observationFixture();
       try {
         await f.submit(method);
@@ -446,7 +448,7 @@ export function errorObservationCases(method: "shell" | "command") {
       }
     });
   }
-  Deno.test(`${method} older owned HTTP settlement keeps provenance without replacing a newer failure`, async () => {
+  test(`${method} older owned HTTP settlement keeps provenance without replacing a newer failure`, async () => {
     const f = await observationFixture();
     try {
       await f.submit(method);
@@ -483,7 +485,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.stop();
     }
   });
-  Deno.test(`${method} query reads current error ownership after native metadata completes`, async () => {
+  test(`${method} query reads current error ownership after native metadata completes`, async () => {
     const f = await observationFixture();
     try {
       f.holdQuery();
@@ -504,7 +506,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.stop();
     }
   });
-  Deno.test(`${method} busy clearing does not discard a genuine still-owned HTTP-only failure`, async () => {
+  test(`${method} busy clearing does not discard a genuine still-owned HTTP-only failure`, async () => {
     const f = await observationFixture();
     try {
       f.native("Prior native failure");
@@ -539,7 +541,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.stop();
     }
   });
-  Deno.test(`${method} cancellation and removal close only the actual session request lifetimes`, async () => {
+  test(`${method} cancellation and removal close only the actual session request lifetimes`, async () => {
     const f = await observationFixture();
     try {
       f.allowLateResponse();
@@ -592,7 +594,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.stop();
     }
   });
-  Deno.test(`${method} same-instance reconnect preserves error observations in index and query`, async () => {
+  test(`${method} same-instance reconnect preserves error observations in index and query`, async () => {
     const f = await observationFixture();
     try {
       await f.submit(method);
@@ -611,7 +613,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.stop();
     }
   });
-  Deno.test(`${method} known instance disposal and stop cannot revive closed request errors`, async () => {
+  test(`${method} known instance disposal and stop cannot revive closed request errors`, async () => {
     const f = await observationFixture();
     try {
       f.allowLateResponse();

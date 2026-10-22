@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 import type { RawPart } from "@otk/harness-opencode1";
-Deno.test("R4 todo checklist states and read-only question answers from real opencode", async () => {
+test("R4 todo checklist states and read-only question answers from real opencode", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { resources } from "./resources.ts";
 /** A byte-transparent TCP proxy: freezing stalls traffic without closing sockets. */
 export class FreezeProxy {
   #listener: Deno.TcpListener;
@@ -9,10 +10,13 @@ export class FreezeProxy {
   #waiters: (() => void)[] = [];
   readonly requests: string[] = [];
   readonly port: number;
+  #stop: () => Promise<void>;
   constructor(readonly target: number) {
+    const scope = resources();
     this.#listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
     this.port = (this.#listener.addr as Deno.NetAddr).port;
     this.#accept = this.#run();
+    this.#stop = scope.defer("freeze proxy", () => this.#shutdown());
   }
   freeze(): void {
     this.#frozen = true;
@@ -90,6 +94,9 @@ export class FreezeProxy {
     }
   }
   async stop(): Promise<void> {
+    await this.#stop();
+  }
+  async #shutdown(): Promise<void> {
     this.thaw();
     this.#listener.close();
     for (const socket of this.#connections) {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
@@ -6,7 +7,7 @@ import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { selectionGeometry } from "../support/selection-geometry.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("selection flow, state and stable boxes span chrome, menu, palette and picker in all themes and colour modes", async () => {
+test("selection flow, state and stable boxes span chrome, menu, palette and picker in all themes and colour modes", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),

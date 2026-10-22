@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
@@ -63,7 +64,7 @@ const sourceGeometry = String.raw`(code,index)=>{
   return {index,row:box.y+box.height/2,glyph,height,lineHeight:parseFloat(getComputedStyle(code.parentElement).lineHeight),top:box.top,bottom:box.bottom};
 }`;
 
-Deno.test("programmatic reveal keeps a transcript action in place for its real click", async () => {
+test("programmatic reveal keeps a transcript action in place for its real click", async () => {
   const f = await browserFixture({ task: "allow" });
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -133,7 +134,7 @@ Deno.test("programmatic reveal keeps a transcript action in place for its real c
   }
 });
 
-Deno.test("actual busy rendering prepares one worker and idle plaintext releases it without code markers", async () => {
+test("actual busy rendering prepares one worker and idle plaintext releases it without code markers", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -194,7 +195,7 @@ Deno.test("actual busy rendering prepares one worker and idle plaintext releases
   }
 });
 
-Deno.test("selected complete raw-tail endpoints survive source materialization and real copy", async () => {
+test("selected complete raw-tail endpoints survive source materialization and real copy", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -286,7 +287,7 @@ Deno.test("selected complete raw-tail endpoints survive source materialization a
   }
 });
 
-Deno.test("genuine far-viewport colour does not wait for dense cold-source materialization", async () => {
+test("genuine far-viewport colour does not wait for dense cold-source materialization", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -373,7 +374,7 @@ Deno.test("genuine far-viewport colour does not wait for dense cold-source mater
   }
 });
 
-Deno.test("completed worker batches preserve multiline grammar and recalled unfinished source and colours", async () => {
+test("completed worker batches preserve multiline grammar and recalled unfinished source and colours", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -460,7 +461,7 @@ Deno.test("completed worker batches preserve multiline grammar and recalled unfi
   }
 });
 
-Deno.test("real downward wheel retains follow intent when transcript growth precedes its scroll notification", async () => {
+test("real downward wheel retains follow intent when transcript growth precedes its scroll notification", async () => {
   const f = await browserFixture();
   try {
     const server = await f.sidecar(), browser = await f.browser(server.url);
@@ -660,7 +661,7 @@ async function scrollBoundary(browser: Cdp) {
   );
 }
 
-Deno.test("native raw source at a nested pane's leading clip requests its genuine colour", async () => {
+test("native raw source at a nested pane's leading clip requests its genuine colour", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -716,7 +717,7 @@ Deno.test("native raw source at a nested pane's leading clip requests its genuin
   }
 });
 
-Deno.test("source rows and selected raw endpoints survive token catch-up while another viewport warms", async () => {
+test("source rows and selected raw endpoints survive token catch-up while another viewport warms", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -828,7 +829,7 @@ Deno.test("source rows and selected raw endpoints survive token catch-up while a
   }
 });
 
-Deno.test("code viewport projection preserves complete text, selection/copy, real scroll colours and numbered write geometry", async () => {
+test("code viewport projection preserves complete text, selection/copy, real scroll colours and numbered write geometry", async () => {
   const f = await browserFixture();
   try {
     const markdown = await f.oc.request<{ id: string }>("/session", {
@@ -1019,7 +1020,7 @@ Deno.test("code viewport projection preserves complete text, selection/copy, rea
   }
 });
 
-Deno.test("source commits stay atomic and selected raw/styled endpoints survive genuine appended bytes", async () => {
+test("source commits stay atomic and selected raw/styled endpoints survive genuine appended bytes", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -1140,7 +1141,7 @@ Deno.test("source commits stay atomic and selected raw/styled endpoints survive 
   }
 });
 
-Deno.test("numbered source retains natural empty, blank and terminal geometry through raw grouping and styling", async () => {
+test("numbered source retains natural empty, blank and terminal geometry through raw grouping and styling", async () => {
   const f = await browserFixture();
   try {
     const server = await f.sidecar(), browser = await f.browser("about:blank");

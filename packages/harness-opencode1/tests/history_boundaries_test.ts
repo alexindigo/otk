@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
@@ -10,7 +11,7 @@ const captured = fromFileUrl(
     import.meta.url,
   ),
 );
-Deno.test("async history reads settle across close and unavailable attachments reject rather than throw", async () => {
+test("async history reads settle across close and unavailable attachments reject rather than throw", async () => {
   const reader = new History(captured);
   const listing = reader.listHistory();
   const attachment = reader.attachment({
@@ -27,7 +28,7 @@ Deno.test("async history reads settle across close and unavailable attachments r
     "Recalled attachment is no longer available",
   );
 });
-Deno.test("actual history shell lookup uses the native message session/time index", async () => {
+test("actual history shell lookup uses the native message session/time index", async () => {
   const statements: string[] = [];
   const prepare = DatabaseSync.prototype.prepare;
   const reader = new History(captured);
@@ -83,7 +84,7 @@ async function database() {
     ).run(id, owner, session, time, time, JSON.stringify(data));
   return { path, db, message, part, session, time };
 }
-Deno.test("history list returns attachment metadata with no base64 or data URL bytes", async () => {
+test("history list returns attachment metadata with no base64 or data URL bytes", async () => {
   const reader = new History(captured);
   try {
     const entries = await reader.listHistory();
@@ -106,7 +107,7 @@ Deno.test("history list returns attachment metadata with no base64 or data URL b
   }
 });
 for (const malformed of ["url", "json"] as const) {
-  Deno.test(`history skips one malformed ${malformed} row and keeps valid history`, async () => {
+  test(`history skips one malformed ${malformed} row and keeps valid history`, async () => {
     const f = await database();
     f.message("msg_malformed", { role: "user" });
     f.part("prt_bad", "msg_malformed", {

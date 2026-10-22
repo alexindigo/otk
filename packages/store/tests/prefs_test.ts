@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assertEquals, assertThrows } from "@std/assert";
 import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import { OtkDb, Prefs } from "@otk/store";
 import { defaults, fixture, migrations, prefsOptions } from "./support.ts";
-Deno.test("otk.db migrates transactionally, uses WAL and preserves prefs on reopen", async () => {
+test("otk.db migrates transactionally, uses WAL and preserves prefs on reopen", async () => {
   const root = await fixture();
   const db = new OtkDb(root, migrations), prefs = new Prefs(db, prefsOptions);
   assertEquals(
@@ -49,7 +50,7 @@ Deno.test("otk.db migrates transactionally, uses WAL and preserves prefs on reop
   untouched.close();
 });
 
-Deno.test("prefs use injected schema for reads, writes and notifications without mutating defaults", async () => {
+test("prefs use injected schema for reads, writes and notifications without mutating defaults", async () => {
   const root = await fixture(), db = new OtkDb(root, migrations);
   const prefs = new Prefs(db, prefsOptions), changes: unknown[] = [];
   try {

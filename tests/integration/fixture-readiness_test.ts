@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
+import { serve } from "../support/http.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest } from "../support/opencode.ts";
 
-Deno.test("native fixture admission joins custom-tool dependency readiness rather than HTTP health", async () => {
+test("native fixture admission joins custom-tool dependency readiness rather than HTTP health", async () => {
   const fetchNative = globalThis.fetch;
   const held = Promise.withResolvers<void>();
   const healthParsed = Promise.withResolvers<void>();
@@ -12,7 +14,7 @@ Deno.test("native fixture admission joins custom-tool dependency readiness rathe
   let released = false, probing = false, returned = false;
   let instance: OpencodeTest | undefined,
     catalog: Promise<string[]> | undefined;
-  const registry = Deno.serve(
+  const registry = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {
       const url = new URL(request.url);
@@ -61,6 +63,7 @@ Deno.test("native fixture admission joins custom-tool dependency readiness rathe
     return response;
   };
   const started = OpencodeTest.start(fake, {}, {
+    packageCache: false,
     env,
     async prepare(test) {
       instance = test;

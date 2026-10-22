@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import type { AgentOption, Message, ModelCatalog } from "@otk/protocol";
 import { browserFixture } from "../support/browser-fixture.ts";
@@ -6,7 +7,7 @@ import { FakeLlm } from "../support/fake-llm.ts";
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("V3 models and agents expose connected public metadata over WS and preserve a sent user variant", async () => {
+test("V3 models and agents expose connected public metadata over WS and preserve a sent user variant", async () => {
   const fake2 = new FakeLlm();
   const f = await browserFixture(undefined, {
     providers: {

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("project time and menu share a stable flowing cell on hover and focus; no tab has a menu", async () => {
+test("project time and menu share a stable flowing cell on hover and focus; no tab has a menu", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),

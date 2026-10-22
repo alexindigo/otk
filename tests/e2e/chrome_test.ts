@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import type { TaskRecord } from "@otk/protocol";
 import { fixture } from "../support/config.ts";
@@ -7,7 +8,7 @@ import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { selectionGeometry } from "../support/selection-geometry.ts";
 
-Deno.test("quiet chrome keeps corner geometry and non-colour selection across themes, collapse states and reload", async () => {
+test("quiet chrome keeps corner geometry and non-colour selection across themes, collapse states and reload", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),

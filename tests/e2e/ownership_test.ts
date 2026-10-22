@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import {
   browserFixture,
@@ -10,7 +11,7 @@ import { FakeLlm } from "../support/fake-llm.ts";
 import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 
-Deno.test("web late creation reply retains a draft typed while RPC was pending", async () => {
+test("web late creation reply retains a draft typed while RPC was pending", async () => {
   const f = await browserFixture(), proxy = new FreezeProxy(f.oc.port);
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -49,7 +50,7 @@ Deno.test("web late creation reply retains a draft typed while RPC was pending",
   }
 });
 
-Deno.test("web removed sidecar cannot reconnect after an in-flight login returns", async () => {
+test("web removed sidecar cannot reconnect after an in-flight login returns", async () => {
   const f = await browserFixture(),
     fake2 = new FakeLlm(),
     oc2 = await OpencodeTest.start(fake2);
@@ -131,7 +132,7 @@ Deno.test("web removed sidecar cannot reconnect after an in-flight login returns
   }
 });
 
-Deno.test("web newer selection supersedes a pending session creation without losing its draft", async () => {
+test("web newer selection supersedes a pending session creation without losing its draft", async () => {
   const f = await browserFixture(), proxy = new FreezeProxy(f.oc.port);
   try {
     const a = await f.oc.request<{ id: string }>("/session", {

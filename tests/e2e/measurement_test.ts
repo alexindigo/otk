@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { Cdp } from "../support/cdp.ts";
 import { fixture } from "../support/config.ts";
 import { assertContentReleased, sessionHeap } from "../support/heap.ts";
 import { menuReady } from "../support/menu.ts";
 
-Deno.test("session heap distinguishes retained content identities from unrelated warmed allocations", async () => {
+test("session heap distinguishes retained content identities from unrelated warmed allocations", async () => {
   const root = await fixture(), browser = await Cdp.launch(root);
   try {
     await browser.evaluate(
@@ -31,7 +32,7 @@ Deno.test("session heap distinguishes retained content identities from unrelated
   }
 });
 
-Deno.test("menu readiness joins native toggle, owned focus and rendered placement instead of DOM presence", async () => {
+test("menu readiness joins native toggle, owned focus and rendered placement instead of DOM presence", async () => {
   const root = await fixture(), browser = await Cdp.launch(root);
   try {
     const premature = await browser.evaluate(`(()=>{

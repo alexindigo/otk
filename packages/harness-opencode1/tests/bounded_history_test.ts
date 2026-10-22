@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { tempDir, test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
-import { fromFileUrl, join } from "@std/path";
+import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import { Opencode1Adapter } from "../adapter.ts";
 import type { Info, RawPart, Session } from "../types.ts";
@@ -9,10 +10,8 @@ import { Client } from "../client.ts";
 import { BootstrapDb } from "../db.ts";
 
 for (const mode of ["SQL", "API"] as const) {
-  Deno.test(`large reverted sessions and task cards use bounded ${mode} reads without changing their metadata`, async () => {
-    const root = fromFileUrl(new URL("../../../.test-state/", import.meta.url));
-    await Deno.mkdir(root, { recursive: true });
-    const db = join(await Deno.makeTempDir({ dir: root }), "missing.db");
+  test(`large reverted sessions and task cards use bounded ${mode} reads without changing their metadata`, async () => {
+    const db = join(await tempDir("native-history-"), "missing.db");
     const session: Session = {
       id: "parent",
       projectID: "project",
@@ -225,7 +224,7 @@ for (const mode of ["SQL", "API"] as const) {
   });
 }
 
-Deno.test("message collection owner rejects stock's unbounded limit values and stalled cursors", async () => {
+test("message collection owner rejects stock's unbounded limit values and stalled cursors", async () => {
   let calls = 0;
   const client = new Client({
     url: "http://fixture",

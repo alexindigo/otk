@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type {
@@ -121,7 +122,7 @@ async function grant(b: Cdp, url: string) {
   });
 }
 
-Deno.test("C2 session targets: tabs, chips, rows, task actions and project menu have captured effects", async () => {
+test("C2 session targets: tabs, chips, rows, task actions and project menu have captured effects", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),
@@ -443,7 +444,7 @@ const reply: AssistantMessage = {
     },
   ],
 };
-Deno.test("C2 shared reply contributions stay constant across N real messages and external features receive identity", async () => {
+test("C2 shared reply contributions stay constant across N real messages and external features receive identity", async () => {
   const root = await fixture(), assets = join(root, "context-dist");
   const build = await new Deno.Command(Deno.execPath(), {
     args: [
@@ -509,7 +510,7 @@ Deno.test("C2 shared reply contributions stay constant across N real messages an
   }
 });
 
-Deno.test("C2 stale task and phantom menus follow captured identities across session switches", async () => {
+test("C2 stale task and phantom menus follow captured identities across session switches", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),
@@ -571,7 +572,7 @@ Deno.test("C2 stale task and phantom menus follow captured identities across ses
   }
 });
 
-Deno.test("C2 project dots share the row projection and report failures without rejected event handlers", async () => {
+test("C2 project dots share the row projection and report failures without rejected event handlers", async () => {
   const root = await fixture(), assets = join(root, "context-dist");
   const build = await new Deno.Command(Deno.execPath(), {
     args: [
@@ -678,7 +679,7 @@ Deno.test("C2 project dots share the row projection and report failures without 
   }
 });
 
-Deno.test("C2 content targets: prompt, whole reply, nested code/diff and feature-contributed tool sources", async () => {
+test("C2 content targets: prompt, whole reply, nested code/diff and feature-contributed tool sources", async () => {
   const root = await fixture();
   const prompt: Message = {
     id: "prompt",
@@ -859,7 +860,7 @@ Deno.test("C2 content targets: prompt, whole reply, nested code/diff and feature
   }
 });
 
-Deno.test("C2 stock capabilities: targeted auto-approve and reply usage menu reach their real consumers", async () => {
+test("C2 stock capabilities: targeted auto-approve and reply usage menu reach their real consumers", async () => {
   const f = await browserFixture({ bash: "allow" });
   let client: WsClient | undefined;
   try {

@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { type ChildProcess, spawn } from "node:child_process";
-import process from "node:process";
-import { fromFileUrl, join } from "@std/path";
+import type { ChildProcess } from "node:child_process";
+import { join } from "@std/path";
 import type { FakeLlm } from "./fake-llm.ts";
+import { acquire, tempDir } from "./resources.ts";
+import { ownedProcess } from "./process.ts";
+import { nativeVersion, seedProviderPackages } from "./provider-cache.ts";
 export function freePort(): number {
   const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
   const port = (listener.addr as Deno.NetAddr).port;
@@ -37,6 +39,7 @@ export class OpencodeTest {
   process!: ChildProcess;
   log = "";
   #env: Record<string, string> = {};
+  #stop: () => Promise<void> = () => Promise.resolve();
   static async start(
     provider: FakeLlm,
     permission: Record<string, "ask" | "allow" | "deny"> = { bash: "ask" },
@@ -44,6 +47,8 @@ export class OpencodeTest {
       prepare?(test: OpencodeTest): Promise<void>;
       env?: Record<string, string>;
       config?: Record<string, unknown>;
+      /** Only cache preparation and the deliberate uncached readiness control. */
+      packageCache?: false;
       providers?: Record<string, {
         fake: FakeLlm;
         name?: string;
@@ -51,118 +56,126 @@ export class OpencodeTest {
       }>;
     } = {},
   ): Promise<OpencodeTest> {
-    const providers = Object.entries(options.providers ?? {});
-    const instances = new Set([provider]);
-    for (const [id, entry] of providers) {
-      if (id === "fake" || instances.has(entry.fake)) {
-        throw new Error(
-          "Extra providers need unique IDs and FakeLlm instances",
-        );
+    return await acquire("native fixture", async () => {
+      const providers = Object.entries(options.providers ?? {});
+      const instances = new Set([provider]);
+      for (const [id, entry] of providers) {
+        if (id === "fake" || instances.has(entry.fake)) {
+          throw new Error(
+            "Extra providers need unique IDs and FakeLlm instances",
+          );
+        }
+        instances.add(entry.fake);
       }
-      instances.add(entry.fake);
-    }
-    const test = new OpencodeTest();
-    const state = fromFileUrl(new URL("../../.test-state/", import.meta.url));
-    await Deno.mkdir(state, { recursive: true });
-    test.root = await Deno.makeTempDir({ dir: state, prefix: "oc-" });
-    test.directory = join(test.root, "project");
-    await Deno.mkdir(test.directory);
-    const git = await new Deno.Command("git", {
-      args: ["init", "-b", "master", test.directory],
-      stdout: "null",
-      stderr: "piped",
-    }).output();
-    if (!git.success) throw new Error(new TextDecoder().decode(git.stderr));
-    await Deno.writeTextFile(
-      join(test.directory, "README.md"),
-      "# OTK fixture\n",
-    );
-    await options.prepare?.(test);
-    const env: Record<string, string> = {
-      ...Deno.env.toObject(),
-      OPENCODE_PURE: "1",
-      OPENCODE_DISABLE_EXTERNAL_SKILLS: "1",
-      OPENCODE_DISABLE_CLAUDE_CODE_SKILLS: "1",
-      ...options.env,
-    };
-    for (
-      const [variable, directory] of Object.entries({
-        XDG_CONFIG_HOME: "config",
-        XDG_DATA_HOME: "data",
-        XDG_STATE_HOME: "state",
-        XDG_CACHE_HOME: "cache",
-      })
-    ) {
-      env[variable] = join(test.root, directory);
-      await Deno.mkdir(env[variable]);
-    }
-    await Deno.mkdir(join(env.XDG_CONFIG_HOME, "opencode"));
-    await Deno.writeTextFile(
-      join(env.XDG_CONFIG_HOME, "opencode/opencode.json"),
-      JSON.stringify({
-        $schema: "https://opencode.ai/config.json",
-        autoupdate: false,
-        share: "disabled",
-        model: "fake/scripted",
-        permission,
-        ...options.config,
-        provider: {
-          ...options.config?.provider as Record<string, unknown>,
-          fake: {
-            npm: "@ai-sdk/openai-compatible",
-            options: {
-              baseURL: `http://127.0.0.1:${provider.port}/v1`,
-              apiKey: "x",
+      const test = new OpencodeTest();
+      test.root = await tempDir("oc-");
+      test.directory = join(test.root, "project");
+      await Deno.mkdir(test.directory);
+      const git = await new Deno.Command("git", {
+        args: ["init", "-b", "master", test.directory],
+        stdout: "null",
+        stderr: "piped",
+      }).output();
+      if (!git.success) throw new Error(new TextDecoder().decode(git.stderr));
+      await Deno.writeTextFile(
+        join(test.directory, "README.md"),
+        "# OTK fixture\n",
+      );
+      await options.prepare?.(test);
+      const env: Record<string, string> = {
+        ...Deno.env.toObject(),
+        OPENCODE_PURE: "1",
+        OPENCODE_DISABLE_EXTERNAL_SKILLS: "1",
+        OPENCODE_DISABLE_CLAUDE_CODE_SKILLS: "1",
+        ...options.env,
+        TMPDIR: join(test.root, "tmp"),
+      };
+      await Deno.mkdir(env.TMPDIR);
+      for (
+        const [variable, directory] of Object.entries({
+          XDG_CONFIG_HOME: "config",
+          XDG_DATA_HOME: "data",
+          XDG_STATE_HOME: "state",
+          XDG_CACHE_HOME: "cache",
+        })
+      ) {
+        env[variable] = join(test.root, directory);
+        await Deno.mkdir(env[variable]);
+      }
+      await Deno.mkdir(join(env.XDG_CONFIG_HOME, "opencode"));
+      if (options.packageCache !== false) {
+        await seedProviderPackages(join(env.XDG_CONFIG_HOME, "opencode"));
+        await seedProviderPackages(join(test.directory, ".opencode"));
+      }
+      await Deno.writeTextFile(
+        join(env.XDG_CONFIG_HOME, "opencode/opencode.json"),
+        JSON.stringify({
+          $schema: "https://opencode.ai/config.json",
+          autoupdate: false,
+          share: "disabled",
+          model: "fake/scripted",
+          permission,
+          ...options.config,
+          provider: {
+            ...options.config?.provider as Record<string, unknown>,
+            fake: {
+              npm: "@ai-sdk/openai-compatible",
+              options: {
+                baseURL: `http://127.0.0.1:${provider.port}/v1`,
+                apiKey: "x",
+              },
+              models: {
+                scripted: { name: "scripted" },
+                "gpt-scripted": { name: "gpt-scripted" },
+              },
             },
-            models: {
-              scripted: { name: "scripted" },
-              "gpt-scripted": { name: "gpt-scripted" },
-            },
+            ...Object.fromEntries(providers.map(([id, entry]) => [id, {
+              npm: "@ai-sdk/openai-compatible",
+              ...(entry.name ? { name: entry.name } : {}),
+              options: {
+                baseURL: `http://127.0.0.1:${entry.fake.port}/v1`,
+                apiKey: "x",
+              },
+              models: entry.models,
+            }])),
           },
-          ...Object.fromEntries(providers.map(([id, entry]) => [id, {
-            npm: "@ai-sdk/openai-compatible",
-            ...(entry.name ? { name: entry.name } : {}),
-            options: {
-              baseURL: `http://127.0.0.1:${entry.fake.port}/v1`,
-              apiKey: "x",
-            },
-            models: entry.models,
-          }])),
-        },
-      }),
-    );
-    test.port = await freePort();
-    test.url = `http://127.0.0.1:${test.port}`;
-    test.db = join(env.XDG_DATA_HOME, "opencode/opencode.db");
-    test.#env = env;
-    test.process = spawn("/usr/local/bin/opencode", [
-      "serve",
-      "--hostname",
-      "127.0.0.1",
-      "--port",
-      String(test.port),
-    ], {
-      cwd: test.directory,
-      env,
-      detached: true,
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const log = (chunk: Uint8Array) => {
-      const text = new TextDecoder().decode(chunk);
-      test.log += text;
-      Deno.writeTextFileSync(join(test.root, "process.log"), text, {
-        append: true,
+        }),
+      );
+      test.port = await freePort();
+      test.url = `http://127.0.0.1:${test.port}`;
+      test.db = join(env.XDG_DATA_HOME, "opencode/opencode.db");
+      test.#env = env;
+      const owner = ownedProcess("/usr/local/bin/opencode", [
+        "serve",
+        "--hostname",
+        "127.0.0.1",
+        "--port",
+        String(test.port),
+      ], {
+        cwd: test.directory,
+        env,
+        detached: true,
+        stdio: ["ignore", "pipe", "pipe"],
       });
-    };
-    test.process.stdout!.on("data", log);
-    test.process.stderr!.on("data", log);
-    try {
-      await test.#ready();
-    } catch (error) {
-      await test.stop();
-      throw new Error(`${error}\n${test.log}`);
-    }
-    return test;
+      test.process = owner.child;
+      test.#stop = owner.stop;
+      const log = (chunk: Uint8Array) => {
+        const text = new TextDecoder().decode(chunk);
+        test.log += text;
+        Deno.writeTextFileSync(join(test.root, "process.log"), text, {
+          append: true,
+        });
+      };
+      test.process.stdout!.on("data", log);
+      test.process.stderr!.on("data", log);
+      try {
+        await test.#ready();
+      } catch (error) {
+        await test.stop();
+        throw new Error(`${error}\n${test.log}`);
+      }
+      return test;
+    });
   }
   async request<T>(
     path: string,
@@ -185,7 +198,7 @@ export class OpencodeTest {
   }
   async restart(): Promise<void> {
     await this.stop();
-    this.process = spawn("/usr/local/bin/opencode", [
+    const owner = ownedProcess("/usr/local/bin/opencode", [
       "serve",
       "--hostname",
       "127.0.0.1",
@@ -197,18 +210,25 @@ export class OpencodeTest {
       detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
+    this.process = owner.child;
+    this.#stop = owner.stop;
     this.process.stdout!.on("data", (chunk) => {
       this.log += chunk.toString();
     });
     this.process.stderr!.on("data", (chunk) => {
       this.log += chunk.toString();
     });
-    await this.#ready();
+    try {
+      await this.#ready();
+    } catch (error) {
+      await this.stop();
+      throw error;
+    }
   }
   /** HTTP admission is earlier than native custom-tool dependency completion. */
   async #ready(): Promise<void> {
     const deadline = Date.now() + 60_000;
-    await waitFor(
+    const health = await waitFor(
       async () =>
         (await fetch(this.url + "/global/health", {
           signal: AbortSignal.timeout(5000),
@@ -216,6 +236,11 @@ export class OpencodeTest {
       (health) => health.healthy === true,
       60_000,
     );
+    if (health.version !== nativeVersion) {
+      throw new Error(
+        `Native fixture requires opencode ${nativeVersion}, received ${health.version}`,
+      );
+    }
     const url = new URL(this.url + "/experimental/tool/ids");
     url.searchParams.set("directory", this.directory);
     const response = await fetch(url, {
@@ -237,24 +262,6 @@ export class OpencodeTest {
     }
   }
   async stop(): Promise<void> {
-    if (!this.process?.pid || this.process.exitCode !== null) return;
-    const exited = new Promise<void>((resolve) =>
-      this.process.once("exit", () => resolve())
-    );
-    process.kill(-this.process.pid, "SIGTERM");
-    let timer: ReturnType<typeof setTimeout> | undefined;
-    await Promise.race([
-      exited,
-      new Promise<void>((resolve) => {
-        timer = setTimeout(() => {
-          if (this.process.exitCode === null) {
-            process.kill(-this.process.pid!, "SIGKILL");
-          }
-          resolve();
-        }, 2000);
-      }),
-    ]);
-    if (timer !== undefined) clearTimeout(timer);
-    await exited;
+    await this.#stop();
   }
 }

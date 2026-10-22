@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { tempDir, test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
-import { fromFileUrl, join } from "@std/path";
+import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import { BootstrapDb } from "../db.ts";
 import { usage } from "../usage.ts";
@@ -11,12 +12,10 @@ import { mapPart } from "../map.ts";
 import { usageTool } from "@otk/protocol";
 
 async function fixture(): Promise<string> {
-  const root = fromFileUrl(new URL("../../../.test-state/", import.meta.url));
-  await Deno.mkdir(root, { recursive: true });
-  return join(await Deno.makeTempDir({ dir: root }), "opencode.db");
+  return join(await tempDir("native-db-"), "opencode.db");
 }
 
-Deno.test("bootstrap DB selects only recent incomplete/pending directories and leaves the database unchanged", async () => {
+test("bootstrap DB selects only recent incomplete/pending directories and leaves the database unchanged", async () => {
   const file = await fixture(), db = new DatabaseSync(file);
   db.exec(
     "CREATE TABLE session (id TEXT PRIMARY KEY, directory TEXT, time_updated INTEGER); CREATE TABLE message (id TEXT PRIMARY KEY, session_id TEXT, data TEXT)",
@@ -59,7 +58,7 @@ Deno.test("bootstrap DB selects only recent incomplete/pending directories and l
   assertEquals(await Deno.readFile(file), before);
 });
 
-Deno.test("bootstrap DB degrades on missing schema without creating a missing database", async () => {
+test("bootstrap DB degrades on missing schema without creating a missing database", async () => {
   const missing = await fixture(), reader = new BootstrapDb(missing);
   assertEquals(reader.possiblyRunningDirectories(0), []);
   reader.close();
@@ -77,7 +76,7 @@ Deno.test("bootstrap DB degrades on missing schema without creating a missing da
   degraded.close();
 });
 
-Deno.test("usage reads every bounded metadata page and tool labels without content or writes; API fallback produces the same full summaries", async () => {
+test("usage reads every bounded metadata page and tool labels without content or writes; API fallback produces the same full summaries", async () => {
   const file = await fixture(), db = new DatabaseSync(file);
   db.exec(
     "CREATE TABLE session(id TEXT,directory TEXT,time_updated INTEGER); CREATE TABLE message(id TEXT,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT,session_id TEXT,message_id TEXT,data TEXT)",

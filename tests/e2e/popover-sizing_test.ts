@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { Cdp } from "../support/cdp.ts";
@@ -90,7 +91,7 @@ async function keyboardContext(browser: Cdp): Promise<void> {
 }
 
 for (const theme of ["otk-dark", "otk-light"]) {
-  Deno.test(`native body fallback and point/rect corners size to hit-testable painted Surface in ${theme}`, async () => {
+  test(`native body fallback and point/rect corners size to hit-testable painted Surface in ${theme}`, async () => {
     const root = await fixture(),
       f = await inboxBrowserFixture(root),
       browser = await Cdp.launch(root),
@@ -199,7 +200,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
   });
 }
 
-Deno.test("tall anchored Surface keeps its positioned bounds and scrolls within the available native side", async () => {
+test("tall anchored Surface keeps its positioned bounds and scrolls within the available native side", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     browser = await Cdp.launch(root),

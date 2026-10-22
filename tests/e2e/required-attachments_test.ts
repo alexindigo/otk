@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -12,7 +13,7 @@ import { WsClient } from "../support/ws-client.ts";
 
 for (const mode of ["prompt", "command"] as const) {
   for (const fault of ["missing", "unreadable"] as const) {
-    Deno.test(`${mode} keeps the entire draft when a selected attachment becomes ${fault} and retries with every attachment`, async () => {
+    test(`${mode} keeps the entire draft when a selected attachment becomes ${fault} and retries with every attachment`, async () => {
       const f = await browserFixture(undefined, {
         async prepare(oc) {
           await Deno.writeTextFile(

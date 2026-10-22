@@ -4,6 +4,7 @@ import type { Harness, HarnessSink } from "@otk/harness";
 import type { ContentSession, IndexEntry, Message } from "@otk/protocol";
 import { startApplication } from "../../application.ts";
 import { cfg } from "./config.ts";
+import { resources } from "./resources.ts";
 
 /** Deterministic external backend through the real shipped core and inbox stores. */
 export async function inboxBrowserFixture(
@@ -12,6 +13,7 @@ export async function inboxBrowserFixture(
   messages: Record<string, Message[]> = {},
   assets = fromFileUrl(new URL("../../web/dist/", import.meta.url)),
 ) {
+  const scope = resources();
   const names = ["otk", "atmosphera", "globnotes", "luch"],
     entries: IndexEntry[] = [];
   for (const [n, name] of names.entries()) {
@@ -117,6 +119,8 @@ export async function inboxBrowserFixture(
     backend,
     assets,
   );
+  const stop = app.stop.bind(app);
+  app.stop = scope.defer("inbox application", stop);
   return {
     app,
     entries,

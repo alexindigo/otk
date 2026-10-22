@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { cfg, fixture } from "../../../tests/support/config.ts";
@@ -27,7 +28,7 @@ function adapterFor(root: string) {
   });
 }
 
-Deno.test("permission-denied discovery candidates are skipped but explicit prompt files reject", async () => {
+test("permission-denied discovery candidates are skipped but explicit prompt files reject", async () => {
   const root = await fixture();
   await Deno.mkdir(join(root, "src"));
   await Deno.mkdir(join(root, "blocked"));
@@ -66,7 +67,7 @@ Deno.test("permission-denied discovery candidates are skipped but explicit promp
   }
 });
 
-Deno.test("mapped file filenames retain the relative path and optional canonical range", async () => {
+test("mapped file filenames retain the relative path and optional canonical range", async () => {
   const root = await fixture();
   await Deno.mkdir(join(root, "src"));
   await Deno.writeTextFile(join(root, "src/file.ts"), "one\ntwo\nthree");

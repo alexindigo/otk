@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import type { TaskRecord } from "@otk/protocol";
 import { fixture } from "../support/config.ts";
@@ -6,7 +7,7 @@ import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("create-in-task preserves membership changes made while session creation is pending", async () => {
+test("create-in-task preserves membership changes made while session creation is pending", async () => {
   const root = await fixture(), f = await inboxBrowserFixture(root);
   const b = await Cdp.launch(root), c = new WsClient(f.url);
   const entered = Promise.withResolvers<void>(),

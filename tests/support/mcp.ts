@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { resources } from "./resources.ts";
 // Stateless streamable HTTP fixture: stock opencode owns the actual MCP client.
 export class McpFixture {
   requests: { method: string; params?: Record<string, unknown> }[] = [];
   server: Deno.HttpServer;
   url: string;
+  #stop: () => Promise<void>;
   constructor() {
+    const scope = resources();
     this.server = Deno.serve(
       { hostname: "127.0.0.1", port: 0, onListen() {} },
       async (request) => {
@@ -88,8 +91,9 @@ export class McpFixture {
     this.url = `http://127.0.0.1:${
       (this.server.addr as Deno.NetAddr).port
     }/mcp`;
+    this.#stop = scope.defer("MCP fixture", () => this.server.shutdown());
   }
   stop() {
-    return this.server.shutdown();
+    return this.#stop();
   }
 }

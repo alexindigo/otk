@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
@@ -11,7 +12,7 @@ import {
 import { highlightedRange } from "../support/highlight.ts";
 const colourPrefix =
   `Array.from(document.querySelectorAll('.otk-code code .otk-token')).slice(0,8).map(el=>({text:el.textContent,color:getComputedStyle(el).color}))`;
-Deno.test("R6 shiki worker colours streaming TS before fence closure and unknown languages remain plain", async () => {
+test("R6 shiki worker colours streaming TS before fence closure and unknown languages remain plain", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -113,7 +114,7 @@ Deno.test("R6 shiki worker colours streaming TS before fence closure and unknown
     await f.stop();
   }
 });
-Deno.test("highlighted history releases its worker and session objects when switching sessions", async () => {
+test("highlighted history releases its worker and session objects when switching sessions", async () => {
   const f = await browserFixture();
   try {
     const a = await f.oc.request<{ id: string }>("/session", {
@@ -227,7 +228,7 @@ const externalObservers = `(() => {
   };
   globalThis.highlightStop=()=>{highlightCancel?.();tasks.disconnect()};
 })()\n//# sourceURL=otk-highlight-observer.js`;
-Deno.test("R-perf visible-source to styled-range latency for 2000 TS lines and 20 acknowledged streamed updates", async () => {
+test("R-perf visible-source to styled-range latency for 2000 TS lines and 20 acknowledged streamed updates", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {

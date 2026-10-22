@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -38,7 +39,7 @@ async function capture(browser: Cdp, root: string, name: string) {
 const bash = (command = "echo otk") => ({
   tool: { name: "bash", input: { command, description: "permission probe" } },
 });
-Deno.test("web typed edit and generic permission details render before rejected tools leave files unchanged", async () => {
+test("web typed edit and generic permission details render before rejected tools leave files unchanged", async () => {
   const f = await browserFixture({ bash: "ask", edit: "ask", read: "ask" });
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -98,7 +99,7 @@ Deno.test("web typed edit and generic permission details render before rejected 
     await f.stop();
   }
 });
-Deno.test("E3 bash permission, real Allow once click, completed output-bearing tool and idle", async () => {
+test("E3 bash permission, real Allow once click, completed output-bearing tool and idle", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -142,7 +143,7 @@ Deno.test("E3 bash permission, real Allow once click, completed output-bearing t
     await f.stop();
   }
 });
-Deno.test("E4 real subagent permission appears on parent dock with child title", async () => {
+test("E4 real subagent permission appears on parent dock with child title", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -212,7 +213,7 @@ Deno.test("E4 real subagent permission appears on parent dock with child title",
     await f.stop();
   }
 });
-Deno.test("web permission snapshot on reopen, focused keys, always confirmation and rejection message", async () => {
+test("web permission snapshot on reopen, focused keys, always confirmation and rejection message", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {

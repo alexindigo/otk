@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../support/resources.ts";
 import { assertEquals, assertThrows } from "@std/assert";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
@@ -6,7 +7,7 @@ import { frecencyMigrations, OtkDb, Prefs, prefsMigrations } from "@otk/store";
 import { prefsOptions } from "../../../core/mod.ts";
 import { fixture } from "./support.ts";
 
-Deno.test("app storage retains every preference default, validator and params error", async () => {
+test("app storage retains every preference default, validator and params error", async () => {
   const root = await fixture(),
     migrations = [prefsMigrations, frecencyMigrations];
   const db = new OtkDb(root, migrations), prefs = new Prefs(db, prefsOptions);

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import {
   browserFixture,
@@ -6,7 +7,7 @@ import {
   streamScript,
 } from "../support/browser-fixture.ts";
 
-Deno.test("created-session readiness: trusted send reaches the provider and transcript while index delivery is held", async () => {
+test("created-session readiness: trusted send reaches the provider and transcript while index delivery is held", async () => {
   const f = await browserFixture();
   try {
     const seed = await f.oc.request<{ id: string }>("/session", {

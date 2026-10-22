@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import type { AssistantMessage, Message } from "@otk/protocol";
 import { usageHeader, UsageLedger } from "@otk/protocol";
@@ -37,7 +38,7 @@ const reply = (id: string): AssistantMessage => ({
   parts: [],
 });
 
-Deno.test("reading column, renderer disclosures, reply metadata, reported composer settings, retry and tab title", async () => {
+test("reading column, renderer disclosures, reply metadata, reported composer settings, retry and tab title", async () => {
   const root = await fixture();
   const base = {
     callID: "call",
@@ -425,7 +426,7 @@ Deno.test("reading column, renderer disclosures, reply metadata, reported compos
   }
 });
 
-Deno.test("composer takeovers retain a browser draft through permissions, questions and session switches while actions reach stock backend", async () => {
+test("composer takeovers retain a browser draft through permissions, questions and session switches while actions reach stock backend", async () => {
   const f = await browserFixture({ bash: "ask" });
   try {
     const a = await f.oc.request<{ id: string }>("/session", {

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { createIndex, createSession, SidecarConnection } from "@otk/client";
@@ -14,7 +15,7 @@ declare module "@otk/protocol" {
   }
 }
 
-Deno.test("a feature-owned capability reaches registry, wire advertisement and client availability without a central name edit", async () => {
+test("a feature-owned capability reaches registry, wire advertisement and client availability without a central name edit", async () => {
   const registry = new CapabilityRegistry();
   registry.register("feature.measure", { read: () => Promise.resolve(42) });
   assertEquals(registry.names(), ["feature.measure"]);
@@ -82,7 +83,7 @@ async function consumer(url: string) {
   };
 }
 
-Deno.test("application composition with an external core-only backend reaches client state and retains store contributions across restart", async () => {
+test("application composition with an external core-only backend reaches client state and retains store contributions across restart", async () => {
   const root = await fixture();
   let app = await coreBackendFixture(root);
   let client = await consumer(app.url);
@@ -141,7 +142,7 @@ Deno.test("application composition with an external core-only backend reaches cl
   }
 });
 
-Deno.test("application composition registers only supplied optional capabilities and forwards public RPC inputs to that backend", async () => {
+test("application composition registers only supplied optional capabilities and forwards public RPC inputs to that backend", async () => {
   const root = await fixture();
   const prompts: PromptInput[] = [];
   const searches: [string, string][] = [];

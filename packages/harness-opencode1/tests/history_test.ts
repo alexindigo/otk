@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
@@ -11,7 +12,7 @@ const file = fromFileUrl(
     import.meta.url,
   ),
 );
-Deno.test("history reads captured 1.18.34 DB, restores shell/file/agent, drops adjacent duplicates and never writes it", async () => {
+test("history reads captured 1.18.34 DB, restores shell/file/agent, drops adjacent duplicates and never writes it", async () => {
   const before = await Deno.readFile(file),
     reader = new History(file),
     entries = await reader.listHistory();
@@ -30,7 +31,7 @@ Deno.test("history reads captured 1.18.34 DB, restores shell/file/agent, drops a
   assertEquals(await Deno.readFile(file), before);
   assertEquals(mergeHistory([entries, entries]).length, 4);
 });
-Deno.test("history degrades missing schema without creation and enforces newest fifty user messages", async () => {
+test("history degrades missing schema without creation and enforces newest fifty user messages", async () => {
   const root = await fixture(),
     missing = join(root, "missing.db"),
     reader = new History(missing);

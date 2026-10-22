@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import type { HarnessSink } from "@otk/harness";
@@ -207,7 +208,7 @@ async function recording(stage?: Stage, watchdog = false, failStatus = false) {
 
 for (const stage of stages) {
   for (const outcome of ["abort", "publication"] as const) {
-    Deno.test(`connection stop owns ${stage} ${outcome}`, async () => {
+    test(`connection stop owns ${stage} ${outcome}`, async () => {
       const record = await recording(stage);
       try {
         await record.reached;
@@ -254,7 +255,7 @@ for (const stage of stages) {
 }
 
 for (const ending of ["disconnect", "watchdog"] as const) {
-  Deno.test(`connection ${ending} retires bootstrap before reconnect`, async () => {
+  test(`connection ${ending} retires bootstrap before reconnect`, async () => {
     const record = await recording("next page", ending === "watchdog");
     try {
       await record.reached;
@@ -279,7 +280,7 @@ for (const ending of ["disconnect", "watchdog"] as const) {
   });
 }
 
-Deno.test("repeated start rejects without replacing the active sink or connection", async () => {
+test("repeated start rejects without replacing the active sink or connection", async () => {
   const record = await recording();
   const replacement: string[] = [];
   try {
@@ -307,7 +308,7 @@ Deno.test("repeated start rejects without replacing the active sink or connectio
 });
 
 for (const stage of ["event colour", "event message"] as const) {
-  Deno.test(`watchdog fences asynchronous ${stage} publication`, async () => {
+  test(`watchdog fences asynchronous ${stage} publication`, async () => {
     const record = await recording(stage, true);
     try {
       await record.reached;
@@ -330,7 +331,7 @@ for (const stage of ["event colour", "event message"] as const) {
   });
 }
 
-Deno.test("native finite read deadline remains active with an owner signal", async () => {
+test("native finite read deadline remains active with an owner signal", async () => {
   const owner = new AbortController();
   let reason: unknown;
   const client = new Client(
@@ -359,7 +360,7 @@ Deno.test("native finite read deadline remains active with an owner signal", asy
   }
 });
 
-Deno.test("failed bootstrap aborts and joins sibling inventory reads", async () => {
+test("failed bootstrap aborts and joins sibling inventory reads", async () => {
   const record = await recording("permission", false, true);
   try {
     await record.reached;
@@ -381,7 +382,7 @@ Deno.test("failed bootstrap aborts and joins sibling inventory reads", async () 
   }
 });
 
-Deno.test("concurrent stops join one owner and start waits for completed teardown", async () => {
+test("concurrent stops join one owner and start waits for completed teardown", async () => {
   const record = await recording("first page");
   try {
     await record.reached;
@@ -412,7 +413,7 @@ Deno.test("concurrent stops join one owner and start waits for completed teardow
   }
 });
 
-Deno.test("duplicate connected frames cannot replace or overlap bootstrap work", async () => {
+test("duplicate connected frames cannot replace or overlap bootstrap work", async () => {
   const record = await recording("first page");
   try {
     await record.reached;

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
@@ -81,7 +82,7 @@ async function capture(browser: Cdp, root: string, name: string) {
   }
 }
 
-Deno.test("context menu: trusted right click, native escape hatch, keyboard navigation, fallback effects and four viewport corners", async () => {
+test("context menu: trusted right click, native escape hatch, keyboard navigation, fallback effects and four viewport corners", async () => {
   const { browser, client, f, root, stop } = await setup();
   try {
     await rightClick(browser, ".otk-tabs-project");
@@ -237,7 +238,7 @@ Deno.test("context menu: trusted right click, native escape hatch, keyboard navi
   }
 });
 
-Deno.test("context menu: editing uses captured ranges and the real clipboard, paste rejection stays in place, links/images/selection copy", async () => {
+test("context menu: editing uses captured ranges and the real clipboard, paste rejection stays in place, links/images/selection copy", async () => {
   const { browser, client, f, root, stop } = await setup();
   const field = 'textarea[name="prompt"]';
   try {
@@ -514,7 +515,7 @@ Deno.test("context menu: editing uses captured ranges and the real clipboard, pa
   }
 });
 
-Deno.test("context binding: external command contributions, live target data, nested groups and destructive ordering", async () => {
+test("context binding: external command contributions, live target data, nested groups and destructive ordering", async () => {
   const root = await fixture(), assets = join(root, "context-dist");
   const build = await new Deno.Command(Deno.execPath(), {
     args: [
@@ -739,7 +740,7 @@ Deno.test("context binding: external command contributions, live target data, ne
   }
 });
 
-Deno.test("round 2: all shared Menu callers distinguish pointer and keyboard opening with compact rows", async () => {
+test("round 2: all shared Menu callers distinguish pointer and keyboard opening with compact rows", async () => {
   const { root, f, browser, client, stop } = await setup();
   const projectTrigger =
     "[data-project-sessions~=otk] .otk-project-menu > button";

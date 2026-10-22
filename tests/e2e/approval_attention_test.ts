@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
+import { serve } from "../support/http.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -14,13 +16,13 @@ import {
   instrumentNotifications,
 } from "../support/notification-browser.ts";
 
-Deno.test("U9 r2 browser-open automatic permission stays quiet through toast OS takeover and attention consumers; reply and accessible policy reach the end", async () => {
+test("U9 r2 browser-open automatic permission stays quiet through toast OS takeover and attention consumers; reply and accessible policy reach the end", async () => {
   const f = await browserFixture();
   let release!: () => void, replying = false;
   const held = new Promise<void>((resolve) => {
     release = resolve;
   });
-  const proxy = Deno.serve({
+  const proxy = serve({
     hostname: "127.0.0.1",
     port: freePort(),
     onListen() {},

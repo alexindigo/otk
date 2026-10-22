@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { runTool } from "../support/rendering.ts";
 import { WsClient } from "../support/ws-client.ts";
-Deno.test("R8 revert RPC restores files, hides reverted turns and persists a counted file banner on reload", async () => {
+test("R8 revert RPC restores files, hides reverted turns and persists a counted file banner on reload", async () => {
   const f = await browserFixture({ edit: "allow", read: "allow" }, {
     prepare: async (oc) => {
       await Deno.writeTextFile(join(oc.directory, "revert.txt"), "before\n");
@@ -64,7 +65,7 @@ Deno.test("R8 revert RPC restores files, hides reverted turns and persists a cou
     await f.stop();
   }
 });
-Deno.test("real harness history renders file/agent chips and compaction divider", async () => {
+test("real harness history renders file/agent chips and compaction divider", async () => {
   const f = await browserFixture();
   try {
     const s = await f.oc.request<{ id: string }>("/session", {
@@ -109,7 +110,7 @@ Deno.test("real harness history renders file/agent chips and compaction divider"
     await f.stop();
   }
 });
-Deno.test("message details show configured agent colour, queued-to-answered transition and no step scaffolds", async () => {
+test("message details show configured agent colour, queued-to-answered transition and no step scaffolds", async () => {
   const f = await browserFixture(undefined, {
     config: { agent: { build: { color: "#6bacff" } } },
   });

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { createInbox, inboxProjects, SidecarConnection } from "@otk/client";
@@ -40,7 +41,7 @@ async function consumer(url: string) {
   };
 }
 
-Deno.test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batch finishes to two framework-free consumers and survive restart", async () => {
+test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batch finishes to two framework-free consumers and survive restart", async () => {
   const root = await fixture();
   let app = await coreBackendFixture(root);
   let a = await consumer(app.url), b = await consumer(app.url);
@@ -163,7 +164,7 @@ Deno.test("inbox RPCs broadcast persisted projects, task ordering, seen and same
   }
 });
 
-Deno.test("server path-template scanning reads only matching directories, supports suffixes and rejects unbounded wildcard syntax", async () => {
+test("server path-template scanning reads only matching directories, supports suffixes and rejects unbounded wildcard syntax", async () => {
   const root = await fixture(), projects = join(root, "projects");
   await Deno.mkdir(join(projects, "one", "repo"), { recursive: true });
   await Deno.mkdir(join(projects, "two"));
@@ -214,7 +215,7 @@ Deno.test("server path-template scanning reads only matching directories, suppor
   }
 });
 
-Deno.test("first-run setup and restart retain the same user's inbox metadata", async () => {
+test("first-run setup and restart retain the same user's inbox metadata", async () => {
   const root = await fixture(), seeded = await coreBackendFixture(root);
   const backend = seeded.app.backend;
   await seeded.app.stop();

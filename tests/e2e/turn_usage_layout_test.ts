@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { type AssistantMessage, usageHeader, UsageLedger } from "@otk/protocol";
@@ -98,7 +99,7 @@ async function setup(count: number) {
 }
 
 for (const count of [3, 120]) {
-  Deno.test(`U14 ${count} calls keep summary, header and Total on screen, support pointer and keyboard and retain exact U12 values`, async () => {
+  test(`U14 ${count} calls keep summary, header and Total on screen, support pointer and keyboard and retain exact U12 values`, async () => {
     const { root, f, b, client } = await setup(count);
     const shots = Deno.env.get("OTK_U14_SHOTS");
     try {
@@ -340,7 +341,7 @@ for (const count of [3, 120]) {
   });
 }
 
-Deno.test("U14 500-call detail is lazy and opens within a one-second interaction budget", async () => {
+test("U14 500-call detail is lazy and opens within a one-second interaction budget", async () => {
   const { f, b, client } = await setup(500);
   try {
     const samples: number[] = [];

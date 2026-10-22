@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type { Preferences, TaskRecord } from "@otk/protocol";
@@ -8,7 +9,7 @@ import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { openSession } from "../support/browser-fixture.ts";
 
-Deno.test("registered panel views, width and collapsed state persist in host preferences; unavailable capabilities stay hidden", async () => {
+test("registered panel views, width and collapsed state persist in host preferences; unavailable capabilities stay hidden", async () => {
   const root = await fixture(), assets = join(root, "panel-dist");
   const build = await new Deno.Command(Deno.execPath(), {
     args: [
@@ -220,7 +221,7 @@ Deno.test("registered panel views, width and collapsed state persist in host pre
   }
 });
 
-Deno.test("Sessions groups the selected project's parent-child tree by task, filters titles and opens previews and solid tasks", async () => {
+test("Sessions groups the selected project's parent-child tree by task, filters titles and opens previews and solid tasks", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),

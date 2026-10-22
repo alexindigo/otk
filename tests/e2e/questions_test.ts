@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
@@ -27,7 +28,7 @@ export const questions = [
     multiple: true,
   },
 ];
-Deno.test("P1 question tabs, keyboard choices, multi/custom answers, confirmation and reject reach the completed tool", async () => {
+test("P1 question tabs, keyboard choices, multi/custom answers, confirmation and reject reach the completed tool", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {

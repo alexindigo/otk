@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../support/resources.ts";
 import { assertEquals, assertRejects } from "@std/assert";
 import { OtkDb, permissionMigrations, PermissionStore } from "@otk/store";
 import type { Harness } from "@otk/harness";
@@ -27,7 +28,7 @@ const entry = (id: string, parentID?: string): IndexEntry => ({
 });
 const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 
-Deno.test("automatic failure is attempted once across unrelated index changes; request and connection generations permit retry", async () => {
+test("automatic failure is attempted once across unrelated index changes; request and connection generations permit retry", async () => {
   const db = new OtkDb(await fixture(), [permissionMigrations]);
   const store = new PermissionStore(db), index = new IndexStore();
   let request: PermissionRequest = {
@@ -86,7 +87,7 @@ Deno.test("automatic failure is attempted once across unrelated index changes; r
   }
 });
 
-Deno.test("server rejects helper policy and removes deleted session policy durably without journal-driven policy revisions", async () => {
+test("server rejects helper policy and removes deleted session policy durably without journal-driven policy revisions", async () => {
   const path = await fixture(), db = new OtkDb(path, [permissionMigrations]);
   const store = new PermissionStore(db), index = new IndexStore();
   const capability = {

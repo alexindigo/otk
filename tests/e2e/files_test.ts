@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { recordTools, runTool } from "../support/rendering.ts";
 import type { RawPart } from "@otk/harness-opencode1";
-Deno.test("R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/diagnostics and patch statuses", async () => {
+test("R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/diagnostics and patch statuses", async () => {
   const lsp = fromFileUrl(new URL("../support/fake-lsp.ts", import.meta.url));
   const f = await browserFixture({
     bash: "allow",

@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("oversized total receives an immediate RPC-id error and leaves the connection usable", async () => {
+test("oversized total receives an immediate RPC-id error and leaves the connection usable", async () => {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
   const server = await SidecarTest.start(oc), client = new WsClient(server.url);
   try {

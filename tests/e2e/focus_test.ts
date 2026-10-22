@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -43,7 +44,7 @@ function focusContrast([outline, fill]: string[]): number {
   return (Math.max(x, y) + .05) / (Math.min(x, y) + .05);
 }
 
-Deno.test("U15 own-answer Enter and all question transitions focus visible controls; composer owns its rounded focus border", async () => {
+test("U15 own-answer Enter and all question transitions focus visible controls; composer owns its rounded focus border", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {

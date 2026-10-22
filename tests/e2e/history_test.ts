@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -9,7 +10,7 @@ import {
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
 import type { HistoryEntry } from "@otk/protocol";
-Deno.test("P6 history merges connected sidecars by time, recalls shell mode and protects edited recalled drafts", async () => {
+test("P6 history merges connected sidecars by time, recalls shell mode and protects edited recalled drafts", async () => {
   const a = await browserFixture(), b = await browserFixture();
   try {
     const first = await a.oc.request<{ id: string }>("/session", {
@@ -107,7 +108,7 @@ Deno.test("P6 history merges connected sidecars by time, recalls shell mode and 
     await b.stop();
   }
 });
-Deno.test("recalled image metadata resolves exact bytes only on send through its originating sidecar", async () => {
+test("recalled image metadata resolves exact bytes only on send through its originating sidecar", async () => {
   const a = await browserFixture(), b = await browserFixture();
   let client: WsClient | undefined;
   const bytes =
@@ -201,7 +202,7 @@ Deno.test("recalled image metadata resolves exact bytes only on send through its
     await b.stop();
   }
 });
-Deno.test("history keeps valid local prompts when a connected sibling transport fails during recall", async () => {
+test("history keeps valid local prompts when a connected sibling transport fails during recall", async () => {
   const f = await browserFixture();
   try {
     const source = await f.oc.request<{ id: string }>("/session", {
@@ -249,7 +250,7 @@ Deno.test("history keeps valid local prompts when a connected sibling transport 
     await f.stop();
   }
 });
-Deno.test("recalled prompt caret is ready for the next native history key before a paint callback", async () => {
+test("recalled prompt caret is ready for the next native history key before a paint callback", async () => {
   const f = await browserFixture();
   try {
     const source = await f.oc.request<{ id: string }>("/session", {

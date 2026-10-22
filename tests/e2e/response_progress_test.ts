@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -8,7 +9,7 @@ import {
 } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("U3 response progress follows streaming content, motion preferences, completion and interruption", async () => {
+test("U3 response progress follows streaming content, motion preferences, completion and interruption", async () => {
   const f = await browserFixture({ bash: "allow" });
   const shots = Deno.env.get("OTK_STREAM_SHOTS");
   const holds: { release(): void }[] = [];

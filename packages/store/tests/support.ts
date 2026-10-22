@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { fromFileUrl } from "@std/path";
+import { tempDir } from "../../../tests/support/resources.ts";
 import {
   type FeatureMigrations,
   frecencyMigrations,
@@ -32,7 +32,5 @@ export const frecencyOptions = {
 };
 
 export async function fixture(): Promise<string> {
-  const root = fromFileUrl(new URL("../../../.test-state/", import.meta.url));
-  await Deno.mkdir(root, { recursive: true });
-  return Deno.makeTempDir({ dir: root, prefix: "store-" });
+  return await tempDir("store-");
 }

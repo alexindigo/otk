@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import type { Message } from "@otk/protocol";
 import { browserFixture } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { waitFor } from "../support/opencode.ts";
-Deno.test("shell RPC honors configured primary agent and bypasses model bash permission", async () => {
+test("shell RPC honors configured primary agent and bypasses model bash permission", async () => {
   const f = await browserFixture({ bash: "deny" }, {
     config: { default_agent: "plan" },
   });

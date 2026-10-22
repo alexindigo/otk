@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
@@ -17,7 +18,7 @@ const captured = fromFileUrl(
     import.meta.url,
   ),
 );
-Deno.test("prompt history consumer preserves captured attachments and refuses recall across changed drafts", async () => {
+test("prompt history consumer preserves captured attachments and refuses recall across changed drafts", async () => {
   const reader = new History(captured);
   try {
     const entries = await reader.listHistory();
@@ -35,7 +36,7 @@ Deno.test("prompt history consumer preserves captured attachments and refuses re
     reader.close();
   }
 });
-Deno.test("history recall preserves stored relative mention labels without adding a duplicate basename chip", async () => {
+test("history recall preserves stored relative mention labels without adding a duplicate basename chip", async () => {
   const path = join(await fixture(), "history.db");
   await Deno.copyFile(captured, path);
   const db = new DatabaseSync(path);

@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../support/resources.ts";
+import { ownSocket } from "../../support/ws-client.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 // @deno-types="npm:@types/ws@8.18.1"
@@ -15,7 +17,7 @@ import {
 import { PROTOCOL_VERSION, type ServerFrame } from "@otk/protocol";
 import { cfg, fixture } from "./support.ts";
 
-Deno.test("core service with a composed backend/assets discovers HTTP routes and advertises capabilities to an actual WS consumer", async () => {
+test("core service with a composed backend/assets discovers HTTP routes and advertises capabilities to an actual WS consumer", async () => {
   const root = await fixture(), settings = cfg();
   settings.server.port = 0;
   settings.auth.type = "none";
@@ -96,6 +98,7 @@ Deno.test("core service with a composed backend/assets discovers HTTP routes and
     ws = new WebSocket(base.replace(/^http/, "ws") + "/api/ws", {
       headers: { Origin: base },
     });
+    ownSocket(ws);
     ws.on("message", (data) => frames.push(JSON.parse(data.toString())));
     await new Promise<void>((resolve, reject) => {
       ws!.once("open", resolve);

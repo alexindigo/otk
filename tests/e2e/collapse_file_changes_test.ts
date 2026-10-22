@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import {
   type AssistantMessage,
@@ -13,7 +14,7 @@ import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-Deno.test("U6 file changes start collapsed, disclose real content and follow the persisted Display preference", async () => {
+test("U6 file changes start collapsed, disclose real content and follow the persisted Display preference", async () => {
   const root = await fixture();
   const file = (path: string): FileDiff => ({
     path,
@@ -238,7 +239,7 @@ Deno.test("U6 file changes start collapsed, disclose real content and follow the
   }
 });
 
-Deno.test("U6 one-token labels and literal fallback phrases reach plain and picker footers", async () => {
+test("U6 one-token labels and literal fallback phrases reach plain and picker footers", async () => {
   for (const picker of [false, true]) {
     const root = await fixture();
     const reply: AssistantMessage = {

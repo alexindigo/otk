@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import type { PermissionActivityPage, PermissionRequest } from "@otk/protocol";
@@ -8,7 +9,7 @@ import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { FreezeProxy } from "../support/freeze-proxy.ts";
 
-Deno.test("U9 stock session auto-approve executes bash and helpers with every OTK connection closed, survives restart and off restores waiting", async () => {
+test("U9 stock session auto-approve executes bash and helpers with every OTK connection closed, survives restart and off restores waiting", async () => {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
   const proxy = new FreezeProxy(oc.port);
   const state = join(oc.root, "auto-sidecar-state");

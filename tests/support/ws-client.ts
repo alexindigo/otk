@@ -4,11 +4,31 @@ import WebSocket from "ws";
 import type { ServerFrame } from "@otk/protocol";
 import { PROTOCOL_VERSION } from "@otk/protocol";
 import { waitFor } from "./opencode.ts";
+import { resources } from "./resources.ts";
+export function ownSocket(socket: WebSocket): () => Promise<void> {
+  return resources().defer("WebSocket client", async () => {
+    if (socket.readyState === WebSocket.CLOSED) {
+      socket.removeAllListeners();
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => socket.terminate(), 1000);
+      socket.once("close", () => {
+        clearTimeout(timer);
+        socket.removeAllListeners();
+        resolve();
+      });
+      socket.close();
+    });
+  });
+}
 export class WsClient {
   frames: ServerFrame[] = [];
   ws: WebSocket;
   #next = 0;
+  #close: () => Promise<void>;
   constructor(readonly base: string, cookie?: string, origin = base) {
+    resources();
     this.ws = new WebSocket(base.replace(/^http/, "ws") + "/api/ws", {
       headers: { Origin: origin, ...(cookie ? { Cookie: cookie } : {}) },
     });
@@ -18,6 +38,7 @@ export class WsClient {
       if (frame.t === "ping") this.send({ t: "pong" });
     });
     this.ws.on("error", () => {});
+    this.#close = ownSocket(this.ws);
   }
   async connect(): Promise<void> {
     if (this.ws.readyState !== WebSocket.OPEN) {
@@ -73,10 +94,6 @@ export class WsClient {
     return frame.result as T;
   }
   async close(): Promise<void> {
-    if (this.ws.readyState === WebSocket.CLOSED) return;
-    await new Promise<void>((resolve) => {
-      this.ws.once("close", resolve);
-      this.ws.close();
-    });
+    await this.#close();
   }
 }

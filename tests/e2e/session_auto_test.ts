@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { OtkDb, permissionMigrations, PermissionStore } from "@otk/store";
@@ -13,7 +14,7 @@ import { WsClient } from "../support/ws-client.ts";
 import { waitFor } from "../support/opencode.ts";
 import { FreezeProxy } from "../support/freeze-proxy.ts";
 
-Deno.test("U9 footer auto-approve, command, inherited marks and persisted activity reach browser consumers; dirty permission input is guarded", async () => {
+test("U9 footer auto-approve, command, inherited marks and persisted activity reach browser consumers; dirty permission input is guarded", async () => {
   const f = await browserFixture();
   const proxy = new FreezeProxy(f.oc.port);
   let client: WsClient | undefined;

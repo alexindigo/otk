@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { tempDir, test } from "../../../tests/support/resources.ts";
 import { assertEquals, assertRejects } from "@std/assert";
 import { join, toFileUrl } from "@std/path";
 import { HarnessError } from "@otk/harness";
@@ -18,8 +19,8 @@ for (const mode of ["prompt", "command"] as const) {
       "broken link",
     ] as const
   ) {
-    Deno.test(`${mode} rejects the entire send for an explicit ${fault} attachment before native admission`, async () => {
-      const root = await Deno.makeTempDir({ prefix: "otk-required-" });
+    test(`${mode} rejects the entire send for an explicit ${fault} attachment before native admission`, async () => {
+      const root = await tempDir("otk-required-");
       const blocked = join(root, "blocked"), selected = "blocked/selected.txt";
       await Deno.mkdir(blocked);
       await Deno.writeTextFile(
@@ -101,8 +102,8 @@ for (const mode of ["prompt", "command"] as const) {
   }
 }
 
-Deno.test("required attachment mapping preserves every source, order, directory and range", async () => {
-  const root = await Deno.makeTempDir({ prefix: "otk-required-valid-" });
+test("required attachment mapping preserves every source, order, directory and range", async () => {
+  const root = await tempDir("otk-required-valid-");
   await Deno.mkdir(join(root, "docs"));
   await Deno.writeTextFile(join(root, "notes.txt"), "one\ntwo\nthree");
   const writes: unknown[] = [];

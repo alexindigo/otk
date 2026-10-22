@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assertEquals, assertThrows } from "@std/assert";
 import {
   Finishes,
@@ -23,7 +24,7 @@ const inboxMigrations = [
   projectTemplatesMigrations,
 ];
 
-Deno.test("inbox features create independent fresh schemas and upgrade the previous schema without losing data", async () => {
+test("inbox features create independent fresh schemas and upgrade the previous schema without losing data", async () => {
   for (const upgrade of [false, true]) {
     const path = await fixture();
     if (upgrade) {
@@ -67,7 +68,7 @@ Deno.test("inbox features create independent fresh schemas and upgrade the previ
   }
 });
 
-Deno.test("project visits and inactive clocks are user-scoped, pause while inactive and resume without counting the pause", async () => {
+test("project visits and inactive clocks are user-scoped, pause while inactive and resume without counting the pause", async () => {
   const db = new OtkDb(await fixture(), [projectsMigrations]);
   let now = 100;
   const projects = new Projects(db, () => now);
@@ -96,7 +97,7 @@ Deno.test("project visits and inactive clocks are user-scoped, pause while inact
   }
 });
 
-Deno.test("tasks retain ordered sessions, reject duplicate memberships atomically, reorder and close only their grouping", async () => {
+test("tasks retain ordered sessions, reject duplicate memberships atomically, reorder and close only their grouping", async () => {
   const db = new OtkDb(await fixture(), [tasksMigrations, finishesMigrations]);
   const tasks = new Tasks(db);
   try {
@@ -130,7 +131,7 @@ Deno.test("tasks retain ordered sessions, reject duplicate memberships atomicall
   }
 });
 
-Deno.test("seen and finish clocks persist monotone timestamps and notify only after valid metadata writes", async () => {
+test("seen and finish clocks persist monotone timestamps and notify only after valid metadata writes", async () => {
   const db = new OtkDb(await fixture(), [
     seenMigrations,
     finishesMigrations,
@@ -162,7 +163,7 @@ Deno.test("seen and finish clocks persist monotone timestamps and notify only af
   }
 });
 
-Deno.test("composite preference defaults are detached on every read", async () => {
+test("composite preference defaults are detached on every read", async () => {
   const db = new OtkDb(await fixture(), migrations);
   const defaults = { thresholds: [2, 8, 24] };
   try {
@@ -180,7 +181,7 @@ Deno.test("composite preference defaults are detached on every read", async () =
   }
 });
 
-Deno.test("explicit project additions stay private to their user while automatic discovery appends in each user's stable order", async () => {
+test("explicit project additions stay private to their user while automatic discovery appends in each user's stable order", async () => {
   const db = new OtkDb(await fixture(), [projectsMigrations]);
   const projects = new Projects(db, () => 100);
   try {

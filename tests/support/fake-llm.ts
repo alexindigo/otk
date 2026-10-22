@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { resources } from "./resources.ts";
 export interface Script {
   chunks?: string[];
   reasoning?: string[];
@@ -14,7 +15,9 @@ export class FakeLlm {
   #holds = new Set<() => void>();
   readonly server: Deno.HttpServer;
   readonly port: number;
+  #stop: () => Promise<void>;
   constructor() {
+    const scope = resources();
     this.server = Deno.serve(
       { hostname: "127.0.0.1", port: 0, onListen() {} },
       async (request) => {
@@ -122,6 +125,10 @@ export class FakeLlm {
       },
     );
     this.port = (this.server.addr as Deno.NetAddr).port;
+    this.#stop = scope.defer("scripted provider", async () => {
+      for (const release of this.#holds) release();
+      await this.server.shutdown();
+    });
   }
   queue(...scripts: Script[]): void {
     this.#queue.push(...scripts);
@@ -160,7 +167,6 @@ export class FakeLlm {
     };
   }
   async stop(): Promise<void> {
-    for (const release of this.#holds) release();
-    await this.server.shutdown();
+    await this.#stop();
   }
 }

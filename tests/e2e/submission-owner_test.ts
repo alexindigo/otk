@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type { ProjectRecord, TaskRecord } from "@otk/protocol";
@@ -11,7 +12,7 @@ import { WsClient } from "../support/ws-client.ts";
 import { waitFor } from "../support/opencode.ts";
 
 for (const path of ["normal", "shell", "slash", "palette"] as const) {
-  Deno.test(`${path} submission promotes its phantom once and records successful actions through reload`, async () => {
+  test(`${path} submission promotes its phantom once and records successful actions through reload`, async () => {
     const f = await browserFixture(undefined, {
       async prepare(oc) {
         const directory = join(oc.directory, ".opencode/command");

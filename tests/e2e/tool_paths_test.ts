@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { runTool } from "../support/rendering.ts";
 
-Deno.test("tool headers, bodies and path-list results share project context, including outside paths and reload", async () => {
+test("tool headers, bodies and path-list results share project context, including outside paths and reload", async () => {
   const f = await browserFixture({
     read: "allow",
     glob: "allow",

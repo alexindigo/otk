@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { tempDir, test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { Cdp } from "../support/cdp.ts";
 
-Deno.test("CDP clicks wait for rendered hit geometry before sending one native gesture", async () => {
-  await Deno.mkdir(".test-state", { recursive: true });
-  const root = await Deno.makeTempDir({ dir: ".test-state", prefix: "cdp-" });
+test("CDP clicks wait for rendered hit geometry before sending one native gesture", async () => {
+  const root = await tempDir("cdp-");
   const browser = await Cdp.launch(root);
   const send = browser.send.bind(browser);
   let presses = 0;

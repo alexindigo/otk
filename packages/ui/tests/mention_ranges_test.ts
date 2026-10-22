@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
@@ -9,7 +10,7 @@ import { promptParts } from "../../../core/mod.ts";
 import { mapPromptParts } from "@otk/harness-opencode1";
 import { fixture } from "../../../tests/support/config.ts";
 
-Deno.test("TUI start-only, open and reversed mention ranges retain an optional end", () => {
+test("TUI start-only, open and reversed mention ranges retain an optional end", () => {
   for (
     const [suffix, start, end] of [
       ["3", 3, undefined],
@@ -29,7 +30,7 @@ Deno.test("TUI start-only, open and reversed mention ranges retain an optional e
   });
 });
 
-Deno.test("optional mention end survives completion, RPC validation and actual harness URL mapping", async () => {
+test("optional mention end survives completion, RPC validation and actual harness URL mapping", async () => {
   const root = await fixture();
   await Deno.mkdir(join(root, "src"));
   await Deno.writeTextFile(
@@ -67,7 +68,7 @@ Deno.test("optional mention end survives completion, RPC validation and actual h
   }
 });
 
-Deno.test("start-only RPC input maps without manufacturing a matching end", async () => {
+test("start-only RPC input maps without manufacturing a matching end", async () => {
   const root = await fixture();
   await Deno.writeTextFile(join(root, "file.ts"), "one\ntwo\nthree\n");
   const mapped = await mapPromptParts(
