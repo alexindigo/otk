@@ -40,25 +40,24 @@ export default function DialogHost(
     run: () => close(),
   });
   return (
-    <For each={opened() ? [opened()!] : []} keyed={(value) => value.id}>
+    <For each={opened() ? [opened()!] : []} keyed={(value) => value}>
       {(value) => {
-        const definition = dialogs.resolve(value().id)!;
+        const owner = value(), definition = dialogs.resolve(owner.id)!;
         return (
           <Dialog
             id={definition.commandId ?? definition.id}
             title={typeof definition.title === "function"
-              ? definition.title(value().input)
+              ? definition.title(owner.input)
               : definition.title ?? definition.id}
             onClose={() => {
-              if (definition.dismiss) definition.dismiss(value().input);
-              else close(value());
+              if (opened() !== owner) return;
+              if (definition.dismiss) definition.dismiss(owner.input);
+              else close(owner);
             }}
           >
             {definition.component({
-              get input() {
-                return value().input;
-              },
-              close: () => close(value()),
+              input: owner.input,
+              close: () => close(owner),
             })}
           </Dialog>
         );
