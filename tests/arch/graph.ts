@@ -47,14 +47,18 @@ export class Graph {
             const target = node.source && this.resolve(path, node.source.value);
             return target
               ? this.exported(target, property(specifier.local) ?? name, seen)
-              : this.component(path, specifier.local, seen) ?? path;
+              : this.component(path, specifier.local, seen) ??
+                (source.binding(specifier.local.name, specifier.local)
+                  ? path
+                  : undefined);
           }
         }
         if (
           node.declaration &&
-          [...nodes(node.declaration)].some((n) =>
-            n.type === "Identifier" && n.name === name
-          )
+          (node.declaration.type === "VariableDeclaration"
+            ? node.declaration.declarations.some((d) => property(d.id) === name)
+            : "id" in node.declaration && node.declaration.id &&
+              property(node.declaration.id) === name)
         ) return path;
       } else if (node.type === "ExportAllDeclaration") {
         const target = this.resolve(path, node.source.value);
@@ -64,7 +68,7 @@ export class Graph {
         node.type === "ExportDefaultDeclaration" && name === "default"
       ) return this.component(path, node.declaration, seen) ?? path;
     }
-    return /\.tsx$/.test(path) ? path : undefined;
+    return undefined;
   }
   component(
     path: string,
@@ -73,25 +77,11 @@ export class Graph {
   ): string | undefined {
     const source = this.sources.get(path);
     if (!source) return;
-    const local =
-      node.type === "JSXMemberExpression" || node.type === "MemberExpression"
-        ? property(node.object)
-        : property(node);
-    for (const statement of source.tree.program.body) {
-      if (statement.type !== "ImportDeclaration") continue;
-      const binding = statement.specifiers.find((s) => s.local.name === local);
-      if (!binding) continue;
-      const target = this.resolve(path, statement.source.value);
-      if (!target) return;
-      const exported = binding.type === "ImportSpecifier"
-        ? property(binding.imported)
-        : binding.type === "ImportNamespaceSpecifier" &&
-            (node.type === "JSXMemberExpression" ||
-              node.type === "MemberExpression")
-        ? property(node.property)
-        : "default";
-      return this.exported(target, exported ?? "default", seen);
-    }
+    const imported = source.imported(node);
+    const target = imported && this.resolve(path, imported.module);
+    return target && imported
+      ? this.exported(target, imported.name, seen)
+      : undefined;
   }
   references(path: string, root: t.Node): string[] {
     const result: string[] = [];

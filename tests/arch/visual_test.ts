@@ -2,10 +2,31 @@
 import { assert, assertEquals } from "@std/assert";
 import { Source, uiSources } from "./analysis.ts";
 import { rules, typographyErrors, words } from "./styles.ts";
-import type { t } from "./syntax.ts";
+import { property, type t } from "./syntax.ts";
 import { resizeBypasses, typographyBypasses } from "./bypasses.ts";
 resizeBypasses(resizeErrors);
 typographyBypasses(visualErrors);
+
+for (
+  const source of [
+    '<button {...selection({kind:"candidate", selected:false, candidate:active})} />',
+    '<button {...selection({["kind"]:"candidate", ["selected"]:false, ["candidate"]:active})} />',
+  ]
+) {
+  Deno.test(`A12 independent candidate still requires orientation ${source}`, () => {
+    assert(selectionErrors(source).length > 0, `Bypass accepted: ${source}`);
+  });
+}
+
+Deno.test("A12 orientation accepts permanently unselected metadata but not arbitrary candidate marks", () => {
+  for (
+    const source of [
+      '<span {...selection({kind:"candidate", selected:false, applied:defaulted})} />',
+      '<span {...selection({["kind"]:"candidate", ["selected"]:false, ["candidate"]:false})} />',
+      '<button data-otk-selection="vertical" {...selection({kind:"candidate", selected:false, candidate:active})} />',
+    ]
+  ) assertEquals(selectionErrors(source), [], source);
+});
 
 const continuousMotionOwners = new Set([
   "components/StatusLight.css",
@@ -230,15 +251,20 @@ export function selectionErrors(source: string): string[] {
         parsed.name(a.argument.callee) !== "selection"
       ) return false;
       const options = parsed.value(a.argument.arguments[0]);
-      const state = options?.type === "ObjectExpression" &&
-        options.properties.find((p) =>
-          p.type === "ObjectProperty" && p.key.type === "Identifier" &&
-          p.key.name === "selected"
+      if (options?.type !== "ObjectExpression") return true;
+      const field = (name: string) => {
+        const state = options.properties.findLast((p) =>
+          p.type === "ObjectProperty" && property(p.key) === name
         );
-      const value = state && state.type === "ObjectProperty"
-        ? parsed.value(state.value)
-        : undefined;
-      return value?.type !== "BooleanLiteral" || value.value;
+        return state?.type === "ObjectProperty"
+          ? parsed.value(state.value)
+          : undefined;
+      };
+      const selected = field("selected"), candidate = field("candidate");
+      const never = (value: t.Node | undefined) =>
+        value?.type === "BooleanLiteral" && !value.value;
+      return !never(selected) || !!candidate && !never(candidate) ||
+        options.properties.some((p) => p.type === "SpreadElement");
     });
     if (!selected) continue;
     const attribute = parsed.attr(node, "data-otk-selection");

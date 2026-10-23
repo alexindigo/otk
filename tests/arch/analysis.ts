@@ -6,15 +6,30 @@ type Binding = {
   value?: t.Node;
   suffix?: string;
   imported?: string;
+  module?: string;
+  exportName?: string;
+  written?: boolean;
 };
+const functions = new Set([
+  "FunctionDeclaration",
+  "FunctionExpression",
+  "ArrowFunctionExpression",
+  "ObjectMethod",
+  "ClassMethod",
+  "ClassPrivateMethod",
+]);
 const isScope = (node: t.Node) =>
-  [
+  functions.has(node.type) || [
     "Program",
     "BlockStatement",
-    "FunctionDeclaration",
-    "FunctionExpression",
-    "ArrowFunctionExpression",
     "CatchClause",
+    "ForStatement",
+    "ForInStatement",
+    "ForOfStatement",
+    "SwitchStatement",
+    "ClassDeclaration",
+    "ClassExpression",
+    "StaticBlock",
   ].includes(node.type);
 
 /** A read-only, lexical source model. Names resolve from the use site, so a
@@ -58,20 +73,83 @@ export class Source {
               : specifier.type === "ImportDefaultSpecifier"
               ? node.source.value.split("/").at(-1)?.replace(/\.[^.]+$/, "")
               : "*",
+            node.source.value,
+            specifier.type === "ImportSpecifier"
+              ? property(specifier.imported)
+              : specifier.type === "ImportDefaultSpecifier"
+              ? "default"
+              : "*",
           );
         }
       } else if (node.type === "VariableDeclarator") {
-        this.bind(node.id, this.scope(node), node.init ?? undefined);
+        let scope = this.scope(node);
+        if (
+          this.parent.get(node)?.type === "VariableDeclaration" &&
+          (this.parent.get(node) as t.VariableDeclaration).kind === "var"
+        ) {
+          while (!functions.has(scope.type) && scope.type !== "Program") {
+            scope = this.scope(scope);
+          }
+        }
+        this.bind(node.id, scope, node.init ?? undefined);
       } else if (
         node.type === "FunctionDeclaration" ||
         node.type === "FunctionExpression" ||
         node.type === "ArrowFunctionExpression" ||
-        node.type === "ObjectMethod" || node.type === "ClassMethod"
+        node.type === "ObjectMethod" || node.type === "ClassMethod" ||
+        node.type === "ClassPrivateMethod"
       ) {
-        if ("id" in node && node.id) this.bind(node.id, this.scope(node));
+        if ("id" in node && node.id) {
+          this.bind(
+            node.id,
+            node.type === "FunctionExpression" ? node : this.scope(node),
+          );
+        }
         for (const param of node.params) this.bind(param, node);
+      } else if (node.type === "CatchClause" && node.param) {
+        this.bind(node.param, node);
+      } else if (
+        (node.type === "ClassDeclaration" || node.type === "ClassExpression") &&
+        node.id
+      ) {
+        this.bind(
+          node.id,
+          node.type === "ClassExpression" ? node : this.scope(node),
+        );
       }
     }
+    // Positive provenance never follows a stale initializer. This deliberately
+    // rejects uncertain mutable dataflow instead of guessing execution order.
+    for (const node of this.all) {
+      const target = node.type === "AssignmentExpression"
+        ? node.left
+        : node.type === "UpdateExpression"
+        ? node.argument
+        : (node.type === "ForInStatement" || node.type === "ForOfStatement") &&
+            node.left.type !== "VariableDeclaration"
+        ? node.left
+        : undefined;
+      if (target) this.markWritten(target);
+    }
+  }
+  private markWritten(node: t.Node): void {
+    if (node.type === "Identifier") {
+      const binding = this.binding(node.name, node);
+      if (binding) binding.written = true;
+    } else if (
+      node.type === "MemberExpression" ||
+      node.type === "OptionalMemberExpression"
+    ) {
+      this.markWritten(node.object);
+    } else if (node.type === "ObjectPattern") {
+      for (const item of node.properties) {
+        this.markWritten(
+          item.type === "ObjectProperty" ? item.value : item.argument,
+        );
+      }
+    } else if (node.type === "ArrayPattern") {
+      for (const item of node.elements) if (item) this.markWritten(item);
+    } else if (node.type === "AssignmentPattern") this.markWritten(node.left);
   }
   scope(node: t.Node): t.Node {
     let current = this.parent.get(node);
@@ -84,10 +162,12 @@ export class Source {
     value?: t.Node,
     suffix?: string,
     imported?: string,
+    module?: string,
+    exportName?: string,
   ): void {
     if (pattern.type === "Identifier") {
       const entries = this.bindings.get(pattern.name) ?? [];
-      entries.push({ scope, value, suffix, imported });
+      entries.push({ scope, value, suffix, imported, module, exportName });
       this.bindings.set(pattern.name, entries);
     } else if (pattern.type === "AssignmentPattern") {
       this.bind(pattern.left, scope, value ?? pattern.right, suffix);
@@ -124,7 +204,7 @@ export class Source {
     seen.add(node);
     if (node.type === "Identifier") {
       const binding = this.binding(node.name, node);
-      if (binding?.value && !binding.suffix) {
+      if (binding?.value && !binding.suffix && !binding.written) {
         return this.value(binding.value, seen);
       }
     }
@@ -147,7 +227,7 @@ export class Source {
     if (node.type === "Identifier" || node.type === "JSXIdentifier") {
       const binding = this.binding(node.name, node);
       if (binding?.imported) return binding.imported;
-      if (binding?.value) {
+      if (binding?.value && !binding.written) {
         const base = this.name(binding.value, seen);
         return base
           ? [base, binding.suffix].filter(Boolean).join(".")
@@ -174,6 +254,64 @@ export class Source {
       node.type === "TSSatisfiesExpression"
     ) return this.name(node.expression, seen);
   }
+  /** Identity and access path, distinct from name()'s diagnostic spelling.
+   * Unresolved/local/imported homonyms must not authorize shared ownership. */
+  access(
+    node: t.Node | null | undefined,
+    seen = new Set<t.Node>(),
+  ): { binding: Binding; fields: string[] } | undefined {
+    if (!node || seen.has(node)) return;
+    seen.add(node);
+    if (node.type === "Identifier" || node.type === "JSXIdentifier") {
+      const binding = this.binding(node.name, node);
+      if (!binding || binding.written) return;
+      const base = binding.value && this.access(binding.value, seen);
+      return base
+        ? {
+          binding: base.binding,
+          fields: [...base.fields, ...binding.suffix?.split(".") ?? []],
+        }
+        : { binding, fields: binding.suffix?.split(".") ?? [] };
+    }
+    if (
+      node.type === "MemberExpression" ||
+      node.type === "OptionalMemberExpression" ||
+      node.type === "JSXMemberExpression"
+    ) {
+      const base = this.access(node.object, seen);
+      const field = "computed" in node && node.computed
+        ? this.string(node.property)
+        : property(node.property);
+      return base && field
+        ? { binding: base.binding, fields: [...base.fields, field] }
+        : undefined;
+    }
+    if (
+      node.type === "TSAsExpression" || node.type === "TSNonNullExpression" ||
+      node.type === "TSSatisfiesExpression" ||
+      node.type === "JSXExpressionContainer"
+    ) {
+      return this.access(node.expression, seen);
+    }
+  }
+  imported(
+    node: t.Node | null | undefined,
+  ): { module: string; name: string } | undefined {
+    const access = this.access(node);
+    if (!access?.binding.module || !access.binding.exportName) return;
+    const { module, exportName } = access.binding;
+    if (exportName === "*" && access.fields.length === 1) {
+      return { module, name: access.fields[0] };
+    }
+    if (!access.fields.length) return { module, name: exportName };
+  }
+  function(node: t.Node): t.Node | undefined {
+    let current: t.Node | undefined = node;
+    while (current && !functions.has(current.type)) {
+      current = this.parent.get(current);
+    }
+    return current;
+  }
   attr(node: t.JSXOpeningElement, name: string): t.Node | undefined {
     const attr = node.attributes.find((a) =>
       a.type === "JSXAttribute" && property(a.name) === name
@@ -192,6 +330,22 @@ export class Source {
           child === parent.alternate && parent.test.value
         ) return false;
       }
+      if (
+        parent.type === "ConditionalExpression" &&
+        parent.test.type === "BooleanLiteral"
+      ) {
+        if (
+          child === parent.consequent && !parent.test.value ||
+          child === parent.alternate && parent.test.value
+        ) return false;
+      }
+      if (
+        parent.type === "LogicalExpression" &&
+        parent.left.type === "BooleanLiteral" &&
+        child === parent.right &&
+        (parent.operator === "&&" && !parent.left.value ||
+          parent.operator === "||" && parent.left.value)
+      ) return false;
       if (parent.type === "BlockStatement" || parent.type === "Program") {
         const index = parent.body.indexOf(child as t.Statement);
         if (
