@@ -174,3 +174,64 @@ test("dialog invocation owns content input, dismiss, teardown and returned close
     await browser.evaluate("dialogTest.close()");
     await browser.poll("!document.querySelector('dialog[open]')");
   }));
+
+test("feature dismissal receives a close bound to its invocation, including deferred completion", () =>
+  consumer(async (browser, root) => {
+    await browser.evaluate("dialogTest.probe('First dismissal')");
+    await browser.poll("!!document.querySelector('dialog[open]')");
+    await browser.key("Escape");
+    await browser.poll("dialogTest.dismissCloses.length===1");
+    await browser.evaluate("dialogTest.dismissCloses[0]()");
+    await browser.poll("!document.querySelector('dialog[open]')");
+    await browser.evaluate("dialogTest.probe('Deferred dismissal')");
+    await browser.poll("!!document.querySelector('dialog[open]')");
+    await browser.key("Escape");
+    await browser.poll("dialogTest.dismissCloses.length===2");
+    await browser.evaluate("dialogTest.probe('Replacement dismissal')");
+    await browser.poll(
+      "document.querySelector('dialog[open]')?.getAttribute('aria-label')==='Replacement dismissal'",
+    );
+    await browser.evaluate("dialogTest.dismissCloses[1]()");
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector('dialog[open]')?.getAttribute('aria-label')",
+      ),
+      "Replacement dismissal",
+      "Late dismissal closed the replacement",
+    );
+    for (const theme of ["otk-dark", "otk-light"]) {
+      await browser.evaluate(`dialogTest.theme('${theme}')`);
+      await browser.poll(
+        `document.documentElement.dataset.otkTheme==='${theme}'`,
+      );
+      await browser.screenshot(join(root, `dismiss-${theme}.png`));
+    }
+    console.info("B1 dismissal screenshots:", root);
+    await browser.key("Escape");
+    await browser.poll("dialogTest.dismissCloses.length===3");
+    await browser.evaluate("dialogTest.dismissCloses[2]()");
+    await browser.poll("!document.querySelector('dialog[open]')");
+  }));
+
+test("standalone palette dismisses through its injected callback without a host close command", () =>
+  consumer(async (browser, root) => {
+    await browser.evaluate("dialogTest.palette()");
+    await browser.poll(
+      "!!document.querySelector('input[name=command-search]')",
+    );
+    await browser.click('[data-command="consumer.action"]');
+    await browser.poll("dialogTest.events.includes('action')");
+    assertEquals(await browser.evaluate("dialogTest.events"), [
+      "action",
+      "palette:closed",
+    ]);
+    await browser.poll("!document.querySelector('input[name=command-search]')");
+    for (const theme of ["otk-dark", "otk-light"]) {
+      await browser.evaluate(`dialogTest.theme('${theme}')`);
+      await browser.poll(
+        `document.documentElement.dataset.otkTheme==='${theme}'`,
+      );
+      await browser.screenshot(join(root, `palette-closed-${theme}.png`));
+    }
+    console.info("B1 standalone palette screenshots:", root);
+  }));

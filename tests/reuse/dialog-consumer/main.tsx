@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { onSettled } from "solid-js";
+import { createSignal, onSettled, Show } from "solid-js";
 import { render } from "@solidjs/web";
 import { CommandHub } from "@otk/client";
 import {
@@ -7,6 +7,7 @@ import {
   CommandProvider,
   createUiRegistries,
   DialogHost,
+  Palette,
   registerOtkThemes,
   registerTaskDialogs,
   ThemeEngine,
@@ -25,13 +26,22 @@ theme.start();
 registerTaskDialogs(ui.dialogs);
 const events: string[] = [],
   closes: (() => void)[] = [],
+  dismissCloses: (() => void)[] = [],
   inputs: (() => string)[] = [];
+const [palette, setPalette] = createSignal(false);
+commands.register({
+  id: "consumer.action",
+  title: "Consumer action",
+  category: "Consumer",
+  run: () => events.push("action"),
+});
 let finish: (() => void) | undefined;
 ui.dialogs.register<{ name: string }>({
   id: "probe",
   title: (input) => input.name,
-  dismiss: (input) => {
+  dismiss: (input, close?: () => void) => {
     events.push(`dismiss:${input.name}`);
+    dismissCloses.push(() => close?.());
   },
   component: (props) => {
     closes.push(props.close);
@@ -50,7 +60,9 @@ ui.dialogs.register<{ name: string }>({
 const driver = {
   events,
   closes,
+  dismissCloses,
   inputs,
+  palette: () => setPalette(true),
   theme: (id: string) => theme.commit(id),
   finish: () => finish?.(),
   close: () => commands.run("dialog.close"),
@@ -84,6 +96,14 @@ render(() => (
       <h1>Dialog lifetime consumer</h1>
       <button type="button" id="origin">Opening control</button>
       <DialogHost />
+      <Show when={palette()}>
+        <Palette
+          onClose={() => {
+            events.push("palette:closed");
+            setPalette(false);
+          }}
+        />
+      </Show>
     </UiProvider>
   </CommandProvider>
 ), document.getElementById("app")!);

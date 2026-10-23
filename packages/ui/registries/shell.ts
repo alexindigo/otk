@@ -11,7 +11,7 @@ export interface DialogDefinition {
   id: string;
   title?: string | ((input: unknown) => string);
   commandId?: string;
-  dismiss?(input: unknown): void;
+  dismiss?(input: unknown, close: () => void): void;
   component(props: DialogProps): Element;
 }
 export class DialogRegistry {
@@ -21,7 +21,7 @@ export class DialogRegistry {
       id: string;
       title?: string | ((input: T) => string);
       commandId?: string;
-      dismiss?(input: T): void;
+      dismiss?(input: T, close: () => void): void;
       component(props: DialogProps<T>): Element;
     },
   ): void {

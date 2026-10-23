@@ -281,14 +281,18 @@ identity-bound close handle, so a stale completion or feature teardown cannot
 close a replacement dialog. Command, keymap, theme, editor and add-project
 features own their registrations. `DialogHost` wraps every registration in the
 native `Dialog` owner; optional `commandId` preserves feature close IDs and
-`dismiss(input)` routes dismissal through feature state when needed. Content
-never creates a second dialog, title or card. The internal `Surface` owns
-boundary, paint, padding and title/body/action flow; only `Dialog`, `Popover`,
-`Menu`, `Toast` and `Takeover` specialisations may consume it. `Popover` owns
-native top-layer anchoring and outside-click/Escape dismissal, `Menu` supplies a
-normal-flow item column and `Toast` supplies the card in the fixed notification
-stack. Overlay tokens and the content/popover/dialog/toast layer scale live in
-`theme.css`. Fieldsets and legends are layout-neutral grouping, never cards.
+`dismiss(input, close)` routes dismissal through feature state when needed; its
+close callback is bound to that invocation and remains safe after asynchronous
+confirmation or replacement. Palette likewise invokes its injected `onClose`
+after a successful action rather than requiring a host-generated command.
+Content never creates a second dialog, title or card. The internal `Surface`
+owns boundary, paint, padding and title/body/action flow; only `Dialog`,
+`Popover`, `Menu`, `Toast` and `Takeover` specialisations may consume it.
+`Popover` owns native top-layer anchoring and outside-click/Escape dismissal,
+`Menu` supplies a normal-flow item column and `Toast` supplies the card in the
+fixed notification stack. Overlay tokens and the content/popover/dialog/toast
+layer scale live in `theme.css`. Fieldsets and legends are layout-neutral
+grouping, never cards.
 `panels.register({ id, title, icon, capability?,
 component })` contributes
 right-panel views. Icons may be strings or feature-owned render functions; the

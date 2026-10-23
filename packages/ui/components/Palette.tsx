@@ -5,7 +5,7 @@ import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
 import { useCommandPorts } from "../keyboard/context.tsx";
 export default function Palette(
-  _props: { onClose(): void },
+  props: { onClose(): void },
 ): import("solid-js").Element {
   const { commands } = useCommandPorts();
   const [query, setQuery] = createSignal(""),
@@ -29,7 +29,7 @@ export default function Palette(
   const invoke = async (id: string) => {
     try {
       await commands.run(id);
-      if (active) await commands.run("palette.close");
+      if (active) props.onClose();
     } catch (error) {
       if (active) setError((error as Error).message);
     }

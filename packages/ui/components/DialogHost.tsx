@@ -51,8 +51,9 @@ export default function DialogHost(
               : definition.title ?? definition.id}
             onClose={() => {
               if (opened() !== owner) return;
-              if (definition.dismiss) definition.dismiss(owner.input);
-              else close(owner);
+              if (definition.dismiss) {
+                definition.dismiss(owner.input, () => close(owner));
+              } else close(owner);
             }}
           >
             {definition.component({
