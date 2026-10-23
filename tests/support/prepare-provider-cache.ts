@@ -9,29 +9,52 @@ import {
 } from "./provider-cache.ts";
 import { resources, withResources } from "./resources.ts";
 
-/** Explicit preparation, never a lazy registry fallback in an isolated fixture. */
+/** Task prerequisite, never a lazy registry fallback in an isolated fixture. */
 export async function prepareProviderCache(): Promise<void> {
-  const target = providerCachePath();
-  try {
-    await Deno.stat(target);
-    await validateProviderCache(target);
-    console.info("Prepared provider cache:", target);
-    return;
-  } catch (error) {
-    if (!(error instanceof Deno.errors.NotFound)) throw error;
+  const binary = await new Deno.Command("/usr/local/bin/opencode", {
+    args: ["--version"],
+    signal: AbortSignal.timeout(15_000),
+  }).output();
+  const version = new TextDecoder().decode(binary.stdout).trim();
+  if (!binary.success || version !== nativeVersion) {
+    throw new Error(
+      `Native fixture requires opencode ${nativeVersion}, received ${version}: ${
+        new TextDecoder().decode(binary.stderr)
+      }`,
+    );
   }
+  const target = providerCachePath();
   await Deno.mkdir(dirname(target), { recursive: true });
-  // Atomic creation is also the preparation lock across independent runners.
-  const lock = target + ".lock";
   await withResources("prepare native provider dependencies", async () => {
-    await Deno.mkdir(lock);
-    resources().defer("cache preparation lock", async () => {
+    // Keep the inode: unlinking a lock file can let a third runner bypass waiters.
+    // The kernel releases this lock even if the preparing process exits abruptly.
+    const lock = await Deno.open(target + ".lock", {
+      create: true,
+      write: true,
+    });
+    resources().defer("cache preparation lock", () => lock.close());
+    await lock.lock(true);
+    // Recheck after joining an independent task's preparation.
+    try {
+      await Deno.stat(target);
+      await validateProviderCache(target);
+      console.info("Prepared provider cache:", target);
+      return;
+    } catch (error) {
+      if (!(error instanceof Deno.errors.NotFound)) throw error;
+    }
+    const stage = await Deno.makeTempDir({
+      dir: dirname(target),
+      prefix: ".provider-cache-",
+    });
+    resources().defer("cache preparation staging", async () => {
       try {
-        await Deno.remove(lock, { recursive: true });
+        await Deno.remove(stage, { recursive: true });
       } catch (error) {
         if (!(error instanceof Deno.errors.NotFound)) throw error;
       }
     });
+    console.info("Preparing provider cache:", target);
     const fake = new FakeLlm();
     const oc = await OpencodeTest.start(fake, {}, {
       packageCache: false,
@@ -45,22 +68,23 @@ export async function prepareProviderCache(): Promise<void> {
       },
     });
     await oc.stop();
-    await Deno.mkdir(join(lock, "dependencies"));
+    await Deno.mkdir(join(stage, "dependencies"));
     const origin = join(oc.root, "config/opencode");
     for (const name of ["package.json", "package-lock.json", "node_modules"]) {
       const result = await new Deno.Command("/usr/bin/cp", {
-        args: ["-a", join(origin, name), join(lock, "dependencies", name)],
+        args: ["-a", join(origin, name), join(stage, "dependencies", name)],
+        signal: AbortSignal.timeout(30_000),
       }).output();
       if (!result.success) {
         throw new Error(new TextDecoder().decode(result.stderr));
       }
     }
     await Deno.writeTextFile(
-      join(lock, "ready.json"),
+      join(stage, "ready.json"),
       JSON.stringify({ opencode: nativeVersion }),
     );
-    await validateProviderCache(lock);
-    await Deno.rename(lock, target);
+    await validateProviderCache(stage);
+    await Deno.rename(stage, target);
   });
   console.info("Prepared provider cache:", target);
 }

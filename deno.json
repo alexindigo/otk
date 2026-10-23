@@ -9,11 +9,18 @@
   "tasks": {
     "start": "deno run --allow-net --allow-read --allow-write --allow-env main.ts",
     "dev": "deno run --watch --allow-net --allow-read --allow-write --allow-env main.ts",
-    "test": "deno test --allow-net --allow-read --allow-write --allow-env --allow-run",
+    "prepare:test": "deno run --allow-net --allow-read --allow-write --allow-env --allow-run tests/support/prepare-provider-cache.ts",
+    "test": {
+      "command": "deno test --allow-net --allow-read --allow-write --allow-env --allow-run",
+      "dependencies": ["prepare:test"]
+    },
     "check": "deno check main.ts application.ts core/ packages/ tests/ web/src/ web/vite.config.ts",
     "build:web": "deno run -A npm:vite@8.2.0 build --config web/vite.config.ts",
     "build:web:watch": "deno run -A npm:vite@8.2.0 build --config web/vite.config.ts --watch",
-    "test:e2e": "deno test --allow-net --allow-read --allow-write --allow-env --allow-run tests/e2e/",
+    "test:e2e": {
+      "command": "deno test --allow-net --allow-read --allow-write --allow-env --allow-run tests/e2e/",
+      "dependencies": ["prepare:test"]
+    },
     "test:unit": "deno task test tests/unit/ packages/*/tests/",
     "test:integration": "deno task test tests/integration/",
     "test:arch": "deno test --allow-read tests/arch/",

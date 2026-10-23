@@ -38,7 +38,7 @@ export async function validateProviderCache(
     }
   } catch (cause) {
     throw new Error(
-      `Prepare the shared provider cache before running fixtures: deno run -A tests/support/prepare-provider-cache.ts (${path})`,
+      `Shared provider cache is missing or invalid: deno task prepare:test (${path})`,
       { cause },
     );
   }

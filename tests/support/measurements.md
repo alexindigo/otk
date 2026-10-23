@@ -147,11 +147,18 @@ exit can hide.
 
 ## Shared native packages
 
-Prepare dependencies explicitly once, inside the assigned OTK VM, before the
-test suite:
+The fixture-bearing test tasks prepare dependencies automatically inside the
+assigned OTK VM. `deno task test` (including focused file/filter arguments),
+`test:unit`, `test:integration`, `test:e2e` and `test:reuse` run the shared
+`prepare:test` prerequisite before any tests. No manual setup is required on a
+fresh workspace. `test:arch` is read-only and has no native fixtures. Direct
+`deno test` bypasses task prerequisites; prepare first with
+`deno task prepare:test` when deliberately invoking that lower-level runner.
+
+The prerequisite can also be invoked on its own:
 
 ```sh
-deno run -A tests/support/prepare-provider-cache.ts
+deno task prepare:test
 ```
 
 This uses a real custom-tool registry read to populate stock1.18.34's config and
@@ -160,19 +167,33 @@ before that path exists; health or built-in IDs alone are not cache preparation.
 The native SDK used by the scripted provider is bundled; the characterized live
 install is `@opencode-ai/plugin` and its transitive provider dependencies.
 
-`OTK_TEST_PROVIDER_CACHE` optionally selects the prepared cache; the default is
+`OTK_TEST_PROVIDER_CACHE` optionally selects the cache; the default is
 `provider-cache/opencode-1.18.34` beside TMPDIR, outside disposable scratch.
-Preparation uses an exclusive directory lock and atomic publication; a present
-but invalid cache fails with preparation instructions, without a live-install
-fallback. Native health and the prepared plugin/lock versions must match1.18.34.
+Preparation checks the installed opencode binary's version before using that
+version's cache. The binary, native health, prepared plugin, package lock and
+ready manifest must all match the fixture's pinned1.18.34 contract.
+
+Independent task processes join one exclusive kernel file lock and revalidate
+after acquiring it. The `.lock` inode stays beside the cache (never unlink it
+while runners may be waiting); process exit releases ownership automatically.
+Preparation builds a private sibling staging directory, validates it, then
+publishes atomically. Failure removes its staging and releases the lock. A
+present but invalid cache fails without overwriting it or silently attempting a
+live install. Repeated valid preparation leaves the published cache untouched.
+Only the first cold prerequisite needs the registry; subsequent test tasks use
+the validated cache even with registry access denied.
 
 Each fixture copies the two package manifests into its own global and project
 config directories and links only the prepared dependency tree. Auth, config,
 state, data and native cache directories remain isolated. Ordinary fixtures
-cannot populate a missing package cache from npm. Only explicit preparation and
+cannot populate a missing package cache from npm. Only the task prerequisite and
 the dedicated uncached readiness barrier select `packageCache: false`.
 
 The offline regression starts two independent native instances with a denied
 registry. Each must expose its actual custom tool and finish a scripted provider
 reply, while the registry receives zero requests. Native tool-registry readiness
-and the existing first-question assertions remain independent requirements.
+and the existing first-question assertions remain independent requirements. The
+task regression starts two independent cold tasks against one absent cache,
+requires exactly one preparation and real custom-tool/provider outcomes in both,
+then repeats the task with registry requests denied and checks that the
+published manifest is unchanged.
