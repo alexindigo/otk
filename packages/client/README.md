@@ -318,8 +318,18 @@ action callbacks and failure presentation.
 separate from session URLs; pass both through the same guarded navigation owner.
 `projectName` names a path without embedding server identity. Consumers keep
 server IDs alongside shared projections and add machine labels for collisions.
-`registerPreferenceCommands` is the framework-free command contribution owner;
-its menu/command metadata still derives from the protocol preference registry.
+`createProjectPicker` owns directory discovery and captured project-add intents.
+Its connection input includes sidecar identity, welcome version and readiness;
+scan state is invocation-current through the usual revision factory. Replaced
+connections cancel reads and clear their projection, `ready()` follows current
+work, and explicit refresh retries a settled failure. Add captures its server
+and trimmed path, shares identical pending submissions, and forwards the
+canonical directory to injected open/close ports only while the picker remains
+alive. Disposal retires scan publication and add navigation without undoing a
+committed server mutation. Native inputs and presentation belong to the UI
+adapter. `registerPreferenceCommands` is the framework-free command contribution
+owner; its menu/command metadata still derives from the protocol preference
+registry.
 
 `inboxStatus`, `rollup`, `unread`, `inboxProjects`, `visitTime` and `ageing` are
 the shared pure projections for column, rail and badges. Supply the connection's

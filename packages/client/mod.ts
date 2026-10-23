@@ -2,6 +2,7 @@
 export { registerPreferenceCommands } from "./preference-commands.ts";
 export { countLabel } from "./count.ts";
 export * from "./project-navigation.ts";
+export * from "./project-picker.ts";
 /** Framework-free OTK transport, observable state and navigation models. */
 export * from "./auth.ts";
 export * from "./connection.ts";

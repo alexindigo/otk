@@ -258,6 +258,12 @@ owner. PermissionActivity receives data/actions, shows manual and automatic
 reply outcomes with the same PermissionSummary as approval surfaces, and offers
 earlier-page loading. The panel host knows no permission implementation.
 
+The add-project adapter binds the client `createProjectPicker` owner to selected
+sidecar/welcome metadata and typed scan/add RPC ports. The owner holds scan
+generations, cancellation, current results/errors and captured add/open/close
+transactions. Native server/path fields and rendering remain in the dialog;
+unmount disposes its owner so late operations cannot navigate from retired UI.
+
 `takeovers.register({ id, capability, component })` supplies composer attention
 owners. `ComposerTakeovers` mounts capability-available components; they read
 session state from context and construct their own UI. Optional feature-owned

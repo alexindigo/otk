@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./projects.css" with { type: "text" };
 import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
+import { createProjectPicker } from "@otk/client";
 import type { DialogProps, DialogRegistry } from "../registries/shell.ts";
 import { useShellPorts } from "../shell/context.tsx";
 import Form from "../components/Form.tsx";
+import { solidState } from "../state/binding.ts";
 
 export function registerProjectDialogs(dialogs: DialogRegistry): void {
   dialogs.register({
@@ -18,47 +20,33 @@ function AddProject(props: DialogProps) {
   const [server, setServer] = createSignal(
     shell.servers().find((s) => s.status === "connected")?.id ?? "local",
   );
-  const [paths, setPaths] = createSignal<string[]>([]),
-    [loading, setLoading] = createSignal(false),
-    [error, setError] = createSignal("");
   const [path, setPath] = createSignal("");
-  let generation = 0;
-  onCleanup(() => generation++);
-  createEffect(
-    () =>
-      [
-        server(),
-        shell.servers().find((s) => s.id === server())?.status,
-      ] as const,
-    ([id, status]) => {
-      const revision = ++generation;
-      setPaths([]);
-      setError("");
-      if (status !== "connected") return;
-      setLoading(true);
-      void shell.connection(id).rpc.call("projects.scan", {}).then((paths) => {
-        if (revision === generation) setPaths(paths);
-      }, (error) => {
-        if (revision === generation) setError((error as Error).message);
-      }).finally(() => {
-        if (revision === generation) setLoading(false);
-      });
-    },
-  );
+  const connection = () => {
+    const selected = shell.servers().find((s) => s.id === server());
+    return {
+      sidecarId: server(),
+      key: selected?.connectionVersion,
+      connected: selected?.status === "connected",
+    };
+  };
+  const picker = createProjectPicker({
+    connection,
+    scan: (id, signal) =>
+      shell.connection(id).rpc.call("projects.scan", {}, signal),
+    add: (id, directory) =>
+      shell.connection(id).rpc.call("projects.add", { directory }),
+    open: shell.openProject,
+    close: props.close,
+    factory: solidState,
+  });
+  onCleanup(() => picker.dispose());
+  createEffect(connection, (value) => picker.connect(value));
   return (
     <>
       <Form
         title="Project directory"
         submitLabel="Add project"
-        onSubmit={async () => {
-          const sidecarId = server(), directory = path().trim();
-          const project = await shell.connection(sidecarId).rpc.call(
-            "projects.add",
-            { directory },
-          );
-          shell.openProject({ sidecarId, directory: project.directory });
-          props.close();
-        }}
+        onSubmit={() => picker.add({ sidecarId: server(), directory: path() })}
       >
         <label>
           Server<select
@@ -91,13 +79,13 @@ function AddProject(props: DialogProps) {
       </Form>
       <section class="otk-template-paths" aria-label="Scanned projects">
         <strong>From path templates</strong>
-        <Show when={loading()}>
+        <Show when={picker.state.loading}>
           <p class="otk-muted">Scanning directories…</p>
         </Show>
-        <Show when={error()}>
-          <p role="alert" class="otk-error">{error()}</p>
+        <Show when={picker.state.error}>
+          <p role="alert" class="otk-error">{picker.state.error}</p>
         </Show>
-        <For each={paths()} keyed={false}>
+        <For each={picker.state.paths} keyed={false}>
           {(directory) => (
             <button
               type="button"
@@ -108,7 +96,10 @@ function AddProject(props: DialogProps) {
             </button>
           )}
         </For>
-        <Show when={!loading() && !error() && !paths().length}>
+        <Show
+          when={!picker.state.loading && !picker.state.error &&
+            !picker.state.paths.length}
+        >
           <p class="otk-muted">
             No matching directories. Set path templates in Settings, or type a
             path above.
