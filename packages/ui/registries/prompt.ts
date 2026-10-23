@@ -1,13 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Element } from "solid-js";
-import type { CommandHub, PromptChoices, PromptSelection } from "@otk/client";
+import type {
+  CommandHub,
+  PromptChoices,
+  PromptSelection,
+  PromptSource,
+} from "@otk/client";
 import type { Keyboard } from "../keyboard/dispatcher.ts";
 import type { PromptPart } from "@otk/protocol";
 import type { SessionPorts } from "./session.tsx";
 import type { Draft, DraftChange } from "../components/prompt/model.ts";
-import type { CompletionOption } from "../components/prompt/autocomplete.ts";
 
 export type { PromptChoices } from "@otk/client";
+export type { PromptCompletion, PromptSource } from "@otk/client";
 /** Consumer-owned prompt data and operations. Features never import a consumer. */
 export interface PromptProps {
   value: Draft;
@@ -43,20 +48,6 @@ export interface PromptContext extends SessionPorts {
   ready(): Promise<void>;
   acceptFiles(files: File[]): Promise<void>;
   fail(error: unknown): void;
-}
-export interface PromptCompletion {
-  start: number;
-  end: number;
-  query: string;
-}
-export interface PromptSource {
-  trigger(input: string, caret: number): PromptCompletion | undefined;
-  options(token: PromptCompletion): Promise<CompletionOption[]>;
-  select(
-    token: PromptCompletion,
-    option: CompletionOption,
-    expand: boolean,
-  ): void;
 }
 /** Feature instances are per mounted prompt and retain their own async lifetime. */
 export interface PromptFeature {

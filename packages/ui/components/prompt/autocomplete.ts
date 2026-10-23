@@ -6,19 +6,10 @@ import type {
   CommandOption,
   FileMatch,
   FrecencyEntry,
-  PromptPart,
   ResourceOption,
 } from "@otk/protocol";
-export interface CompletionOption {
-  id: string;
-  label: string;
-  description?: string;
-  path?: string;
-  directory?: boolean;
-  part?: PromptPart;
-  aliases?: string[];
-  command?: CommandOption;
-}
+import type { CompletionOption } from "@otk/client";
+export type { CompletionOption } from "@otk/client";
 export interface MentionSources {
   files: FileMatch[];
   agents: AgentOption[];

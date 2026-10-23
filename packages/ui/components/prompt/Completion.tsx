@@ -1,86 +1,49 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createEffect, createSignal, type Element, Show } from "solid-js";
-import type {
-  PromptCompletion,
-  PromptContext,
-  PromptFeature,
-  PromptSource,
-} from "../../registries/prompt.ts";
-import type { CompletionOption } from "./autocomplete.ts";
+import { createEffect, type Element, Show } from "solid-js";
+import { createPromptCompletion } from "@otk/client";
+import type { PromptContext, PromptFeature } from "../../registries/prompt.ts";
 import Autocomplete from "./Autocomplete.tsx";
 import { ownedCommand } from "../../keyboard/context.tsx";
-import { inlineChip } from "./model.ts";
+import { solidState } from "../../state/binding.ts";
 
 /** Coordinate injected sources without knowing any concrete trigger or feature. */
 export function createCompletion(
   ctx: PromptContext,
   features: PromptFeature[],
 ): PromptFeature {
-  const [completion, setCompletion] = createSignal<
-      { token: PromptCompletion; source: PromptSource }
-    >(),
-    [options, setOptions] = createSignal<CompletionOption[]>([]),
-    [choice, setChoice] = createSignal(0);
-  let generation = 0;
-  const clear = () => {
-    generation++;
-    setCompletion(undefined);
-    setOptions([]);
-  };
-  const visible = () => !!completion() && options().length > 0;
+  const owner = createPromptCompletion({
+    sources: features.flatMap((feature) =>
+      feature.source ? [feature.source] : []
+    ),
+    factory: solidState,
+    fail: ctx.fail,
+  });
+  ctx.own(() => owner.dispose());
   createEffect(() => ({
-    value: ctx.props.value.input,
+    input: ctx.props.value.input,
     mode: ctx.props.value.mode,
     caret: ctx.caret(),
     connected: ctx.props.connected && ctx.supports("prompt"),
-  }), ({ value, mode, caret, connected }) => {
-    let found: { token: PromptCompletion; source: PromptSource } | undefined;
-    if (
-      connected && mode === "normal" &&
-      !ctx.props.value.chips.some((chip) =>
-        inlineChip(chip) && caret >= chip.start && caret <= chip.end
-      )
-    ) {
-      for (const feature of features) {
-        const source = feature.source, token = source?.trigger(value, caret);
-        if (source && token) {
-          found = { source, token };
-          break;
-        }
-      }
-    }
-    const revision = ++generation;
-    setCompletion(found);
-    setOptions([]);
-    setChoice(0);
-    if (found) {
-      void found.source.options(found.token).then((value) => {
-        if (ctx.active() && revision === generation) setOptions(value);
-      }).catch((error) => {
-        if (ctx.active() && revision === generation) ctx.fail(error);
-      });
-    }
+    chips: ctx.props.value.chips.map((chip) => ({
+      start: chip.start,
+      end: chip.end,
+    })),
+  }), (input) => {
+    void owner.update(input).catch(ctx.fail);
   });
-  const select = (index: number, expand = false) => {
-    const current = completion(), option = options()[index];
-    if (!current || !option) return;
-    current.source.select(current.token, option, expand);
-    if (!expand || !option.directory) clear();
-  };
   const close = ownedCommand(ctx, {
     id: "prompt.complete.close",
     title: "Close completion",
     category: "Prompt",
     hidden: true,
-    run: clear,
+    run: () => owner.clear(),
   });
   const move = ownedCommand(ctx, {
     id: "prompt.complete.move",
     title: "Move completion",
     category: "Prompt",
     hidden: true,
-    run: (_context, delta: number) =>
-      setChoice((choice() + delta + options().length) % options().length),
+    run: (_context, delta: number) => owner.move(delta),
   });
   const choose = ownedCommand(ctx, {
     id: "prompt.complete.choose",
@@ -88,19 +51,19 @@ export function createCompletion(
     category: "Prompt",
     hidden: true,
     run: (_context, args: { index: number; expand?: boolean }) =>
-      select(args.index, args.expand),
+      owner.choose(args.index, args.expand),
   });
   ctx.own(
     ctx.keyboard.layer(
       "prompt.complete.close",
-      () => visible() && ctx.focused(),
+      () => owner.state.visible && ctx.focused(),
       15,
     ),
   );
   return {
     key(event) {
       if (
-        !visible() ||
+        !owner.state.visible ||
         !["ArrowUp", "ArrowDown", "Enter", "Tab", "Escape"].includes(event.key)
       ) return false;
       event.preventDefault();
@@ -108,16 +71,19 @@ export function createCompletion(
       if (event.key === "Escape") void close().catch(ctx.fail);
       else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
         void move(event.key === "ArrowUp" ? -1 : 1).catch(ctx.fail);
-      } else {void choose({ index: choice(), expand: event.key === "Tab" })
+      } else {void choose({
+          index: owner.state.choice,
+          expand: event.key === "Tab",
+        })
           .catch(ctx.fail);}
       return true;
     },
     beforeInput(): Element {
       return (
-        <Show when={visible()}>
+        <Show when={owner.state.visible}>
           <Autocomplete
-            options={options()}
-            selected={choice()}
+            options={owner.state.options}
+            selected={owner.state.choice}
             onSelect={(index) => void choose({ index }).catch(ctx.fail)}
           />
         </Show>

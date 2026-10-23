@@ -21,6 +21,7 @@ export * from "./history.ts";
 export * from "./drafts.ts";
 export * from "./prompt-selection.ts";
 export * from "./composer-selection.ts";
+export * from "./prompt-completion.ts";
 export * from "./model-catalog.ts";
 export * from "./model-groups.ts";
 export * from "./model-preferences.ts";

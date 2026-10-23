@@ -134,6 +134,12 @@ overlays. Shell, mentions, slash, history, paste, attachments and editor each
 own their implementation. `Prompt` owns native input, submission identity and
 teardown; it has no feature import list.
 
+The completion adapter binds the framework-free client `createPromptCompletion`
+owner through `solidState`, forwards current input/caret/chip ranges and renders
+its options/choice. Source arbitration, query invalidation and selection
+transitions belong to that owner. Native key events, keyboard layers and pointer
+events remain at the UI edge; prompt teardown disposes the completion lifetime.
+
 The prompt textarea uses native content sizing, retaining its 48px minimum and
 growing in 24px prose lines to the component's named 240px cap. It then scrolls
 internally with the caret; deleting text or clearing a sent draft shrinks it.

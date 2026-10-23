@@ -149,6 +149,16 @@ Sidecar state exposes `connectionVersion`, incremented for every welcome,
 including reconnects, so consumers can identify the current connection even if
 reactive batching coalesces a disconnected interval.
 
+`createPromptCompletion({sources, fail, factory?})` owns generic per-prompt
+completion arbitration, query generations, options and choice transitions. Feed
+`update` the current input/mode/caret, connection availability and chip ranges;
+the first matching source wins outside inline chips in normal mode. Query
+replacement, close and disposal retire previous results and errors. Directory
+expansion retains completion; ordinary selection closes it. Like drafts and
+composer selection, invocation-current data is independent of deferred framework
+publication. Sources retain their own feature-specific loading and selection
+ports; the owner requires no browser, Solid or ranking dependency.
+
 `createQuestionForm(request, factory?)` owns the framework-free question steps,
 single/multiple option picks and typed own answers. `answers()` derives the wire
 reply from that state; choosing a single option retains unselected typed text.
