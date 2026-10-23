@@ -10,6 +10,12 @@ import {
   sessionHeap,
 } from "../support/heap.ts";
 import { highlightedRange } from "../support/highlight.ts";
+import {
+  assertHighlightBudget,
+  highlightDistribution,
+  type HighlightEvidence,
+  highlightObservers,
+} from "../support/highlight-latency.ts";
 const colourPrefix =
   `Array.from(document.querySelectorAll('.otk-code code .otk-token')).slice(0,8).map(el=>({text:el.textContent,color:getComputedStyle(el).color}))`;
 test("R6 shiki worker colours streaming TS before fence closure and unknown languages remain plain", async () => {
@@ -187,48 +193,7 @@ test("highlighted history releases its worker and session objects when switching
     await f.stop();
   }
 });
-const externalObservers = `(() => {
-  globalThis.highlightEvidence = { blocks: [], longtasks: [], observerMs: 0, reads: 0 };
-  const tasks = new PerformanceObserver(list => {
-    for (const entry of list.getEntries()) highlightEvidence.longtasks.push({start:entry.startTime,duration:entry.duration,attribution:entry.attribution.map(a=>({name:a.name,containerType:a.containerType,containerSrc:a.containerSrc}))});
-  });
-  tasks.observe({type:'longtask'});
-  globalThis.highlightMeasure = (selector, marker) => {
-    let start, firstSource, frame, done=false;
-    const root=document.querySelector('.otk-messages');
-    const inspect=(rendered=false)=>{
-      if(done)return;
-      const began=performance.now();highlightEvidence.reads++;
-      const code=root.querySelector(selector), viewport=root.getBoundingClientRect();
-      if(code) {
-        const walker=document.createTreeWalker(code,NodeFilter.SHOW_TEXT);
-        let node;
-        while(node=walker.nextNode()) {
-          const offset=node.textContent.indexOf(marker);if(offset<0)continue;
-          firstSource??=performance.now();
-          const range=document.createRange();range.setStart(node,offset);range.setEnd(node,offset+marker.length);
-          const rect=range.getBoundingClientRect();
-          if(rect.top<viewport.top||rect.bottom>viewport.bottom||!rect.width)break;
-          start??=performance.now();
-          const token=node.parentElement.closest('.otk-token');
-          if(rendered && token?.style.color && getComputedStyle(token).color!=='rgba(0, 0, 0, 0)') {
-            done=true;observer.disconnect();
-            highlightEvidence.blocks.push({marker,start,firstSource,end:performance.now(),latency:performance.now()-start});
-          }
-          break;
-        }
-      }
-      highlightEvidence.observerMs+=performance.now()-began;
-      if(!done)frame=requestAnimationFrame(()=>inspect(true));
-    };
-    const observer=new MutationObserver(()=>{cancelAnimationFrame(frame);inspect()});
-    observer.observe(root,{subtree:true,childList:true,characterData:true});
-    frame=requestAnimationFrame(()=>inspect(true));
-    globalThis.highlightCancel=()=>{done=true;cancelAnimationFrame(frame);observer.disconnect()};
-  };
-  globalThis.highlightStop=()=>{highlightCancel?.();tasks.disconnect()};
-})()\n//# sourceURL=otk-highlight-observer.js`;
-test("R-perf visible-source to styled-range latency for 2000 TS lines and 20 acknowledged streamed updates", async () => {
+test("R-perf visible-source to styled-range latency for 2000 TS lines, acknowledged updates and free-running revisions", async () => {
   const f = await browserFixture();
   try {
     const session = await f.oc.request<{ id: string }>("/session", {
@@ -246,11 +211,12 @@ test("R-perf visible-source to styled-range latency for 2000 TS lines and 20 ack
     await browser.poll(
       `document.querySelector('[data-session="${session.id}"]').dataset.status==='idle'`,
     );
+    const coldStartupMs = performance.now() - startup;
     console.info(
       "Highlight cold startup (includes native provider/transport)",
-      performance.now() - startup,
+      coldStartupMs,
     );
-    await browser.evaluate(externalObservers);
+    await browser.evaluate(highlightObservers);
     await browser.send("Tracing.start", {
       categories: "devtools.timeline,v8,disabled-by-default-devtools.timeline",
       transferMode: "ReportEvents",
@@ -333,41 +299,71 @@ test("R-perf visible-source to styled-range latency for 2000 TS lines and 20 ack
       big,
       "Highlighting changed code bytes",
     );
-    const evidence = await browser.evaluate<
-      {
-        blocks: {
-          start: number;
-          end: number;
-          latency: number;
-          marker: string;
-        }[];
-        longtasks: { start: number; duration: number }[];
-        observerMs: number;
-        reads: number;
-      }
-    >("highlightEvidence");
+    // No consumer acknowledgements or range-demand helper during this phase.
+    // 240 releases at the original 100 ms cadence leave >=200 actual visible
+    // source revisions (at least ten observations in the p95 tail).
+    const freeUpdates = 240;
+    await browser.evaluate(
+      `highlightStream(${
+        JSON.stringify(measured + " .otk-code code")
+      },'passive')`,
+    );
+    f.fake.queue({
+      chunks: [
+        "```ts\nconst freeRunning: number = 0;\n",
+        ...Array.from(
+          { length: freeUpdates },
+          (_, i) => `const passive${i}: number = ${i};\n`,
+        ),
+        "```\n",
+      ],
+      delay: 100,
+    });
+    await browser.type(
+      "textarea[name=prompt]",
+      "Stream without waiting for paint",
+    );
+    await browser.key("Enter");
+    await browser.poll(
+      `document.querySelector('[data-session="${session.id}"]').dataset.status==='idle' && document.querySelector('${measured} .otk-code code')?.textContent.includes('passive239')`,
+      60000,
+    );
+    // Observe the final outcome only: polling cannot slow the producer.
+    await browser.poll(
+      "highlightEvidence.revisions.at(-1)?.marker==='passive239' && highlightEvidence.revisions.every(sample=>sample.end!==undefined)",
+    );
+    await browser.evaluate("highlightCancel()");
+    const evidence = await browser.evaluate<HighlightEvidence>(
+      "highlightEvidence",
+    );
     assert(
       evidence.blocks.length === 21,
       "Need one demanded 2000-line range and every one of 20 streamed revisions",
     );
-    const latencies = evidence.blocks.slice(1).map((block) => block.latency)
-      .sort((
-        a,
-        b,
-      ) => a - b);
-    const percentile = (p: number) =>
-      latencies[Math.ceil(latencies.length * p) - 1];
-    const p50 = percentile(.5), p95 = percentile(.95);
+    const acknowledged = highlightDistribution(evidence.blocks.slice(1), 20);
+    const freeRunning = highlightDistribution(evidence.revisions, 200);
+    assertEquals(
+      evidence.revisions.flatMap((sample) => sample.markers),
+      Array.from({ length: freeUpdates }, (_, i) => `passive${i}`),
+      "Every free-running marker must enter the observed source revisions",
+    );
+    const { p50, p95 } = acknowledged;
     const targets = await browser.send("Target.getTargets");
     console.info("Highlight preliminary evidence", {
       p50,
       p95,
-      evidence,
+      coldStartupMs,
+      acknowledged,
+      freeRunning,
       targets,
     });
     await Deno.writeTextFile(
       join(f.oc.root, "highlight-preliminary.json"),
-      JSON.stringify({ p50, p95, evidence, targets }, null, 2),
+      JSON.stringify(
+        { coldStartupMs, acknowledged, freeRunning, evidence, targets },
+        null,
+        2,
+      ),
     );
     await browser.send("Tracing.end");
     await waitFor(
@@ -393,21 +389,39 @@ test("R-perf visible-source to styled-range latency for 2000 TS lines and 20 ack
     // Bound the existing strict workload budget to demanded source through the
     // last styled update. This is workload observation, not causal attribution
     // of every renderer task to Shiki; startup/navigation are separate.
-    const start = Math.min(...evidence.blocks.map((block) => block.start));
-    const end = Math.max(...evidence.blocks.map((block) => block.end));
+    const intervals = [evidence.blocks, evidence.revisions].map((samples) => ({
+      start: Math.min(...samples.map((sample) => sample.start!)),
+      end: Math.max(...samples.map((sample) => sample.end!)),
+    }));
     const attributed = evidence.longtasks.filter((task) =>
-      task.start + task.duration >= start && task.start <= end
+      intervals.some(({ start, end }) =>
+        task.start + task.duration >= start && task.start <= end
+      )
     );
     console.info("Highlight budget", {
       p50,
       p95,
-      blocks: evidence.blocks,
+      acknowledged,
+      freeRunning,
+      largeRangeMs: evidence.blocks[0].latency,
       mainLongTasks: mainLongTasks.length,
       attributed,
     });
     await Deno.writeTextFile(
       join(f.oc.root, "highlight-performance.json"),
-      JSON.stringify({ p50, p95, evidence, mainLongTasks, threads }, null, 2),
+      JSON.stringify(
+        {
+          coldStartupMs,
+          acknowledged,
+          freeRunning,
+          evidence,
+          intervals,
+          mainLongTasks,
+          threads,
+        },
+        null,
+        2,
+      ),
     );
     await Deno.writeTextFile(
       join(f.oc.root, "highlight-trace.json"),
@@ -445,9 +459,10 @@ test("R-perf visible-source to styled-range latency for 2000 TS lines and 20 ack
         ),
       "No highlighting worker owned by the production page",
     );
-    assert(p95 <= 200, `STOP: shiki p95 ${p95} ms exceeds 200 ms`);
+    assertHighlightBudget(evidence.blocks.slice(1), 20);
+    assertHighlightBudget(evidence.revisions, 200);
     assert(
-      evidence.blocks[0].latency <= 200,
+      evidence.blocks[0].latency! <= 200,
       "Demanded large-code range exceeds the same 200 ms budget",
     );
     console.info("Highlight measurement overhead", {

@@ -40,21 +40,39 @@ prepares TypeScript through a real cold reply first and reports that startup
 separately; provider admission, transport and grammar startup are not streaming
 update latency. One large 2000-line source range has its own 200 ms assertion.
 Twenty individually released subsequent updates each contribute exactly one
-sample. Nearest-rank p95 is the nineteenth sorted update, not the maximum of two
-blocks' first-token observations. The **200 ms** budget is unchanged.
+sample (nearest-rank p95 = nineteenth sorted update). This isolated service-time
+check is followed by **240 free-running updates at the original 100 ms provider
+cadence**, with no consumer acknowledgement or active scroll/demand helper. A
+passive MutationObserver records each distinct source revision and its newest
+marker; token-only DOM replacements do not create revisions. Coalesced provider
+markers belong to one actual source revision, never fabricated samples. All240
+markers must be accounted for, with at least200 complete revision observations
+(at least ten observations in the p95 tail). Each phase independently retains
+the same **200 ms** nearest-rank p95 budget; populations are never pooled.
 
 Each sample identifies its own source marker, records first-source and first
 actual viewport demand separately, and finishes only on an animation frame with
 the marker's token and computed style. Offscreen intentional deferral is not
 counted as active highlighting time. The observer scans only the current reply's
-requested code range, and disconnects after that sample. Its own cumulative
-execution time and read count are recorded in the performance artifact.
+requested code range. One shared range/style observer owns both modes: it
+disconnects after an acknowledged sample, or tracks overlapping revisions until
+the free-running phase ends. Neither mode submits, releases, scrolls or alters
+the producer. Missing, unpainted or insufficient samples fail instead of being
+excluded from the percentile population. Its own cumulative execution time and
+read count are recorded in the performance artifact, along with every revision's
+source length, first-source/demand/style timestamps and markers. Cold-startup
+latency is logged and persisted alongside the two distributions, without adding
+a startup budget (that remains a user decision).
 
 The unchanged zero-main-thread-long-tasks-over-50-ms budget applies from the
-first demanded source through the last styled update. This is a strict **code
-workload** budget, not a claim that every renderer task in that interval was
-caused by Shiki. Startup/navigation lie outside that interval. Trace events
-remain available for diagnosis.
+first demanded source through the last styled update **in each phase**. Gaps
+between phases and startup/navigation are outside those intervals. This is a
+strict **code workload** budget, not a claim that every renderer task in that
+interval was caused by Shiki. Startup/navigation lie outside that interval.
+Trace events remain available for diagnosis. A real Chromium control uses a
+renderer that styles isolated revisions within200ms but is starved by updates
+every100ms; the acknowledged check accepts it and the passive check rejects its
+actual per-revision p95. Missing and unpainted populations are also rejected.
 
 `highlightedRange` repeatedly resolves the particular marker's actual text
 range, establishes viewport demand, checks two stable rendered frames and
