@@ -1,24 +1,47 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
+import { Source } from "./analysis.ts";
+import { nodes } from "./syntax.ts";
+import { rules } from "./styles.ts";
+import { tabBypasses } from "./bypasses.ts";
+tabBypasses(tabErrors);
 
-function tabErrors(source: string): string[] {
-  const tabs = source.slice(
-    source.indexOf('class="otk-task-list"'),
-    source.indexOf('class="otk-icon-button otk-task-new"'),
+export function tabErrors(source: string): string[] {
+  let parsed: Source;
+  try {
+    parsed = new Source(source);
+  } catch {
+    return ["tab chrome must parse"];
+  }
+  const lists = parsed.all.filter((node) =>
+    node.type === "JSXElement" &&
+    parsed.string(parsed.attr(node.openingElement, "role")) === "tablist"
   );
-  return /<(?:Menu|Popover)\b|⋯|···|otk-tab-actions/.test(tabs)
+  if (lists.length !== 1) {
+    return ["tab chrome requires one unambiguous tablist"];
+  }
+  return [...nodes(lists[0])].some((node) =>
+      node.type === "JSXOpeningElement" &&
+        ["Menu", "Popover", "CommandMenu"].includes(
+          parsed.name(node.name) ?? "",
+        ) ||
+      node.type === "JSXText" && /⋯|···/.test(node.value) ||
+      node.type === "StringLiteral" &&
+        node.value.split(/\s+/).includes("otk-tab-actions")
+    )
     ? ["tabs have no menu presentation"]
     : [];
 }
 function rowErrors(css: string): string[] {
   const errors: string[] = [];
-  for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  for (const { selector, declarations } of rules(css)) {
     if (
       /\.otk-project-(?:row|open|content|trailing|visit|menu)\b/.test(
         selector,
       ) &&
-      /\bposition\s*:|(?:^|;)\s*(?:top|left|right|bottom|inset)(?:-[\w-]+)?\s*:/
-        .test(body)
+      [...declarations.keys()].some((prop) =>
+        /^(?:position|top|left|right|bottom|inset)(?:-|$)/.test(prop)
+      )
     ) {
       errors.push("project row content stays in flow");
     }

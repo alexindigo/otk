@@ -1,68 +1,142 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
+import { Source, uiSources } from "./analysis.ts";
+import { nodes, property, type t } from "./syntax.ts";
+import { pathBypasses, presenterBypasses } from "./bypasses.ts";
+pathBypasses((source) => errors("NewTool.tsx", source));
+presenterBypasses(presenterErrors);
 
-function errors(name: string, source: string): string[] {
-  if (name === "ToolPath.tsx" || name === "paths.ts") return [];
+/** Follow value-producing expressions only. A child's props are data, not text
+ * rendered by its parent; child text containers are inspected independently. */
+function* rendered(
+  parsed: Source,
+  node: t.Node,
+  seen = new Set<t.Node>(),
+): Generator<t.Node> {
+  if (seen.has(node)) return;
+  seen.add(node);
+  const value = parsed.value(node);
+  if (
+    !value || value.type === "JSXElement" || value.type === "JSXFragment" ||
+    value.type === "JSXAttribute"
+  ) return;
+  yield value;
+  if (
+    value.type === "CallExpression" &&
+    parsed.name(value.callee) === "relativeTarget"
+  ) return;
+  if (value.type === "ConditionalExpression") {
+    yield* rendered(parsed, value.consequent, seen);
+    yield* rendered(parsed, value.alternate, seen);
+  } else if (value.type === "LogicalExpression") {
+    yield* rendered(parsed, value.right, seen);
+    if (value.operator !== "&&") yield* rendered(parsed, value.left, seen);
+  } else if (
+    value.type === "ArrowFunctionExpression" ||
+    value.type === "FunctionExpression"
+  ) {
+    yield* rendered(parsed, value.body, seen);
+  } else {for (const child of nodes(value)) {
+      if (child !== value && parsed.parent.get(child) === value) {
+        yield* rendered(parsed, child, seen);
+      }
+    }}
+}
+
+export function errors(name: string, source: string): string[] {
+  if (
+    /(?:^|\/)tools\/(?:ToolPath\.tsx|paths\.ts)$/.test(name) ||
+    name === "ToolPath.tsx" || name === "paths.ts"
+  ) return [];
   const result: string[] = [];
-  if (/\botk-path\b/.test(source)) {
-    result.push("file labels belong to ToolPath");
+  let parsed: Source;
+  try {
+    parsed = new Source(source);
+  } catch {
+    return ["path source must parse"];
   }
-  const aliases = ["path", "cwd", "oldPath"];
-  for (
-    const match of source.matchAll(
-      /\b(?:const|let)\s+(\w+)\s*=\s*(?:props\.)?(?:call|file(?:\(\))?)\.(?:path|oldPath|cwd)\b/g,
-    )
-  ) aliases.push(match[1]);
-  const raw = new RegExp(
-    `>\\s*\\{\\s*(?:(?:props\\.)?(?:call|file(?:\\(\\))?)\\.(?:path|oldPath|cwd)\\b|(?:${
-      aliases.join("|")
-    })\\b)`,
-  );
-  if (
-    raw.test(source) ||
-    /\{\s*`[^`]*\$\{(?:props\.)?(?:call|file(?:\(\))?)\.(?:path|oldPath|cwd)[^`]*`\s*\}/
-      .test(source)
-  ) {
-    result.push("tool body renders a raw path");
-  }
-  if (
-    /(?:\.outputPaths|\.outputContent\??\.paths)\s*\?*\.\s*(?:join|map)\s*\(/
-      .test(source)
-  ) {
-    result.push(
-      "path-list formatting belongs to ToolOutput and the path presenter",
-    );
-  }
-  if (/function\s+relativeTarget\b/.test(source)) {
-    result.push("duplicate path presenter");
-  }
-  for (
-    const [, component, attrs] of source.matchAll(
-      /<(ToolPath|Diff|ReadTool|SearchTool|EditTool|PatchTool)\b([\s\S]*?)\/>/g,
-    )
-  ) {
-    if (!/\bdirectory=/.test(attrs)) {
-      result.push(`${component} lost project context`);
+  const toolBody = !name.includes("/") || name.includes("/components/tools/") ||
+    name.endsWith("/components/Diff.tsx");
+  for (const node of parsed.all) {
+    if (
+      toolBody && node.type === "JSXAttribute" &&
+      property(node.name) === "class" && [...nodes(node)].some((child) =>
+        parsed.string(child)?.split(/\s+/).includes("otk-path")
+      )
+    ) {
+      result.push("file labels belong to ToolPath");
+    }
+    if (
+      toolBody && node.type === "JSXExpressionContainer" &&
+      parsed.parent.get(node)?.type !== "JSXAttribute"
+    ) {
+      const expression = parsed.value(node.expression);
+      if (
+        expression && [...rendered(parsed, expression)].some((child) =>
+          /^(?:(?:props\.)?(?:call|file)\.)?(?:path|oldPath|cwd)(?:\.|$)/.test(
+            parsed.name(child) ?? "",
+          )
+        )
+      ) {
+        result.push("tool body renders a raw path");
+      }
+    }
+    if (
+      (node.type === "CallExpression" ||
+        node.type === "OptionalCallExpression") &&
+      /(?:\.outputPaths|\.outputContent\.paths)\.(?:join|map)$/.test(
+        parsed.name(node.callee) ?? "",
+      )
+    ) {
+      result.push(
+        "path-list formatting belongs to ToolOutput and the path presenter",
+      );
+    }
+    if (
+      (node.type === "FunctionDeclaration" &&
+        node.id?.name === "relativeTarget") ||
+      (node.type === "VariableDeclarator" &&
+        property(node.id) === "relativeTarget")
+    ) {
+      result.push("duplicate path presenter");
+    }
+    if (node.type === "JSXOpeningElement") {
+      const component = parsed.name(node.name);
+      if (
+        ["ToolPath", "Diff", "ReadTool", "SearchTool", "EditTool", "PatchTool"]
+          .includes(component ?? "") && !parsed.attr(node, "directory")
+      ) {
+        result.push(`${component} lost project context`);
+      }
     }
   }
   return result;
 }
+export function presenterErrors(source: string): string[] {
+  const parsed = new Source(source);
+  return parsed.all.some((node) =>
+      node.type === "JSXExpressionContainer" &&
+      parsed.parent.get(node)?.type !== "JSXAttribute" && parsed.live(node) &&
+      (() => {
+        const value = parsed.value(node.expression);
+        return value && [...nodes(value)].some((child) =>
+          child.type === "CallExpression" &&
+          parsed.name(child.callee) === "relativeTarget" &&
+          parsed.name(child.arguments[0])?.endsWith(".path") &&
+          parsed.name(child.arguments[1])?.endsWith(".directory")
+        );
+      })()
+    )
+    ? []
+    : ["ToolPath must render its path through the shared presenter"];
+}
 Deno.test("tool bodies and their diff labels cannot bypass the shared path presenter", async () => {
   const tools = new URL("../../packages/ui/components/tools/", import.meta.url);
-  for await (const entry of Deno.readDir(tools)) {
-    if (!/\.tsx?$/.test(entry.name)) continue;
-    assertEquals(
-      errors(entry.name, await Deno.readTextFile(new URL(entry.name, tools))),
-      [],
-      entry.name,
-    );
+  for (const [path, source] of await uiSources()) {
+    if (!path.endsWith(".css")) assertEquals(errors(path, source), [], path);
   }
-  assertEquals(
-    errors("Diff.tsx", await Deno.readTextFile(new URL("../Diff.tsx", tools))),
-    [],
-  );
   const owner = await Deno.readTextFile(new URL("ToolPath.tsx", tools));
-  assert(owner.includes("relativeTarget(props.path, props.directory)"));
+  assertEquals(presenterErrors(owner), []);
   const output = await Deno.readTextFile(new URL("ToolOutput.tsx", tools));
   assert(
     /result\.paths\.map\(\(path\)\s*=>\s*relativeTarget\(path, props\.directory\)/

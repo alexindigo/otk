@@ -1,148 +1,70 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
+import { productionSources, Source } from "./analysis.ts";
+import { nodes, property } from "./syntax.ts";
+import { shellPolicyErrors } from "./shell-policy.ts";
+import { layoutBypasses, shellBypasses } from "./bypasses.ts";
+layoutBypasses(layoutOwnerErrors);
+shellBypasses((source) =>
+  errors("packages/client/nested/duplicate.ts", source)
+);
 const root = new URL("../../", import.meta.url);
-function errors(path: string, source: string): string[] {
-  const errors: string[] = [];
-  if (
-    path === "packages/ui/registries/shell.ts" &&
-    /from\s+["'][^"']*(?:features|components|shell\/)/.test(source)
-  ) errors.push("registry imports an implementation");
-  if (
-    path === "packages/ui/registries/prompt.ts" &&
-    /\b(?:promptEnabled|shellEnabled|historyEnabled|agentsEnabled|commandsEnabled|pasteSummary|onAgents|onFind|onMentions|onBump|onCommands|onCommand|onNew|onHistory)\b/
-      .test(source)
-  ) errors.push("prompt owns feature-specific inputs");
-  if (
-    path.endsWith("/Shell.tsx") &&
-    /<(?:PermissionDock|QuestionDock|Palette|KeysHelp|ThemePicker|Editor)\b|docks=/
-      .test(source)
-  ) errors.push("shell builds a registered feature");
-  if (
-    path === "web/src/ui/App.tsx" &&
-    /create(?:Signal|Effect|Store)|\.rpc\.|new CommandHub/.test(source)
-  ) errors.push("web owns shell behaviour");
-  if (
-    /^packages\/client\/(?:tabs|inbox)\.ts$/.test(path) &&
-    /promote\s*[:(][^;{]*\bsession:\s*IndexEntry/.test(source)
-  ) errors.push("tab promotion depends on a replicated status row");
-  if (
-    path === "packages/client/server-resources.ts" &&
-    (!source.includes("createTabs(") ||
-      !/createTabs\([\s\S]*?\binput:\s*\(\)\s*=>\s*tabInput\(p\),\s*session:/
-        .test(source))
-  ) errors.push("shell tabs lack owner-current inputs and session resolution");
-  if (
-    path.endsWith("/Shell.tsx") &&
-    /createInbox\(|createApprovals\(|createTabs\(|\binboxes\b|\bapprovalModels\b|\btabModels\b|inboxProjects\(|rpc\.call\("(?:layout\.patch|projects\.inactive|prefs\.set)"/
-      .test(source)
-  ) errors.push("server resources belong to the client owner");
-  if (
-    path !== "packages/client/server-resources.ts" &&
-    /\bfunction\s+createServerResources\s*\(/.test(source)
-  ) errors.push("server resources have one client owner");
-  if (
-    path.endsWith("/Shell.tsx") &&
-    /\.rpc\.|rpc\.call\(|new Map<|createTaskActions\(|createNavigation\(|\broute\(|projectRoute\(|hashFor\(|projectHash\(|confirm\(|\bnavigationRevision\b|document\.hasFocus/
-      .test(source)
-  ) {
-    errors.push("guarded navigation and creation belong to client owners");
+export function errors(path: string, source: string): string[] {
+  return shellPolicyErrors(path, source);
+}
+export function layoutOwnerErrors(source: string): string[] {
+  const parsed = new Source(source);
+  const registrations = parsed.calls("register").filter((call) =>
+    parsed.string(call.arguments[0]) === "layout.patch"
+  );
+  if (registrations.length !== 1) {
+    return ["layout requires one registered handler"];
   }
-  for (
-    const [name, owner] of [["createInputGuard", "input-guard"], [
-      "createShellNavigation",
-      "shell-navigation",
-    ]]
-  ) {
-    if (
-      path !== `packages/client/${owner}.ts` &&
-      new RegExp(`\\bfunction\\s+${name}\\s*\\(`).test(source)
-    ) errors.push("guard/navigation have one client owner");
+  const options = parsed.value(registrations[0].arguments[1]);
+  const field = options?.type === "ObjectExpression"
+    ? options.properties.find((p) =>
+      p.type === "ObjectProperty" && property(p.key) === "handler"
+    )
+    : undefined;
+  const handler = field?.type === "ObjectProperty"
+    ? parsed.value(field.value)
+    : undefined;
+  const error = ["layout handler merges and saves the authoritative value"];
+  if (
+    handler?.type !== "ArrowFunctionExpression" &&
+    handler?.type !== "FunctionExpression"
+  ) return error;
+  if (
+    handler.async ||
+    [...nodes(handler.body)].some((node) => node.type === "AwaitExpression")
+  ) return error;
+  const patch = handler.params[1];
+  const outputs = handler.body.type === "BlockStatement"
+    ? [...nodes(handler.body)].flatMap((node) =>
+      node.type === "ReturnStatement" && node.argument ? [node.argument] : []
+    )
+    : [handler.body];
+  if (outputs.length !== 1) return error;
+  const call = parsed.value(outputs[0]);
+  if (
+    call?.type !== "CallExpression" ||
+    !parsed.name(call.callee)?.endsWith(".set") ||
+    parsed.string(call.arguments[0]) !== "shellLayout"
+  ) return error;
+  const value = parsed.value(call.arguments[1]);
+  if (
+    value?.type !== "ObjectExpression" || value.properties.length !== 2 ||
+    value.properties.some((p) => p.type !== "SpreadElement")
+  ) return error;
+  const [current, intent] = value.properties;
+  if (current.type !== "SpreadElement" || intent.type !== "SpreadElement") {
+    return error;
   }
-  if (
-    path.startsWith("packages/ui/") &&
-    /\bfunction\s+(?:applyRoute|discardDraft)\s*\(/.test(source)
-  ) errors.push("route/input policy belongs to client");
-  if (
-    path.endsWith("/Shell.tsx") &&
-    /createSessionSubmission\(|\bsessionAncestors\b|["']session\.(?:prompt|abort)["']|history\.attachment|\.tasks\.(?:find|some)|function sessionPorts|sessionPorts = /
-      .test(source)
-  ) {
-    errors.push("session target operations belong to the client owner");
-  }
-  if (
-    path !== "packages/client/session-actions.ts" &&
-    /\bfunction\s+createSessionActions\s*\(/.test(source)
-  ) {
-    errors.push("session actions have one client owner");
-  }
-  if (
-    path.startsWith("packages/ui/") &&
-    /\bfunction\s+directoryFor\s*\(/.test(source)
-  ) {
-    errors.push("session directory lookup belongs to client");
-  }
-  if (
-    /^packages\/ui\/(?:shell\/session-ports|state\/shell)\.ts$/.test(path) &&
-    /rpc\.call\(|new Map</.test(source)
-  ) {
-    errors.push("shell bindings delegate operations and own no caches");
-  }
-  if (
-    path.startsWith("packages/ui/") &&
-    /\.\.\.\s*layout\(\)|key:\s*["']shellLayout["']|onLayout\(\w+:\s*Preferences\["shellLayout"\]/
-      .test(source)
-  ) errors.push("layout controls must send field intents, not stale snapshots");
-  if (
-    path.endsWith("/RightPanel.tsx") &&
-    /(?:from\s+["'][^"']*(?:features|ProjectSessions)|["']sessions["']|<ProjectSessions\b|rpc\.call)/
-      .test(source)
-  ) {
-    errors.push("panel host owns a concrete view or its data");
-  }
-  if (
-    (path.endsWith("/Shell.tsx") ||
-      /^packages\/ui\/(?:shell\/session-ports|state\/shell)\.ts$/.test(path)) &&
-    /\.supports\(/.test(source)
-  ) {
-    errors.push(
-      "shell feature availability bypasses reactive advertised state",
-    );
-  }
-  if (
-    path.endsWith("/ComposerTakeovers.tsx") &&
-    /Permission|Question|\.permissions\(|\.questions\(/.test(source)
-  ) {
-    errors.push("takeover host selects concrete attention owners");
-  }
-  if (
-    path.endsWith("/ToolFrame.tsx") &&
-    /call\.tool\s*===|case\s+["'](?:edit|bash|task)["']/.test(source)
-  ) {
-    errors.push("tool frame owns feature presentation");
-  }
-  if (
-    (path.endsWith("/Message.tsx") || path.endsWith("/work-log.ts")) &&
-    /(?:part\.kind|case)\s*(?:===\s*)?["'](?:tool|reasoning)["']/.test(source)
-  ) errors.push("work grouping belongs to contributed part presentation");
-  if (
-    path.startsWith("packages/ui/") &&
-    /(?:interface|type)\s+Draft\s*[={]|new Map<string,\s*Draft>/.test(source)
-  ) {
-    errors.push("browser draft model belongs to client");
-  }
-  if (
-    path.startsWith("packages/ui/") &&
-    /function\s+(?:replyMessages|replyGroups|replyMetadata)\s*\(/.test(source)
-  ) errors.push("reply projection belongs to client");
-  if (
-    path.endsWith("/Message.tsx") &&
-    /fallback=\{[A-Za-z_$][\w$]*\([^}]*\.parts/.test(source)
-  ) {
-    errors.push(
-      "part updates must flow through a stable keyed component, not a recreated JSX factory",
-    );
-  }
-  return errors;
+  return parsed.name(current.argument) ===
+        parsed.name(call.callee)?.replace(/\.set$/, ".get.shellLayout") &&
+      parsed.name(intent.argument) === (patch && parsed.name(patch))
+    ? []
+    : error;
 }
 Deno.test("composer and tool hosts remain open while client owns browser drafts", async () => {
   for (
@@ -257,11 +179,11 @@ Deno.test("tab commands own readiness and the shell injects current inputs and a
     const [path, source] of [
       [
         "packages/client/tabs.ts",
-        "promote: (session: IndexEntry) => Promise<TaskRecord>",
+        "interface Tabs { promote: (session: IndexEntry) => Promise<TaskRecord>; }",
       ],
       [
         "packages/client/inbox.ts",
-        "promote(session: IndexEntry): Promise<TaskRecord>;",
+        "interface Inbox { promote(session: IndexEntry): Promise<TaskRecord>; }",
       ],
       [
         "packages/client/server-resources.ts",
@@ -298,11 +220,7 @@ Deno.test("layout controls send field intents to the authoritative persistence o
   const owner = await Deno.readTextFile(
     new URL("core/features/layout.ts", root),
   );
-  assert(
-    owner.includes(
-      'prefs.set("shellLayout", { ...prefs.get().shellLayout, ...patch })',
-    ),
-  );
+  assertEquals(layoutOwnerErrors(owner), []);
   assert(!/\basync\b|\bawait\b/.test(owner.replace(/\/\/[^\n]*/g, "")));
 });
 
@@ -345,40 +263,8 @@ Deno.test("shell delegates server resources to one framework-free owner", async 
       "function createServerResources(options) {}",
     ).length > 0,
   );
-  const scan = async (directory: string): Promise<void> => {
-    for await (
-      const file of Deno.readDir(
-        new URL(
-          directory.split("/").map(encodeURIComponent).join("/") + "/",
-          root,
-        ),
-      )
-    ) {
-      const path = `${directory}/${file.name}`;
-      if (file.isDirectory && file.name !== "tests") await scan(path);
-      else if (file.isFile && /\.tsx?$/.test(path)) {
-        assertEquals(
-          errors(
-            path,
-            await Deno.readTextFile(
-              new URL(path.split("/").map(encodeURIComponent).join("/"), root),
-            ),
-          ),
-          [],
-          path,
-        );
-      }
-    }
-  };
-  await scan("packages");
-  await scan("core");
-  await scan("web/src");
-  for (const path of ["main.ts", "application.ts"]) {
-    assertEquals(
-      errors(path, await Deno.readTextFile(new URL(path, root))),
-      [],
-      path,
-    );
+  for (const [path, source] of await productionSources()) {
+    if (!path.endsWith(".css")) assertEquals(errors(path, source), [], path);
   }
 });
 
@@ -473,4 +359,23 @@ Deno.test("shell binds guarded navigation without browser policy, transactions o
         0,
     );
   }
+});
+
+Deno.test("A12 layout contract accepts renamed parameters, const aliases and comments", () => {
+  assertEquals(
+    layoutOwnerErrors(`
+    export function install(dispatch, preferences) {
+      const bus = dispatch, store = preferences;
+      bus.register("layout.patch", {
+        handler: (_context, fields) => {
+          const latest = store.get().shellLayout;
+          // The registered handler owns the authoritative merge.
+          const merged = { ...latest, ...fields };
+          return store.set("shellLayout", merged);
+        }
+      });
+    }
+  `),
+    [],
+  );
 });

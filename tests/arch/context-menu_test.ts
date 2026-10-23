@@ -1,71 +1,87 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
+import { Source, uiSources } from "./analysis.ts";
+import { contextBypasses } from "./bypasses.ts";
+contextBypasses((source) => errors("components/New.tsx", source));
 
-function errors(name: string, source: string): string[] {
+export function errors(name: string, source: string): string[] {
   const errors: string[] = [];
-  if (
-    name !== "components/ContextMenu.tsx" &&
-    /onContextMenu|(?:addEventListener|removeEventListener)\s*\(\s*["'`]contextmenu["'`]/
-      .test(source)
-  ) {
-    errors.push("contextmenu listener belongs to ContextMenu");
+  let parsed: Source;
+  try {
+    parsed = new Source(source);
+  } catch {
+    return ["context source must parse"];
   }
-  if (
-    name !== "components/ContextMenu.tsx" && /\.key\b/.test(source) &&
-    /["'`](?:ContextMenu|F10)["'`]/.test(source)
-  ) {
-    errors.push("context-menu keyboard opening belongs to ContextMenu");
-  }
-  if (/data-context-(?:kind|target)|oncontextmenu/i.test(source)) {
-    errors.push("targets use the shared contextTarget binding");
-  }
-  if (/\{\s*\.\.\.contextTarget\s*[<(]/.test(source)) {
-    errors.push("contextTarget is a composable callback ref");
-  }
-  return errors;
-}
-async function inspect(directory: URL, prefix = ""): Promise<string[]> {
-  const result: string[] = [];
-  for await (const entry of Deno.readDir(directory)) {
-    if (entry.name === "tests") continue;
-    if (entry.isDirectory) {
-      result.push(
-        ...await inspect(
-          new URL(`${entry.name}/`, directory),
-          `${prefix}${entry.name}/`,
-        ),
-      );
-    } else if (/\.tsx?$/.test(entry.name)) {
-      result.push(
-        ...errors(
-          prefix + entry.name,
-          await Deno.readTextFile(new URL(entry.name, directory)),
-        ),
-      );
+  const owner =
+    name.replace(/^packages\/ui\//, "") === "components/ContextMenu.tsx";
+  for (const node of parsed.all) {
+    if (
+      (node.type === "CallExpression" ||
+        node.type === "OptionalCallExpression") &&
+      ["addEventListener", "removeEventListener"].includes(
+        parsed.name(node.callee)?.split(".").at(-1) ?? "",
+      )
+    ) {
+      const event = parsed.string(node.arguments[0]);
+      if (!owner && (event === "contextmenu" || event === undefined)) {
+        errors.push("contextmenu listener belongs to ContextMenu");
+      }
     }
+    if (node.type === "JSXAttribute") {
+      const name = node.name.type === "JSXIdentifier" ? node.name.name : "";
+      if (
+        /^oncontextmenu$/i.test(name) ||
+        /^data-context-(?:kind|target)$/.test(name)
+      ) errors.push("targets use the shared contextTarget binding");
+    }
+    if (
+      node.type === "JSXSpreadAttribute" &&
+      (node.argument.type === "CallExpression" ||
+        node.argument.type === "OptionalCallExpression") &&
+      parsed.name(node.argument.callee) === "contextTarget"
+    ) errors.push("contextTarget is a composable callback ref");
   }
-  return result;
+  if (
+    !owner && parsed.all.some((node) =>
+      (node.type === "MemberExpression" ||
+        node.type === "OptionalMemberExpression") &&
+      parsed.name(node)?.endsWith(".key")
+    ) &&
+    parsed.all.some((node) =>
+      ["ContextMenu", "F10"].includes(parsed.string(node) ?? "")
+    )
+  ) errors.push("context-menu keyboard opening belongs to ContextMenu");
+  return errors;
 }
 Deno.test("context menus have one shell-root listener owner and declarative target bindings", async () => {
   const ui = new URL("../../packages/ui/", import.meta.url);
-  assertEquals(await inspect(ui), []);
-  assertEquals(
-    await inspect(new URL("../../web/", import.meta.url), "web/"),
-    [],
-  );
+  for (const [path, source] of await uiSources()) {
+    if (!path.endsWith(".css")) assertEquals(errors(path, source), [], path);
+  }
   const owner = await Deno.readTextFile(
     new URL("components/ContextMenu.tsx", ui),
   );
-  assertEquals(
-    [...owner.matchAll(/addEventListener\("contextmenu"/g)].length,
-    1,
+  const parsed = new Source(owner);
+  const listeners = parsed.calls("addEventListener").filter((node) =>
+    parsed.string(node.arguments[0]) === "contextmenu"
   );
-  assert(owner.includes('root.addEventListener("contextmenu", pointer, true)'));
-  assert(owner.includes("contextTargets([node])"));
-  assert(owner.includes("<CommandMenu"));
+  assertEquals(listeners.length, 1);
+  assert(
+    parsed.name(listeners[0].callee) === "props.root.addEventListener" &&
+      parsed.name(listeners[0].arguments[1]) === "pointer" &&
+      listeners[0].arguments[2]?.type === "BooleanLiteral" &&
+      listeners[0].arguments[2].value,
+  );
+  assert(parsed.calls("contextTargets").length > 0);
+  assert(
+    parsed.all.some((node) =>
+      node.type === "JSXOpeningElement" &&
+      parsed.name(node.name) === "CommandMenu"
+    ),
+  );
   for (
     const source of [
-      "onContextMenu={() => {}}",
+      "<div onContextMenu={() => {}} />",
       'el.addEventListener("contextmenu", handler)',
       "el.addEventListener(`contextmenu`, handler)",
       "if (event.key === `ContextMenu`) open()",

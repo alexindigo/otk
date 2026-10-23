@@ -1,15 +1,52 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
+import { Source, uiSources } from "./analysis.ts";
+import { rules } from "./styles.ts";
+import { nodes, property } from "./syntax.ts";
 
 function stateErrors(source: string): string[] {
-  return /\b(?:aria-selected|aria-current|aria-pressed|data-selected)\s*=|["'`](?:aria-selected|aria-current|aria-pressed|data-selected|is-selected|is-highlighted|otk-selected)["'`]|class(?:Name)?\s*=\s*["'][^"']*\bis-(?:selected|highlighted)\b/
-      .test(source)
-    ? ["selection state belongs to the shared binding"]
-    : [];
+  let parsed: Source;
+  try {
+    parsed = new Source(source);
+  } catch {
+    return ["selection source must parse"];
+  }
+  const attributes = new Set([
+    "aria-selected",
+    "aria-current",
+    "aria-pressed",
+    "data-selected",
+  ]);
+  const classes = new Set(["is-selected", "is-highlighted", "otk-selected"]);
+  for (const node of parsed.all) {
+    if (
+      (node.type === "JSXAttribute" || node.type === "ObjectProperty") &&
+      attributes.has(
+        property(node.type === "JSXAttribute" ? node.name : node.key) ?? "",
+      )
+    ) return ["selection state belongs to the shared binding"];
+    if (
+      node.type === "JSXAttribute" &&
+      ["class", "className"].includes(property(node.name) ?? "") &&
+      [...nodes(node)].some((child) =>
+        parsed.string(child)?.split(/\s+/).some((name) => classes.has(name))
+      )
+    ) return ["selection state belongs to the shared binding"];
+    if (
+      node.type === "CallExpression" &&
+      /(?:\.classList\.(?:toggle|add|remove)|\.setAttribute)$/.test(
+        parsed.name(node.callee) ?? "",
+      ) &&
+      [...attributes, ...classes].includes(
+        parsed.string(node.arguments[0]) ?? "",
+      )
+    ) return ["selection state belongs to the shared binding"];
+  }
+  return [];
 }
 function paintErrors(css: string): string[] {
   const errors: string[] = [];
-  for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+  for (const { selector, declarations } of rules(css)) {
     if (/\[aria-(?:selected|current|pressed)|\[data-selected/.test(selector)) {
       errors.push("selection paint must use the state class");
     }
@@ -18,8 +55,9 @@ function paintErrors(css: string): string[] {
         errors.push("selection has no attribute-driven decoration");
       }
       if (
-        /\bposition\s*:|(?:^|;)\s*(?:top|left|right|bottom|inset)(?:-[\w-]+)?\s*:/
-          .test(body)
+        [...declarations.keys()].some((prop) =>
+          /^(?:position|top|left|right|bottom|inset)(?:-|$)/.test(prop)
+        )
       ) {
         errors.push("selection participates in layout");
       }
@@ -28,43 +66,28 @@ function paintErrors(css: string): string[] {
   return errors;
 }
 Deno.test("selection state and decoration have one enforceable owner across UI consumers", async () => {
-  async function inspect(directory: URL): Promise<void> {
-    for await (const entry of Deno.readDir(directory)) {
-      const file = new URL(
-        entry.name + (entry.isDirectory ? "/" : ""),
-        directory,
-      );
-      if (entry.isDirectory && entry.name !== "tests") await inspect(file);
-      else if (
-        /\.tsx?$/.test(entry.name) &&
-        file.href !==
-          new URL("../../packages/ui/components/selection.ts", import.meta.url)
-            .href
-      ) {
-        const source = await Deno.readTextFile(file);
-        assertEquals(
-          stateErrors(source),
-          [],
-          file.pathname,
-        );
-        for (const [item] of source.matchAll(/<button\b[\s\S]*?<\/button>/g)) {
-          if (/data-otk-selection="(?:vertical|horizontal)"/.test(item)) {
-            assert(
-              item.includes("<SelectionContent"),
-              `${file.pathname}: items must group content beside their flowing mark`,
-            );
-          }
+  for (const [path, source] of await uiSources()) {
+    if (path.endsWith(".css")) assertEquals(paintErrors(source), [], path);
+    else if (path !== "packages/ui/components/selection.ts") {
+      assertEquals(stateErrors(source), [], path);
+      const parsed = new Source(source, path);
+      for (const node of parsed.all) {
+        if (
+          node.type === "JSXElement" &&
+          parsed.name(node.openingElement.name) === "button" &&
+          parsed.attr(node.openingElement, "data-otk-selection")
+        ) {
+          assert(
+            [...nodes(node)].some((child) =>
+              child.type === "JSXOpeningElement" &&
+              parsed.name(child.name) === "SelectionContent"
+            ),
+            `${path}: items must group content beside their flowing mark`,
+          );
         }
-      } else if (entry.name.endsWith(".css")) {
-        assertEquals(
-          paintErrors(await Deno.readTextFile(file)),
-          [],
-          file.pathname,
-        );
       }
     }
   }
-  await inspect(new URL("../../packages/ui/", import.meta.url));
   const theme = await Deno.readTextFile(
     new URL("../../packages/ui/theme.css", import.meta.url),
   );
@@ -97,7 +120,7 @@ Deno.test("selection state and decoration have one enforceable owner across UI c
     ]
   ) assert(stateErrors(invalid).length > 0, invalid);
   assertEquals(
-    stateErrors('<button {...selection({selected, kind: "current"})}>'),
+    stateErrors('<button {...selection({selected, kind: "current"})} />'),
     [],
   );
   for (

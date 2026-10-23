@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
+import { Source, uiSources } from "./analysis.ts";
+import { rules, typographyErrors, words } from "./styles.ts";
+import type { t } from "./syntax.ts";
+import { resizeBypasses, typographyBypasses } from "./bypasses.ts";
+resizeBypasses(resizeErrors);
+typographyBypasses(visualErrors);
 
 const continuousMotionOwners = new Set([
   "components/StatusLight.css",
@@ -9,18 +15,29 @@ const continuousMotionOwners = new Set([
 /** Both shared rules cover elements and their pseudo-elements, with priority. */
 function motionSuppressionErrors(shared: string): string[] {
   const errors: string[] = [];
+  const parsed = rules(shared);
   if (
-    !/@media\s*\(prefers-reduced-motion:\s*reduce\)\s*\{\s*\*,\s*\*::before,\s*\*::after\s*\{[^{}]*\banimation:\s*none\s*!important\s*;/
-      .test(shared)
+    !["*", "*::before", "*::after"].every((selector) =>
+      parsed.some((rule) =>
+        rule.selector === selector &&
+        rule.condition.replace(/\s+/g, "").includes(
+          "@media(prefers-reduced-motion:reduce)",
+        ) && rule.declarations.get("animation") === "none !important"
+      )
+    )
   ) errors.push("continuous motion must honour OS reduced motion");
   if (
-    !/:root\[data-otk-animations-off\]\s+\*,\s*:root\[data-otk-animations-off\]\s+\*::before,\s*:root\[data-otk-animations-off\]\s+\*::after\s*\{[^{}]*\banimation:\s*none\s*!important\s*;/
-      .test(shared)
+    !["*", "*::before", "*::after"].every((selector) =>
+      parsed.some((rule) =>
+        rule.selector === `:root[data-otk-animations-off] ${selector}` &&
+        rule.declarations.get("animation") === "none !important"
+      )
+    )
   ) errors.push("continuous motion must honour Animations off");
   return errors;
 }
 
-function visualErrors(
+export function visualErrors(
   css: string,
   base = false,
   motionOwner = false,
@@ -29,63 +46,40 @@ function visualErrors(
   const errors: string[] = [];
   if (
     !motionOwner &&
-    /\banimation(?:-iteration-count)?:[^;{}]*\binfinite\b/.test(css)
+    rules(css).some((rule) =>
+      [...rule.declarations].some(([prop, value]) =>
+        /^(?:animation|animation-iteration-count)$/.test(prop) &&
+        words(value).includes("infinite")
+      )
+    )
   ) {
     errors.push("continuous motion belongs to declared owners");
   }
   if (motionOwner) errors.push(...motionSuppressionErrors(shared));
-  if (!base && /(?:font-family|font)\s*:[^;{}]*["']IBM Plex/.test(css)) {
-    errors.push("font bypasses tokens");
-  }
-  if (/font-size\s*:\s*(\d*\.?\d+)(px|rem)/g.test(css)) {
-    for (const match of css.matchAll(/font-size\s*:\s*(\d*\.?\d+)(px|rem)/g)) {
-      if (Number(match[1]) * (match[2] === "rem" ? 13 : 1) < 12) {
-        errors.push("text below 12px");
-      }
-    }
-  }
-  for (
-    const match of css.matchAll(
-      /(?:padding|margin|gap)(?:-[\w-]+)?\s*:\s*([^;{}]+)/g,
-    )
-  ) {
-    if (/rem\b/.test(match[1])) errors.push("spacing bypasses 4px grid");
-    for (const value of match[1].matchAll(/([\d.]+)px/g)) {
-      if (Number(value[1]) % 4 !== 0) errors.push("spacing bypasses 4px grid");
-    }
-  }
+  errors.push(...typographyErrors(css, base));
   return errors;
 }
 Deno.test("visual typography and spacing stay behind the shared contract", async () => {
   const ui = new URL("../../packages/ui/", import.meta.url);
   const shared = await Deno.readTextFile(new URL("theme.css", ui));
   const seen = new Set<string>();
-  async function inspect(directory: URL): Promise<void> {
-    for await (const entry of Deno.readDir(directory)) {
-      const file = new URL(
-        entry.name + (entry.isDirectory ? "/" : ""),
-        directory,
+  for (const [path, css] of await uiSources()) {
+    if (path.endsWith(".css")) {
+      const relative = path.replace(/^packages\/ui\//, "");
+      const motionOwner = continuousMotionOwners.has(relative);
+      if (motionOwner) seen.add(relative);
+      assertEquals(
+        visualErrors(
+          css,
+          path === "packages/ui/theme.css",
+          motionOwner,
+          shared,
+        ),
+        [],
+        path,
       );
-      if (entry.isDirectory) await inspect(file);
-      else if (entry.name.endsWith(".css")) {
-        const css = await Deno.readTextFile(file);
-        const relative = file.pathname.slice(ui.pathname.length);
-        const motionOwner = continuousMotionOwners.has(relative);
-        if (motionOwner) seen.add(relative);
-        assertEquals(
-          visualErrors(
-            css,
-            entry.name === "theme.css",
-            motionOwner,
-            shared,
-          ),
-          [],
-          file.pathname,
-        );
-      }
     }
   }
-  await inspect(ui);
   assertEquals(
     seen,
     continuousMotionOwners,
@@ -176,72 +170,87 @@ Deno.test("continuous-motion owners require shared suppression and arbitrary ani
 
 /** Conservative syntax proof: accept only forms whose complete value set is
  * literal orientations. Unknown expressions fail closed, even if well typed. */
-function selectionOrientation(tag: string): boolean {
-  const value = tag.match(
-    /\bdata-otk-selection\s*=\s*("[^"]*"|'[^']*'|\{[^{}]*\})/,
-  )?.[1];
-  if (!value) return false;
-  const literal = `(?:"(?:vertical|horizontal)"|'(?:vertical|horizontal)')`;
-  if (new RegExp(`^${literal}$`).test(value)) return true;
-  if (!value.startsWith("{")) return false;
-  const expression = value.slice(1, -1).trim();
-  if (new RegExp(`^${literal}$`).test(expression)) return true;
-  // A simple predicate (including a zero-argument read) selects two literals.
-  // Do not accept arrow functions, comma/boolean fallbacks or partial branches.
-  const predicate = String.raw`!?\s*[\w$]+(?:\.[\w$]+)*(?:\(\))?`;
-  return new RegExp(
-    `^${predicate}\\s*\\?\\s*${literal}\\s*:\\s*${literal}$`,
-  ).test(expression);
+function selectionOrientation(value: t.Node): boolean {
+  const expression = value.type === "JSXExpressionContainer"
+    ? value.expression
+    : value;
+  const literal = (node: t.Node) =>
+    node.type === "StringLiteral" &&
+    ["vertical", "horizontal"].includes(node.value);
+  const member = (node: t.Node): boolean =>
+    node.type === "Identifier" ||
+    node.type === "MemberExpression" && !node.computed && member(node.object);
+  const predicate = (node: t.Node): boolean =>
+    member(node) ||
+    node.type === "CallExpression" && node.arguments.length === 0 &&
+      member(node.callee) ||
+    node.type === "UnaryExpression" && node.operator === "!" &&
+      predicate(node.argument);
+  return literal(expression) ||
+    expression.type === "ConditionalExpression" && predicate(expression.test) &&
+      literal(expression.consequent) && literal(expression.alternate);
 }
-/** JSX expressions may contain > (comparisons/arrows), not a tag boundary. */
-function* selectionTags(source: string): Generator<string> {
-  for (const match of source.matchAll(/<(?:button|a)\b/g)) {
-    let depth = 0, quote = "";
-    for (let i = match.index + match[0].length; i < source.length; i++) {
-      const char = source[i];
-      if (quote) {
-        if (char === "\\") i++;
-        else if (char === quote) quote = "";
-      } else if ("\"'`".includes(char)) quote = char;
-      else if (char === "{") depth++;
-      else if (char === "}") depth--;
-      else if (char === ">" && depth === 0) {
-        yield source.slice(match.index, i + 1);
-        break;
-      }
-    }
+export function selectionErrors(source: string): string[] {
+  let parsed: Source;
+  const error = "selected chrome item bypasses the shared selection primitive";
+  try {
+    parsed = new Source(source);
+  } catch {
+    return [error];
   }
-}
-function selectionErrors(source: string): string[] {
-  return [...selectionTags(source)]
-    .filter((tag) =>
-      /\b(?:aria-selected|aria-current|aria-pressed|data-selected)=|\.\.\.selection\(/
-        .test(tag) && !selectionOrientation(tag)
-    )
-    .map(() => "selected chrome item bypasses the shared selection primitive");
+  const result: string[] = [];
+  for (const node of parsed.all) {
+    if (node.type !== "JSXOpeningElement") continue;
+    // Native listbox options (e.g. prompt completions) are not chrome items.
+    if (parsed.string(parsed.attr(node, "role")) === "option") {
+      let ancestor = parsed.parent.get(node);
+      let listbox = false;
+      while (ancestor) {
+        if (
+          ancestor.type === "JSXElement" &&
+          parsed.string(parsed.attr(ancestor.openingElement, "role")) ===
+            "listbox"
+        ) listbox = true;
+        ancestor = parsed.parent.get(ancestor);
+      }
+      if (listbox) continue;
+    }
+    const selected = node.attributes.some((a) => {
+      if (a.type === "JSXAttribute" && a.name.type === "JSXIdentifier") {
+        return [
+          "aria-selected",
+          "aria-current",
+          "aria-pressed",
+          "data-selected",
+        ].includes(a.name.name);
+      }
+      if (
+        a.type !== "JSXSpreadAttribute" ||
+        a.argument.type !== "CallExpression" ||
+        parsed.name(a.argument.callee) !== "selection"
+      ) return false;
+      const options = parsed.value(a.argument.arguments[0]);
+      const state = options?.type === "ObjectExpression" &&
+        options.properties.find((p) =>
+          p.type === "ObjectProperty" && p.key.type === "Identifier" &&
+          p.key.name === "selected"
+        );
+      const value = state && state.type === "ObjectProperty"
+        ? parsed.value(state.value)
+        : undefined;
+      return value?.type !== "BooleanLiteral" || value.value;
+    });
+    if (!selected) continue;
+    const attribute = parsed.attr(node, "data-otk-selection");
+    if (!attribute || !selectionOrientation(attribute)) result.push(error);
+  }
+  return result;
 }
 Deno.test("chrome selected/current states opt into the shared orientation primitive", async () => {
-  for (
-    const name of [
-      "ProjectInbox",
-      "ProjectTabs",
-      "ProjectSessions",
-      "RightPanel",
-      "ThemePicker",
-      "Palette",
-      "Sidebar",
-      "QuestionDock",
-    ]
-  ) {
-    assertEquals(
-      selectionErrors(
-        await Deno.readTextFile(
-          new URL(`../../packages/ui/components/${name}.tsx`, import.meta.url),
-        ),
-      ),
-      [],
-      name,
-    );
+  for (const [path, source] of await uiSources()) {
+    if (!path.endsWith(".css")) {
+      assertEquals(selectionErrors(source), [], path);
+    }
   }
   assertEquals(
     selectionErrors('<button aria-current={selected ? "page" : undefined}>'),
@@ -249,7 +258,7 @@ Deno.test("chrome selected/current states opt into the shared orientation primit
   );
   assertEquals(
     selectionErrors(
-      '<button data-otk-selection="vertical" {...selection({ kind: "current", selected })}>',
+      '<button data-otk-selection="vertical" {...selection({ kind: "current", selected })} />',
     ),
     [],
   );
@@ -257,7 +266,7 @@ Deno.test("chrome selected/current states opt into the shared orientation primit
 
 Deno.test("chrome orientation expressions prove every possible result is a literal orientation", () => {
   const item = (attribute: string) =>
-    `<button ${attribute} {...selection({ kind: "selected", selected })}>`;
+    `<button ${attribute} {...selection({ kind: "selected", selected })} />`;
   for (
     const valid of [
       'data-otk-selection="horizontal"',
@@ -297,13 +306,43 @@ Deno.test("chrome orientation expressions prove every possible result is a liter
   }
 });
 
-function resizeErrors(source: string): string[] {
-  return /parentElement[\s\S]*?getBoundingClientRect/.test(source) ||
-      !source.includes("resizeDrag(")
-    ? [
-      "resizing must use an immutable pointer-delta gesture, not a parent edge",
-    ]
-    : [];
+export function resizeErrors(source: string): string[] {
+  const parsed = new Source(source);
+  const error = [
+    "resizing must use an immutable pointer-delta gesture, not a parent edge",
+  ];
+  if (
+    parsed.all.some((node) =>
+      parsed.name(node)?.includes("parentElement.getBoundingClientRect")
+    )
+  ) return error;
+  for (const call of parsed.calls("resizeDrag")) {
+    const assignment = parsed.parent.get(call);
+    const target = assignment?.type === "AssignmentExpression"
+      ? assignment.left
+      : assignment?.type === "VariableDeclarator"
+      ? assignment.id
+      : undefined;
+    if (target?.type !== "Identifier") continue;
+    const binding = parsed.binding(target.name, target);
+    const consumers = parsed.calls(target.name).filter((node) =>
+      node !== call && node.callee.type === "Identifier" &&
+      parsed.binding(node.callee.name, node.callee) === binding
+    );
+    if (
+      consumers.some((node) => {
+        let current = parsed.parent.get(node);
+        while (
+          current &&
+          !["ExpressionStatement", "ReturnStatement", "CallExpression"]
+            .includes(current.type)
+        ) current = parsed.parent.get(current);
+        return current?.type === "CallExpression" ||
+          current?.type === "ReturnStatement";
+      })
+    ) return [];
+  }
+  return error;
 }
 Deno.test("both column resizers share border-independent pointer-delta ownership", async () => {
   for (const name of ["ProjectInbox", "RightPanel"]) {
@@ -323,7 +362,9 @@ Deno.test("both column resizers share border-independent pointer-delta ownership
     ).length > 0,
   );
   assertEquals(
-    resizeErrors("drag = resizeDrag(width(), event.clientX, -1, 280, 480);"),
+    resizeErrors(
+      "let drag; function down(event) { drag = resizeDrag(width(), event.clientX, -1, 280, 480); } function move(event) { setWidth(drag(event.clientX)); }",
+    ),
     [],
   );
 });

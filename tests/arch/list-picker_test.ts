@@ -1,70 +1,63 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
+import { Source, uiSources } from "./analysis.ts";
+import { nodes } from "./syntax.ts";
+import { pickerErrors } from "./picker-policy.ts";
+import { pickerBypasses, readinessBypasses } from "./bypasses.ts";
+pickerBypasses((source) =>
+  errors("packages/ui/features/prompt/nested/extension.tsx", source)
+);
+readinessBypasses(readinessErrors);
 const root = new URL("../../", import.meta.url);
-function errors(path: string, source: string): string[] {
-  const result: string[] = [];
-  if (path.startsWith("packages/ui/") && /plan_exit|plan_enter/.test(source)) {
-    result.push("tool-driven agent selection belongs to the client owner");
-  }
-  if (path.endsWith("ListPicker.tsx")) {
-    if (
-      /\brpc\b|@otk\/client|prefs\.|querySelector|\.parentElement/.test(source)
-    ) {
-      result.push(
-        "picker owns interaction only, with injected data and callbacks",
-      );
+export function errors(path: string, source: string): string[] {
+  return pickerErrors(path, source);
+}
+export function readinessErrors(source: string): string[] {
+  const parsed = new Source(source);
+  const bodies = parsed.all.flatMap((node) => {
+    if (node.type === "FunctionDeclaration" && node.id?.name === "submit") {
+      return [node.body];
     }
     if (
-      !source.includes("<Popover") || !source.includes("<SelectionContent") ||
-      !source.includes("...selection(")
-    ) result.push("picker must use shared surface and selection owners");
+      node.type === "VariableDeclarator" && node.id.type === "Identifier" &&
+      node.id.name === "submit" &&
+      node.init?.type === "ArrowFunctionExpression" &&
+      node.init.body.type === "BlockStatement"
+    ) return [node.init.body];
+    return [];
+  });
+  if (bodies.length !== 1) return ["submission requires one unambiguous owner"];
+  let ready = false, read = false;
+  for (const statement of bodies[0].body) {
+    if (
+      statement.type === "ExpressionStatement" &&
+      statement.expression.type === "AwaitExpression"
+    ) {
+      const call = statement.expression.argument;
+      if (
+        (call.type === "CallExpression" ||
+          call.type === "OptionalCallExpression") &&
+        parsed.name(call.callee)?.endsWith(".ready")
+      ) ready = true;
+    }
+    if (
+      [...nodes(statement)].some((node) =>
+        node.type === "CallExpression" && parsed.name(node.callee) === "change"
+      )
+    ) {
+      if (!ready) {
+        return ["submission must await readiness before reading its draft"];
+      }
+      read = true;
+    }
   }
-  if (
-    path.endsWith("Prompt.tsx") &&
-    /models\.list|agents\.list|ListPicker|chooseModel|chooseVariant/.test(
-      source,
-    )
-  ) {
-    result.push(
-      "prompt host consumes contributions, not concrete picker implementations",
-    );
-  }
-  if (
-    path.endsWith("features/prompt/agents.tsx") &&
-    /JSON\.parse|modelGroups\(|toggleFavouriteModel\(|recordRecentModel\(|new Promise|let (?:queue|preferences)|choose(?:Agent|Model|Variant)\(draft/
-      .test(source)
-  ) {
-    result.push(
-      "composer catalog, selection and preference logic belongs to the client owner",
-    );
-  }
-  if (
-    path.endsWith("features/prompt/catalog.ts") &&
-    /createSignal|let pending|function promptCatalog|\.then\(|\.finally\(/.test(
-      source,
-    )
-  ) {
-    result.push("catalog UI module binds the framework-free owner only");
-  }
-  if (
-    path.endsWith("Prompt.tsx") &&
-    /nextSelection:\s*\(draft\s*=\s*change\(/.test(source)
-  ) result.push("rendered selection reads the reactive draft");
-  return result;
+  return ready && read
+    ? []
+    : ["submission must await readiness before reading its draft"];
 }
 Deno.test("ListPicker uses shared owners and prompt selection flows through one contributed projection", async () => {
-  for (
-    const path of [
-      "packages/ui/components/ListPicker.tsx",
-      "packages/ui/components/Prompt.tsx",
-      "packages/ui/features/prompt/agents.tsx",
-      "packages/ui/features/prompt/catalog.ts",
-      "packages/ui/registries/session.tsx",
-      "packages/ui/shell/Shell.tsx",
-    ]
-  ) {
-    const source = await Deno.readTextFile(new URL(path, root));
-    assertEquals(errors(path, source), []);
+  for (const [path, source] of await uiSources()) {
+    if (!path.endsWith(".css")) assertEquals(errors(path, source), [], path);
   }
   for (
     const invalid of [
@@ -81,7 +74,7 @@ Deno.test("ListPicker uses shared owners and prompt selection flows through one 
       ).length,
     );
   }
-  assert(errors("Prompt.tsx", "models.list").length);
+  assert(errors("Prompt.tsx", 'ctx.rpc("models.list", input)').length);
   assert(
     errors(
       "packages/ui/features/prompt/catalog.ts",
@@ -92,7 +85,10 @@ Deno.test("ListPicker uses shared owners and prompt selection flows through one 
     errors("packages/ui/shell/Shell.tsx", 'part.name === "plan_enter"').length,
   );
   assert(
-    errors("Prompt.tsx", "nextSelection: (draft = change((value) => value))")
+    errors(
+      "Prompt.tsx",
+      "const context = { nextSelection: (draft = change((value) => value)) => draft };",
+    )
       .length,
   );
   for (
@@ -113,9 +109,7 @@ Deno.test("ListPicker uses shared owners and prompt selection flows through one 
   );
   assert(prompt.includes("feature.submit?.(draft, parts, selection)"));
   assert(prompt.includes("send({ parts, mode: draft.mode, selection })"));
-  assert(
-    prompt.indexOf("await ctx.ready()") < prompt.indexOf("let draft = change("),
-  );
+  assertEquals(readinessErrors(prompt), []);
   const picker = await Deno.readTextFile(
     new URL("packages/ui/components/ListPicker.tsx", root),
   );
@@ -126,5 +120,20 @@ Deno.test("ListPicker uses shared owners and prompt selection flows through one 
   assert(
     !picker.includes('"★"') && !picker.includes('"☆"'),
     "Generic actions inject their own content",
+  );
+});
+
+Deno.test("A12 submission readiness accepts aliased ports and formatted awaits", () => {
+  assertEquals(
+    readinessErrors(`
+    const current = ctx;
+    async function submit() {
+      await current["ready"](/* wait for the owning resource */);
+      const readDraft = change;
+      const value = readDraft(item => item);
+      return value;
+    }
+  `),
+    [],
   );
 });

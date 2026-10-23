@@ -1,5 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
+import { dependencySpecifiers, sourceInventory } from "./analysis.ts";
+import { dependencyBypasses } from "./bypasses.ts";
+dependencyBypasses((source) =>
+  imports(source).flatMap((specifier) =>
+    dependencyError(
+      "packages/client/bypass.ts",
+      specifier,
+      new Set(["client", "ui", "protocol"]),
+    ) ?? []
+  )
+);
 
 // Final seven-library dependency table; the application remains at root.
 const allowed: Record<string, readonly string[]> = {
@@ -15,47 +26,11 @@ const root = new URL("../../", import.meta.url);
 const owner = (path: string) => /^packages\/([^/]+)\//.exec(path)?.[1];
 const isTest = (path: string) => /(^|\/)tests\//.test(path);
 
-// Tokenize comments and string literals as units so documentation, browser
-// script strings and commented imports cannot masquerade as dependencies.
-function imports(source: string): (string | undefined)[] {
-  const tokens = Array.from(
-    source.matchAll(
-      /\/\/[^\n]*|\/\*[\s\S]*?\*\/|"(?:\\.|[^"\\])*"|'(?:\\.|[^'\\])*'|`(?:\\.|[^`\\])*`|[\w$]+|[^\s]/g,
-    ),
-    (match) => match[0],
-  ).filter((token) => !token.startsWith("//") && !token.startsWith("/*"));
-  const literal = (token: string | undefined): string | undefined => {
-    if (!token || !/^["'`]/.test(token) || token.includes("${")) return;
-    // Escaped specifiers are rejected rather than letting an encoded path
-    // bypass the public boundary check.
-    if (token.includes("\\")) return;
-    return token.slice(1, -1);
-  };
-  const result: (string | undefined)[] = [];
-  for (let i = 0; i < tokens.length; i++) {
-    const kind = tokens[i];
-    if (kind !== "import" && kind !== "export") continue;
-    const next = tokens[i + 1];
-    if (next === ".") continue; // import.meta
-    if (kind === "import" && next === "(") {
-      result.push(tokens[i + 3] === ")" ? literal(tokens[i + 2]) : undefined);
-      continue;
-    }
-    if (kind === "import" && /^["'`]/.test(next ?? "")) {
-      result.push(literal(next));
-      continue;
-    }
-    if (kind === "export" && !["*", "{", "type"].includes(next)) continue;
-    for (let j = i + 1; j < tokens.length && tokens[j] !== ";"; j++) {
-      if (tokens[j] !== "from" || !/^["'`]/.test(tokens[j + 1] ?? "")) continue;
-      result.push(literal(tokens[j + 1]));
-      break;
-    }
-  }
-  return result;
+export function imports(source: string): (string | undefined)[] {
+  return dependencySpecifiers(source);
 }
 
-function dependencyError(
+export function dependencyError(
   path: string,
   specifier: string | undefined,
   present: ReadonlySet<string>,
@@ -138,7 +113,7 @@ function dependencyError(
   }
 }
 
-function sourceErrors(path: string, source: string): string[] {
+export function sourceErrors(path: string, source: string): string[] {
   const from = owner(path);
   if (isTest(path)) return [];
   if (!from && !/^(?:(?:main|application)\.ts$|core\/|web\/src\/)/.test(path)) {
@@ -398,22 +373,6 @@ function sourceErrors(path: string, source: string): string[] {
   return errors;
 }
 
-async function* sources(directory: URL): AsyncGenerator<URL> {
-  for await (const entry of Deno.readDir(directory)) {
-    if (
-      ["node_modules", "dist", ".test-state", "tmp", "arch"].includes(
-        entry.name,
-      )
-    ) continue;
-    const url = new URL(
-      encodeURIComponent(entry.name) + (entry.isDirectory ? "/" : ""),
-      directory,
-    );
-    if (entry.isDirectory) yield* sources(url);
-    else if (/\.(?:[cm]?[jt]s|tsx|jsx)$/.test(entry.name)) yield url;
-  }
-}
-
 Deno.test("extracted package metadata and imports follow public downward dependencies", async () => {
   const present = new Set<string>();
   for await (const entry of Deno.readDir(new URL("packages/", root))) {
@@ -470,15 +429,8 @@ Deno.test("extracted package metadata and imports follow public downward depende
   }
   let files = 0, edges = 0;
   const errors: string[] = [];
-  const urls = [new URL("main.ts", root), new URL("application.ts", root)];
-  for (const directory of ["packages/", "core/", "web/src/", "tests/"]) {
-    for await (const url of sources(new URL(directory, root))) {
-      urls.push(url);
-    }
-  }
-  for (const url of urls) {
-    const path = decodeURIComponent(url.href.slice(root.href.length));
-    const source = await Deno.readTextFile(url);
+  for (const [path, source] of await sourceInventory({ tests: true })) {
+    if (path.endsWith(".css")) continue;
     files++;
     for (const specifier of imports(source)) {
       edges++;
@@ -694,7 +646,10 @@ Deno.test("connector and core cannot retain a second session-index map", async (
     ]
   ) {
     assertEquals(
-      sourceErrors(path, "#entries = new Map<string, IndexEntry>();"),
+      sourceErrors(
+        path,
+        "class Connector { #entries = new Map<string, IndexEntry>(); }",
+      ),
       ["session entries belong only to the shared SessionIndex owner"],
     );
   }
@@ -747,7 +702,7 @@ Deno.test("database upgrades stay feature-owned and the global sequence is froze
       ],
       [
         "packages/store/db.ts",
-        "constructor(path: string, migrations: readonly Migration[]) {}",
+        "class Store { constructor(path: string, migrations: readonly Migration[]) {} }",
       ],
       [
         "packages/store/migrations.ts",
@@ -849,14 +804,23 @@ Deno.test("capability names and implementations share one open feature-owned pro
       ],
       [
         "packages/client/connection.ts",
-        "supports(capability: string): boolean { return false; }",
+        "class Connection { supports(capability: string): boolean { return false; } }",
       ],
-      ["packages/client/connection.ts", "#capabilities = new Set<string>();"],
-      ["packages/protocol/messages.ts", "capabilities?: string[];"],
-      ["packages/ui/registries/renderers.ts", "capability?: string;"],
+      [
+        "packages/client/connection.ts",
+        "class Connection { #capabilities = new Set<string>(); }",
+      ],
+      [
+        "packages/protocol/messages.ts",
+        "interface Welcome { capabilities?: string[]; }",
+      ],
+      [
+        "packages/ui/registries/renderers.ts",
+        "interface Renderer { capability?: string; }",
+      ],
       [
         "packages/ui/components/SessionView.tsx",
-        "capabilities: readonly string[];",
+        "interface Props { capabilities: readonly string[]; }",
       ],
       [
         path,

@@ -1,145 +1,24 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import { THEME_SLOTS } from "../../packages/ui/theme/slots.ts";
+import { uiSources } from "./analysis.ts";
+import { surfaceErrors } from "./surface-policy.ts";
+import { tokenErrors } from "./tokens.ts";
+import { surfaceBypasses, tokenBypasses } from "./bypasses.ts";
+surfaceBypasses(surfaceErrors);
+tokenBypasses(tokenErrors);
 
-type Sources = Map<string, string>;
-const root = new URL("../../packages/ui/", import.meta.url);
-async function sources(directory = root, prefix = ""): Promise<Sources> {
-  const files: Sources = new Map();
-  for await (const entry of Deno.readDir(directory)) {
-    const name = prefix + entry.name;
-    if (entry.isDirectory) {
-      if (entry.name === "tests") continue;
-      for (
-        const item of await sources(
-          new URL(`${entry.name}/`, directory),
-          `${name}/`,
-        )
-      ) files.set(...item);
-    } else if (/\.(tsx?|css)$/.test(name)) {
-      files.set(name, await Deno.readTextFile(new URL(entry.name, directory)));
-    }
-  }
-  return files;
-}
-function ownershipErrors(files: Sources): string[] {
-  const errors: string[] = [];
-  const owners =
-    /^components\/surface\/(Dialog|Popover|Menu|Toast|Takeover)\.tsx$/;
-  const overlay = new Set<string>();
-  for (const [name, text] of files) {
-    if (
-      /\b(?:import|export)\b[^;]*["'][^"']*\/Surface(?:\.tsx)?["']/.test(
-        text,
-      ) && !owners.test(name)
-    ) errors.push(`${name}: Surface is internal`);
-    if (/<dialog\b/.test(text) && name !== "components/surface/Dialog.tsx") {
-      errors.push(`${name}: native dialog belongs to Dialog`);
-    }
-    if (
-      name === "components/surface/Popover.tsx" && /togglePopover\(/.test(text)
-    ) {
-      errors.push(
-        `${name}: native popovertarget association owns trigger toggling`,
-      );
-    }
-    if (
-      name === "components/surface/Dialog.css" &&
-      /\[data-dialog[=\]]/.test(text)
-    ) {
-      errors.push(
-        `${name}: Dialog sizes content without caller-specific rules`,
-      );
-    }
-    if (
-      /\bpopover=["']/.test(text) && name !== "components/surface/Popover.tsx"
-    ) errors.push(`${name}: native popover belongs to Popover`);
-    if (
-      /dialogs\.register|<(?:Popover|Menu|Toast|ListPicker)\b/.test(text) &&
-      !owners.test(name)
-    ) overlay.add(name);
-  }
-  // Follow component dependencies of registrations and anchored content. This
-  // catches new content modules, not just today's concrete overlay names.
-  for (const name of overlay) {
-    const text = files.get(name)!;
-    const content = /<(?:Popover|Menu|Toast|ListPicker)\b/.test(text)
-      ? [
-        ...text.matchAll(
-          /<(?:Popover|Menu|Toast|ListPicker)\b[\s\S]*?<\/(?:Popover|Menu|Toast|ListPicker)>/g,
-        ),
-      ].map((m) => m[0]).join("\n")
-      : text;
-    for (
-      const match of text.matchAll(
-        /import\s+(\w+)\s+from\s+["']([^"']+\.tsx)["']/g,
-      )
-    ) {
-      if (!new RegExp(`(?:<|component:\\s*)${match[1]}\\b`).test(content)) {
-        continue;
-      }
-      const url = new URL(match[2], new URL(name, root));
-      const child = url.href.slice(root.href.length);
-      if (
-        files.has(child) && !child.includes("/surface/") &&
-        !child.startsWith("registries/") && !child.startsWith("shell/") &&
-        !child.startsWith("keyboard/")
-      ) overlay.add(child);
-    }
-  }
-  const allowedPositions = new Set([
-    "components/surface/Popover.css:.otk-popover-panel", // The anchored overlay itself, never content.
-    "components/surface/Popover.css:.otk-popover-anchor", // Rect geometry owned by the same overlay boundary.
-    "components/ProjectInbox.css:.otk-inbox-resizer",
-    "components/Toasts.css:.otk-toasts", // Existing fixed notification stack.
-  ]);
-  for (const [name, text] of files) {
-    if (!name.endsWith(".css")) continue;
-    for (const match of text.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const selector = match[1].replace(/\/\*[\s\S]*?\*\//g, "").trim(),
-        body = match[2];
-      const surface = name === "components/surface/Surface.css";
-      const shadow = /box-shadow\s*:\s*([^;]+)/.exec(body)?.[1].trim();
-      if (
-        !surface && /background(?:-color)?\s*:/.test(body) &&
-        /border-radius\s*:/.test(body) && shadow && shadow !== "none" &&
-        name !== "components/ComposerTakeovers.css" && name !== "theme.css"
-      ) errors.push(`${name}: card paint belongs to Surface`);
-      if (
-        /\b(?:fieldset|legend)\b/.test(selector) &&
-        /(?:background|border-radius|box-shadow)\s*:/.test(body)
-      ) errors.push(`${name}: field grouping is not a surface`);
-      if (
-        (overlay.has(name.replace(/\.css$/, ".tsx")) ||
-          /^components\/surface\/\w+\.css$/.test(name)) &&
-        !allowedPositions.has(`${name}:${selector}`)
-      ) {
-        if (
-          /position\s*:\s*(?:absolute|fixed)|(?:^|;)\s*(?:top|left|right|bottom|inset)\s*:|margin(?:-[\w-]+)?\s*:[^;]*-\d/
-            .test(body)
-        ) errors.push(`${name}: overlay content must stay in flow`);
-      }
-    }
-  }
-  return errors;
-}
-function tokenErrors(files: Sources): string[] {
-  const defined = new Set(THEME_SLOTS.map((slot) => `--otk-${slot}`));
-  for (const text of files.values()) {
-    for (const match of text.matchAll(/(--[\w-]+)["']?\s*:/g)) {
-      defined.add(match[1]);
-    }
-  }
-  return [...files].filter(([name]) => name.endsWith(".css")).flatMap((
-    [name, css],
-  ) =>
-    [...css.matchAll(/var\(\s*(--[\w-]+)/g)].filter((match) =>
-      !defined.has(match[1])
-    ).map((match) => `${name}: undefined ${match[1]}`)
+export { surfaceErrors as ownershipErrors, tokenErrors };
+
+async function sources(): Promise<Map<string, string>> {
+  return new Map(
+    [...(await uiSources())].map((
+      [path, source],
+    ) => [path.replace(/^packages\/ui\//, ""), source]),
   );
 }
+
 Deno.test("overlay owners enforce an internal Surface and normal-flow registered content", async () => {
-  assertEquals(ownershipErrors(await sources()), []);
+  assertEquals(surfaceErrors(await sources()), []);
   for (
     const [name, text] of [
       ["components/Bad.tsx", 'import Surface from "./surface/Surface.tsx";'],
@@ -170,10 +49,10 @@ Deno.test("overlay owners enforce an internal Surface and normal-flow registered
         ".otk-dialog[data-dialog=feature] { width: 90vw; }",
       ],
     ]
-  ) assert(ownershipErrors(new Map([[name, text]])).length, text);
+  ) assert(surfaceErrors(new Map([[name, text]])).length, text);
   for (const owner of ["Dialog", "Popover", "Menu", "Toast", "Takeover"]) {
     assertEquals(
-      ownershipErrors(
+      surfaceErrors(
         new Map([[
           `components/surface/${owner}.tsx`,
           'import Surface from "./Surface.tsx";',
@@ -184,7 +63,7 @@ Deno.test("overlay owners enforce an internal Surface and normal-flow registered
   }
   for (const owner of ["Popover", "Menu", "Toast", "ListPicker"]) {
     assert(
-      ownershipErrors(
+      surfaceErrors(
         new Map([
           [
             "components/Host.tsx",
@@ -206,7 +85,7 @@ Deno.test("overlay owners enforce an internal Surface and normal-flow registered
     ]
   ) {
     assert(
-      ownershipErrors(
+      surfaceErrors(
         new Map([
           [
             "features/extension.tsx",
@@ -220,10 +99,60 @@ Deno.test("overlay owners enforce an internal Surface and normal-flow registered
     );
   }
 });
+
 Deno.test("every UI CSS variable resolves to a declared theme or structural token", async () => {
   assertEquals(tokenErrors(await sources()), []);
   assertEquals(
     tokenErrors(new Map([["bad.css", ".bad { color: var(--missing); }"]])),
     ["bad.css: undefined --missing"],
+  );
+});
+
+Deno.test("A12 surface analysis accepts native nested flow, sticky offsets and decorative lamps", () => {
+  assertEquals(
+    surfaceErrors(
+      new Map([
+        [
+          "components/Host.tsx",
+          'import { Body as Content } from "./Body.tsx"; export function Host() { return <Popover><Content /></Popover>; }',
+        ],
+        [
+          "components/Body.tsx",
+          'export function Body() { return <div class="body"><span class="lamp" aria-hidden="true" /><table><tfoot><tr><th>Total</th></tr></tfoot></table></div>; }',
+        ],
+        [
+          "components/Body.css",
+          `
+      .body { display: flex; .row { display: grid; align-items: center; } }
+      :is(thead, tfoot) th { position: sticky; }
+      tfoot th { bottom: 0; }
+      .lamp { background: red; border-radius: 8px; box-shadow: 0 0 4px black; }
+    `,
+        ],
+      ]),
+    ),
+    [],
+  );
+});
+
+Deno.test("A12 token availability accepts real ancestor and animation consumer scopes", () => {
+  assertEquals(
+    tokenErrors(
+      new Map([
+        [
+          "components/Light.tsx",
+          'export function Light() { return <div class="scope"><span class="lamp" /></div>; }',
+        ],
+        [
+          "components/Light.css",
+          `
+      .scope { --ink: red; }
+      .lamp { color: var(--ink); --lamp-color: red; animation: pulse 1s; }
+      @keyframes pulse { to { color: var(--lamp-color); } }
+    `,
+        ],
+      ]),
+    ),
+    [],
   );
 });

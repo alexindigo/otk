@@ -10,7 +10,7 @@ export function parse(source: string, path = "fixture.tsx"): t.File {
     sourceType: "module",
     plugins: ["typescript", "jsx", "importAttributes"],
     allowReturnOutsideFunction: true,
-    errorRecovery: true,
+    errorRecovery: false,
   });
 }
 
