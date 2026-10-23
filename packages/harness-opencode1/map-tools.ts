@@ -55,7 +55,7 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
     return {
       ...base,
       tool: "task",
-      agent: string(input.subagent_type) || "general",
+      agent: string(input.subagent_type) || undefined,
       description: string(input.description) || "",
       childSessionID: string(metadata.sessionId),
       toolCount: 0,

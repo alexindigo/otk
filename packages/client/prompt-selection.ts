@@ -31,7 +31,7 @@ export interface PromptSelectionContext {
 export interface PromptSelection {
   applies: { agent: true; model: true; variant: boolean };
   input: PromptChoices;
-  agent: SelectionField<string> & { color?: string };
+  agent: SelectionField<string> & { color?: AgentOption["color"] };
   model: SelectionField<ModelRef> & {
     name?: string;
     providerName?: string;

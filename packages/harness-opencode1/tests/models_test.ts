@@ -293,8 +293,8 @@ Deno.test("agent options share transcript color resolution and map only public m
   for (const agent of [...primary, ...mentions]) {
     assertEquals(agent.color, colors.get(agent.name));
   }
-  assertEquals(primary[0].color, "var(--accent)");
-  assertEquals(primary[1].color, "var(--secondary)");
+  assertEquals(primary[0].color, "accent");
+  assertEquals(primary[1].color, "secondary");
   assert(!JSON.stringify(primary).includes(secret));
 });
 

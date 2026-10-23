@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { AgentsCapability } from "@otk/harness";
+import type { AgentColor } from "@otk/protocol";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
 interface Agent {
@@ -33,19 +34,22 @@ export function agents(client: Client, directory: Directory): AgentsCapability {
     },
   };
 }
-function agentColor(color?: string | null): string | undefined {
-  return color && /^#(?:[a-f\d]{3}|[a-f\d]{6}|[a-f\d]{8})$/i.test(color)
+function hexColor(color: string): color is `#${string}` {
+  return /^#(?:[a-f\d]{3}|[a-f\d]{6}|[a-f\d]{8})$/i.test(color);
+}
+function agentColor(color?: string | null): AgentColor | undefined {
+  return color && hexColor(color)
     ? color
     : color === "primary"
-    ? "var(--accent)"
+    ? "accent"
     : color === "secondary"
-    ? "var(--secondary)"
+    ? "secondary"
     : undefined;
 }
 export async function agentColors(
   client: Client,
   directory?: string,
-): Promise<Map<string, string>> {
+): Promise<Map<string, AgentColor>> {
   const agents = await client.json<{ name: string; color?: string | null }[]>(
     "/agent",
     { query: { directory } },
@@ -58,9 +62,12 @@ export async function agentColors(
 
 /** Directory configuration is shared across transcript pages and live events. */
 export class AgentColors {
-  #directories = new Map<string | undefined, Promise<Map<string, string>>>();
+  #directories = new Map<
+    string | undefined,
+    Promise<Map<string, AgentColor>>
+  >();
   constructor(readonly client: Client) {}
-  get(directory?: string): Promise<Map<string, string>> {
+  get(directory?: string): Promise<Map<string, AgentColor>> {
     let colors = this.#directories.get(directory);
     if (!colors) {
       colors = agentColors(this.client, directory).catch((error) => {

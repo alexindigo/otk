@@ -19,7 +19,7 @@ export default function GenericTool(
       <Show when={props.output}>
         <ToolOutput text={props.call.output || ""} limit={3} />
         <Show when={props.call.outputTruncated}>
-          <small>Output truncated at 64 KiB by the sidecar.</small>
+          <small>Output truncated.</small>
         </Show>
       </Show>
     </>

@@ -55,7 +55,8 @@ helper, including tokens, reverted messages, pastes and favicon attention.
 Optional display text preserves compact/locale formatting while the numeric
 value owns inflection. Structural edit, write, patch, todo and question bodies
 keep their typed result presentation; generic output retains its display
-preference and bounded preview notice. Invisible bookkeeping owners declare
+preference and provenance-neutral truncation notice. Unknown task agents have an
+identity-free “Unknown agent” label. Invisible bookkeeping owners declare
 themselves hidden so wire steps cannot split a visible work fold. Reply metadata
 combines contiguous source parts for one whole-reply copy.
 
@@ -595,6 +596,10 @@ search command while mounted and visible. The sidebar's Search control opens the
 command palette; it has no project-search field or separate scan control.
 
 ## Semantic themes
+
+Agent colours arrive as neutral hex values or semantic roles. The shared
+presentation resolver maps roles into this consumer's theme for reply metadata,
+agent triggers and picker rows; native adapters and client state carry no CSS.
 
 `ThemeRegistry` owns immutable data registrations; it imports no themes. A
 consumer calls `registerOtkThemes(themes)` to select the shipped complete Dark

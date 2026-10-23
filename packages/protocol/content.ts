@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { SessionErrorState } from "./errors.ts";
+/** A concrete hex colour or a semantic role, resolved by the consumer's theme. */
+export type AgentColor = `#${string}` | "accent" | "secondary";
 export interface ModelRef {
   provider: string;
   model: string;
@@ -198,7 +200,7 @@ export type ToolCall = ToolKinds[keyof ToolKinds] | ExternalCall;
 export type FileToolCall = EditCall | WriteCall | PatchCall;
 export interface TaskCall extends ToolBase {
   tool: "task";
-  agent: string;
+  agent?: string;
   description: string;
   currentTool?: string;
   toolCount: number;
@@ -258,7 +260,7 @@ export interface UserMessage {
   role: "user";
   time: { created: number };
   agent?: string;
-  agentColor?: string;
+  agentColor?: AgentColor;
   model?: ModelRef;
   variant?: string;
   parts: Part[];
@@ -269,7 +271,7 @@ export interface AssistantMessage {
   role: "assistant";
   time: { created: number; completed?: number; lastOutput?: number };
   agent: string;
-  agentColor?: string;
+  agentColor?: AgentColor;
   replyTo?: string;
   model: ModelRef;
   tokens: Tokens;

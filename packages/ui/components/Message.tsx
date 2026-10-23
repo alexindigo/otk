@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Message.css" with { type: "text" };
+import { agentColor } from "../theme/agent-color.ts";
 import { createMemo, For, Show } from "solid-js";
 import WorkLog from "./WorkLog.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
@@ -213,7 +214,8 @@ export default function Message(
                     tabindex="0"
                     data-otk-focus="content"
                     style={{
-                      "--message-agent-color": message().agentColor ||
+                      "--message-agent-color":
+                        agentColor(message().agentColor) ||
                         "var(--otk-fg-3)",
                     }}
                   >

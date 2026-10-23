@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./pickers.css" with { type: "text" };
+import { agentColor } from "../../theme/agent-color.ts";
 import { onSettled, Show } from "solid-js";
 import type { ComposerCatalog, SelectionField } from "@otk/client";
 import type { ModelRef } from "@otk/protocol";
@@ -144,7 +145,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                 class="otk-composer-picker otk-agent-picker"
                 triggerClass="otk-picker-trigger"
                 applied={applied(selection().agent)}
-                triggerColor={selection().agent.color}
+                triggerColor={agentColor(selection().agent.color)}
                 trigger={
                   <>
                     <span class="otk-composer-agent otk-picker-label">
@@ -163,7 +164,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                     value: agent.name,
                     label: selectionLabel(agent.name),
                     description: agent.description,
-                    color: agent.color,
+                    color: agentColor(agent.color),
                   })),
                 }]}
                 selected={selection().agent.value}

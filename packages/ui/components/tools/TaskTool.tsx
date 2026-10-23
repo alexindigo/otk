@@ -13,7 +13,7 @@ export function registerTaskTool(tools: ToolRegistry): void {
     (call) => ({
       icon: "↳",
       verb: "Delegate",
-      target: call.agent,
+      target: call.agent || "Unknown agent",
       summary: call.description,
       expanded: true,
     }),

@@ -106,9 +106,16 @@ connected providers' IDs/names and model IDs/names, variant names, status,
 optional `default: ModelRef` identifies the configured model only when it is in
 that catalog. Native credentials, options, headers and environment data never
 belong in this contract. This new capability is not inferred for legacy servers.
-`AgentOption` optionally carries resolved `color`, configured `model: ModelRef`
-and `variant`; `UserMessage` optionally carries the recorded `variant` alongside
-its `model` for restoration.
+`AgentOption` optionally carries neutral `color: AgentColor`, configured
+`model: ModelRef` and `variant`; `UserMessage` optionally carries the recorded
+`variant` alongside its `model` for restoration.
+
+`AgentColor` is a concrete hex colour or the semantic role `accent` /
+`secondary`; consumers resolve roles in their own presentation system.
+Transcripts use the same contract. A task's optional `agent` contains only a
+reported identity; absence never implies a specific backend agent. External
+output's truncation flag reports truncation only, not a universal byte limit or
+source.
 
 The transcript preference owner contributes `showCost` and
 `collapseFileChanges`, both on by default, with shared Display toggles and

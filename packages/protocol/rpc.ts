@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type {
+  AgentColor,
   ContentSession,
   Message,
   ModelRef,
@@ -64,7 +65,7 @@ export interface FileMatch {
 export interface AgentOption {
   name: string;
   description?: string;
-  color?: string;
+  color?: AgentColor;
   model?: ModelRef;
   variant?: string;
 }
