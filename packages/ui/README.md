@@ -395,6 +395,12 @@ Source coordinates, raw layout, worker preparation/progress, cached replay and
 the renderer's complete-group path consume that same constant; changing a group
 size cannot leave a different layer on its own copied boundary.
 
+Interaction durations stay with their component owners. StatusLight supplies its
+250ms blink duration to both the pulse timer and CSS animation through one
+custom property; Prompt's 5-second interrupt window owns its deadline and
+disarming timer; Popover's 120ms preview-leave delay is shared by trigger and
+panel exits.
+
 ## Example
 
 [`example.tsx`](./example.tsx) renders a generic tool with only the selected

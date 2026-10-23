@@ -2,6 +2,9 @@
 import "./StatusLight.css" with { type: "text" };
 import { createEffect, createSignal, onCleanup } from "solid-js";
 import { LIGHT_STATES, type LightState } from "./status-light.ts";
+
+const BLINK_DURATION_MS = 250;
+
 /** Inputs only: event identity changes blink once; initial mounting is silent. */
 export default function StatusLight(props: {
   state: LightState;
@@ -19,13 +22,14 @@ export default function StatusLight(props: {
     // A new identity replaces the old pulse, rather than accumulating animations.
     timer = setTimeout(() => {
       setBlink(true);
-      timer = setTimeout(() => setBlink(false), 250);
+      timer = setTimeout(() => setBlink(false), BLINK_DURATION_MS);
     }, 0);
   });
   onCleanup(() => clearTimeout(timer));
   return (
     <span
       class="otk-status-light"
+      style={{ "--lamp-blink-duration": `${BLINK_DURATION_MS}ms` }}
       data-state={props.state}
       data-activity={props.activity}
       data-small={props.small || undefined}

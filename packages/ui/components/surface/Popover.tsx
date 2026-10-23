@@ -14,6 +14,8 @@ import { ownedCommand, useCommandPorts } from "../../keyboard/context.tsx";
 import Surface from "./Surface.tsx";
 import { selection } from "../selection.ts";
 
+const PREVIEW_LEAVE_DELAY_MS = 120;
+
 export type PopoverOpenReason = "pointer" | "keyboard";
 export interface PopoverControl {
   open(anchor?: PointAnchor, reason?: PopoverOpenReason): void;
@@ -194,7 +196,7 @@ export default function Popover(props: {
           ) {
             panel.hidePopover();
           }
-        }, 120);
+        }, PREVIEW_LEAVE_DELAY_MS);
       }}
       onFocusIn={(event) => preview(event.target === trigger)}
       onFocusOut={(event) => {
@@ -300,7 +302,7 @@ export default function Popover(props: {
                   !root()?.matches(":hover") &&
                   !root()?.contains(document.activeElement)
                 ) panel.hidePopover();
-              }, 120);
+              }, PREVIEW_LEAVE_DELAY_MS);
             }}
             onFocusIn={cancelLeave}
             onFocusOut={(event) => {

@@ -19,6 +19,8 @@ import type { PromptChoices } from "../registries/prompt.ts";
 import { ModelLabel, selectionLabel } from "./prompt/labels.tsx";
 import { contextTarget } from "./context-target.ts";
 
+const INTERRUPT_WINDOW_MS = 5000;
+
 /** Input and submission lifetime; concrete prompt concepts are injected features. */
 export default function Prompt(props: PromptProps): import("solid-js").Element {
   const [pending, setPending] = createSignal(false),
@@ -177,12 +179,12 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
           ctx.fail(error);
         }
       } else {
-        deadline = Date.now() + 5000;
+        deadline = Date.now() + INTERRUPT_WINDOW_MS;
         setArmed(true);
         timer = setTimeout(() => {
           deadline = 0;
           setArmed(false);
-        }, 5000);
+        }, INTERRUPT_WINDOW_MS);
       }
     },
   });
