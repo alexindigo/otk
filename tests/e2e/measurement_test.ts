@@ -72,7 +72,7 @@ test("session heap distinguishes retained content identities from unrelated warm
   const root = await fixture(), browser = await Cdp.launch(root);
   try {
     await browser.evaluate(
-      `globalThis.held={sessionID:'heap-probe',parts:[{text:'OTK_HEAP_PROBE_payload'}]};globalThis.noise=Array.from({length:400000},(_,i)=>({i}));void 0`,
+      `globalThis.held={sessionID:'heap-probe',parts:[{text:String.fromCharCode(79,84,75,95,72,69,65,80,95,80,82,79,66,69,95)+'payload'}]};globalThis.noise=Array.from({length:400000},(_,i)=>({i}));void 0`,
     );
     const retained = await sessionHeap(
       browser,
@@ -93,6 +93,88 @@ test("session heap distinguishes retained content identities from unrelated warm
     await browser.close();
   }
 });
+
+for (
+  const owner of [
+    "closure Map",
+    "flat tail",
+    "sliced backing",
+    "split cons",
+    "detached text",
+    "empty transcript",
+  ]
+) {
+  test(`session heap rejects large content retained only by ${owner}`, async () => {
+    const root = await fixture(), browser = await Cdp.launch(root);
+    // Construct the marker outside the evaluated source: source/debugger strings
+    // must not become a false positive for the session payload.
+    const marker = `OTK_STRING_ONLY_${owner.replaceAll(" ", "_")}_`;
+    try {
+      await browser.evaluate(`(()=>{
+        const marker=String.fromCharCode(${
+        [...marker].map((c) => c.charCodeAt(0))
+      });
+        const owner=${JSON.stringify(owner)};
+        let payload='prefix '+marker+'x'.repeat(2*1024*1024);
+        if (owner==='flat tail') payload=('x'.repeat(2*1024*1024)+marker).split('').join('');
+        if (owner==='sliced backing') payload=payload.slice(128);
+        if (owner==='split cons') {
+          const first=String.fromCharCode(${
+        [...marker.slice(0, Math.floor(marker.length / 2))].map((c) =>
+          c.charCodeAt(0)
+        )
+      });
+          const second=String.fromCharCode(${
+        [...marker.slice(Math.floor(marker.length / 2))].map((c) =>
+          c.charCodeAt(0)
+        )
+      });
+          payload=first+second+'x'.repeat(2*1024*1024);
+        }
+        if (!['detached text','empty transcript'].includes(owner)) {
+          const cache=new Map([[1,payload]]);
+          globalThis.retentionProbe=()=>cache.get(1).length;
+        } else {
+          const transcript=document.createElement('div');
+          transcript.className='otk-messages';
+          if(owner==='detached text') transcript.append(document.createTextNode(payload));
+          document.body.append(transcript);
+          globalThis.retentionProbe=owner==='detached text'?transcript.firstChild:transcript;
+          transcript.remove();
+        }
+      })();void 0`);
+      assertEquals(
+        await browser.evaluate("document.querySelector('.otk-messages')"),
+        null,
+      );
+      const retained = await sessionHeap(
+        browser,
+        "string-only-session",
+        marker,
+      );
+      console.info("String-only retention control", { owner, retained });
+      assertThrows(() => assertContentReleased(retained));
+      assert(retained.every((node) => node.path.length > 1));
+      assert(
+        retained.some((node) =>
+          node.kind ===
+            (["detached text", "empty transcript"].includes(owner)
+              ? "dom"
+              : "string")
+        ),
+      );
+      if (owner === "split cons") {
+        assert(retained.some((node) => node.type === "concatenated string"));
+      }
+      await browser.evaluate("delete globalThis.retentionProbe;void 0");
+      assertContentReleased(
+        await sessionHeap(browser, "string-only-session", marker),
+      );
+    } finally {
+      await browser.close();
+    }
+  });
+}
 
 test("menu readiness joins native toggle, owned focus and rendered placement instead of DOM presence", async () => {
   const root = await fixture(), browser = await Cdp.launch(root);

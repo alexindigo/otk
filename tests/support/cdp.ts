@@ -29,6 +29,9 @@ export class Cdp {
         "--no-sandbox",
         "--disable-dev-shm-usage",
         "--disable-gpu",
+        // V8 defaults to 1024-character snapshot names, hiding tail markers in
+        // flat session strings. UINT_MAX covers every valid V8 string length.
+        "--js-flags=--heap-snapshot-string-limit=4294967295",
         "--window-size=1280,800",
         `--remote-debugging-port=${port}`,
         `--user-data-dir=${join(root, "chromium-" + port)}`,

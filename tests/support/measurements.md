@@ -83,20 +83,37 @@ one-shot scroll.
 
 ## Session release
 
-E8 and code-history release use **reachable session-content object identity**,
-not bytes allocated by the entire V8 isolate. A 2 MiB ASCII reply does not imply
-a 2 MiB allocation increase: strings can share representations. Conversely,
+E8 and code-history release use **reachable session-content identity**, not
+bytes allocated by the entire V8 isolate. A 2 MiB ASCII reply does not imply a 2
+MiB allocation increase: strings can share representations. Conversely,
 framework/grammar/cache warmup can grow the isolate after correct disposal.
 
 The measurement unit therefore changes from whole-isolate byte delta (old 1 MiB
-allowance) to retained session objects (**zero allowed**). The payload remains
+allowance) to retained session objects, marker-bearing strings and detached
+transcript DOM nodes (**zero allowed in every category**). The payload remains
 at least 2 MiB in E8; its DOM length is checked. This is not a larger byte
 allowance. Three equivalent load/dispose cycles each take one loaded and one
 post-disposal GC snapshot. Loaded snapshots positively identify message objects
 by `sessionID` + `parts`, and source-bearing objects by their unique `text` or
 `source` marker. Post-disposal snapshots must contain none, including any copied
-objects with that identity. Heap IDs and immediate incoming retaining edges are
-reported on failure. No remote object handles are retained by the observer.
+objects with that identity. Strong root reachability excludes weak edges and
+unreferenced entries in the snapshot's string table. Every string node type is
+examined through the snapshot JSON's names and string edges, independently of
+the retaining owner's shape. Bounded prefix/suffix summaries detect markers
+across concatenated-string boundaries without expanding ropes. Sliced strings
+keep their backing parent reachable, including content outside the slice.
+Chromium's snapshot string-name limit is set to UINT_MAX (above every valid V8
+string length), rather than the default 1024 characters; a flat 2 MiB
+tail-marker control guards against silent truncation. Primitive strings are
+never resolved as remote objects.
+
+Blink native Text content may have no corresponding V8 string. The DOM agent's
+detached trees are therefore checked for marker-bearing text and transcript
+root/message classes, including empty transcript roots. Only matching detached
+trees are resolved temporarily to associate their native heap IDs with the same
+sample's strong root paths. Heap IDs, kinds, types, immediate incoming retaining
+edges and complete root paths are reported on failure. The transient object
+group is released and the DOM agent disabled in finally before any later sample.
 
 Post-disposal sampling follows replacement transcript readiness and two render
 frames; code history additionally waits for the owned worker target to
@@ -105,10 +122,14 @@ Unsubscribe and DOM absence remain independent assertions. Existing client
 generation/cancellation and highlighting-disposal units cover the deterministic
 owner contracts.
 
-The measurement-control browser test deliberately retains identifiable content
+The measurement-control browser tests deliberately retain identifiable content
 alongside an unrelated large allocation, proves retention is rejected, then
 releases only the content and proves the unrelated allocation cannot cause a
-false leak report.
+false leak report. Independent closure-held Map, flat tail, sliced backing,
+split cons, detached native text and empty-transcript controls each require
+retention rejection with strong paths, followed by zero retention after removing
+the sole owner. Markers are constructed from character codes outside evaluated
+source literals so debugger/source strings cannot masquerade as content leaks.
 
 ## Fixture lifetime
 
