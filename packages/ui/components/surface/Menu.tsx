@@ -9,6 +9,7 @@ import Popover, {
 export default function Menu(props: {
   label: string;
   trigger?: Element;
+  triggerClass?: string;
   class?: string;
   control?(control: PopoverControl): void;
   dismissOnAction?: boolean;
@@ -36,6 +37,7 @@ export default function Menu(props: {
     <Popover
       label={props.label}
       trigger={props.trigger}
+      triggerClass={props.triggerClass}
       size="content"
       class={`otk-menu ${props.class ?? ""}`}
       dismissOnAction={props.dismissOnAction ?? true}

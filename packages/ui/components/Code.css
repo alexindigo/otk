@@ -60,3 +60,9 @@
   display: block;
   white-space: pre;
 }
+.otk-code[data-reveal-fence=true] > pre:not(.otk-code-numbers)::before,
+.otk-code[data-reveal-fence=true] > pre:not(.otk-code-numbers)::after {
+  content: "```";
+  display: block;
+  color: var(--secondary);
+}

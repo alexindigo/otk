@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { ViewHeader } from "./View.tsx";
 import "./Settings.css" with { type: "text" };
 import { For, Show } from "solid-js";
 import { LOCAL_SIDECAR, type SidecarState } from "@otk/client";
@@ -29,12 +30,17 @@ export default function Settings(props: {
   );
   return (
     <section class="otk-settings" aria-label="Settings">
-      <header class="otk-view-header">
-        <h1>Settings / servers</h1>
-        <button type="button" onClick={() => void close()}>
-          Close settings
-        </button>
-      </header>
+      <ViewHeader
+        title="Settings / servers"
+        actions={
+          <button
+            type="button"
+            onClick={() => void close()}
+          >
+            Close settings
+          </button>
+        }
+      />
       <div class="otk-settings-content">
         {props.appearance}
         {props.notifications}
@@ -65,18 +71,22 @@ export default function Settings(props: {
                 <p class="otk-error" role="alert">{sidecar().error}</p>
               </Show>
               <Show when={sidecar().status === "login required"}>
-                <Login
-                  label={sidecar().label}
-                  authType={sidecar().authType}
-                  onLogin={(input) => props.onLogin(sidecar().id, input)}
-                />
+                <div class="otk-sidecar-auth">
+                  <Login
+                    label={sidecar().label}
+                    authType={sidecar().authType}
+                    onLogin={(input) => props.onLogin(sidecar().id, input)}
+                  />
+                </div>
               </Show>
               <Show when={sidecar().status === "setup required"}>
                 <Show
                   when={sidecar().id === LOCAL_SIDECAR}
                   fallback={<p>Needs setup on that host.</p>}
                 >
-                  <Setup onSetup={(input) => props.onSetup(input)} />
+                  <div class="otk-sidecar-auth">
+                    <Setup onSetup={(input) => props.onSetup(input)} />
+                  </div>
                 </Show>
               </Show>
             </section>

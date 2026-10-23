@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import "./WorkLog.css" with { type: "text" };
 import { createSignal, type Element } from "solid-js";
 import { ownedAction } from "../keyboard/context.tsx";
 import { elapsed, type WorkTime } from "./work-log.ts";
@@ -17,7 +18,7 @@ export default function WorkLog(
         aria-expanded={open() ? "true" : "false"}
         onClick={() => void toggle()}
       >
-        <ChevronIcon />
+        <ChevronIcon class="otk-work-chevron" />
         <span>
           {props.time.start !== undefined && props.time.end !== undefined
             ? `Worked for ${elapsed(props.time.start, props.time.end)}`

@@ -23,7 +23,7 @@
 .otk-panel-icons button {
   --selection-padding: 0;
 }
-.otk-panel-icons .otk-selection-content > span {
+.otk-panel-view-icon {
   display: flex;
 }
 .otk-panel-content {
@@ -61,9 +61,6 @@
   --selection-padding: 0;
   padding-inline-end: var(--item-inset);
 }
-.otk-panel-rail-icons .otk-selection-content {
+.otk-panel-rail-selection {
   justify-content: center;
-}
-.otk-panel-rail-icons .otk-selection-content > span {
-  display: flex;
 }

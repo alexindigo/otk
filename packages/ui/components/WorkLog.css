@@ -1,0 +1,23 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-work-fold {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  margin-bottom: 4px;
+  color: var(--otk-fg-3);
+  font-size: var(--text-meta);
+  text-align: left;
+}
+.otk-work-chevron {
+  width: 13px;
+  height: 13px;
+}
+.otk-work-fold[aria-expanded=true] .otk-work-chevron {
+  rotate: 90deg;
+}
+.otk-work-rule {
+  flex: 1;
+  border-top: 1px solid var(--otk-border);
+}

@@ -20,7 +20,7 @@
   padding: 0 12px 0 16px;
   gap: var(--chrome-gap);
 }
-.otk-app[data-right-collapsed=true] .otk-task-strip {
+.otk-project-tabs[data-reserve-trailing=true] .otk-task-strip {
   padding-right: var(--corner-zone);
 }
 .otk-tabs-project {
@@ -80,7 +80,7 @@
   display: flex;
   color: var(--otk-fg-3);
 }
-.otk-crumb-separator .otk-chrome-icon {
+.otk-crumb-chevron {
   width: 13px;
   height: 13px;
 }
@@ -103,7 +103,7 @@
   white-space: nowrap;
   color: var(--otk-fg-3);
 }
-.otk-folded-crumbs > .otk-popover-trigger {
+.otk-folded-crumbs-trigger {
   cursor: pointer;
   padding: 4px 8px;
 }

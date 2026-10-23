@@ -28,3 +28,6 @@
 .otk-permission-patterns ul {
   margin: 8px 0 0;
 }
+.otk-permission-summary ul {
+  list-style-type: disc;
+}

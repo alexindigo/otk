@@ -23,6 +23,7 @@ export default function DisplayMenu(
   return (
     <Popover
       class="otk-display-menu"
+      triggerClass="otk-display-trigger"
       label="Display options"
       title="Display preferences"
       trigger={<SettingsIcon />}

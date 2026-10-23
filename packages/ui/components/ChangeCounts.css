@@ -1,0 +1,7 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-diff-add {
+  color: var(--otk-diff-add);
+}
+.otk-diff-del {
+  color: var(--otk-diff-del);
+}

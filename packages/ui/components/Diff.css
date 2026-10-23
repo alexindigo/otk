@@ -59,9 +59,3 @@
 .otk-diff [data-line-kind=del] {
   background: var(--otk-diff-del-bg);
 }
-.otk-diff-add {
-  color: var(--otk-diff-add);
-}
-.otk-diff-del {
-  color: var(--otk-diff-del);
-}

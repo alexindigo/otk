@@ -31,25 +31,25 @@ function TextInline(props: InlineProps<"text">) {
   return <>{props.item.text}</>;
 }
 function CodeInline(props: InlineProps<"code">) {
-  return <code>{props.item.text}</code>;
+  return <code class="otk-prose-code">{props.item.text}</code>;
 }
 function StrongInline(props: InlineProps<"strong">) {
   return (
-    <strong>
+    <strong class="otk-prose-strong">
       <Inlines items={props.item.inline} />
     </strong>
   );
 }
 function EmInline(props: InlineProps<"em">) {
   return (
-    <em>
+    <em class="otk-prose-em">
       <Inlines items={props.item.inline} />
     </em>
   );
 }
 function DelInline(props: InlineProps<"del">) {
   return (
-    <del>
+    <del class="otk-prose-del">
       <Inlines items={props.item.inline} />
     </del>
   );
@@ -57,6 +57,7 @@ function DelInline(props: InlineProps<"del">) {
 function LinkInline(props: InlineProps<"link">) {
   return (
     <a
+      class="otk-prose-link"
       href={safeHref(props.item.href)}
       target="_blank"
       rel="noopener noreferrer"
@@ -68,6 +69,7 @@ function LinkInline(props: InlineProps<"link">) {
 function ImageInline(props: InlineProps<"image">) {
   return (
     <img
+      class="otk-prose-image"
       src={props.item.src.startsWith("data:image/")
         ? props.item.src
         : safeHref(props.item.src)}
@@ -111,7 +113,7 @@ function InlineView(props: { item: Inline }) {
 }
 function Paragraph(props: { block: Block & { b: "paragraph" } }) {
   return (
-    <p>
+    <p class="otk-prose-paragraph">
       <Inlines items={props.block.inline} />
     </p>
   );
@@ -121,21 +123,28 @@ function Heading(props: { block: Block & { b: "heading" } }) {
     `h${props.block.level}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6"
   );
   return (
-    <Tag>
+    <Tag class="otk-prose-heading">
       <Inlines items={props.block.inline} />
     </Tag>
   );
 }
-function Code(props: { block: Block & { b: "code" }; streaming?: boolean }) {
+function Code(
+  props: {
+    block: Block & { b: "code" };
+    streaming?: boolean;
+    conceal?: boolean;
+  },
+) {
   return (
     <HighlightedCode
       text={props.block.text}
       lang={props.block.lang}
       streaming={props.streaming}
+      revealFence={props.conceal === false}
     />
   );
 }
-function List(props: { block: Block & { b: "list" } }) {
+function List(props: { block: Block & { b: "list" }; conceal?: boolean }) {
   const Tag = dynamic(() => props.block.ordered ? "ol" : "ul");
   return (
     <Tag start={props.block.ordered ? props.block.start : undefined}>
@@ -144,23 +153,24 @@ function List(props: { block: Block & { b: "list" } }) {
           <li>
             <Show when={item().task}>
               <input
+                class="otk-prose-task"
                 type="checkbox"
                 checked={item().checked}
                 disabled
                 aria-label="Task"
               />
             </Show>
-            <Blocks blocks={item().blocks} />
+            <BlockList blocks={item().blocks} conceal={props.conceal} />
           </li>
         )}
       </For>
     </Tag>
   );
 }
-function Quote(props: { block: Block & { b: "quote" } }) {
+function Quote(props: { block: Block & { b: "quote" }; conceal?: boolean }) {
   return (
-    <blockquote>
-      <Blocks blocks={props.block.blocks} />
+    <blockquote class="otk-prose-quote">
+      <BlockList blocks={props.block.blocks} conceal={props.conceal} />
     </blockquote>
   );
 }
@@ -205,9 +215,11 @@ function Table(props: { block: Block & { b: "table" } }) {
   );
 }
 function Rule() {
-  return <hr />;
+  return <hr class="otk-prose-rule" />;
 }
-function BlockView(props: { block: Block; streaming?: boolean }) {
+function BlockView(
+  props: { block: Block; streaming?: boolean; conceal?: boolean },
+) {
   return (
     <Switch>
       <Match when={blockOf(props.block, "paragraph")}>
@@ -217,13 +229,19 @@ function BlockView(props: { block: Block; streaming?: boolean }) {
         {(block) => <Heading block={block()} />}
       </Match>
       <Match when={blockOf(props.block, "code")}>
-        {(block) => <Code block={block()} streaming={props.streaming} />}
+        {(block) => (
+          <Code
+            block={block()}
+            streaming={props.streaming}
+            conceal={props.conceal}
+          />
+        )}
       </Match>
       <Match when={blockOf(props.block, "list")}>
-        {(block) => <List block={block()} />}
+        {(block) => <List block={block()} conceal={props.conceal} />}
       </Match>
       <Match when={blockOf(props.block, "quote")}>
-        {(block) => <Quote block={block()} />}
+        {(block) => <Quote block={block()} conceal={props.conceal} />}
       </Match>
       <Match when={blockOf(props.block, "table")}>
         {(block) => <Table block={block()} />}
@@ -234,8 +252,8 @@ function BlockView(props: { block: Block; streaming?: boolean }) {
     </Switch>
   );
 }
-export default function Blocks(
-  props: { blocks: Block[]; streaming?: boolean },
+function BlockList(
+  props: { blocks: Block[]; streaming?: boolean; conceal?: boolean },
 ): import("solid-js").Element {
   return (
     <For each={props.blocks} keyed={false}>
@@ -243,8 +261,32 @@ export default function Blocks(
         <BlockView
           block={block()}
           streaming={props.streaming && index === props.blocks.length - 1}
+          conceal={props.conceal}
         />
       )}
     </For>
+  );
+}
+
+/** Own prose paint and presentation; recursive blocks share this single boundary. */
+export default function Blocks(props: {
+  blocks: Block[];
+  streaming?: boolean;
+  conceal?: boolean;
+  compact?: boolean;
+}): import("solid-js").Element {
+  return (
+    <div
+      class={["otk-text", {
+        "otk-prose-unconcealed": props.conceal === false,
+        "otk-prose-compact": props.compact,
+      }]}
+    >
+      <BlockList
+        blocks={props.blocks}
+        streaming={props.streaming}
+        conceal={props.conceal}
+      />
+    </div>
   );
 }

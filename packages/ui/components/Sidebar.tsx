@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { EmptyState } from "./View.tsx";
 import "./Sidebar.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -187,9 +188,9 @@ export default function Sidebar(
           )}
         </For>
         <Show when={!props.entries.some((entry) => !entry.parentID)}>
-          <p class="otk-muted otk-empty">
+          <EmptyState>
             No sessions yet. Create a session in opencode to start a project.
-          </p>
+          </EmptyState>
         </Show>
       </div>
       <button

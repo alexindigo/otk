@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import ChangeCounts from "./ChangeCounts.tsx";
 import "./RevertBanner.css" with { type: "text" };
 import { For } from "solid-js";
 import type { RevertInfo } from "@otk/protocol";
@@ -13,8 +14,10 @@ export default function RevertBanner(props: { revert: RevertInfo }) {
         {(file) => (
           <div>
             <span class="otk-path">{file().path}</span>{" "}
-            <span class="otk-diff-add">+{file().additions}</span>{" "}
-            <span class="otk-diff-del">−{file().deletions}</span>
+            <ChangeCounts
+              additions={file().additions}
+              deletions={file().deletions}
+            />
           </div>
         )}
       </For>

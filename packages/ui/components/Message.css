@@ -16,12 +16,6 @@
   border-radius: var(--radius-bubble);
   padding: 12px 16px;
 }
-.otk-user-bubble .otk-text > :first-child {
-  margin-top: 0;
-}
-.otk-user-bubble .otk-text > :last-child {
-  margin-bottom: 0;
-}
 .otk-user-meta {
   display: flex;
   align-items: center;
@@ -93,26 +87,4 @@
   color: var(--fg);
   padding: 0 4px;
   border-radius: var(--radius-control);
-}
-.otk-work-fold {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 0;
-  margin-bottom: 4px;
-  color: var(--otk-fg-3);
-  font-size: var(--text-meta);
-  text-align: left;
-}
-.otk-work-fold .otk-chrome-icon {
-  width: 13px;
-  height: 13px;
-}
-.otk-work-fold[aria-expanded=true] .otk-chrome-icon {
-  rotate: 90deg;
-}
-.otk-work-rule {
-  flex: 1;
-  border-top: 1px solid var(--otk-border);
 }

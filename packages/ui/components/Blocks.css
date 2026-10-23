@@ -2,56 +2,34 @@
 .otk-text {
   font: 400 var(--text-prose)/24px var(--font-ui);
 }
-.otk-text h1,
-.otk-text h2,
-.otk-text h3,
-.otk-text h4,
-.otk-text h5,
-.otk-text h6 {
+.otk-prose-heading {
   font-weight: 600;
   font-size: var(--text-heading);
   line-height: 24px;
   margin: 16px 0;
 }
-.otk-text h1 {
-  font-size: var(--text-heading);
-  line-height: 24px;
-}
-.otk-text h2 {
-  font-size: var(--text-heading);
-}
-.otk-text p {
+.otk-prose-paragraph {
   margin: 12px 0;
 }
-.otk-text pre {
-  background: var(--otk-bg-code);
-  border: 1px solid var(--otk-border-code);
-  padding: 12px;
-  border-radius: var(--radius-card);
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-.otk-text code {
+.otk-prose-code {
   font-family: var(--font-mono);
-}
-.otk-text :not(pre) > code {
   background: var(--otk-bg-inline-code);
   padding: 0 4px;
   border-radius: var(--radius-inline-code);
 }
-.otk-text blockquote {
+.otk-prose-quote {
   border-left: 2px solid var(--muted);
   margin: 12px 0;
   padding-left: 12px;
   color: var(--secondary);
 }
-.otk-text li > input {
+.otk-prose-task {
   margin-right: 8px;
 }
-.otk-text img {
+.otk-prose-image {
   max-width: 100%;
 }
-.otk-text hr {
+.otk-prose-rule {
   border: 0;
   border-top: 1px solid var(--muted);
 }
@@ -66,51 +44,51 @@
   border: 1px solid var(--muted);
   padding: 8px 12px;
 }
-.otk-unconcealed .otk-text strong::before,
-.otk-unconcealed .otk-text strong::after {
+.otk-prose-compact > :first-child {
+  margin-top: 0;
+}
+.otk-prose-compact > :last-child {
+  margin-bottom: 0;
+}
+.otk-prose-unconcealed .otk-prose-strong::before,
+.otk-prose-unconcealed .otk-prose-strong::after {
   content: "**";
   color: var(--secondary);
 }
-.otk-unconcealed .otk-text em::before,
-.otk-unconcealed .otk-text em::after {
+.otk-prose-unconcealed .otk-prose-em::before,
+.otk-prose-unconcealed .otk-prose-em::after {
   content: "*";
   color: var(--secondary);
 }
-.otk-unconcealed .otk-text del::before,
-.otk-unconcealed .otk-text del::after {
+.otk-prose-unconcealed .otk-prose-del::before,
+.otk-prose-unconcealed .otk-prose-del::after {
   content: "~~";
   color: var(--secondary);
 }
-.otk-unconcealed .otk-text :not(pre) > code::before,
-.otk-unconcealed .otk-text :not(pre) > code::after {
+.otk-prose-unconcealed .otk-prose-code::before,
+.otk-prose-unconcealed .otk-prose-code::after {
   content: "`";
   color: var(--secondary);
 }
-.otk-unconcealed .otk-text pre::before,
-.otk-unconcealed .otk-text pre::after {
-  content: "```";
-  display: block;
-  color: var(--secondary);
-}
-.otk-unconcealed .otk-text a::after {
+.otk-prose-unconcealed .otk-prose-link::after {
   content: " (" attr(href) ")";
   color: var(--secondary);
 }
-.otk-unconcealed .otk-text h1::before {
+.otk-prose-unconcealed h1.otk-prose-heading::before {
   content: "# ";
 }
-.otk-unconcealed .otk-text h2::before {
+.otk-prose-unconcealed h2.otk-prose-heading::before {
   content: "## ";
 }
-.otk-unconcealed .otk-text h3::before {
+.otk-prose-unconcealed h3.otk-prose-heading::before {
   content: "### ";
 }
-.otk-unconcealed .otk-text h4::before {
+.otk-prose-unconcealed h4.otk-prose-heading::before {
   content: "#### ";
 }
-.otk-unconcealed .otk-text h5::before {
+.otk-prose-unconcealed h5.otk-prose-heading::before {
   content: "##### ";
 }
-.otk-unconcealed .otk-text h6::before {
+.otk-prose-unconcealed h6.otk-prose-heading::before {
   content: "###### ";
 }

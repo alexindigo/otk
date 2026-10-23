@@ -18,10 +18,10 @@
   padding: 8px 12px;
   border-left: 1px solid var(--muted);
 }
-.otk-reasoning .otk-chrome-icon {
+.otk-reasoning-chevron {
   width: 13px;
   height: 13px;
 }
-.otk-reasoning > button[aria-expanded=true] .otk-chrome-icon {
+.otk-reasoning > button[aria-expanded=true] .otk-reasoning-chevron {
   rotate: 90deg;
 }

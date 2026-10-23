@@ -40,14 +40,14 @@ export default function PermissionActivity(props: {
       >
         <p class="otk-muted">Permission replies will appear here.</p>
       </Show>
-      <ol>
+      <ol class="otk-activity-list">
         <For
           each={props.value.entries}
           keyed={(entry) =>
             entry.id}
         >
           {(entry) => (
-            <li data-activity={entry().id}>
+            <li class="otk-activity-entry" data-activity={entry().id}>
               <header>
                 <strong>
                   {entry().source === "auto" ? "Auto" : "Manual"} ·{" "}

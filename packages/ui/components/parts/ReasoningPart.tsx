@@ -10,6 +10,7 @@ export function registerReasoningPart(parts: PartRegistry): void {
       <Reasoning
         part={props.part as ReasoningPart}
         mode={props.prefs.thinking}
+        conceal={props.prefs.conceal}
       />
     ),
     (part) => ({ work: part.time }),

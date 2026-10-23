@@ -36,6 +36,8 @@ export default function Popover(props: {
   applied?: string;
   triggerColor?: string;
   trigger?: Element;
+  /** Caller-owned style on the trigger, without selecting its internal wrapper. */
+  triggerClass?: string;
   title?: string;
   size?: "wide" | "content";
   class?: string;
@@ -212,7 +214,8 @@ export default function Popover(props: {
             kind: "candidate",
             selected: false,
             applied: !!props.applied,
-            class: "otk-popover-trigger",
+            class: ["otk-popover-trigger", props.triggerClass].filter(Boolean)
+              .join(" "),
           })}
           aria-label={triggerLabel()}
           title={props.preview ? undefined : triggerLabel()}

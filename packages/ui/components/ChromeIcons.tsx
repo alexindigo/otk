@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Element } from "solid-js";
-function Icon(props: { children: Element }): Element {
+function Icon(props: { children: Element; class?: string }): Element {
   return (
     <svg
-      class="otk-chrome-icon"
+      class={["otk-chrome-icon", props.class]}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -33,8 +33,8 @@ export const PlusIcon = () => (
     <path d="M5 12h14M12 5v14" />
   </Icon>
 );
-export const SearchIcon = () => (
-  <Icon>
+export const SearchIcon = (props: { class?: string } = {}) => (
+  <Icon class={props.class}>
     <circle cx="11" cy="11" r="7" />
     <path d="m20 20-3.5-3.5" />
   </Icon>
@@ -52,13 +52,13 @@ export const KeyboardIcon = () => (
     <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M7 14h10" />
   </Icon>
 );
-export const ChevronIcon = () => (
-  <Icon>
+export const ChevronIcon = (props: { class?: string } = {}) => (
+  <Icon class={props.class}>
     <path d="m9 18 6-6-6-6" />
   </Icon>
 );
-export const ChevronDownIcon = () => (
-  <Icon>
+export const ChevronDownIcon = (props: { class?: string } = {}) => (
+  <Icon class={props.class}>
     <path d="m6 9 6 6 6-6" />
   </Icon>
 );

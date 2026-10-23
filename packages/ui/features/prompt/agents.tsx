@@ -10,8 +10,11 @@ import ListPicker, {
 } from "../../components/ListPicker.tsx";
 import { ChevronDownIcon, StarIcon } from "../../components/ChromeIcons.tsx";
 import { bindComposerSelection } from "./catalog.ts";
-import { selection as selectionState } from "../../components/selection.ts";
-import { ModelLabel, selectionLabel } from "../../components/prompt/labels.tsx";
+import {
+  ModelLabel,
+  PromptSetting,
+  selectionLabel,
+} from "../../components/prompt/labels.tsx";
 
 /** One presentation rule for every projected field, including plain labels. */
 function applied(field: SelectionField<unknown>): string | undefined {
@@ -128,15 +131,9 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
             <Show
               when={owner.state.agents.available}
               fallback={
-                <span
-                  {...selectionState({
-                    kind: "candidate",
-                    selected: false,
-                    applied: !!applied(selection().agent),
-                  })}
-                >
+                <PromptSetting applied={!!applied(selection().agent)}>
                   {selectionLabel(selection().agent.value, "Default agent")}
-                </span>
+                </PromptSetting>
               }
             >
               <ListPicker
@@ -144,18 +141,19 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                 triggerLabel={`Agent: ${
                   selectionLabel(selection().agent.value, "Default agent")
                 }`}
-                class="otk-agent-picker"
+                class="otk-composer-picker otk-agent-picker"
+                triggerClass="otk-picker-trigger"
                 applied={applied(selection().agent)}
                 triggerColor={selection().agent.color}
                 trigger={
                   <>
-                    <span class="otk-composer-agent">
+                    <span class="otk-composer-agent otk-picker-label">
                       {selectionLabel(
                         selection().agent.value,
                         "Default agent",
                       )}
                     </span>
-                    <ChevronDownIcon />
+                    <ChevronDownIcon class="otk-picker-chevron" />
                   </>
                 }
                 groups={[{
@@ -183,18 +181,13 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
             <Show
               when={owner.state.models.available}
               fallback={
-                <span
-                  {...selectionState({
-                    kind: "candidate",
-                    selected: false,
-                    applied: !!applied(selection().model),
-                  })}
-                >
+                <PromptSetting applied={!!applied(selection().model)}>
                   <ModelLabel
+                    class="otk-prompt-model-label"
                     provider={selection().model.providerName}
                     name={selection().model.name}
                   />
-                </span>
+                </PromptSetting>
               }
             >
               <ListPicker<ModelRef>
@@ -204,15 +197,17 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                     ? `${selection().model.providerName} `
                     : ""
                 }${selection().model.name ?? "Default model"}`}
-                class="otk-model-picker"
+                class="otk-composer-picker otk-model-picker"
+                triggerClass="otk-picker-trigger otk-model-trigger"
                 applied={applied(selection().model)}
                 trigger={
                   <>
                     <ModelLabel
+                      class="otk-picker-label"
                       provider={selection().model.providerName}
                       name={selection().model.name}
                     />
-                    <ChevronDownIcon />
+                    <ChevronDownIcon class="otk-picker-chevron" />
                   </>
                 }
                 groups={owner.groups().map((group) => ({
@@ -270,14 +265,15 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                   triggerLabel={`Variant: ${
                     selectionLabel(selection().variant.value, "Default")
                   }`}
-                  class="otk-variant-picker"
+                  class="otk-composer-picker otk-variant-picker"
+                  triggerClass="otk-picker-trigger"
                   applied={applied(selection().variant)}
                   trigger={
                     <>
-                      <span>
+                      <span class="otk-picker-label">
                         {selectionLabel(selection().variant.value, "Default")}
                       </span>
-                      <ChevronDownIcon />
+                      <ChevronDownIcon class="otk-picker-chevron" />
                     </>
                   }
                   groups={[{
@@ -310,15 +306,9 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                 when={!owner.catalogKnown() &&
                   selection().variant.value !== undefined}
               >
-                <span
-                  {...selectionState({
-                    kind: "candidate",
-                    selected: false,
-                    applied: !!applied(selection().variant),
-                  })}
-                >
+                <PromptSetting applied={!!applied(selection().variant)}>
                   {selectionLabel(selection().variant.value!)}
-                </span>
+                </PromptSetting>
               </Show>
             </Show>
           </>

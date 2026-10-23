@@ -55,6 +55,8 @@ export default function ProjectTabs(props: {
   auto?(sessionID: string): boolean;
   session?: ContentSession;
   displayMenu?: Element;
+  /** Reserve space for consumer chrome without inspecting its class or state. */
+  reserveTrailing?: boolean;
   ready: boolean;
   onOpen(id: string): boolean;
   onEmpty(): boolean;
@@ -197,7 +199,11 @@ export default function ProjectTabs(props: {
       }`,
     );
   return (
-    <section class="otk-project-tabs" aria-label="Project tabs">
+    <section
+      class="otk-project-tabs"
+      aria-label="Project tabs"
+      data-reserve-trailing={props.reserveTrailing ? "true" : undefined}
+    >
       <Show when={error()}>
         <p role="alert" class="otk-error">{error()}</p>
       </Show>
@@ -289,6 +295,7 @@ export default function ProjectTabs(props: {
                   <Show when={n() === 0 || visibleCrumb(n() - 1)}>
                     <Menu
                       class="otk-folded-crumbs"
+                      triggerClass="otk-folded-crumbs-trigger"
                       label="More task sessions"
                       trigger="…"
                     >
@@ -324,7 +331,7 @@ export default function ProjectTabs(props: {
                 <span class="otk-crumb-link">
                   <Show when={n() > 0}>
                     <span class="otk-crumb-separator">
-                      <ChevronIcon />
+                      <ChevronIcon class="otk-crumb-chevron" />
                     </span>
                   </Show>
                   <button

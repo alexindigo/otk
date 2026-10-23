@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -174,6 +175,7 @@ export default function ProjectInbox(props: {
               </time>
               <CommandMenu
                 class="otk-project-menu"
+                triggerClass="otk-project-menu-trigger"
                 label={`Project menu for ${name()}`}
                 trigger="⋯"
                 targets={() => [target()]}
@@ -228,7 +230,7 @@ export default function ProjectInbox(props: {
             title={commandTitle("palette.open", "Search commands")}
             onClick={() => void commands.run("palette.open")}
           >
-            <SearchIcon />
+            <SearchIcon class="otk-inbox-search-icon" />
             <Show when={!collapsed()}>Search</Show>
           </button>
         </nav>
@@ -278,7 +280,7 @@ export default function ProjectInbox(props: {
                         ? "blocked"
                         : "idle"}
                     />
-                    <span>{s().label}</span>
+                    <span class="otk-server-label">{s().label}</span>
                   </button>
                   <Show when={s().error}>
                     <p class="otk-error" role="alert">{s().error}</p>
@@ -362,7 +364,7 @@ export default function ProjectInbox(props: {
               setError((error as Error).message)
             )}
         >
-          <ChevronIcon />
+          <ChevronIcon class="otk-inactive-chevron" />
           <span>Inactive</span>
           <span class="otk-inbox-rule" />
           <span>({props.projects.filter((p) => p.inactive).length})</span>
@@ -379,7 +381,7 @@ export default function ProjectInbox(props: {
         </Show>
       </Show>
       <Show when={!collapsed() && !props.projects.length}>
-        <p class="otk-muted otk-empty">Add a project to get started.</p>
+        <EmptyState>Add a project to get started.</EmptyState>
       </Show>
     </SidebarRail>
   );

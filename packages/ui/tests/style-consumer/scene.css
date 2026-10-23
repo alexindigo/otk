@@ -1,0 +1,30 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.style-scene {
+  padding: 24px;
+  max-width: 1200px;
+  margin-inline: auto;
+}
+.style-scene > h1 {
+  font-size: var(--text-heading);
+  margin: 0 0 24px;
+}
+.style-columns {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+}
+.style-panel {
+  min-width: 0;
+}
+.style-panel > h2 {
+  font-size: var(--text-heading);
+  margin: 0 0 12px;
+}
+.style-chrome {
+  display: flex;
+  height: 320px;
+}
+.style-chrome > div {
+  flex: 1;
+  min-width: 0;
+}

@@ -139,6 +139,8 @@ export default function Code(
     streaming?: boolean;
     lineNumbers?: boolean;
     startLine?: number;
+    /** Reveal source fence markers without an ancestor styling this renderer. */
+    revealFence?: boolean;
   },
 ): import("solid-js").Element {
   const identity = useContentIdentity();
@@ -447,6 +449,7 @@ export default function Code(
       }))}
       data-language={props.lang || "text"}
       data-numbered={props.lineNumbers ? "true" : "false"}
+      data-reveal-fence={props.revealFence ? "true" : undefined}
     >
       <Show when={props.lineNumbers}>
         <pre

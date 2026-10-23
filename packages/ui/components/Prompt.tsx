@@ -296,13 +296,14 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
             when={features.some((feature) => feature.settings)}
             fallback={
               <>
-                <span>
+                <span class="otk-prompt-setting">
                   {selectionLabel(
                     ctx.nextSelection().agent.value,
                     "Default agent",
                   )}
                 </span>
                 <ModelLabel
+                  class="otk-prompt-setting"
                   provider={ctx.nextSelection().model.providerName}
                   name={ctx.nextSelection().model.name}
                 />

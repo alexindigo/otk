@@ -61,8 +61,10 @@ export default function RightPanel(props: {
               onClick={() =>
                 void save({ rightView: view().id, rightCollapsed: false })}
             >
-              <SelectionContent>
-                <span aria-hidden="true">
+              <SelectionContent
+                class={input.rail ? "otk-panel-rail-selection" : undefined}
+              >
+                <span class="otk-panel-view-icon" aria-hidden="true">
                   {(() => {
                     const icon = view().icon;
                     return typeof icon === "function" ? icon() : icon;

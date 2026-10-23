@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { EmptyState } from "./View.tsx";
 import "./SessionView.css" with { type: "text" };
 import {
   createEffect,
@@ -214,7 +215,7 @@ export default function SessionView(props: {
               when={!props.loading && !props.messages.length && !props.error &&
                 !props.sessionError}
             >
-              <p class="otk-muted otk-empty">Start a conversation below.</p>
+              <EmptyState>Start a conversation below.</EmptyState>
             </Show>
           </div>
         </div>

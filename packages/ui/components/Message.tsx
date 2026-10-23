@@ -135,7 +135,6 @@ export default function Message(
         }))}
         class={["otk-message", {
           "otk-user-message": props.message.role === "user",
-          "otk-unconcealed": !props.prefs.conceal,
         }]}
         data-message={props.message.id}
         data-role={props.message.role}

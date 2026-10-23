@@ -99,7 +99,7 @@ export default function ProjectSessions(props: {
       >
         <div class="otk-project-session-heading">
           <label class="otk-session-search">
-            <SearchIcon />
+            <SearchIcon class="otk-session-search-icon" />
             <input
               ref={(element) => {
                 search = element;
@@ -131,7 +131,7 @@ export default function ProjectSessions(props: {
                 aria-label={group().title}
               >
                 <h3>
-                  <ChevronIcon />
+                  <ChevronIcon class="otk-session-group-chevron" />
                   <span>{group().title}</span>
                   <span class="otk-session-group-rule" />
                 </h3>

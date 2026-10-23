@@ -9,14 +9,14 @@ export function registerTextPart(parts: PartRegistry): void {
   parts.registerTyped(
     "text",
     (props) => (
-      <div class="otk-text">
-        <Show when={!props.user || !(props.part as TextPart).synthetic}>
-          <Blocks
-            blocks={(props.part as TextPart).blocks}
-            streaming={props.streaming}
-          />
-        </Show>
-      </div>
+      <Show when={!props.user || !(props.part as TextPart).synthetic}>
+        <Blocks
+          blocks={(props.part as TextPart).blocks}
+          streaming={props.streaming}
+          conceal={props.prefs.conceal}
+          compact={props.user}
+        />
+      </Show>
     ),
     (part) => ({ text: part.synthetic ? undefined : blocksText(part.blocks) }),
   );

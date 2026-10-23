@@ -34,6 +34,7 @@ export default function TurnUsage(
   return (
     <Popover
       class="otk-turn-usage"
+      triggerClass="otk-turn-usage-trigger"
       label="Turn usage"
       triggerLabel={`Turn usage: ${summary()}${
         props.showCost

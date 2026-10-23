@@ -441,6 +441,7 @@ export default function Shell(
                   >
                     <Show when={project()}>
                       <ProjectTabs
+                        reserveTrailing={layout().rightCollapsed}
                         project={project()!}
                         model={tabsFor(project()!)}
                         entries={resources.projectEntries(project()!)}

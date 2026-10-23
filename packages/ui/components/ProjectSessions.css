@@ -26,7 +26,7 @@
 .otk-session-search:hover {
   background: var(--otk-hover);
 }
-.otk-session-search .otk-chrome-icon {
+.otk-session-search-icon {
   width: 13px;
   height: 13px;
 }
@@ -100,7 +100,7 @@
   justify-content: flex-end;
   width: calc(var(--session-depth, 0) * 20px);
 }
-.otk-session-group h3 .otk-chrome-icon {
+.otk-session-group-chevron {
   width: 13px;
   height: 13px;
   transform: rotate(90deg);

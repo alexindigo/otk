@@ -401,18 +401,33 @@ dock registrations and verifies rendered updates, callbacks and isolation.
 Theme tokens and base controls are loaded with the UI provider. Components
 import their own CSS using `with { type: "text" }`: Deno's stable asset
 attribute validates the publication graph while Vite bundles the same styles
-normally; no CSS loader plugin or generated style mirror is needed. Consumers
-bundle IBM Plex Sans 400/500/600 and IBM Plex Mono 400/600; all selection uses
-`--font-ui` / `--font-mono`. Interface text is 13/20, prose 14/24, headings
-16/24 600 and metadata 12px sans; mono is for code, paths, commands and IDs.
-Base buttons are ghost controls; `.otk-pill`, `.otk-icon-button` and
-`.otk-send-button` provide action pills, 28px icons and 32px circular Send.
-Radii use shared role tokens: controls/rows 8px, inline code 5px, cards 10px,
-bubbles 18px and composer 20px. Accent is reserved for primary actions and
-focus. Source selection and code geometry retain their existing contracts.
-Transcript, composer and takeovers share `--lane-width: 736px` (the prototype's
-46rem at its default 16px root), centred within 24px gutters independently of
-the 13px interface root. User bubbles occupy at most 80% of that lane.
+normally; no CSS loader plugin or generated style mirror is needed. Consumers do
+not activate component paint with a wrapper class. `Blocks` owns its prose root
+and accepts `conceal` and `compact`; text and reasoning adapters pass these
+inputs explicitly. Recursive blocks share that root, and Code owns optional
+fence markers. WorkLog imports its own paint; view headers/empty states and
+change counts use explicitly imported shared styles. Journal-entry styling stops
+at the entry boundary, preserving PermissionSummary's file and scope lists.
+
+`ProjectTabs.reserveTrailing` reserves consumer chrome space without reading a
+Shell ancestor. Popover's `triggerClass`, forwarded by Menu, CommandMenu and
+ListPicker, is the caller-owned trigger style slot. Chrome search/chevron icons,
+ModelLabel and SelectionContent likewise accept a caller class. Consumers style
+their supplied class/content rather than another component's private wrapper or
+descendants.
+
+Consumers bundle IBM Plex Sans 400/500/600 and IBM Plex Mono 400/600; all
+selection uses `--font-ui` / `--font-mono`. Interface text is 13/20, prose
+14/24, headings 16/24 600 and metadata 12px sans; mono is for code, paths,
+commands and IDs. Base buttons are ghost controls; `.otk-pill`,
+`.otk-icon-button` and `.otk-send-button` provide action pills, 28px icons and
+32px circular Send. Radii use shared role tokens: controls/rows 8px, inline code
+5px, cards 10px, bubbles 18px and composer 20px. Accent is reserved for primary
+actions and focus. Source selection and code geometry retain their existing
+contracts. Transcript, composer and takeovers share `--lane-width: 736px` (the
+prototype's 46rem at its default 16px root), centred within 24px gutters
+independently of the 13px interface root. User bubbles occupy at most 80% of
+that lane.
 
 Lists opt into `data-otk-selection="vertical"` or `"horizontal"` and spread
 `selection({ selected, kind, class? })` onto each item. This binding alone owns

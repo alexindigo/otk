@@ -9,7 +9,7 @@
   padding: 12px var(--panel-inset);
   min-width: 0;
 }
-.otk-permission-activity ol {
+.otk-activity-list {
   display: flex;
   flex-direction: column;
   gap: 16px;
@@ -17,7 +17,7 @@
   padding: 0;
   margin: 0;
 }
-.otk-permission-activity li {
+.otk-activity-entry {
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -25,17 +25,18 @@
   padding-bottom: 16px;
   border-bottom: 1px solid var(--otk-border);
 }
-.otk-permission-activity header {
+.otk-activity-entry > header {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 8px;
   justify-content: space-between;
 }
-.otk-permission-activity time {
+.otk-activity-entry > header > time {
   color: var(--otk-fg-3);
   font-size: var(--text-meta);
 }
-.otk-permission-activity p {
+.otk-permission-activity > p,
+.otk-activity-entry > p {
   margin: 0;
 }

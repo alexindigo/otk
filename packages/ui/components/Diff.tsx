@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import ChangeCounts from "./ChangeCounts.tsx";
 import "./Diff.css" with { type: "text" };
 import { For, Show } from "solid-js";
 import type { FileDiff, Hunk } from "@otk/protocol";
@@ -105,8 +106,10 @@ export default function Diff(
             </Show>
           </span>
           <Show when={!props.inline}>
-            <span class="otk-diff-add">+{props.file.additions}</span>
-            <span class="otk-diff-del">−{props.file.deletions}</span>
+            <ChangeCounts
+              additions={props.file.additions}
+              deletions={props.file.deletions}
+            />
           </Show>
         </header>
       </Show>

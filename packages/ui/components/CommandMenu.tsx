@@ -22,6 +22,7 @@ export default function CommandMenu(props: {
   label: string;
   class?: string;
   trigger?: Element;
+  triggerClass?: string;
   targets(): readonly ContextTarget[];
   control?(control: PopoverControl): void;
   beforeRun?(): void;
@@ -92,6 +93,7 @@ export default function CommandMenu(props: {
       label={props.label}
       class={props.class}
       trigger={props.trigger}
+      triggerClass={props.triggerClass}
       dismissOnAction={false}
       control={(control) => {
         menu = control;

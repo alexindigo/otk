@@ -7,7 +7,11 @@ import StatusLight from "./StatusLight.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
 import { ChevronIcon } from "./ChromeIcons.tsx";
 export default function Reasoning(
-  props: { part: Extract<Part, { kind: "reasoning" }>; mode: "show" | "hide" },
+  props: {
+    part: Extract<Part, { kind: "reasoning" }>;
+    mode: "show" | "hide";
+    conceal?: boolean;
+  },
 ) {
   const [expanded, setExpanded] = createSignal(false);
   const toggle = ownedAction(
@@ -33,7 +37,7 @@ export default function Reasoning(
         disabled={props.mode === "show"}
         onClick={() => void toggle()}
       >
-        <ChevronIcon />
+        <ChevronIcon class="otk-reasoning-chevron" />
         <Show when={props.part.time.end === undefined}>
           <StatusLight state="working" small activity="spinner" />
         </Show>
@@ -52,6 +56,7 @@ export default function Reasoning(
           </Show>
           <Blocks
             blocks={heading() ? props.part.blocks.slice(1) : props.part.blocks}
+            conceal={props.conceal}
           />
         </div>
       </Show>
