@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { HighlightToken } from "./types.ts";
+import { HIGHLIGHT_GROUP_ROWS } from "./policy.ts";
 export interface CodeLine {
   tokens: HighlightToken[];
   newline: boolean;
@@ -76,7 +77,7 @@ export const lineBreakCount = (text: string) =>
     ? 0
     : text.match(/\r\n|\n|\r/g)?.length || 0;
 
-/** The genuine 32-row source interval containing a native text position. */
+/** The genuine source-group interval containing a native text position. */
 export function sourceRange(source: string, offset: number) {
   offset = Math.max(0, Math.min(offset, source.length));
   if (source[offset] === "\n" && source[offset - 1] === "\r") offset--;
@@ -91,7 +92,7 @@ export function sourceRange(source: string, offset: number) {
     return start;
   };
   let start = beginning(offset);
-  for (let i = 0; i < line % 32; i++) {
+  for (let i = 0; i < line % HIGHLIGHT_GROUP_ROWS; i++) {
     const ending = source[start - 1] === "\n" && source[start - 2] === "\r"
       ? 2
       : 1;
@@ -99,7 +100,7 @@ export function sourceRange(source: string, offset: number) {
   }
   let end = start;
   const carriage = source.includes("\r");
-  for (let i = 0; i < 32 && end < source.length; i++) {
+  for (let i = 0; i < HIGHLIGHT_GROUP_ROWS && end < source.length; i++) {
     end = sourceLine(source, end, carriage).end;
   }
   return { start, end };
@@ -180,7 +181,7 @@ export class CodeProjection {
     }
     return true;
   }
-  /** One raw-layout operation creates no more than 32 rows. */
+  /** One raw-layout operation creates no more than one source group. */
   build(): { index: number; group: SourceGroup } | undefined {
     if (this.#complete) return;
     const index = this.#group, old = this.groups[index];
@@ -213,7 +214,7 @@ export class CodeProjection {
   #read(start: number, old?: SourceGroup): SourceGroup {
     const rows: SourceRow[] = [];
     let position = start;
-    for (let i = 0; i < 32; i++) {
+    for (let i = 0; i < HIGHLIGHT_GROUP_ROWS; i++) {
       const offset = position;
       const line = sourceLine(this.source, offset, this.#carriage);
       const end = line.end;
@@ -273,7 +274,7 @@ export class CodeProjection {
       this.#tokens.push({ token, start: offset, end });
       offset = end;
       lines += lineBreakCount(token.content);
-      if (lines >= 32) {
+      if (lines >= HIGHLIGHT_GROUP_ROWS) {
         this.#mark(start, offset);
         yield;
         start = offset;
@@ -297,7 +298,7 @@ export class CodeProjection {
     }
     return low;
   }
-  /** A viewport request projects only its own (at most 32) source rows. */
+  /** A viewport request projects only its own bounded source group. */
   project(group: SourceGroup): HighlightToken[][] | undefined {
     if ((this.#tokens.at(-1)?.end ?? 0) < group.end) return;
     return this.#project(group, this.#tokens);

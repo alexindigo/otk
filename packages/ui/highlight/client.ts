@@ -9,6 +9,7 @@ import type {
   HighlightToken,
 } from "./types.ts";
 import { lineBreakCount, sourceLine } from "./lines.ts";
+import { HIGHLIGHT_GROUP_ROWS } from "./policy.ts";
 let worker: Worker | undefined, nextBlock = 0, nextRequest = 0;
 const users = new Set<() => void>();
 const pending = new Map<
@@ -127,7 +128,11 @@ interface Capture {
 function prefixSource(source: string): string {
   let end = 0;
   const carriage = source.includes("\r");
-  for (let line = 0; line < 32 && end < source.length; line++) {
+  for (
+    let line = 0;
+    line < HIGHLIGHT_GROUP_ROWS && end < source.length;
+    line++
+  ) {
     end = sourceLine(source, end, carriage).end;
   }
   return source.slice(0, end);
@@ -243,7 +248,7 @@ export function highlightBlock(lang?: string, source?: string) {
         for (const token of cached) {
           batch.push(token);
           lines += lineBreakCount(token.content);
-          if (lines >= 32) {
+          if (lines >= HIGHLIGHT_GROUP_ROWS) {
             apply(capture, { from, tokens: batch });
             from += batch.length;
             batch = [];

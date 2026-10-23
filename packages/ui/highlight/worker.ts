@@ -11,6 +11,7 @@ import { bundledLanguages } from "shiki/langs";
 import { ShikiStreamTokenizer } from "@shikijs/stream";
 import { EncodedTokenMetadata } from "shiki/textmate";
 import { sourceLine } from "./lines.ts";
+import { HIGHLIGHT_GROUP_ROWS } from "./policy.ts";
 import { sharedNativeScanners } from "./scanners.ts";
 import { instantiateOniguruma } from "./engine.ts";
 import type {
@@ -188,7 +189,11 @@ function prepareSource(block: number, lang: string, source: string): Prefix {
   if (prior && prior.lang === lang && prior.text === source) return prior;
   let end = 0;
   const carriage = source.includes("\r");
-  for (let line = 0; line < 32 && end < source.length; line++) {
+  for (
+    let line = 0;
+    line < HIGHLIGHT_GROUP_ROWS && end < source.length;
+    line++
+  ) {
     end = sourceLine(source, end, carriage).end;
   }
   const prefix: Prefix = {
@@ -290,7 +295,11 @@ async function advance(job: Job) {
     end++;
     joinedEnding = true;
   }
-  for (let line = 0; line < 32 && end < request.text.length; line++) {
+  for (
+    let line = 0;
+    line < HIGHLIGHT_GROUP_ROWS && end < request.text.length;
+    line++
+  ) {
     end = sourceLine(request.text, end, job.carriage).end;
   }
   // A closed fence with unchanged source needs only tail finalization.
@@ -372,7 +381,11 @@ function advanceViewport(job: Job, stream: Stream): boolean {
   const priority = job.priority;
   const end = Math.max(...future.map((range) => range.end));
   if (priority.position >= end) return false;
-  for (let count = 0; count < 32 && priority.position < end; count++) {
+  for (
+    let count = 0;
+    count < HIGHLIGHT_GROUP_ROWS && priority.position < end;
+    count++
+  ) {
     const start = priority.position,
       line = sourceLine(request.text, start, job.carriage),
       text = request.text.slice(start, line.contentEnd);
@@ -430,7 +443,7 @@ channel.port1.onmessage = () => {
   scheduled = false;
   const task = ready.shift();
   if (!task) return;
-  // Each turn advances one block by at most 32 new lines. Other ready blocks
+  // Each turn advances one block by at most one source group. Other ready blocks
   // and incoming cancellation/preparation messages run before continuation.
   void task().finally(() => {
     if (ready.length && !scheduled) {

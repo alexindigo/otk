@@ -9,6 +9,7 @@ import {
   untrack,
 } from "solid-js";
 import type { SourceRow } from "../highlight/lines.ts";
+import { HIGHLIGHT_GROUP_ROWS } from "../highlight/policy.ts";
 import type { HighlightToken } from "../highlight/types.ts";
 const OVERSCAN = "100% 0px";
 
@@ -41,7 +42,7 @@ function Fragments(props: { row: SourceRow; from?: number }) {
 function Raw(props: { rows: readonly SourceRow[] }) {
   const initial = untrack(() => props.rows);
   if (
-    initial.length === 32 &&
+    initial.length === HIGHLIGHT_GROUP_ROWS &&
     initial.every((row) => row.newline && row.ending !== "\r")
   ) {
     // Complete immutable source uses native preformatted lines. Row/token

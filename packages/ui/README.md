@@ -390,6 +390,11 @@ validator or persistent cache. Native Deno module workers resolve that same
 public export with `import.meta.resolve`, so direct workers also avoid consumer
 install paths.
 
+The dependency-free highlighting policy owns the 32-row source-group contract.
+Source coordinates, raw layout, worker preparation/progress, cached replay and
+the renderer's complete-group path consume that same constant; changing a group
+size cannot leave a different layer on its own copied boundary.
+
 ## Example
 
 [`example.tsx`](./example.tsx) renders a generic tool with only the selected
