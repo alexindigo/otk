@@ -19,6 +19,8 @@ export * from "./approval-attention.ts";
 export * from "./permission-notification.ts";
 export * from "./history.ts";
 export * from "./drafts.ts";
+export * from "./draft-content.ts";
+export * from "./prompt-history.ts";
 export * from "./prompt-selection.ts";
 export * from "./composer-selection.ts";
 export * from "./prompt-completion.ts";

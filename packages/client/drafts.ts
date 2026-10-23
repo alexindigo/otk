@@ -29,12 +29,24 @@ export const emptyDraft = (): Draft => ({
   mode: "normal",
 });
 
+/** Replace content without taking ownership of this draft's prompt choices. */
+export function replaceDraftContent(
+  draft: Draft,
+  content: Pick<Draft, "input" | "chips" | "mode">,
+): Draft {
+  const next = {
+    ...draft,
+    input: content.input,
+    chips: content.chips,
+    mode: content.mode,
+  };
+  delete next.editor;
+  return next;
+}
+
 /** Clear submitted content while retaining explicit next-prompt choices. */
 export function clearDraft(draft: Draft): Draft {
-  const next = { ...emptyDraft(), agent: draft.agent, model: draft.model };
-  return Object.hasOwn(draft, "variant")
-    ? { ...next, variant: draft.variant }
-    : next;
+  return replaceDraftContent(draft, emptyDraft());
 }
 
 /** Browser-lifetime drafts, keyed by server and session, never session content. */

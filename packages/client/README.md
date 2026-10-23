@@ -94,6 +94,22 @@ drafts. `clearDraft` clears submitted content but retains all explicit choices,
 including Default; callers retain the existing submitted-draft identity guard
 around it.
 
+`replaceDraftContent(draft, content)` changes input, chips and mode while
+retaining the current draft's choices, including absent versus own-undefined
+Default, and releasing its editor. History, whole-prompt editor saves and
+`clearDraft` use this same boundary. The plain `draft-content` transforms also
+own inline/independent chip edits, serialization and paste labels; no browser or
+framework is required.
+
+`createPromptHistory({available, load, change, fail})` owns a per-prompt recall
+queue and cursor. It reads the session-bound writer's invocation-current draft,
+serializes consecutive intents, preserves current choices through recalled
+content and return to empty, and rejects replacement after newer edits. Reset
+and disposal retire pending results/errors. `recall()` joins its actual async
+continuation; caret placement is passed to the injected input port. Native keys
+and focus stay with the UI adapter. `historyDraft` and `PromptHistory` expose
+the metadata-only projection and cursor for independent consumers.
+
 `recordRecentModel(recent, sentModel)` returns a deduplicated most-recent-first
 list (max 10) after a successful send, using the submission's captured model.
 `toggleFavouriteModel(favourites, model)` toggles exact provider/model pairs,

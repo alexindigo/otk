@@ -1,50 +1,31 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PromptRegistry } from "../../registries/prompt.ts";
-import { PromptHistory } from "../../components/prompt/history.ts";
+import { createPromptHistory } from "@otk/client";
 import { ownedCommand } from "../../keyboard/context.tsx";
 export function registerHistoryPrompt(prompt: PromptRegistry): void {
   prompt.register({
     id: "history",
     create(ctx) {
-      const history = new PromptHistory();
-      let queue = Promise.resolve();
-      const recall = (direction: -1 | 1) => {
-        queue = queue.then(async () => {
-          const draft = ctx.change((current) => current);
-          if (
-            !ctx.active() || !ctx.supports("history") ||
-            !history.canMove(draft)
-          ) return;
-          if (history.empty) {
-            const entries = await ctx.history();
-            if (
-              !ctx.active() || ctx.change((current) => current) !== draft
-            ) return;
-            history.replace(entries);
-          }
-          const next = history.move(direction, draft);
-          if (next) {
-            ctx.change(
-              (current) =>
-                current === draft ? { ...next, agent: current.agent } : current,
-              direction === -1 ? 0 : next.input.length,
-            );
-          }
-        }).catch(ctx.fail);
-      };
+      const history = createPromptHistory({
+        available: () => ctx.active() && ctx.supports("history"),
+        load: () => ctx.history(),
+        change: (update, caret) => ctx.change(update, caret),
+        fail: (error) => ctx.fail(error),
+      });
+      ctx.own(() => history.dispose());
       const previous = ownedCommand(ctx, {
         id: "prompt.history.previous",
         title: "Previous prompt",
         category: "Prompt",
         hidden: true,
-        run: () => recall(-1),
+        run: () => history.recall(-1),
       });
       const next = ownedCommand(ctx, {
         id: "prompt.history.next",
         title: "Next prompt",
         category: "Prompt",
         hidden: true,
-        run: () => recall(1),
+        run: () => history.recall(1),
       });
       return {
         submitted: () => history.reset(),

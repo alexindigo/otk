@@ -140,6 +140,14 @@ its options/choice. Source arbitration, query invalidation and selection
 transitions belong to that owner. Native key events, keyboard layers and pointer
 events remain at the UI edge; prompt teardown disposes the completion lifetime.
 
+The history adapter likewise binds `createPromptHistory` and owns only native
+key/selection adaptation and command registration. Recall loading,
+serialization, cursor and draft identity belong to the client owner; teardown
+disposes it. History/editor/clear content replacement shares
+`replaceDraftContent`, retaining the current agent/model/variant choices and
+explicit Default. Prompt model and history compatibility modules re-export the
+plain client transforms/projections.
+
 The prompt textarea uses native content sizing, retaining its 48px minimum and
 growing in 24px prose lines to the component's named 240px cap. It then scrolls
 internally with the caret; deleting text or clearing a sent draft shrinks it.
