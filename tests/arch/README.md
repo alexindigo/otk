@@ -145,6 +145,18 @@ single client owner, with a plain typed UI ports binding. Negatives reject
 duplicated transactions, inline ports, transport-private capability reads and
 RPC/cache implementation in the binding.
 
+Browser/client native admissions (`session.prompt`, `session.shell`,
+`session.command`) must execute inside an inline callback of the shared session
+submission port. The parsed shell policy follows lexical port aliases, imported
+PromptRegistry/PromptContext/SessionPorts contracts and the actual client
+submission factory. It rejects homonymous/local submit functions, shadowed or
+reassigned ports, eager callback invocation and detached nested callbacks. New
+production modules are covered by the recursive source inventory; negative
+mutants also remove each shipped path's boundary. Inline callbacks are
+deliberate: unproven helpers or escaped callbacks fail closed rather than
+receiving admission authority by their name. This is a static ownership check,
+alongside the A6 browser/runtime promotion and bookkeeping tests.
+
 Guarded routing, creation, input release and seen bookkeeping belong to the
 client navigation/guard owners. Negative fixtures reject browser policy, RPCs,
 caches and route/creation transactions in Shell, duplicate client constructors,

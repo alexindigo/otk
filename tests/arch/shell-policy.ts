@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { Source } from "./analysis.ts";
 import { nodes, property } from "./syntax.ts";
+import { submissionErrors } from "./submission-policy.ts";
 
 export function shellPolicyErrors(path: string, text: string): string[] {
   const errors = new Set<string>();
@@ -264,5 +265,5 @@ export function shellPolicyErrors(path: string, text: string): string[] {
       )
     ) report("shell tabs lack owner-current inputs and session resolution");
   }
-  return [...errors];
+  return [...errors, ...submissionErrors(path, source)];
 }
