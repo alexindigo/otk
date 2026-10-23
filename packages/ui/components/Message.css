@@ -1,7 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-message {
   margin-bottom: 24px;
-  line-height: 24px;
+  line-height: var(--line-prose);
   overflow-wrap: anywhere;
 }
 .otk-user-message {
@@ -39,7 +39,7 @@
   flex-wrap: wrap;
   gap: 8px 16px;
   margin-top: 4px;
-  font: 400 var(--text-meta)/20px var(--font-ui);
+  font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
   color: var(--otk-fg-3);
   font-variant-numeric: tabular-nums;
 }

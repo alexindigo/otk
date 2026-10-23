@@ -77,8 +77,8 @@
   align-items: center;
   gap: 8px;
   color: var(--otk-fg-3);
-  font-size: 12px;
-  line-height: 20px;
+  font-size: var(--text-meta);
+  line-height: var(--line-meta);
   font-weight: 500;
 }
 .otk-session-group > p {
@@ -117,7 +117,7 @@
 .otk-session-cost {
   flex: none;
   color: var(--otk-fg-3);
-  font-size: 12px;
+  font-size: var(--text-meta);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }

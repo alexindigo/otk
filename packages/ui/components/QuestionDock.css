@@ -9,7 +9,7 @@
 }
 .otk-question-text {
   font-size: var(--text-prose);
-  line-height: 24px;
+  line-height: var(--line-prose);
 }
 .otk-question-options {
   display: flex;

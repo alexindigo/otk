@@ -34,6 +34,11 @@
   --text-prose: 14px;
   --text-heading: 16px;
   --text-meta: 12px;
+  --text-minimum: 12px;
+  --line-ui: 20px;
+  --line-prose: 24px;
+  --line-heading: var(--line-prose);
+  --line-meta: var(--line-ui);
   /* Prototype's 46rem at its 16px root, independent of the 13px UI root. */
   --lane-width: 736px;
   --item-inset: 12px;
@@ -64,8 +69,8 @@
   font-family: var(--font-ui);
   color: var(--fg);
   background: var(--bg);
-  font-size: 13px;
-  line-height: 20px;
+  font-size: var(--text-ui);
+  line-height: var(--line-ui);
 }
 * {
   box-sizing: border-box;
@@ -210,10 +215,10 @@ pre,
   font-family: var(--font-mono);
 }
 code {
-  font-size: max(12px, .92em);
+  font-size: max(var(--text-minimum), .92em);
 }
 small {
-  font-size: max(12px, .92em);
+  font-size: max(var(--text-minimum), .92em);
 }
 /* Shared controls: feature owners choose their role, never their palette. */
 .otk-pill {

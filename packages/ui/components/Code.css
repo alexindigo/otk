@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-code {
-  font: 400 13px/20px var(--font-mono);
+  font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   min-width: 0;
@@ -17,7 +17,7 @@
   background: var(--otk-bg-code);
   border: 1px solid var(--otk-border-code);
   font: inherit;
-  line-height: 20px;
+  line-height: var(--line-ui);
 }
 .otk-code code {
   font: inherit;

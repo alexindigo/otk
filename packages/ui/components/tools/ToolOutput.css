@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-tool-output {
   white-space: pre-wrap;
-  font: 400 13px/20px var(--font-mono);
+  font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
   margin: 8px 0;
 }
 .otk-output-toggle {
   align-self: flex-start;
-  font-size: 12px;
+  font-size: var(--text-meta);
   padding: 4px 8px;
 }

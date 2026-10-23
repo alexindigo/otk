@@ -4,7 +4,7 @@
   align-items: center;
   gap: 8px;
   flex-wrap: wrap;
-  font-size: 12px;
+  font-size: var(--text-meta);
   color: var(--secondary);
 }
 .otk-connection small {

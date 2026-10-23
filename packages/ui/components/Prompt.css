@@ -17,8 +17,8 @@
   max-height: var(--prompt-input-max-height);
   overflow-y: auto;
   resize: none;
-  line-height: 24px;
-  font: 400 var(--text-prose)/24px var(--font-ui);
+  line-height: var(--line-prose);
+  font: 400 var(--text-prose)/var(--line-prose) var(--font-ui);
   background: transparent;
   border: 0;
   padding: 0;

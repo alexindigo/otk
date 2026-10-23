@@ -71,7 +71,7 @@
   padding-block-end: 4px;
 }
 .otk-project-name {
-  font-size: 13px;
+  font-size: var(--text-ui);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -80,7 +80,7 @@
   font-weight: 600;
 }
 .otk-project-machine {
-  font-size: 12px;
+  font-size: var(--text-meta);
   color: var(--otk-fg-3);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -89,7 +89,7 @@
   font-variant-numeric: tabular-nums;
   color: var(--otk-fg-3);
   white-space: nowrap;
-  font-size: 12px;
+  font-size: var(--text-meta);
 }
 .otk-project-trailing {
   display: grid;
@@ -136,7 +136,7 @@
   margin-top: var(--chrome-inset);
   padding: 0 var(--project-inset);
   color: var(--otk-fg-3);
-  font-size: 12px;
+  font-size: var(--text-meta);
 }
 .otk-inactive-toggle[aria-expanded=true] .otk-inactive-chevron {
   transform: rotate(90deg);
@@ -163,7 +163,7 @@
 .otk-server-connection {
   display: flex;
   align-items: center;
-  font-size: 12px;
+  font-size: var(--text-meta);
 }
 .otk-server-connection > button {
   overflow: hidden;

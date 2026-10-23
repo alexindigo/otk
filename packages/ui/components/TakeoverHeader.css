@@ -8,7 +8,7 @@
 .otk-takeover-header h2 {
   margin: 0;
   color: var(--otk-fg);
-  font: 600 var(--text-ui)/20px var(--font-ui);
+  font: 600 var(--text-ui)/var(--line-ui) var(--font-ui);
 }
 .otk-takeover-where,
 .otk-permission-child,

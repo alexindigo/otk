@@ -16,7 +16,7 @@
   padding: 4px 8px;
   color: var(--control-color, var(--otk-fg));
   font-size: var(--text-meta);
-  line-height: 20px;
+  line-height: var(--line-ui);
 }
 .otk-picker-label {
   overflow: hidden;

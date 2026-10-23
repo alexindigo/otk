@@ -8,7 +8,7 @@
   padding: 16px;
 }
 .otk-template-paths > strong {
-  font-size: 14px;
+  font-size: var(--text-prose);
   margin: 0 0 8px;
 }
 .otk-template-paths > button {

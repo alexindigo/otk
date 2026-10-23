@@ -14,7 +14,7 @@
 }
 .otk-view-header p {
   margin: 8px 0 0;
-  font: 400 12px/20px var(--font-ui);
+  font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
   display: flex;
   flex-wrap: wrap;
   gap: 12px;
@@ -23,5 +23,5 @@
 }
 .otk-empty {
   padding: 12px;
-  font-size: 12px;
+  font-size: var(--text-meta);
 }

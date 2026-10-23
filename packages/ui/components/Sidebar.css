@@ -24,7 +24,7 @@
     color: var(--fg);
   }
   .otk-brand span {
-    font-size: 12px;
+    font-size: var(--text-meta);
     max-width: 8rem;
     line-height: 1.6;
   }
@@ -52,7 +52,7 @@
     margin: 0 4px 8px;
   }
   .otk-project-header h3 {
-    font: 400 14px/20px var(--font-ui);
+    font: 400 var(--text-prose)/var(--line-ui) var(--font-ui);
     color: var(--secondary);
     overflow-wrap: anywhere;
     margin: 0;
@@ -83,7 +83,7 @@
     white-space: nowrap;
   }
   .otk-session-row time {
-    font-size: 12px;
+    font-size: var(--text-meta);
     font-variant-numeric: tabular-nums;
     color: var(--secondary);
   }
@@ -91,14 +91,14 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: var(--text-meta);
     color: var(--secondary);
   }
   .otk-attention {
     display: flex;
     align-items: center;
     gap: 8px;
-    font-size: 12px;
+    font-size: var(--text-meta);
     color: var(--accent);
   }
   .otk-settings-entry {

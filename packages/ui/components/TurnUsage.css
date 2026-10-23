@@ -74,7 +74,7 @@
 }
 .otk-usage-summary dd {
   font-size: var(--text-heading);
-  line-height: 24px;
+  line-height: var(--line-heading);
   font-weight: 600;
 }
 .otk-usage-scroll {

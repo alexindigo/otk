@@ -40,5 +40,5 @@
   gap: 8px;
 }
 .otk-toast-actions button {
-  font-size: 12px;
+  font-size: var(--text-meta);
 }

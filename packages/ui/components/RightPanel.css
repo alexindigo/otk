@@ -34,8 +34,8 @@
 }
 .otk-panel-content > h2 {
   margin: 0 var(--panel-inset) 8px;
-  font-size: 13px;
-  line-height: 20px;
+  font-size: var(--text-ui);
+  line-height: var(--line-ui);
   font-weight: 600;
 }
 .otk-panel-resizer {

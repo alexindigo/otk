@@ -18,7 +18,7 @@
 .otk-palette-list small {
   display: block;
   color: var(--secondary);
-  font-size: 12px;
+  font-size: var(--text-meta);
 }
 .otk-palette-list kbd {
   color: var(--secondary);

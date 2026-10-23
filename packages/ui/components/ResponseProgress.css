@@ -26,7 +26,7 @@
   align-items: center;
   gap: 8px;
   color: var(--otk-fg-3);
-  font: 400 var(--text-meta)/20px var(--font-ui);
+  font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
 }
 .otk-response-progress-text::before,
 .otk-response-progress-text::after {

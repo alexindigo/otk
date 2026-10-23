@@ -1,11 +1,11 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-text {
-  font: 400 var(--text-prose)/24px var(--font-ui);
+  font: 400 var(--text-prose)/var(--line-prose) var(--font-ui);
 }
 .otk-prose-heading {
   font-weight: 600;
   font-size: var(--text-heading);
-  line-height: 24px;
+  line-height: var(--line-heading);
   margin: 16px 0;
 }
 .otk-prose-paragraph {

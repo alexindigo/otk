@@ -30,7 +30,7 @@
 }
 .otk-surface-title h2 {
   margin: 0;
-  font: 600 var(--text-heading)/24px var(--font-ui);
+  font: 600 var(--text-heading)/var(--line-heading) var(--font-ui);
 }
 .otk-surface-body {
   display: flex;

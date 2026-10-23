@@ -85,7 +85,7 @@
 :root[data-otk-reduced-colors] .otk-lamp-shape {
   display: block;
   color: var(--otk-fg);
-  font: 600 12px/1 var(--font-ui);
+  font: 600 var(--text-meta)/1 var(--font-ui);
 }
 .otk-status-light[data-activity=spinner] .otk-lamp-glow {
   display: none;

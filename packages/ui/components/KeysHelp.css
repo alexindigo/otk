@@ -15,7 +15,7 @@
 }
 .otk-keys-row small {
   display: block;
-  font-size: 12px;
+  font-size: var(--text-meta);
   color: var(--secondary);
 }
 .otk-keys-row input {

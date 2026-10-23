@@ -8,7 +8,7 @@
 }
 .otk-session-error-details {
   color: var(--secondary);
-  font-size: 12px;
+  font-size: var(--text-meta);
 }
 .otk-session-error-details summary {
   cursor: pointer;

@@ -10,5 +10,5 @@
 }
 .otk-task-card span {
   color: var(--secondary);
-  font-size: 12px;
+  font-size: var(--text-meta);
 }
