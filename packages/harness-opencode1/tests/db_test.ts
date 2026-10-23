@@ -48,7 +48,7 @@ test("bootstrap DB selects only recent incomplete/pending directories and leaves
   const before = await Deno.readFile(file);
   const reader = new BootstrapDb(file);
   try {
-    assertEquals(reader.possiblyRunningDirectories(50).sort(), [
+    assertEquals(reader.possiblyRunningDirectories(50)?.sort(), [
       "/busy",
       "/pending",
     ]);
@@ -60,7 +60,7 @@ test("bootstrap DB selects only recent incomplete/pending directories and leaves
 
 test("bootstrap DB degrades on missing schema without creating a missing database", async () => {
   const missing = await fixture(), reader = new BootstrapDb(missing);
-  assertEquals(reader.possiblyRunningDirectories(0), []);
+  assertEquals(reader.possiblyRunningDirectories(0), undefined);
   reader.close();
   try {
     await Deno.stat(missing);
@@ -72,8 +72,28 @@ test("bootstrap DB degrades on missing schema without creating a missing databas
   incomplete.exec("CREATE TABLE session (id TEXT)");
   incomplete.close();
   const degraded = new BootstrapDb(file);
-  assertEquals(degraded.possiblyRunningDirectories(0), []);
+  assertEquals(degraded.possiblyRunningDirectories(0), undefined);
   degraded.close();
+});
+
+test("bootstrap DB distinguishes an authoritative empty hint set from a failed query", async () => {
+  const file = await fixture(), db = new DatabaseSync(file);
+  db.exec(
+    "CREATE TABLE session(id TEXT,directory TEXT,time_updated INTEGER); CREATE TABLE message(id TEXT,session_id TEXT,data TEXT)",
+  );
+  const reader = new BootstrapDb(file);
+  try {
+    assertEquals(reader.possiblyRunningDirectories(0), []);
+    db.exec(
+      "INSERT INTO session VALUES('s','/project',100); INSERT INTO message VALUES('m','s','not JSON')",
+    );
+    const before = await Deno.readFile(file);
+    assertEquals(reader.possiblyRunningDirectories(0), undefined);
+    assertEquals(await Deno.readFile(file), before);
+  } finally {
+    reader.close();
+    db.close();
+  }
 });
 
 test("usage reads every bounded metadata page and tool labels without content or writes; API fallback produces the same full summaries", async () => {

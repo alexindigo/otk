@@ -31,9 +31,11 @@ export class BootstrapDb {
       );
     }
   }
-  possiblyRunningDirectories(since: number): string[] {
-    if (!this.#db) return [];
-    const rows = this.#db.prepare(`
+  /** Undefined means hints are unavailable; an empty list is authoritative. */
+  possiblyRunningDirectories(since: number): string[] | undefined {
+    if (!this.#db) return;
+    try {
+      const rows = this.#db.prepare(`
       SELECT DISTINCT s.directory FROM session s
       JOIN message m ON m.id = (SELECT id FROM message WHERE session_id = s.id ORDER BY id DESC LIMIT 1)
       WHERE s.time_updated >= ? AND (
@@ -41,7 +43,13 @@ export class BootstrapDb {
         OR json_extract(m.data, '$.role') = 'user'
       )
     `).all(since);
-    return rows.map((r) => String(r.directory));
+      return rows.map((r) => String(r.directory));
+    } catch (error) {
+      console.warn(
+        `harness db: using API fallback: ${(error as Error).message}`,
+      );
+      return;
+    }
   }
   /** One scalar result, never message/part JSON or transcript content. */
   revertedUserCount(id: string, cutoff: string): number | undefined {

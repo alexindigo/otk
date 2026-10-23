@@ -540,13 +540,15 @@ export class Opencode1Adapter implements Harness {
     const previousPermissions = new Map(this.#permissions);
     const nextPermissions = new Map<string, PendingPermission>();
     const nextQuestions = new Map<string, string>();
-    // Session metadata defines inventory coverage. SQLite hints may add asking
-    // instances, but cannot exclude running or blocked work from the snapshot.
-    const directories = new Set([
-      ...[...entries.values()].map((entry) => entry.directory),
-      ...this.#db.possiblyRunningDirectories(since),
-    ]);
-    for (const directory of directories) {
+    // Native directory reads create retained instances and touch project clocks.
+    // Only unavailable hints require the bounded session-window API fallback.
+    const hints = this.#db.possiblyRunningDirectories(since);
+    const directories = new Set(
+      hints ?? [...entries.values()].map((entry) => entry.directory),
+    );
+    const inventory = async (directory: string) => {
+      const local = new AbortController();
+      const signal = AbortSignal.any([controller.signal, local.signal]);
       const reads = [
         this.client.json<
           Record<
@@ -560,54 +562,89 @@ export class Opencode1Adapter implements Harness {
           >
         >("/session/status", {
           query: { directory },
-          signal: controller.signal,
+          signal,
         }),
         this.client.json<RawPermission[]>("/permission", {
           query: { directory },
-          signal: controller.signal,
+          signal,
         }),
         this.client.json<{ id: string; sessionID: string }[]>("/question", {
           query: { directory },
-          signal: controller.signal,
+          signal,
         }),
       ] as const;
-      const [statuses, permissions, questions] = await Promise.all(reads).catch(
-        async (error) => {
-          if (this.#current(controller)) console.warn("bootstrap:", error);
-          controller.abort();
-          await Promise.allSettled(reads);
-          throw error;
-        },
-      );
-      if (!this.#current(controller)) return;
-      for (const [id, status] of Object.entries(statuses)) {
-        const entry = entries.get(id);
-        if (!entry) continue;
-        entry.status = status.type;
-        if (status.type === "retry") {
-          entry.retry = {
-            attempt: status.attempt!,
-            message: status.message!,
-            next: status.next!,
-          };
+      try {
+        const [statuses, permissions, questions] = await Promise.all(reads)
+          .catch(async (error) => {
+            local.abort();
+            await Promise.allSettled(reads);
+            throw error;
+          });
+        if (!this.#current(controller)) return;
+        for (const [id, status] of Object.entries(statuses)) {
+          const entry = entries.get(id);
+          if (!entry) continue;
+          entry.status = status.type;
+          if (status.type === "retry") {
+            entry.retry = {
+              attempt: status.attempt!,
+              message: status.message!,
+              next: status.next!,
+            };
+          }
+        }
+        for (const request of permissions) {
+          nextPermissions.set(
+            request.id,
+            {
+              directory,
+              request: mapPermission(
+                request,
+                previousPermissions.get(request.id)?.request.time ?? Date.now(),
+              ),
+            },
+          );
+        }
+        for (const request of questions) {
+          nextQuestions.set(request.id, request.sessionID);
+        }
+      } catch (error) {
+        if (!this.#current(controller)) return;
+        console.warn(
+          `bootstrap directory ${JSON.stringify(directory)}:`,
+          error,
+        );
+        // A failed inventory is not evidence that previous work/input ended.
+        for (const entry of entries.values()) {
+          if (entry.directory !== directory) continue;
+          const previous = this.#index.get(entry.id);
+          if (previous) {
+            entry.status = previous.status;
+            entry.retry = previous.retry;
+          }
+        }
+        for (const [id, pending] of previousPermissions) {
+          if (pending.directory === directory) nextPermissions.set(id, pending);
+        }
+        for (const [id, sessionID] of this.#questions) {
+          if (
+            (entries.get(sessionID) ?? this.#index.get(sessionID))
+              ?.directory === directory
+          ) {
+            nextQuestions.set(id, sessionID);
+          }
         }
       }
-      for (const request of permissions) {
-        nextPermissions.set(
-          request.id,
-          {
-            directory,
-            request: mapPermission(
-              request,
-              previousPermissions.get(request.id)?.request.time ?? Date.now(),
-            ),
-          },
-        );
-      }
-      for (const request of questions) {
-        nextQuestions.set(request.id, request.sessionID);
-      }
-    }
+    };
+    const remaining = directories.values();
+    await Promise.all(
+      Array.from({ length: Math.min(4, directories.size) }, async () => {
+        for (const directory of remaining) {
+          if (!this.#current(controller)) return;
+          await inventory(directory);
+        }
+      }),
+    );
     if (!this.#current(controller)) return;
     for (const entry of entries.values()) {
       this.#errors.register(entry.id);

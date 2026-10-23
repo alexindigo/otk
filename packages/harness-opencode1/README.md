@@ -90,10 +90,13 @@ omitted. This routing metadata stays internal rather than becoming part of the
 neutral request returned to readers.
 
 Before publishing connection readiness, bootstrap inventories status,
-permissions and questions in every directory from the paginated native session
-snapshot. Read-only SQLite hints may contribute additional asking instances, but
-never filter that coverage. Missing or incompatible SQLite therefore cannot hide
-already-running or blocked sessions on connection or instance resync.
+permissions and questions only in directories hinted as possibly running by
+compatible read-only SQLite. An authoritative empty hint list makes no native
+inventory requests: directory reads create native instances and touch project
+visit clocks. Missing, unreadable, incompatible or failed SQLite reads instead
+use every distinct directory in the paginated, index-window session snapshot,
+with at most four directories in flight. This fallback keeps already-running and
+blocked sessions visible without a database, on connection or instance resync.
 
 Each start owns one reconnect loop; a repeated start rejects without replacing
 its sink, including while stop is pending. Stop cancels and joins that lifetime
@@ -102,9 +105,12 @@ bootstrap, native inventories and ordered event work with one cancellation
 signal. Finite native reads retain their deadline alongside caller cancellation;
 streams and explicitly unbounded requests retain their existing timeout policy.
 Cancelled generations cannot publish snapshots, readiness, resyncs or late event
-results. Bootstrap failure cancels and joins sibling inventory reads, and
-repeated connected frames cannot launch overlapping snapshots. Instance-disposal
-resync uses the same connection owner and cancellation fences.
+results. A directory inventory failure cancels and joins only that directory's
+sibling reads, logs its directory and retains previously known activity/input;
+healthy directories still reconcile and the connection becomes ready. Failures
+of the authoritative session snapshot still reconnect. Repeated connected frames
+cannot launch overlapping snapshots. Instance-disposal resync uses the same
+connection owner and cancellation fences.
 
 `capabilities.models.listModels(sessionID)` reads native `GET /provider` and
 `GET /config` in that session's directory. It allowlists connected provider and

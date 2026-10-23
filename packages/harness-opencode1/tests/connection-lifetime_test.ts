@@ -360,23 +360,24 @@ test("native finite read deadline remains active with an owner signal", async ()
   }
 });
 
-test("failed bootstrap aborts and joins sibling inventory reads", async () => {
+test("failed directory aborts and joins sibling reads without retiring the connection", async () => {
   const record = await recording("permission", false, true);
   try {
     await record.reached;
-    await wait(() => record.streamAborts() === 1);
-    let stopped = false;
-    const stop = record.adapter.core.stop().then(() => {
-      stopped = true;
-    });
-    await tick();
-    const joined = !stopped;
+    await wait(() => record.signals[0]?.aborted === true);
+    const joined = !record.published.includes("connected");
     const aborted = record.signals[0]?.aborted;
     record.release();
-    await stop;
+    await wait(() => record.published.includes("resync"));
     assertEquals(joined, true, "Failed bootstrap detached its sibling reads");
     assertEquals(aborted, true, "Failed inventory left its siblings alive");
-    assertEquals(record.published, ["connecting"]);
+    assertEquals(record.streamAborts(), 0);
+    assertEquals(record.published, [
+      "connecting",
+      "reset:root",
+      "connected",
+      "resync",
+    ]);
   } finally {
     await record.close();
   }

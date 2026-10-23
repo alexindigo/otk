@@ -434,7 +434,7 @@ test("I7 opencode restart reconnects and resnapshots", async () => {
     await f.stop();
   }
 });
-test("I8 bootstrap inventories each distinct session directory exactly once and preserves idle projects", async () => {
+test("I8 compatible idle projects bootstrap without loading native inventories", async () => {
   const f = await fixture(), controller = new AbortController();
   const requests: { path: string; directory: string | null }[] = [];
   const proxy = serve(
@@ -490,10 +490,8 @@ test("I8 bootstrap inventories each distinct session directory exactly once and 
     const inventories = ["/session/status", "/permission", "/question"];
     assertEquals(
       requests.filter(({ path }) => inventories.includes(path))
-        .map(({ path, directory }) => [directory, path]).sort(),
-      directories.flatMap((directory) =>
-        inventories.map((path) => [directory, path])
-      ).sort(),
+        .map(({ path, directory }) => [directory, path]),
+      [],
     );
   } finally {
     try {

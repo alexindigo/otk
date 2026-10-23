@@ -9,7 +9,15 @@ import { cfg, fixture } from "../../../tests/support/config.ts";
 import { waitFor } from "../../../tests/support/opencode.ts";
 import { Opencode1Adapter } from "../adapter.ts";
 
-for (const database of ["missing", "incompatible", "no hints"] as const) {
+for (
+  const database of [
+    "missing",
+    "incompatible",
+    "hints",
+    "no hints",
+    "query failure",
+  ] as const
+) {
   test(`bootstrap inventories paged session directories before readiness with ${database} SQLite`, async () => {
     const settings = cfg(), root = await fixture();
     settings.harness.db = join(root, "native.db");
@@ -39,7 +47,10 @@ for (const database of ["missing", "incompatible", "no hints"] as const) {
       time: { created: Date.now(), updated: Date.now() },
     }));
     const retry = { type: "retry", attempt: 2, message: "Waiting", next: 123 };
-    if (database === "no hints") {
+    if (
+      database === "hints" || database === "no hints" ||
+      database === "query failure"
+    ) {
       const db = new DatabaseSync(settings.harness.db);
       const session = db.prepare("INSERT INTO session VALUES(?,?,?)");
       const message = db.prepare("INSERT INTO message VALUES(?,?,?)");
@@ -48,9 +59,9 @@ for (const database of ["missing", "incompatible", "no hints"] as const) {
         message.run(
           `message-${seed.id}`,
           seed.id,
-          JSON.stringify({
+          database === "query failure" ? "invalid JSON" : JSON.stringify({
             role: "assistant",
-            time: { completed: Date.now() },
+            time: database === "hints" ? {} : { completed: Date.now() },
           }),
         );
       }
@@ -137,6 +148,24 @@ for (const database of ["missing", "incompatible", "no hints"] as const) {
       });
       await waitFor(() => ready, (count) => count === 1);
       const check = async () => {
+        if (database === "no hints") {
+          assertEquals(
+            reads,
+            [],
+            "Compatible idle metadata loaded native instances",
+          );
+          for (const entry of index.values()) {
+            assertEquals(entry.status, "idle");
+            assertEquals(entry.attention, {
+              permissions: 0,
+              questions: 0,
+              childPermissions: 0,
+              childQuestions: 0,
+              errorState: { observations: [], revision: 0 },
+            });
+          }
+          return;
+        }
         assertEquals(
           index.get("busy")?.status,
           "busy",
@@ -168,7 +197,7 @@ for (const database of ["missing", "incompatible", "no hints"] as const) {
       await check();
       assertEquals(
         snapshots[0].find((entry) => entry.id === "busy")?.status,
-        "busy",
+        database === "no hints" ? "idle" : "busy",
         "Readiness preceded activity reconciliation",
       );
       stream.enqueue(new TextEncoder().encode(
@@ -177,6 +206,150 @@ for (const database of ["missing", "incompatible", "no hints"] as const) {
       await waitFor(() => resets, (count) => count === 2);
       await check();
     } finally {
+      await adapter.core.stop();
+      await Deno.remove(root, { recursive: true });
+    }
+  });
+}
+
+for (const failed of ["/session/status", "/permission", "/question"]) {
+  test(`bounded directory inventories retain failed ${failed} activity across resync`, async () => {
+    const settings = cfg(), root = await fixture();
+    settings.harness.db = join(root, "missing.db");
+    const seeds = Array.from({ length: 8 }, (_, i) => ({
+      id: `s${i}`,
+      directory: `/p${i}`,
+      projectID: `p${i}`,
+      title: `s${i}`,
+      time: { created: Date.now(), updated: Date.now() },
+    }));
+    const gates = seeds.map(() => Promise.withResolvers<void>());
+    const started = new Set<string>();
+    const index = new SessionIndex();
+    let stream!: ReadableStreamDefaultController<Uint8Array>,
+      round = 0,
+      resets = 0,
+      ready = 0;
+    const fetcher: typeof fetch = async (input, options) => {
+      const url = new URL(String(input)), path = url.pathname;
+      if (path === "/global/health") {
+        return Response.json({ version: "1.18.34" });
+      }
+      if (path === "/experimental/session") {
+        round++;
+        return Response.json(seeds);
+      }
+      if (path === "/global/event") {
+        return new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              stream = controller;
+              controller.enqueue(
+                new TextEncoder().encode(
+                  'data: {"payload":{"type":"server.connected","properties":{}}}\n\n',
+                ),
+              );
+              options?.signal?.addEventListener(
+                "abort",
+                () => controller.close(),
+                { once: true },
+              );
+            },
+          }),
+        );
+      }
+      const directory = url.searchParams.get("directory")!;
+      const i = seeds.findIndex((seed) => seed.directory === directory);
+      assertEquals(i >= 0, true);
+      if (round === 1) {
+        started.add(directory);
+        await gates[i].promise;
+      } else if (i === 0 && path === failed) {
+        return new Response("directory unavailable", { status: 500 });
+      }
+      if (path === "/session/status") {
+        return Response.json({
+          [seeds[i].id]: { type: i === 0 || round > 1 ? "busy" : "idle" },
+        });
+      }
+      if (path === "/permission") {
+        return Response.json(
+          i === 0 && round === 1
+            ? [{
+              id: "permission",
+              sessionID: "s0",
+              permission: "bash",
+              patterns: ["pwd"],
+              always: [],
+              metadata: {},
+            }]
+            : [],
+        );
+      }
+      assertEquals(path, "/question");
+      return Response.json(
+        i === 0 && round === 1 ? [{ id: "question", sessionID: "s0" }] : [],
+      );
+    };
+    const adapter = new Opencode1Adapter(settings, undefined, fetcher);
+    try {
+      await adapter.core.start({
+        index,
+        connection(state) {
+          if (state === "connected") ready++;
+        },
+        indexReset(entries) {
+          index.reset(entries);
+          resets++;
+        },
+        indexUpsert: (entry) => index.upsert(entry),
+        indexRemove: (id) => index.remove(id),
+        content() {},
+        resync() {},
+      });
+      await waitFor(() => started.size, (count) => count >= 4);
+      assertEquals(
+        started.size,
+        4,
+        "Fallback did not bound directory concurrency",
+      );
+      assertEquals(ready, 0);
+      gates[0].resolve();
+      await waitFor(() => started.size, (count) => count === 5);
+      assertEquals(ready, 0, "Readiness preceded all inventories");
+      for (const gate of gates) gate.resolve();
+      await waitFor(() => ready, (count) => count === 1);
+      assertEquals(started.size, 8, "Fallback silently dropped a directory");
+      assertEquals(index.get("s0")?.status, "busy");
+      assertEquals(index.get("s0")?.attention.permissions, 1);
+      assertEquals(index.get("s0")?.attention.questions, 1);
+      stream.enqueue(
+        new TextEncoder().encode(
+          'data: {"payload":{"type":"server.instance.disposed","properties":{}}}\n\n',
+        ),
+      );
+      await waitFor(() => resets, (count) => count === 2);
+      assertEquals(
+        index.get("s0")?.status,
+        "busy",
+        "Failed inventory erased known work",
+      );
+      assertEquals(index.get("s0")?.attention.permissions, 1);
+      assertEquals(index.get("s0")?.attention.questions, 1);
+      assertEquals(
+        (await adapter.capabilities.permissions.listPermissions("s0")).map((
+          request,
+        ) => request.id),
+        ["permission"],
+      );
+      assertEquals(
+        index.get("s1")?.status,
+        "busy",
+        "Failed project blocked healthy reconciliation",
+      );
+      assertEquals(ready, 1, "Directory failure replaced the connection");
+    } finally {
+      for (const gate of gates) gate.resolve();
       await adapter.core.stop();
       await Deno.remove(root, { recursive: true });
     }
