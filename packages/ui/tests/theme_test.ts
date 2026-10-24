@@ -38,6 +38,21 @@ function setup() {
     watching: () => !!change,
   };
 }
+Deno.test("theme release is bound to the immutable registration even if the caller mutates identity", () => {
+  const { themes } = setup();
+  const theme = {
+    id: "mutable",
+    label: "Mutable",
+    mode: "dark" as ThemeMode,
+    colors: { accent: "#123456" },
+  };
+  const release = themes.register(theme);
+  theme.id = "elsewhere";
+  theme.mode = "light";
+  release();
+  release();
+  assert(!themes.list().some((value) => value.id === "mutable"));
+});
 Deno.test("unknown theme startup, host commit and preview restore all paint the base without overwriting saved identity", () => {
   const f = setup();
   f.os("light");

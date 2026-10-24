@@ -18,6 +18,13 @@ exposes `server`, `backend`, `index`, `connections` and `stop()`. Stop closes
 connections, stops the backend, shuts down HTTP and closes the store; the
 application owns this lifetime.
 
+Acquisition rolls back on auth, backend or listener failure. Feature sources,
+index/prefs/source subscriptions, backend, HTTP listener and store are each
+released even when another cleanup fails; startup and cleanup causes are
+retained. Concurrent stop calls join one idempotent teardown. Connections
+release timers and subscriptions immediately and cannot rearm them from a late
+RPC completion.
+
 `RpcRegistry(backend, store)` dispatches registered methods and gives handlers
 `RpcContext` (`harness`, `store`, authoritative `sessionDirectory(id)`).
 Features own `params` validation and `handler`; `register(method, definition)`

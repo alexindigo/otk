@@ -27,19 +27,13 @@ export interface CoreServer {
   connections: Connections;
   stop(): Promise<void>;
 }
-/** Application composition supplies a backend, registrations, store and assets. */
-export async function startCore(options: CoreOptions): Promise<CoreServer> {
-  const { cfg, backend, store, prefs, rpc, staticRoot } = options;
-  const auth = new AuthState(cfg), index = options.index ?? new IndexStore();
-  const connections = new Connections(
-    backend,
-    index,
-    cfg.harness.url,
-    prefs,
-    rpc,
-    options.sources,
-  );
-  await backend.core.start({
+/** Bind the backend to the same authoritative index and live transport. */
+function startBackend(
+  backend: Harness,
+  index: IndexStore,
+  connections: Connections,
+): Promise<void> {
+  return backend.core.start({
     index,
     connection: (state) => connections.connection(state),
     indexReset: (entries) => index.reset(entries),
@@ -48,17 +42,71 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
     content: (id, event) => connections.content(id, event),
     resync: (sessionIDs) => connections.broadcast({ t: "resync", sessionIDs }),
   });
-  const server = await serve({ cfg, auth, backend, connections, staticRoot });
-  return {
-    server,
-    backend,
-    index,
-    connections,
-    async stop() {
-      connections.close();
-      await backend.core.stop();
-      await server.shutdown();
-      store.close();
-    },
-  };
+}
+/** Application composition supplies a backend, registrations, store and assets. */
+export async function startCore(options: CoreOptions): Promise<CoreServer> {
+  const { cfg, backend, store, prefs, rpc, staticRoot } = options;
+  const index = options.index ?? new IndexStore();
+  let connections: Connections | undefined,
+    server: Deno.HttpServer<Deno.NetAddr> | undefined;
+  let backendOwned = false, stopping: Promise<void> | undefined;
+  const stop = (): Promise<void> =>
+    stopping ??= Promise.resolve().then(async () => {
+      const errors: unknown[] = [];
+      const attempt = async (release: () => unknown) => {
+        try {
+          await release();
+        } catch (error) {
+          errors.push(error);
+        }
+      };
+      if (connections) await attempt(() => connections!.close());
+      else {for (const source of options.sources ?? []) {
+          await attempt(() => source.close?.());
+        }}
+      if (backendOwned) await attempt(() => backend.core.stop());
+      if (server) await attempt(() => server!.shutdown());
+      await attempt(() => store.close());
+      if (errors.length) {
+        throw new AggregateError(errors, "Service cleanup failed");
+      }
+    });
+  try {
+    const auth = new AuthState(cfg);
+    const transport = connections = new Connections(
+      backend,
+      index,
+      cfg.harness.url,
+      prefs,
+      rpc,
+      options.sources,
+    );
+    backendOwned = true;
+    await startBackend(backend, index, transport);
+    server = await serve({
+      cfg,
+      auth,
+      backend,
+      connections: transport,
+      staticRoot,
+    });
+    return {
+      server,
+      backend,
+      index,
+      connections: transport,
+      stop,
+    };
+  } catch (error) {
+    try {
+      await stop();
+    } catch (cleanup) {
+      throw new AggregateError(
+        [error, cleanup],
+        "Service startup and cleanup failed",
+        { cause: error },
+      );
+    }
+    throw error;
+  }
 }

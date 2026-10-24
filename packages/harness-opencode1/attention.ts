@@ -141,4 +141,14 @@ export class Attention {
       this.erase(id);
     });
   }
+  /** Explicit deletion, unlike index-window eviction, ends direct ownership. */
+  dispose(id: string): void {
+    const counts = this.#direct.get(id);
+    if (counts) {
+      for (const kind of ["permissions", "questions"] as const) {
+        if (counts[kind]) this.change(id, kind, -counts[kind]);
+      }
+    }
+    this.remove(id);
+  }
 }

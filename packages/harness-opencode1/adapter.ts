@@ -48,6 +48,9 @@ import { sessionDirectory } from "./directory.ts";
 import { Messages } from "./messages.ts";
 import { Attention } from "./attention.ts";
 import { MessageRecovery } from "./recovery.ts";
+import { connectionPublication } from "./publication.ts";
+const BOOTSTRAP_EVENT_LIMIT = 128;
+const BOOTSTRAP_TEXT_BUDGET = 4 * 1024 * 1024;
 const contentEvents = new Set([
   "session.created",
   "session.updated",
@@ -76,6 +79,7 @@ export class Opencode1Adapter implements Harness {
   version = "unknown";
   readonly client: Client;
   #sink!: HarnessSink;
+  #target!: HarnessSink;
   #index = new SessionIndex();
   #attention = new Attention(
     (id) => this.#index.get(id),
@@ -92,7 +96,13 @@ export class Opencode1Adapter implements Harness {
     AbortController,
     { sessionID: string; task: Promise<void> }
   >();
-  #errors = new SessionErrors((id, state) => this.#publishErrors(id, state));
+  #errors = new SessionErrors(
+    (id, state) => this.#publishErrors(id, state),
+    (id) =>
+      !this.#stopped && (!!this.#index.get(id) || this.buffers.subscribed(id)),
+    (id) =>
+      this.#stopped ? undefined : this.#index.get(id)?.attention.errorState,
+  );
   #controller?: AbortController;
   #run?: { controller: AbortController; task: Promise<void> };
   #stopping?: Promise<void>;
@@ -157,11 +167,12 @@ export class Opencode1Adapter implements Harness {
       (error) => console.warn("message recovery:", error),
     );
     this.#tasks = new TaskProgress(
-      async (id, message) => {
+      async (id, message, signal) => {
         if (message) {
-          return [await this.#messages.get(id, message)];
+          return [await this.#messages.get(id, message, signal)];
         }
-        return this.#db.taskMessages(id) ?? this.#messages.scan(id);
+        return this.#db.taskMessages(id) ??
+          this.#messages.scan(id, undefined, signal);
       },
       (id) => this.buffers.subscribed(id),
       (parent, messageID, part) => {
@@ -259,7 +270,7 @@ export class Opencode1Adapter implements Harness {
     this.#index = sink.index ?? new SessionIndex();
     // Standalone consumers need no index implementation. In core, callbacks
     // already mutate the injected owner; never maintain a mirrored map.
-    this.#sink = sink.index ? sink : {
+    this.#target = sink.index ? sink : {
       ...sink,
       indexReset: (entries) => {
         this.#index.reset(entries);
@@ -278,6 +289,7 @@ export class Opencode1Adapter implements Harness {
       controller: new AbortController(),
       task: Promise.resolve(),
     };
+    this.#sink = connectionPublication(this.#target, run.controller.signal);
     run.task = Promise.resolve().then(() => this.#loop(run.controller.signal));
     sink.connection("connecting");
     return Promise.resolve();
@@ -294,11 +306,15 @@ export class Opencode1Adapter implements Harness {
   }
   async #shutdown(): Promise<void> {
     this.#abortCommands();
-    this.#errors.reset();
     this.buffers.stop();
-    this.#tasks.release();
+    this.#errors.reset();
+    await this.#tasks.stop();
     await this.#recovery.stop();
     this.#colors.clear();
+    this.#permissions.clear();
+    this.#questions.clear();
+    this.#reverts.clear();
+    this.#attention.reset([], [], []);
     await this.#run?.task;
     await Promise.all(
       [...this.#commands.values()].map((request) => request.task),
@@ -314,6 +330,7 @@ export class Opencode1Adapter implements Harness {
         (sessionID, op) => this.#sink.content(sessionID, op),
       );
     }
+    if (!count) this.#errors.release(id);
     if (!count) this.#tasks.release(id);
     if (!count) this.#colors.release(id);
     if (!count) this.#reverts.delete(id);
@@ -425,6 +442,10 @@ export class Opencode1Adapter implements Harness {
     const backoff = new Backoff(this.cfg.harness.reconnectmax);
     while (!signal.aborted) {
       const controller = this.#controller = new AbortController();
+      const sink = this.#sink = connectionPublication(
+        this.#target,
+        controller.signal,
+      );
       controller.signal.addEventListener("abort", () => {
         this.#recovery.release();
         this.#tasks.release();
@@ -434,8 +455,9 @@ export class Opencode1Adapter implements Harness {
         this.cfg.harness.heartbeattimeout * 1000,
         () => controller.abort(),
       );
-      let chain = Promise.resolve(), ready = false, bootstrapping = false;
+      let chain = Promise.resolve(), bootstrapping = false, ready = false;
       const buffered: Envelope[] = [];
+      let bufferedBytes = 0;
       try {
         const health = await this.client.json<{ version: string }>(
           "/global/health",
@@ -452,43 +474,73 @@ export class Opencode1Adapter implements Harness {
           await response.body?.cancel();
           controller.signal.throwIfAborted();
         }
-        await consumeEvents(response, () => watchdog.touch(), (event) => {
-          if (!this.#current(controller)) return;
-          if (event.payload.type === "server.connected") {
-            if (bootstrapping) return;
-            bootstrapping = true;
-            backoff.connected();
-            chain = this.#bootstrap(controller).then(async () => {
-              if (!this.#current(controller)) return;
-              ready = true;
-              this.#sink.connection("connected");
-              if (!this.#current(controller)) return;
-              this.#sink.resync("all");
-              for (const pending of buffered.splice(0)) {
-                if (!this.#current(controller)) break;
-                await this.#handle(pending, controller);
+        await consumeEvents(
+          response,
+          () => watchdog.touch(),
+          (event, textLength) => {
+            if (!this.#current(controller)) return;
+            if (event.payload.type === "server.connected") {
+              if (bootstrapping) return;
+              bootstrapping = true;
+              backoff.connected();
+              chain = this.#bootstrap(controller).then(async () => {
+                if (!this.#current(controller)) return;
+                ready = true;
+                sink.connection("connected");
+                if (!this.#current(controller)) return;
+                sink.resync("all");
+                bufferedBytes = 0;
+                for (const pending of buffered.splice(0)) {
+                  if (!this.#current(controller)) break;
+                  await this.#handle(pending, controller);
+                }
+              }).catch((error) => {
+                if (this.#current(controller)) {
+                  console.warn("bootstrap:", error);
+                }
+                controller.abort();
+              });
+            } else if (event.payload.type !== "server.heartbeat") {
+              if (!ready) {
+                // Bound both object count and retained serialized UTF-16 text.
+                // One overflowing frame remains owned by the paused parser.
+                const bytes = textLength * 2;
+                if (
+                  buffered.length < BOOTSTRAP_EVENT_LIMIT &&
+                  bufferedBytes + bytes <= BOOTSTRAP_TEXT_BUDGET
+                ) {
+                  buffered.push(event);
+                  bufferedBytes += bytes;
+                  return;
+                }
+                // Our own backpressure makes transport heartbeats unobservable;
+                // finite bootstrap requests still own their cancellation/deadline.
+                watchdog.stop();
+                chain = chain.then(() => this.#handle(event, controller))
+                  .finally(() => {
+                    if (this.#current(controller)) watchdog.touch();
+                  });
+                return chain;
               }
-            }).catch((error) => {
-              if (this.#current(controller)) console.warn("bootstrap:", error);
-              controller.abort();
-            });
-          } else if (event.payload.type !== "server.heartbeat") {
-            if (!ready) buffered.push(event);
-            else {
               chain = chain.then(() => this.#handle(event, controller));
               // Once bootstrap is ready, the parser owns at most the event being
               // forwarded, rather than accumulating content in a promise queue.
               return chain;
             }
-          }
-        }, (type) => {
-          if (
-            contentEvents.has(type) || type === "server.connected" ||
-            type === "server.heartbeat"
-          ) return true;
-          console.debug(`harness event ignored: ${type}`);
-          return false;
-        });
+          },
+          (type) => {
+            if (
+              contentEvents.has(type) || type === "server.connected" ||
+              type === "server.heartbeat"
+            ) return true;
+            console.debug(`harness event ignored: ${type}`);
+            return false;
+          },
+          undefined,
+          () => {
+            if (bootstrapping && !ready) controller.abort();
+          },
+        );
       } catch (error) {
         if (this.#current(controller)) {
           console.warn(`harness stream: ${errorMessage(error)}`);
@@ -498,12 +550,13 @@ export class Opencode1Adapter implements Harness {
         controller.abort();
         await chain;
         buffered.length = 0;
+        await this.#tasks.stop();
         this.#recovery.release();
         this.#controller = undefined;
       }
       if (signal.aborted) break;
       this.buffers.reset();
-      this.#sink.connection("reconnecting");
+      this.#target.connection("reconnecting");
       await new Promise<void>((resolve) => {
         const wake = () => {
           clearTimeout(timer);
@@ -518,6 +571,7 @@ export class Opencode1Adapter implements Harness {
   }
   async #bootstrap(controller: AbortController): Promise<void> {
     if (!this.#current(controller)) return;
+    const sink = this.#sink;
     this.#recovery.release();
     this.#reverts.clear();
     this.#tasks.release();
@@ -657,6 +711,7 @@ export class Opencode1Adapter implements Harness {
       }),
     );
     if (!this.#current(controller)) return;
+    this.#errors.reconcile(new Set(entries.keys()));
     for (const entry of entries.values()) {
       this.#errors.register(entry.id);
       this.#errorEntry(entry);
@@ -671,7 +726,7 @@ export class Opencode1Adapter implements Harness {
       [...this.#permissions.values()].map(({ request }) => request.sessionID),
       this.#questions.values(),
     );
-    this.#sink.indexReset([...entries.values()]);
+    sink.indexReset([...entries.values()]);
   }
   #question(id: string, session?: string): void {
     const previous = this.#questions.get(id);
@@ -681,6 +736,36 @@ export class Opencode1Adapter implements Harness {
       this.#questions.set(id, session);
       this.#attention.change(session, "questions", 1);
     } else this.#questions.delete(id);
+  }
+  #disposeSession(id: string): void {
+    const sink = this.#sink;
+    this.#abortCommands(id);
+    this.#errors.remove(id);
+    for (const [key, pending] of this.#permissions) {
+      if (pending.request.sessionID !== id) continue;
+      this.#permissions.delete(key);
+      this.#attention.change(id, "permissions", -1);
+      sink.content(id, {
+        op: "permission.remove",
+        requestID: key,
+        sessionID: id,
+      });
+    }
+    for (const [key, session] of this.#questions) {
+      if (session !== id) continue;
+      this.#question(key);
+      sink.content(id, {
+        op: "question.remove",
+        requestID: key,
+        sessionID: id,
+      });
+    }
+    this.#attention.dispose(id);
+    this.#tasks.dispose(id);
+    this.#colors.release(id);
+    this.#reverts.delete(id);
+    this.#recovery.release(id);
+    this.buffers.removeSession(id);
   }
   async #handle(event: Envelope, controller: AbortController): Promise<void> {
     try {
@@ -693,6 +778,7 @@ export class Opencode1Adapter implements Harness {
   }
   async #event(event: Envelope, controller: AbortController): Promise<void> {
     if (!this.#current(controller)) return;
+    const sink = this.#sink;
     const { type, properties: p } = event.payload;
     // The 1.x bridge emits both the legacy event and its durable "sync"
     // companion. The latter has syncEvent, not properties; do not apply twice.
@@ -712,7 +798,7 @@ export class Opencode1Adapter implements Harness {
         controller.abort();
         throw error;
       }
-      if (this.#current(controller)) this.#sink.resync("all");
+      if (this.#current(controller)) sink.resync("all");
       return;
     }
     const info = p.info as Info | undefined;
@@ -741,13 +827,13 @@ export class Opencode1Adapter implements Harness {
       ) {
         const revert = await this.#revertInfo(session);
         if (!this.#current(controller)) return;
-        this.#sink.content(session.id, {
+        sink.content(session.id, {
           op: "session.revert",
           messageID: revert?.messageID,
           messageCount: revert?.messageCount || 0,
           files: revert?.files || [],
         });
-        this.#sink.resync("all");
+        sink.resync("all");
       }
       return;
     }
@@ -756,11 +842,7 @@ export class Opencode1Adapter implements Harness {
       if (typeof id !== "string" || !id) {
         throw new Error("Malformed session.deleted: session id missing");
       }
-      this.#abortCommands(id);
-      this.#errors.remove(id);
-      this.#attention.remove(id);
-      this.#recovery.release(id);
-      this.buffers.removeSession(id);
+      this.#disposeSession(id);
       return;
     }
     if (!sessionID) throw new Error(`Malformed ${type}: session id missing`);
@@ -791,7 +873,7 @@ export class Opencode1Adapter implements Harness {
       }
       // Index reads are detached values: commit status before the error owner
       // publishes its independent clear observation against that same record.
-      if (entry) this.#sink.indexUpsert(entry);
+      if (entry) sink.indexUpsert(entry);
       if (status.type === "busy") this.#errors.clear(sessionID);
       return;
     }
@@ -823,9 +905,9 @@ export class Opencode1Adapter implements Harness {
       } else if (entry) {
         // Changed request metadata must wake the same server index observer even
         // when the number of pending requests did not change.
-        this.#sink.indexUpsert(entry);
+        sink.indexUpsert(entry);
       }
-      this.#sink.content(sessionID, {
+      sink.content(sessionID, {
         op: "permission.upsert",
         request: mapped,
       });
@@ -837,7 +919,7 @@ export class Opencode1Adapter implements Harness {
       if (previous) {
         this.#attention.change(previous.request.sessionID, "permissions", -1);
       }
-      this.#sink.content(sessionID, {
+      sink.content(sessionID, {
         op: "permission.remove",
         requestID: String(p.requestID),
         sessionID,
@@ -850,7 +932,7 @@ export class Opencode1Adapter implements Harness {
       }
       const request = mapQuestion(p as unknown as RawQuestion);
       this.#question(String(p.id), sessionID);
-      this.#sink.content(sessionID, {
+      sink.content(sessionID, {
         op: "question.upsert",
         request,
       });
@@ -858,7 +940,7 @@ export class Opencode1Adapter implements Harness {
     }
     if (type === "question.replied" || type === "question.rejected") {
       this.#question(String(p.requestID));
-      this.#sink.content(sessionID, {
+      sink.content(sessionID, {
         op: "question.remove",
         requestID: String(p.requestID),
         sessionID,
@@ -879,7 +961,7 @@ export class Opencode1Adapter implements Harness {
       info.time.completed !== undefined
     ) {
       this.buffers.complete(info.id, (id, op) => {
-        if (this.#current(controller)) this.#sink.content(id, op);
+        sink.content(id, op);
       });
     }
     if (type === "message.updated" && info?.time.completed !== undefined) {
@@ -915,7 +997,7 @@ export class Opencode1Adapter implements Harness {
           current.timeUpdated,
           info.time.completed,
         );
-        this.#sink.indexUpsert(current);
+        sink.indexUpsert(current);
       }
     }
     if (type === "message.removed") {
@@ -957,7 +1039,7 @@ export class Opencode1Adapter implements Harness {
         String(p.partID),
         String(p.delta),
         (id, op) => {
-          if (this.#current(controller)) this.#sink.content(id, op);
+          sink.content(id, op);
         },
       )
     ) return;
@@ -970,7 +1052,7 @@ export class Opencode1Adapter implements Harness {
     if (cutoff && messageID && messageID >= cutoff) return;
     const content = (op: ContentOp) => {
       if (this.#current(controller) && this.buffers.subscribed(sessionID)) {
-        this.#sink.content(sessionID, op);
+        sink.content(sessionID, op);
       }
     };
     switch (type) {
@@ -1020,7 +1102,7 @@ export class Opencode1Adapter implements Harness {
             id,
             String(p.delta),
             (id, op) => {
-              if (this.#current(controller)) this.#sink.content(id, op);
+              sink.content(id, op);
             },
           )
         ) {

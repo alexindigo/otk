@@ -221,6 +221,17 @@ tool labels; missing capability never causes a partial-page estimate. The ledger
 supplies the complete turn's first start/last end independently of transcript
 pages.
 
+Mounted usage consumers hold `retain(target)` leases; the returned release is
+idempotent and bound to that exact resource. The selected transcript owns one
+lease; the Sessions panel binds `usage.scope().set(targets)` and disposes its
+scope on unmount. Shared targets coalesce work until the last lease releases,
+which aborts reads and removes both ledger and published snapshot. Explicit
+index removals and `removeServer(id)` invalidate targets, including held reads.
+One-shot load/get consumers retain at most 32 unleased targets in
+least-recently-loaded order; leased targets are never evicted by that reuse
+cache. `stop()` ends the owner and cannot be undone by late frame delivery or
+loading.
+
 `priceUsage(total, catalog?)` prices the owner's exact per-model summaries, with
 reasoning at the output rate. Unknown prices leave category costs absent and
 known zero prices remain zero. Backend-reported totals stay authoritative,
@@ -307,11 +318,14 @@ owner-current inputs and authoritative session lookup for readiness.
 Frames reduce approvals, index and inbox before ordered observers run. An index
 gap requests a resnapshot and reaches observers with `accepted=false`, so
 notification consumers can skip it while session consumers retain delivery.
-Removal clears the index, notifies observers, evicts the inbox, then removes the
-connection. Existing approval/tab cache retention is unchanged. `stop()` stops
-approval models before sidecars. Server-scoped task actions, live capability and
-history-source projections, labelled projects and the local layout/preference
-RPC ports share this owner.
+Removal clears the index, notifies observers, releases the inbox, approval and
+all project-tab caches for that server, then removes its connection. Guarded
+navigation detaches a selected server before removal even when its project is
+still loading. Tab disposal retires pending promotion publication and prevents
+later admission. `stop()` releases all caches before sidecars and ignores late
+frames; stopped owners cannot create replacement resources. Server-scoped task
+actions, live capability and history-source projections, labelled projects and
+the local layout/preference RPC ports share this owner.
 
 `createInbox(rpc, factory?, report?)` receives connection-local `inbox` frames,
 including the snapshot sent on every hello. `openProject`, `openSession` and
@@ -344,6 +358,13 @@ validates each remote entry independently. Bad entries, duplicate IDs/URLs and
 invalid URLs are diagnosed while valid neighbours survive. A corrupt envelope
 yields only the implicit local server and a diagnostic. Reading never rewrites
 saved data; `createSidecars` accepts the same diagnostic port in its options.
+
+Every connection attempt owns discovery, socket callbacks, RPCs and retry timer.
+Replacing an attempt immediately retires its socket and availability; a captured
+old callback cannot send or publish into the replacement. Collection additions
+share one pending operation per normalized URL. Stop cancels discovery and
+fences late installation; persisted specs are owner-current even with a deferred
+state factory. Re-adding a removed server creates a fresh connection lifetime.
 
 `projectHash` / `projectRoute` provide project-only URLs for empty projects,
 separate from session URLs; pass both through the same guarded navigation owner.

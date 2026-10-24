@@ -81,6 +81,10 @@ export function createServerResources(o: {
   const approvalModels = new Map<string, ApprovalModel>();
   const tabModels = new Map<string, ClientTabs>();
   const observers = new Set<FrameObserver>();
+  let stopped = false;
+  const live = () => {
+    if (stopped) throw new Error("Server resources are stopped");
+  };
   const entry = (id: string, sessionID: string): IndexEntry | undefined =>
     o.index.state.entries[sessionKey(id, sessionID)];
   const server = (id: string): SidecarState | undefined =>
@@ -93,6 +97,7 @@ export function createServerResources(o: {
   const advertised = (id: string, capability: CapabilityName): boolean =>
     connected(id) && declares(id, capability);
   const approvals = (id: string): ApprovalModel => {
+    live();
     let model = approvalModels.get(id);
     if (!model) {
       model = createApprovals(
@@ -115,6 +120,7 @@ export function createServerResources(o: {
       )
     );
   const inbox = (id: string): InboxModel => {
+    live();
     let model = inboxes.get(id);
     if (!model) {
       model = createInbox(sidecars.connection(id).rpc, factory, o.error);
@@ -128,6 +134,7 @@ export function createServerResources(o: {
     inbox: inbox(p.sidecarId).state.inbox,
   });
   const tabs = (p: ProjectSelection): ClientTabs => {
+    live();
     const key = `${p.sidecarId}/${p.directory}`;
     let model = tabModels.get(key);
     if (!model) {
@@ -144,6 +151,7 @@ export function createServerResources(o: {
     return model;
   };
   const receive = (id: string, frame: ServerFrame): void => {
+    if (stopped) return;
     approvals(id).receive(frame);
     let accepted = true;
     if (frame.t === "index.snapshot" || frame.t === "index.patch") {
@@ -230,6 +238,13 @@ export function createServerResources(o: {
       o.index.remove(id);
       for (const observer of observers) observer.removed?.(id);
       inboxes.delete(id);
+      approvalModels.get(id)?.stop();
+      approvalModels.delete(id);
+      for (const [key, model] of tabModels) {
+        if (!key.startsWith(`${id}/`)) continue;
+        model.stop();
+        tabModels.delete(key);
+      }
       sidecars.remove(id);
     },
     async layout(patch) {
@@ -248,7 +263,14 @@ export function createServerResources(o: {
       });
     },
     stop() {
+      if (stopped) return;
+      stopped = true;
       for (const model of approvalModels.values()) model.stop();
+      for (const model of tabModels.values()) model.stop();
+      approvalModels.clear();
+      tabModels.clear();
+      inboxes.clear();
+      observers.clear();
       sidecars.stop();
     },
   };

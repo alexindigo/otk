@@ -212,7 +212,7 @@ Deno.test("server resources cache per server and per server-directory with readi
   f.resources.stop();
 });
 
-Deno.test("server resource removal preserves index-observer-inbox-connection order and retained caches", () => {
+Deno.test("server resource removal preserves observer order and evicts every server-owned cache", () => {
   const f = fixture(),
     inbox = f.resources.inbox("remote"),
     approvals = f.resources.approvals("remote");
@@ -234,8 +234,8 @@ Deno.test("server resource removal preserves index-observer-inbox-connection ord
     "sidecars.remove:remote",
   ]);
   assertNotStrictEquals(f.resources.inbox("remote"), inbox);
-  assertStrictEquals(f.resources.approvals("remote"), approvals);
-  assertStrictEquals(f.resources.tabs(p), tabs);
+  assertNotStrictEquals(f.resources.approvals("remote"), approvals);
+  assertNotStrictEquals(f.resources.tabs(p), tabs);
   f.resources.stop();
 });
 
@@ -366,14 +366,14 @@ Deno.test("server resource capability policies and RPC ports stay live and serve
     ["remote", "tasks.addSession", { id: "task", sessionID: "member" }],
     ["add", "https://server", "Name"],
   ]);
-  f.resources.approvals("local");
+  const approval = f.resources.approvals("local");
   f.resources.stop();
   f.receive("local", {
     t: "approvals",
     approvals: { enabled: ["session"], revision: 1 },
   });
   assertEquals(
-    f.resources.approvals("local").state.ready,
+    approval.state.ready,
     false,
     "approvals stop before sidecars",
   );

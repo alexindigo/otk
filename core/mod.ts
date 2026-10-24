@@ -6,7 +6,7 @@ export {
   type RpcDefinition,
   RpcRegistry,
 } from "./ws/registry.ts";
-export { Connections } from "./ws/connections.ts";
+export { Connections, type FrameSource } from "./ws/connections.ts";
 export { IndexStore } from "./index/store.ts";
 export * from "./config/loader.ts";
 export * from "./config/schema.ts";

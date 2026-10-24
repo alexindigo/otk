@@ -19,10 +19,15 @@ export function serveBackend(
   staticRoot: string,
 ): Promise<CoreServer> {
   const store = new OtkDb(cfg.state.path, [prefsMigrations]);
-  const prefs = new Prefs(store, prefsOptions),
-    rpc = new RpcRegistry(backend, store);
-  registerSessions(rpc, backend);
-  registerPrompt(rpc, backend); // No prompt RPCs when this capability is absent.
-  registerPrefs(rpc, backend, prefs);
-  return startCore({ cfg, backend, store, prefs, rpc, staticRoot });
+  try {
+    const prefs = new Prefs(store, prefsOptions),
+      rpc = new RpcRegistry(backend, store);
+    registerSessions(rpc, backend);
+    registerPrompt(rpc, backend); // No prompt RPCs when this capability is absent.
+    registerPrefs(rpc, backend, prefs);
+    return startCore({ cfg, backend, store, prefs, rpc, staticRoot });
+  } catch (error) {
+    store.close();
+    throw error;
+  }
 }

@@ -248,7 +248,10 @@ export function createShellNavigation(o: {
       });
     },
     removeServer(id) {
-      if (store.state.project?.sidecarId === id && !navigation.open("")) {
+      if (
+        (session.state.selection?.sidecarId === id ||
+          store.state.project?.sidecarId === id) && !navigation.open("")
+      ) {
         return false;
       }
       resources.remove(id);

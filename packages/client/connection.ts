@@ -60,18 +60,21 @@ export class SidecarConnection {
     // Removal/unmount ends this instance's lifetime; late async callers cannot
     // restart it. Reconnects use a live instance, re-adds create a new one.
     if (this.#stopped) return;
-    this.#controller?.abort();
-    clearTimeout(this.#retry);
+    this.#retire();
     const controller = this.#controller = new AbortController();
+    const current = () =>
+      this.#controller === controller && !controller.signal.aborted &&
+      !this.#stopped;
     this.sink.status(this.#backoff === 1000 ? "connecting" : "reconnecting");
     try {
+      if (!current()) return;
       const auth = await request<AuthStatus>(
         this.base,
         "session",
         undefined,
         AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
       );
-      if (this.#stopped || controller.signal.aborted) return;
+      if (!current()) return;
       if (auth.setupRequired || !auth.authenticated) {
         this.sink.status(
           auth.setupRequired ? "setup required" : "login required",
@@ -87,10 +90,15 @@ export class SidecarConnection {
           : "ws:";
       const socket = this.#socket = this.options.socket?.(url) ??
         new WebSocket(url);
-      socket.onopen = () =>
-        socket.send(JSON.stringify({ t: "hello", protocol: PROTOCOL_VERSION }));
+      socket.onopen = () => {
+        if (current() && socket === this.#socket) {
+          socket.send(
+            JSON.stringify({ t: "hello", protocol: PROTOCOL_VERSION }),
+          );
+        }
+      };
       socket.onmessage = ({ data }) => {
-        if (socket !== this.#socket || this.#stopped) return;
+        if (!current() || socket !== this.#socket) return;
         const frame: ServerFrame = JSON.parse(data);
         if (frame.t === "ping") {
           socket.send(JSON.stringify({ t: "pong" }));
@@ -105,6 +113,7 @@ export class SidecarConnection {
           this.#capabilities = new Set(welcomeCapabilities(frame));
           this.#backoff = 1000;
           this.sink.status("connected");
+          if (!current()) return;
           for (const sessionID of this.#subscriptions) {
             this.send({ t: "subscribe", sessionID });
           }
@@ -117,23 +126,38 @@ export class SidecarConnection {
         this.sink.frame(frame);
       };
       socket.onclose = () => {
-        if (socket !== this.#socket) return;
-        this.#welcomed = false;
-        this.#capabilities.clear();
-        this.rpc.close();
+        if (!current() || socket !== this.#socket) return;
+        this.#retire();
         if (!this.#stopped) this.#schedule();
       };
     } catch (error) {
-      if (!this.#stopped && !controller.signal.aborted) {
+      if (current()) {
+        this.#retire();
         this.#schedule(errorMessage(error));
       }
     }
   }
   #schedule(error?: string): void {
-    this.sink.status("reconnecting", error);
+    if (this.#stopped) return;
     const delay = this.#backoff;
     this.#backoff = Math.min(this.#backoff * 2, 30_000);
     this.#retry = setTimeout(() => void this.connect(), delay);
+    this.sink.status("reconnecting", error);
+  }
+  #retire(): void {
+    this.#controller?.abort();
+    this.#controller = undefined;
+    clearTimeout(this.#retry);
+    this.#retry = undefined;
+    this.#welcomed = false;
+    this.#capabilities.clear();
+    this.rpc.close();
+    const socket = this.#socket;
+    this.#socket = undefined;
+    if (socket) {
+      socket.onopen = socket.onmessage = socket.onclose = null;
+      socket.close();
+    }
   }
   #protocolMismatch(): void {
     this.stop();
@@ -154,12 +178,7 @@ export class SidecarConnection {
   }
   stop(): void {
     this.#stopped = true;
-    this.#controller?.abort();
-    clearTimeout(this.#retry);
-    this.#welcomed = false;
-    this.#capabilities.clear();
-    this.rpc.close();
-    this.#socket?.close();
+    this.#retire();
     this.#subscriptions.clear();
   }
 }

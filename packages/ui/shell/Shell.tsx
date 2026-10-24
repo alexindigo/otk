@@ -103,7 +103,10 @@ export default function Shell(
     removed: (id) => notifications.remove(id),
   }));
   onCleanup(
-    resources.observe({ frame: (id, frame) => session.receive(id, frame) }),
+    resources.observe({
+      frame: (id, frame) => session.receive(id, frame),
+      removed: (id) => session.usage.removeServer(id),
+    }),
   );
   onCleanup(resources.observe({
     frame: (id, frame) => {

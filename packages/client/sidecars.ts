@@ -102,16 +102,17 @@ export function createSidecars(
     })),
   });
   const connections = new Map<string, SidecarConnection>();
+  const specs = new Map(initial.map((spec) => [spec.id, spec]));
+  const additions = new Map<
+    string,
+    { controller: AbortController; work: Promise<string> }
+  >();
+  let stopped = false;
   const persist = () =>
     storage.setItem(
       "otk.sidecars",
       JSON.stringify(
-        [...connections.keys()].filter((id) => id !== LOCAL_SIDECAR).map(
-          (id) => {
-            const item = state.list.find((item) => item.id === id)!;
-            return { id: item.id, baseUrl: item.baseUrl, label: item.label };
-          },
-        ),
+        [...specs.values()].filter((spec) => spec.id !== LOCAL_SIDECAR),
       ),
     );
   const install = (spec: SidecarSpec) => {
@@ -161,41 +162,73 @@ export function createSidecars(
       return connection;
     },
     start(): void {
+      if (stopped) return;
       for (const connection of connections.values()) void connection.connect();
     },
     stop(): void {
+      stopped = true;
+      for (const addition of additions.values()) addition.controller.abort();
+      additions.clear();
       for (const connection of connections.values()) connection.stop();
     },
-    async add(value: string, label: string): Promise<string> {
-      const baseUrl = normalizeBase(value);
-      if (state.list.some((item) => item.baseUrl === baseUrl)) {
-        throw new Error("Sidecar already added");
+    add(value: string, label: string): Promise<string> {
+      if (stopped) {
+        return Promise.reject(new Error("Sidecar collection is stopped"));
       }
-      const health = await request<{ ok: boolean }>(apiBase(baseUrl), "health");
-      if (!health.ok) throw new Error("This URL is not an OTK sidecar");
-      const spec = {
-        id: crypto.randomUUID(),
-        baseUrl,
-        label: label.trim() || new URL(baseUrl).host,
-      };
-      setState((draft) => {
-        draft.list.push({
-          ...spec,
-          status: "connecting",
-          harness: "connecting",
-          capabilities: [],
+      let baseUrl: string;
+      try {
+        baseUrl = normalizeBase(value);
+      } catch (error) {
+        return Promise.reject(error);
+      }
+      if ([...specs.values()].some((item) => item.baseUrl === baseUrl)) {
+        return Promise.reject(new Error("Sidecar already added"));
+      }
+      const pending = additions.get(baseUrl);
+      if (pending) return pending.work;
+      const controller = new AbortController();
+      const work = Promise.resolve().then(async () => {
+        const health = await request<{ ok: boolean }>(
+          apiBase(baseUrl),
+          "health",
+          undefined,
+          AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
+        );
+        controller.signal.throwIfAborted();
+        if (stopped) throw new Error("Sidecar collection is stopped");
+        if (!health.ok) throw new Error("This URL is not an OTK sidecar");
+        const spec = {
+          id: crypto.randomUUID(),
+          baseUrl,
+          label: label.trim() || new URL(baseUrl).host,
+        };
+        specs.set(spec.id, spec);
+        install(spec);
+        setState((draft) => {
+          draft.list.push({
+            ...spec,
+            status: "connecting",
+            harness: "connecting",
+            capabilities: [],
+          });
         });
+        queueMicrotask(persist);
+        await connections.get(spec.id)?.connect();
+        controller.signal.throwIfAborted();
+        return spec.id;
+      }).finally(() => {
+        if (additions.get(baseUrl)?.controller === controller) {
+          additions.delete(baseUrl);
+        }
       });
-      install(spec);
-      // Persist after the binding's microtask batch commits the new list.
-      queueMicrotask(persist);
-      await connections.get(spec.id)!.connect();
-      return spec.id;
+      additions.set(baseUrl, { controller, work });
+      return work;
     },
     remove(id: string): void {
       if (id === LOCAL_SIDECAR) return;
       connections.get(id)?.stop();
       connections.delete(id);
+      specs.delete(id);
       setState((draft) => {
         draft.list = draft.list.filter((item) => item.id !== id);
       });

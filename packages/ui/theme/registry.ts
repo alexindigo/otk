@@ -36,13 +36,13 @@ export class ThemeRegistry {
       ...theme,
       colors: Object.freeze({ ...theme.colors }),
     });
-    this.#themes.set(theme.id, data);
-    if (options.base) this.#bases.set(theme.mode, theme.id);
+    this.#themes.set(data.id, data);
+    if (options.base) this.#bases.set(data.mode, data.id);
     return () => {
-      if (this.#themes.get(theme.id) !== data) return;
-      this.#themes.delete(theme.id);
-      if (this.#bases.get(theme.mode) === theme.id) {
-        this.#bases.delete(theme.mode);
+      if (this.#themes.get(data.id) !== data) return;
+      this.#themes.delete(data.id);
+      if (this.#bases.get(data.mode) === data.id) {
+        this.#bases.delete(data.mode);
       }
     };
   }

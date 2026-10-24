@@ -44,6 +44,7 @@ export interface ClientTabs {
   preview(sessionID: string): void;
   pin(sessionID: string): Promise<TaskRecord>;
   send<T>(sessionID: string, action: () => Promise<T>): Promise<T>;
+  stop(): void;
 }
 /** The current idle/seen phantom is retained until selection moves elsewhere. */
 export function createTabs(
@@ -54,7 +55,7 @@ export function createTabs(
   const store = factory<TabState>({ revision: 0 });
   const promotions = new Map<string, Promise<TaskRecord>>();
   const remembered = new Map<string, string>();
-  let selectionRevision = 0;
+  let selectionRevision = 0, stopped = false;
   let input: TabInput = {
     directory: "",
     entries: [],
@@ -67,6 +68,7 @@ export function createTabs(
     },
   };
   const refresh = () => {
+    if (stopped) throw new Error("Project tabs are stopped");
     if (sources) model.update(sources.input());
   };
   function tabs(): InboxTab[] {
@@ -133,6 +135,7 @@ export function createTabs(
     tabs,
     sessionFor,
     update(next: TabInput): void {
+      if (stopped) return;
       const changedProject = next.directory !== input.directory;
       input = next;
       if (changedProject) selectionRevision++;
@@ -250,6 +253,7 @@ export function createTabs(
         // Share the whole resolution/promotion, retaining its invocation scope.
         const pending = Promise.resolve().then(async () => {
           const session = entry ?? await sources?.session(sessionID);
+          if (stopped) throw new Error("Project tabs are stopped");
           if (session?.id !== sessionID || session.directory !== directory) {
             throw new Error("Unknown project session");
           }
@@ -263,7 +267,7 @@ export function createTabs(
         });
       }
       const task = existing ?? await promotions.get(sessionID)!;
-      if (revision === selectionRevision) {
+      if (!stopped && revision === selectionRevision) {
         selectionRevision++;
         store.update((draft) => {
           draft.selected = { kind: "task", id: task.id };
@@ -275,7 +279,32 @@ export function createTabs(
     },
     async send<T>(sessionID: string, action: () => Promise<T>): Promise<T> {
       await this.pin(sessionID);
+      if (stopped) throw new Error("Project tabs are stopped");
       return await action();
+    },
+    stop() {
+      if (stopped) return;
+      stopped = true;
+      selectionRevision++;
+      promotions.clear();
+      remembered.clear();
+      input = {
+        ...input,
+        entries: [],
+        inbox: {
+          projects: [],
+          tasks: [],
+          seen: {},
+          finishes: {},
+          pathTemplates: [],
+        },
+      };
+      store.update((draft) => {
+        delete draft.selected;
+        delete draft.preview;
+        delete draft.sessionID;
+        draft.revision++;
+      });
     },
   };
   return model;

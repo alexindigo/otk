@@ -17,13 +17,17 @@ export class SessionErrors {
   #requestID = 0;
   constructor(
     readonly publish: (sessionID: string, state: SessionErrorState) => void,
+    readonly retained: (sessionID: string) => boolean = () => false,
+    readonly baseline: (sessionID: string) => SessionErrorState | undefined =
+      () => undefined,
   ) {}
   register(sessionID: string): void {
     this.#removed.delete(sessionID);
   }
   snapshot(sessionID: string): SessionErrorState {
     return structuredClone(
-      this.#states.get(sessionID) || { revision: 0, observations: [] },
+      this.#states.get(sessionID) || this.baseline(sessionID) ||
+        { revision: 0, observations: [] },
     );
   }
   #update(
@@ -31,13 +35,23 @@ export class SessionErrors {
     observations: ErrorObservation[],
     currentRequestID = this.#states.get(sessionID)?.currentRequestID,
   ): void {
+    const active = [...this.#requests].some((request) =>
+      request.sessionID === sessionID
+    );
     const state: SessionErrorState = {
       revision: ++this.#revision,
-      ...(currentRequestID ? { currentRequestID } : {}),
+      ...(currentRequestID && (observations.length || active)
+        ? { currentRequestID }
+        : {}),
       observations,
     };
-    this.#states.set(sessionID, state);
-    this.publish(sessionID, this.snapshot(sessionID));
+    if (
+      observations.length || active ||
+      (this.retained(sessionID) && !this.baseline(sessionID))
+    ) {
+      this.#states.set(sessionID, state);
+    } else this.#states.delete(sessionID);
+    this.publish(sessionID, structuredClone(state));
   }
   begin(sessionID: string, operation: ErrorRequest["operation"]): ErrorRequest {
     this.register(sessionID);
@@ -52,6 +66,13 @@ export class SessionErrors {
   }
   settled(request: ErrorRequest): void {
     this.#requests.delete(request);
+    const state = this.#states.get(request.sessionID);
+    if (
+      state && !state.observations.length &&
+      ![...this.#requests].some((item) => item.sessionID === request.sessionID)
+    ) {
+      this.#update(request.sessionID, []);
+    }
   }
   http(request: ErrorRequest, detail: Detail): void {
     if (
@@ -115,13 +136,35 @@ export class SessionErrors {
   }
   remove(sessionID: string): void {
     this.#closeRequests(sessionID);
-    if (!this.#removed.has(sessionID)) this.#update(sessionID, []);
+    if (this.#states.has(sessionID)) this.#update(sessionID, []);
     this.#states.delete(sessionID);
     this.#removed.add(sessionID);
   }
   reset(): void {
     this.#requests.clear();
-    for (const sessionID of this.#states.keys()) this.#update(sessionID, []);
+    for (const sessionID of [...this.#states.keys()]) {
+      this.#update(sessionID, [], undefined);
+    }
     this.#removed.clear();
+  }
+  release(sessionID: string): void {
+    const state = this.#states.get(sessionID);
+    if (
+      state && !state.observations.length &&
+      ![...this.#requests].some((request) => request.sessionID === sessionID)
+    ) this.#states.delete(sessionID);
+  }
+  reconcile(ids: ReadonlySet<string>): void {
+    // A new accepted snapshot is the release barrier for old deletion fences.
+    this.#removed.clear();
+    for (const [id, state] of this.#states) {
+      if ([...this.#requests].some((request) => request.sessionID === id)) {
+        continue;
+      }
+      if (
+        (!state.observations.length && this.baseline(id)) ||
+        (!ids.has(id) && !this.retained(id))
+      ) this.#states.delete(id);
+    }
   }
 }

@@ -87,6 +87,25 @@ function fixture(hash = "#/local/selected") {
   };
 }
 
+Deno.test("removing a direct-route server detaches even while its project metadata is unknown", () => {
+  const f = fixture("#/remote/loading");
+  try {
+    assertEquals(f.navigation.state.project, undefined);
+    assertEquals(f.navigation.removeServer("remote"), true);
+    assertEquals(
+      f.session.state.selection,
+      undefined,
+      "Removed server is still selected",
+    );
+    assertEquals(f.location.hash, "");
+    assert(
+      f.calls.findIndex((call) => call[0] === "open") <
+        f.calls.findIndex((call) => call[0] === "remove"),
+    );
+  } finally {
+    f.stop();
+  }
+});
 Deno.test("shell navigation owns route state, unknown-server errors, project visits and subscriptions", async () => {
   const f = fixture();
   let changes = 0;

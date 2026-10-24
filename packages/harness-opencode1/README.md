@@ -125,6 +125,28 @@ of the authoritative session snapshot still reconnect. Repeated connected frames
 cannot launch overlapping snapshots. Instance-disposal resync uses the same
 connection owner and cancellation fences.
 
+All publication methods share a connection-scoped sink that permanently drops
+calls after abort; asynchronous event work captures that port. Bootstrap stages
+at most 128 accepted events and a 4 MiB serialized UTF-16 text estimate, plus
+the parser's one in-flight frame. Below that window the parser keeps observing
+transport heartbeats. At its limit, backpressure holds the next frame until
+bootstrap and ordered replay finish; the byte watchdog pauses only while that
+owned backpressure prevents observing bytes. Finite bootstrap request deadlines
+and cancellation still apply. No event is dropped to meet the staging budget.
+Transport closure can cancel held bootstrap reads without consuming more events.
+Task summaries share one initial child scan and one in-flight refresh with a
+trailing dirty flag. Parent release aborts scan/read lifetimes and stop joins
+their actual completion; one failed link cannot affect independent parents.
+Explicit session deletion releases pending input and direct attention, task and
+revert ownership, optional colours, recovery, commands and buffers together.
+Error observations are admitted independently of the index window. Empty-state
+revisions borrow the authoritative index, or live only with an active
+out-of-window subscriber/request. Unsubscribe releases those empty consumer
+clocks. Deletion fences last until the next accepted snapshot generation; old
+HTTP tokens remain invalid after that barrier. Reconciliation releases unowned
+observations rather than retaining busy/cleared keys and old-generation deletion
+metadata forever.
+
 `capabilities.models.listModels(sessionID)` reads native `GET /provider` and
 `GET /config` in that session's directory. It allowlists connected provider and
 model display metadata, including finite positive native `limit.context` as

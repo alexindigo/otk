@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createEffect, createMemo } from "solid-js";
+import { createEffect, createMemo, onCleanup } from "solid-js";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import { useShellPorts } from "../shell/context.tsx";
 import type { PanelDefinition, SurfaceRegistry } from "../registries/shell.ts";
@@ -15,6 +15,8 @@ export function registerSessionsPanel(
     icon: SessionsIcon,
     component: () => {
       const shell = useShellPorts(), { commands } = useCommandPorts();
+      const usage = shell.usage.scope();
+      onCleanup(() => usage.dispose());
       const entries = createMemo(() => {
         const project = shell.project();
         return shell.entries().filter((entry) =>
@@ -31,12 +33,10 @@ export function registerSessionsPanel(
           ? entries()
           : [];
       }, (rows) => {
-        for (const entry of rows) {
-          void shell.usage.load({
-            sidecarId: entry.sidecarId,
-            sessionID: entry.id,
-          });
-        }
+        usage.set(rows.map((entry) => ({
+          sidecarId: entry.sidecarId,
+          sessionID: entry.id,
+        })));
       });
       return (
         <ProjectSessions

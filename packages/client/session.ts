@@ -87,6 +87,7 @@ export function createSession(
   });
   let selected: Selection | undefined, generation = 0, load = 0;
   const usage = createSessionUsage(connection, factory);
+  let releaseUsage: (() => void) | undefined;
   let buffer: ContentOp[] = [], fetching = false;
   let hasBaseline = false;
   let attentionReads: {
@@ -277,12 +278,15 @@ export function createSession(
     controller?.abort();
     models?.dispose();
     models = undefined;
+    releaseUsage?.();
+    releaseUsage = undefined;
     if (selected) {
       connection(selected.sidecarId).subscribe(selected.sessionID, false);
     }
     selected = selection;
     if (selection) {
       const target = { ...selection }, sidecar = connection(target.sidecarId);
+      releaseUsage = usage.retain(target);
       models = createModelCatalog({
         connection: () =>
           catalogConnection?.(target) ?? {

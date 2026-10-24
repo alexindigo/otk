@@ -13,6 +13,7 @@ interface Connection {
   ws: WebSocket;
   welcomed: boolean;
   sessions: Set<string>;
+  close(): void;
 }
 /** Feature-owned metadata streams, including a fresh snapshot on every hello. */
 export interface FrameSource {
@@ -24,8 +25,8 @@ export class Connections {
   #connections = new Set<Connection>();
   #counts = new Map<string, number>();
   harnessState: HarnessState = "connecting";
-  #stopPrefs: () => void;
-  #stopSources: (() => void)[];
+  #stops: (() => void)[] = [];
+  #closed = false;
   constructor(
     readonly backend: Harness,
     readonly index: IndexStore,
@@ -34,16 +35,36 @@ export class Connections {
     readonly rpc: RpcRegistry,
     readonly sources: readonly FrameSource[] = [],
   ) {
-    index.listen((frame) => this.broadcast(frame));
-    this.#stopPrefs = prefs.listen((prefs) =>
-      this.broadcast({ t: "prefs", prefs })
-    );
-    this.#stopSources = sources.map((source) =>
-      source.listen((frame) => this.broadcast(frame))
-    );
+    try {
+      this.#stops.push(index.listen((frame) => this.broadcast(frame)));
+      this.#stops.push(
+        prefs.listen((prefs) => this.broadcast({ t: "prefs", prefs })),
+      );
+      for (const source of sources) {
+        this.#stops.push(source.listen((frame) => this.broadcast(frame)));
+      }
+    } catch (error) {
+      const failures: unknown[] = [error];
+      for (const stop of this.#stops.splice(0).reverse()) {
+        try {
+          stop();
+        } catch (failure) {
+          failures.push(failure);
+        }
+      }
+      if (failures.length > 1) {
+        throw new AggregateError(failures, "Connection subscriptions failed", {
+          cause: error,
+        });
+      }
+      throw error;
+    }
   }
   #send(connection: Connection, frame: ServerFrame): void {
-    if (connection.ws.readyState === WebSocket.OPEN) {
+    if (
+      this.#connections.has(connection) &&
+      connection.ws.readyState === WebSocket.OPEN
+    ) {
       connection.ws.send(JSON.stringify(frame));
     }
   }
@@ -83,7 +104,16 @@ export class Connections {
     this.backend.core.subscriptions(sessionID, count);
   }
   accept(ws: WebSocket): void {
-    const connection: Connection = { ws, welcomed: false, sessions: new Set() };
+    if (this.#closed) {
+      ws.close(1001, "server stopping");
+      return;
+    }
+    const connection: Connection = {
+      ws,
+      welcomed: false,
+      sessions: new Set(),
+      close: () => dispose(),
+    };
     this.#connections.add(connection);
     const helloDeadline = setTimeout(() => {
       if (!connection.welcomed) ws.close(1008, "hello required");
@@ -94,16 +124,26 @@ export class Connections {
     );
     const silent = () => ws.close(1001, "heartbeat timeout");
     let silenceDeadline = setTimeout(silent, 60_000);
-    ws.onclose = () => {
+    const dispose = () => {
+      if (!this.#connections.delete(connection)) return;
       clearTimeout(helloDeadline);
       clearTimeout(silenceDeadline);
       clearInterval(ping);
+      const errors: unknown[] = [];
       for (const sessionID of connection.sessions) {
-        this.#subscribe(connection, sessionID, false);
+        try {
+          this.#subscribe(connection, sessionID, false);
+        } catch (error) {
+          errors.push(error);
+        }
       }
-      this.#connections.delete(connection);
+      if (errors.length) {
+        throw new AggregateError(errors, "Session unsubscribe failed");
+      }
     };
+    ws.onclose = dispose;
     ws.onmessage = async (event) => {
+      if (!this.#connections.has(connection)) return;
       let rpcID: string | undefined;
       try {
         if (typeof event.data !== "string") {
@@ -181,8 +221,10 @@ export class Connections {
             });
           }
         } else throw new HarnessError("frame", "Unknown frame");
-        clearTimeout(silenceDeadline);
-        silenceDeadline = setTimeout(silent, 60_000);
+        if (this.#connections.has(connection)) {
+          clearTimeout(silenceDeadline);
+          silenceDeadline = setTimeout(silent, 60_000);
+        }
       } catch (error) {
         const detail = {
           code: error instanceof HarnessError ? error.code : "frame",
@@ -198,11 +240,24 @@ export class Connections {
     };
   }
   close(): void {
-    this.#stopPrefs();
-    for (const stop of this.#stopSources) stop();
-    for (const source of this.sources) source.close?.();
+    if (this.#closed) return;
+    this.#closed = true;
+    const errors: unknown[] = [];
+    const attempt = (release: () => void) => {
+      try {
+        release();
+      } catch (error) {
+        errors.push(error);
+      }
+    };
+    for (const stop of this.#stops.splice(0).reverse()) attempt(stop);
+    for (const source of this.sources) attempt(() => source.close?.());
     for (const connection of this.#connections) {
-      connection.ws.close(1001, "server stopping");
+      attempt(() => connection.close());
+      attempt(() => connection.ws.close(1001, "server stopping"));
+    }
+    if (errors.length) {
+      throw new AggregateError(errors, "Connection cleanup failed");
     }
   }
 }

@@ -19,6 +19,7 @@ export class Messages {
     limit: number,
     before?: string,
     directory = this.directory(id),
+    signal?: AbortSignal,
   ): Promise<{
     items: NativeMessage[];
     next?: string;
@@ -29,7 +30,7 @@ export class Messages {
     }
     const response = await this.client.request(
       `/session/${encodeURIComponent(id)}/message`,
-      { query: { directory, limit, before } },
+      { query: { directory, limit, before }, signal },
     );
     const items: NativeMessage[] = await response.json();
     const next = response.headers.get("x-next-cursor") ?? undefined;
@@ -41,10 +42,13 @@ export class Messages {
   async *scan(
     id: string,
     directory = this.directory(id),
+    signal?: AbortSignal,
   ): AsyncIterable<NativeMessage> {
     let before: string | undefined;
     do {
-      const page = await this.page(id, 100, before, directory);
+      signal?.throwIfAborted();
+      const page = await this.page(id, 100, before, directory, signal);
+      signal?.throwIfAborted();
       yield* page.items;
       before = page.next;
     } while (before);

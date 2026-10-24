@@ -15,6 +15,8 @@ import type { Selection } from "./session.ts";
 import { sessionKey } from "./index.ts";
 
 type Target = Pick<Selection, "sidecarId" | "sessionID">;
+/** One-shot API readers get bounded reuse; mounted consumers retain a lease. */
+const UNRETAINED_TARGET_LIMIT = 32;
 type UsageChange = { message: UsageMessage } | { remove: string } | {
   messageID: string;
   tool: UsageTool;
@@ -30,6 +32,10 @@ export interface SessionUsageOwner {
   subscribe(listener: (state: UsageState) => void): () => void;
   get(target: Target): SessionUsage | undefined;
   load(target: Target, refresh?: boolean): Promise<void>;
+  /** Independent consumers share work until the last identity-bound lease ends. */
+  retain(target: Target): () => void;
+  scope(): { set(targets: readonly Target[]): void; dispose(): void };
+  removeServer(sidecar: string): void;
   receive(sidecar: string, frame: ServerFrame): void;
   stop(): void;
 }
@@ -39,6 +45,7 @@ export function createSessionUsage(
   factory: StateFactory = createState,
 ): SessionUsageOwner {
   const { state, update, subscribe } = factory<UsageState>({ entries: {} });
+  let stopped = false;
   const resources = new Map<
     string,
     {
@@ -48,6 +55,7 @@ export function createSessionUsage(
       events: UsageChange[];
       controller?: AbortController;
       again: boolean;
+      leases: number;
     }
   >();
   const publish = (
@@ -66,14 +74,23 @@ export function createSessionUsage(
     else ledger.removeTool(event.messageID, event.removeTool);
   };
   const load = (target: Target, refresh = false): Promise<void> => {
+    if (stopped) return Promise.resolve();
     const key = sessionKey(target.sidecarId, target.sessionID);
     let resource = resources.get(key);
     if (!resource) {
       resources.set(
         key,
-        resource = { target: { ...target }, events: [], again: false },
+        resource = {
+          target: { ...target },
+          events: [],
+          again: false,
+          leases: 0,
+        },
       );
     }
+    resources.delete(key);
+    resources.set(key, resource);
+    trim();
     if (!connection(target.sidecarId).supports("usage")) {
       resource.controller?.abort();
       resource.ledger = undefined;
@@ -121,15 +138,87 @@ export function createSessionUsage(
     publish(key, owner.ledger?.snapshot(), undefined, true);
     return work;
   };
+  const remove = (key: string) => {
+    resources.get(key)?.controller?.abort();
+    resources.delete(key);
+    update((draft) => {
+      delete draft.entries[key];
+    });
+  };
+  const trim = () => {
+    let unretained =
+      [...resources.values()].filter((resource) => !resource.leases).length;
+    for (const [key, resource] of resources) {
+      if (unretained <= UNRETAINED_TARGET_LIMIT) break;
+      if (resource.leases) continue;
+      remove(key);
+      unretained--;
+    }
+  };
+  const retain = (target: Target): () => void => {
+    if (stopped) return () => {};
+    const key = sessionKey(target.sidecarId, target.sessionID);
+    let resource = resources.get(key);
+    if (!resource) {
+      resource = { target: { ...target }, events: [], again: false, leases: 0 };
+      resources.set(key, resource);
+    }
+    const owner = resource;
+    owner.leases++;
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      if (--owner.leases === 0 && resources.get(key) === owner) remove(key);
+    };
+  };
   return {
     state,
     subscribe,
     load,
+    retain,
+    scope() {
+      const leases = new Map<string, () => void>();
+      let disposed = false;
+      return {
+        set(targets) {
+          if (disposed) return;
+          const keys = new Set(
+            targets.map((target) =>
+              sessionKey(target.sidecarId, target.sessionID)
+            ),
+          );
+          for (const [key, release] of leases) {
+            if (!keys.has(key)) {
+              leases.delete(key);
+              release();
+            }
+          }
+          for (const target of targets) {
+            const key = sessionKey(target.sidecarId, target.sessionID);
+            if (leases.has(key)) continue;
+            leases.set(key, retain(target));
+            void load(target);
+          }
+        },
+        dispose() {
+          disposed = true;
+          for (const release of leases.values()) release();
+          leases.clear();
+        },
+      };
+    },
+    removeServer(sidecar) {
+      for (const [key, resource] of resources) {
+        if (resource.target.sidecarId === sidecar) remove(key);
+      }
+    },
     get: (target) =>
       state.entries[sessionKey(target.sidecarId, target.sessionID)]?.value,
     receive(sidecar, frame) {
+      if (stopped) return;
       if (frame.t === "welcome" || frame.t === "resync") {
-        for (const resource of resources.values()) {
+        for (const resource of [...resources.values()]) {
           if (resource.target.sidecarId === sidecar) {
             resource.controller?.abort();
             resource.pending = undefined;
@@ -143,7 +232,8 @@ export function createSessionUsage(
               op.op === "upsert" ? op.entry.id : op.id,
             ),
             resource = resources.get(key);
-          if (resource && op.op === "upsert") void load(resource.target, true);
+          if (op.op === "remove") remove(key);
+          else if (resource) void load(resource.target, true);
         }
       } else if (frame.t === "content") {
         const key = sessionKey(sidecar, frame.sessionID),
@@ -176,6 +266,7 @@ export function createSessionUsage(
       }
     },
     stop() {
+      stopped = true;
       for (const resource of resources.values()) resource.controller?.abort();
       resources.clear();
       update((draft) => {

@@ -21,6 +21,7 @@ import {
 } from "@otk/store";
 import {
   type CoreServer,
+  type FrameSource,
   frecencyOptions,
   IndexStore,
   prefsOptions,
@@ -63,57 +64,82 @@ export function startApplication(
     projectTemplatesMigrations,
     permissionMigrations,
   ]);
-  const prefs = new Prefs(store, prefsOptions);
-  const rpc = new RpcRegistry(backend, store);
-  const index = new IndexStore();
-  const inbox = new InboxFeature(
-    {
-      projects: new Projects(store),
-      tasks: new Tasks(store),
-      seen: new Seen(store),
-      finishes: new Finishes(store),
-      templates: new ProjectTemplates(store),
-    },
-    index,
-    () => cfg.auth.username.toLowerCase() || "local",
-  );
-  inbox.register(rpc);
-  registerPrefs(rpc, backend, prefs);
-  registerLayout(rpc, prefs);
-  registerFrecency(rpc, backend, new Frecency(store, frecencyOptions));
-  registerSessions(rpc, backend);
-  registerPrompt(rpc, backend);
-  registerShell(rpc, backend);
-  registerCommands(rpc, backend);
-  registerHistory(rpc, backend);
-  registerFiles(rpc, backend);
-  registerAgents(rpc, backend);
-  registerModels(rpc, backend);
-  registerUsage(rpc, backend);
-  registerResources(rpc, backend);
-  const approvals = backend.capabilities.permissions
-    ? new PermissionFeature(
-      new PermissionStore(store),
+  const sources: FrameSource[] = [];
+  try {
+    const prefs = new Prefs(store, prefsOptions);
+    const rpc = new RpcRegistry(backend, store);
+    const index = new IndexStore();
+    const inbox = new InboxFeature(
+      {
+        projects: new Projects(store),
+        tasks: new Tasks(store),
+        seen: new Seen(store),
+        finishes: new Finishes(store),
+        templates: new ProjectTemplates(store),
+      },
       index,
-      backend.capabilities.permissions,
-    )
-    : undefined;
-  approvals?.register(rpc);
-  registerPermissions(
-    rpc,
-    backend,
-    approvals && ((input) => approvals.reply(input)),
-  );
-  registerQuestions(rpc, backend);
-  registerRevert(rpc, backend);
-  return startCore({
-    cfg,
-    backend,
-    store,
-    prefs,
-    rpc,
-    staticRoot,
-    index,
-    sources: [inbox, ...(approvals ? [approvals] : [])],
-  });
+      () => cfg.auth.username.toLowerCase() || "local",
+    );
+    sources.push(inbox);
+    inbox.register(rpc);
+    registerPrefs(rpc, backend, prefs);
+    registerLayout(rpc, prefs);
+    registerFrecency(rpc, backend, new Frecency(store, frecencyOptions));
+    registerSessions(rpc, backend);
+    registerPrompt(rpc, backend);
+    registerShell(rpc, backend);
+    registerCommands(rpc, backend);
+    registerHistory(rpc, backend);
+    registerFiles(rpc, backend);
+    registerAgents(rpc, backend);
+    registerModels(rpc, backend);
+    registerUsage(rpc, backend);
+    registerResources(rpc, backend);
+    const approvals = backend.capabilities.permissions
+      ? new PermissionFeature(
+        new PermissionStore(store),
+        index,
+        backend.capabilities.permissions,
+      )
+      : undefined;
+    if (approvals) sources.push(approvals);
+    approvals?.register(rpc);
+    registerPermissions(
+      rpc,
+      backend,
+      approvals && ((input) => approvals.reply(input)),
+    );
+    registerQuestions(rpc, backend);
+    registerRevert(rpc, backend);
+    return startCore({
+      cfg,
+      backend,
+      store,
+      prefs,
+      rpc,
+      staticRoot,
+      index,
+      sources,
+    });
+  } catch (error) {
+    const failures: unknown[] = [error];
+    for (const source of sources.reverse()) {
+      try {
+        source.close?.();
+      } catch (failure) {
+        failures.push(failure);
+      }
+    }
+    try {
+      store.close();
+    } catch (failure) {
+      failures.push(failure);
+    }
+    if (failures.length > 1) {
+      throw new AggregateError(failures, "Application composition failed", {
+        cause: error,
+      });
+    }
+    throw error;
+  }
 }

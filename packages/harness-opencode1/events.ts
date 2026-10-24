@@ -4,13 +4,17 @@ import { envelopeType } from "./envelope.ts";
 export async function consumeEvents(
   response: Response,
   bytes: () => void,
-  event: (envelope: Envelope) => void | Promise<void>,
+  event: (envelope: Envelope, textLength: number) => void | Promise<void>,
   accept?: (type: string) => boolean,
   failed: (error: unknown) => void = (error) =>
     console.warn("harness event:", error),
+  ended?: () => void,
 ): Promise<void> {
   if (!response.body) throw new Error("SSE body missing");
   const reader = response.body.getReader(), decoder = new TextDecoder();
+  // A suspended event consumer may still own cancellable bootstrap I/O.
+  // Observe transport closure without reading ahead or accumulating envelopes.
+  void reader.closed.then(() => ended?.(), () => ended?.());
   let fragments: string[] = [], data: string[] = [], skipLF = false;
   async function line(text: string): Promise<void> {
     if (text === "") {
@@ -22,7 +26,7 @@ export async function consumeEvents(
             const type = envelopeType(raw);
             if (type !== undefined && !accept(type)) return;
           }
-          await event(JSON.parse(raw) as Envelope);
+          await event(JSON.parse(raw) as Envelope, raw.length);
         } catch (error) {
           failed(error);
         }
