@@ -45,7 +45,7 @@ function snapshot(): InboxSnapshot {
     pathTemplates: [],
   };
 }
-Deno.test("inbox roll-up gives blocked, working, unseen-finished then idle priority without treating idle startup as a finish", () => {
+Deno.test("inbox roll-up gives blocked, unseen-finished, working then idle priority without treating idle startup as a finish", () => {
   const inbox = snapshot(),
     idle = entry("idle"),
     busy = entry("busy", "busy"),
@@ -55,13 +55,49 @@ Deno.test("inbox roll-up gives blocked, working, unseen-finished then idle prior
   blocked.attention.childQuestions = 1;
   assertEquals(rollup([idle], inbox), "idle");
   assertEquals(rollup([idle, done], inbox), "finished");
-  assertEquals(rollup([done, busy], inbox), "working");
+  assertEquals(rollup([done, busy], inbox), "finished");
   assertEquals(rollup([blocked, done, busy], inbox), "blocked");
   assertEquals(inboxStatus(entry("retry", "retry"), inbox), "working");
   blocked.attention.childQuestions = 0;
   blocked.attention.error = "failed";
   assertEquals(inboxStatus(blocked, inbox), "blocked");
   assertEquals(rollup([], inbox), "idle");
+});
+Deno.test("tracked and discovered projects and task tabs share attention-first aggregation independently of input order", () => {
+  const inbox = snapshot(),
+    done = entry("done"),
+    busy = entry("busy", "busy"),
+    blocked = entry("blocked");
+  inbox.finishes.done = 10;
+  inbox.tasks.push({
+    id: "task",
+    directory: "/p",
+    name: "Review",
+    order: 0,
+    sessions: ["done", "busy", "blocked"],
+  });
+  const tabs = createTabs(() => {
+    throw new Error("unused");
+  });
+  for (const needsInput of [false, true]) {
+    blocked.attention.permissions = needsInput ? 1 : 0;
+    const expected = needsInput ? "blocked" : "finished";
+    for (const entries of [[done, busy, blocked], [blocked, busy, done]]) {
+      for (const projects of [inbox.projects, []]) {
+        assertEquals(
+          inboxProjects(entries, { ...inbox, projects }, 0)[0].status,
+          expected,
+        );
+      }
+      tabs.update({ directory: "/p", entries, inbox });
+      assertEquals(tabs.tabs()[0].status, expected);
+    }
+  }
+  inbox.seen.done = 10;
+  blocked.attention.permissions = 0;
+  tabs.update({ directory: "/p", entries: [done, busy, blocked], inbox });
+  assertEquals(tabs.tabs()[0].status, "working");
+  tabs.stop();
 });
 Deno.test("unread is strictly finish greater than seen, independently of working status", () => {
   const inbox = snapshot();

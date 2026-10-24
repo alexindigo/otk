@@ -404,6 +404,10 @@ Keep each server's inputs separate when merging the resulting project rows.
 index-only directories, which win over template-only discovery. Its `source`
 distinguishes these rows; discovery sorts index-first by newest activity, then
 name, without backend queries. Template-only rows have no visit clock or light.
+`INBOX_STATUS_PRIORITY` owns aggregate light priority: needs you, finished but
+unseen, working, idle. Project and task lights both use `rollup`; presentation
+does not rank states. Task order, phantom index order and discovery recency/name
+order remain independent of light priority.
 
 `createTabs(inbox.promote, factory?)` takes
 `update({directory, entries, inbox})` and exposes task, mandatory phantom and

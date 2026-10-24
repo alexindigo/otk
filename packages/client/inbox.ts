@@ -14,7 +14,16 @@ import { createState, type StateFactory } from "./state.ts";
 import type { TabSession } from "./tabs.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
 import { projectName } from "./project-navigation.ts";
-export type InboxStatus = "blocked" | "working" | "finished" | "idle";
+/** Attention first. All aggregate lights use this one immutable priority order. */
+export const INBOX_STATUS_PRIORITY = Object.freeze(
+  [
+    "blocked",
+    "finished",
+    "working",
+    "idle",
+  ] as const,
+);
+export type InboxStatus = typeof INBOX_STATUS_PRIORITY[number];
 export function unread(
   sessionID: string,
   inbox: Pick<InboxSnapshot, "seen" | "finishes">,
@@ -38,9 +47,8 @@ export function rollup(
   inbox: Pick<InboxSnapshot, "seen" | "finishes">,
 ): InboxStatus {
   const states = entries.map((entry) => inboxStatus(entry, inbox));
-  return (["blocked", "working", "finished", "idle"] as const).find((status) =>
-    states.includes(status)
-  ) ?? "idle";
+  return INBOX_STATUS_PRIORITY.find((status) => states.includes(status)) ??
+    "idle";
 }
 export function visitTime(lastVisit: number, now: number): string {
   const minutes = Math.floor(Math.max(0, now - lastVisit) / 60_000);
