@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals, assertStrictEquals } from "@std/assert";
+import {
+  assert,
+  assertEquals,
+  assertNotStrictEquals,
+  assertStrictEquals,
+} from "@std/assert";
 import { CodeProjection, sourceRange } from "../highlight/lines.ts";
 import type { HighlightToken } from "../highlight/types.ts";
 
@@ -11,6 +16,42 @@ function build(model: CodeProjection) {
   return model.groups.flatMap((group) => group.rows)
     .map((row) => row.text + row.ending).join("");
 }
+Deno.test("source projection preserves exact text, empty lines and stable prefix identity across recall", () => {
+  const initial = "const a = 1;\n\nta";
+  const model = new CodeProjection(initial, "ts");
+  build(model);
+  accept(model, initial, 0, [{
+    content: "const a = 1;\n\n",
+    color: "var(--keyword)",
+  }, { content: "ta", color: "var(--fg)" }]);
+  const first = model.groups[0].rows;
+  const firstTokens = model.project(model.groups[0]);
+  assert(model.append("const a = 1;\n\ntail"));
+  build(model);
+  accept(model, model.source, 1, [{
+    content: "tail",
+    color: "var(--fg)",
+  }]);
+  const next = model.groups[0].rows;
+  assertStrictEquals(next[0], first[0]);
+  assertStrictEquals(next[1], first[1]);
+  assertNotStrictEquals(next[2], first[2]);
+  assertEquals(next.map((row) => row.text + row.ending).join(""), model.source);
+  assertEquals(next.map((row) => row.end), [13, 14, 18]);
+  assertEquals(model.project(model.groups[0]), [
+    [{ content: "const a = 1;", color: "var(--keyword)" }],
+    [],
+    [{ content: "tail", color: "var(--fg)" }],
+  ]);
+  assertEquals(firstTokens?.[2], [{ content: "ta", color: "var(--fg)" }]);
+  const emptyLines = new CodeProjection("\n\n", "ts");
+  assertEquals(build(emptyLines), "\n\n");
+  assertEquals(emptyLines.groups[0].rows.map((row) => row.newline), [
+    true,
+    true,
+    false,
+  ]);
+});
 Deno.test("native source positions identify the exact bounded source group before row materialization", () => {
   for (const ending of ["\n", "\r\n", "\r"]) {
     const rows = Array.from(

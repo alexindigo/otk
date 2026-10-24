@@ -740,7 +740,7 @@ test("context binding: external command contributions, live target data, nested 
   }
 });
 
-test("round 2: all shared Menu callers distinguish pointer and keyboard opening with compact rows", async () => {
+test("all shared Menu callers distinguish pointer and keyboard opening with compact rows", async () => {
   const { root, f, browser, client, stop } = await setup();
   const projectTrigger =
     "[data-project-sessions~=otk] .otk-project-menu > button";
@@ -903,7 +903,7 @@ test("round 2: all shared Menu callers distinguish pointer and keyboard opening 
       await browser.poll("!document.querySelector(':popover-open')");
     }
     assertEquals(browser.errors, []);
-    console.info("Round 2 screenshot root", root);
+    console.info("Shared Menu screenshot root", root);
   } finally {
     await stop();
   }

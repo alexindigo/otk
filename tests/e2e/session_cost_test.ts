@@ -167,7 +167,7 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     );
     await b.click('[aria-label="Open right panel"]');
     await b.poll("!document.querySelector('.otk-right-panel').hidden");
-    // Also captures a reproducible pre-U5 baseline before its missing-row assertion.
+    // Capture visible rows even if their cost assertion fails.
     await capture("rows");
     await b.poll(
       `${cost("core")}==='$1.02' && ${cost("helper")}==='$0.07' && ${

@@ -746,7 +746,7 @@ test("V5 backend without model capability renders a plain model label and makes 
   }
 });
 
-test("round2 prompt snapshots the agent/model/variant picked while first catalog readiness is pending", async () => {
+test("prompt snapshots the agent/model/variant picked while first catalog readiness is pending", async () => {
   const root = await fixture(), sent: PromptInput[] = [];
   let resolve!: (catalog: ModelCatalog) => void;
   const pending = new Promise<ModelCatalog>((done) => {
@@ -816,7 +816,7 @@ test("round2 prompt snapshots the agent/model/variant picked while first catalog
   }
 });
 
-test("round2 failed unknown catalog preserves the restored variant in the footer and at the prompt consumer", async () => {
+test("failed unknown catalog preserves the restored variant in the footer and at the prompt consumer", async () => {
   const root = await fixture(), sent: PromptInput[] = [];
   const { app, url } = await coreBackendFixture(root, {
     models: { listModels: () => Promise.reject(new Error("Catalog offline")) },

@@ -39,7 +39,7 @@ test("R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/dia
     });
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await openSession(browser, s.id);
-    // This renderer suite exercises the expanded display mode; U6 covers default disclosure.
+    // Exercise file renderers in expanded display mode.
     await browser.click(".otk-display-menu > button");
     await browser.click("input[name=collapseFileChanges]");
     await browser.click(".otk-display-menu > button");
@@ -98,8 +98,7 @@ test("R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/dia
     await browser.key("ArrowUp");
     await browser.key("Enter");
     await browser.click(".otk-display-menu > button");
-    // Auto diff style uses the actual transcript pane, whose available width
-    // now excludes both side panels rather than only the project column.
+    // Auto diff style uses the transcript pane's width, excluding both side panels.
     const wideViewport = await browser.evaluate<number>(
       "Math.ceil(innerWidth + 1280 - document.querySelector('.otk-session-view').getBoundingClientRect().width)",
     );

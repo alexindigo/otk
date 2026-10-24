@@ -96,7 +96,7 @@ async function rightClick(
   }
 }
 
-test("C3 round 2: session menus omit current-place no-ops while background Open and task promotion still act", async () => {
+test("C3 session menus omit current-place no-ops while background Open and task promotion still act", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),
@@ -139,7 +139,7 @@ test("C3 round 2: session menus omit current-place no-ops while background Open 
         ".otk-user-bubble",
         false,
         Deno.env.get("OTK_CONTEXT_SCREENSHOTS")
-          ? join(root, `C3-${theme}-round2-message`)
+          ? join(root, `C3-${theme}-session-menu-message`)
           : undefined,
       );
       assertEquals(await groups(b), [["Copy prompt"], [
@@ -197,7 +197,7 @@ test("C3 round 2: session menus omit current-place no-ops while background Open 
       1,
     );
     assertEquals(b.errors, []);
-    console.info("C3 round2 screenshot root", root);
+    console.info("C3 session-menu screenshot root", root);
   } finally {
     await client.close();
     await b.close();

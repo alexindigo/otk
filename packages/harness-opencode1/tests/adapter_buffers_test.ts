@@ -30,7 +30,7 @@ for (
   ] as const
 ) {
   test(`adapter recorded stream buffers: ${outcome}`, async () => {
-    // Recorded from the real 1.18.34 scripted provider in the named M1 guest.
+    // Recorded from stock opencode 1.18.34 with the scripted provider.
     const frames: Envelope[] = JSON.parse(
       await Deno.readTextFile(
         new URL(

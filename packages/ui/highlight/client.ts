@@ -128,13 +128,13 @@ interface Capture {
 }
 function prefixSource(source: string): string {
   let end = 0;
-  const carriage = source.includes("\r");
+  const hasCarriageReturns = source.includes("\r");
   for (
     let line = 0;
     line < HIGHLIGHT_GROUP_ROWS && end < source.length;
     line++
   ) {
-    end = sourceLine(source, end, carriage).end;
+    end = sourceLine(source, end, hasCarriageReturns).end;
   }
   return source.slice(0, end);
 }

@@ -56,8 +56,8 @@ export type ServerFrame =
   }
   | { t: "error"; code: string; message?: string };
 
-// Before capability advertisement, these RPC families were always exposed by
-// the wire contract. A missing field is legacy; an explicit [] advertises none.
+// A missing advertisement uses the compatibility families; an explicit []
+// advertises none.
 export function welcomeCapabilities(
   frame: Extract<ServerFrame, { t: "welcome" }>,
 ): readonly CapabilityName[] {

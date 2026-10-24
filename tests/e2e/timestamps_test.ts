@@ -116,8 +116,7 @@ test("creation-time hover and persistent visibility, structural footer date/cloc
     await browser.screenshot(
       join(f.oc.root, "timestamps-hover-output-date.png"),
     );
-    // The divider now belongs to the work-fold line; its exact width, style and
-    // barely-noticeable contrast are exercised in transcript_test in all themes.
+    // transcript_test covers the work-fold divider's width, style and contrast.
     await browser.send("Input.dispatchMouseEvent", {
       type: "mouseMoved",
       x: 10,

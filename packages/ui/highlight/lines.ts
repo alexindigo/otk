@@ -1,62 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { HighlightToken } from "./types.ts";
 import { HIGHLIGHT_GROUP_ROWS } from "./policy.ts";
-export interface CodeLine {
-  tokens: HighlightToken[];
-  newline: boolean;
-  end: number;
-}
-/** Immutable line identities keep a streamed suffix out of the stable DOM. */
-export function codeLines(
-  tokens: HighlightToken[],
-  previous: CodeLine[] = [],
-): CodeLine[] {
-  const lines: CodeLine[] = [];
-  let row: HighlightToken[] = [], end = 0;
-  const finish = (newline: boolean) => {
-    const old = previous[lines.length];
-    if (
-      old && old.newline === newline && old.end === end &&
-      old.tokens.length === row.length &&
-      row.every((token, i) =>
-        token.content === old.tokens[i].content &&
-        token.color === old.tokens[i].color &&
-        token.fontStyle === old.tokens[i].fontStyle
-      )
-    ) {
-      lines.push(old);
-    } else {
-      Object.freeze(row);
-      lines.push(Object.freeze({ tokens: row, newline, end }));
-    }
-    row = [];
-  };
-  for (const token of tokens) {
-    if (!token.content.includes("\n")) {
-      row.push(token);
-      end += token.content.length;
-      continue;
-    }
-    const pieces = token.content.split("\n");
-    for (const [i, content] of pieces.entries()) {
-      if (content) {
-        row.push({ ...token, content });
-        end += content.length;
-      }
-      if (i < pieces.length - 1) {
-        end++;
-        finish(true);
-      }
-    }
-  }
-  if (row.length) finish(false);
-  return lines;
-}
-
 const ENDING = /\r\n|\n|\r/g;
 /** One source coordinate system for layout, tokenizer jobs and publication. */
-export function sourceLine(source: string, start: number, carriage = true) {
-  if (!carriage) {
+export function sourceLine(
+  source: string,
+  start: number,
+  scanCarriageReturns = true,
+) {
+  if (!scanCarriageReturns) {
     const end = source.indexOf("\n", start);
     return end < 0
       ? { contentEnd: source.length, end: source.length, ending: "" }
@@ -99,9 +51,9 @@ export function sourceRange(source: string, offset: number) {
     start = beginning(start - ending);
   }
   let end = start;
-  const carriage = source.includes("\r");
+  const hasCarriageReturns = source.includes("\r");
   for (let i = 0; i < HIGHLIGHT_GROUP_ROWS && end < source.length; i++) {
-    end = sourceLine(source, end, carriage).end;
+    end = sourceLine(source, end, hasCarriageReturns).end;
   }
   return { start, end };
 }
@@ -138,14 +90,14 @@ export class CodeProjection {
   #group = 0;
   #complete = false;
   #source: string;
-  #carriage: boolean;
+  #hasCarriageReturns: boolean;
   constructor(
     source: string,
     readonly lang: string,
     previous?: CodeProjection,
   ) {
     this.#source = source;
-    this.#carriage = source.includes("\r");
+    this.#hasCarriageReturns = source.includes("\r");
     if (previous && source.startsWith(previous.source)) {
       this.#reserved = new Map(previous.#reserved);
       this.groups.push(...previous.groups);
@@ -172,7 +124,9 @@ export class CodeProjection {
   append(source: string): boolean {
     if (!source.startsWith(this.source)) return false;
     if (source === this.source) return true;
-    this.#carriage ||= source.slice(this.#source.length).includes("\r");
+    this.#hasCarriageReturns ||= source.slice(this.#source.length).includes(
+      "\r",
+    );
     this.#source = source;
     if (this.#complete) {
       this.#group = Math.max(0, this.groups.length - 1);
@@ -216,7 +170,7 @@ export class CodeProjection {
     let position = start;
     for (let i = 0; i < HIGHLIGHT_GROUP_ROWS; i++) {
       const offset = position;
-      const line = sourceLine(this.source, offset, this.#carriage);
+      const line = sourceLine(this.source, offset, this.#hasCarriageReturns);
       const end = line.end;
       const text = this.source.slice(offset, line.contentEnd);
       const previous = old?.rows[i];

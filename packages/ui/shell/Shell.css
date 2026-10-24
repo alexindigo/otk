@@ -25,11 +25,6 @@
   flex: 1;
   padding: 48px;
 }
-.otk-wordmark {
-  font-size: 5rem;
-  color: var(--fg);
-  font-weight: 600;
-}
 .otk-welcome h1 {
   font-size: 1.3rem;
   margin-top: 12px;

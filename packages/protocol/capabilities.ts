@@ -69,8 +69,8 @@ export function capabilityNames(
     .map(([name]) => name as CapabilityName);
 }
 
-// Historical compatibility only: extensions are not implicitly available on
-// servers predating advertisements. Each original owner supplies its old name.
+// Owners contribute compatibility names for missing advertisements. Extensions
+// require an explicit advertisement and are never implicitly available.
 export const legacyCapabilities: readonly CapabilityName[] = Object.freeze([
   ...legacyPromptCapabilities,
   ...legacyShellCapabilities,

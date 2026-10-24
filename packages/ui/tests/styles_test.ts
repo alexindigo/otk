@@ -52,7 +52,7 @@ Deno.test("component-owned CSS is imported by its owner and retains structural t
       '"IBM Plex Mono"',
     ]
   ) assert(theme.includes(token));
-  // The same branding assertions now observe the sole palette owner.
+  // Branding values belong to the palette owner.
   const dark = JSON.parse(
     await Deno.readTextFile(new URL("features/theme/otk-dark.json", base)),
   );

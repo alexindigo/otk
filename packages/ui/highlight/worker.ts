@@ -53,10 +53,10 @@ async function appendCompleted(
 ) {
   const source = tokenizer.lastUnstableCodeChunk + delta;
   const endings: string[] = [];
-  const carriage = source.includes("\r");
+  const hasCarriageReturns = source.includes("\r");
   let boundary = 0, contentEnd = 0;
   while (boundary < source.length) {
-    const line = sourceLine(source, boundary, carriage);
+    const line = sourceLine(source, boundary, hasCarriageReturns);
     if (!line.ending) break;
     endings.push(line.ending);
     contentEnd = line.contentEnd;
@@ -65,7 +65,7 @@ async function appendCompleted(
   if (!endings.length) return tokenizer.enqueue(delta);
   const recall = tokenizer.tokensUnstable.length;
   const prefix = core.codeToTokens(
-    carriage
+    hasCarriageReturns
       ? source.slice(0, contentEnd).replace(/\r\n|\r/g, "\n")
       : source.slice(0, contentEnd),
     {
@@ -99,7 +99,7 @@ type NativeGrammar = ReturnType<Core["getLanguage"]>;
 type NativeState = ReturnType<NativeGrammar["tokenizeLine2"]>["ruleStack"];
 interface Job {
   request: Capture;
-  carriage: boolean;
+  hasCarriageReturns: boolean;
   core?: Core;
   focus: HighlightRange[];
   priority?: {
@@ -189,13 +189,13 @@ function prepareSource(block: number, lang: string, source: string): Prefix {
   const prior = prefixes.get(block);
   if (prior && prior.lang === lang && prior.text === source) return prior;
   let end = 0;
-  const carriage = source.includes("\r");
+  const hasCarriageReturns = source.includes("\r");
   for (
     let line = 0;
     line < HIGHLIGHT_GROUP_ROWS && end < source.length;
     line++
   ) {
-    end = sourceLine(source, end, carriage).end;
+    end = sourceLine(source, end, hasCarriageReturns).end;
   }
   const prefix: Prefix = {
     lang,
@@ -301,7 +301,7 @@ async function advance(job: Job) {
     line < HIGHLIGHT_GROUP_ROWS && end < request.text.length;
     line++
   ) {
-    end = sourceLine(request.text, end, job.carriage).end;
+    end = sourceLine(request.text, end, job.hasCarriageReturns).end;
   }
   // A closed fence with unchanged source needs only tail finalization.
   const result = end === stream.text.length
@@ -388,7 +388,7 @@ function advanceViewport(job: Job, stream: Stream): boolean {
     count++
   ) {
     const start = priority.position,
-      line = sourceLine(request.text, start, job.carriage),
+      line = sourceLine(request.text, start, job.hasCarriageReturns),
       text = request.text.slice(start, line.contentEnd);
     const target = future.find((range) => range.start === start);
     if (target) {
@@ -503,7 +503,7 @@ function receive(request: HighlightRequest) {
   }
   const job: Job = {
     request,
-    carriage: request.text.includes("\r"),
+    hasCarriageReturns: request.text.includes("\r"),
     focus: request.focus || [],
   };
   jobs.set(request.block, job);

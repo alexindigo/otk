@@ -3,8 +3,7 @@ import { assertEquals } from "@std/assert";
 import { uiSources } from "./analysis.ts";
 import { rules, words } from "./styles.ts";
 
-// Matching values must follow the shared scale. Distinct legacy treatments
-// (15/22 headings, fractional breadcrumbs and wordmarks) are a separate audit.
+// Consumer values matching the shared type scale must use its tokens.
 Deno.test("shared type sizes and line metrics have no literal consumer copies", async () => {
   const errors: string[] = [];
   for (const [path, css] of await uiSources()) {
