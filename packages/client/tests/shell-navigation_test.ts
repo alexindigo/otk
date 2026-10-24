@@ -59,6 +59,10 @@ function fixture(hash = "#/local/selected") {
     guard,
     environment,
     presence: () => presence,
+    confirm: (message) => {
+      messages.push(message);
+      return consent;
+    },
   });
   navigation.start();
   f.calls.length = 0;
@@ -387,4 +391,134 @@ Deno.test("shell navigation preview and pin share guarded target transitions and
   );
   await settled();
   f.stop();
+});
+
+Deno.test("close session removes only captured membership, clears its view and retains backend metadata", async () => {
+  const f = fixture();
+  try {
+    const inbox = f.resources.inbox("local").state.inbox;
+    inbox.tasks = [shellTask("task", ["selected", "other"])];
+    const tabs = f.resources.tabs({ sidecarId: "local", directory: "/p" });
+    tabs.preview("selected");
+    await f.navigation.close({ sidecarId: "local", sessionID: "selected" });
+    assertEquals(f.calls.filter((c) => String(c[1]).startsWith("tasks.")), [[
+      "local",
+      "tasks.removeSession",
+      { id: "task", sessionID: "selected" },
+    ]]);
+    assertEquals(f.location.hash, "#/local/other");
+    assertEquals(tabs.state.sessionID, undefined);
+    assert(f.resources.entry("local", "selected"));
+    assertEquals(f.calls.some((c) => c[1] === "session.delete"), false);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("close helper returns to its immediate parent without removing inherited membership", async () => {
+  const f = fixture("#/local/selected/helper");
+  try {
+    f.entries("local", [
+      shellEntry("selected"),
+      shellEntry("helper", "/p", "selected"),
+    ]);
+    f.resources.inbox("local").state.inbox.tasks = [
+      shellTask("task", ["selected"]),
+    ];
+    const tabs = f.resources.tabs({ sidecarId: "local", directory: "/p" });
+    tabs.preview("helper");
+    await f.navigation.close({ sidecarId: "local", sessionID: "helper" });
+    assertEquals(f.location.hash, "#/local/selected");
+    assertEquals(f.calls.some((c) => c[1] === "tasks.removeSession"), false);
+    assertEquals(f.resources.inbox("local").state.inbox.tasks[0].sessions, [
+      "selected",
+    ]);
+    assertEquals(
+      client.taskBreadcrumbs(
+        shellTask("task", ["selected"]),
+        f.resources.projectEntries({ sidecarId: "local", directory: "/p" }),
+        "selected",
+        tabs.state.closed,
+      ).map((c) => c.id),
+      ["selected"],
+    );
+    tabs.preview("helper");
+    assertEquals(tabs.state.closed, []);
+  } finally {
+    f.stop();
+  }
+});
+
+for (const status of ["working", "blocked", "finished"] as const) {
+  Deno.test(`close ${status} session confirms and retains its mandatory phantom until idle and seen`, async () => {
+    const f = fixture();
+    try {
+      const entry = shellEntry("selected");
+      if (status === "working") entry.status = "busy";
+      if (status === "blocked") entry.attention.permissions = 1;
+      f.entries("local", [entry]);
+      const inbox = f.resources.inbox("local").state.inbox;
+      if (status === "finished") inbox.finishes.selected = 10;
+      const tabs = f.resources.tabs({ sidecarId: "local", directory: "/p" });
+      tabs.preview("selected");
+      f.consent(false);
+      assertEquals(await f.navigation.close(), false);
+      assertEquals(f.location.hash, "#/local/selected");
+      assertEquals(tabs.state.sessionID, "selected");
+      assert(
+        f.messages.at(-1)?.includes("phantom tab until it is idle and seen"),
+      );
+      f.consent(true);
+      assertEquals(await f.navigation.close(), true);
+      assertEquals(f.location.hash, "#project/local/%2Fp");
+      assertEquals(
+        tabs.tabs().map((tab) => [tab.id, tab.status, tab.preview]),
+        [["selected", status, false]],
+      );
+      entry.status = "idle";
+      entry.attention.permissions = 0;
+      f.entries("local", [entry]);
+      inbox.seen.selected = 11;
+      tabs.update(
+        f.resources.tabSnapshot({ sidecarId: "local", directory: "/p" }),
+      );
+      assertEquals(tabs.tabs(), []);
+    } finally {
+      f.stop();
+    }
+  });
+}
+
+Deno.test("close cancellation, failed membership and a later route preserve the current view and dirty input", async () => {
+  const f = fixture();
+  try {
+    f.guard.mark("permissions", true);
+    f.consent(false);
+    assertEquals(await f.navigation.close(), false);
+    assertEquals(f.calls, []);
+    assertEquals(f.guard.dirty("permissions"), true);
+    f.consent(true);
+    f.resources.inbox("local").state.inbox.tasks = [
+      shellTask("task", ["selected"]),
+    ];
+    f.reply(() => Promise.reject(new Error("membership failed")));
+    let failure: unknown;
+    try {
+      await f.navigation.close();
+    } catch (error) {
+      failure = error;
+    }
+    assertEquals((failure as Error).message, "membership failed");
+    assertEquals(f.location.hash, "#/local/selected");
+    const held = Promise.withResolvers<unknown>();
+    f.reply(() => held.promise);
+    const closing = f.navigation.close();
+    await settled();
+    f.navigation.navigate({ sidecarId: "local", sessionID: "other" });
+    held.resolve(null);
+    await closing;
+    assertEquals(f.location.hash, "#/local/other");
+  } finally {
+    f.stop();
+  }
 });

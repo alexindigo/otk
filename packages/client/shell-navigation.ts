@@ -3,6 +3,7 @@ import { errorMessage } from "@otk/protocol";
 import type { TaskRecord } from "@otk/protocol";
 import type { InputGuard } from "./input-guard.ts";
 import { sessionKey } from "./index.ts";
+import { inboxStatus } from "./inbox.ts";
 import { createNavigation, type NavigationEnvironment } from "./navigation.ts";
 import {
   projectHash,
@@ -41,6 +42,7 @@ export interface ShellNavigation {
   projectHome(): boolean;
   preview(target: Selection): boolean;
   pin(target: Selection): Promise<boolean>;
+  close(target?: Selection): Promise<boolean>;
   available(input?: ProjectSelection): boolean;
   create(input?: ProjectSelection): Promise<void>;
   createIn(
@@ -64,6 +66,7 @@ export function createShellNavigation(o: {
   guard: InputGuard;
   session: Pick<ClientSession, "state" | "open">;
   presence(): { focused: boolean; visible: boolean };
+  confirm(message: string): boolean;
   environment?: NavigationEnvironment;
   factory?: StateFactory;
 }): ShellNavigation {
@@ -237,6 +240,41 @@ export function createShellNavigation(o: {
       model.preview(target.sessionID);
       if (model.state.selected?.kind === "task") return true;
       await model.pin(target.sessionID);
+      return true;
+    },
+    async close(input) {
+      const target = input ?? session.state.selection;
+      if (!target || !resources.connected(target.sidecarId)) return false;
+      const intent = revision;
+      const directory = await actions.directory(target);
+      if (intent !== revision) return false;
+      const p = { sidecarId: target.sidecarId, directory };
+      const entry = resources.projectEntries(p).find((e) =>
+        e.id === target.sessionID
+      );
+      if (!entry) return false;
+      const inbox = resources.inbox(target.sidecarId).state.inbox;
+      if (
+        inboxStatus(entry, inbox) !== "idle" && !o.confirm(
+          `Close “${entry.title}”? It will stay visible as a phantom tab until it is idle and seen. The session remains in Sessions and in the agent service.`,
+        )
+      ) return false;
+      const shown = () =>
+        session.state.selection?.sidecarId === target.sidecarId &&
+        session.state.selection?.sessionID === target.sessionID;
+      if (shown() && !guard.release()) return false;
+      const model = resources.tabs(p);
+      const task = inbox.tasks.find((t) =>
+        t.directory === directory && t.sessions.includes(target.sessionID)
+      );
+      const remaining = task?.sessions.find((id) => id !== target.sessionID);
+      if (task) await resources.taskActions(p).remove(task, target.sessionID);
+      if (intent === revision && shown()) {
+        const next = entry.parentID ?? remaining;
+        if (next) navigate({ sidecarId: target.sidecarId, sessionID: next });
+        else navigation.open(projectHash(p));
+      }
+      model.close(target.sessionID);
       return true;
     },
     available(input) {

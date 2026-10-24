@@ -32,6 +32,7 @@ export interface TabState {
   selected?: TabSelection;
   preview?: string;
   sessionID?: string;
+  closed?: string[];
   revision: number;
 }
 export interface ClientTabs {
@@ -42,6 +43,7 @@ export interface ClientTabs {
   update(input: TabInput): void;
   select(selection: TabSelection, sessionID?: string): void;
   preview(sessionID: string): void;
+  close(sessionID: string): void;
   pin(sessionID: string): Promise<TaskRecord>;
   send<T>(sessionID: string, action: () => Promise<T>): Promise<T>;
   stop(): void;
@@ -148,6 +150,7 @@ export function createTabs(
           delete draft.selected;
           delete draft.preview;
           delete draft.sessionID;
+          delete draft.closed;
         }
         if (draft.selected?.kind === "session") {
           const task = input.inbox.tasks.find((t) =>
@@ -210,6 +213,7 @@ export function createTabs(
       store.update((draft) => {
         draft.selected = { ...selection };
         draft.sessionID = selectedID;
+        draft.closed = draft.closed?.filter((id) => id !== selectedID);
         delete draft.preview;
       });
     },
@@ -233,6 +237,7 @@ export function createTabs(
           id: task?.id ?? sessionID,
         };
         draft.sessionID = sessionID;
+        draft.closed = draft.closed?.filter((id) => id !== sessionID);
         if (task) remembered.set(task.id, sessionID);
         if (task) delete draft.preview;
         else draft.preview = sessionID;
@@ -272,10 +277,26 @@ export function createTabs(
         store.update((draft) => {
           draft.selected = { kind: "task", id: task.id };
           draft.sessionID = sessionID;
+          draft.closed = draft.closed?.filter((id) => id !== sessionID);
           delete draft.preview;
         });
       }
       return task;
+    },
+    close(sessionID) {
+      refresh();
+      selectionRevision++;
+      for (const [task, id] of remembered) {
+        if (id === sessionID) remembered.delete(task);
+      }
+      store.update((draft) => {
+        draft.closed = [...new Set([...(draft.closed ?? []), sessionID])];
+        if (draft.preview === sessionID) delete draft.preview;
+        if (draft.sessionID === sessionID) {
+          delete draft.selected;
+          delete draft.sessionID;
+        }
+      });
     },
     async send<T>(sessionID: string, action: () => Promise<T>): Promise<T> {
       await this.pin(sessionID);
@@ -303,6 +324,7 @@ export function createTabs(
         delete draft.selected;
         delete draft.preview;
         delete draft.sessionID;
+        delete draft.closed;
         draft.revision++;
       });
     },

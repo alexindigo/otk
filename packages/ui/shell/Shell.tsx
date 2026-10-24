@@ -263,6 +263,7 @@ export default function Shell(
     inTask: actions.inTask,
     open: navigation.preview,
     pin: navigation.pin,
+    close: navigation.close,
   }));
   onCleanup(commands.register({
     id: "session.title.copy",

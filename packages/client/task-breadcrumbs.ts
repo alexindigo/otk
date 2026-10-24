@@ -15,6 +15,7 @@ export function taskBreadcrumbs(
   task: TaskRecord,
   entries: readonly IndexEntry[],
   selected?: string,
+  closed: readonly string[] = [],
 ): TaskCrumb[] {
   const lookup = (id: string) =>
     entries.find((e) => e.id === id && e.directory === task.directory);
@@ -29,6 +30,10 @@ export function taskBreadcrumbs(
       )
     ) {
       if (visited.has(child.id)) continue;
+      if (
+        closed.includes(child.id) &&
+        !belongsToSession(selected ?? "", child.id, lookup)
+      ) continue;
       visited.add(child.id);
       result.push({ id: child.id, helper: true, depth });
       if (belongsToSession(selected ?? "", child.id, lookup)) {

@@ -611,12 +611,16 @@ sidecar/session: Open is absent for that session in every view. Pin as task
 remains for an ungrouped current session; an already-grouped current session has
 no task-opening item. Background grouped sessions offer Open as task, using the
 same guarded navigation and task owner. Ordinary visible-control reselection
-remains available independently of context projection. Session tabs have no
-Close action: phantom tabs leave on their own when idle and seen. Project rows
-share their existing Mark active / Mark inactive command with the visible
-project CommandMenu projection, including shared invocation and row error
-feedback. Project/task kinds carry sidecar, directory and task identities
-instead of component-specific kinds.
+remains available independently of context projection. `session.close`
+contributes Close session to every session target and the command palette. The
+navigation owner removes explicit task membership through the single-member
+operation, releases the tab view and returns helpers to their immediate parent.
+Sessions remain in the Sessions panel and backend. Closing working, blocked or
+unseen-finished sessions asks for confirmation and retains the mandatory phantom
+until idle and seen. Project rows share their existing Mark active / Mark
+inactive command with the visible project CommandMenu projection, including
+shared invocation and row error feedback. Project/task kinds carry sidecar,
+directory and task identities instead of component-specific kinds.
 
 `TranscriptContext` registers each `prompt`, `reply`, `code`, `diff` and `tool`
 action once, independent of transcript length. Targets carry sidecar/session,

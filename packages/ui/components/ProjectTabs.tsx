@@ -172,7 +172,12 @@ export default function ProjectTabs(props: {
         ? [{ id: props.session.id, helper: !!props.session.parentID, depth: 0 }]
         : [];
     }
-    return taskBreadcrumbs(task, props.entries, props.model.state.sessionID);
+    return taskBreadcrumbs(
+      task,
+      props.entries,
+      props.model.state.sessionID,
+      props.model.state.closed,
+    );
   });
   const visibleCrumb = (n: number) =>
     crumbs().length <= 7 || n < 2 || n >= crumbs().length - 2 ||

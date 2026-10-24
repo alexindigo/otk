@@ -27,24 +27,32 @@ Deno.test("session context transitions: current-place no-ops vanish, background 
       effects.push(["task", value]);
       return Promise.resolve(true);
     },
+    close: (value = current) => {
+      effects.push(["close", value]);
+      return Promise.resolve(true);
+    },
   });
   const items = () =>
     commands.contextActions({ kind: "session", data: target });
   const titles = () => items().map((item) => item.title);
-  assertEquals(titles(), ["Pin as task"]);
+  assertEquals(titles(), ["Pin as task", "Close session"]);
   assertEquals(
     commands.contextActions({ kind: "session", data: undefined }),
     [],
   );
+  assertEquals(
+    commands.list().find((c) => c.cmd.id === "session.close")?.cmd.title,
+    "Close session",
+  );
   await commands.runContext(items()[0]);
   assertEquals(effects, [["task", target]]);
-  assertEquals(titles(), []);
+  assertEquals(titles(), ["Close session"]);
   current = { sidecarId: "one", sessionID: "other" };
-  assertEquals(titles(), ["Open", "Open as task"]);
+  assertEquals(titles(), ["Open", "Open as task", "Close session"]);
   const [open, task] = items();
   await commands.runContext(open);
   assertEquals(current, target);
-  assertEquals(titles(), []);
+  assertEquals(titles(), ["Close session"]);
   await assertRejects(
     () => commands.runContext(task),
     Error,
@@ -52,7 +60,7 @@ Deno.test("session context transitions: current-place no-ops vanish, background 
   );
   // Same session ID on another sidecar is not the same place.
   current = { sidecarId: "two", sessionID: "same" };
-  assertEquals(titles(), ["Open", "Open as task"]);
+  assertEquals(titles(), ["Open", "Open as task", "Close session"]);
   connected = false;
   assertEquals(titles(), ["Open"]);
   exists = false;
@@ -62,7 +70,11 @@ Deno.test("session context transitions: current-place no-ops vanish, background 
   // Visible controls can still re-select, independently of context projection.
   await commands.run("session.preview", target);
   assertEquals(effects.at(-1), ["open", target]);
-  assertEquals(titles(), []);
+  assertEquals(titles(), ["Close session"]);
+  await commands.runContext(
+    items().find((item) => item.title === "Close session")!,
+  );
+  assertEquals(effects.at(-1), ["close", target]);
   release();
   assertEquals(items(), []);
 });

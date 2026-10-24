@@ -36,10 +36,14 @@ panel hosts feature-registered views; its collapsed rail keeps their icons
 available and clicking an icon opens that view. Sessions shows the selected
 project's task-grouped parent/child tree with status lights and title search.
 Click to preview or double-click to make a task. Panel width (280–480px) and
-selected view persist with its collapsed state per user. Open a session to
-stream its transcript, send prompts, or press Esc twice to interrupt. Message
-history for the previous session is released on switching. Web assets and fonts
-are bundled locally; no dev server or CDN is used.
+selected view persist with its collapsed state per user. Close session in the
+context menu or palette releases task membership and the view while keeping the
+session in Sessions and the backend. Closing a helper returns to its parent.
+Working, blocked and unseen-finished sessions retain a phantom tab until idle
+and seen, with an explanation before closing. Open a session to stream its
+transcript, send prompts, or press Esc twice to interrupt. Message history for
+the previous session is released on switching. Web assets and fonts are bundled
+locally; no dev server or CDN is used.
 
 Pending permissions for the open session and its descendants take over the
 composer. Allow once, confirm the displayed future grant patterns for Allow

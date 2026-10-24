@@ -293,6 +293,14 @@ subsequent finish observations mark seen only while focused and visible. Browser
 confirmation, history and presence remain injectable. `shellTitle` is the pure
 session/project/application title projection.
 
+`close(target?)` captures the target's server/project and removes only explicit
+task membership through `TaskActions.remove`. It releases the tab view without
+deleting backend metadata, returns helpers to their immediate parent, and keeps
+later navigation authoritative across an asynchronous mutation. Current input
+uses the same release guard; mandatory activity uses an injected confirmation.
+`ClientTabs.close` clears only preview/selection and remembered member state, so
+the ordinary activity projection still retains every mandatory phantom.
+
 `createSessionActions({resources, session, current})` owns session-target
 directory resolution (index, matching selected info, then authoritative lookup),
 non-submitting actions and the shared submission port. Prompts resolve the

@@ -12,7 +12,7 @@ import { menuReady } from "../support/menu.ts";
 
 const menu = ':popover-open [role="menu"][aria-label="Context menu"]';
 const app = ["New session", "Open command palette", "Display preferences"];
-const session = ["Pin as task", "Copy session title"];
+const session = ["Pin as task", "Copy session title", "Close session"];
 const areas = {
   projects: ".otk-inbox-scroll",
   panel: ".otk-panel-content",
@@ -145,6 +145,7 @@ test("C3 session menus omit current-place no-ops while background Open and task 
       assertEquals(await groups(b), [["Copy prompt"], [
         "Pin as task",
         "Copy session title",
+        "Close session",
       ]]);
       await dismiss(b);
     }
@@ -463,6 +464,7 @@ test("C3 stock areas: picker and approval commands, Activity panel and Dark/Line
             "Pin as task",
             "Turn auto-approve on",
             "Copy session title",
+            "Close session",
           ], app]
           : [
             ["Choose agent", "Choose model", "Edit prompt", "Attach files"],

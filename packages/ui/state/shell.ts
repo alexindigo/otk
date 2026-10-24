@@ -70,6 +70,7 @@ export function createShellState(o: { api: URL }): ShellState {
       focused: document.hasFocus(),
       visible: document.visibilityState === "visible",
     }),
+    confirm: (message) => globalThis.confirm(message),
   });
   createEffect(() => {
     const selected = session.state.selection, data = actions.info();

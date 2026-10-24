@@ -21,7 +21,7 @@ import { menuReady } from "../support/menu.ts";
 
 const menu = ':popover-open [role="menu"][aria-label="Context menu"]';
 const panelArea = ["New session", "Find a session", "Collapse right panel"];
-const transcriptArea = ["Pin as task", "Copy session title"];
+const transcriptArea = ["Pin as task", "Copy session title", "Close session"];
 const captureOrigins = new WeakMap<
   Cdp,
   { selector: string; theme: string; before: string }
@@ -151,6 +151,7 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
       "Add to task: Review",
       "Add to task: Delivery",
       "Copy session title",
+      "Close session",
     ];
     for (
       const [name, selector] of [
@@ -202,7 +203,7 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
       );
       await b.key("End");
       await b.poll(
-        `document.activeElement?.textContent==='Copy session title'`,
+        `document.activeElement?.textContent==='Close session'`,
       );
       await dismiss(b);
       await b.poll(
@@ -226,6 +227,7 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
       "Open as task",
       "Add to task: Review",
       "Copy session title",
+      "Close session",
       ...panelArea,
     ]);
     await invoke(b, "Open as task");
@@ -886,6 +888,7 @@ test("C2 stock capabilities: targeted auto-approve and reply usage menu reach th
       "Pin as task",
       "Turn auto-approve on",
       "Copy session title",
+      "Close session",
       ...panelArea,
     ]);
     for (const theme of ["otk-dark", "otk-light"]) {
@@ -923,6 +926,7 @@ test("C2 stock capabilities: targeted auto-approve and reply usage menu reach th
       "Show usage breakdown",
       "Turn auto-approve on",
       "Copy session title",
+      "Close session",
     ]);
     for (const theme of ["otk-dark", "otk-light"]) {
       await client.rpc("prefs.set", { key: "theme", value: theme });

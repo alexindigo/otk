@@ -75,6 +75,7 @@ export function registerSessionTargetCommands(commands: CommandHub, actions: {
   inTask(target: Selection): boolean;
   open(target: Selection): boolean;
   pin(target: Selection): Promise<boolean>;
+  close(target?: Selection): Promise<boolean>;
 }): () => void {
   const shown = (target: Selection) => {
     const current = actions.current();
@@ -119,6 +120,24 @@ export function registerSessionTargetCommands(commands: CommandHub, actions: {
       enabled: (_ctx, target?: Selection) =>
         !!target && actions.exists(target) && actions.connected(target),
       run: (_ctx, target: Selection) => actions.pin(target),
+    }),
+    commands.register({
+      id: "session.close",
+      title: "Close session",
+      category: "Session",
+      context: {
+        kind: "session",
+        order: 50,
+        items: (target?: Selection) =>
+          target
+            ? [{ key: "close", title: "Close session", args: target }]
+            : [],
+      },
+      enabled: (_ctx, input?: Selection) => {
+        const target = input ?? actions.current();
+        return !!target && actions.exists(target) && actions.connected(target);
+      },
+      run: (_ctx, target?: Selection) => actions.close(target),
     }),
   ];
   return () => releases.forEach((release) => release());

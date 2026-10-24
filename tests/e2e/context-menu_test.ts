@@ -301,6 +301,7 @@ test("context menu: editing uses captured ranges and the real clipboard, paste r
         "Select all",
         "Pin as task",
         "Copy session title",
+        "Close session",
       ]);
       await action(browser, "context.editable.selectAll");
       await closed(browser);
@@ -311,6 +312,7 @@ test("context menu: editing uses captured ranges and the real clipboard, paste r
         "Select all",
         "Pin as task",
         "Copy session title",
+        "Close session",
       ]);
       await action(browser, "context.editable.paste");
       await closed(browser);
@@ -383,6 +385,7 @@ test("context menu: editing uses captured ranges and the real clipboard, paste r
       "Copy link address",
       "Pin as task",
       "Copy session title",
+      "Close session",
     ]);
     await action(browser, "context.link.copy");
     await closed(browser);
@@ -408,6 +411,7 @@ test("context menu: editing uses captured ranges and the real clipboard, paste r
       "Copy image address",
       "Pin as task",
       "Copy session title",
+      "Close session",
     ]);
     await action(browser, "context.image.copy");
     await closed(browser);
@@ -442,6 +446,7 @@ test("context menu: editing uses captured ranges and the real clipboard, paste r
       "Copy link address",
       "Pin as task",
       "Copy session title",
+      "Close session",
     ]);
     await browser.key("Escape");
     await closed(browser);
@@ -455,6 +460,7 @@ test("context menu: editing uses captured ranges and the real clipboard, paste r
       "Copy link address",
       "Pin as task",
       "Copy session title",
+      "Close session",
     ]);
     await action(browser, "context.selection.copy");
     await closed(browser);
@@ -473,6 +479,7 @@ test("context menu: editing uses captured ranges and the real clipboard, paste r
       "Select all",
       "Pin as task",
       "Copy session title",
+      "Close session",
     ]);
     await action(browser, "context.editable.cut");
     await closed(browser);
