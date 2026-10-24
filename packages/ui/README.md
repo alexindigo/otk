@@ -326,7 +326,12 @@ searchable parent/child tree. Its feature adapter reads common `ShellPorts`
 resources; the panel knows no views.
 
 `SidebarRail` is the shared frame for both collapsed sides: one 48px rail, 52px
-corner reservation, leading controls, scrolling body and optional footer.
+corner reservation, leading controls, scrolling body and optional footer. The
+shared `--rail-width`, `--chrome-header-height` and `--control-size` tokens own
+those dimensions and compact controls; corner clearance derives from the control
+size. Collapsed width belongs to the rail's CSS, never a second numeric view
+policy. Expanded width defaults and validated bounds come from protocol's
+immutable `SHELL_WIDTHS`, also consumed by ARIA, keyboard and pointer resizing.
 ProjectInbox also uses this frame when expanded. Search stays in its expanded
 vertical slot above the project lights; collapsing never moves their y
 positions. The right rail stacks available registered panel icons with vertical

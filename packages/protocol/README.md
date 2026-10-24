@@ -54,6 +54,10 @@ rather than library-internal module augmentation, which JSR's publication graph
 does not support. The composition names owners only, never individual keys or
 validators.
 
+The layout preference owner exports immutable `SHELL_WIDTHS` data for each
+column's minimum, maximum and default. Preference defaults/validation and UI
+resize consumers share that policy; collapsed rail geometry is a UI concern.
+
 The model preference owner contributes `models.recent` (max 10) and
 `models.favourite` (max 50), both initially empty arrays of unique
 `{ provider, model }` references. Runtime validation rejects malformed,

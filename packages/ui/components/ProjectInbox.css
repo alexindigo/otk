@@ -3,7 +3,7 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 52px;
+  height: var(--chrome-header-height);
   flex: none;
   padding: 0 var(--chrome-inset) 0 var(--corner-zone);
 }
@@ -168,7 +168,7 @@
 .otk-server-connection > button {
   overflow: hidden;
   text-overflow: ellipsis;
-  height: 28px;
+  height: var(--control-size);
   display: flex;
   align-items: center;
   gap: 8px;

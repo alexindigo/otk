@@ -2,8 +2,8 @@
 .otk-display-trigger {
   display: grid;
   place-items: center;
-  width: 28px;
-  height: 28px;
+  width: var(--control-size);
+  height: var(--control-size);
   padding: 0;
 }
 .otk-display-preferences fieldset {

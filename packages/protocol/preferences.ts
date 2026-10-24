@@ -35,6 +35,7 @@ export const isPreference: PreferenceRegistry["validate"] = preferences.validate
 export { registerDiffPreferences } from "./preferences/diff.ts";
 export {
   registerLayoutPreferences,
+  SHELL_WIDTHS,
   type ShellLayout,
 } from "./preferences/layout.ts";
 export { registerKeymapPreferences } from "./preferences/keymap.ts";

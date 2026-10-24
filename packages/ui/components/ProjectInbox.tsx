@@ -11,7 +11,11 @@ import {
   type ProjectSelection,
   type SidecarState,
 } from "@otk/client";
-import type { Preferences, ShellLayout } from "@otk/protocol";
+import {
+  type Preferences,
+  SHELL_WIDTHS,
+  type ShellLayout,
+} from "@otk/protocol";
 import StatusLight from "./StatusLight.tsx";
 import { resizeDrag } from "./resize.ts";
 import {
@@ -81,7 +85,8 @@ export default function ProjectInbox(props: {
   };
   const layout = () => props.prefs.shellLayout;
   const collapsed = () => layout().leftCollapsed;
-  const width = () => collapsed() ? 48 : dragWidth() ?? layout().leftWidth;
+  const bounds = SHELL_WIDTHS.left;
+  const width = () => dragWidth() ?? layout().leftWidth;
   const save = async (patch: Partial<ShellLayout>) => {
     try {
       await props.onLayout(patch);
@@ -302,8 +307,8 @@ export default function ProjectInbox(props: {
             aria-label="Project column width"
             aria-orientation="vertical"
             tabindex="0"
-            aria-valuemin={200}
-            aria-valuemax={360}
+            aria-valuemin={bounds.min}
+            aria-valuemax={bounds.max}
             aria-valuenow={width()}
             onKeyDown={(event) => {
               if (
@@ -311,18 +316,27 @@ export default function ProjectInbox(props: {
               ) return;
               event.preventDefault();
               const next = event.key === "Home"
-                ? 200
+                ? bounds.min
                 : event.key === "End"
-                ? 360
+                ? bounds.max
                 : Math.max(
-                  200,
-                  Math.min(360, width() + (event.key === "ArrowLeft" ? -8 : 8)),
+                  bounds.min,
+                  Math.min(
+                    bounds.max,
+                    width() + (event.key === "ArrowLeft" ? -8 : 8),
+                  ),
                 );
               void save({ leftWidth: next });
             }}
             onPointerDown={(event) => {
               event.currentTarget.setPointerCapture(event.pointerId);
-              drag = resizeDrag(width(), event.clientX, 1, 200, 360);
+              drag = resizeDrag(
+                width(),
+                event.clientX,
+                1,
+                bounds.min,
+                bounds.max,
+              );
               setDragWidth(width());
             }}
             onPointerMove={(event) => {

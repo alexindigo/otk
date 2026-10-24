@@ -14,10 +14,10 @@
   border-left: 1px solid var(--otk-border);
 }
 .otk-sidebar-rail[data-collapsed=true] {
-  width: 48px;
+  width: var(--rail-width);
 }
 .otk-rail-header {
-  height: 52px;
+  height: var(--chrome-header-height);
   flex: none;
 }
 .otk-rail-body {

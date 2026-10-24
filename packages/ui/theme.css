@@ -45,8 +45,11 @@
   --panel-inset: 20px;
   --pill-inset: var(--item-inset);
   /* Prototype chrome geometry, shared by the bars that reserve its corners. */
+  --rail-width: 48px;
+  --chrome-header-height: 52px;
+  --control-size: 28px;
   --corner: 12px;
-  --corner-zone: calc(var(--corner) + 28px + 8px);
+  --corner-zone: calc(var(--corner) + var(--control-size) + 8px);
   --chrome-gap: 4px;
   --chrome-inset: 12px;
   --project-inset: 12px;
@@ -234,8 +237,8 @@ small {
   line-height: 1;
 }
 .otk-icon-button {
-  width: 28px;
-  height: 28px;
+  width: var(--control-size);
+  height: var(--control-size);
   flex: none;
   display: inline-grid;
   place-items: center;

@@ -16,7 +16,7 @@
   align-items: center;
   gap: var(--chrome-gap);
   padding: 0 var(--corner-zone) 0 var(--chrome-inset);
-  min-height: 52px;
+  min-height: var(--chrome-header-height);
   flex: none;
   flex-wrap: wrap;
 }

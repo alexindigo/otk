@@ -3,7 +3,11 @@ import "./RightPanel.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { createMemo, createSignal, For, Show } from "solid-js";
-import type { CapabilityName, Preferences } from "@otk/protocol";
+import {
+  type CapabilityName,
+  type Preferences,
+  SHELL_WIDTHS,
+} from "@otk/protocol";
 import { useUiRegistries } from "../registries/context.tsx";
 import { resizeDrag } from "./resize.ts";
 import SidebarRail from "./SidebarRail.tsx";
@@ -25,7 +29,8 @@ export default function RightPanel(props: {
   const [dragWidth, setDragWidth] = createSignal<number>();
   let drag: ReturnType<typeof resizeDrag> | undefined;
   const [error, setError] = createSignal("");
-  const width = () => dragWidth() ?? props.layout.rightWidth ?? 320;
+  const bounds = SHELL_WIDTHS.right;
+  const width = () => dragWidth() ?? props.layout.rightWidth ?? bounds.default;
   const save = async (patch: Partial<Preferences["shellLayout"]>) => {
     try {
       await props.onLayout(patch);
@@ -135,8 +140,8 @@ export default function RightPanel(props: {
           aria-label="Right panel width"
           aria-orientation="vertical"
           tabindex={props.ready ? 0 : -1}
-          aria-valuemin={280}
-          aria-valuemax={480}
+          aria-valuemin={bounds.min}
+          aria-valuemax={bounds.max}
           aria-valuenow={width()}
           onKeyDown={(event) => {
             if (
@@ -145,19 +150,28 @@ export default function RightPanel(props: {
             ) return;
             event.preventDefault();
             const next = event.key === "Home"
-              ? 280
+              ? bounds.min
               : event.key === "End"
-              ? 480
+              ? bounds.max
               : Math.max(
-                280,
-                Math.min(480, width() + (event.key === "ArrowLeft" ? 8 : -8)),
+                bounds.min,
+                Math.min(
+                  bounds.max,
+                  width() + (event.key === "ArrowLeft" ? 8 : -8),
+                ),
               );
             void save({ rightWidth: next });
           }}
           onPointerDown={(event) => {
             if (!props.ready) return;
             event.currentTarget.setPointerCapture(event.pointerId);
-            drag = resizeDrag(width(), event.clientX, -1, 280, 480);
+            drag = resizeDrag(
+              width(),
+              event.clientX,
+              -1,
+              bounds.min,
+              bounds.max,
+            );
             setDragWidth(width());
           }}
           onPointerMove={(event) => {

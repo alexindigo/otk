@@ -16,7 +16,7 @@
   min-width: 0;
 }
 .otk-task-strip {
-  min-height: 52px;
+  min-height: var(--chrome-header-height);
   padding: 0 12px 0 16px;
   gap: var(--chrome-gap);
 }
@@ -39,7 +39,7 @@
 }
 .otk-tab-open {
   --selection-padding: 0 var(--chrome-inset);
-  height: 28px;
+  height: var(--control-size);
   padding: 0 var(--chrome-inset);
   text-align: left;
   white-space: nowrap;
