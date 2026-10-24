@@ -10,6 +10,10 @@ export default function WorkLog(
 ): Element {
   const [open, setOpen] = createSignal(true);
   const toggle = ownedAction("work.toggle", () => setOpen(!open()));
+  const label = () =>
+    props.time.start !== undefined && props.time.end !== undefined
+      ? `Worked for ${elapsed(props.time.start, props.time.end)}`
+      : "Work log";
   return (
     <section class="otk-work-log">
       <button
@@ -19,10 +23,8 @@ export default function WorkLog(
         onClick={() => void toggle()}
       >
         <ChevronIcon class="otk-work-chevron" />
-        <span>
-          {props.time.start !== undefined && props.time.end !== undefined
-            ? `Worked for ${elapsed(props.time.start, props.time.end)}`
-            : "Work log"}
+        <span class="otk-control-label" title={label()}>
+          {label()}
         </span>
         <span class="otk-work-rule" aria-hidden="true" />
       </button>

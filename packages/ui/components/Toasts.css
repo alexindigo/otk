@@ -25,7 +25,6 @@
   text-align: left;
   padding: 0;
   line-height: 1.5;
-  overflow-wrap: anywhere;
 }
 .otk-toast-message strong {
   font-weight: 500;

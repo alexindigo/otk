@@ -263,8 +263,15 @@ function Request(
                 onClick={() => form.pick(index, i)}
               >
                 <SelectionContent class="otk-question-content">
-                  <span>{option().label}</span>
-                  <span class="otk-muted">{option().description}</span>
+                  <span class="otk-control-label" title={option().label}>
+                    {option().label}
+                  </span>
+                  <span
+                    class="otk-muted otk-control-label"
+                    title={option().description}
+                  >
+                    {option().description}
+                  </span>
                 </SelectionContent>
               </button>
             )}

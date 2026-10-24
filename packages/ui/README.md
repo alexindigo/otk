@@ -226,7 +226,10 @@ including for backend-applied and plain-label states. Full provider/model names
 remain in picker tooltips and accessible names when visible text truncates. The
 footer gives controls their natural width and shrinks the model control only
 under actual row pressure: provider text yields first, then model text. Shared
-flex sizing keeps actions on the same row without a fixed label cap. Agent and
+intrinsic sizing keeps actions on the same row without a fixed label cap. Picker
+triggers reserve their chevron and padding through a flexible-label grid; when
+the settings' intrinsic minimum and actions cannot share a row, whole controls
+flow onto the next footer line rather than paint over one another. Agent and
 variant names use display-only title case in triggers and menu rows; literal
 fallback phrases stay sentence case through the same name/fallback formatter.
 Keys and submitted values retain their exact spelling. Edit prompt uses the
@@ -454,7 +457,18 @@ selection uses `--font-ui` / `--font-mono`. Interface text is 13/20, prose
 commands and IDs. Matching size treatments consume the shared `--text-*` roles;
 `--line-ui`, `--line-prose`, `--line-heading` and `--line-meta` own their line
 metrics, including the root and mono code/path treatments. Base buttons are
-ghost controls; the code/small text floor remains independently owned by
+ghost controls. The shared base keeps button, button-role, tab, menu,
+disclosure, pill and chip labels on one line and prevents actions shrinking.
+Rows wrap whole controls when appropriate; variable content uses
+`otk-control-grow` to yield space and `otk-control-label` to ellipsize,
+retaining full text in a title and the accessible name. `otk-control-row` wraps
+whole actions when their intrinsic minima cannot fit. The label slot owns
+single-line text itself, including section/group headings that are not buttons;
+their decorative rules yield before the title ellipsizes, with its full text
+retained. Elastic labels combine both slots to contribute no intrinsic width, so
+long text yields before a row wraps its controls. Component styles do not supply
+their own control-label whitespace policy. Separate picker subtitles remain
+separate lines. The code/small text floor remains independently owned by
 `--text-minimum` (12px). `.otk-pill`, `.otk-icon-button` and `.otk-send-button`
 provide action pills, 28px icons and 32px circular Send. Radii use shared role
 tokens: controls/rows 8px, inline code 5px, cards 10px, bubbles 18px and

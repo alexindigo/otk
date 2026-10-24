@@ -6,17 +6,10 @@
   margin: 0 0 4px;
   font-size: var(--text-ui);
 }
-.otk-tool-state {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
 .otk-tool-toggle {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-width: 0;
-  width: 100%;
   min-height: 26px;
   padding: 0 4px;
   color: inherit;
@@ -36,22 +29,14 @@
 }
 .otk-tool-verb {
   font-weight: 500;
-  flex: none;
 }
 .otk-tool-target,
 .otk-tool-brief {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  min-width: 0;
   color: var(--otk-fg-3);
   font-size: var(--text-meta);
 }
 .otk-tool-target {
   font-family: var(--font-mono);
-}
-.otk-tool-brief {
-  flex: 1;
 }
 .otk-tool-duration {
   margin-left: auto;

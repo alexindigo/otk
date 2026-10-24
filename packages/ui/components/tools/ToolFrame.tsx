@@ -49,9 +49,9 @@ export default function ToolFrame(
         data-tool={props.call.tool}
         data-tool-status={props.call.status}
       >
-        <header class="otk-tool-state">
+        <header class="otk-tool-state otk-control-row">
           <button
-            class="otk-tool-toggle"
+            class="otk-tool-toggle otk-control-grow"
             type="button"
             aria-expanded={open() ? "true" : "false"}
             onClick={() => void expand()}
@@ -61,12 +61,15 @@ export default function ToolFrame(
                 ? props.presentation.icon()
                 : props.presentation?.icon ?? "◇"}
             </span>{" "}
-            <span class="otk-tool-verb">
+            <span
+              class="otk-tool-verb otk-control-label"
+              title={props.presentation?.verb ?? props.call.tool}
+            >
               {props.presentation?.verb ?? props.call.tool}
             </span>{" "}
             <Show when={props.presentation?.target}>
               <span
-                class="otk-tool-target otk-id"
+                class="otk-tool-target otk-id otk-control-label otk-control-grow"
                 title={props.presentation?.target}
               >
                 {props.presentation?.target}
@@ -74,7 +77,10 @@ export default function ToolFrame(
               {" "}
             </Show>
             <Show when={props.presentation?.summary}>
-              <span class="otk-tool-brief" title={props.presentation?.summary}>
+              <span
+                class="otk-tool-brief otk-control-label otk-control-grow"
+                title={props.presentation?.summary}
+              >
                 {props.presentation?.summary}
               </span>
               {" "}

@@ -263,7 +263,9 @@ export default function ProjectTabs(props: {
                 >
                   <SelectionContent>
                     <StatusLight small state={tab().status} />
-                    <span>{tab().title || "Session"}</span>
+                    <span class="otk-control-label">
+                      {tab().title || "Session"}
+                    </span>
                     <AutoMark
                       active={tab().sessions.some((id) => !!props.auto?.(id))}
                       label={tab().kind === "task"

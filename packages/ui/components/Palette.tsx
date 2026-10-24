@@ -70,8 +70,10 @@ export default function Palette(
                 onClick={() => void invoke(row().cmd.id)}
               >
                 <SelectionContent class="otk-palette-content">
-                  <span>
-                    {row().cmd.title}
+                  <span class="otk-control-grow">
+                    <span class="otk-control-label" title={row().cmd.title}>
+                      {row().cmd.title}
+                    </span>
                     <small>{row().cmd.category}</small>
                   </span>
                   <kbd>{row().keys.join(" / ")}</kbd>

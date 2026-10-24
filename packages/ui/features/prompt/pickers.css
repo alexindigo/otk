@@ -3,16 +3,18 @@
   padding: 0;
   border-radius: var(--radius-control);
   font-weight: 500;
+  min-width: max-content;
 }
 .otk-composer-picker:hover {
   background: var(--otk-hover);
 }
 .otk-picker-trigger {
   --control-color: var(--otk-fg);
-  display: inline-flex;
+  display: inline-grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
   gap: 4px;
-  min-width: 0;
+  min-width: min-content;
   padding: 4px 8px;
   color: var(--control-color, var(--otk-fg));
   font-size: var(--text-meta);
@@ -26,7 +28,7 @@
 }
 .otk-model-picker {
   flex: 0 1 auto;
-  min-width: 0;
+  min-width: min-content;
 }
 .otk-model-trigger {
   width: 100%;

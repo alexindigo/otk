@@ -35,14 +35,15 @@
 }
 .otk-tab {
   gap: 0;
+  max-width: 100%;
   border-radius: var(--radius-row);
 }
 .otk-tab-open {
   --selection-padding: 0 var(--chrome-inset);
   height: var(--control-size);
+  max-width: 100%;
   padding: 0 var(--chrome-inset);
   text-align: left;
-  white-space: nowrap;
 }
 .otk-tab[data-kind=phantom] .otk-tab-open {
   color: var(--otk-fg-3);
@@ -100,7 +101,6 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  white-space: nowrap;
   color: var(--otk-fg-3);
 }
 .otk-folded-crumbs-trigger {

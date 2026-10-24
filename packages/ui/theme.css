@@ -224,6 +224,38 @@ small {
   font-size: max(var(--text-minimum), .92em);
 }
 /* Shared controls: feature owners choose their role, never their palette. */
+/* Labels are atomic. Rows may wrap whole controls; variable content explicitly
+   takes the flexible slot and ellipsizes, never steals an action's label width. */
+:where(button, [role="button"], [role="tab"], [role="menuitem"], summary, .otk-chip, .otk-pill) {
+  white-space: nowrap;
+  overflow-wrap: normal;
+  flex-shrink: 0;
+}
+.otk-control-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.otk-control-grow {
+  flex: 1 1 min-content;
+  min-width: 0;
+}
+.otk-control-label {
+  display: block;
+  white-space: nowrap;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Elastic text contributes no intrinsic minimum to its control's row. Fixed
+   labels set that minimum; remaining space is shared by the text slots. */
+.otk-control-label.otk-control-grow {
+  contain: inline-size;
+  flex-basis: 0;
+}
 .otk-pill {
   height: 30px;
   display: inline-flex;

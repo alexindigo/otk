@@ -133,7 +133,9 @@ export default function ProjectSessions(props: {
               >
                 <h3>
                   <ChevronIcon class="otk-session-group-chevron" />
-                  <span>{group().title}</span>
+                  <span class="otk-control-label" title={group().title}>
+                    {group().title}
+                  </span>
                   <span class="otk-session-group-rule" />
                 </h3>
                 <ul class="otk-project-session-list">

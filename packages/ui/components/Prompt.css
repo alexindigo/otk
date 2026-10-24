@@ -28,13 +28,13 @@ textarea.otk-prompt-input:focus-visible {
 .otk-prompt-actions {
   display: flex;
   align-items: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 4px;
   padding-top: 4px;
 }
 .otk-prompt-context {
-  flex: 0 1 auto;
-  min-width: 0;
+  flex: 1 1 min-content;
+  min-width: min-content;
   display: flex;
   align-items: center;
   flex-wrap: nowrap;

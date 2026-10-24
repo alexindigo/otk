@@ -148,7 +148,9 @@ export default function CommandMenu(props: {
                         : undefined}
                       onClick={() => void run(action())}
                     >
-                      {action().title}
+                      <span class="otk-control-label" title={action().title}>
+                        {action().title}
+                      </span>
                     </button>
                   </>
                 )}

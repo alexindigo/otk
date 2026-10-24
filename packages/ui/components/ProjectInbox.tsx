@@ -352,7 +352,7 @@ export default function ProjectInbox(props: {
         >
           <ChevronIcon class="otk-discovered-chevron" />
           <Show when={!collapsed()}>
-            <span>Discovered</span>
+            <span class="otk-control-label" title="Discovered">Discovered</span>
             <span class="otk-inbox-rule" />
             <span>({discovered().length})</span>
           </Show>
@@ -380,7 +380,7 @@ export default function ProjectInbox(props: {
             void inactive().catch((error) => setError(errorMessage(error)))}
         >
           <ChevronIcon class="otk-inactive-chevron" />
-          <span>Inactive</span>
+          <span class="otk-control-label" title="Inactive">Inactive</span>
           <span class="otk-inbox-rule" />
           <span>({props.projects.filter((p) => p.inactive).length})</span>
         </button>

@@ -194,7 +194,9 @@ export default function ListPicker<T = string>(props: {
               {(group) => (
                 <section role="group" aria-label={group().label}>
                   <Show when={group().label}>
-                    <h3>{group().label}</h3>
+                    <h3 class="otk-control-label" title={group().label}>
+                      {group().label}
+                    </h3>
                   </Show>
                   <For each={group().items} keyed={(item) => item.key}>
                     {(item) => (
@@ -225,9 +227,19 @@ export default function ListPicker<T = string>(props: {
                               class="otk-picker-name"
                               style={{ color: item().color }}
                             >
-                              <span>{item().label}</span>
+                              <span
+                                class="otk-control-label"
+                                title={item().label}
+                              >
+                                {item().label}
+                              </span>
                               <Show when={item().description}>
-                                <small>{item().description}</small>
+                                <small
+                                  class="otk-control-label"
+                                  title={item().description}
+                                >
+                                  {item().description}
+                                </small>
                               </Show>
                             </span>
                             <Show when={item().tag}>

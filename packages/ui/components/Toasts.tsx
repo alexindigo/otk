@@ -24,9 +24,13 @@ export default function Toasts(
               title="Dismiss notification"
               onClick={() => item().delivery.dismiss()}
             >
-              <strong>{item().note.title}</strong>
+              <strong class="otk-control-label" title={item().note.title}>
+                {item().note.title}
+              </strong>
               <Show when={item().note.body}>
-                <span>{item().note.body}</span>
+                <span class="otk-control-label" title={item().note.body}>
+                  {item().note.body}
+                </span>
               </Show>
             </button>
             {props.detail?.(item().note)}

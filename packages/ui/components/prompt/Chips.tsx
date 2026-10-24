@@ -34,7 +34,8 @@ export default function Chips(
           <span class="otk-prompt-chip">
             <button
               type="button"
-              title={title(chip())}
+              class="otk-control-grow"
+              title={title(chip()) ?? chip().label}
               onClick={() => void open(chip())}
             >
               <Show when={thumbnail(chip())}>
@@ -44,12 +45,14 @@ export default function Chips(
                   alt=""
                 />
               </Show>
-              {chip().label}
-              {chip().pending
-                ? " reading…"
-                : chip().error
-                ? ` ${chip().error}`
-                : ""}
+              <span class="otk-control-label">
+                {chip().label}
+                {chip().pending
+                  ? " reading…"
+                  : chip().error
+                  ? ` ${chip().error}`
+                  : ""}
+              </span>
             </button>
             <button
               type="button"

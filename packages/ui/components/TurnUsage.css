@@ -3,7 +3,6 @@
   font: inherit;
   color: inherit;
   padding: 0;
-  white-space: nowrap;
 }
 .otk-usage-breakdown {
   --usage-call-width: 48px;
