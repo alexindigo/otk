@@ -17,9 +17,9 @@ Deno.test("toggle consumers cannot acquire selection marks; native switches and 
   const auto = await read("features/prompt/approvals.tsx");
   assert(auto.includes("...toggle({"));
   assert(!/selection\(|SelectionContent|data-otk-selection/.test(auto));
-  const display = await read("components/DisplayMenu.tsx");
-  assert(display.includes('type="checkbox"'));
-  assert(!/selection\(|data-otk-selection/.test(display));
+  const controls = await read("components/PreferenceControls.tsx");
+  assert(controls.includes('type="checkbox"'));
+  assert(!/selection\(|data-otk-selection/.test(controls));
   const shell = await read("shell/Shell.tsx");
   for (const match of shell.matchAll(/<button\b[\s\S]*?<\/button>/g)) {
     if (!match[0].includes("aria-expanded=")) continue;

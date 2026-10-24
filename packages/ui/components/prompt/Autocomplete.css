@@ -10,14 +10,11 @@
   border-radius: var(--radius-card);
 }
 .otk-autocomplete button {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   text-align: left;
-  gap: 12px;
   border: 0;
 }
-.otk-autocomplete .is-selected {
-  background: var(--bg);
-  color: var(--fg);
+.otk-autocomplete-content {
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
 }

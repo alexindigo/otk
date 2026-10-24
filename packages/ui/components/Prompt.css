@@ -11,12 +11,9 @@
   overflow: hidden;
   clip-path: inset(50%);
 }
-.otk-prompt > textarea {
-  field-sizing: content;
+textarea.otk-prompt-input {
   min-height: var(--prompt-input-min-height);
   max-height: var(--prompt-input-max-height);
-  overflow-y: auto;
-  resize: none;
   line-height: var(--line-prose);
   font: 400 var(--text-prose)/var(--line-prose) var(--font-ui);
   background: transparent;
@@ -25,7 +22,7 @@
   border-radius: 0;
   box-shadow: none;
 }
-.otk-prompt > textarea:focus-visible {
+textarea.otk-prompt-input:focus-visible {
   outline: var(--prompt-input-outline, 2px solid var(--control-focus));
 }
 .otk-prompt-actions {

@@ -17,7 +17,7 @@ import {
   type ShellLayout,
 } from "@otk/protocol";
 import StatusLight from "./StatusLight.tsx";
-import { resizeDrag } from "./resize.ts";
+import { createResize } from "./resize.ts";
 import {
   ChevronIcon,
   KeyboardIcon,
@@ -50,8 +50,6 @@ export default function ProjectInbox(props: {
   onLayout(patch: Partial<ShellLayout>): Promise<void>;
 }): import("solid-js").Element {
   const [inactiveOpen, setInactiveOpen] = createSignal(false);
-  const [dragWidth, setDragWidth] = createSignal<number>();
-  let drag: ReturnType<typeof resizeDrag> | undefined;
   const [error, setError] = createSignal("");
   const ports = useCommandPorts(), { commands } = ports;
   const add = ownedCommand(ports, {
@@ -81,14 +79,19 @@ export default function ProjectInbox(props: {
   const layout = () => props.prefs.shellLayout;
   const collapsed = () => layout().leftCollapsed;
   const bounds = SHELL_WIDTHS.left;
-  const width = () => dragWidth() ?? layout().leftWidth;
-  const save = async (patch: Partial<ShellLayout>) => {
-    try {
-      await props.onLayout(patch);
-    } catch (error) {
-      setError((error as Error).message);
-    }
-  };
+  const resize = createResize({
+    width: () => layout().leftWidth,
+    ready: () => props.ready && !collapsed(),
+    direction: 1,
+    bounds,
+    save: async (leftWidth) => {
+      await props.onLayout({ leftWidth });
+      setError("");
+    },
+    fail: (error) =>
+      setError(error instanceof Error ? error.message : String(error)),
+  });
+  const width = resize.width;
   const open = ownedAction("project.open", props.onOpen);
   ownedAction(
     "project.inactive",
@@ -301,61 +304,11 @@ export default function ProjectInbox(props: {
             role="separator"
             aria-label="Project column width"
             aria-orientation="vertical"
-            tabindex="0"
+            tabindex={props.ready ? 0 : -1}
             aria-valuemin={bounds.min}
             aria-valuemax={bounds.max}
             aria-valuenow={width()}
-            onKeyDown={(event) => {
-              if (
-                !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
-              ) return;
-              event.preventDefault();
-              const next = event.key === "Home"
-                ? bounds.min
-                : event.key === "End"
-                ? bounds.max
-                : Math.max(
-                  bounds.min,
-                  Math.min(
-                    bounds.max,
-                    width() + (event.key === "ArrowLeft" ? -8 : 8),
-                  ),
-                );
-              void save({ leftWidth: next });
-            }}
-            onPointerDown={(event) => {
-              event.currentTarget.setPointerCapture(event.pointerId);
-              drag = resizeDrag(
-                width(),
-                event.clientX,
-                1,
-                bounds.min,
-                bounds.max,
-              );
-              setDragWidth(width());
-            }}
-            onPointerMove={(event) => {
-              if (
-                !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
-              ) return;
-              setDragWidth(drag(event.clientX));
-            }}
-            onPointerUp={(event) => {
-              if (
-                !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
-              ) return;
-              const gesture = drag;
-              event.currentTarget.releasePointerCapture(event.pointerId);
-              void save({ leftWidth: gesture(event.clientX) }).finally(() => {
-                if (drag !== gesture) return;
-                drag = undefined;
-                setDragWidth(undefined);
-              });
-            }}
-            onPointerCancel={() => {
-              drag = undefined;
-              setDragWidth(undefined);
-            }}
+            {...resize.handlers}
           />
         </Show>
       }

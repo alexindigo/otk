@@ -7,6 +7,7 @@ import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { Cdp } from "../support/cdp.ts";
 import { fixture } from "../support/config.ts";
+import { labelTextBounds } from "../support/control-geometry.ts";
 
 // No consumer width/padding escape hatch: exercise the owning stylesheet with
 // native inputs, including HTML's default/invalid text state and mixed-case types.
@@ -65,6 +66,15 @@ test("shared field geometry excludes native compact inputs without consumer over
   try {
     browser = await Cdp.launch(root);
     await browser.goto(`http://127.0.0.1:${server.addr.port}`);
+    const representations = await browser.evaluate<
+      { before: unknown; direct: unknown }
+    >(`(() => {
+      const bounds=${labelTextBounds}, field=document.querySelector('input[data-compact="0"]');
+      const span=field.nextElementSibling, text=document.createTextNode(span.textContent), before=bounds(field);
+      span.replaceWith(text);const direct=bounds(field);text.replaceWith(span);
+      return {before,direct};
+    })()`);
+    assertEquals(representations.direct, representations.before);
     // Shadow-root UA controls supply platform-native dimensions, rather than a
     // hardcoded checkbox glyph size or another copy of the corrected selector.
     await browser.evaluate(`(() => {
@@ -242,7 +252,7 @@ test("Display and Markdown consumers retain native checkbox bounds and field/sel
       }[];
     }>(`(() => {
       const bounds=el=>{const r=el.getBoundingClientRect(),p=el.parentElement.getBoundingClientRect();return {width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right}};
-      const textBounds=el=>{const range=document.createRange();range.selectNodeContents(el.parentElement);const node=[...el.parentElement.childNodes].find(n=>n.nodeType===Node.TEXT_NODE && n.textContent.trim());range.selectNodeContents(node);return range.getBoundingClientRect()};
+      const textBounds=${labelTextBounds};
       return {controls:[...document.querySelectorAll('.otk-display-menu input,.otk-text li > input')].map(bounds),
         labels:[...document.querySelectorAll('.otk-display-menu input')].map(el=>{const r=el.getBoundingClientRect(),t=textBounds(el),p=el.parentElement.getBoundingClientRect();return {gap:t.left-r.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),right:t.right,parentRight:p.right}}),
         selects:[...document.querySelectorAll('.otk-display-menu select')].map(el=>{const r=el.getBoundingClientRect(),t=textBounds(el),p=el.parentElement.getBoundingClientRect();return {padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right,gap:r.left-t.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),value:el.value}}),
@@ -329,7 +339,7 @@ test("Display and Markdown consumers retain native checkbox bounds and field/sel
         right: number;
         parentRight: number;
       }[]
-    >(`[...document.querySelectorAll('.otk-notification-settings input[type=checkbox]')].map(el=>{const r=el.getBoundingClientRect(),s=el.nextElementSibling.getBoundingClientRect(),p=el.parentElement.getBoundingClientRect();return {name:el.name,width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),gap:s.left-r.right,centers:Math.abs(r.y+r.height/2-s.y-s.height/2),right:s.right,parentRight:p.right}})`);
+    >(`(() => {const textBounds=${labelTextBounds};return [...document.querySelectorAll('.otk-notification-settings input[type=checkbox]')].map(el=>{const r=el.getBoundingClientRect(),s=textBounds(el),p=el.parentElement.getBoundingClientRect();return {name:el.name,width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),gap:s.left-r.right,centers:Math.abs(r.y+r.height/2-s.y-s.height/2),right:s.right,parentRight:p.right}})})()`);
     assertEquals(notificationControls.map((control) => control.name), [
       "notify.toast",
       "notify.os",

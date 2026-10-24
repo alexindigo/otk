@@ -4,18 +4,14 @@
   padding: 16px;
   margin-bottom: 20px;
   border-radius: var(--radius-card);
+  --preference-gap: 12px;
+  --preference-margin: 12px;
 }
 .otk-notification-settings h2 {
   font: 600 15px/22px var(--font-ui);
   margin: 0 0 12px;
 }
-.otk-notification-settings label {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 12px 0;
-}
-.otk-notification-settings p {
+.otk-notification-settings > p {
   margin: 12px 0 0;
   line-height: 1.5;
 }

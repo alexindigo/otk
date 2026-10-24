@@ -1,19 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Element } from "solid-js";
+import SvgIcon from "./Icon.tsx";
 function Icon(props: { children: Element; class?: string }): Element {
   return (
-    <svg
-      class={["otk-chrome-icon", props.class]}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.75"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
+    <SvgIcon
+      class={`otk-chrome-icon ${props.class ?? ""}`}
     >
       {props.children}
-    </svg>
+    </SvgIcon>
   );
 }
 export const PanelLeftIcon = () => (

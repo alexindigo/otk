@@ -12,16 +12,18 @@ export type PreferenceControl =
       readonly label: string;
     }[];
   };
+export interface PreferencePresentation {
+  readonly order: number;
+  readonly control: PreferenceControl;
+}
 export type PreferenceDefinition<K extends PreferenceKey = PreferenceKey> = {
   [P in K]: {
     readonly key: P;
     readonly default: Preferences[P];
     readonly validate: (value: unknown) => value is Preferences[P];
     readonly label: string;
-    readonly display?: {
-      readonly order: number;
-      readonly control: PreferenceControl;
-    };
+    readonly display?: PreferencePresentation;
+    readonly settings?: PreferencePresentation & { readonly group: string };
   };
 }[K];
 
@@ -35,38 +37,41 @@ export class PreferenceRegistry {
     if (!definition.validate(definition.default)) {
       throw new Error(`Invalid preference default: ${definition.key}`);
     }
-    const control = definition.display?.control;
-    if (
-      control &&
-      (control.kind === "toggle"
-        ? typeof definition.default !== "boolean"
-        : !control.options.length ||
-          !control.options.every((option) =>
+    const presentation = <T extends PreferencePresentation>(
+      value: T | undefined,
+    ): Readonly<T> | undefined => {
+      if (!value) return;
+      const control = value.control;
+      if (
+        control.kind === "toggle"
+          ? typeof definition.default !== "boolean"
+          : !control.options.length || !control.options.every((option) =>
             definition.validate(option.value)
-          ) ||
-          !control.options.some((option) =>
+          ) || !control.options.some((option) =>
             option.value === definition.default
-          ))
-    ) {
-      throw new Error(`Invalid preference control: ${definition.key}`);
-    }
-    const display = definition.display && Object.freeze({
-      ...definition.display,
-      control: control?.kind === "select"
-        ? Object.freeze({
-          ...control,
-          options: Object.freeze(
-            control.options.map((option) => Object.freeze({ ...option })),
-          ),
-        })
-        : Object.freeze({ kind: "toggle" as const }),
-    });
+          )
+      ) {
+        throw new Error(`Invalid preference control: ${definition.key}`);
+      }
+      return Object.freeze({
+        ...value,
+        control: control.kind === "select"
+          ? Object.freeze({
+            ...control,
+            options: Object.freeze(
+              control.options.map((option) => Object.freeze({ ...option })),
+            ),
+          })
+          : Object.freeze({ kind: "toggle" as const }),
+      });
+    };
     this.#definitions.set(
       definition.key,
       Object.freeze({
         ...definition,
         default: structuredClone(definition.default),
-        display,
+        display: presentation(definition.display),
+        settings: presentation(definition.settings),
       }) as PreferenceDefinition,
     );
   }
@@ -76,6 +81,12 @@ export class PreferenceRegistry {
   display(): readonly PreferenceDefinition[] {
     return this.list().filter((definition) => definition.display)
       .sort((a, b) => a.display!.order - b.display!.order);
+  }
+  settings(group: string): readonly PreferenceDefinition[] {
+    return this.list().filter((definition) =>
+      definition.settings?.group === group
+    )
+      .sort((a, b) => a.settings!.order - b.settings!.order);
   }
   defaults(): Readonly<Preferences> {
     const defaults: Partial<Preferences> = {};

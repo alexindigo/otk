@@ -46,13 +46,16 @@ registration, and supplies the same selected registry to its server policy and
 UI consumers. Register before constructing storage or mounting UI. `defaults()`
 derives the selected snapshot; `validate` delegates only to the registered key's
 validator. No coercion occurs. Optional display controls/ordering supply both
-menu controls and command actions. Theme IDs are bounded, nonempty identifier
-strings, independent of installed palettes; missing palettes resolve to the
-consumer's dark base at paint time, without changing the saved ID. System
-retains OS-mode base selection. The shipped contract uses interface inheritance
-rather than library-internal module augmentation, which JSR's publication graph
-does not support. The composition names owners only, never individual keys or
-validators.
+menu controls and command actions. Separate optional settings
+group/order/control metadata supplies the selected registry's settings sections;
+settings-only controls do not acquire Display command contributions. Both
+presentations validate and freeze the same control contract. Theme IDs are
+bounded, nonempty identifier strings, independent of installed palettes; missing
+palettes resolve to the consumer's dark base at paint time, without changing the
+saved ID. System retains OS-mode base selection. The shipped contract uses
+interface inheritance rather than library-internal module augmentation, which
+JSR's publication graph does not support. The composition names owners only,
+never individual keys or validators.
 
 The layout preference owner exports immutable `SHELL_WIDTHS` data for each
 column's minimum, maximum and default. Preference defaults/validation and UI

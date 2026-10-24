@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { For } from "solid-js";
 import type { PatchCall } from "@otk/protocol";
 import type { Preferences } from "@otk/protocol";
-import Diff from "../Diff.tsx";
+import FileChanges from "./FileChanges.tsx";
+import { changeCounts } from "./file-changes.ts";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { relativeTarget } from "./paths.ts";
 import { EditIcon } from "./ToolIcons.tsx";
@@ -26,10 +26,7 @@ export function registerPatchTool(tools: ToolRegistry): void {
       target: call.files.map((file) =>
         relativeTarget(file.path, context.directory)
       ).join(", "),
-      changes: {
-        additions: call.files.reduce((n, file) => n + file.additions, 0),
-        deletions: call.files.reduce((n, file) => n + file.deletions, 0),
-      },
+      changes: changeCounts(call.files),
       expanded: context.prefs?.collapseFileChanges === false,
     }),
   );
@@ -43,19 +40,12 @@ export default function PatchTool(
   },
 ) {
   return (
-    <>
-      <For each={props.call.files} keyed={false}>
-        {(file) => (
-          <Diff
-            file={file()}
-            inline={props.call.files.length === 1}
-            style={props.prefs.diffStyle}
-            wrap={props.prefs.diffWrap}
-            paneWidth={props.paneWidth}
-            directory={props.directory}
-          />
-        )}
-      </For>
-    </>
+    <FileChanges
+      files={props.call.files}
+      prefs={props.prefs}
+      paneWidth={props.paneWidth}
+      directory={props.directory}
+      inline={() => props.call.files.length === 1}
+    />
   );
 }

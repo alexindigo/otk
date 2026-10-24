@@ -12,6 +12,7 @@ export function registerVisualPreferences(registry: PreferenceRegistry): void {
     validate: booleanPreference,
     label: "Reduced colours",
     display: { order: 9, control: { kind: "toggle" } },
+    settings: { group: "appearance", order: 0, control: { kind: "toggle" } },
   });
   registry.register({
     key: "animationsOff",
@@ -19,5 +20,6 @@ export function registerVisualPreferences(registry: PreferenceRegistry): void {
     validate: booleanPreference,
     label: "Animations off",
     display: { order: 10, control: { kind: "toggle" } },
+    settings: { group: "appearance", order: 1, control: { kind: "toggle" } },
   });
 }

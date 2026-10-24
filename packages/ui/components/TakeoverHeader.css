@@ -19,9 +19,13 @@
 .otk-draft-kept {
   margin-left: auto;
 }
-.otk-takeover-collapse svg {
+.otk-takeover-chevron {
   transition: transform 0.15s;
 }
-.otk-takeover-collapse[aria-expanded=false] svg {
+.otk-takeover-collapse[aria-expanded=false] .otk-takeover-chevron {
   transform: rotate(180deg);
+}
+.otk-takeover-chevron {
+  width: 16px;
+  height: 16px;
 }

@@ -44,6 +44,7 @@ import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
+import SharedControls from "./shared-controls.tsx";
 
 declare module "@otk/protocol" {
   interface CapabilityContracts {
@@ -444,4 +445,9 @@ function Consumer(): Element {
     </CommandProvider>
   );
 }
-render(Consumer, document.getElementById("app")!);
+render(
+  new URL(location.href).searchParams.has("shared-controls")
+    ? () => <SharedControls onTheme={(id) => theme.commit(id)} />
+    : Consumer,
+  document.getElementById("app")!,
+);

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./QuestionDock.css" with { type: "text" };
+import ContentTextarea from "./ContentTextarea.tsx";
 import Takeover from "./surface/Takeover.tsx";
 import Tabs from "./Tabs.tsx";
 import QuestionAnswers from "./QuestionAnswers.tsx";
@@ -218,7 +219,7 @@ function Request(
     >
       <SelectionContent class="otk-question-content">
         <span>Type your own answer</span>
-        <textarea
+        <ContentTextarea
           ref={(element) => {
             ownFields[index] = element;
           }}
@@ -229,8 +230,6 @@ function Request(
           value={form.state.drafts[index].own}
           onInput={(event) => {
             const field = event.currentTarget;
-            field.style.height = "0px";
-            field.style.height = `${field.scrollHeight}px`;
             form.typeOwn(index, field.value);
           }}
         />

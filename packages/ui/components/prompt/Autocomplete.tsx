@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Autocomplete.css" with { type: "text" };
 import { selection } from "../selection.ts";
+import SelectionContent from "../SelectionContent.tsx";
 import { For } from "solid-js";
 import type { CompletionOption } from "./autocomplete.ts";
 export default function Autocomplete(
@@ -21,14 +22,17 @@ export default function Autocomplete(
           <button
             type="button"
             role="option"
+            data-otk-selection="vertical"
             {...selection({
               kind: "selected",
               selected: props.selected === index(),
             })}
             onClick={() => props.onSelect(index())}
           >
-            <span>{option().label}{option().directory ? "/" : ""}</span>
-            <span class="otk-muted">{option().description}</span>
+            <SelectionContent class="otk-autocomplete-content">
+              <span>{option().label}{option().directory ? "/" : ""}</span>
+              <span class="otk-muted">{option().description}</span>
+            </SelectionContent>
           </button>
         )}
       </For>

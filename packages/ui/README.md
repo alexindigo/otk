@@ -552,6 +552,24 @@ registered display-settings command owners. DisplayPreferences shares one
 control body between the anchored Display menu and the registered app-level
 dialog.
 
+Display, Appearance and Notifications delegate native fields to
+PreferenceControls. Each accepts the consumer's selected preference registry;
+feature-contributed settings groups supply section membership. A native change
+captures intent and immediately reconciles the field to authoritative prefs;
+settlement re-reads the latest broadcast, including after a rejected save.
+Readiness is checked at the action boundary, with focusable controls and local
+error feedback.
+
+Both column views bind the same native resize lifetime: immutable origin,
+pointer identity/capture, transient final width, one-shot persistence,
+cancellation, lost capture, keyboard bounds and readiness. Teardown releases
+capture and retires late cleanup. Edit/Patch share a FileChanges collection and
+count projection; their feature owners retain inline-label policy and trailing
+diagnostics. Chrome, tool and takeover paths share the SVG frame; the takeover
+reuses the chevron. Prompt and own-answer fields share native content sizing,
+including restored values; autocomplete rows use the same permanent vertical
+selection pointer as other lists.
+
 Native placement first tries the painted Surface's viewport-bounded natural
 size. A shared bounded position-try fallback applies available-side clipping
 only after overflow, so an empty side cannot falsely fit an empty positioning

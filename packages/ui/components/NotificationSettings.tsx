@@ -1,25 +1,26 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./NotificationSettings.css" with { type: "text" };
-import { createSignal, For, onCleanup, Show } from "solid-js";
-import { type Preferences, preferences } from "@otk/protocol";
+import { createSignal, onCleanup } from "solid-js";
+import type { Preferences } from "@otk/protocol";
+import PreferenceControls, {
+  type PreferenceControlsProps,
+} from "./PreferenceControls.tsx";
 import type { BrowserNotificationStatus } from "../features/notify/os.ts";
 export type NotificationPreference = Extract<
   keyof Preferences,
   `notify.${string}`
 >;
-export default function NotificationSettings(props: {
-  prefs: Preferences;
-  ready: boolean;
-  browser: {
-    state: { status: BrowserNotificationStatus };
-    subscribe(
-      listener: (state: { status: BrowserNotificationStatus }) => void,
-    ): () => void;
-  };
-  onSet(key: NotificationPreference, value: boolean): Promise<void>;
-}): import("solid-js").Element {
-  const [status, setStatus] = createSignal(props.browser.state.status),
-    [error, setError] = createSignal("");
+export default function NotificationSettings(
+  props: PreferenceControlsProps & {
+    browser: {
+      state: { status: BrowserNotificationStatus };
+      subscribe(
+        listener: (state: { status: BrowserNotificationStatus }) => void,
+      ): () => void;
+    };
+  },
+): import("solid-js").Element {
+  const [status, setStatus] = createSignal(props.browser.state.status);
   onCleanup(props.browser.subscribe((state) => setStatus(state.status)));
   return (
     <section
@@ -27,31 +28,7 @@ export default function NotificationSettings(props: {
       aria-label="Notification settings"
     >
       <h2>Notifications</h2>
-      <For
-        each={preferences.list().filter((
-          definition,
-        ): definition is import("@otk/protocol").PreferenceDefinition<
-          NotificationPreference
-        > => definition.key.startsWith("notify."))}
-      >
-        {(row) => (
-          <label>
-            <input
-              type="checkbox"
-              name={row.key}
-              checked={props.prefs[row.key]}
-              disabled={!props.ready}
-              onChange={(event) => {
-                setError("");
-                void props.onSet(row.key, event.currentTarget.checked).catch((
-                  error,
-                ) => setError((error as Error).message));
-              }}
-            />
-            <span>{row.label}</span>
-          </label>
-        )}
-      </For>
+      <PreferenceControls {...props} group="notifications" />
       <p class="otk-notification-browser" role="status">
         {status() === "granted"
           ? "Browser permission granted"
@@ -65,9 +42,6 @@ export default function NotificationSettings(props: {
         Sound unlocks after your first click or keypress. Preferences are saved
         on this host.
       </p>
-      <Show when={error()}>
-        <p class="otk-error" role="alert">{error()}</p>
-      </Show>
     </section>
   );
 }

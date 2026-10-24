@@ -1,53 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../support/resources.ts";
-import { serve } from "../support/http.ts";
 import { assertEquals } from "@std/assert";
-import { join } from "@std/path";
-import { fixture } from "../support/config.ts";
-import { Cdp } from "../support/cdp.ts";
+import { uiConsumer } from "../support/ui-consumer.ts";
 
 test("independent public UI consumer renders external tools twice, updates live, routes callbacks and retains isolated fallback", async () => {
-  const root = await fixture(), dist = join(root, "dist");
-  const build = await new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-A",
-      "npm:vite@8.2.0",
-      "build",
-      "--config",
-      "tests/reuse/ui-consumer/vite.config.ts",
-      "--outDir",
-      dist,
-      "--logLevel",
-      "warn",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
-  const server = serve(
-    { hostname: "127.0.0.1", port: 0, onListen() {} },
-    async (request) => {
-      const pathname = new URL(request.url).pathname;
-      const file = join(dist, pathname === "/" ? "index.html" : pathname);
-      const mime = file.endsWith(".js")
-        ? "text/javascript"
-        : file.endsWith(".css")
-        ? "text/css"
-        : "text/html";
-      try {
-        return new Response(await Deno.readFile(file), {
-          headers: { "content-type": mime },
-        });
-      } catch {
-        return new Response("Not found", { status: 404 });
-      }
-    },
-  );
-  let browser: Cdp | undefined;
+  const f = await uiConsumer(), { browser, root } = f;
   try {
-    browser = await Cdp.launch(root);
-    await browser.goto(`http://127.0.0.1:${server.addr.port}/`);
     await browser.poll(
       "document.querySelectorAll('#registered [data-external-tool]').length === 2",
     );
@@ -204,7 +162,6 @@ test("independent public UI consumer renders external tools twice, updates live,
     assertEquals(browser.errors, []);
     console.info("Independent UI consumer evidence:", root);
   } finally {
-    await browser?.close();
-    await server.shutdown();
+    await f.close();
   }
 });

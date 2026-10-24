@@ -2,6 +2,7 @@
 import "./TakeoverHeader.css" with { type: "text" };
 import { Show } from "solid-js";
 import StatusLight from "./StatusLight.tsx";
+import { ChevronDownIcon } from "./ChromeIcons.tsx";
 export default function TakeoverHeader(
   props: {
     title: string;
@@ -34,16 +35,7 @@ export default function TakeoverHeader(
           title={props.collapsed ? "Show the question" : "Hide the question"}
           onClick={() => props.onCollapse?.(!props.collapsed)}
         >
-          <svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true">
-            <path
-              d="m6 9 6 6 6-6"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.75"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-            />
-          </svg>
+          <ChevronDownIcon class="otk-takeover-chevron" />
         </button>
       </Show>
     </header>

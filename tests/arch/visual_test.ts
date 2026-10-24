@@ -342,6 +342,30 @@ export function resizeErrors(source: string): string[] {
       parsed.name(node)?.includes("parentElement.getBoundingClientRect")
     )
   ) return error;
+  for (const call of parsed.calls("createResize")) {
+    const imported = parsed.imported(call.callee);
+    if (
+      imported?.module !== "./resize.ts" || imported.name !== "createResize"
+    ) continue;
+    const wired = parsed.all.some((node) => {
+      if (node.type !== "JSXSpreadAttribute") return false;
+      const access = parsed.access(node.argument);
+      return access?.binding.value === call &&
+        access.fields.join(".") === "handlers";
+    });
+    const overrides = parsed.all.some((node) =>
+      node.type === "JSXAttribute" &&
+      [
+        "onKeyDown",
+        "onPointerDown",
+        "onPointerMove",
+        "onPointerUp",
+        "onPointerCancel",
+        "onLostPointerCapture",
+      ].includes(parsed.name(node.name) ?? "")
+    );
+    if (wired && !overrides) return [];
+  }
   for (const call of parsed.calls("resizeDrag")) {
     const assignment = parsed.parent.get(call);
     const target = assignment?.type === "AssignmentExpression"
@@ -371,6 +395,18 @@ export function resizeErrors(source: string): string[] {
   return error;
 }
 Deno.test("both column resizers share border-independent pointer-delta ownership", async () => {
+  const owner = new Source(
+    await Deno.readTextFile(
+      new URL("../../packages/ui/components/resize.ts", import.meta.url),
+    ),
+  );
+  assertEquals(owner.calls("resizeDrag").length, 1);
+  assertEquals(
+    owner.calls("move").filter((call) =>
+      owner.name(call.callee) === "current.move"
+    ).length,
+    2,
+  );
   for (const name of ["ProjectInbox", "RightPanel"]) {
     assertEquals(
       resizeErrors(
@@ -393,4 +429,16 @@ Deno.test("both column resizers share border-independent pointer-delta ownership
     ),
     [],
   );
+  const delegated =
+    `import { createResize } from './resize.ts'; const resize = createResize({}); const view = <div {...resize.handlers} />;`;
+  assertEquals(resizeErrors(delegated), []);
+  for (
+    const mutant of [
+      delegated.replace("./resize.ts", "./other.ts"),
+      delegated.replace("{...resize.handlers}", ""),
+      delegated.replace("const resize", "let resize") + "resize = other;",
+      delegated.replace("<div", "<div onPointerMove={ownMove}"),
+      `function createResize() {} const resize = createResize(); const view = <div {...resize.handlers} />;`,
+    ]
+  ) assert(resizeErrors(mutant).length > 0, mutant);
 });

@@ -9,7 +9,7 @@ import {
   SHELL_WIDTHS,
 } from "@otk/protocol";
 import { useUiRegistries } from "../registries/context.tsx";
-import { resizeDrag } from "./resize.ts";
+import { createResize } from "./resize.ts";
 import SidebarRail from "./SidebarRail.tsx";
 import { contextTarget } from "./context-target.ts";
 
@@ -26,11 +26,21 @@ export default function RightPanel(props: {
   const active = createMemo(() =>
     views().find((v) => v.id === props.layout.rightView) ?? views()[0]
   );
-  const [dragWidth, setDragWidth] = createSignal<number>();
-  let drag: ReturnType<typeof resizeDrag> | undefined;
   const [error, setError] = createSignal("");
   const bounds = SHELL_WIDTHS.right;
-  const width = () => dragWidth() ?? props.layout.rightWidth ?? bounds.default;
+  const resize = createResize({
+    width: () => props.layout.rightWidth ?? bounds.default,
+    ready: () => props.ready && !props.layout.rightCollapsed,
+    direction: -1,
+    bounds,
+    save: async (rightWidth) => {
+      await props.onLayout({ rightWidth });
+      setError("");
+    },
+    fail: (error) =>
+      setError(error instanceof Error ? error.message : String(error)),
+  });
+  const width = resize.width;
   const save = async (patch: Partial<Preferences["shellLayout"]>) => {
     try {
       await props.onLayout(patch);
@@ -143,59 +153,7 @@ export default function RightPanel(props: {
           aria-valuemin={bounds.min}
           aria-valuemax={bounds.max}
           aria-valuenow={width()}
-          onKeyDown={(event) => {
-            if (
-              !props.ready ||
-              !["ArrowLeft", "ArrowRight", "Home", "End"].includes(event.key)
-            ) return;
-            event.preventDefault();
-            const next = event.key === "Home"
-              ? bounds.min
-              : event.key === "End"
-              ? bounds.max
-              : Math.max(
-                bounds.min,
-                Math.min(
-                  bounds.max,
-                  width() + (event.key === "ArrowLeft" ? 8 : -8),
-                ),
-              );
-            void save({ rightWidth: next });
-          }}
-          onPointerDown={(event) => {
-            if (!props.ready) return;
-            event.currentTarget.setPointerCapture(event.pointerId);
-            drag = resizeDrag(
-              width(),
-              event.clientX,
-              -1,
-              bounds.min,
-              bounds.max,
-            );
-            setDragWidth(width());
-          }}
-          onPointerMove={(event) => {
-            if (
-              !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
-            ) return;
-            setDragWidth(drag(event.clientX));
-          }}
-          onPointerUp={(event) => {
-            if (
-              !drag || !event.currentTarget.hasPointerCapture(event.pointerId)
-            ) return;
-            const gesture = drag;
-            event.currentTarget.releasePointerCapture(event.pointerId);
-            void save({ rightWidth: gesture(event.clientX) }).finally(() => {
-              if (drag !== gesture) return;
-              drag = undefined;
-              setDragWidth(undefined);
-            });
-          }}
-          onPointerCancel={() => {
-            drag = undefined;
-            setDragWidth(undefined);
-          }}
+          {...resize.handlers}
         />
       </aside>
     </>

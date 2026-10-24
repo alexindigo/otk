@@ -1,0 +1,20 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-preference-controls fieldset {
+  display: flex;
+  flex-direction: column;
+  gap: var(--preference-gap, 12px);
+  margin-block: var(--preference-margin, 0px);
+}
+.otk-preference-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.otk-preference-control select {
+  width: auto;
+  flex: 1;
+}
+.otk-preference-error {
+  margin: 12px 0 0;
+  line-height: 1.5;
+}

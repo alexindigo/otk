@@ -49,3 +49,61 @@ Deno.test("shell binding delegates connection facts to server resources", async 
   }
   assertEquals(copied, []);
 });
+
+Deno.test("file-change collection and SVG frame have one presentation owner", async () => {
+  const copies: string[] = [];
+  for (const [path, text] of await productionSources()) {
+    if (!path.startsWith("packages/ui/components/") || !path.endsWith(".tsx")) {
+      continue;
+    }
+    const source = new Source(text, path);
+    if (/tools\/(Edit|Patch)Tool\.tsx$/.test(path)) {
+      for (const node of source.all) {
+        if (
+          node.type === "JSXOpeningElement" && source.name(node.name) === "Diff"
+        ) copies.push(`${path}: Diff`);
+        if (
+          node.type === "CallExpression" &&
+          /\.reduce$/.test(source.name(node.callee) ?? "")
+        ) copies.push(`${path}: counts`);
+      }
+    }
+    if (/(ChromeIcons|ToolIcons|TakeoverHeader)\.tsx$/.test(path)) {
+      for (const node of source.all) {
+        if (
+          node.type === "JSXOpeningElement" && source.name(node.name) === "svg"
+        ) copies.push(`${path}: frame`);
+      }
+    }
+  }
+  assertEquals(copies, []);
+});
+
+Deno.test("settings surfaces delegate native preference controls and column capture lifecycle", async () => {
+  const copies: string[] = [];
+  for (
+    const name of [
+      "DisplayMenu",
+      "VisualSettings",
+      "NotificationSettings",
+      "ProjectInbox",
+      "RightPanel",
+    ]
+  ) {
+    const path = `packages/ui/components/${name}.tsx`,
+      source = new Source(await Deno.readTextFile(path), path);
+    for (const node of source.all) {
+      if (
+        node.type === "JSXOpeningElement" &&
+        ["input", "select"].includes(source.name(node.name) ?? "")
+      ) copies.push(`${name}: native control`);
+      if (
+        node.type === "CallExpression" &&
+        /\.(setPointerCapture|releasePointerCapture)$/.test(
+          source.name(node.callee) ?? "",
+        )
+      ) copies.push(`${name}: capture`);
+    }
+  }
+  assertEquals(copies, []);
+});

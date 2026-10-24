@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Prompt.css" with { type: "text" };
+import ContentTextarea from "./ContentTextarea.tsx";
 import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
 import {
   type DraftChange,
@@ -277,7 +278,8 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       </label>
       {completion.beforeInput?.()}
       <For each={features}>{(feature) => feature.beforeInput?.()}</For>
-      <textarea
+      <ContentTextarea
+        class="otk-prompt-input"
         ref={(element) => {
           input = element;
         }}

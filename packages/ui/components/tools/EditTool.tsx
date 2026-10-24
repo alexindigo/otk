@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { For } from "solid-js";
 import type { EditCall } from "@otk/protocol";
 import type { Preferences } from "@otk/protocol";
-import Diff from "../Diff.tsx";
+import FileChanges from "./FileChanges.tsx";
+import { changeCounts } from "./file-changes.ts";
 import Diagnostics from "./Diagnostics.tsx";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { relativeTarget } from "./paths.ts";
@@ -23,10 +23,7 @@ export function registerEditTool(tools: ToolRegistry): void {
       verb: "Edit",
       target: relativeTarget(call.path, context.directory),
       copy: { path: call.path },
-      changes: {
-        additions: call.files.reduce((n, file) => n + file.additions, 0),
-        deletions: call.files.reduce((n, file) => n + file.deletions, 0),
-      },
+      changes: changeCounts(call.files),
       expanded: context.prefs?.collapseFileChanges === false,
     }),
   );
@@ -40,21 +37,15 @@ export default function EditTool(
   },
 ) {
   return (
-    <>
-      <For each={props.call.files} keyed={false}>
-        {(file) => (
-          <Diff
-            file={file()}
-            inline={props.call.files.length === 1 &&
-              file().path === props.call.path}
-            style={props.prefs.diffStyle}
-            wrap={props.prefs.diffWrap}
-            paneWidth={props.paneWidth}
-            directory={props.directory}
-          />
-        )}
-      </For>
+    <FileChanges
+      files={props.call.files}
+      prefs={props.prefs}
+      paneWidth={props.paneWidth}
+      directory={props.directory}
+      inline={(file) =>
+        props.call.files.length === 1 && file.path === props.call.path}
+    >
       <Diagnostics items={props.call.diagnostics} />
-    </>
+    </FileChanges>
   );
 }

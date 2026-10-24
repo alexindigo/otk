@@ -273,6 +273,9 @@ export function sourceErrors(path: string, source: string): string[] {
   if (
     [
       "packages/ui/components/DisplayMenu.tsx",
+      "packages/ui/components/PreferenceControls.tsx",
+      "packages/ui/components/VisualSettings.tsx",
+      "packages/ui/components/NotificationSettings.tsx",
       "packages/client/preference-commands.ts",
     ].includes(path) &&
     /["'](?:timestamps|thinking|toolDetails|conceal|genericToolOutput|diffWrap|diffStyle|scrollbar|pasteSummary)["']/
@@ -871,7 +874,7 @@ Deno.test("preferences stay feature-owned with an open composed contract and one
   );
   for (
     const path of [
-      "packages/ui/components/DisplayMenu.tsx",
+      "packages/ui/components/PreferenceControls.tsx",
       "packages/client/preference-commands.ts",
     ]
   ) {
@@ -945,7 +948,16 @@ Deno.test("independent UI consumer imports public kit entries without applicatio
     "@fontsource/ibm-plex-sans/400.css",
     "@fontsource/ibm-plex-sans/500.css",
     "@fontsource/ibm-plex-sans/600.css",
+    "./shared-controls.tsx",
   ]);
+  assertEquals(
+    imports(
+      await Deno.readTextFile(
+        new URL("tests/reuse/ui-consumer/shared-controls.tsx", root),
+      ),
+    ),
+    ["solid-js", "@otk/client", "@otk/protocol", "@otk/ui"],
+  );
 });
 
 Deno.test("final application entries compose public kit modules and keep reflective routes outside library publication", async () => {
