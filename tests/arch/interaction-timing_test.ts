@@ -97,7 +97,47 @@ Deno.test("interrupt admission deadline and disarming timer share one owner poli
 
 Deno.test("preview exits from trigger and panel share their component delay", async () => {
   const source = await component("components/surface/Popover.tsx");
-  const exits = timers(source, 120);
+  const exits = source.all.filter((node): node is t.JSXAttribute =>
+    node.type === "JSXAttribute" && node.name.type === "JSXIdentifier" &&
+    node.name.name === "onMouseLeave"
+  );
   assertEquals(exits.length, 2);
-  duration(source, exits.map((node) => node.arguments[1]));
+  duration(
+    source,
+    exits.map((node) =>
+      node.value?.type === "JSXExpressionContainer"
+        ? node.value.expression
+        : null
+    ),
+  );
+  const sheet = css.parse(
+    await Deno.readTextFile(
+      new URL(
+        "../../packages/ui/components/surface/Popover.css",
+        import.meta.url,
+      ),
+    ),
+  );
+  const policy: Record<string, string[]> = {};
+  css.walk(sheet, (node) => {
+    if (
+      node.type === "Declaration" &&
+      ["--hover-open-delay", "--hover-close-delay"].includes(node.property)
+    ) (policy[node.property] ??= []).push(css.generate(node.value).trim());
+  });
+  assertEquals(policy, {
+    "--hover-open-delay": ["500ms"],
+    "--hover-close-delay": ["150ms"],
+  });
+  for (const token of Object.keys(policy)) {
+    assertEquals(
+      source.all.filter((node) =>
+        node.type === "CallExpression" && property(node.callee) === "delay" &&
+        node.arguments[0]?.type === "StringLiteral" &&
+        node.arguments[0].value === token
+      ).length,
+      1,
+      `${token} is read once by its shared owner`,
+    );
+  }
 });

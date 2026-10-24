@@ -2,6 +2,8 @@
 .otk-popover {
   display: inline-flex;
   flex: none;
+  --hover-open-delay: 500ms;
+  --hover-close-delay: 150ms;
 }
 .otk-popover-panel {
   position: absolute;

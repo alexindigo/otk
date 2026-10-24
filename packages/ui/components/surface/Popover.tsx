@@ -14,8 +14,6 @@ import { ownedCommand, useCommandPorts } from "../../keyboard/context.tsx";
 import Surface from "./Surface.tsx";
 import { selection } from "../selection.ts";
 
-const PREVIEW_LEAVE_DELAY_MS = 120;
-
 export type PopoverOpenReason = "pointer" | "keyboard";
 export interface PopoverControl {
   open(anchor?: PointAnchor, reason?: PopoverOpenReason): void;
@@ -67,12 +65,19 @@ export default function Popover(props: {
   let panel!: HTMLDivElement, trigger!: HTMLButtonElement;
   let previewFocus: HTMLElement | undefined;
   let restoringFocus = false;
+  let hoverTimer: ReturnType<typeof setTimeout> | undefined;
   let leaveTimer: ReturnType<typeof setTimeout> | undefined;
   let stopWatching: (() => void) | undefined;
   const cancelLeave = () => clearTimeout(leaveTimer);
+  const cancelHover = () => clearTimeout(hoverTimer);
+  const delay = (token: string) => {
+    const value = getComputedStyle(root()!).getPropertyValue(token).trim();
+    return parseFloat(value) * (value.endsWith("ms") ? 1 : 1000);
+  };
   const ports = useCommandPorts(), closeId = `${anchor}.close`;
   const release = () => {
     invocation++;
+    cancelHover();
     cancelLeave();
     stopWatching?.();
     stopWatching = undefined;
@@ -100,17 +105,58 @@ export default function Popover(props: {
     }
   };
   const preview = (focused = false) => {
+    cancelHover();
     cancelLeave();
     if (!props.preview || restoringFocus) return;
     if (focused) previewFocus = trigger;
-    else if (!panel.matches(":popover-open")) {
+    if (panel.matches(":popover-open")) return;
+    if (focused) {
+      show(undefined, "keyboard");
+      return;
+    }
+    const deadline = performance.now() + delay("--hover-open-delay");
+    const rest = () => {
+      const remaining = deadline - performance.now();
+      if (remaining > 0) {
+        hoverTimer = setTimeout(rest, remaining);
+        return;
+      }
+      if (
+        !props.preview || !root()?.matches(":hover") || !trigger.isConnected
+      ) {
+        return;
+      }
       previewFocus = document.activeElement instanceof HTMLElement
         ? document.activeElement
         : undefined;
-    }
-    show(undefined, focused ? "keyboard" : "pointer");
+      show(undefined, "pointer");
+    };
+    hoverTimer = setTimeout(rest, deadline - performance.now());
+  };
+  // Trigger and portalled panel share one lifetime; neither content nor callers
+  // own timers. A brief exit can cross the anchored surface's boundary.
+  const leavePreview = () => {
+    cancelHover();
+    cancelLeave();
+    if (!props.preview || !active) return;
+    const deadline = performance.now() + delay("--hover-close-delay");
+    const leave = () => {
+      const remaining = deadline - performance.now();
+      if (remaining > 0) {
+        leaveTimer = setTimeout(leave, remaining);
+        return;
+      }
+      if (
+        !root()?.matches(":hover") && !panel.matches(":hover") &&
+        !root()?.contains(document.activeElement) &&
+        !panel.contains(document.activeElement)
+      ) panel.hidePopover();
+    };
+    leaveTimer = setTimeout(leave, deadline - performance.now());
   };
   const show = (at?: PointAnchor, reason: PopoverOpenReason = "keyboard") => {
+    cancelHover();
+    cancelLeave();
     openedBy = reason;
     const origin = at?.origin ?? trigger;
     setPoint(at);
@@ -182,23 +228,14 @@ export default function Popover(props: {
       ref={setRoot}
       data-open={String(open())}
       onMouseEnter={() => preview()}
-      onMouseLeave={(event) => {
-        if (!props.preview) return;
-        const owner = event.currentTarget;
-        cancelLeave();
-        // Permit pointer travel across the anchored surface's edge without
-        // making content responsible for its parent's preview lifetime.
-        leaveTimer = setTimeout(() => {
-          if (
-            !owner.matches(":hover") && !panel.matches(":hover") &&
-            !owner.contains(document.activeElement) &&
-            !panel.contains(document.activeElement)
-          ) {
-            panel.hidePopover();
-          }
-        }, PREVIEW_LEAVE_DELAY_MS);
+      onMouseMove={(event) => {
+        if (!panel.contains(event.target as Node)) preview();
       }}
-      onFocusIn={(event) => preview(event.target === trigger)}
+      onMouseLeave={leavePreview}
+      onFocusIn={(event) => {
+        if (event.target === trigger) preview(true);
+        else cancelLeave();
+      }}
       onFocusOut={(event) => {
         if (
           props.preview &&
@@ -292,18 +329,7 @@ export default function Popover(props: {
               }
             }}
             onMouseEnter={cancelLeave}
-            onMouseLeave={() => {
-              if (!props.preview) return;
-              cancelLeave();
-              leaveTimer = setTimeout(() => {
-                if (
-                  !panel.matches(":hover") &&
-                  !panel.contains(document.activeElement) &&
-                  !root()?.matches(":hover") &&
-                  !root()?.contains(document.activeElement)
-                ) panel.hidePopover();
-              }, PREVIEW_LEAVE_DELAY_MS);
-            }}
+            onMouseLeave={leavePreview}
             onFocusIn={cancelLeave}
             onFocusOut={(event) => {
               if (

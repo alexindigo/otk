@@ -341,6 +341,165 @@ for (const count of [3, 120]) {
   });
 }
 
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`T1 usage hover waits for pointer rest, retains surface travel, closes after grace and focuses immediately in ${theme}`, async () => {
+    const { f, b, client } = await setup(3);
+    const shots = Deno.env.get("OTK_T1_SHOTS");
+    const visible = `!!document.querySelector('${panel}')`;
+    const pause = (ms: number) =>
+      b.evaluate(`new Promise(resolve=>setTimeout(resolve,${ms}))`);
+    const away = () =>
+      b.send("Input.dispatchMouseEvent", { type: "mouseMoved", x: 1, y: 1 });
+    const capture = async (name: string) => {
+      if (!shots) return;
+      await Deno.mkdir(shots, { recursive: true });
+      await b.screenshot(join(shots, `${theme}-${name}.png`));
+    };
+    try {
+      await client.rpc("prefs.set", { key: "theme", value: theme });
+      await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
+      await b.evaluate("document.fonts.ready.then(()=>true)");
+      await b.click("textarea[name=prompt]");
+      await b.evaluate(`(()=>{
+        const t=document.querySelector('${trigger}'),p=document.getElementById(t.getAttribute('popovertarget'));
+        window.hoverTimes={};
+        t.addEventListener('mousemove',()=>window.hoverTimes.move=performance.now());
+        t.addEventListener('focus',()=>window.hoverTimes.focus=performance.now());
+        p.addEventListener('mouseleave',()=>window.hoverTimes.leave=performance.now());
+        p.addEventListener('beforetoggle',e=>window.hoverTimes[e.newState]=performance.now());
+      })()`);
+      const at = await point(b, trigger);
+      await hover(b, trigger);
+      await pause(250);
+      await capture("pending");
+      assertEquals(
+        await b.evaluate(visible),
+        false,
+        "No detail during a passing hover",
+      );
+      await away();
+      await pause(550);
+      assertEquals(
+        await b.evaluate(visible),
+        false,
+        "Leaving cancels the pending opening",
+      );
+
+      // Moving within the trigger restarts the full rest interval, not just entry.
+      await hover(b, trigger);
+      await pause(300);
+      await b.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: at.x + 1,
+        y: at.y,
+      });
+      await pause(300);
+      assertEquals(
+        await b.evaluate(visible),
+        false,
+        "Motion restarts the 500ms interval",
+      );
+      await b.poll(visible);
+      await b.poll(
+        "document.querySelectorAll('.otk-usage-breakdown tbody tr').length===3",
+      );
+      const opened = await b.evaluate<number>(
+        "window.hoverTimes.open-window.hoverTimes.move",
+      );
+      assert(opened >= 500, `Opened before pointer rest: ${opened}ms`);
+      await capture("open");
+      assertEquals(
+        await b.evaluate(
+          "document.activeElement.matches('textarea[name=prompt]')",
+        ),
+        true,
+      );
+      await hover(b, scroll);
+      await pause(200);
+      assertEquals(
+        await b.evaluate(visible),
+        true,
+        "Pointer can enter and read the surface",
+      );
+      await away();
+      await pause(60);
+      assertEquals(
+        await b.evaluate(visible),
+        true,
+        "Short grace bridges pointer travel",
+      );
+      await hover(b, scroll);
+      await pause(200);
+      assertEquals(await b.evaluate(visible), true, "Re-entry cancels closing");
+      await away();
+      await b.poll(`!(${visible})`);
+      const closed = await b.evaluate<number>(
+        "window.hoverTimes.closed-window.hoverTimes.leave",
+      );
+      assert(closed >= 150 && closed < 500, `Close grace: ${closed}ms`);
+
+      // Establish a real Tab path from this trigger, then return with Shift+Tab.
+      await b.evaluate(`document.querySelector('${trigger}').focus()`);
+      await b.poll(visible);
+      await b.key("Escape");
+      await b.key("Tab");
+      for (const reduced of [false, true]) {
+        await b.send("Emulation.setEmulatedMedia", {
+          features: [{
+            name: "prefers-reduced-motion",
+            value: reduced ? "reduce" : "no-preference",
+          }],
+        });
+        await b.key("Tab", 8);
+        await b.poll(visible);
+        assertEquals(
+          await b.evaluate(
+            `document.activeElement===document.querySelector('${trigger}')`,
+          ),
+          true,
+        );
+        const focused = await b.evaluate<number>(
+          "window.hoverTimes.open-window.hoverTimes.focus",
+        );
+        assert(
+          focused >= 0 && focused < 500,
+          `Focus must bypass hover delay: ${focused}ms`,
+        );
+        await b.key("Escape");
+        await b.poll(`!(${visible})`);
+        await b.key("Tab");
+      }
+      // Reduced motion changes animation policy, not hover intent.
+      await hover(b, trigger);
+      await pause(250);
+      assertEquals(await b.evaluate(visible), false);
+      await b.poll(visible);
+      assert(
+        await b.evaluate<number>(
+          "window.hoverTimes.open-window.hoverTimes.move",
+        ) >= 500,
+      );
+      await b.evaluate(`document.querySelector('${trigger}').focus()`);
+      await b.key("Escape");
+      await pause(550);
+      await b.poll(`!(${visible})`);
+      assertEquals(
+        await b.evaluate(
+          `document.activeElement===document.querySelector('${trigger}')`,
+        ),
+        true,
+        "Focus entering an existing hover preview becomes its Escape return target",
+      );
+      console.info("T1 timings", theme, JSON.stringify({ opened, closed }));
+      assertEquals(b.errors, []);
+    } finally {
+      await client.close();
+      await b.close();
+      await f.app.stop();
+    }
+  });
+}
+
 test("U14 500-call detail is lazy and opens within a one-second interaction budget", async () => {
   const { f, b, client } = await setup(500);
   try {
