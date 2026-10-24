@@ -174,24 +174,18 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
       exitCode: typeof metadata.exit === "number" ? metadata.exit : undefined,
     };
   }
-  const bytes = state.output === undefined
-    ? undefined
-    : new TextEncoder().encode(state.output);
-  const outputTruncated = (bytes?.length || 0) > 65_536;
-  const output = outputTruncated
-    ? new TextDecoder().decode(bytes!.subarray(0, 65_536), { stream: true })
-    : state.output;
+  const output = state.output === undefined ? undefined : preview(state.output);
   return {
     ...base,
     tool: "external",
     name: part.tool!,
-    input: preview(input),
-    metadata: preview(metadata),
+    input: preview(input).text,
+    metadata: preview(metadata).text,
     summary:
       Object.values(input).map(string).find((v) => v?.trim())?.split("\n")[0]
         .slice(0, 256) || part.tool!,
-    output,
-    outputTruncated,
+    output: output?.text,
+    outputTruncated: output?.truncated ?? false,
     childSessionID: string(metadata.sessionId),
   };
 }

@@ -168,7 +168,12 @@ export function mapPart(part: RawPart, awaitingPermission = false): Part {
         tokens: tokens(part.tokens),
       };
     default:
-      return { kind: "external", id, name: part.type, data: preview(part) };
+      return {
+        kind: "external",
+        id,
+        name: part.type,
+        data: preview(part).text,
+      };
   }
 }
 export function mapDiffs(diffs: RawDiff[]): FileDiff[] {

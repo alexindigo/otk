@@ -42,16 +42,11 @@ export function createShellState(o: { api: URL }): ShellState {
   const session = createSession(
     (id) => sidecars.connection(id),
     entry,
-    (target) => {
-      const sidecar = sidecars.state.list.find((s) =>
-        s.id === target.sidecarId
-      );
-      return {
-        key: sidecar?.connectionVersion,
-        connected: sidecar?.status === "connected",
-        available: sidecar?.capabilities.includes("models") ?? false,
-      };
-    },
+    (target) => ({
+      key: resources.connectionKey(target.sidecarId),
+      connected: resources.connected(target.sidecarId),
+      available: resources.declares(target.sidecarId, "models"),
+    }),
   );
   const drafts = createDrafts(solidState);
   const current = createCurrentClient(

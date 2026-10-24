@@ -92,6 +92,7 @@ export interface InboxRpc {
   call<M extends RpcMethod>(
     method: M,
     params: RpcParams<M>,
+    signal?: AbortSignal,
   ): Promise<RpcResult<M>>;
 }
 export interface InboxState {

@@ -8,6 +8,7 @@ import type {
 import type { Draft, DraftChange } from "./drafts.ts";
 import type { ToolCompletionSource } from "./session.ts";
 import { createState, type StateFactory } from "./state.ts";
+import { createCatalogResource } from "./catalog-resource.ts";
 import {
   type CatalogState,
   createModelCatalog,
@@ -50,7 +51,10 @@ export interface ComposerSelectionOptions {
   change(change: DraftChange): Draft;
   context(): PromptSelectionContext["context"];
   connection(): ComposerConnection;
-  load: { agents(): Promise<AgentOption[]>; models(): Promise<ModelCatalog> };
+  load: {
+    agents(signal: AbortSignal): Promise<AgentOption[]>;
+    models(signal: AbortSignal): Promise<ModelCatalog>;
+  };
   prefs: {
     get(): Pick<Preferences, "models.favourite" | "models.recent">;
     set(
@@ -97,12 +101,16 @@ export function createComposerSelection(
       const c = options.connection();
       return { key: c.key, connected: c.connected, available: c.models };
     },
-    load: () => options.load.models(),
+    load: options.load.models,
   });
-  const current: Omit<ComposerSelectionState, "models"> = {
-    connected: false,
-    agents: { available: false, loading: false, error: "" },
-  };
+  const agents = createCatalogResource({
+    connection: () => {
+      const c = options.connection();
+      return { key: c.key, connected: c.connected, available: c.agents };
+    },
+    load: options.load.agents,
+  });
+  const current = { connected: false };
   // Like createDrafts, owner data is invocation-current even when a framework
   // publishes its notification later. The factory stores only invalidation.
   const store = (options.factory ?? createState)({ revision: 0 });
@@ -113,7 +121,7 @@ export function createComposerSelection(
     },
     get agents() {
       void store.state.revision;
-      return current.agents;
+      return agents.state;
     },
     get models() {
       void store.state.revision;
@@ -131,86 +139,14 @@ export function createComposerSelection(
   let invalidated = new Promise<void>((resolve) => {
     changed = resolve;
   });
-  function resource<T>(
-    read: () => ComposerCatalog<T>,
-    write: (change: (catalog: ComposerCatalog<T>) => void) => void,
-    load: () => Promise<T>,
-  ) {
-    let pending: { generation: number; work: Promise<void> } | undefined;
-    let attempted = -1;
-    const refresh = (): Promise<void> => {
-      if (!alive || !state.connected || !read().available) {
-        return Promise.resolve();
-      }
-      if (pending?.generation === generation) return pending.work;
-      const at = generation;
-      attempted = at;
-      write((catalog) => {
-        catalog.loading = true;
-        catalog.error = "";
-      });
-      const work = Promise.resolve().then(load).then((value) => {
-        connect();
-        if (alive && generation === at) {
-          write((catalog) => {
-            catalog.value = value;
-          });
-        }
-      }).catch((error: unknown) => {
-        connect();
-        if (alive && generation === at) {
-          write((catalog) => {
-            catalog.error = (error as Error).message;
-          });
-        }
-      }).finally(() => {
-        if (alive && generation === at) {
-          pending = undefined;
-          write((catalog) => {
-            catalog.loading = false;
-          });
-        }
-      });
-      pending = { generation: at, work };
-      return work;
-    };
-    return {
-      refresh,
-      ensure: () =>
-        pending?.generation === generation
-          ? pending.work
-          : attempted === generation
-          ? Promise.resolve()
-          : refresh(),
-      reset() {
-        pending = undefined;
-        attempted = -1;
-        write((catalog) => {
-          catalog.loading = false;
-          catalog.error = "";
-        });
-      },
-    };
-  }
-  const agents = resource(
-    () => state.agents,
-    (fn) =>
-      update((value) => {
-        value.agents = { ...value.agents };
-        fn(value.agents);
-      }),
-    options.load.agents,
-  );
+  const stopAgents = agents.subscribe(() => {
+    if (alive) update(() => {});
+  });
   const stopModels = models.subscribe(() => {
     if (alive) update(() => {});
   });
   const connect = (next = options.connection()) => {
     if (!alive) return;
-    models.connect(
-      options.modelCatalog
-        ? undefined
-        : { key: next.key, connected: next.connected, available: next.models },
-    );
     if (
       connection && Object.is(next.key, connection.key) &&
       next.connected === connection.connected &&
@@ -224,10 +160,17 @@ export function createComposerSelection(
     });
     update((value) => {
       value.connected = next.connected;
-      value.agents = { ...value.agents, available: next.agents };
     });
-    agents.reset();
-    void agents.refresh();
+    agents.connect({
+      key: next.key,
+      connected: next.connected,
+      available: next.agents,
+    });
+    models.connect(
+      options.modelCatalog
+        ? undefined
+        : { key: next.key, connected: next.connected, available: next.models },
+    );
   };
   const context = (): PromptSelectionContext => ({
     context: options.context(),
@@ -243,7 +186,7 @@ export function createComposerSelection(
       if (!state.connected) return;
       const at = generation;
       await Promise.race([
-        Promise.all([agents.ensure(), models.ready()]),
+        Promise.all([agents.ready(), models.ready()]),
         invalidated,
       ]);
       connect();
@@ -265,6 +208,8 @@ export function createComposerSelection(
     connect,
     dispose() {
       alive = false;
+      stopAgents();
+      agents.dispose();
       stopModels();
       if (!options.modelCatalog) models.dispose();
       stopTools?.();

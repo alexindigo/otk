@@ -21,18 +21,13 @@ export class ProjectTemplates extends MetadataChanges {
   }
   set(templates: string[]): string[] {
     ordered(templates);
-    this.db.connection.exec("BEGIN IMMEDIATE");
-    try {
+    this.db.transaction(() => {
       this.db.connection.exec("DELETE FROM project_templates");
       templates.forEach((template, i) =>
         this.db.connection.prepare("INSERT INTO project_templates VALUES(?,?)")
           .run(i, template)
       );
-      this.db.connection.exec("COMMIT");
-    } catch (error) {
-      this.db.connection.exec("ROLLBACK");
-      throw error;
-    }
+    });
     this.changed();
     return this.list();
   }

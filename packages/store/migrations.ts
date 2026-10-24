@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { DatabaseSync } from "node:sqlite";
 import { legacyMigrations } from "./legacy.ts";
+import { transaction } from "./transaction.ts";
 
 /** A version within one feature's append-only upgrade list, starting at 1. */
 export interface Migration {
@@ -33,17 +34,6 @@ export function validateMigrations(
         );
       }
     }
-  }
-}
-
-function transaction(db: DatabaseSync, run: () => void): void {
-  db.exec("BEGIN IMMEDIATE");
-  try {
-    run();
-    db.exec("COMMIT");
-  } catch (error) {
-    db.exec("ROLLBACK");
-    throw error;
   }
 }
 

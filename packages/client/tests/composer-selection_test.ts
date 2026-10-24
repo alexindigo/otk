@@ -43,6 +43,104 @@ const agents: AgentOption[] = [{ name: "build" }, { name: "plan" }, {
   model: second,
   variant: "high",
 }];
+
+Deno.test("composer agent refresh reserves its work before synchronous loading publication", async () => {
+  const drafts = createDrafts();
+  let calls = 0, joins = 0;
+  const owner = createComposerSelection({
+    draft: () => drafts.get("s"),
+    change: drafts.writer("s"),
+    context: () => undefined,
+    connection: () => ({
+      key: 1,
+      connected: true,
+      agents: true,
+      models: false,
+    }),
+    load: {
+      agents: () => {
+        calls++;
+        return Promise.resolve(agents);
+      },
+      models: () => Promise.resolve(catalog),
+    },
+    prefs: {
+      get: () => ({ "models.favourite": [], "models.recent": [] }),
+      set: () => Promise.resolve(),
+    },
+  });
+  const release = owner.subscribe((state) => {
+    if (state.agents.loading && joins++ < 3) void owner.refreshAgents();
+  });
+  try {
+    owner.connect();
+    await owner.ready();
+    assertEquals(
+      calls,
+      1,
+      "Loading subscribers launched duplicate agent requests",
+    );
+    assertEquals(owner.state.agents.value, agents);
+  } finally {
+    release();
+    owner.dispose();
+  }
+});
+
+Deno.test("composer agent lifetime aborts retired loads and readiness follows the replacement", async () => {
+  const drafts = createDrafts();
+  let connection = { key: 1, connected: true, agents: true, models: false };
+  const requests: {
+    signal?: AbortSignal;
+    done: ReturnType<typeof Promise.withResolvers<AgentOption[]>>;
+  }[] = [];
+  const owner = createComposerSelection({
+    draft: () => drafts.get("s"),
+    change: drafts.writer("s"),
+    context: () => undefined,
+    connection: () => connection,
+    load: {
+      agents: (signal?: AbortSignal) => {
+        const done = Promise.withResolvers<AgentOption[]>();
+        requests.push({ signal, done });
+        return done.promise;
+      },
+      models: () => Promise.resolve(catalog),
+    },
+    prefs: {
+      get: () => ({ "models.favourite": [], "models.recent": [] }),
+      set: () => Promise.resolve(),
+    },
+  });
+  try {
+    owner.connect();
+    const ready = owner.ready(), initial = owner.refreshAgents();
+    await Promise.resolve();
+    connection = { ...connection, key: 2 };
+    owner.connect();
+    await Promise.resolve();
+    assertEquals(
+      requests[0].signal?.aborted,
+      true,
+      "Agent request has no cancellation owner",
+    );
+    requests[1].done.resolve(agents);
+    await ready;
+    requests[0].done.resolve([{ name: "stale" }]);
+    await initial;
+    assertEquals(owner.state.agents.value, agents);
+    const last = owner.refreshAgents();
+    await Promise.resolve();
+    owner.dispose();
+    assertEquals(requests[2].signal?.aborted, true);
+    requests[2].done.resolve([{ name: "disposed" }]);
+    await last;
+    assertEquals(owner.state.agents.value, agents);
+  } finally {
+    owner.dispose();
+    for (const request of requests) request.done.resolve(agents);
+  }
+});
 function deferred<T>() {
   let resolve!: (value: T) => void, reject!: (reason: Error) => void;
   const promise = new Promise<T>((yes, no) => {

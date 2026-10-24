@@ -91,6 +91,13 @@ remains an intentional complete replacement, not an add/remove helper. Clocks
 can be injected for deterministic consumers. Feature listeners run after
 committed writes. Composite preference defaults are detached on every read.
 
+`OtkDb.transaction(run)` returns a synchronous callback's result after commit or
+rolls back and rethrows its failure. If rollback also fails, an AggregateError
+retains the original as its cause and first error. Nested transactions reject at
+BEGIN without retiring the caller's transaction. Migrations and metadata
+features share this connection primitive; feature notifications run only after
+commit.
+
 Use Deno read/write permissions for the state directory and packaged SQL.
 
 `PermissionStore` / `permissionMigrations` independently contribute explicit

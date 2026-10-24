@@ -24,9 +24,14 @@ export function bindComposerSelection(ctx: PromptContext): ComposerSelection {
     onToolCompleted: ctx.onToolCompleted,
     modelCatalog: ctx.modelCatalog,
     load: {
-      agents: () =>
-        ctx.rpc("agents.list", { sessionID: ctx.sessionID(), primary: true }),
-      models: () => ctx.rpc("models.list", { sessionID: ctx.sessionID() }),
+      agents: (signal) =>
+        ctx.rpc(
+          "agents.list",
+          { sessionID: ctx.sessionID(), primary: true },
+          signal,
+        ),
+      models: (signal) =>
+        ctx.rpc("models.list", { sessionID: ctx.sessionID() }, signal),
     },
     prefs: {
       get: ctx.prefs,

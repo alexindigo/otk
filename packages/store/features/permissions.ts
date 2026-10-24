@@ -65,9 +65,7 @@ export class PermissionStore {
     ancestors: string[] = [],
   ): number {
     const family = [...new Set([key(input.session), ...ancestors.map(key)])];
-    this.db.connection.exec("BEGIN IMMEDIATE");
-    let id: number;
-    try {
+    const id = this.db.transaction(() => {
       const result = this.db.connection.prepare(
         "INSERT INTO permission_activity(session,request_id,request,reply,source,owner,message,time,outcome) VALUES(?,?,?,?,?,?,?,?,'started')",
       ).run(
@@ -80,16 +78,13 @@ export class PermissionStore {
         input.message ?? null,
         this.now(),
       );
-      id = Number(result.lastInsertRowid);
+      const id = Number(result.lastInsertRowid);
       const link = this.db.connection.prepare(
         "INSERT INTO permission_activity_family(session,activity) VALUES(?,?)",
       );
       for (const session of family) link.run(session, id);
-      this.db.connection.exec("COMMIT");
-    } catch (error) {
-      this.db.connection.exec("ROLLBACK");
-      throw error;
-    }
+      return id;
+    });
     this.#changed({ kind: "activity", sessions: family });
     return id;
   }

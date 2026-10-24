@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { DatabaseSync } from "node:sqlite";
 import { join } from "@std/path";
+import { transaction } from "./transaction.ts";
 import {
   type FeatureMigrations,
   migrate,
@@ -20,6 +21,9 @@ export class OtkDb {
       db.close();
       throw error;
     }
+  }
+  transaction<T>(run: () => T): T {
+    return transaction(this.connection, run);
   }
   close(): void {
     this.connection.close();

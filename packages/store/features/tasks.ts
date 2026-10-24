@@ -122,14 +122,7 @@ export class Tasks extends MetadataChanges {
     });
   }
   #transaction(write: () => void): void {
-    this.db.connection.exec("BEGIN IMMEDIATE");
-    try {
-      write();
-      this.db.connection.exec("COMMIT");
-    } catch (error) {
-      this.db.connection.exec("ROLLBACK");
-      throw error;
-    }
+    this.db.transaction(write);
     this.changed();
   }
 }

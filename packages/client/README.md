@@ -150,6 +150,12 @@ Composer disposal releases its subscription, not the session's resource.
 Standalone composers create the same resource locally when none is supplied. No
 catalog is copied into another store.
 
+Agent and model catalogs share one framework-free resource lifecycle. It
+reserves in-flight identity before publishing loading, aborts retired
+generations, retains last-good data and lets readiness follow replacement work.
+Composer load ports receive the resource's cancellation signal; UI adapters
+forward it to typed RPC.
+
 `createSession().onToolCompleted(selection, listener)` observes completed tool
 parts only from the selected session's live stream. Initial/refetch snapshots
 and older pages establish a silent baseline; completed IDs stay consumed until
