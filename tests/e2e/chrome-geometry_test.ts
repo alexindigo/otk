@@ -142,10 +142,15 @@ test("shared chrome geometry reaches both rails headers controls and corner rese
         for (
           const [press, expected] of [["Home", min], ["End", max]] as const
         ) {
+          const before = client.frames.length;
           await b.evaluate(`document.querySelector('${selector}').focus()`);
           await b.key(press);
           await b.poll(
             `Number(document.querySelector('${selector}').getAttribute('aria-valuenow'))===${expected}`,
+          );
+          await client.wait((frame) =>
+            client.frames.indexOf(frame) >= before && frame.t === "prefs" &&
+            frame.prefs.shellLayout[key] === expected
           );
           assertEquals(
             (await client.rpc<{ shellLayout: Record<string, number> }>(
@@ -162,6 +167,7 @@ test("shared chrome geometry reaches both rails headers controls and corner rese
         const point = await b.evaluate<{ x: number; y: number }>(
           `(()=>{const r=document.querySelector('${selector}').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+200}})()`,
         );
+        const before = client.frames.length;
         await b.send("Input.dispatchMouseEvent", {
           type: "mousePressed",
           ...point,
@@ -189,6 +195,12 @@ test("shared chrome geometry reaches both rails headers controls and corner rese
         });
         await b.poll(
           `Number(document.querySelector('${selector}').getAttribute('aria-valuenow'))===${max}`,
+        );
+        // ARIA also reports transient drag width; only a fresh prefs broadcast
+        // establishes that this gesture has reached the persistence owner.
+        await client.wait((frame) =>
+          client.frames.indexOf(frame) >= before && frame.t === "prefs" &&
+          frame.prefs.shellLayout[key] === max
         );
         assertEquals(
           (await client.rpc<{ shellLayout: Record<string, number> }>(
