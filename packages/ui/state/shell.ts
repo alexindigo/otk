@@ -35,6 +35,7 @@ export function createShellState(o: { api: URL }): ShellState {
   const resources = createServerResources({
     index,
     factory: solidState,
+    error: (error) => navigation.fail(error),
     sidecars: (receive) =>
       createSidecars(receive, { connection: { api: o.api } }),
   });

@@ -74,6 +74,7 @@ export function createServerResources(o: {
   sidecars(receive: (id: string, frame: ServerFrame) => void): ClientSidecars;
   index: ClientIndex;
   factory?: StateFactory;
+  error?: (error: unknown) => void;
 }): ServerResources {
   const factory = o.factory ?? createState;
   const inboxes = new Map<string, InboxModel>();
@@ -116,7 +117,7 @@ export function createServerResources(o: {
   const inbox = (id: string): InboxModel => {
     let model = inboxes.get(id);
     if (!model) {
-      model = createInbox(sidecars.connection(id).rpc, factory);
+      model = createInbox(sidecars.connection(id).rpc, factory, o.error);
       inboxes.set(id, model);
     }
     return model;

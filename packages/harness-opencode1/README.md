@@ -41,7 +41,10 @@ is required; start a stock server separately. Empty `db` resolves through
 `XDG_DATA_HOME`/`HOME` using the native default. There are no sidecar auth/state
 inputs. All twelve optional capabilities are implemented in separate modules and
 share one session-directory resolver. Use `core` for lifecycle/session queries
-and `capabilities.<name>` for optional operations.
+and `capabilities.<name>` for optional operations. The adapter exposes the same
+honest optional capability map as `Harness`; consumers check or
+`requireCapability` at their operation boundary. Augmenting the open protocol
+contract never promises that this stock adapter installs that port.
 
 The adapter retains ownership of events, stream buffers, task watchers, admitted
 shell/command requests and reconciled HTTP/SSE errors. Stop aborts and joins

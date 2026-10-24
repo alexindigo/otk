@@ -5,6 +5,7 @@ import { fromFileUrl, join } from "@std/path";
 import { loadServiceConfig } from "../../../core/config/loader.ts";
 import { Opencode1Adapter } from "../adapter.ts";
 import { StreamBuffers } from "@otk/content";
+import { requireCapability } from "@otk/harness";
 import type { Session } from "../types.ts";
 import type { ContentOp } from "@otk/protocol";
 
@@ -98,8 +99,8 @@ for (const method of ["shell", "command"] as const) {
         await new Promise((resolve) => setTimeout(resolve, 5));
       }
       const capability = method === "shell"
-        ? adapter.capabilities.shell.shell
-        : adapter.capabilities.commands.command;
+        ? requireCapability(adapter.capabilities, "shell").shell
+        : requireCapability(adapter.capabilities, "commands").command;
       const input = {
         sessionID: session.id,
         command: "held command",
@@ -216,8 +217,8 @@ for (const method of ["shell", "command"] as const) {
         });
         await wait(() => ready);
         const capability = method === "shell"
-          ? adapter.capabilities.shell.shell
-          : adapter.capabilities.commands.command;
+          ? requireCapability(adapter.capabilities, "shell").shell
+          : requireCapability(adapter.capabilities, "commands").command;
         const input = {
           sessionID: session.id,
           command: "owned command",

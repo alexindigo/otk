@@ -1,6 +1,4 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Part } from "@otk/protocol";
-type ReasoningPart = Extract<Part, { kind: "reasoning" }>;
 import type { PartRegistry } from "../../registries/renderers.ts";
 import Reasoning from "../Reasoning.tsx";
 export function registerReasoningPart(parts: PartRegistry): void {
@@ -8,7 +6,7 @@ export function registerReasoningPart(parts: PartRegistry): void {
     "reasoning",
     (props) => (
       <Reasoning
-        part={props.part as ReasoningPart}
+        part={props.part}
         mode={props.prefs.thinking}
         conceal={props.prefs.conceal}
       />

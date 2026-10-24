@@ -44,7 +44,10 @@ import "@fontsource/ibm-plex-mono/400.css";
 import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
-import SharedControls, { ErrorBoundaries } from "./shared-controls.tsx";
+import SharedControls, {
+  ErrorBoundaries,
+  SecondaryFailures,
+} from "./shared-controls.tsx";
 
 declare module "@otk/protocol" {
   interface CapabilityContracts {
@@ -446,7 +449,9 @@ function Consumer(): Element {
   );
 }
 render(
-  new URL(location.href).searchParams.has("error-boundaries")
+  new URL(location.href).searchParams.has("secondary-failures")
+    ? () => <SecondaryFailures onTheme={(id) => theme.commit(id)} />
+    : new URL(location.href).searchParams.has("error-boundaries")
     ? () => <ErrorBoundaries onTheme={(id) => theme.commit(id)} />
     : new URL(location.href).searchParams.has("shared-controls")
     ? () => <SharedControls onTheme={(id) => theme.commit(id)} />

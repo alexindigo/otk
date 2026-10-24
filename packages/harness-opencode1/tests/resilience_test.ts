@@ -2,7 +2,7 @@
 import { test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { SessionIndex } from "@otk/harness";
+import { requireCapability, SessionIndex } from "@otk/harness";
 import type { ContentOp } from "@otk/protocol";
 import { StreamBuffers } from "@otk/content";
 import { emptyContent, reduce } from "@otk/client";
@@ -275,7 +275,9 @@ test("connector and core use the same index owner, including authoritative direc
       status: { type: "retry", attempt: 8, message: "keep metadata", next: 0 },
     });
     await record.drain();
-    await record.adapter.capabilities.agents.listAgents("root");
+    await requireCapability(record.adapter.capabilities, "agents").listAgents(
+      "root",
+    );
     assertEquals(directories, ["/changed"]);
     assertEquals(record.index.get("root")!.title, "Core owner edit");
     assertEquals(record.index.get("root")!.retry?.attempt, 8);

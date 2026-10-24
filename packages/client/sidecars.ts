@@ -7,6 +7,7 @@ import {
   welcomeCapabilities,
 } from "@otk/protocol";
 import { apiBase, normalizeBase, request } from "./auth.ts";
+import { reportDiagnostic } from "./diagnostics.ts";
 import {
   type ConnectionOptions,
   type ConnectionState,
@@ -28,33 +29,50 @@ export interface SidecarState extends SidecarSpec {
   connectionVersion?: number;
 }
 export const LOCAL_SIDECAR = "local";
-export function readSidecars(storage: Pick<Storage, "getItem">): SidecarSpec[] {
+export function readSidecars(
+  storage: Pick<Storage, "getItem">,
+  report: (error: unknown) => void = (error) =>
+    console.error("Saved sidecar configuration rejected", error),
+): SidecarSpec[] {
   const implicit = { id: LOCAL_SIDECAR, baseUrl: "", label: "This server" };
+  let raw: unknown;
   try {
-    const raw = JSON.parse(storage.getItem("otk.sidecars") || "[]");
-    if (!Array.isArray(raw)) return [implicit];
-    const seen = new Set([LOCAL_SIDECAR]), urls = new Set<string>();
-    const remote: SidecarSpec[] = [];
-    for (const item of raw) {
+    raw = JSON.parse(storage.getItem("otk.sidecars") || "[]");
+    if (!Array.isArray(raw)) throw new Error("Expected a saved sidecar array");
+  } catch (error) {
+    reportDiagnostic(report, error);
+    return [implicit];
+  }
+  const seen = new Set([LOCAL_SIDECAR]), urls = new Set<string>();
+  const remote: SidecarSpec[] = [];
+  for (const [index, item] of raw.entries()) {
+    try {
       if (
+        !item || typeof item !== "object" ||
         typeof item.id !== "string" || !item.id || item.id.includes("/") ||
         typeof item.label !== "string" || typeof item.baseUrl !== "string" ||
         !item.baseUrl || seen.has(item.id)
-      ) continue;
+      ) throw new Error("Invalid or duplicate saved sidecar");
       const baseUrl = normalizeBase(item.baseUrl);
-      if (urls.has(baseUrl)) continue;
+      if (urls.has(baseUrl)) throw new Error("Duplicate saved sidecar URL");
       seen.add(item.id);
       urls.add(baseUrl);
       remote.push({ id: item.id, baseUrl, label: item.label });
+    } catch (error) {
+      reportDiagnostic(
+        report,
+        new Error(`Invalid saved sidecar entry ${index}`, {
+          cause: error,
+        }),
+      );
     }
-    return [implicit, ...remote];
-  } catch {
-    return [implicit];
   }
+  return [implicit, ...remote];
 }
 export interface SidecarsOptions {
   storage?: Pick<Storage, "getItem" | "setItem">;
   connection?: ConnectionOptions;
+  diagnostic?: (error: unknown) => void;
 }
 export interface SidecarsState {
   list: SidecarState[];
@@ -74,7 +92,7 @@ export function createSidecars(
   factory: StateFactory = createState,
 ): ClientSidecars {
   const storage = options.storage ?? globalThis.localStorage;
-  const initial = readSidecars(storage);
+  const initial = readSidecars(storage, options.diagnostic);
   const { state, update: setState, subscribe } = factory<SidecarsState>({
     list: initial.map((item) => ({
       ...item,

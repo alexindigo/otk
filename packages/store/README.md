@@ -68,9 +68,10 @@ start at v1, with SQL files in their own feature-named directories.
 
 `Prefs<P>` merges validated persisted JSON into a fresh copy of supplied
 defaults. It rejects invalid writes before persistence or notification, then
-notifies listeners synchronously with the validated full snapshot. Stored
-unknown/invalid values are ignored on reads; malformed JSON retains the original
-parse-error behavior. `listen` returns an unsubscribe callback.
+notifies listeners synchronously with a detached validated full snapshot for
+each listener. Stored unknown/invalid values are ignored on reads; malformed
+JSON retains the original parse-error behavior. `listen` returns an unsubscribe
+callback.
 
 `Frecency` resolves project/path keys exactly as the app did, rejects empty,
 NUL-containing or over-4096-character keys before writing, increments scores,
@@ -92,7 +93,14 @@ immediate transaction against current membership. Repeats preserve ordering;
 another task's exclusive membership is never stolen or removed. `Tasks.sessions`
 remains an intentional complete replacement, not an add/remove helper. Clocks
 can be injected for deterministic consumers. Feature listeners run after
-committed writes. Composite preference defaults are detached on every read.
+committed writes. All store features share one post-commit dispatcher: an
+observer failure is reported without rejecting the committed mutation or
+skipping other listeners. `OtkDb` accepts an optional third
+`{ observerError(error) }` argument for injected diagnostics; the default logs
+the original failure. If the reporter itself throws, a fallback diagnostic
+retains both failures. Payloads are detached for each observer and from the
+mutation's returned value. Composite preference defaults are detached on every
+read.
 
 `OtkDb.transaction(run)` returns a synchronous callback's result after commit or
 rolls back and rethrows its failure. If rollback also fails, an AggregateError

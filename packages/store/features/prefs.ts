@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { OtkDb } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
+import { Changes } from "../changes.ts";
 
 /** The prefs feature contributes its original schema version, independently. */
 export const prefsMigrations: FeatureMigrations = {
@@ -21,9 +22,10 @@ export interface PrefsOptions<P extends object> {
 }
 
 /** JSON preference persistence, validated reads/writes and change subscriptions. */
-export class Prefs<P extends object> {
-  #listeners = new Set<(prefs: P) => void>();
-  constructor(readonly db: OtkDb, readonly options: PrefsOptions<P>) {}
+export class Prefs<P extends object> extends Changes<P> {
+  constructor(readonly db: OtkDb, readonly options: PrefsOptions<P>) {
+    super(db);
+  }
   get(): P {
     const prefs = structuredClone(this.options.defaults) as P;
     for (
@@ -45,11 +47,7 @@ export class Prefs<P extends object> {
       "INSERT INTO prefs(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated=excluded.updated",
     ).run(key, JSON.stringify(value), Date.now());
     const prefs = this.get();
-    for (const listener of this.#listeners) listener(prefs);
+    this.changed(prefs);
     return prefs;
-  }
-  listen(listener: (prefs: P) => void): () => void {
-    this.#listeners.add(listener);
-    return () => this.#listeners.delete(listener);
   }
 }

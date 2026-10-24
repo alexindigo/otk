@@ -18,7 +18,7 @@ export interface TaskRecord {
 }
 export class Tasks extends MetadataChanges {
   constructor(readonly db: OtkDb) {
-    super();
+    super(db);
   }
   list(directory?: string): TaskRecord[] {
     return this.db.connection.prepare(

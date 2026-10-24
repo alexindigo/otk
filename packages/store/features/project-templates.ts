@@ -12,7 +12,7 @@ export const projectTemplatesMigrations: FeatureMigrations = {
 /** Server-scoped settings; filesystem expansion belongs to the server feature. */
 export class ProjectTemplates extends MetadataChanges {
   constructor(readonly db: OtkDb) {
-    super();
+    super(db);
   }
   list(): string[] {
     return this.db.connection.prepare(

@@ -4,7 +4,7 @@ import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { cfg, fixture } from "../../../tests/support/config.ts";
 import { Opencode1Adapter } from "../mod.ts";
-import { HarnessError } from "@otk/harness";
+import { HarnessError, requireCapability } from "@otk/harness";
 import { StreamBuffers } from "@otk/content";
 import { mapPromptParts } from "../mod.ts";
 
@@ -44,10 +44,11 @@ test("permission-denied discovery candidates are skipped but explicit prompt fil
         "./src/../src/file.ts",
       ]
     ) {
-      const files = await adapter.capabilities.files.findFiles(
-        "ses_files",
-        query,
-      );
+      const files = await requireCapability(adapter.capabilities, "files")
+        .findFiles(
+          "ses_files",
+          query,
+        );
       assert(files.some((file) => file.path === query && !file.directory));
       assert(!files.some((file) => file.path === "blocked/file.ts"));
     }

@@ -3,7 +3,7 @@ import { test } from "../../../tests/support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
-import { SessionIndex } from "@otk/harness";
+import { requireCapability, SessionIndex } from "@otk/harness";
 import type { IndexEntry } from "@otk/protocol";
 import { cfg, fixture } from "../../../tests/support/config.ts";
 import { waitFor } from "../../../tests/support/opencode.ts";
@@ -181,7 +181,8 @@ for (
         assertEquals(index.get("parent")?.attention.childPermissions, 1);
         assertEquals(index.get("parent")?.attention.childQuestions, 1);
         assertEquals(
-          (await adapter.capabilities.permissions.listPermissions("parent"))
+          (await requireCapability(adapter.capabilities, "permissions")
+            .listPermissions("parent"))
             .map((r) => r.id),
           [request.id],
         );
@@ -337,9 +338,10 @@ for (const failed of ["/session/status", "/permission", "/question"]) {
       assertEquals(index.get("s0")?.attention.permissions, 1);
       assertEquals(index.get("s0")?.attention.questions, 1);
       assertEquals(
-        (await adapter.capabilities.permissions.listPermissions("s0")).map((
-          request,
-        ) => request.id),
+        (await requireCapability(adapter.capabilities, "permissions")
+          .listPermissions("s0")).map((
+            request,
+          ) => request.id),
         ["permission"],
       );
       assertEquals(

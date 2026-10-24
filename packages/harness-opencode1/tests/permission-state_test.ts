@@ -5,6 +5,7 @@ import { join } from "@std/path";
 import type { ContentOp } from "@otk/protocol";
 import { Opencode1Adapter } from "../adapter.ts";
 import { StreamBuffers } from "@otk/content";
+import { requireCapability } from "@otk/harness";
 import { cfg, fixture } from "../../../tests/support/config.ts";
 import { waitFor } from "../../../tests/support/opencode.ts";
 
@@ -113,7 +114,7 @@ test("native pending permission events own normalized family reads and removal w
       () => ops.some((op) => op.op === "permission.upsert"),
       Boolean,
     );
-    const port = adapter.capabilities.permissions!;
+    const port = requireCapability(adapter.capabilities, "permissions");
     const parent = await port.listPermissions("root");
     assertEquals(parent.length, 1);
     assertEquals(parent[0].detail, { kind: "generic", summary: "exact query" });

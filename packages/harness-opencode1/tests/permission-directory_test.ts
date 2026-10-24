@@ -7,6 +7,7 @@ import { cfg, fixture } from "../../../tests/support/config.ts";
 import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import { Opencode1Adapter } from "../adapter.ts";
+import { requireCapability } from "@otk/harness";
 import { waitFor } from "../../../tests/support/opencode.ts";
 
 test("permission reply without pending instance resolves and always sends a directory", async () => {
@@ -145,7 +146,7 @@ test("bootstrap permission reply retains its listing instance even when session 
       resync() {},
     });
     await waitFor(() => connected, Boolean);
-    const port = adapter.capabilities.permissions!;
+    const port = requireCapability(adapter.capabilities, "permissions");
     assertEquals((await port.listPermissions("root")).length, 1);
     await port.replyPermission({
       sessionID: "root",

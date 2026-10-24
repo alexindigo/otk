@@ -227,7 +227,7 @@ export default function SessionView(props: {
                   suspended={active()}
                   context={props.messages.findLast((message) =>
                     message.role === "user"
-                  ) as import("@otk/protocol").UserMessage | undefined}
+                  )}
                   busy={props.busy}
                   value={props.draft}
                   connected={props.connected}

@@ -10,8 +10,15 @@ import {
 /** Disk-backed SQLite connection with caller-composed feature migrations. */
 export class OtkDb {
   readonly connection: DatabaseSync;
-  constructor(statePath: string, migrations: readonly FeatureMigrations[]) {
+  readonly observerError: (error: unknown) => void;
+  constructor(
+    statePath: string,
+    migrations: readonly FeatureMigrations[],
+    options: { observerError?: (error: unknown) => void } = {},
+  ) {
     if (statePath === "") throw new TypeError("State path must not be empty");
+    this.observerError = options.observerError ??
+      ((error) => console.error("Store observer failed after commit", error));
     validateMigrations(migrations);
     Deno.mkdirSync(statePath, { recursive: true, mode: 0o700 });
     const db = this.connection = new DatabaseSync(join(statePath, "otk.db"));

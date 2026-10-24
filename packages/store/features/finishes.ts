@@ -11,7 +11,7 @@ export const finishesMigrations: FeatureMigrations = {
 };
 export class Finishes extends MetadataChanges {
   constructor(readonly db: OtkDb, readonly now: () => number = Date.now) {
-    super();
+    super(db);
   }
   time(session: string): number {
     return Number(

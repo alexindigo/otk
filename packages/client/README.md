@@ -303,14 +303,15 @@ approval models before sidecars. Server-scoped task actions, live capability and
 history-source projections, labelled projects and the local layout/preference
 RPC ports share this owner.
 
-`createInbox(rpc, factory?)` receives connection-local `inbox` frames, including
-the snapshot sent on every hello. `openProject`, `openSession` and `act` reset
-the server-owned visit clock; opening a session also records its seen timestamp.
-Wrap sends, approvals, answers and interrupts in `act(directory, callback)`. For
-submissions, `createSessionSubmission({sessionID, directory, inbox, tabs})` is
-the shared session-bound admission port: it resolves the captured project's
-directory, enters the existing tab `send` promotion, then runs the mode-specific
-callback through inbox `act`. Normal prompts, shell commands and native commands
+`createInbox(rpc, factory?, report?)` receives connection-local `inbox` frames,
+including the snapshot sent on every hello. `openProject`, `openSession` and
+`act` reset the server-owned visit clock; opening a session also records its
+seen timestamp. Wrap sends, approvals, answers and interrupts in
+`act(directory, callback)`. For submissions,
+`createSessionSubmission({sessionID, directory, inbox, tabs})` is the shared
+session-bound admission port: it resolves the captured project's directory,
+enters the existing tab `send` promotion, then runs the mode-specific callback
+through inbox `act`. Normal prompts, shell commands and native commands
 (including palette execution) use this same port. Promotion failure prevents
 native admission; action failure propagates without recording a successful
 visit. Concurrent submissions reuse the tab owner's promotion, independently of
@@ -319,6 +320,20 @@ directly, without promoting a session merely for responding to it.
 `promote(session)` creates a title-named task with its initial session
 atomically. These are UI-independent ports: callers own navigation guards,
 action callbacks and failure presentation.
+
+After a successful action, a failed `projects.visit` is a separate bookkeeping
+diagnostic: `act` still returns the exact action result, so an admitted send or
+reply cannot look unsent. The injected `report` port (console diagnostics by
+default) owns that failure; `createServerResources` forwards its optional
+`error` port and the browser binding routes it to existing navigation feedback.
+Reporter failure is diagnosed separately and cannot change the accepted action
+result.
+
+`readSidecars(storage, diagnostic?)` parses the saved envelope once and
+validates each remote entry independently. Bad entries, duplicate IDs/URLs and
+invalid URLs are diagnosed while valid neighbours survive. A corrupt envelope
+yields only the implicit local server and a diagnostic. Reading never rewrites
+saved data; `createSidecars` accepts the same diagnostic port in its options.
 
 `projectHash` / `projectRoute` provide project-only URLs for empty projects,
 separate from session URLs; pass both through the same guarded navigation owner.

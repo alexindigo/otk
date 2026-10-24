@@ -12,6 +12,7 @@ import type {
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import type { TabSession } from "./tabs.ts";
+import { reportDiagnostic } from "./diagnostics.ts";
 export type InboxStatus = "blocked" | "working" | "finished" | "idle";
 export function unread(
   sessionID: string,
@@ -111,6 +112,8 @@ export interface InboxModel {
 export function createInbox(
   rpc: InboxRpc,
   factory: StateFactory = createState,
+  report: (error: unknown) => void = (error) =>
+    console.error("Visit bookkeeping failed after successful action", error),
 ): InboxModel {
   const store = factory<{ inbox: InboxSnapshot }>({
     inbox: {
@@ -147,7 +150,11 @@ export function createInbox(
     /** Wrap send/approve/answer/interrupt so every successful action resets visits. */
     async act<T>(directory: string, action: () => Promise<T>): Promise<T> {
       const result = await action();
-      await rpc.call("projects.visit", { directory });
+      try {
+        await rpc.call("projects.visit", { directory });
+      } catch (error) {
+        reportDiagnostic(report, error);
+      }
       return result;
     },
   };

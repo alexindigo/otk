@@ -1,14 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { Show } from "solid-js";
-import type { Part } from "@otk/protocol";
-type ToolPart = Extract<Part, { kind: "tool" }>;
 import type { PartRegistry } from "../../registries/renderers.ts";
 import ToolLine from "../ToolLine.tsx";
 export function registerToolPart(parts: PartRegistry): void {
   parts.registerTyped(
     "tool",
     (props) => {
-      const call = () => (props.part as ToolPart).call;
+      const call = () => props.part.call;
       return (
         <Show when={props.prefs.toolDetails || call().status !== "completed"}>
           <ToolLine

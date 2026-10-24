@@ -4,6 +4,7 @@ import { fromFileUrl, join } from "@std/path";
 import { loadServiceConfig } from "../../core/mod.ts";
 import { Opencode1Adapter } from "@otk/harness-opencode1";
 import { StreamBuffers } from "@otk/content";
+import { requireCapability } from "@otk/harness";
 import type { IndexEntry } from "@otk/protocol";
 import type { ContentOp } from "@otk/protocol";
 import type { Session } from "@otk/harness-opencode1";
@@ -192,8 +193,8 @@ export async function observationFixture() {
     sessions,
     async submit(method: "shell" | "command", sessionID = "case-a") {
       const invoke = method === "shell"
-        ? adapter.capabilities.shell.shell
-        : adapter.capabilities.commands.command;
+        ? requireCapability(adapter.capabilities, "shell").shell
+        : requireCapability(adapter.capabilities, "commands").command;
       assert(
         typeof invoke === "function",
         `Feature has no ${method} operation`,
@@ -292,7 +293,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.wait(() =>
         f.ops.some((item) => Reflect.get(item.event, "error") === "Aborted")
       );
-      await f.adapter.capabilities.prompt.abort("case-a");
+      await requireCapability(f.adapter.capabilities, "prompt").abort("case-a");
       assert(f.requests[0].signal.aborted);
       f.fail(0, "Cancelled HTTP watcher late failure");
       const current = await f.coherent();
@@ -547,7 +548,7 @@ export function errorObservationCases(method: "shell" | "command") {
       f.allowLateResponse();
       await f.submit(method, "case-a");
       await f.submit(method, "case-b");
-      await f.adapter.capabilities.prompt.abort("case-a");
+      await requireCapability(f.adapter.capabilities, "prompt").abort("case-a");
       assert(
         f.requests[0].signal.aborted,
         "Cancellation left its HTTP watcher alive",

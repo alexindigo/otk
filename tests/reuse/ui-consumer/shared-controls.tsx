@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createEffect, createSignal, type Element, Show } from "solid-js";
-import { CommandHub } from "@otk/client";
+import { CommandHub, createInbox, createSessionSubmission } from "@otk/client";
 import {
   booleanPreference,
   createPreferences,
   DEFAULT_PREFS,
+  errorMessage,
   type PreferenceKey,
   type Preferences,
   type ShellLayout,
@@ -97,6 +98,102 @@ export function ErrorBoundaries(props: { onTheme(id: string): void }): Element {
           />
         </section>
       </main>
+    </CommandProvider>
+  );
+}
+
+export function SecondaryFailures(
+  props: { onTheme(id: string): void },
+): Element {
+  const commands = new CommandHub(), ui = createUiRegistries();
+  const [draft, setDraft] = createSignal(emptyDraft()),
+    [sent, setSent] = createSignal(0),
+    [diagnostic, setDiagnostic] = createSignal("");
+  const inbox = createInbox(
+    {
+      call: () => Promise.reject(new Error("Visit storage unavailable")),
+    },
+    undefined,
+    (error) => setDiagnostic(errorMessage(error)),
+  );
+  const submit = createSessionSubmission({
+    sessionID: "probe",
+    directory: () => Promise.resolve("/project"),
+    inbox,
+    tabs: () => ({ send: (_id, action) => action() }),
+  });
+  return (
+    <CommandProvider commands={commands}>
+      <UiProvider registries={ui}>
+        <main
+          style={{
+            padding: "24px",
+            "max-width": "736px",
+            margin: "0 auto",
+            display: "grid",
+            gap: "24px",
+          }}
+        >
+          <header>
+            <h1>Successful action, separate bookkeeping</h1>
+            <button
+              type="button"
+              data-dark
+              onClick={() => props.onTheme("otk-dark")}
+            >
+              Dark
+            </button>
+            <button
+              type="button"
+              data-light
+              onClick={() => props.onTheme("otk-light")}
+            >
+              Linen
+            </button>
+          </header>
+          <section>
+            <h2>Submitted actions</h2>
+            <output data-sent>{sent()}</output>
+          </section>
+          <Show when={diagnostic()}>
+            <p role="alert" data-bookkeeping>
+              Project visit could not be recorded: {diagnostic()}
+            </p>
+          </Show>
+          <SessionProvider
+            ports={{
+              supports: (capability) => capability === "prompt",
+              sessionID: () => "probe",
+              directory: () => Promise.resolve("/project"),
+              entry: () => undefined,
+              permissions: () => [],
+              questions: () => [],
+              prefs: () => DEFAULT_PREFS,
+              dirty: () => {},
+              act: (action) => inbox.act("/project", action),
+              submit,
+              history: () => Promise.resolve([]),
+              attachments: (parts) => Promise.resolve(parts),
+              rpc: () => Promise.reject(new Error("Unexpected RPC")),
+            }}
+          >
+            <Prompt
+              value={draft()}
+              onChange={(change) => {
+                setDraft(change);
+                return draft();
+              }}
+              connected
+              onSubmit={() =>
+                submit(() => {
+                  setSent((value) => value + 1);
+                  return Promise.resolve();
+                })}
+              onAbort={() => Promise.resolve()}
+            />
+          </SessionProvider>
+        </main>
+      </UiProvider>
     </CommandProvider>
   );
 }

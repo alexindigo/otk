@@ -71,7 +71,7 @@ const contentEvents = new Set([
 ]);
 export class Opencode1Adapter implements Harness {
   readonly core: HarnessCore;
-  readonly capabilities: Readonly<Required<Capabilities>>;
+  readonly capabilities: Readonly<Capabilities>;
   readonly kind = "opencode1";
   version = "unknown";
   readonly client: Client;
@@ -237,9 +237,7 @@ export class Opencode1Adapter implements Harness {
       "revert",
       revert(this.client, directory, (id) => this.core.getSession(id)),
     );
-    this.capabilities = registry.capabilities as Readonly<
-      Required<Capabilities>
-    >;
+    this.capabilities = registry.capabilities;
   }
   #start(sink: HarnessSink): Promise<void> {
     if (this.#run || this.#stopping) {

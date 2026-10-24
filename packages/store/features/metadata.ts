@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { Changes } from "../changes.ts";
 /** Common metadata validation and notification mechanics, independent of policy. */
 export function key(value: string): string {
   if (
@@ -15,13 +16,4 @@ export function ordered(values: string[]): string[] {
   }
   return values.map(key);
 }
-export class MetadataChanges {
-  #listeners = new Set<() => void>();
-  listen(listener: () => void): () => void {
-    this.#listeners.add(listener);
-    return () => this.#listeners.delete(listener);
-  }
-  protected changed(): void {
-    for (const listener of this.#listeners) listener();
-  }
-}
+export class MetadataChanges extends Changes<void> {}

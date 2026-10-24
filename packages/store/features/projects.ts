@@ -19,7 +19,7 @@ export interface ProjectRecord {
 }
 export class Projects extends MetadataChanges {
   constructor(readonly db: OtkDb, readonly now: () => number = Date.now) {
-    super();
+    super(db);
   }
   #record(r: Record<string, unknown>): ProjectRecord {
     return {

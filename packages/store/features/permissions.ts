@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { OtkDb } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
+import { Changes } from "../changes.ts";
 import { key } from "./metadata.ts";
 
 export const permissionMigrations: FeatureMigrations = {
@@ -28,15 +29,9 @@ export type PermissionChange = { kind: "policy" } | {
   kind: "activity";
   sessions: string[];
 };
-export class PermissionStore {
-  #listeners = new Set<(change: PermissionChange) => void>();
-  constructor(readonly db: OtkDb, readonly now: () => number = Date.now) {}
-  listen(listener: (change: PermissionChange) => void): () => void {
-    this.#listeners.add(listener);
-    return () => this.#listeners.delete(listener);
-  }
-  #changed(change: PermissionChange): void {
-    for (const listener of this.#listeners) listener(structuredClone(change));
+export class PermissionStore extends Changes<PermissionChange> {
+  constructor(readonly db: OtkDb, readonly now: () => number = Date.now) {
+    super(db);
   }
   enabled(): string[] {
     return this.db.connection.prepare(
@@ -53,7 +48,7 @@ export class PermissionStore {
         ? "INSERT OR IGNORE INTO permission_auto VALUES(?)"
         : "DELETE FROM permission_auto WHERE session=?",
     ).run(session);
-    if (result.changes) this.#changed({ kind: "policy" });
+    if (result.changes) this.changed({ kind: "policy" });
   }
   confirmed(session: string, requestID: string): boolean {
     return !!this.db.connection.prepare(
@@ -85,7 +80,7 @@ export class PermissionStore {
       for (const session of family) link.run(session, id);
       return id;
     });
-    this.#changed({ kind: "activity", sessions: family });
+    this.changed({ kind: "activity", sessions: family });
     return id;
   }
   finish(
@@ -103,7 +98,7 @@ export class PermissionStore {
       const sessions = this.db.connection.prepare(
         "SELECT session FROM permission_activity_family WHERE activity=? ORDER BY session",
       ).all(id).map((row) => String(row.session));
-      this.#changed({ kind: "activity", sessions });
+      this.changed({ kind: "activity", sessions });
     }
   }
   list(

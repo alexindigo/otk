@@ -8,6 +8,7 @@ import type { Info, RawPart, Session } from "../types.ts";
 import { Messages } from "../messages.ts";
 import { Client } from "../client.ts";
 import { BootstrapDb } from "../db.ts";
+import { requireCapability } from "@otk/harness";
 
 for (const mode of ["SQL", "API"] as const) {
   test(`large reverted sessions and task cards use bounded ${mode} reads without changing their metadata`, async () => {
@@ -200,7 +201,9 @@ for (const mode of ["SQL", "API"] as const) {
       );
       // Directory resolution for native @-agent completion must not fetch transcript content.
       const before = reads.length;
-      await adapter.capabilities.agents.listAgents("parent");
+      await requireCapability(adapter.capabilities, "agents").listAgents(
+        "parent",
+      );
       assertEquals(reads.slice(before).map((url) => url.pathname), [
         "/session/parent",
         "/agent",
