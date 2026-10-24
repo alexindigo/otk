@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import "./Form.css" with { type: "text" };
 import { createSignal, type Element, Show } from "solid-js";
 import { ownedAction } from "../keyboard/context.tsx";
@@ -25,7 +26,7 @@ export default function Form(
     try {
       await send(data);
     } catch (error) {
-      setError((error as Error).message);
+      setError(errorMessage(error));
     } finally {
       setPending(false);
     }

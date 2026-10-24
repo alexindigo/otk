@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import { type ContentOp, isAttentionOp, type Preferences } from "@otk/protocol";
 import type { ClientFrame, HarnessState, ServerFrame } from "@otk/protocol";
 import { capabilityNames, checkClientFrameSize } from "@otk/protocol";
@@ -114,7 +115,7 @@ export class Connections {
         try {
           checkClientFrameSize(event.data);
         } catch (error) {
-          throw new HarnessError("frame", (error as Error).message);
+          throw new HarnessError("frame", errorMessage(error));
         }
         if (!connection.welcomed) {
           if (frame.t !== "hello" || frame.protocol !== PROTOCOL_VERSION) {
@@ -175,7 +176,7 @@ export class Connections {
               ok: false,
               error: {
                 code: error instanceof HarnessError ? error.code : "harness",
-                message: (error as Error).message,
+                message: errorMessage(error),
               },
             });
           }
@@ -185,7 +186,7 @@ export class Connections {
       } catch (error) {
         const detail = {
           code: error instanceof HarnessError ? error.code : "frame",
-          message: (error as Error).message,
+          message: errorMessage(error),
         };
         this.#send(
           connection,

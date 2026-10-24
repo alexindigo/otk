@@ -11,6 +11,7 @@ import {
 export class OtkDb {
   readonly connection: DatabaseSync;
   constructor(statePath: string, migrations: readonly FeatureMigrations[]) {
+    if (statePath === "") throw new TypeError("State path must not be empty");
     validateMigrations(migrations);
     Deno.mkdirSync(statePath, { recursive: true, mode: 0o700 });
     const db = this.connection = new DatabaseSync(join(statePath, "otk.db"));

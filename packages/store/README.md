@@ -36,13 +36,16 @@ try {
 ```
 
 `OtkDb(statePath, migrations)` creates a private state directory and opens
-`otk.db` with WAL and a 5000 ms busy timeout. The caller composes feature
-contributions as `FeatureMigrations` objects: a stable `feature` name plus its
-own `migrations` list of `{ version, sql }`. Names are 1–120 ASCII identifier
-characters (letters, digits, underscore, dot, colon, hyphen), starting with a
-letter or digit. Versions are contiguous within each feature, starting at 1;
-feature order is unrestricted. The runner never imports features. A
-frecency-only consumer supplies `[frecencyMigrations]`, without prefs.
+`otk.db` with WAL and a 5000 ms busy timeout. An empty state path is rejected
+before filesystem access; configuration must resolve its default sentinel before
+constructing storage. Explicit relative directories remain supported. The caller
+composes feature contributions as `FeatureMigrations` objects: a stable
+`feature` name plus its own `migrations` list of `{ version, sql }`. Names are
+1–120 ASCII identifier characters (letters, digits, underscore, dot, colon,
+hyphen), starting with a letter or digit. Versions are contiguous within each
+feature, starting at 1; feature order is unrestricted. The runner never imports
+features. A frecency-only consumer supplies `[frecencyMigrations]`, without
+prefs.
 
 The `otk_migrations` table records each applied `(feature, version)`. Each
 feature's pending upgrades and their records commit together in an immediate

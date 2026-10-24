@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import {
   applyColorReplacements,
   createCssVariablesTheme,
@@ -156,7 +157,7 @@ function enqueue(job: Job) {
         id: request.id,
         block: request.block,
         generation: request.generation,
-        error: (error as Error).message,
+        error: errorMessage(error),
       });
     })
   );
@@ -494,7 +495,7 @@ function receive(request: HighlightRequest) {
           type: "error",
           id: request.id,
           block: request.block,
-          error: (error as Error).message,
+          error: errorMessage(error),
         });
       }
     });
@@ -527,7 +528,7 @@ function receive(request: HighlightRequest) {
       id: request.id,
       block: request.block,
       generation: request.generation,
-      error: (error as Error).message,
+      error: errorMessage(error),
     });
   });
 }

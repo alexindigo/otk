@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import "./ProjectSessions.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -56,7 +57,7 @@ export default function ProjectSessions(props: {
   );
   const create = ownedAction("project.session.new", props.onCreate);
   const run = (promise: Promise<unknown>) =>
-    void promise.catch((e) => setError((e as Error).message));
+    void promise.catch((e) => setError(errorMessage(e)));
   const groups = createMemo(() => {
     const project = props.project;
     return project

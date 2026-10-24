@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import {
   type ServerFrame,
   type SessionUsage,
@@ -103,7 +104,7 @@ export function createSessionUsage(
         publish(key, ledger.snapshot());
       } catch (error) {
         if (resources.get(key) === owner && !abort.signal.aborted) {
-          publish(key, owner.ledger?.snapshot(), (error as Error).message);
+          publish(key, owner.ledger?.snapshot(), errorMessage(error));
         }
       } finally {
         if (owner.controller === abort) {

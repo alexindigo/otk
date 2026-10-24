@@ -4,6 +4,7 @@ import { CommandHub } from "@otk/client";
 import {
   booleanPreference,
   createPreferences,
+  DEFAULT_PREFS,
   type PreferenceKey,
   type Preferences,
   type ShellLayout,
@@ -13,8 +14,10 @@ import {
   createUiRegistries,
   DisplayMenu,
   emptyDraft,
+  Login,
   NotificationSettings,
   paintVisualPreferences,
+  Palette,
   ProjectInbox,
   Prompt,
   QuestionDock,
@@ -32,6 +35,70 @@ declare module "@otk/protocol" {
     "consumer.appearance": boolean;
     "consumer.notification": boolean;
   }
+}
+
+export function ErrorBoundaries(props: { onTheme(id: string): void }): Element {
+  const [kind, setKind] = createSignal("null");
+  const reject = () =>
+    Promise.reject(kind() === "null" ? null : "Injected failure");
+  const commands = new CommandHub();
+  commands.register({
+    id: "consumer.failure",
+    title: "Run failing action",
+    category: "Consumer",
+    run: reject,
+  });
+  return (
+    <CommandProvider commands={commands}>
+      <main
+        style={{
+          padding: "24px",
+          "max-width": "736px",
+          margin: "0 auto",
+          display: "grid",
+          gap: "24px",
+        }}
+      >
+        <header>
+          <h1>Consumer failure feedback</h1>
+          <button type="button" data-null onClick={() => setKind("null")}>
+            Null rejection
+          </button>
+          <button type="button" data-string onClick={() => setKind("string")}>
+            String rejection
+          </button>
+          <button
+            type="button"
+            data-dark
+            onClick={() => props.onTheme("otk-dark")}
+          >
+            Dark
+          </button>
+          <button
+            type="button"
+            data-light
+            onClick={() => props.onTheme("otk-light")}
+          >
+            Linen
+          </button>
+        </header>
+        <section data-login>
+          <Login label="Independent consumer" onLogin={reject} />
+        </section>
+        <section data-preferences>
+          <VisualSettings prefs={DEFAULT_PREFS} ready onSet={reject} />
+        </section>
+        <section data-palette>
+          <h2>Commands</h2>
+          <Palette
+            onClose={() => {
+              throw new Error("A failed command must not close");
+            }}
+          />
+        </section>
+      </main>
+    </CommandProvider>
+  );
 }
 
 /** An alternate application supplies its own registry, authoritative state and save ports. */

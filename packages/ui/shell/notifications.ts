@@ -11,7 +11,12 @@ import {
   type Selection,
   type SidecarConnection,
 } from "@otk/client";
-import type { IndexEntry, Preferences, ServerFrame } from "@otk/protocol";
+import {
+  errorMessage,
+  type IndexEntry,
+  type Preferences,
+  type ServerFrame,
+} from "@otk/protocol";
 import { registerBadgeChannel } from "../features/notify/badge.ts";
 import { registerOsChannel } from "../features/notify/os.ts";
 import { registerSoundChannel } from "../features/notify/sound.ts";
@@ -51,7 +56,7 @@ export function applicationNotifications(input: {
   const hub = new NotificationHub(
     notificationPolicy(context),
     (id, args) => input.commands.run(id, args),
-    (error) => message("error", (error as Error).message),
+    (error) => message("error", errorMessage(error)),
   );
   const toast = registerToastChannel(hub),
     os = registerOsChannel(hub),
@@ -122,7 +127,7 @@ export function applicationNotifications(input: {
       }, (error) => {
         if (candidates.get(incoming.id) !== incoming) return;
         publish(incoming);
-        message("error", (error as Error).message);
+        message("error", errorMessage(error));
       });
     },
     retract,
@@ -153,7 +158,7 @@ export function applicationNotifications(input: {
     os,
     update,
     info: (text: string) => message("info", text),
-    error: (error: unknown) => message("error", (error as Error).message),
+    error: (error: unknown) => message("error", errorMessage(error)),
     receive(sidecar: string, frame: ServerFrame) {
       observed.add(sidecar);
       if (frame.t === "welcome") {

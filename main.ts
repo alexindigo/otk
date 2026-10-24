@@ -39,7 +39,7 @@ if (import.meta.main) {
     Deno.addSignalListener("SIGTERM", stop);
     Deno.addSignalListener("SIGINT", stop);
   } catch (error) {
-    console.error((error as Error).message);
+    console.error(error);
     Deno.exit(1);
   }
 }

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import "./RightPanel.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -37,8 +38,7 @@ export default function RightPanel(props: {
       await props.onLayout({ rightWidth });
       setError("");
     },
-    fail: (error) =>
-      setError(error instanceof Error ? error.message : String(error)),
+    fail: (error) => setError(errorMessage(error)),
   });
   const width = resize.width;
   const save = async (patch: Partial<Preferences["shellLayout"]>) => {
@@ -46,7 +46,7 @@ export default function RightPanel(props: {
       await props.onLayout(patch);
       setError("");
     } catch (error) {
-      setError((error as Error).message);
+      setError(errorMessage(error));
     }
   };
   function Views(input: { rail: boolean }) {

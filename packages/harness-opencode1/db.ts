@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import { DatabaseSync } from "node:sqlite";
 import type { NativeMessage } from "./messages.ts";
 import type { Info, RawPart } from "./types.ts";
@@ -27,7 +28,7 @@ export class BootstrapDb {
     } catch (e) {
       this.close();
       console.warn(
-        `harness db: using API fallback: ${(e as Error).message}`,
+        `harness db: using API fallback: ${errorMessage(e)}`,
       );
     }
   }
@@ -46,7 +47,7 @@ export class BootstrapDb {
       return rows.map((r) => String(r.directory));
     } catch (error) {
       console.warn(
-        `harness db: using API fallback: ${(error as Error).message}`,
+        `harness db: using API fallback: ${errorMessage(error)}`,
       );
       return;
     }

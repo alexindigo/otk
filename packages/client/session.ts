@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import type { ContentOp, ContentSession, Message, Part } from "@otk/protocol";
 import { isAttentionOp } from "@otk/protocol";
@@ -190,7 +191,7 @@ export function createSession(
       buffer = [];
       setState((draft) => {
         draft.loading = false;
-        draft.error = (error as Error).message;
+        draft.error = errorMessage(error);
       });
     }
   };
@@ -337,7 +338,7 @@ export function createSession(
         if (current(id, request)) {
           setState((draft) => {
             draft.paging = false;
-            draft.error = (error as Error).message;
+            draft.error = errorMessage(error);
           });
         }
       }

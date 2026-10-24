@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import "./QuestionDock.css" with { type: "text" };
 import ContentTextarea from "./ContentTextarea.tsx";
 import Takeover from "./surface/Takeover.tsx";
@@ -89,7 +90,7 @@ function Request(
       forgetQuestionForm(props.request.id);
       if (alive) props.onDirty(false);
     } catch (failure) {
-      if (alive) setError((failure as Error).message);
+      if (alive) setError(errorMessage(failure));
     } finally {
       if (alive) setPending(false);
     }

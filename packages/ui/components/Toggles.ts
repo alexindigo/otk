@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import { createStore } from "solid-js";
 import {
   DEFAULT_PREFS,
@@ -42,7 +43,7 @@ export function createToggles(
         await save(key, value);
       } catch (error) {
         setState((draft) => {
-          draft.error = (error as Error).message;
+          draft.error = errorMessage(error);
         });
       }
     },

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import {
   createEffect,
   createSignal,
@@ -77,7 +78,7 @@ export default function CommandMenu(props: {
       if (current === generation) menu.close(() => {});
     } catch (cause) {
       if (current !== generation) return;
-      const message = cause instanceof Error ? cause.message : "";
+      const message = errorMessage(cause);
       const text = !message ||
           /(?:Unknown command|Command unavailable|Command owner inactive)/.test(
             message,

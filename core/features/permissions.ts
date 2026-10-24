@@ -17,13 +17,14 @@ export function register(
   });
   rpc.register("permission.reply", {
     params(p): PermissionReply {
-      if (!["once", "always", "reject"].includes(String(p.reply))) {
+      const reply = p.reply;
+      if (reply !== "once" && reply !== "always" && reply !== "reject") {
         throw new HarnessError("params", "Invalid permission reply");
       }
       return {
         sessionID: text(p, "sessionID")!,
         requestID: text(p, "requestID")!,
-        reply: p.reply as "once" | "always" | "reject",
+        reply,
         message: text(p, "message", true),
       };
     },

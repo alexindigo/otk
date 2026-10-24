@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 // Service-only port of globnotes-layered-config/server/config/loader.ts.
 import { parse } from "@std/toml";
 import { join } from "@std/path";
@@ -106,7 +107,7 @@ function read(file: string, required: boolean, errors: string[]): Tree | null {
     return parse(Deno.readTextFileSync(file)) as Tree;
   } catch (e) {
     if (e instanceof Deno.errors.NotFound && !required) return null;
-    errors.push(`${file}: ${(e as Error).message}`);
+    errors.push(`${file}: ${errorMessage(e)}`);
     return null;
   }
 }

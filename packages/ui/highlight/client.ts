@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { normalizeError } from "@otk/protocol";
 import type {
   HighlightChunk,
   HighlightCompletion,
@@ -291,7 +292,7 @@ export function highlightBlock(lang?: string, source?: string) {
               finish(capture, { plain: value.plain });
             }
           } catch (error) {
-            finish(capture, undefined, error as Error);
+            finish(capture, undefined, normalizeError(error));
           }
         },
       });
@@ -304,7 +305,9 @@ export function highlightBlock(lang?: string, source?: string) {
           range.start >= 0 && range.end <= input.text.length
         ),
       });
-    })().catch((error) => finish(capture, undefined, error));
+    })().catch((error: unknown) =>
+      finish(capture, undefined, normalizeError(error))
+    );
   };
   return {
     prepare,

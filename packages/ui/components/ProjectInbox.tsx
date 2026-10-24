@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
 import { selection } from "./selection.ts";
@@ -88,8 +89,7 @@ export default function ProjectInbox(props: {
       await props.onLayout({ leftWidth });
       setError("");
     },
-    fail: (error) =>
-      setError(error instanceof Error ? error.message : String(error)),
+    fail: (error) => setError(errorMessage(error)),
   });
   const width = resize.width;
   const open = ownedAction("project.open", props.onOpen);
@@ -218,7 +218,7 @@ export default function ProjectInbox(props: {
             aria-label="Add project"
             title="Add project"
             onClick={() =>
-              void add().catch((error) => setError((error as Error).message))}
+              void add().catch((error) => setError(errorMessage(error)))}
           >
             <PlusIcon />
           </button>
@@ -322,9 +322,7 @@ export default function ProjectInbox(props: {
           class="otk-inactive-toggle"
           aria-expanded={inactiveOpen() ? "true" : "false"}
           onClick={() =>
-            void inactive().catch((error) =>
-              setError((error as Error).message)
-            )}
+            void inactive().catch((error) => setError(errorMessage(error)))}
         >
           <ChevronIcon class="otk-inactive-chevron" />
           <span>Inactive</span>

@@ -1,4 +1,30 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+/** Nonempty feedback for an arbitrary thrown value. Failure reporting must not
+ * itself throw, including for circular objects or hostile conversion hooks. */
+export function errorMessage(value: unknown): string {
+  try {
+    if (typeof value === "string") return value || "Unknown error";
+    if (value === null || value === undefined) return "Unknown error";
+    if (typeof value === "object" && "message" in value) {
+      const message = value.message;
+      if (typeof message === "string" && message) return message;
+    }
+    const encoded = JSON.stringify(value);
+    if (encoded && encoded !== "{}") return encoded;
+    const text = String(value);
+    return text && text !== "[object Object]" ? text : "Unknown error";
+  } catch {
+    return "Unknown error";
+  }
+}
+
+/** Preserve Error identity, stack and feature-owned codes at Error-only ports. */
+export function normalizeError(value: unknown): Error {
+  return value instanceof Error
+    ? value
+    : new Error(errorMessage(value), { cause: value });
+}
+
 export interface ErrorObservation {
   id: string;
   source: "http" | "event";

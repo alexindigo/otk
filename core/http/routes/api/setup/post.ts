@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import { type Handler, HttpError } from "@pathfinder/pathfinder";
 import "../../../app.ts";
 import { object, text } from "../../../../ws/params.ts";
@@ -15,9 +16,10 @@ const handler: Handler = async (request, { app }) => {
     });
     return { ok: true };
   } catch (e) {
+    const message = errorMessage(e);
     throw new HttpError(
-      (e as Error).message === "already_configured" ? 409 : 400,
-      { code: "setup", message: (e as Error).message },
+      message === "already_configured" ? 409 : 400,
+      { code: "setup", message },
     );
   }
 };

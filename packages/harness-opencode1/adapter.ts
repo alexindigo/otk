@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage, normalizeError } from "@otk/protocol";
 import type { ContentOp, RevertInfo, Todo } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
 import { harnessDb, type Opencode1Config } from "./config.ts";
@@ -367,8 +368,8 @@ export class Opencode1Adapter implements Harness {
           error instanceof HttpFailure
             ? { ...error.detail, status: error.status }
             : {
-              message: (error as Error).message || "Harness error",
-              kind: (error as Error).name,
+              message: errorMessage(error),
+              kind: normalizeError(error).name,
             },
         );
       }
@@ -480,7 +481,7 @@ export class Opencode1Adapter implements Harness {
         });
       } catch (error) {
         if (this.#current(controller)) {
-          console.warn(`harness stream: ${(error as Error).message}`);
+          console.warn(`harness stream: ${errorMessage(error)}`);
         }
       } finally {
         watchdog.stop();

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import "./KeysHelp.css" with { type: "text" };
 import { createSignal, For, onSettled, Show } from "solid-js";
 import { comboFromEvent, type Keymap } from "../keyboard/keys.ts";
@@ -34,7 +35,7 @@ export default function KeysHelp(props: {
       await props.onSave(value);
       if (active) setEditing("");
     } catch (error) {
-      if (active) setError((error as Error).message);
+      if (active) setError(errorMessage(error));
     } finally {
       if (active) setPending(false);
     }

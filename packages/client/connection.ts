@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import type { CapabilityName, ClientFrame, ServerFrame } from "@otk/protocol";
 import { PROTOCOL_VERSION, welcomeCapabilities } from "@otk/protocol";
 import { apiBase, type AuthStatus, request } from "./auth.ts";
@@ -124,7 +125,7 @@ export class SidecarConnection {
       };
     } catch (error) {
       if (!this.#stopped && !controller.signal.aborted) {
-        this.#schedule((error as Error).message);
+        this.#schedule(errorMessage(error));
       }
     }
   }

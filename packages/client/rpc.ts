@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { normalizeError } from "@otk/protocol";
 import type { ClientFrame, ServerFrame } from "@otk/protocol";
 import { checkClientFrameSize } from "@otk/protocol";
 import type { RpcMethod, RpcParams, RpcResult } from "@otk/protocol";
@@ -51,7 +52,7 @@ export class Rpc {
         checkClientFrameSize(JSON.stringify(frame));
         this.send(frame);
       } catch (error) {
-        fail(error as Error);
+        fail(normalizeError(error));
       }
     });
   }

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 
 export interface CatalogState<T> {
@@ -73,7 +74,7 @@ export function createCatalogResource<T>(options: {
       connect();
       if (alive && at === generation) {
         update((state) => {
-          state.error = (error as Error).message;
+          state.error = errorMessage(error);
         });
       }
     }).finally(() => {

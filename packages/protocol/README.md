@@ -4,6 +4,14 @@ Harness-neutral OTK wire contracts and shared helpers, with no runtime
 dependencies. This package does not connect to a harness or sidecar, parse
 markdown, store data, or render a UI.
 
+`errorMessage(unknown)` supplies nonempty feedback without assuming a thrown
+value is an Error; strings and string-valued messages are preserved, other
+values are encoded when possible, and unrepresentable values use
+`Unknown error`. `normalizeError(unknown)` preserves actual Error identity
+(including codes and stack), wrapping other values with their original value as
+cause for Error-only ports. Transport and presentation failure boundaries share
+these helpers.
+
 ## Public API
 
 Import only `@otk/protocol`; `mod.ts` is the single public entry point.

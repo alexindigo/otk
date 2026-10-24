@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import "./PermissionDock.css" with { type: "text" };
 import Takeover from "./surface/Takeover.tsx";
 import type { DockRegistry } from "../registries/renderers.ts";
@@ -124,7 +125,7 @@ function RequestDock(
       await props.onReply(input);
       if (active) props.onDirty(false);
     } catch (error) {
-      if (active) setError((error as Error).message);
+      if (active) setError(errorMessage(error));
     } finally {
       if (active) setPending(false);
     }

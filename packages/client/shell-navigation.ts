@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import type { TaskRecord } from "@otk/protocol";
 import type { InputGuard } from "./input-guard.ts";
 import { sessionKey } from "./index.ts";
@@ -74,7 +75,7 @@ export function createShellNavigation(o: {
   let revision = 0, viewed = "", viewedFinish = 0;
   const fail = (error: unknown): void =>
     store.update((draft) => {
-      draft.error = (error as Error).message;
+      draft.error = errorMessage(error);
     });
   const clearError = (): void =>
     store.update((draft) => {

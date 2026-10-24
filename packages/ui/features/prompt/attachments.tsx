@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import { onSettled } from "solid-js";
 import type { PromptRegistry } from "../../registries/prompt.ts";
 import {
@@ -140,7 +141,7 @@ export function registerAttachmentsPrompt(prompt: PromptRegistry): void {
               const part = await upload(file);
               patch({ part, pending: false });
             } catch (error) {
-              patch({ pending: false, error: (error as Error).message });
+              patch({ pending: false, error: errorMessage(error) });
             }
           }
         },

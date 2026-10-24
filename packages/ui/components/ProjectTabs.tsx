@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import "./ProjectTabs.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -75,7 +76,7 @@ export default function ProjectTabs(props: {
     );
   const entry = (id: string) => props.entries.find((e) => e.id === id);
   const fail = (error: unknown) => {
-    setError((error as Error).message);
+    setError(errorMessage(error));
   };
   const run = (action: Promise<unknown>) => {
     void action.catch(fail);

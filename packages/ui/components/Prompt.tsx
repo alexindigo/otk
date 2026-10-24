@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import "./Prompt.css" with { type: "text" };
 import ContentTextarea from "./ContentTextarea.tsx";
 import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
@@ -82,7 +83,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       await Promise.all(features.map((feature) => feature.ready?.()));
     },
     fail: (error) => {
-      if (active) setError((error as Error).message);
+      if (active) setError(errorMessage(error));
     },
     acceptFiles: async (files) => {
       for (const feature of features) await feature.drop?.(files);

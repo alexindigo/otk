@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { errorMessage } from "@otk/protocol";
 import { DatabaseSync } from "node:sqlite";
 import { fromFileUrl } from "@std/path";
 import { type HistoryEntry, sameHistory } from "@otk/protocol";
@@ -186,7 +187,7 @@ export class History implements HistoryCapability {
           if (!this.#malformed.has(id)) {
             console.warn(
               `history db: skipped malformed message ${id}: ${
-                (error as Error).message
+                errorMessage(error)
               }`,
             );
             this.#malformed.add(id);
@@ -197,7 +198,7 @@ export class History implements HistoryCapability {
       return result;
     } catch (error) {
       this.close();
-      const message = (error as Error).message;
+      const message = errorMessage(error);
       if (message !== this.#error) {
         console.warn(`history db: degraded (empty history): ${message}`);
       }
