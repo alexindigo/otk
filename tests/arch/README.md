@@ -204,6 +204,15 @@ collapse states and restored width after reload. Integration tests cover
 separate connections, authoritative broadcasts, invalid-patch atomicity and
 restart.
 
+The layout scanner compares lexical bindings for the injected registry/store,
+the saved getter and the handler's patch; nested or conditional-only returns
+cannot substitute for the handler's direct return. Shared lexical provenance
+declares rest shadows, treats defaults as uncertain and resolves computed
+pattern keys after mutation indexing. Initializers cannot authorize an earlier
+lexical use. These are conservative source-local checks, not interprocedural
+execution or general control-flow proofs; diagnostic names do not establish
+identity.
+
 `deno task test:arch` checks the exact seven workspace libraries against the
 kit-repackaging dependency table. It also checks root application/core/web/test
 consumers for private paths into extracted packages and retired protocol,

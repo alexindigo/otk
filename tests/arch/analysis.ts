@@ -4,7 +4,7 @@ import { literal, nodes, parse, property, type t } from "./syntax.ts";
 type Binding = {
   scope: t.Node;
   value?: t.Node;
-  suffix?: string;
+  suffix?: (string | t.Node)[];
   imported?: string;
   module?: string;
   exportName?: string;
@@ -150,6 +150,7 @@ export class Source {
     } else if (node.type === "ArrayPattern") {
       for (const item of node.elements) if (item) this.markWritten(item);
     } else if (node.type === "AssignmentPattern") this.markWritten(node.left);
+    else if (node.type === "RestElement") this.markWritten(node.argument);
   }
   scope(node: t.Node): t.Node {
     let current = this.parent.get(node);
@@ -160,7 +161,7 @@ export class Source {
     pattern: t.Node,
     scope: t.Node,
     value?: t.Node,
-    suffix?: string,
+    suffix?: (string | t.Node)[],
     imported?: string,
     module?: string,
     exportName?: string,
@@ -170,17 +171,24 @@ export class Source {
       entries.push({ scope, value, suffix, imported, module, exportName });
       this.bindings.set(pattern.name, entries);
     } else if (pattern.type === "AssignmentPattern") {
-      this.bind(pattern.left, scope, value ?? pattern.right, suffix);
+      // A default is conditional on an unknown caller/property value. Neither
+      // branch alone establishes provenance, but the binding still shadows.
+      this.bind(pattern.left, scope);
+    } else if (pattern.type === "RestElement") {
+      this.bind(pattern.argument, scope);
     } else if (pattern.type === "ObjectPattern") {
       for (const item of pattern.properties) {
         if (item.type === "ObjectProperty") {
+          // Computed keys resolve at use after all declarations and writes have
+          // been indexed; constructor order cannot grant stale-key authority.
+          const key = item.computed ? item.key : property(item.key);
           this.bind(
             item.value,
             scope,
-            value,
-            [suffix, property(item.key)].filter(Boolean).join("."),
+            key === undefined ? undefined : value,
+            key === undefined ? undefined : [...suffix ?? [], key],
           );
-        }
+        } else this.bind(item.argument, scope);
       }
     } else if (pattern.type === "ArrayPattern") {
       for (const item of pattern.elements) if (item) this.bind(item, scope);
@@ -196,6 +204,23 @@ export class Source {
       current = this.parent.get(current);
     }
   }
+  private initialized(binding: Binding, at: t.Node): boolean {
+    // This lexical model does not infer call order. A later initializer cannot
+    // authorize an earlier use, including a use in its own initializer.
+    return !binding.value ||
+      (binding.value.end !== null && binding.value.end !== undefined &&
+        at.start !== null && at.start !== undefined &&
+        binding.value.end <= at.start);
+  }
+  private fields(binding: Binding): string[] | undefined {
+    const fields =
+      binding.suffix?.map((key) =>
+        typeof key === "string" ? key : this.string(key)
+      ) ?? [];
+    return fields.every((field): field is string => field !== undefined)
+      ? fields
+      : undefined;
+  }
   value(
     node: t.Node | null | undefined,
     seen = new Set<t.Node>(),
@@ -204,7 +229,10 @@ export class Source {
     seen.add(node);
     if (node.type === "Identifier") {
       const binding = this.binding(node.name, node);
-      if (binding?.value && !binding.suffix && !binding.written) {
+      if (
+        binding?.value && !binding.suffix?.length && !binding.written &&
+        this.initialized(binding, node)
+      ) {
         return this.value(binding.value, seen);
       }
     }
@@ -227,11 +255,12 @@ export class Source {
     if (node.type === "Identifier" || node.type === "JSXIdentifier") {
       const binding = this.binding(node.name, node);
       if (binding?.imported) return binding.imported;
-      if (binding?.value && !binding.written) {
+      if (
+        binding?.value && !binding.written && this.initialized(binding, node)
+      ) {
         const base = this.name(binding.value, seen);
-        return base
-          ? [base, binding.suffix].filter(Boolean).join(".")
-          : node.name;
+        const fields = this.fields(binding);
+        return base && fields ? [base, ...fields].join(".") : node.name;
       }
       return node.name;
     }
@@ -264,14 +293,18 @@ export class Source {
     seen.add(node);
     if (node.type === "Identifier" || node.type === "JSXIdentifier") {
       const binding = this.binding(node.name, node);
-      if (!binding || binding.written) return;
+      if (!binding || binding.written || !this.initialized(binding, node)) {
+        return;
+      }
+      const fields = this.fields(binding);
+      if (!fields) return;
       const base = binding.value && this.access(binding.value, seen);
       return base
         ? {
           binding: base.binding,
-          fields: [...base.fields, ...binding.suffix?.split(".") ?? []],
+          fields: [...base.fields, ...fields],
         }
-        : { binding, fields: binding.suffix?.split(".") ?? [] };
+        : { binding, fields };
     }
     if (
       node.type === "MemberExpression" ||

@@ -40,16 +40,34 @@ export function layoutOwnerErrors(source: string): string[] {
   ) return error;
   const patch = handler.params[1];
   const outputs = handler.body.type === "BlockStatement"
-    ? [...nodes(handler.body)].flatMap((node) =>
-      node.type === "ReturnStatement" && node.argument ? [node.argument] : []
+    ? handler.body.body.flatMap((node) =>
+      node.type === "ReturnStatement" && node.argument && parsed.live(node)
+        ? [node.argument]
+        : []
     )
     : [handler.body];
   if (outputs.length !== 1) return error;
   const call = parsed.value(outputs[0]);
   if (
     call?.type !== "CallExpression" ||
-    !parsed.name(call.callee)?.endsWith(".set") ||
     parsed.string(call.arguments[0]) !== "shellLayout"
+  ) return error;
+  const saved = parsed.access(call.callee);
+  const registration = parsed.access(registrations[0].callee);
+  const owner = parsed.function(registrations[0]);
+  const parameters = owner && "params" in owner
+    ? owner.params.map((param) => parsed.access(param))
+    : [];
+  const injected = (access: ReturnType<Source["access"]>) =>
+    access &&
+    parameters.some((param) =>
+      param && !param.fields.length && param.binding === access.binding
+    );
+  if (
+    !saved || saved.fields.length !== 1 || saved.fields[0] !== "set" ||
+    !registration || registration.fields.length !== 1 ||
+    registration.fields[0] !== "register" || !injected(saved) ||
+    !injected(registration) || saved.binding === registration.binding
   ) return error;
   const value = parsed.value(call.arguments[1]);
   if (
@@ -60,9 +78,23 @@ export function layoutOwnerErrors(source: string): string[] {
   if (current.type !== "SpreadElement" || intent.type !== "SpreadElement") {
     return error;
   }
-  return parsed.name(current.argument) ===
-        parsed.name(call.callee)?.replace(/\.set$/, ".get.shellLayout") &&
-      parsed.name(intent.argument) === (patch && parsed.name(patch))
+  const latest = parsed.value(current.argument);
+  if (
+    latest?.type !== "MemberExpression" ||
+    (latest.computed
+        ? parsed.string(latest.property)
+        : property(latest.property)) !==
+      "shellLayout"
+  ) return error;
+  const read = parsed.value(latest.object);
+  if (read?.type !== "CallExpression" || read.arguments.length) return error;
+  const getter = parsed.access(read.callee);
+  const fields = parsed.access(intent.argument);
+  const input = parsed.access(patch);
+  return getter?.binding === saved.binding && getter.fields.length === 1 &&
+      getter.fields[0] === "get" && fields && input &&
+      !fields.fields.length && !input.fields.length &&
+      fields.binding === input.binding
     ? []
     : error;
 }
@@ -379,3 +411,31 @@ Deno.test("A12 layout contract accepts renamed parameters, const aliases and com
     [],
   );
 });
+
+for (
+  const [name, handler] of [
+    [
+      "uninvoked nested return",
+      '(_, patch) => { function unused() { return prefs.set("shellLayout", { ...prefs.get().shellLayout, ...patch }); } }',
+    ],
+    [
+      "handler-local store impostor",
+      '(_, patch) => { const prefs = other; return prefs.set("shellLayout", { ...prefs.get().shellLayout, ...patch }); }',
+    ],
+    [
+      "conditional-only return",
+      '(_, patch) => { if (flag) return prefs.set("shellLayout", { ...prefs.get().shellLayout, ...patch }); }',
+    ],
+  ]
+) {
+  Deno.test(`B8 layout ownership rejects ${name}`, () => {
+    assert(
+      layoutOwnerErrors(`
+      export function register(rpc, prefs) {
+        rpc.register("layout.patch", { handler: ${handler} });
+      }
+    `).length > 0,
+      `Bypass accepted: ${name}`,
+    );
+  });
+}
