@@ -95,23 +95,49 @@ Deno.test("every theme text, CTA and focus pair meets its contrast contract on e
   assert(pairs > 800, "The complete surface matrix must be exercised");
   assertEquals(failures, []);
 });
-Deno.test("fixed gel colours contrast against their own Luch dark rim, including unlit", async () => {
+Deno.test("status lamps consume semantic theme paint through the shared role aliases", async () => {
   const css = await Deno.readTextFile(
     new URL("../components/StatusLight.css", import.meta.url),
   );
+  const shared = await Deno.readTextFile(
+    new URL("../theme.css", import.meta.url),
+  );
   assert(
-    !css.includes("var(--otk-lamp-"),
-    "Lamp construction cannot depend on theme slots",
+    !/--lamp-color:\s*#/.test(css),
+    "The component must not own gel colours",
   );
-  assert(!/--lamp-color:\s*var\(/.test(css));
-  assert(!THEME_SLOTS.some((slot) => slot.startsWith("lamp-")));
-  const lamps = [...css.matchAll(/--lamp-color: (#[\da-f]{6});/g)].map((m) =>
-    m[1]
-  );
-  assertEquals(lamps, ["#8e949b", "#ff2e4d", "#ff8f2e", "#30ff85"]);
-  for (const lamp of lamps) {
-    const color = rgb(lamp), mix = lamp === "#8e949b" ? .4 : .42;
-    const rim = color.map((value) => value * mix) as Rgb;
-    assert(contrast(color, rim) >= 3, `${lamp} against its dark rim`);
+  for (const state of ["blocked", "finished", "working", "idle"]) {
+    assert(css.includes(`--lamp-color: var(--status-light-${state})`));
+    assert(
+      shared.includes(`--status-light-${state}: var(--otk-lamp-${state})`),
+    );
+  }
+});
+Deno.test("every theme's session and connection tokens meet non-text contrast on every surface, hover and selection", () => {
+  const themes = new ThemeRegistry();
+  registerOtkThemes(themes);
+  const lamps = THEME_SLOTS.filter((s) => /^(lamp-|connection-)/.test(s));
+  assertEquals(lamps.length, 8);
+  for (const theme of themes.list()) {
+    const colors = themes.resolve(theme.id, theme.mode).colors;
+    for (const token of lamps) {
+      let minimum = Infinity;
+      for (const surface of backgrounds) {
+        for (const state of ["base", "hover", "selected"] as const) {
+          const bg = state === "base"
+            ? rgb(colors[surface])
+            : over(colors[state], rgb(colors[surface]));
+          const ratio = contrast(rgb(colors[token]), bg);
+          minimum = Math.min(minimum, ratio);
+          assert(
+            ratio >= 3,
+            `${theme.id} ${token}/${surface}+${state}: ${ratio.toFixed(3)} < 3`,
+          );
+        }
+      }
+      console.info(
+        `${theme.id} ${token} ${colors[token]} minimum ${minimum.toFixed(3)}:1`,
+      );
+    }
   }
 });

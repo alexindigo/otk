@@ -30,6 +30,7 @@ Deno.test("A12 orientation accepts permanently unselected metadata but not arbit
 
 const continuousMotionOwners = new Set([
   "components/StatusLight.css",
+  "components/ActivityIndicator.css",
   "components/ResponseProgress.css",
 ]);
 

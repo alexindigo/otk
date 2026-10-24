@@ -18,6 +18,8 @@ import {
   type ShellLayout,
 } from "@otk/protocol";
 import StatusLight from "./StatusLight.tsx";
+import ConnectionLight from "./ConnectionLight.tsx";
+import { connectionLabel } from "./connection-light.ts";
 import { createResize } from "./resize.ts";
 import {
   ChevronIcon,
@@ -288,23 +290,11 @@ export default function ProjectInbox(props: {
                     type="button"
                     class="otk-server-status"
                     data-connection={s().id}
-                    aria-label={`${s().label}: ${s().status}; agent service ${s().harness}`}
-                    title={`${s().label}: ${s().status}; agent service ${s().harness}${
-                      s().error ? `; ${s().error}` : ""
-                    }`}
+                    aria-label={connectionLabel(s())}
+                    title={connectionLabel(s())}
                     onClick={() => void commands.run("settings.open")}
                   >
-                    <StatusLight
-                      small
-                      label={`${s().label}: ${s().status}; agent service ${s().harness}`}
-                      state={s().status === "connected" &&
-                          s().harness === "connected"
-                        ? "finished"
-                        : s().error || s().status === "login required" ||
-                            s().status === "setup required"
-                        ? "blocked"
-                        : "idle"}
-                    />
+                    <ConnectionLight small connection={s()} />
                     <span class="otk-server-label">{s().label}</span>
                   </button>
                   <Show when={s().error}>

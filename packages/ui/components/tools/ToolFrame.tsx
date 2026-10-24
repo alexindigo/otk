@@ -2,7 +2,7 @@
 import "./ToolFrame.css" with { type: "text" };
 import { createSignal, type Element, Show } from "solid-js";
 import type { ToolCall } from "@otk/protocol";
-import StatusLight from "../StatusLight.tsx";
+import ActivityIndicator from "../ActivityIndicator.tsx";
 import { ownedAction } from "../../keyboard/context.tsx";
 import type { ToolPresentation } from "../../registries/renderers.ts";
 import { elapsed } from "../work-log.ts";
@@ -95,7 +95,7 @@ export default function ToolFrame(
               )}
             </Show>
             <Show when={props.call.status === "running" && !props.waiting}>
-              <StatusLight state="working" small activity="spinner" />
+              <ActivityIndicator small />
               {" "}
             </Show>
             <Show when={props.waiting}>

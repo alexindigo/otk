@@ -46,6 +46,7 @@ import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
 import SharedControls, {
   ErrorBoundaries,
+  Indicators,
   InteractionFailures,
   SecondaryFailures,
 } from "./shared-controls.tsx";
@@ -450,7 +451,9 @@ function Consumer(): Element {
   );
 }
 render(
-  new URL(location.href).searchParams.has("interaction-failures")
+  new URL(location.href).searchParams.has("indicators")
+    ? () => <Indicators onTheme={(id) => theme.commit(id)} />
+    : new URL(location.href).searchParams.has("interaction-failures")
     ? () => <InteractionFailures onTheme={(id) => theme.commit(id)} />
     : new URL(location.href).searchParams.has("secondary-failures")
     ? () => <SecondaryFailures onTheme={(id) => theme.commit(id)} />

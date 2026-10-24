@@ -36,6 +36,15 @@ export {
 export * from "./shell/context.tsx";
 export { default as Sidebar } from "./components/Sidebar.tsx";
 export { default as StatusLight } from "./components/StatusLight.tsx";
+export { default as ConnectionLight } from "./components/ConnectionLight.tsx";
+export { default as ActivityIndicator } from "./components/ActivityIndicator.tsx";
+export {
+  CONNECTION_STATES,
+  type ConnectionInput,
+  connectionLabel,
+  type ConnectionLightState,
+  connectionState,
+} from "./components/connection-light.ts";
 export {
   LIGHT_STATES,
   type LightState,

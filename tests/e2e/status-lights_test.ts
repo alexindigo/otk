@@ -60,6 +60,12 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       await c.rpc("prefs.set", { key: "notify.toast", value: false });
       await b.goto(f.url);
       await openSession(b, "otk");
+      assert(
+        await b.evaluate(
+          "!!document.querySelector('.otk-server-status .otk-connection-light[data-connection-state=connected]') && !document.querySelector('.otk-server-status .otk-status-light')",
+        ),
+        "Healthy connection must use its own connected indicator, never a session attention state",
+      );
       f.update("running", { status: "busy" });
       f.update("blue-tab", { status: "busy" });
       f.update("done", { status: "busy" });
@@ -98,10 +104,59 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
             }).getBoundingClientRect();return r.width>0&&r.left>=0&&r.right<=innerWidth&&r.top>=0&&r.bottom<=innerHeight})()`,
           ),
         );
+        const paints = await b.evaluate<
+          { gel: string; token: string; body: string }[]
+        >(
+          `[...document.querySelectorAll('.otk-project-inbox .otk-status-light[data-state=${state}], .otk-project-tabs [role=tab] .otk-status-light[data-state=${state}]')].map(el=>({gel:getComputedStyle(el).getPropertyValue('--lamp-color').trim(),token:getComputedStyle(document.documentElement).getPropertyValue('--otk-lamp-${state}').trim(),body:getComputedStyle(el.querySelector('.otk-lamp-body')).backgroundImage}))`,
+        );
+        assert(paints.length >= 2);
+        for (const paint of paints) {
+          assert(/^#[\da-f]{6}$/i.test(paint.token), JSON.stringify(paint));
+          assertEquals(paint.gel, paint.token);
+          assert(paint.body.includes("gradient"));
+        }
       }
+      await b.evaluate("document.fonts.ready");
+      const connectionPaint = await b.evaluate<
+        { color: string; token: string }
+      >("(()=>{const el=document.querySelector('.otk-server-status .otk-connection-light');return {color:getComputedStyle(el).getPropertyValue('--connection-color').trim(),token:getComputedStyle(document.documentElement).getPropertyValue('--otk-connection-connected').trim()}})()");
+      assertEquals(connectionPaint.color, connectionPaint.token);
+      assert(/^#[\da-f]{6}$/i.test(connectionPaint.token));
       if (Deno.env.get("OTK_STATUS_LIGHT_SHOTS")) {
-        await b.screenshot(join(root, `lights-${theme}.png`));
+        await b.screenshot(join(root, `lights-r2-${theme}.png`));
       }
+      await c.rpc("prefs.set", { key: "animationsOff", value: false });
+      await b.poll(
+        "getComputedStyle(document.querySelector('.otk-project-tabs [data-state=working] .otk-lamp-glow')).animationName==='otk-lamp-breathe'",
+      );
+      await c.rpc("prefs.set", { key: "animationsOff", value: true });
+      await b.poll(
+        "getComputedStyle(document.querySelector('.otk-project-tabs [data-state=working] .otk-lamp-glow')).animationName==='none'",
+      );
+      await c.rpc("prefs.set", { key: "reducedColors", value: true });
+      await b.poll(
+        "document.documentElement.hasAttribute('data-otk-reduced-colors')",
+      );
+      for (
+        const [state, shape, label] of [
+          ["blocked", "×", "Needs you"],
+          ["finished", "✓", "Finished, not seen"],
+          ["working", "◐", "Working"],
+          ["idle", "○", "Idle"],
+        ]
+      ) {
+        const lamp =
+          `.otk-project-tabs [role=tab] .otk-status-light[data-state=${state}]`;
+        assertEquals(
+          await b.evaluate(
+            `(()=>{const el=document.querySelector(${
+              JSON.stringify(lamp)
+            });return {shape:el.textContent.trim(),label:el.getAttribute('aria-label'),display:getComputedStyle(el.querySelector('.otk-lamp-shape')).display,body:getComputedStyle(el.querySelector('.otk-lamp-body')).display}})()`,
+          ),
+          { shape, label, display: "block", body: "none" },
+        );
+      }
+      await c.rpc("prefs.set", { key: "reducedColors", value: false });
       await c.rpc("tasks.addSession", { id: task.id, sessionID: "blocked" });
       await b.poll(`${light(tab)}?.dataset.state==='blocked'`);
       // Once the blocking request resolves, the unseen finish outranks work in
@@ -117,6 +172,30 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         "document.querySelector('.otk-project-inbox').dataset.collapsed==='true'",
       );
       await b.poll(`${light(project)}?.dataset.state==='finished'`);
+      await b.poll(
+        "!!document.querySelector('.otk-server-status .otk-connection-light[data-connection-state=connected]')",
+      );
+      f.app.connections.connection("reconnecting");
+      await b.poll(
+        "!!document.querySelector('.otk-server-status .otk-connection-light[data-connection-state=reconnecting]')",
+      );
+      f.app.connections.connection("connected");
+      await b.click(".otk-settings-entry");
+      await b.poll(
+        "!!document.querySelector('.otk-settings .otk-connection-light[data-connection-state=connected]')",
+      );
+      f.app.connections.connection("connecting");
+      await b.poll(
+        "!!document.querySelector('.otk-settings .otk-connection-light[data-connection-state=connecting]')",
+      );
+      f.app.connections.connection("reconnecting");
+      await b.poll(
+        "!!document.querySelector('.otk-settings .otk-connection-light[data-connection-state=reconnecting]')",
+      );
+      f.app.connections.connection("connected");
+      await b.poll(
+        "!!document.querySelector('.otk-settings .otk-connection-light[data-connection-state=connected]')",
+      );
       assertEquals(b.errors, []);
     } finally {
       await c.close();

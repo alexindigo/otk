@@ -13,6 +13,15 @@
   --applied-fg: var(--otk-fg-2);
   --control-color: var(--otk-fg-2);
   --control-focus: var(--otk-action-focus);
+  /* Status meaning is shared; each active theme supplies its contrast-safe gel. */
+  --status-light-blocked: var(--otk-lamp-blocked);
+  --status-light-finished: var(--otk-lamp-finished);
+  --status-light-working: var(--otk-lamp-working);
+  --status-light-idle: var(--otk-lamp-idle);
+  --connection-light-connected: var(--otk-connection-connected);
+  --connection-light-connecting: var(--otk-connection-connecting);
+  --connection-light-disconnected: var(--otk-connection-disconnected);
+  --connection-light-error: var(--otk-connection-error);
   --font-ui: "IBM Plex Sans", sans-serif;
   --font-mono: "IBM Plex Mono", monospace;
   --radius-control: 8px;
@@ -164,16 +173,6 @@ p {
   padding: 4px 8px;
   margin-right: 8px;
   border-radius: var(--radius-pill);
-}
-.otk-dot {
-  width: .5rem;
-  height: .5rem;
-  flex: 0 0 .5rem;
-  border-radius: 50%;
-  background: var(--muted);
-}
-.otk-dot-connected {
-  background: var(--otk-fg-2);
 }
 @media (prefers-reduced-motion: reduce) {
   *,

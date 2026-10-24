@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createEffect, createSignal, type Element, Show } from "solid-js";
-import { CommandHub, createInbox, createSessionSubmission } from "@otk/client";
+import {
+  CommandHub,
+  createInbox,
+  createSessionSubmission,
+  type SidecarState,
+} from "@otk/client";
 import {
   booleanPreference,
   createPreferences,
@@ -12,7 +17,9 @@ import {
   type ToolBase,
 } from "@otk/protocol";
 import {
+  ActivityIndicator,
   CommandProvider,
+  ConnectionLight,
   createUiRegistries,
   DisplayMenu,
   emptyDraft,
@@ -32,10 +39,101 @@ import {
   registerUnknownPart,
   RightPanel,
   SessionProvider,
+  Sidebar,
   ToolLine,
   UiProvider,
   VisualSettings,
 } from "@otk/ui";
+
+export function Indicators(props: { onTheme(id: string): void }): Element {
+  const healthy: SidecarState = {
+    id: "probe",
+    label: "Probe",
+    baseUrl: "",
+    status: "connected",
+    harness: "connected",
+    capabilities: [],
+  };
+  const [server, setServer] = createSignal<SidecarState | undefined>(healthy);
+  const commands = new CommandHub(), ui = createUiRegistries();
+  return (
+    <CommandProvider commands={commands}>
+      <UiProvider registries={ui}>
+        <div class="otk-control-row">
+          <button
+            type="button"
+            data-case="connected"
+            onClick={() => setServer(healthy)}
+          >
+            Connected
+          </button>
+          <button
+            type="button"
+            data-case="connecting"
+            onClick={() => setServer({ ...healthy, status: "connecting" })}
+          >
+            Connecting
+          </button>
+          <button
+            type="button"
+            data-case="reconnecting"
+            onClick={() => setServer({ ...healthy, harness: "reconnecting" })}
+          >
+            Reconnecting
+          </button>
+          <button
+            type="button"
+            data-case="disconnected"
+            onClick={() => setServer(undefined)}
+          >
+            Disconnected
+          </button>
+          <button
+            type="button"
+            data-case="error"
+            onClick={() => setServer({ ...healthy, error: "Transport failed" })}
+          >
+            Error
+          </button>
+          <button
+            type="button"
+            data-theme="otk-dark"
+            onClick={() => props.onTheme("otk-dark")}
+          >
+            Dark
+          </button>
+          <button
+            type="button"
+            data-theme="otk-light"
+            onClick={() => props.onTheme("otk-light")}
+          >
+            Linen
+          </button>
+          <button
+            type="button"
+            data-theme="otk-light-stone"
+            onClick={() => props.onTheme("otk-light-stone")}
+          >
+            Stone
+          </button>
+        </div>
+        <section data-independent-connection>
+          <ConnectionLight connection={server()} />
+        </section>
+        <section data-independent-activity>
+          <ActivityIndicator small />
+        </section>
+        <Sidebar
+          sidecars={server() ? [server()!] : []}
+          entries={[]}
+          onOpen={() => {}}
+          onCreate={() => {}}
+          onSettings={() => {}}
+        />
+      </UiProvider>
+    </CommandProvider>
+  );
+}
 
 declare module "@otk/protocol" {
   interface PartKinds {

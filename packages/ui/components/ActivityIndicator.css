@@ -1,0 +1,37 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-activity-indicator {
+  --activity-size: 10px;
+  display: inline-grid;
+  place-items: center;
+  width: var(--activity-size);
+  height: var(--activity-size);
+  flex: 0 0 var(--activity-size);
+  vertical-align: middle;
+}
+.otk-activity-indicator[data-small] {
+  --activity-size: 8px;
+}
+.otk-activity-spinner {
+  width: 100%;
+  height: 100%;
+  border: 1px solid var(--otk-fg-2);
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: otk-activity-spin 1.1s linear infinite;
+}
+.otk-activity-shape {
+  display: none;
+}
+@keyframes otk-activity-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+:root[data-otk-reduced-colors] .otk-activity-spinner {
+  display: none;
+}
+:root[data-otk-reduced-colors] .otk-activity-shape {
+  display: block;
+  color: var(--otk-fg);
+  font: 600 var(--text-meta)/1 var(--font-ui);
+}

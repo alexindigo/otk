@@ -3,7 +3,7 @@ import "./Reasoning.css" with { type: "text" };
 import { createSignal, Show } from "solid-js";
 import type { Part } from "@otk/protocol";
 import Blocks from "./Blocks.tsx";
-import StatusLight from "./StatusLight.tsx";
+import ActivityIndicator from "./ActivityIndicator.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
 import { ChevronIcon } from "./ChromeIcons.tsx";
 export default function Reasoning(
@@ -39,7 +39,7 @@ export default function Reasoning(
       >
         <ChevronIcon class="otk-reasoning-chevron" />
         <Show when={props.part.time.end === undefined}>
-          <StatusLight state="working" small activity="spinner" />
+          <ActivityIndicator small />
         </Show>
         {props.part.time.end === undefined ? "Thinking…" : "Thought for"}
         {props.part.time.end !== undefined

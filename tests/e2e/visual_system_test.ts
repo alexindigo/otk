@@ -86,7 +86,7 @@ test("appearance settings persist, broadcast and paint real session status light
   }
 });
 
-test("public lights render all states, fixed gel colours, sizing, event blink, breathing and motion suppression; reduced colours shapes and ageing", async () => {
+test("public lights render all states, themed gel colours, sizing, event blink, breathing and motion suppression; reduced colours shapes and ageing", async () => {
   const root = await fixture(), dist = join(root, "dist");
   const build = await new Deno.Command(Deno.execPath(), {
     args: [
@@ -138,7 +138,7 @@ test("public lights render all states, fixed gel colours, sizing, event blink, b
       `(() => [...document.querySelectorAll('[data-visual-gallery] .otk-status-light')].map(el=>{
       const halo=el.querySelector('.otk-lamp-glow');for(const animation of halo.getAnimations()){animation.pause();animation.currentTime=0;}
       const body=getComputedStyle(el.querySelector('.otk-lamp-body')),glow=getComputedStyle(halo),shape=getComputedStyle(el.querySelector('.otk-lamp-shape')),r=el.getBoundingClientRect();
-      return {state:el.dataset.state,label:el.getAttribute('aria-label'),title:el.title,size:r.width,height:r.height,color:getComputedStyle(el).getPropertyValue('--lamp-color').trim(),rim:body.boxShadow,border:body.borderTopWidth,halo:glow.boxShadow,body:body.display,shape:shape.display,glyph:el.querySelector('.otk-lamp-shape').textContent,fg:shape.color,breathe:glow.animationName,duration:glow.animationDuration,blink:body.animationName,glow:glow.display,gradient:body.backgroundImage};
+      return {state:el.dataset.state,label:el.getAttribute('aria-label'),title:el.title,size:r.width,height:r.height,color:getComputedStyle(el).getPropertyValue('--lamp-color').trim(),token:getComputedStyle(document.documentElement).getPropertyValue('--otk-lamp-'+el.dataset.state).trim(),rim:body.boxShadow,border:body.borderTopWidth,halo:glow.boxShadow,body:body.display,shape:shape.display,glyph:el.querySelector('.otk-lamp-shape').textContent,fg:shape.color,breathe:glow.animationName,duration:glow.animationDuration,blink:body.animationName,glow:glow.display,gradient:body.backgroundImage};
     }))()`;
     type Light = {
       state: string;
@@ -147,6 +147,7 @@ test("public lights render all states, fixed gel colours, sizing, event blink, b
       size: number;
       height: number;
       color: string;
+      token: string;
       rim: string;
       border: string;
       halo: string;
@@ -176,13 +177,13 @@ test("public lights render all states, fixed gel colours, sizing, event blink, b
       assertEquals(lamp.border, "0px", "No pale/theme-dependent rim");
       assert(lamp.rim.includes("0px 0px 0px 1px"));
     }
-    assertEquals(dark.map((lamp) => lamp.color), [
-      "#ff2e4d",
-      "#ff8f2e",
-      "#30ff85",
-      "#8e949b",
-      "#ff8f2e",
-    ]);
+    const themedPaint = (lamps: Light[]) => {
+      for (const lamp of lamps) {
+        assert(/^#[\da-f]{6}$/i.test(lamp.token));
+        assertEquals(lamp.color, lamp.token);
+      }
+    };
+    themedPaint(dark);
     assert(dark[0].gradient.includes("radial-gradient"));
     assert(dark[0].gradient.includes("linear-gradient"));
     assertEquals(dark[1].breathe, "otk-lamp-breathe");
@@ -224,21 +225,28 @@ test("public lights render all states, fixed gel colours, sizing, event blink, b
       "document.documentElement.dataset.otkTheme === 'otk-light'",
     );
     const construction = (lamps: Light[]) =>
-      lamps.map((
-        { color, rim, border, halo, gradient, glow, size, height },
-      ) => ({ color, rim, border, halo, gradient, glow, size, height }));
-    assertEquals(
-      construction(await browser.evaluate<Light[]>(probe)),
-      construction(dark),
-    );
+      lamps.map((lamp) => ({
+        border: lamp.border,
+        glow: lamp.glow,
+        size: lamp.size,
+        height: lamp.height,
+        rim: lamp.rim.includes("0px 0px 0px 1px"),
+        halo: lamp.halo.includes("6px"),
+        radial: lamp.gradient.includes("radial-gradient"),
+        linear: lamp.gradient.includes("linear-gradient"),
+      }));
+    const linen = await browser.evaluate<Light[]>(probe);
+    themedPaint(linen);
+    assert(linen.some((lamp, i) => lamp.color !== dark[i].color));
+    assertEquals(construction(linen), construction(dark));
     await browser.click("[data-stone]");
     await browser.poll(
       "document.documentElement.dataset.otkTheme === 'otk-light-stone'",
     );
-    assertEquals(
-      construction(await browser.evaluate<Light[]>(probe)),
-      construction(dark),
-    );
+    const stone = await browser.evaluate<Light[]>(probe);
+    themedPaint(stone);
+    assert(stone.some((lamp, i) => lamp.color !== linen[i].color));
+    assertEquals(construction(stone), construction(dark));
     await browser.click("[data-light]");
     await browser.poll(
       "document.documentElement.dataset.otkTheme === 'otk-light'",

@@ -10,7 +10,6 @@ export default function StatusLight(props: {
   state: LightState;
   small?: boolean;
   label?: string;
-  activity?: "spinner";
   event?: string | number;
 }): import("solid-js").Element {
   const [blink, setBlink] = createSignal(false);
@@ -31,7 +30,6 @@ export default function StatusLight(props: {
       class="otk-status-light"
       style={{ "--lamp-blink-duration": `${BLINK_DURATION_MS}ms` }}
       data-state={props.state}
-      data-activity={props.activity}
       data-small={props.small || undefined}
       data-blink={blink() || undefined}
       role="img"

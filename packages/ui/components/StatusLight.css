@@ -1,8 +1,8 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-status-light {
   --lamp-size: 10px;
-  /* Luch construction is fixed, including the unlit gel; never theme paint. */
-  --lamp-color: #8e949b;
+  /* Construction stays local; semantic gel paint comes from the active theme. */
+  --lamp-color: var(--status-light-idle);
   position: relative;
   display: inline-grid;
   place-items: center;
@@ -15,13 +15,13 @@
   --lamp-size: 8px;
 }
 .otk-status-light[data-state=blocked] {
-  --lamp-color: #ff2e4d;
+  --lamp-color: var(--status-light-blocked);
 }
 .otk-status-light[data-state=working] {
-  --lamp-color: #ff8f2e;
+  --lamp-color: var(--status-light-working);
 }
 .otk-status-light[data-state=finished] {
-  --lamp-color: #30ff85;
+  --lamp-color: var(--status-light-finished);
 }
 .otk-lamp-body,
 .otk-lamp-glow {
@@ -86,19 +86,4 @@
   display: block;
   color: var(--otk-fg);
   font: 600 var(--text-meta)/1 var(--font-ui);
-}
-.otk-status-light[data-activity=spinner] .otk-lamp-glow {
-  display: none;
-}
-.otk-status-light[data-activity=spinner] .otk-lamp-body {
-  background: none;
-  box-shadow: none;
-  border: 1px solid var(--otk-fg-2);
-  border-top-color: transparent;
-  animation: otk-activity-spin 1.1s linear infinite;
-}
-@keyframes otk-activity-spin {
-  to {
-    transform: rotate(360deg);
-  }
 }
