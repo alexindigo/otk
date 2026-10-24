@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../support/resources.ts";
-import { serve } from "../support/http.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest } from "../support/opencode.ts";
+import { packageRegistry } from "../support/package-registry.ts";
 
 test("native fixture admission joins custom-tool dependency readiness rather than HTTP health", async () => {
   const fetchNative = globalThis.fetch;
@@ -14,29 +14,15 @@ test("native fixture admission joins custom-tool dependency readiness rather tha
   let released = false, probing = false, returned = false;
   let instance: OpencodeTest | undefined,
     catalog: Promise<string[]> | undefined;
-  const registry = serve(
-    { hostname: "127.0.0.1", port: 0, onListen() {} },
-    async (request) => {
-      const url = new URL(request.url);
-      if (!released) {
-        held.resolve();
-        await release.promise;
-      }
-      const response = await fetchNative(
-        "https://registry.npmjs.org" + url.pathname + url.search,
-        { signal: AbortSignal.timeout(30_000) },
-      );
-      return new Response(response.body, {
-        status: response.status,
-        headers: response.headers,
-      });
-    },
-  );
+  const registry = await packageRegistry(async () => {
+    if (!released) {
+      held.resolve();
+      await release.promise;
+    }
+  });
   const fake = new FakeLlm();
   const env: Record<string, string> = {
-    npm_config_registry: `http://127.0.0.1:${
-      (registry.addr as Deno.NetAddr).port
-    }`,
+    npm_config_registry: registry.url,
   };
   // Return health only after the actual tool-registry read is blocked behind
   // controlled native dependency I/O. This fixes the execution ordering without
@@ -111,6 +97,8 @@ test("native fixture admission joins custom-tool dependency readiness rather tha
       [],
       "Readiness must not manufacture an LLM prompt",
     );
+    assertEquals(registry.unexpected, []);
+    assert(registry.requests.some((path) => path.endsWith(".tgz")));
   } finally {
     released = true;
     release.resolve();

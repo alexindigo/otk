@@ -236,3 +236,15 @@ task regression starts two independent cold tasks against one absent cache,
 requires exactly one preparation and real custom-tool/provider outcomes in both,
 then repeats the task with registry requests denied and checks that the
 published manifest is unchanged.
+
+The cold-task and uncached-readiness regressions own their package source via
+`packageRegistry`. It serves a synthetic, dependency-free `@opencode-ai/plugin`
+package at the pinned native version, including local metadata, tarball and npm
+audit responses. These tests exercise native install/readiness, concurrent task
+preparation and offline reuse, not the plugin SDK API. Their tools use plain
+definitions; actual native tool catalogs and completed provider replies remain
+required. Cold preparation asserts that its lock resolves to the test's local
+source, uses private npm caches and rejects unexpected registry requests. The
+readiness test holds that source until after health, then releases the install.
+Neither regression forwards to a public registry. Synthetic packages stay in the
+cold test's temporary cache; ordinary fixtures keep the real shared cache.
