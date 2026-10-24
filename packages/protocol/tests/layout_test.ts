@@ -13,6 +13,12 @@ Deno.test("shell layout preference validates persisted bounds and complete colla
   for (const leftWidth of [200, 248, 360]) {
     assertEquals(isPreference("shellLayout", { ...base, leftWidth }), true);
   }
+  for (const discoveredCollapsed of [false, true]) {
+    assertEquals(
+      isPreference("shellLayout", { ...base, discoveredCollapsed }),
+      true,
+    );
+  }
   for (const rightWidth of [280, 320, 480]) {
     assertEquals(
       isPreference("shellLayout", {
@@ -37,6 +43,7 @@ Deno.test("shell layout preference validates persisted bounds and complete colla
       { ...base, leftWidth: 199 },
       { ...base, leftWidth: 361 },
       { ...base, leftCollapsed: "true" },
+      { ...base, discoveredCollapsed: "true" },
       { leftWidth: 248, leftCollapsed: false },
       { ...base, unknown: true },
       { ...base, rightWidth: 279 },

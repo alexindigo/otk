@@ -32,6 +32,12 @@ test("inbox activity returns inactive projects and all three required lights rem
     client = new WsClient(f.url);
   try {
     await client.connect();
+    for (const entry of f.entries.slice(0, 4)) {
+      await client.rpc("projects.visit", {
+        directory: entry.directory,
+        active: true,
+      });
+    }
     await browser.goto(f.url);
     await browser.poll(
       "document.querySelectorAll('.otk-project-row').length===4",
@@ -141,6 +147,10 @@ test("inbox mocked-clock ageing, reduced-colour underlines, visit resets on open
     client = new WsClient(f.url);
   try {
     await client.connect();
+    await client.rpc("projects.visit", {
+      directory: f.entries[0].directory,
+      active: true,
+    });
     await browser.send("Page.addScriptToEvaluateOnNewDocument", {
       source: inboxClockScript,
     });
@@ -283,7 +293,7 @@ test("inbox adds empty and scanned projects, persists layout bounds and keeps ce
     await browser.fill("input[name=directory]", empty);
     await browser.click("dialog .otk-form button[type=submit]");
     await browser.poll(
-      `location.hash.includes('empty-project') && !!document.querySelector(${
+      `!!document.querySelector('.otk-session-view') && !!document.querySelector(${
         JSON.stringify(row(empty))
       }) && !!document.querySelector('.otk-new-session')`,
     );
@@ -293,6 +303,8 @@ test("inbox adds empty and scanned projects, persists layout bounds and keeps ce
       )?.added,
       true,
     );
+    const created = f.entries.find((entry) => entry.directory === empty)!;
+    assert(created, "Add project creates its initial backend session");
     const resizer = ".otk-inbox-resizer";
     await browser.click(resizer);
     await browser.key("End");
@@ -305,7 +317,7 @@ test("inbox adds empty and scanned projects, persists layout bounds and keeps ce
     );
     await browser.reload();
     await browser.poll(
-      "document.querySelector('.otk-project-inbox')?.getBoundingClientRect().width===200 && location.hash.includes('empty-project')",
+      `document.querySelector('.otk-project-inbox')?.getBoundingClientRect().width===200 && location.hash.endsWith('/${created.id}')`,
     );
     await browser.send("Emulation.setDeviceMetricsOverride", {
       width: 720,
@@ -347,6 +359,19 @@ test("inbox merges servers with duplicate-name machine labels and stable order t
     b = await inboxBrowserFixture(join(root, "second"), [a.url]),
     browser = await Cdp.launch(root);
   try {
+    // This check owns tracked stable ordering; discovery's activity ordering is
+    // exercised separately by project-catalog_test.
+    for (const f of [a, b]) {
+      const client = new WsClient(f.url);
+      await client.connect();
+      for (const entry of f.entries.slice(0, 4)) {
+        await client.rpc("projects.visit", {
+          directory: entry.directory,
+          active: true,
+        });
+      }
+      await client.close();
+    }
     await browser.goto(a.url);
     await browser.poll(
       "document.querySelectorAll('.otk-project-row').length===4",
@@ -407,6 +432,10 @@ test("opening the already-selected session resets its visit without replacing th
     client = new WsClient(f.url);
   try {
     await client.connect();
+    await client.rpc("projects.visit", {
+      directory: f.entries[0].directory,
+      active: true,
+    });
     await browser.goto(f.url);
     await openSession(browser, "otk");
     const snapshot = await waitFor(

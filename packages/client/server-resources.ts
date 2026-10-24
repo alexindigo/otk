@@ -17,7 +17,7 @@ import {
   inboxProjects,
 } from "./inbox.ts";
 import type { Selection } from "./session.ts";
-import type { ProjectSelection } from "./project-navigation.ts";
+import { projectName, type ProjectSelection } from "./project-navigation.ts";
 import {
   type ClientSidecars,
   LOCAL_SIDECAR,
@@ -194,7 +194,15 @@ export function createServerResources(o: {
           ageing,
         )
           .map((p) => ({ ...p, sidecarId: s.id, label: s.label }))
-      ),
+      ).sort((a, b) => {
+        const rank = { tracked: 0, index: 1, template: 2 };
+        if (a.source === "tracked" && b.source === "tracked") return 0;
+        return rank[a.source ?? "tracked"] - rank[b.source ?? "tracked"] ||
+          a.order - b.order ||
+          projectName(a.directory).localeCompare(projectName(b.directory)) ||
+          a.directory.localeCompare(b.directory) ||
+          a.label.localeCompare(b.label);
+      }),
     tabSnapshot(p) {
       const input = tabInput(p), metadata = input.inbox;
       return {

@@ -331,7 +331,9 @@ the local layout/preference RPC ports share this owner.
 including the snapshot sent on every hello. `openProject`, `openSession` and
 `act` reset the server-owned visit clock; opening a session also records its
 seen timestamp. Wrap sends, approvals, answers and interrupts in
-`act(directory, callback)`. For submissions,
+`act(directory, callback)`. Successful actions request activation through the
+same visit bookkeeping port; opening/viewing never requests activation. Session
+creation is tracked by the server's creation registration. For submissions,
 `createSessionSubmission({sessionID, directory, inbox, tabs})` is the shared
 session-bound admission port: it resolves the captured project's directory,
 enters the existing tab `send` promotion, then runs the mode-specific callback
@@ -381,13 +383,19 @@ alive. Disposal retires scan publication and add navigation without undoing a
 committed server mutation. Native inputs and presentation belong to the UI
 adapter. `registerPreferenceCommands` is the framework-free command contribution
 owner; its menu/command metadata still derives from the protocol preference
-registry.
+registry. When creation returns a session ID, the optional `openSession` output
+receives that exact captured session before close; it never waits for index
+replication.
 
 `inboxStatus`, `rollup`, `unread`, `inboxProjects`, `visitTime` and `ageing` are
 the shared pure projections for column, rail and badges. Supply the connection's
 index entries, its metadata and an explicit current time. Ageing defaults to
 2h/8h/24h and accepts the validated `projectAgeing` preference (milliseconds).
 Keep each server's inputs separate when merging the resulting project rows.
+`inboxProjects` is also the catalog projection: tracked membership wins over
+index-only directories, which win over template-only discovery. Its `source`
+distinguishes these rows; discovery sorts index-first by newest activity, then
+name, without backend queries. Template-only rows have no visit clock or light.
 
 `createTabs(inbox.promote, factory?)` takes
 `update({directory, entries, inbox})` and exposes task, mandatory phantom and

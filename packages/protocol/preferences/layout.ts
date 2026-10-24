@@ -12,6 +12,7 @@ export interface ShellLayout {
   rightCollapsed: boolean;
   rightWidth?: number;
   rightView?: string;
+  discoveredCollapsed?: boolean;
 }
 export interface LayoutPreferences {
   shellLayout: ShellLayout;
@@ -42,6 +43,7 @@ export function registerLayoutPreferences(registry: PreferenceRegistry): void {
           "rightCollapsed",
           "rightWidth",
           "rightView",
+          "discoveredCollapsed",
         ].includes(key)
       ) &&
         typeof layout.leftWidth === "number" &&
@@ -55,6 +57,8 @@ export function registerLayoutPreferences(registry: PreferenceRegistry): void {
             Number.isFinite(layout.rightWidth) &&
             layout.rightWidth >= SHELL_WIDTHS.right.min &&
             layout.rightWidth <= SHELL_WIDTHS.right.max)) &&
+        (layout.discoveredCollapsed === undefined ||
+          typeof layout.discoveredCollapsed === "boolean") &&
         (layout.rightView === undefined ||
           (typeof layout.rightView === "string" &&
             layout.rightView.length <= 128));

@@ -63,6 +63,13 @@ export class Projects extends MetadataChanges {
     if (!record) throw new Error("Unknown project");
     return this.#record(record);
   }
+  /** Membership lookup without discovering or creating a user project. */
+  find(user: string, directory: string): ProjectRecord | undefined {
+    const record = this.db.connection.prepare(
+      "SELECT * FROM projects WHERE user=? AND directory=?",
+    ).get(key(user), key(directory));
+    return record ? this.#record(record) : undefined;
+  }
   add(user: string, directory: string): ProjectRecord {
     this.list(user);
     this.db.connection.prepare(

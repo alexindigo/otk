@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { InboxSnapshot, IndexEntry, ServerFrame } from "@otk/protocol";
+import {
+  errorMessage,
+  type InboxSnapshot,
+  type IndexEntry,
+  type ServerFrame,
+} from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
 import type {
   Finishes,
@@ -26,10 +31,15 @@ export class InboxFeature implements FrameSource {
   #stops: (() => void)[] = [];
   #scheduled = false;
   #closed = false;
+  #discovered: string[] = [];
+  #discoveryError = "";
+  #scanVersion = 0;
   constructor(
     readonly stores: InboxStores,
     readonly index: IndexStore,
     readonly identity: string | (() => string),
+    readonly scan: (templates: readonly string[]) => Promise<string[]> =
+      scanProjects,
   ) {
     this.#stops.push(
       index.observe((entry, previous) => this.#observe(entry, previous)),
@@ -37,6 +47,8 @@ export class InboxFeature implements FrameSource {
     for (const store of Object.values(stores)) {
       this.#stops.push(store.listen(() => this.#emit()));
     }
+    this.#stops.push(stores.templates.listen(() => void this.#scan()));
+    void this.#scan();
   }
   get user(): string {
     return typeof this.identity === "string" ? this.identity : this.identity();
@@ -49,6 +61,8 @@ export class InboxFeature implements FrameSource {
       seen: s.seen.list(this.user),
       finishes: s.finishes.list(),
       pathTemplates: s.templates.list(),
+      discovered: [...this.#discovered],
+      ...(this.#discoveryError ? { discoveryError: this.#discoveryError } : {}),
     };
   }
   snapshot(): Extract<ServerFrame, { t: "inbox" }> {
@@ -75,7 +89,6 @@ export class InboxFeature implements FrameSource {
   }
   #observe(entry: IndexEntry, previous?: IndexEntry): void {
     const s = this.stores;
-    s.projects.discover(entry.directory);
     if (
       previous?.status !== undefined && previous.status !== "idle" &&
       entry.status === "idle"
@@ -84,12 +97,35 @@ export class InboxFeature implements FrameSource {
     const active = entry.status !== "idle" || !!a.error ||
       a.permissions + a.questions + a.childPermissions + a.childQuestions > 0;
     for (const user of new Set([this.user, ...s.projects.users()])) {
-      const project = s.projects.get(user, entry.directory);
+      const project = s.projects.find(user, entry.directory);
       if (
-        project.inactive &&
+        project?.inactive &&
         (active || s.finishes.time(entry.id) > s.seen.time(user, entry.id))
       ) s.projects.inactive(user, entry.directory, false);
     }
+  }
+  /** Creation and successful action bookkeeping share the persisted project owner. */
+  activate(directory: string): void {
+    const project = this.stores.projects.find(this.user, directory);
+    if (!project) this.stores.projects.add(this.user, directory);
+    else if (project.inactive) {
+      this.stores.projects.inactive(this.user, directory, false);
+    }
+  }
+  async #scan(): Promise<void> {
+    const version = ++this.#scanVersion;
+    // Retired template results must not survive a new configuration.
+    this.#discovered = [];
+    this.#discoveryError = "";
+    try {
+      const paths = await this.scan(this.stores.templates.list());
+      if (this.#closed || version !== this.#scanVersion) return;
+      this.#discovered = paths;
+    } catch (error) {
+      if (this.#closed || version !== this.#scanVersion) return;
+      this.#discoveryError = errorMessage(error);
+    }
+    this.#emit();
   }
   register(rpc: RpcRegistry): void {
     const s = this.stores, user = () => this.user;
@@ -112,11 +148,18 @@ export class InboxFeature implements FrameSource {
     });
     rpc.register("projects.add", {
       params: (p) => projectPath(text(p, "directory")!),
-      async handler(_ctx, directory) {
+      handler: async (ctx, directory) => {
         if (!(await Deno.stat(directory)).isDirectory) {
           throw new HarnessError("params", "Expected a project directory");
         }
-        return s.projects.add(user(), directory);
+        // The existing Add project entry creates its initial session; empty
+        // directory-only tracking is no longer a product operation.
+        const session = await ctx.harness.core.createSession({ directory });
+        this.activate(session.directory);
+        return {
+          ...s.projects.get(user(), session.directory),
+          sessionID: session.id,
+        };
       },
     });
     rpc.register("projects.inactive", {
@@ -138,8 +181,21 @@ export class InboxFeature implements FrameSource {
       },
     });
     rpc.register("projects.visit", {
-      params: (p) => projectPath(text(p, "directory")!),
-      handler: (_ctx, directory) => s.projects.visit(user(), directory),
+      params(p) {
+        if (p.active !== undefined && typeof p.active !== "boolean") {
+          throw new HarnessError("params", "Expected active boolean");
+        }
+        return {
+          directory: projectPath(text(p, "directory")!),
+          active: p.active === true,
+        };
+      },
+      handler: (_ctx, p) => {
+        if (p.active) this.activate(p.directory);
+        return s.projects.find(user(), p.directory)
+          ? s.projects.visit(user(), p.directory)
+          : null;
+      },
     });
     rpc.register("projects.scan", {
       params: () => undefined,
@@ -163,7 +219,6 @@ export class InboxFeature implements FrameSource {
         sessions: p.sessions === undefined ? [] : strings(p, "sessions"),
       }),
       async handler(ctx, p) {
-        s.projects.get(user(), p.directory);
         for (const id of p.sessions) {
           if (await ctx.sessionDirectory(id) !== p.directory) {
             throw new HarnessError(

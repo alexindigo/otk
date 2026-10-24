@@ -73,12 +73,14 @@ export function createShellState(o: { api: URL }): ShellState {
   });
   createEffect(() => {
     const selected = session.state.selection, data = actions.info();
+    const project = selected ? undefined : navigation.state.project;
+    const sidecar = selected?.sidecarId ?? project?.sidecarId;
     return {
       selected,
-      directory: data?.directory,
+      directory: selected ? data?.directory : project?.directory,
       loading: session.state.loading,
       settings: navigation.state.settings,
-      connected: !!selected && resources.connected(selected.sidecarId),
+      connected: !!sidecar && resources.connected(sidecar),
       finish: selected
         ? resources.inbox(selected.sidecarId).state.inbox
           .finishes[selected.sessionID] ?? 0

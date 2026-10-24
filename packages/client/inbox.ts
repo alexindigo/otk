@@ -13,6 +13,7 @@ import type {
 import { createState, type StateFactory } from "./state.ts";
 import type { TabSession } from "./tabs.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
+import { projectName } from "./project-navigation.ts";
 export type InboxStatus = "blocked" | "working" | "finished" | "idle";
 export function unread(
   sessionID: string,
@@ -58,6 +59,8 @@ export function ageing(
   return thresholds.filter((threshold) => now - lastVisit >= threshold).length;
 }
 export interface InboxProject extends ProjectRecord {
+  /** Older injected projections without a source are tracked projects. */
+  source?: "tracked" | "index" | "template";
   status: InboxStatus;
   unread: boolean;
   visitText: string;
@@ -70,7 +73,7 @@ export function inboxProjects(
   now: number,
   thresholds?: readonly number[],
 ): InboxProject[] {
-  return [...inbox.projects].sort((a, b) => a.order - b.order).map(
+  const tracked = [...inbox.projects].sort((a, b) => a.order - b.order).map(
     (project) => {
       const sessions = entries.filter((entry) =>
         entry.directory === project.directory
@@ -80,6 +83,7 @@ export function inboxProjects(
       const clock = inactive ? project.inactiveAt ?? project.lastVisit : now;
       return {
         ...project,
+        source: "tracked" as const,
         inactive,
         status,
         unread: sessions.some((s) => unread(s.id, inbox)),
@@ -88,6 +92,51 @@ export function inboxProjects(
       };
     },
   );
+  const known = new Set(tracked.map((p) => p.directory));
+  const indexed = new Map<string, IndexEntry[]>();
+  const latest = (sessions: readonly IndexEntry[]) =>
+    sessions.reduce((time, entry) => Math.max(time, entry.timeUpdated), 0);
+  const byName = (a: string, b: string) =>
+    projectName(a).localeCompare(projectName(b)) || a.localeCompare(b);
+  for (const entry of entries) {
+    if (known.has(entry.directory)) continue;
+    const sessions = indexed.get(entry.directory) ?? [];
+    sessions.push(entry);
+    indexed.set(entry.directory, sessions);
+  }
+  const discovered = [...indexed].sort(([a, aa], [b, bb]) =>
+    latest(bb) - latest(aa) || byName(a, b)
+  ).map(([directory, sessions]): InboxProject => {
+    known.add(directory);
+    return {
+      directory,
+      source: "index",
+      order: -latest(sessions),
+      added: false,
+      inactive: false,
+      lastVisit: 0,
+      status: rollup(sessions, inbox),
+      unread: sessions.some((s) => unread(s.id, inbox)),
+      visitText: "",
+      ageing: 0,
+    };
+  });
+  const templates = [...new Set(inbox.discovered ?? [])].filter((p) =>
+    !known.has(p)
+  )
+    .sort(byName).map((directory): InboxProject => ({
+      directory,
+      source: "template",
+      order: 0,
+      added: false,
+      inactive: false,
+      lastVisit: 0,
+      status: "idle",
+      unread: false,
+      visitText: "",
+      ageing: 0,
+    }));
+  return [...tracked, ...discovered, ...templates];
 }
 export interface InboxRpc {
   call<M extends RpcMethod>(
@@ -151,7 +200,7 @@ export function createInbox(
     async act<T>(directory: string, action: () => Promise<T>): Promise<T> {
       const result = await action();
       try {
-        await rpc.call("projects.visit", { directory });
+        await rpc.call("projects.visit", { directory, active: true });
       } catch (error) {
         reportDiagnostic(report, error);
       }

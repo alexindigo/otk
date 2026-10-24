@@ -2,6 +2,7 @@
 import { errorMessage } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import type { ProjectSelection } from "./project-navigation.ts";
+import type { Selection } from "./session.ts";
 
 export interface ProjectPickerConnection {
   sidecarId: string;
@@ -28,8 +29,12 @@ export interface ProjectPickerOwner {
 export function createProjectPicker(options: {
   connection(): ProjectPickerConnection;
   scan(sidecarId: string, signal: AbortSignal): Promise<string[]>;
-  add(sidecarId: string, directory: string): Promise<{ directory: string }>;
+  add(
+    sidecarId: string,
+    directory: string,
+  ): Promise<{ directory: string; sessionID?: string }>;
   open(project: ProjectSelection): void;
+  openSession?(selection: Selection): void;
   close(): void;
   factory?: StateFactory;
 }): ProjectPickerOwner {
@@ -143,10 +148,17 @@ export function createProjectPicker(options: {
         return options.add(project.sidecarId, project.directory);
       }).then((added) => {
         if (!alive || !added) return;
-        options.open({
-          sidecarId: project.sidecarId,
-          directory: added.directory,
-        });
+        if (added.sessionID && options.openSession) {
+          options.openSession({
+            sidecarId: project.sidecarId,
+            sessionID: added.sessionID,
+          });
+        } else {
+          options.open({
+            sidecarId: project.sidecarId,
+            directory: added.directory,
+          });
+        }
         options.close();
       }).finally(() => {
         addition = undefined;

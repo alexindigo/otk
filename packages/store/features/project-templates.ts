@@ -7,6 +7,9 @@ export const projectTemplatesMigrations: FeatureMigrations = {
   migrations: [{
     version: 1,
     sql: new URL("./migrations/project-templates/001.sql", import.meta.url),
+  }, {
+    version: 2,
+    sql: new URL("./migrations/project-templates/002.sql", import.meta.url),
   }],
 };
 /** Server-scoped settings; filesystem expansion belongs to the server feature. */

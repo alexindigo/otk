@@ -42,9 +42,14 @@ for (const path of ["normal", "shell", "slash", "palette"] as const) {
           sentFrames(b).some(({ frame }) => frame.method === "sessions.seen"),
         Boolean,
       );
-      const before = (await c.rpc<ProjectRecord[]>("projects.list", {})).find(
-        (p) => p.directory === f.oc.directory,
-      )!;
+      assertEquals(
+        (await c.rpc<ProjectRecord[]>("projects.list", {})).find(
+          (p) => p.directory === f.oc.directory,
+        ),
+        undefined,
+        "Viewing an indexed session must leave its project discovered",
+      );
+      const before = Date.now();
       const start = sentFrames(b).length;
       for (let turn = 0; turn < 2; turn++) {
         if (path === "palette") {
@@ -127,7 +132,7 @@ for (const path of ["normal", "shell", "slash", "palette"] as const) {
       const after = (await c.rpc<ProjectRecord[]>("projects.list", {})).find(
         (p) => p.directory === f.oc.directory,
       )!;
-      assertEquals(after.lastVisit > before.lastVisit, true);
+      assertEquals(after.lastVisit >= before, true);
       const task = (await c.rpc<TaskRecord[]>("tasks.list", {
         directory: f.oc.directory,
       }))[0];

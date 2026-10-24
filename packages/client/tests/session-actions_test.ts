@@ -56,7 +56,7 @@ Deno.test("session actions act uses its target directory and returns the success
   assertEquals(f.calls, [
     ["remote", "session.get", { sessionID: "background" }],
     ["action"],
-    ["remote", "projects.visit", { directory: "/resolved" }],
+    ["remote", "projects.visit", { directory: "/resolved", active: true }],
   ]);
   f.resources.stop();
 });
@@ -132,7 +132,7 @@ Deno.test("session actions prompt captures invocation target and enters submissi
       model: { provider: "p", model: "m" },
       variant: "high",
     }],
-    ["local", "projects.visit", { directory: "/p" }],
+    ["local", "projects.visit", { directory: "/p", active: true }],
   ]);
   f.resources.stop();
 });
@@ -161,23 +161,23 @@ Deno.test("session actions abort and replies use invocation-current act and neve
   await actions.question({ requestID: "q" });
   assertEquals(f.calls, [
     ["local", "session.abort", { sessionID: "selected" }],
-    ["local", "projects.visit", { directory: "/p" }],
+    ["local", "projects.visit", { directory: "/p", active: true }],
     ["remote", "permission.reply", {
       sessionID: "selected",
       requestID: "p",
       reply: "once",
     }],
-    ["remote", "projects.visit", { directory: "/remote" }],
+    ["remote", "projects.visit", { directory: "/remote", active: true }],
     ["remote", "permission.reply", {
       sessionID: "background",
       requestID: "b",
       reply: "reject",
     }],
-    ["remote", "projects.visit", { directory: "/background" }],
+    ["remote", "projects.visit", { directory: "/background", active: true }],
     ["remote", "question.reply", { requestID: "q", answers: [] }],
-    ["remote", "projects.visit", { directory: "/remote" }],
+    ["remote", "projects.visit", { directory: "/remote", active: true }],
     ["remote", "question.reject", { requestID: "q" }],
-    ["remote", "projects.visit", { directory: "/remote" }],
+    ["remote", "projects.visit", { directory: "/remote", active: true }],
   ]);
   f.resources.stop();
 });

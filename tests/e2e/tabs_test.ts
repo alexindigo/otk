@@ -422,6 +422,7 @@ test("axiom 1: working blocked and unseen-finished ungrouped tabs and rail light
     await c.connect();
     const base = f.entries[0];
     for (const id of ["blocked", "finished"]) f.add({ ...base, id, title: id });
+    await c.rpc("projects.visit", { directory: base.directory, active: true });
     await c.rpc("projects.inactive", {
       directory: base.directory,
       inactive: true,

@@ -137,6 +137,35 @@ Deno.test("shell navigation owns route state, unknown-server errors, project vis
   release();
   f.stop();
 });
+Deno.test("project-only routes defer visits until connected and retain view-only bookkeeping after reload", async () => {
+  const f = fixture();
+  try {
+    f.servers.state.list[0].status = "reconnecting";
+    f.external("#project/local/%2Fdiscovered");
+    await settled();
+    assertEquals(f.calls.filter((call) => call[1] === "projects.visit"), []);
+    f.servers.state.list[0].status = "connected";
+    const view = {
+      selected: undefined,
+      directory: "/discovered",
+      connected: true,
+      loading: false,
+      settings: false,
+      finish: 0,
+    };
+    f.navigation.observeView(view);
+    f.navigation.observeView(view);
+    await settled();
+    assertEquals(f.calls.filter((call) => call[1] === "projects.visit"), [[
+      "local",
+      "projects.visit",
+      { directory: "/discovered" },
+    ]]);
+    assertEquals(f.navigation.state.error, "");
+  } finally {
+    f.stop();
+  }
+});
 Deno.test("shell navigation confirms and clears dirty owners only on selection change", () => {
   const f = fixture();
   f.guard.mark("permissions", true);

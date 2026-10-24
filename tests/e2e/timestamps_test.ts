@@ -233,6 +233,7 @@ test("creation-time hover and persistent visibility, structural footer date/cloc
           { feature: "permissions", version: 1 },
           { feature: "prefs", version: 1 },
           { feature: "project-templates", version: 1 },
+          { feature: "project-templates", version: 2 },
           { feature: "projects", version: 1 },
           { feature: "seen", version: 1 },
           { feature: "tasks", version: 1 },

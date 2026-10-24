@@ -72,7 +72,7 @@ export function createShellNavigation(o: {
     settings: false,
     error: "",
   });
-  let revision = 0, viewed = "", viewedFinish = 0;
+  let revision = 0, viewed = "", viewedFinish = 0, projectOnly = false;
   const fail = (error: unknown): void =>
     store.update((draft) => {
       draft.error = errorMessage(error);
@@ -89,11 +89,20 @@ export function createShellNavigation(o: {
     store.update((draft) => {
       draft.settings = false;
     });
+  const observeProject = (target: ProjectSelection, ready: boolean): void => {
+    const key = `project/${target.sidecarId}/${target.directory}`;
+    if (!ready || viewed === key) return;
+    viewed = key;
+    void resources.inbox(target.sidecarId).openProject(target.directory).catch(
+      fail,
+    );
+  };
   const navigation = createNavigation({
     intent: () => {
       revision++;
     },
     apply(hash) {
+      projectOnly = false;
       const target = route(hash),
         projectTarget = projectRoute(hash),
         previous = session.state.selection;
@@ -108,6 +117,7 @@ export function createShellNavigation(o: {
         session.open();
         project();
       } else {
+        projectOnly = !!projectTarget;
         clearError();
         session.open(target);
         project(
@@ -121,9 +131,10 @@ export function createShellNavigation(o: {
               : undefined),
         );
         if (projectTarget) {
-          void resources.inbox(projectTarget.sidecarId).openProject(
-            projectTarget.directory,
-          ).catch(fail);
+          observeProject(
+            projectTarget,
+            resources.connected(projectTarget.sidecarId),
+          );
         }
       }
       if (changes) guard.clear();
@@ -258,11 +269,20 @@ export function createShellNavigation(o: {
       return true;
     },
     observeView(value) {
+      if (!value.selected) {
+        const target = store.state.project;
+        if (
+          projectOnly && target && value.directory === target.directory &&
+          !value.settings
+        ) {
+          observeProject(target, value.connected);
+        } else viewed = "";
+        return;
+      }
       if (
-        !value.selected || !value.directory || value.loading ||
+        !value.directory || value.loading ||
         value.settings || !value.connected
       ) {
-        if (!value.selected) viewed = "";
         return;
       }
       const target = value.selected,

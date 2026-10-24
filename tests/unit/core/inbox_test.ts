@@ -56,6 +56,9 @@ test("core records real status edges at the single index owner and clears persis
   try {
     index.reset([idle]);
     assertEquals(stores.finishes.list(), {});
+    assertEquals(stores.projects.list("alice"), []);
+    stores.projects.add("alice", "/p");
+    stores.projects.add("bob", "/p");
     stores.projects.inactive("alice", "/p", true);
     stores.projects.inactive("bob", "/p", true);
     now = 200;

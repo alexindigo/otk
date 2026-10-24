@@ -3,7 +3,11 @@ import { type Harness, HarnessError } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { text } from "../ws/params.ts";
 
-export function register(rpc: RpcRegistry, _harness: Harness): void {
+export function register(
+  rpc: RpcRegistry,
+  _harness: Harness,
+  created?: (directory: string) => void,
+): void {
   rpc.register("session.get", {
     params: (p) => text(p, "sessionID")!,
     handler: (ctx, id) => ctx.harness.core.getSession(id),
@@ -38,6 +42,10 @@ export function register(rpc: RpcRegistry, _harness: Harness): void {
       title: text(p, "title", true),
       parentID: text(p, "parentID", true),
     }),
-    handler: (ctx, p) => ctx.harness.core.createSession(p),
+    async handler(ctx, p) {
+      const session = await ctx.harness.core.createSession(p);
+      created?.(session.directory);
+      return session;
+    },
   });
 }

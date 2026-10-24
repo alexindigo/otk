@@ -129,6 +129,10 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
     client = new WsClient(f.url);
   await client.connect();
   try {
+    await client.rpc("projects.visit", {
+      directory: f.entries[0].directory,
+      active: true,
+    });
     f.add({ ...f.entries[0], id: "second", title: "Second session" });
     await b.goto(f.url);
     await openSession(b, "otk");

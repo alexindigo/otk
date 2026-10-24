@@ -6,6 +6,7 @@ import type { DialogProps, DialogRegistry } from "../registries/shell.ts";
 import { useShellPorts } from "../shell/context.tsx";
 import Form from "../components/Form.tsx";
 import { solidState } from "../state/binding.ts";
+import { useCommandPorts } from "../keyboard/context.tsx";
 
 export function registerProjectDialogs(dialogs: DialogRegistry): void {
   dialogs.register({
@@ -17,6 +18,7 @@ export function registerProjectDialogs(dialogs: DialogRegistry): void {
 }
 function AddProject(props: DialogProps) {
   const shell = useShellPorts();
+  const { commands } = useCommandPorts();
   const [server, setServer] = createSignal(
     shell.servers().find((s) => s.status === "connected")?.id ?? "local",
   );
@@ -36,6 +38,9 @@ function AddProject(props: DialogProps) {
     add: (id, directory) =>
       shell.connection(id).rpc.call("projects.add", { directory }),
     open: shell.openProject,
+    openSession: (target) => {
+      void commands.run("session.open", target);
+    },
     close: props.close,
     factory: solidState,
   });
@@ -45,9 +50,12 @@ function AddProject(props: DialogProps) {
     <>
       <Form
         title="Project directory"
-        submitLabel="Add project"
+        submitLabel="Create session"
         onSubmit={() => picker.add({ sidecarId: server(), directory: path() })}
       >
+        <p class="otk-muted">
+          Create the first session to start tracking this project.
+        </p>
         <label>
           Server<select
             name="server"

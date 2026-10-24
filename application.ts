@@ -85,7 +85,7 @@ export function startApplication(
     registerPrefs(rpc, backend, prefs);
     registerLayout(rpc, prefs);
     registerFrecency(rpc, backend, new Frecency(store, frecencyOptions));
-    registerSessions(rpc, backend);
+    registerSessions(rpc, backend, (directory) => inbox.activate(directory));
     registerPrompt(rpc, backend);
     registerShell(rpc, backend);
     registerCommands(rpc, backend);

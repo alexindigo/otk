@@ -41,16 +41,32 @@ async function consumer(url: string) {
   };
 }
 
+// This test exercises multiple project creation intents. Its backend must honor
+// the directory (the shared core-only fixture deliberately returns one session).
+function projectCreation(app: Awaited<ReturnType<typeof coreBackendFixture>>) {
+  app.app.backend.core.createSession = (input) =>
+    Promise.resolve({
+      ...app.session,
+      id: crypto.randomUUID(),
+      directory: input.directory,
+    });
+}
+
 test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batch finishes to two framework-free consumers and survive restart", async () => {
   const root = await fixture();
   let app = await coreBackendFixture(root);
+  projectCreation(app);
   let a = await consumer(app.url), b = await consumer(app.url);
   try {
     const rpc = a.connection.rpc;
     assertEquals(
       a.inbox().projects.map((p) => [p.directory, p.added, p.order]),
-      [[root, false, 0]],
+      [],
     );
+    await a.model.openSession("core", root);
+    assertEquals((await rpc.call("projects.list", {})).length, 0);
+    await a.model.act(root, () => Promise.resolve());
+    await waitFor(() => a.inbox().projects.length === 1, Boolean);
     assertEquals(await rpc.call("sessions.finishes", {}), {});
     const empty = join(root, "empty");
     await Deno.mkdir(empty);
@@ -156,7 +172,12 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
       0,
     ], [empty, 1]]);
     assertEquals(a.inbox().pathTemplates, [join(root, "{project}")]);
-    assertEquals(await a.connection.rpc.call("inbox.get", {}), a.inbox());
+    await waitFor(
+      async () =>
+        JSON.stringify(await a.connection.rpc.call("inbox.get", {})) ===
+          JSON.stringify(a.inbox()),
+      Boolean,
+    );
   } finally {
     await a.stop();
     await b.stop();
@@ -250,6 +271,7 @@ test("first-run setup and restart retain the same user's inbox metadata", async 
     const first = new WsClient(url, cookie);
     clients.push(first);
     await first.connect();
+    projectCreation(seeded);
     const empty = join(root, "private");
     await Deno.mkdir(empty);
     await first.rpc("projects.add", { directory: empty });

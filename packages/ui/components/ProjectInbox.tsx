@@ -106,12 +106,21 @@ export default function ProjectInbox(props: {
         props.ready && !!input &&
         props.projects.some((project) =>
           project.sidecarId === input.sidecarId &&
-          project.directory === input.directory
+          project.directory === input.directory &&
+          (project.source ?? "tracked") === "tracked"
         ),
     },
   );
+  const discovered = () =>
+    props.projects.filter((p) => (p.source ?? "tracked") !== "tracked");
   const rows = () =>
-    collapsed() ? props.projects : props.projects.filter((p) => !p.inactive);
+    props.projects.filter((p) =>
+      (p.source ?? "tracked") === "tracked" && !p.inactive
+    );
+  const discoveredOpen = () => !layout().discoveredCollapsed;
+  const toggleDiscovered = ownedAction("projects.discovered", async () => {
+    await props.onLayout({ discoveredCollapsed: discoveredOpen() });
+  });
   function Row(row: { project: ProjectRow }) {
     const [rowError, setRowError] = createSignal("");
     const project = () => row.project;
@@ -120,6 +129,7 @@ export default function ProjectInbox(props: {
       data: {
         sidecarId: project().sidecarId,
         directory: project().directory,
+        discovered: (project().source ?? "tracked") !== "tracked",
         value: !project().inactive,
       },
     });
@@ -144,6 +154,7 @@ export default function ProjectInbox(props: {
           e.directory === project().directory
         ).map((e) => e.id).join(" ")}
         data-inactive={project().inactive ? "true" : "false"}
+        data-source={project().source}
         data-rollup={project().status}
       >
         <SelectionContent class="otk-project-content">
@@ -153,10 +164,19 @@ export default function ProjectInbox(props: {
             aria-label={`Open project ${name()}${
               duplicate() ? ` on ${project().label}` : ""
             }`}
-            title={`${project().directory} · ${project().label} · ${project().status}`}
+            title={`${project().directory} · ${project().label}${
+              project().source === "template" ? "" : ` · ${project().status}`
+            }`}
             onClick={() => void open(project())}
           >
-            <StatusLight state={project().status} />
+            <span class="otk-project-marker">
+              <Show
+                when={project().source !== "template"}
+                fallback={collapsed() ? name().slice(0, 1) : undefined}
+              >
+                <StatusLight state={project().status} />
+              </Show>
+            </span>
             <Show when={!collapsed()}>
               <span class="otk-project-name-line">
                 <span
@@ -173,9 +193,11 @@ export default function ProjectInbox(props: {
           </button>
           <Show when={!collapsed()}>
             <div class="otk-project-trailing">
-              <time class="otk-project-visit" title="Since last visit">
-                {project().visitText}
-              </time>
+              <Show when={(project().source ?? "tracked") === "tracked"}>
+                <time class="otk-project-visit" title="Since last visit">
+                  {project().visitText}
+                </time>
+              </Show>
               <CommandMenu
                 class="otk-project-menu"
                 triggerClass="otk-project-menu-trigger"
@@ -316,6 +338,39 @@ export default function ProjectInbox(props: {
       <For each={rows()} keyed={(p) => `${p.sidecarId}/${p.directory}`}>
         {(p) => <Row project={p()} />}
       </For>
+      <Show when={discovered().length}>
+        <button
+          type="button"
+          class="otk-discovered-toggle"
+          aria-label={`Discovered projects (${discovered().length})`}
+          title={`Discovered projects (${discovered().length})`}
+          aria-expanded={discoveredOpen() ? "true" : "false"}
+          onClick={() =>
+            void toggleDiscovered().catch((error) =>
+              setError(errorMessage(error))
+            )}
+        >
+          <ChevronIcon class="otk-discovered-chevron" />
+          <Show when={!collapsed()}>
+            <span>Discovered</span>
+            <span class="otk-inbox-rule" />
+            <span>({discovered().length})</span>
+          </Show>
+        </button>
+        <section
+          aria-label="Discovered projects"
+          class="otk-discovered-projects"
+        >
+          <For
+            each={discovered().filter((p) =>
+              discoveredOpen() || p.status !== "idle"
+            )}
+            keyed={(p) => `${p.sidecarId}/${p.directory}`}
+          >
+            {(p) => <Row project={p()} />}
+          </For>
+        </section>
+      </Show>
       <Show when={!collapsed() && props.projects.some((p) => p.inactive)}>
         <button
           type="button"
@@ -339,6 +394,14 @@ export default function ProjectInbox(props: {
             </For>
           </section>
         </Show>
+      </Show>
+      <Show when={collapsed()}>
+        <For
+          each={props.projects.filter((p) => p.inactive)}
+          keyed={(p) => `${p.sidecarId}/${p.directory}`}
+        >
+          {(p) => <Row project={p()} />}
+        </For>
       </Show>
       <Show when={!collapsed() && !props.projects.length}>
         <EmptyState>Add a project to get started.</EmptyState>

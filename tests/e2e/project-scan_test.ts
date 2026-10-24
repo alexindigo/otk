@@ -99,9 +99,9 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await b.click("dialog[open] button[type=submit]");
       await b.poll("!document.querySelector('dialog[open]')");
       await b.poll(
-        `location.hash.includes(encodeURIComponent(${
+        `!!document.querySelector('.otk-session-view') && !!document.querySelector('[data-project=${
           JSON.stringify(directory)
-        }))`,
+        }][data-source="tracked"]')`,
       );
       const inbox = await client.rpc<{ projects: { directory: string }[] }>(
         "inbox.get",

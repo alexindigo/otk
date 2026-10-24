@@ -351,36 +351,43 @@ shell-navigation owners, injects browser confirmation/presence and installs
 split view/tab effects. Shell registers commands, observes frames and renders
 chrome through those ports. `ProjectInbox` renders the shared client projection
 in its column and 48px rail; it does not recompute roll-ups, unread or ageing.
-Width (200–360px, 248 default) and collapsed states follow the serving server's
-`shellLayout` preference. Controls pass independent `Partial<ShellLayout>` field
-intents through `onLayout`; the shell sends `layout.patch`, whose core owner
-merges against persisted state before validation/save/broadcast. No control
-constructs a whole-layout replacement from props. `ProjectTabs` consumes the
-public client tabs model, server/project-scoped task actions and injected
-guarded navigation. It renders task/phantom/preview tabs, ordered foldable
-breadcrumbs with helper nesting and reported usage, using 8px status lights.
-Shell-owned 28px corner toggles stay at a shared 12px offset across full/rail
-and right-open/closed layouts; each top bar reserves the corner zone. The 52px
-centre bar contains quiet task pills and injected Display options; the
-breadcrumb owns the selected session title and path tooltip. Reported usage
-fills the context bar against the reporting model's catalog context window;
-unknown windows show tokens without an invented denominator or bar. The inbox
-has 32px rows, hover-revealed menus, Search and a compact settings/keys/server
-footer; Sessions has 30px rows and CSS child guides. Chrome uses the shared
-selection pointer/underline, and shortcuts remain in tooltips, Keys and the
-palette. `registerTaskDialogs` contributes its name editor to the dialog host.
-Tabs have no per-tab menu; their owner-scoped commands and package-internal task
-handlers retain pin, naming, moving, adding and closing actions independently of
-presentation. Project rows own selection around their flowing open button and
-trailing cell. That cell reserves visit time and menu trigger in the same grid
-cell, revealing the trigger on hover or focus without shifting content or
-positioning it over the row. `session.preview` and `session.pin` are guarded
-command ports for the Sessions panel; preview replacement cannot remove required
-activity tabs. `ProjectSessions` consumes the framework-free client hierarchy
-and injected open/pin/create actions. The shell's existing navigation guard
-protects draft/attention input, including same-event slash navigation and
-browser history. Project-only URLs support empty projects. Opening or acting
-resets visits; a loaded viewed session records seen.
+Tracked rows precede the persisted, initially expanded Discovered disclosure and
+Inactive section. Collapsed discovery retains working/blocked/unseen-finished
+rows; the rail retains the same discovery-section geometry and mandatory
+indicators. Template-only rows reserve the same marker track without a lamp (a
+name initial identifies them in the rail). Discovered row context offers the
+shared captured New session action, while tracked rows retain their
+active/inactive action. Add project creates an initial session rather than
+tracking an empty directory alone. Width (200–360px, 248 default) and collapsed
+states follow the serving server's `shellLayout` preference. Controls pass
+independent `Partial<ShellLayout>` field intents through `onLayout`; the shell
+sends `layout.patch`, whose core owner merges against persisted state before
+validation/save/broadcast. No control constructs a whole-layout replacement from
+props. `ProjectTabs` consumes the public client tabs model,
+server/project-scoped task actions and injected guarded navigation. It renders
+task/phantom/preview tabs, ordered foldable breadcrumbs with helper nesting and
+reported usage, using 8px status lights. Shell-owned 28px corner toggles stay at
+a shared 12px offset across full/rail and right-open/closed layouts; each top
+bar reserves the corner zone. The 52px centre bar contains quiet task pills and
+injected Display options; the breadcrumb owns the selected session title and
+path tooltip. Reported usage fills the context bar against the reporting model's
+catalog context window; unknown windows show tokens without an invented
+denominator or bar. The inbox has 32px rows, hover-revealed menus, Search and a
+compact settings/keys/server footer; Sessions has 30px rows and CSS child
+guides. Chrome uses the shared selection pointer/underline, and shortcuts remain
+in tooltips, Keys and the palette. `registerTaskDialogs` contributes its name
+editor to the dialog host. Tabs have no per-tab menu; their owner-scoped
+commands and package-internal task handlers retain pin, naming, moving, adding
+and closing actions independently of presentation. Project rows own selection
+around their flowing open button and trailing cell. That cell reserves visit
+time and menu trigger in the same grid cell, revealing the trigger on hover or
+focus without shifting content or positioning it over the row. `session.preview`
+and `session.pin` are guarded command ports for the Sessions panel; preview
+replacement cannot remove required activity tabs. `ProjectSessions` consumes the
+framework-free client hierarchy and injected open/pin/create actions. The
+shell's existing navigation guard protects draft/attention input, including
+same-event slash navigation and browser history. Project-only URLs support empty
+projects. Opening or acting resets visits; a loaded viewed session records seen.
 
 `createIndex`, `createSession`, `createSidecars` and `solidState` bind the
 framework-free client models to Solid stores. Connection options, including the

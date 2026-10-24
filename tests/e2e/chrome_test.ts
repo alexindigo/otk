@@ -15,6 +15,10 @@ test("quiet chrome keeps corner geometry and non-colour selection across themes,
     c = new WsClient(f.url);
   try {
     await c.connect();
+    await c.rpc("projects.visit", {
+      directory: f.entries[1].directory,
+      active: true,
+    });
     const base = f.entries[0];
     f.add({
       ...base,

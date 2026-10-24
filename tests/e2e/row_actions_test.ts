@@ -16,6 +16,10 @@ test("project time and menu share a stable flowing cell on hover and focus; no t
     `(()=>{const row=document.querySelector('${row}'),cell=row.querySelector('.otk-project-trailing'),time=cell.querySelector('time'),trigger=cell.querySelector('.otk-popover-trigger'),r=cell.getBoundingClientRect(),t=time.getBoundingClientRect(),m=trigger.getBoundingClientRect();return {box:[r.x,r.y,r.width,r.height],row:row.getBoundingClientRect().toJSON(),centre:Math.max(Math.abs(t.y+t.height/2-m.y-m.height/2),Math.abs(m.y+m.height/2-r.y-r.height/2)),positions:[row,cell,time,trigger,...cell.children].map(e=>getComputedStyle(e).position),inside:t.left>=r.left&&t.right<=r.right&&m.left>=r.left&&m.right<=r.right}})()`;
   try {
     await c.connect();
+    await c.rpc("projects.visit", {
+      directory: f.entries[0].directory,
+      active: true,
+    });
     f.add({
       ...f.entries[0],
       id: "row-action-phantom",

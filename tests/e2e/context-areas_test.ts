@@ -212,6 +212,12 @@ test("C3 areas: empty regions, inner groups and shared control commands reach th
     client = new WsClient(f.url);
   await client.connect();
   try {
+    for (const entry of [f.entries[0], f.entries[3]]) {
+      await client.rpc("projects.visit", {
+        directory: entry.directory,
+        active: true,
+      });
+    }
     await client.rpc("projects.inactive", {
       directory: f.entries[3].directory,
       inactive: true,

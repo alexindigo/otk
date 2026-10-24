@@ -21,17 +21,26 @@ export interface InboxSnapshot {
   seen: Record<string, number>;
   finishes: Record<string, number>;
   pathTemplates: string[];
+  /** Server-side template discovery; index discovery is projected from the index. */
+  discovered?: string[];
+  discoveryError?: string;
 }
 /** Feature-owned contracts, composed by the open RPC interface. */
 export interface InboxRpcMethods {
   "inbox.get": { params: Record<string, never>; result: InboxSnapshot };
   "projects.list": { params: Record<string, never>; result: ProjectRecord[] };
-  "projects.add": { params: { directory: string }; result: ProjectRecord };
+  "projects.add": {
+    params: { directory: string };
+    result: ProjectRecord & { sessionID: string };
+  };
   "projects.inactive": {
     params: { directory: string; inactive: boolean };
     result: ProjectRecord;
   };
-  "projects.visit": { params: { directory: string }; result: ProjectRecord };
+  "projects.visit": {
+    params: { directory: string; active?: boolean };
+    result: ProjectRecord | null;
+  };
   "projects.scan": { params: Record<string, never>; result: string[] };
   "projects.templates": { params: { templates: string[] }; result: string[] };
   "tasks.list": { params: { directory?: string }; result: TaskRecord[] };

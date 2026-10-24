@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { isAbsolute, join, normalize, resolve, SEPARATOR } from "@std/path";
+import {
+  dirname,
+  isAbsolute,
+  join,
+  normalize,
+  resolve,
+  SEPARATOR,
+} from "@std/path";
 import { HarnessError } from "@otk/harness";
 export function projectPath(path: string): string {
   if (!path.trim() || path.includes("\0") || path.length > 4096) {
@@ -47,7 +54,10 @@ export async function scanProjects(
       }
       for (const candidate of candidates) {
         try {
-          if ((await Deno.stat(candidate)).isDirectory) found.add(candidate);
+          if (
+            (await Deno.stat(candidate)).isDirectory &&
+            !(await isWorktree(candidate))
+          ) found.add(candidate);
         } catch (error) {
           if (!(error instanceof Deno.errors.NotFound)) throw error;
         }
@@ -57,4 +67,27 @@ export async function scanProjects(
     }
   }
   return [...found].sort();
+}
+
+/** Git's linked-worktree metadata has commondir + a backlink, unlike submodules.
+ * Read only these small files: no Git process or native backend instance. */
+async function isWorktree(directory: string): Promise<boolean> {
+  const dot = join(directory, ".git");
+  try {
+    if (!(await Deno.stat(dot)).isFile) return false;
+    const match = /^gitdir:\s*(.+)\s*$/m.exec(await Deno.readTextFile(dot));
+    if (!match) return false;
+    const metadata = resolve(directory, match[1].trim());
+    const common = (await Deno.readTextFile(join(metadata, "commondir")))
+      .trim();
+    const backlink = (await Deno.readTextFile(join(metadata, "gitdir"))).trim();
+    return resolve(metadata, common) !== metadata &&
+      resolve(dirname(join(metadata, "gitdir")), backlink) === dot;
+  } catch (error) {
+    if (
+      error instanceof Deno.errors.NotFound ||
+      error instanceof Deno.errors.NotADirectory
+    ) return false;
+    throw error;
+  }
 }

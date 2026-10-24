@@ -86,8 +86,8 @@ Deno.test("session submission waits for directory resolution and shares promotio
     }],
     "submitted to original",
     "submitted to original",
-    ["projects.visit", { directory: "/original" }],
-    ["projects.visit", { directory: "/original" }],
+    ["projects.visit", { directory: "/original", active: true }],
+    ["projects.visit", { directory: "/original", active: true }],
   ]);
   assertEquals(f.tabs.state.selected, { kind: "task", id: "task" });
   assertEquals(

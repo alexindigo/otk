@@ -109,7 +109,7 @@ Deno.test("session ports capture target once while capability and resource gette
   assertEquals(calls, [["local", "session.abort", { sessionID: "original" }], [
     "local",
     "projects.visit",
-    { directory: "/original" },
+    { directory: "/original", active: true },
   ]]);
   assertEquals([ports.supports("history"), ports.supports("models")], [
     true,
