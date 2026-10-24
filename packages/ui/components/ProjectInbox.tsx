@@ -26,6 +26,7 @@ import {
   SettingsIcon,
 } from "./ChromeIcons.tsx";
 import {
+  commandHints,
   ownedAction,
   ownedCommand,
   useCommandPorts,
@@ -76,13 +77,7 @@ export default function ProjectInbox(props: {
       !collapsed() && props.projects.some((project) => project.inactive),
     run: () => setInactiveOpen(!inactiveOpen()),
   });
-  const commandTitle = (id: string, label: string) => {
-    props.prefs.keymap;
-    const keys = commands.list().find((row) => row.cmd.id === id)?.keys.join(
-      " / ",
-    );
-    return keys ? `${label} (${keys})` : label;
-  };
+  const hints = commandHints(ports);
   const layout = () => props.prefs.shellLayout;
   const collapsed = () => layout().leftCollapsed;
   const bounds = SHELL_WIDTHS.left;
@@ -232,7 +227,7 @@ export default function ProjectInbox(props: {
             type="button"
             class="otk-inbox-search"
             aria-label="Search commands"
-            title={commandTitle("palette.open", "Search commands")}
+            title={hints.title("palette.open", "Search commands")}
             onClick={() => void commands.run("palette.open")}
           >
             <SearchIcon class="otk-inbox-search-icon" />
@@ -255,7 +250,7 @@ export default function ProjectInbox(props: {
             type="button"
             class="otk-icon-button otk-keys-entry"
             aria-label="Keyboard shortcuts"
-            title={commandTitle("help.keys", "Keyboard shortcuts")}
+            title={hints.title("help.keys", "Keyboard shortcuts")}
             onClick={() => void commands.run("help.keys")}
           >
             <KeyboardIcon />

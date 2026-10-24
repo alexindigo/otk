@@ -14,7 +14,7 @@ export default function Editor(
   const save = ownedAction("editor.save", () => props.onSave());
   return (
     <div class="otk-editor">
-      <p>Save to keep changes · Esc to cancel</p>
+      <p>Save to keep changes</p>
       <textarea
         autofocus
         name="editor"

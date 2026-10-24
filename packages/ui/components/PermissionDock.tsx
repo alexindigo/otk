@@ -151,6 +151,12 @@ function RequestDock(
     enabled: () => !pending(),
     run: () => setMode("reject"),
   });
+  // Fixed widget keys, active only on this card's non-text controls in normal mode.
+  const shortcuts = {
+    once: { key: "1", run: once },
+    always: { key: "2", run: always },
+    reject: { key: "3", run: reject },
+  };
   const answerCommand = ownedCommand(ports, {
     id: "permission.answer",
     title: "Answer permission",
@@ -187,10 +193,12 @@ function RequestDock(
           event.target instanceof HTMLInputElement || pending() ||
           mode() !== "normal"
         ) return;
-        if (["1", "2", "3"].includes(event.key)) {
+        const shortcut = Object.values(shortcuts).find((item) =>
+          item.key === event.key
+        );
+        if (shortcut) {
           event.preventDefault();
-          if (event.key === "1") void once();
-          else void (event.key === "2" ? always() : reject());
+          void shortcut.run();
         }
       }}
     >
@@ -214,7 +222,7 @@ function RequestDock(
                   disabled={pending()}
                   onClick={() => void once()}
                   class="otk-primary otk-pill"
-                  title="Allow once (1 when focused)"
+                  title={`Allow once (${shortcuts.once.key} when focused)`}
                 >
                   Allow once
                 </button>
@@ -223,7 +231,7 @@ function RequestDock(
                   disabled={pending()}
                   onClick={() => void always()}
                   class="otk-pill"
-                  title="Review future grant (2 when focused)"
+                  title={`Review future grant (${shortcuts.always.key} when focused)`}
                 >
                   Always allow
                 </button>
@@ -232,7 +240,7 @@ function RequestDock(
                   disabled={pending()}
                   onClick={() => void reject()}
                   class="otk-pill"
-                  title="Reject (3 when focused)"
+                  title={`Reject (${shortcuts.reject.key} when focused)`}
                 >
                   Reject
                 </button>

@@ -501,6 +501,15 @@ bindings are Tab/reverse agent cycle, Enter submission, Mod+K palette,
 outside-text `?` help and top-layer Esc before double-Esc interrupt. Shift+Enter
 inserts a newline through the prompt-owned input port.
 
+The shared `commandHints` binding observes keymap registration, override/reset
+and command lifetimes. Prompt and inbox tooltips consume current command keys,
+including hidden prompt commands; unbound actions have no shortcut hint. Dialog
+and Editor contain no static surface hints. Permission's 1/2/3 keys are fixed
+widget data shared by its local dispatch and titles, active only on non-text
+controls in normal mode. Question's fixed Escape layer first leaves an answer
+field; with question controls focused it skips. These widget/layer interactions
+are separate from remappable command bindings.
+
 ## Context menus
 
 `ContextMenu({root})` owns the shell root's single capture-phase contextmenu

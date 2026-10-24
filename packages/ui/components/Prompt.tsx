@@ -10,7 +10,11 @@ import {
 import { createCompletion } from "./prompt/Completion.tsx";
 import { useUiRegistries } from "../registries/context.tsx";
 import type { PromptContext, PromptProps } from "../registries/prompt.ts";
-import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
+import {
+  commandHints,
+  ownedCommand,
+  useCommandPorts,
+} from "../keyboard/context.tsx";
 import { createKeyboard } from "../keyboard/dispatcher.ts";
 import { useSessionPorts } from "../registries/session.tsx";
 import { SendIcon } from "./ChromeIcons.tsx";
@@ -35,6 +39,17 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
   const ports = useCommandPorts();
   const keyboard = ports.keyboard ??
     createKeyboard(ports.commands, (error) => ctx.fail(error));
+  const hints = commandHints({ ...ports, keyboard });
+  const submitTitle = () => {
+    const newline = hints.keys("prompt.newline");
+    const interrupt = hints.keys("session.interrupt");
+    if (armed() && interrupt) return `${interrupt} again to interrupt`;
+    return [
+      hints.title("prompt.submit", "Send"),
+      newline && `${newline} for newline`,
+      interrupt && `${interrupt} twice to interrupt`,
+    ].filter(Boolean).join("; ");
+  };
   const releases: (() => void)[] = [];
   const change = (update: DraftChange, caret?: number) => {
     const draft = write(update);
@@ -229,7 +244,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         key: "Escape",
         inPrompt: true,
         ctx: "prompt",
-        desc: "Esc twice to interrupt",
+        desc: "Press twice to interrupt",
       }),
     );
     if (!ports.keyboard) releases.push(keyboard.start());
@@ -320,9 +335,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
           type="submit"
           class="otk-primary otk-send-button"
           aria-label="Send"
-          title={armed()
-            ? "Esc again to interrupt"
-            : "Send (Enter); Shift+Enter for newline; Esc twice to interrupt"}
+          title={submitTitle()}
           disabled={pending() ||
             props.value.chips.some((chip) => chip.pending || chip.error) ||
             !canSubmit() || !hasDraftContent(props.value)}

@@ -314,7 +314,7 @@ function Request(
               class="otk-pill"
               disabled={pending()}
               onClick={() => void reject()}
-              title="Skip question (Esc)"
+              title="Skip question (Esc with question controls focused)"
             >
               Skip question
             </button>

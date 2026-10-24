@@ -51,7 +51,7 @@ export default function Dialog(props: {
               onClick={() => void close()}
               aria-label={`Close ${props.title}`}
             >
-              Esc · Close
+              Close
             </button>
           </>
         }
