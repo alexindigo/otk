@@ -42,6 +42,17 @@ function output(message: Message, lastOutput?: number): Message {
     : message;
 }
 export function reduce(state: ContentState, op: ContentOp): ContentState {
+  if (op.op === "agent.colors") {
+    return {
+      ...state,
+      messages: state.messages.map((message) => ({
+        ...message,
+        agentColor: message.agent === undefined
+          ? undefined
+          : op.colors[message.agent],
+      })),
+    };
+  }
   if (op.op === "session.error") {
     if (op.errorState) {
       if (op.errorState.revision <= (state.errorState?.revision ?? -1)) {

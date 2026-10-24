@@ -9,6 +9,7 @@ import {
   type PreferenceKey,
   type Preferences,
   type ShellLayout,
+  type ToolBase,
 } from "@otk/protocol";
 import {
   CommandProvider,
@@ -16,6 +17,7 @@ import {
   DisplayMenu,
   emptyDraft,
   Login,
+  Message,
   NotificationSettings,
   paintVisualPreferences,
   Palette,
@@ -23,7 +25,11 @@ import {
   Prompt,
   QuestionDock,
   registerEditTool,
+  registerGenericTool,
   registerPatchTool,
+  registerTextPart,
+  registerToolPart,
+  registerUnknownPart,
   RightPanel,
   SessionProvider,
   ToolLine,
@@ -32,10 +38,177 @@ import {
 } from "@otk/ui";
 
 declare module "@otk/protocol" {
+  interface PartKinds {
+    "consumer.unregistered": {
+      kind: "consumer.unregistered";
+      id: string;
+      label: "Extension label must not render";
+    };
+  }
+  interface ToolKinds {
+    "consumer.unregistered": ToolBase & {
+      tool: "consumer.unregistered";
+      outputTruncated: "collision";
+    };
+  }
   interface Preferences {
     "consumer.appearance": boolean;
     "consumer.notification": boolean;
   }
+}
+
+export function InteractionFailures(
+  props: { onTheme(id: string): void },
+): Element {
+  const ui = createUiRegistries(), commands = new CommandHub();
+  registerGenericTool(ui.tools);
+  registerUnknownPart(ui.parts);
+  registerTextPart(ui.parts);
+  registerToolPart(ui.parts);
+  const [draft, setDraft] = createSignal(emptyDraft()),
+    [kind, setKind] = createSignal("async");
+  const reject = (source: string) => {
+    if (kind() === "sync") throw new Error(`Synchronous ${source} refusal`);
+    return Promise.reject(new Error(`Asynchronous ${source} refusal`));
+  };
+  ui.prompt.register({
+    id: "refusing-port",
+    create: () => ({
+      paste(event) {
+        event.preventDefault();
+        return reject("paste");
+      },
+      drop: () => reject("drop"),
+    }),
+  });
+  return (
+    <CommandProvider commands={commands}>
+      <UiProvider registries={ui}>
+        <main
+          style={{
+            padding: "24px",
+            "max-width": "736px",
+            margin: "0 auto",
+            display: "grid",
+            gap: "24px",
+          }}
+        >
+          <header>
+            <h1>Interaction feedback and open fallback contracts</h1>
+            <button
+              type="button"
+              data-dark
+              onClick={() => props.onTheme("otk-dark")}
+            >
+              Dark
+            </button>
+            <button
+              type="button"
+              data-light
+              onClick={() => props.onTheme("otk-light")}
+            >
+              Linen
+            </button>
+            <button type="button" data-sync onClick={() => setKind("sync")}>
+              Synchronous refusal
+            </button>
+            <button type="button" data-async onClick={() => setKind("async")}>
+              Asynchronous refusal
+            </button>
+          </header>
+          <Message
+            sidecarId="probe"
+            message={{
+              id: "probe",
+              sessionID: "probe",
+              role: "assistant",
+              time: { created: 1, completed: 2 },
+              agent: "Consumer",
+              model: { provider: "Independent", model: "Fixture" },
+              tokens: {
+                input: 0,
+                output: 0,
+                reasoning: 0,
+                cache: { read: 0, write: 0 },
+              },
+              cost: 0,
+              interrupted: false,
+              parts: [
+                {
+                  kind: "text",
+                  id: "text",
+                  synthetic: false,
+                  blocks: [{
+                    b: "paragraph",
+                    inline: [{
+                      i: "text",
+                      text:
+                        "Keep this reply available after a clipboard refusal.",
+                    }],
+                  }],
+                },
+                {
+                  kind: "consumer.unregistered",
+                  id: "part",
+                  label: "Extension label must not render",
+                },
+                {
+                  kind: "tool",
+                  id: "tool",
+                  call: {
+                    tool: "consumer.unregistered",
+                    callID: "tool",
+                    status: "completed",
+                    time: {},
+                    awaitingPermission: false,
+                    output: "Common output survives an unregistered extension.",
+                    outputTruncated: "collision",
+                  },
+                },
+              ],
+            }}
+            prefs={{ ...DEFAULT_PREFS, genericToolOutput: true }}
+            permissions={[]}
+            paneWidth={736}
+            queued={false}
+            onOpenChild={() => {}}
+          />
+          <SessionProvider
+            ports={{
+              supports: () => true,
+              rpc: () => Promise.reject(new Error("Unexpected RPC")),
+              sessionID: () => "probe",
+              directory: () => Promise.resolve("/project"),
+              entry: () => undefined,
+              permissions: () => [],
+              questions: () => [],
+              prefs: () => DEFAULT_PREFS,
+              dirty() {},
+              act: (action) => action(),
+              submit: (action) => action(),
+              history: () => Promise.resolve([]),
+              attachments: (parts) => Promise.resolve(parts),
+            }}
+          >
+            <Prompt
+              value={draft()}
+              connected
+              busy={false}
+              onChange={(update) => {
+                let next = draft();
+                setDraft((current) =>
+                  next = typeof update === "function" ? update(current) : update
+                );
+                return next;
+              }}
+              onSubmit={() => Promise.resolve()}
+              onAbort={() => Promise.resolve()}
+            />
+          </SessionProvider>
+        </main>
+      </UiProvider>
+    </CommandProvider>
+  );
 }
 
 export function ErrorBoundaries(props: { onTheme(id: string): void }): Element {

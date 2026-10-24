@@ -112,7 +112,18 @@ export class Opencode1Adapter implements Harness {
     this.#db = new BootstrapDb(harnessDb(cfg));
     this.#history = new History(harnessDb(cfg));
     this.#messages = new Messages(this.client, (id) => this.#directory(id));
-    this.#colors = new AgentColors(this.client);
+    this.#colors = new AgentColors(this.client, (colors, sessions) => {
+      const controller = this.#controller;
+      if (!controller || !this.#current(controller)) return;
+      for (const [id, owner] of sessions) {
+        if (owner === controller && this.buffers.subscribed(id)) {
+          this.#sink.content(id, {
+            op: "agent.colors",
+            colors: Object.fromEntries(colors),
+          });
+        }
+      }
+    }, () => this.#controller);
     this.#recovery = new MessageRecovery(
       (session, message, signal) =>
         this.#messages.get(session, message, signal),
@@ -171,7 +182,7 @@ export class Opencode1Adapter implements Harness {
           });
         }
       },
-      () => this.#sink.resync("all"),
+      (parent, error) => console.warn(`task summary for ${parent}:`, error),
     );
     const directory = sessionDirectory(
       (id) => this.#directory(id),
@@ -304,6 +315,7 @@ export class Opencode1Adapter implements Harness {
       );
     }
     if (!count) this.#tasks.release(id);
+    if (!count) this.#colors.release(id);
     if (!count) this.#reverts.delete(id);
     if (!count) this.#recovery.release(id);
   }
@@ -969,10 +981,10 @@ export class Opencode1Adapter implements Harness {
               [],
               completedOutput ?? this.buffers.outputTime(info!.id),
             ),
-            colors = await this.#colors.get(this.#directory(sessionID));
+            colors = this.#colors.peek(this.#directory(sessionID), sessionID);
           if (!this.#current(controller)) return;
           if (message.agent !== undefined) {
-            message.agentColor = colors.get(message.agent);
+            message.agentColor = colors?.get(message.agent);
           }
           content({ op: "message.upsert", message });
         }

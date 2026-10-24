@@ -90,6 +90,15 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     },
   };
   const features = useUiRegistries().prompt.create(ctx);
+  // Invoke synchronously so feature-owned preventDefault still precedes native
+  // paste, then contain either a synchronous throw or an asynchronous rejection.
+  const interact = (action: () => void | Promise<void>) => {
+    try {
+      void Promise.resolve(action()).catch(ctx.fail);
+    } catch (error) {
+      ctx.fail(error);
+    }
+  };
   const completion = createCompletion(ctx, features);
   // The input owns its focus port. Resume only when the replacing surface has
   // released focus, preserving a reader's newer focus elsewhere in the shell.
@@ -267,7 +276,9 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
-        void ctx.acceptFiles(Array.from(event.dataTransfer?.files || []));
+        interact(() =>
+          ctx.acceptFiles(Array.from(event.dataTransfer?.files || []))
+        );
       }}
       onSubmit={(event) => {
         event.preventDefault();
@@ -293,7 +304,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         onPaste={(event) => {
           for (const feature of features) {
             if (feature.paste) {
-              void feature.paste(event);
+              interact(() => feature.paste!(event));
               break;
             }
           }

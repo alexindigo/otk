@@ -382,8 +382,12 @@ test("theme save rejection stays visible, retains preview and never replaces hos
     await browser.poll(
       "document.querySelector('dialog[aria-label=Theme] [role=alert]')?.textContent.includes('Invalid preference key or value') && !document.querySelector('.otk-theme-actions button:last-child').disabled",
     );
-    await browser.poll(
-      "document.querySelector('.otk-toast[data-kind=error]')?.textContent.includes('Invalid preference key or value')",
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelectorAll('.otk-toast[data-kind=error]').length",
+      ),
+      0,
+      "The local theme save owner must not also create a transport-wide error",
     );
     assertEquals(
       await browser.evaluate("document.documentElement.dataset.otkTheme"),

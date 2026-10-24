@@ -57,7 +57,9 @@ async function recording(
   let controller!: ReadableStreamDefaultController<Uint8Array>;
   let release!: () => void;
   const held = new Promise<void>((resolve) => release = resolve);
-  const connections: string[] = [], ops: { id: string; op: ContentOp }[] = [];
+  const connections: string[] = [],
+    ops: { id: string; op: ContentOp }[] = [],
+    resyncs: string[] = [];
   const index = new IndexStore(), buffers = new StreamBuffers();
   let resets = 0, streams = 0;
   const fetcher: typeof fetch = (input, options) => {
@@ -113,7 +115,9 @@ async function recording(
     indexUpsert: (entry) => index.upsert(entry),
     indexRemove: (id) => index.remove(id),
     content: (id, op) => ops.push({ id, op }),
-    resync: () => {},
+    resync: (id) => {
+      resyncs.push(id);
+    },
   });
   await wait(() => !!controller);
   const raw = (text: string) =>
@@ -139,6 +143,7 @@ async function recording(
     index,
     ops,
     connections,
+    resyncs,
     send,
     raw,
     drain,
@@ -311,6 +316,107 @@ test("colour cache shares in-flight directory lookups, retries failures and inva
   colors.clear();
   await colors.get("/project");
   assertEquals(calls, 3);
+});
+
+test("optional agent failure cannot reject an otherwise valid transcript page", async () => {
+  const raw = session("root");
+  const record = await recording((url) => {
+    if (url.pathname === "/agent") {
+      return Promise.resolve(new Response("optional failure", { status: 500 }));
+    }
+    if (url.pathname === "/session/root") {
+      return Promise.resolve(Response.json(raw));
+    }
+    if (url.pathname === "/session/root/message") {
+      return Promise.resolve(Response.json([{ info: info(), parts: [] }]));
+    }
+  });
+  try {
+    const messages = await record.adapter.core.listMessages("root", {
+      limit: 100,
+    });
+    assertEquals(messages.map((message) => message.id), ["msg_live"]);
+    assertEquals(messages[0].agentColor, undefined);
+  } finally {
+    await record.adapter.core.stop();
+  }
+});
+
+test("optional color retries retain independent subscribers and cleared generations cannot publish", async () => {
+  const held = [
+    Promise.withResolvers<Response>(),
+    Promise.withResolvers<Response>(),
+    Promise.withResolvers<Response>(),
+  ];
+  let reads = 0;
+  const deliveries: string[][] = [];
+  const colors = new AgentColors(
+    new Client(cfg().harness, () => held[reads++].promise),
+    (_colors, sessions) => deliveries.push([...sessions.keys()]),
+  );
+  const first = colors.get("/project");
+  colors.peek("/project", "first");
+  colors.peek("/project", "second");
+  held[0].resolve(new Response("optional failure", { status: 500 }));
+  await first.catch(() => {});
+  const retry = colors.get("/project");
+  held[1].resolve(Response.json([{ name: "build", color: "#123456" }]));
+  await retry;
+  assertEquals(deliveries, [["first", "second"]]);
+  colors.clear();
+  const retired = colors.get("/project");
+  colors.peek("/project", "retired");
+  colors.clear();
+  held[2].resolve(Response.json([{ name: "build", color: "#abcdef" }]));
+  await retired;
+  assertEquals(deliveries, [["first", "second"]]);
+});
+
+test("held agent decoration never gates live headers and late colors invalidate only their subscribed directory", async () => {
+  const held = Promise.withResolvers<Response>();
+  const record = await recording((url) => {
+    if (url.pathname === "/agent") return held.promise;
+    if (url.pathname === "/session/root") {
+      return Promise.resolve(Response.json(session("root")));
+    }
+    if (url.pathname === "/session/root/message") {
+      return Promise.resolve(Response.json([{ info: info(), parts: [] }]));
+    }
+  });
+  try {
+    record.send("message.updated", { info: info() });
+    await record.drain();
+    assert(
+      record.ops.some(({ op }) =>
+        op.op === "message.upsert" && op.message.id === "msg_live"
+      ),
+    );
+    const before = record.ops.length;
+    held.resolve(Response.json([{ name: "build", color: "#123456" }]));
+    await wait(() =>
+      record.ops.slice(before).some(({ op }) => op.op === "agent.colors")
+    );
+    const decorations = record.ops.slice(before).filter(({ op }) =>
+      op.op === "agent.colors"
+    );
+    assertEquals(decorations.map(({ id }) => id), ["root"]);
+    const content = record.ops.filter(({ id }) => id === "root").reduce(
+      (state, { op }) => reduce(state, op),
+      emptyContent(),
+    );
+    assertEquals(
+      content.messages.find((message) => message.id === "msg_live")?.agentColor,
+      "#123456",
+    );
+    assertEquals(
+      (await record.adapter.core.listMessages("root", { limit: 100 }))[0]
+        .agentColor,
+      "#123456",
+    );
+  } finally {
+    held.resolve(Response.json([]));
+    await record.adapter.core.stop();
+  }
 });
 
 test("recovery coalesces parts within one message and cancels scheduled reads before they start", async () => {
@@ -577,10 +683,27 @@ test("agent colours are shared per directory across sessions, pages, events and 
     await record.drain();
     assertEquals([...lookups], [["/project", 1], ["/second", 1]]);
     for (
-      const { op } of record.ops.filter(({ op }) => op.op === "message.upsert")
+      const [id, expected] of [["root", ["event-root", "after-reconnect"]], [
+        "other",
+        ["event-other"],
+      ]] as const
     ) {
-      assert(op.op === "message.upsert");
-      assertEquals(op.message.agentColor, "#abcdef");
+      const rendered = () =>
+        record.ops.filter((item) => item.id === id).reduce(
+          (state, { op }) => reduce(state, op),
+          emptyContent(),
+        );
+      await wait(() =>
+        rendered().messages.length === expected.length &&
+        rendered().messages.every((message) => message.agentColor === "#abcdef")
+      );
+      assertEquals(
+        rendered().messages.map((message) => message.id).sort(),
+        [...expected].sort(),
+      );
+      for (const message of rendered().messages) {
+        assertEquals(message.agentColor, "#abcdef");
+      }
     }
   } finally {
     await record.adapter.core.stop();

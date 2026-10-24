@@ -30,6 +30,16 @@ Treat state as read-only outside model methods. A UI binding can supply a
 `StateFactory` implementing draft updates and reconciliation. The application's
 thin Solid binding retains granular updates at the UI boundary.
 
+Session snapshots publish essential session/message data independently of
+optional attention and sibling reads. Optional failures retain last-good data
+and expose diagnostics. Live attention changes replay over their own resource
+snapshot. Replacement fetches retain the live-operation buffer; failure applies
+it to a last-good transcript, or retains it for retry when no baseline exists.
+`state.continuity` distinguishes `loading`, `ready` and recoverable `missing`
+baselines. Superseding a generation retires its paging flag. Late `agent.colors`
+operations decorate the existing transcript without retaining another
+collection.
+
 `rpc.call(method, params, signal?)` derives its input and result types from
 `@otk/protocol`'s declaration-mergeable `RpcMethods` interface. Callers do not
 supply result type arguments. `createCurrentClient().call` uses the same

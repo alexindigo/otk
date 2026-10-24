@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Message.css" with { type: "text" };
 import { agentColor } from "../theme/agent-color.ts";
-import { createMemo, For, Show } from "solid-js";
+import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
 import WorkLog from "./WorkLog.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
@@ -20,8 +20,10 @@ import type { Preferences } from "@otk/protocol";
 import type { PartProps } from "../registries/renderers.ts";
 import {
   ContentIdentityProvider,
+  copyContent,
   useContentIdentity,
 } from "../features/transcript-context.tsx";
+import { errorMessage } from "@otk/protocol";
 function PartView(
   props: {
     part: Part;
@@ -106,8 +108,19 @@ export default function Message(
     ).filter(Boolean).join("\n\n");
   const copy = ownedAction(
     "message.copy",
-    (value: string) => navigator.clipboard.writeText(value),
+    copyContent,
   );
+  const [copyError, setCopyError] = createSignal("");
+  let active = true;
+  onCleanup(() => {
+    active = false;
+  });
+  const copyReply = () => {
+    setCopyError("");
+    void copy(text()).catch((error) => {
+      if (active) setCopyError(errorMessage(error));
+    });
+  };
   const assistant = () =>
     props.metadata === null ? undefined : props.metadata ??
       (props.message.role === "assistant" ? props.message : undefined);
@@ -253,7 +266,7 @@ export default function Message(
                   class="otk-icon-button otk-copy-message"
                   aria-label="Copy reply"
                   title="Copy reply"
-                  onClick={() => void copy(text())}
+                  onClick={copyReply}
                 >
                   <CopyIcon />
                 </button>
@@ -290,6 +303,9 @@ export default function Message(
         </Show>
         <Show when={error()}>
           <p class="otk-error" role="alert">{error()}</p>
+        </Show>
+        <Show when={copyError()}>
+          <p class="otk-error" role="alert">{copyError()}</p>
         </Show>
       </article>
     </ContentIdentityProvider>

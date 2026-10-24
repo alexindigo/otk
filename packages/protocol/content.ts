@@ -319,6 +319,7 @@ export interface Todo {
   priority: string;
 }
 export type ContentOp =
+  | { op: "agent.colors"; colors: Record<string, AgentColor> }
   | { op: "session.error"; error?: string; errorState?: SessionErrorState }
   | { op: "question.upsert"; request: QuestionRequest }
   | { op: "question.remove"; requestID: string; sessionID: string }

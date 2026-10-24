@@ -53,25 +53,51 @@ export class AuthState {
       const dir = this.cfg.state.path;
       await Deno.mkdir(dir, { recursive: true, mode: 0o700 });
       await Deno.chmod(dir, 0o700);
-      const file = await Deno.open(join(dir, "auth.toml"), {
+      const stage = join(dir, `.auth-${crypto.randomUUID()}.toml`);
+      const file = await Deno.open(stage, {
         createNew: true,
         write: true,
         mode: 0o600,
       });
       try {
-        const bytes = new TextEncoder().encode(stringify(stored));
-        let written = 0;
-        while (written < bytes.length) {
-          written += await file.write(bytes.subarray(written));
+        try {
+          const bytes = new TextEncoder().encode(stringify(stored));
+          let written = 0;
+          while (written < bytes.length) {
+            const count = await file.write(bytes.subarray(written));
+            if (!count) throw new Error("Auth state write made no progress");
+            written += count;
+          }
+          await file.sync();
+        } finally {
+          file.close();
         }
-        await file.sync();
+        // A same-filesystem hard link is the no-overwrite commit point. No
+        // reader can observe the incremental write as the configured identity.
+        await Deno.link(stage, join(dir, "auth.toml"));
+        Object.assign(this.cfg.auth, stored);
+        this.local = stored.type === "password"
+          ? new LocalAuth(this.cfg.auth)
+          : null;
+        // Publication has committed. A durability diagnostic must not report a
+        // completed setup as unconfigured or encourage a competing retry.
+        try {
+          const directory = await Deno.open(dir, { read: true });
+          try {
+            await directory.sync();
+          } finally {
+            directory.close();
+          }
+        } catch (error) {
+          console.warn("Auth state published; directory sync failed:", error);
+        }
       } finally {
-        file.close();
+        try {
+          await Deno.remove(stage);
+        } catch (error) {
+          console.warn("Auth staging cleanup failed:", error);
+        }
       }
-      Object.assign(this.cfg.auth, stored);
-      this.local = stored.type === "password"
-        ? new LocalAuth(this.cfg.auth)
-        : null;
     } catch (e) {
       if (e instanceof Deno.errors.AlreadyExists) {
         throw new Error("already_configured");

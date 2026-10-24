@@ -7,15 +7,18 @@ export class FreezeProxy {
   #jobs = new Set<Promise<void>>();
   #accept: Promise<void>;
   #frozen = false;
+  #stopping = false;
+  #failures: unknown[] = [];
   #waiters: (() => void)[] = [];
-  readonly requests: string[] = [];
   readonly port: number;
   #stop: () => Promise<void>;
   constructor(readonly target: number) {
     const scope = resources();
     this.#listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
     this.port = (this.#listener.addr as Deno.NetAddr).port;
-    this.#accept = this.#run();
+    this.#accept = this.#run().catch((error) => {
+      this.#failures.push(error);
+    });
     this.#stop = scope.defer("freeze proxy", () => this.#shutdown());
   }
   freeze(): void {
@@ -28,12 +31,16 @@ export class FreezeProxy {
   async #run(): Promise<void> {
     try {
       for await (const incoming of this.#listener) {
-        const task = this.#pair(incoming);
+        const task = this.#pair(incoming).catch((error) => {
+          this.#failures.push(error);
+        });
         this.#jobs.add(task);
-        task.finally(() => this.#jobs.delete(task));
+        void task.then(() => this.#jobs.delete(task));
       }
     } catch (error) {
-      if (!(error instanceof Deno.errors.BadResource)) throw error;
+      if (!this.#stopping || !(error instanceof Deno.errors.BadResource)) {
+        throw error;
+      }
     }
   }
   async #pair(incoming: Deno.TcpConn): Promise<void> {
@@ -45,43 +52,47 @@ export class FreezeProxy {
         port: this.target,
       });
       this.#connections.add(outgoing);
+      if (this.#stopping) return;
+      let closing = false;
       const forward = async (
         source: Deno.TcpConn,
         target: Deno.TcpConn,
-        record = false,
       ) => {
         const buffer = new Uint8Array(65_536);
-        let header = "", recorded = false;
         try {
           while (true) {
             const size = await source.read(buffer);
             if (size === null) break;
-            if (record && !recorded) {
-              header += new TextDecoder().decode(buffer.subarray(0, size));
-              if (header.includes("\r\n")) {
-                this.requests.push(header.split("\r\n")[0]);
-                recorded = true;
-                header = "";
-              }
-            }
             while (this.#frozen) {
               await new Promise<void>((resolve) => this.#waiters.push(resolve));
             }
             let written = 0;
             while (written < size) {
-              written += await target.write(buffer.subarray(written, size));
+              const count = await target.write(buffer.subarray(written, size));
+              if (!count) throw new Error("Proxy write made no progress");
+              written += count;
             }
           }
+        } catch (error) {
+          if (
+            !((this.#stopping || closing) &&
+              (error instanceof Deno.errors.BadResource ||
+                error instanceof Deno.errors.Interrupted))
+          ) throw error;
         } finally {
+          closing = true;
           try {
             target.close();
           } catch { /* peer already closed */ }
         }
       };
-      await Promise.allSettled([
-        forward(incoming, outgoing, true),
+      const results = await Promise.allSettled([
+        forward(incoming, outgoing),
         forward(outgoing, incoming),
       ]);
+      for (const result of results) {
+        if (result.status === "rejected") this.#failures.push(result.reason);
+      }
     } finally {
       for (const socket of [incoming, outgoing]) {
         if (socket) {
@@ -97,6 +108,7 @@ export class FreezeProxy {
     await this.#stop();
   }
   async #shutdown(): Promise<void> {
+    this.#stopping = true;
     this.thaw();
     this.#listener.close();
     for (const socket of this.#connections) {
@@ -106,5 +118,11 @@ export class FreezeProxy {
     }
     await this.#accept;
     await Promise.allSettled([...this.#jobs]);
+    if (this.#failures.length) {
+      throw new AggregateError(
+        this.#failures,
+        "Unexpected freeze proxy forwarding failure",
+      );
+    }
   }
 }

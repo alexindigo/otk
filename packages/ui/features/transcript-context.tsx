@@ -8,6 +8,11 @@ import {
 } from "solid-js";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 
+/** Both visible reply actions and context commands copy the captured source. */
+export function copyContent(value: string): Promise<void> {
+  return navigator.clipboard.writeText(value);
+}
+
 /** Shared target data is extensible without importing a message or tool view. */
 export interface ContentIdentity {
   sidecarId?: string;
@@ -82,8 +87,7 @@ export function TranscriptContext(props: { children: Element }): Element {
       hidden: true,
       context: { kind },
       enabled: (_ctx, target?: ContentTarget) => !!target?.text,
-      run: (_ctx, target: ContentTarget) =>
-        navigator.clipboard.writeText(target.text!),
+      run: (_ctx, target: ContentTarget) => copyContent(target.text!),
     });
   }
   for (
@@ -101,8 +105,7 @@ export function TranscriptContext(props: { children: Element }): Element {
       hidden: true,
       context: { kind: "tool" },
       enabled: (_ctx, target?: ContentTarget) => !!target?.[source],
-      run: (_ctx, target: ContentTarget) =>
-        navigator.clipboard.writeText(target[source]!),
+      run: (_ctx, target: ContentTarget) => copyContent(target[source]!),
     });
   }
   ownedCommand(ports, {

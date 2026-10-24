@@ -127,10 +127,12 @@ belong in this contract. This new capability is not inferred for legacy servers.
 
 `AgentColor` is a concrete hex colour or the semantic role `accent` /
 `secondary`; consumers resolve roles in their own presentation system.
-Transcripts use the same contract. A task's optional `agent` contains only a
-reported identity; absence never implies a specific backend agent. External
-output's truncation flag reports truncation only, not a universal byte limit or
-source.
+Transcripts use the same contract. A late `agent.colors` content operation
+carries available name-to-colour metadata independently of essential message
+delivery; the receiver decorates its existing transcript. A task's optional
+`agent` contains only a reported identity; absence never implies a specific
+backend agent. External output's truncation flag reports truncation only, not a
+universal byte limit or source.
 
 The transcript preference owner contributes `showCost` and
 `collapseFileChanges`, both on by default, with shared Display toggles and

@@ -133,7 +133,12 @@ Features can provide triggers and autocomplete sources, key handling,
 paste/drop, submission transforms, completion hooks, chips, actions and
 overlays. Shell, mentions, slash, history, paste, attachments and editor each
 own their implementation. `Prompt` owns native input, submission identity and
-teardown; it has no feature import list.
+teardown; it has no feature import list. Native paste/drop entry points contain
+both synchronous throws and rejected feature promises through the prompt's
+lifetime-bound feedback port. Reply copy uses the shared captured-source copy
+operation and shows a local refusal without losing content. Failed RPC results
+belong to their requesting operation; only unsolicited protocol errors enter
+transport-wide notification feedback.
 
 The completion adapter binds the framework-free client `createPromptCompletion`
 owner through `solidState`, forwards current input/caret/chip ranges and renders

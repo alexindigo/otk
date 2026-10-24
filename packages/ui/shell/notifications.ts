@@ -172,12 +172,6 @@ export function applicationNotifications(input: {
       if (frame.t === "approvals" || frame.t === "harness") {
         triggers.refresh(sidecar);
       }
-      if (frame.t === "rpc.result" && !frame.ok) {
-        message(
-          "error",
-          frame.error.message,
-        );
-      }
       if (frame.t === "error") message("error", frame.message || frame.code);
     },
     remove(sidecar: string) {

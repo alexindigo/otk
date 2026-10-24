@@ -80,11 +80,14 @@ export function sessions(
         ).replaceAll("+", "-").replaceAll("/", "_").replace(/=+$/, "");
       }
       const { items: raw } = await reader.page(id, opts.limit, before);
-      const colors = await agentColors.get(session.directory);
+      const colors = agentColors.peek(
+        session.directory,
+        buffers.subscribed(id) ? id : undefined,
+      );
       const messages = await Promise.all(raw.map(async (message) => {
         const mapped = mapMessage(message.info, message.parts);
         if (mapped.agent !== undefined) {
-          mapped.agentColor = colors.get(mapped.agent);
+          mapped.agentColor = colors?.get(mapped.agent);
         }
         for (const [i, part] of message.parts.entries()) {
           if (part.type === "tool" && part.tool === "task") {

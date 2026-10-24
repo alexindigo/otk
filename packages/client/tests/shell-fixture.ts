@@ -120,6 +120,7 @@ export function shellFixture() {
       loading: false,
       paging: false,
       exhausted: false,
+      continuity: "ready",
     },
     open(target) {
       calls.push(["open", target]);

@@ -67,7 +67,13 @@ once from those supplied inputs, loads generated auth state there and publishes
 that same path as `cfg.state.path`. Authentication and every store composition
 consume this value without consulting the process environment again. Root
 bootstrap owns memoization and default paths. `AuthState`, `LocalAuth`, password
-helpers and `allowedOrigin` retain cookie/origin/JWT/TOTP behavior.
+helpers and `allowedOrigin` retain cookie/origin/JWT/TOTP behavior. First-run
+setup writes and syncs a private same-directory staging file, then publishes its
+complete contents through a no-overwrite hard link. Write, file-sync and
+publication failures leave setup retryable; concurrent owners cannot replace the
+winning identity. Publication is the commit point. Directory-sync or staging
+cleanup failures after it are diagnosed without reporting committed setup as
+unconfigured. Restart reads the same committed `auth.toml` through config.
 `Connections`, `IndexStore`, `serve`, `staticResponse`, `promptParts`, `object`
 and `text` are shared core implementation helpers. `IndexStore` extends the
 harness-neutral `SessionIndex` owner and adds wire revisions/batching. Core

@@ -77,6 +77,16 @@ parents. Agent colours share one in-flight/cache entry per directory until
 native instance disposal or stop. Reconnecting alone does not invalidate
 directory configuration.
 
+Agent-colour reads are optional directory resources, never prerequisites for a
+history page or live header. Essential content uses available colours
+immediately; late colours publish `agent.colors` to current subscribers, whose
+existing transcript is decorated by the client reducer. No second message/header
+store is retained. Failed lookups are diagnosed once per attempt and can retry
+on the next read. Disposal cancels the resource and fences its late results;
+unsubscribe releases its session identity. Task refresh failures likewise report
+the affected live parent only, continue independent links and suppress
+retired-parent errors; they do not cause a connection-wide resnapshot.
+
 The connector's pending-permission owner retains normalized requests from
 bootstrap and global permission events. Family list readers, attention counts
 and tool waiting state use that same owner, including with no content

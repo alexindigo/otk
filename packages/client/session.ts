@@ -46,6 +46,8 @@ export interface SessionState {
   loading: boolean;
   paging: boolean;
   exhausted: boolean;
+  /** Missing baselines retain live operations until a successful recovery. */
+  continuity: "loading" | "ready" | "missing";
   error?: string;
 }
 export type ToolPart = Extract<Part, { kind: "tool" }>;
@@ -81,10 +83,16 @@ export function createSession(
     loading: false,
     paging: false,
     exhausted: false,
+    continuity: "ready",
   });
   let selected: Selection | undefined, generation = 0, load = 0;
   const usage = createSessionUsage(connection, factory);
   let buffer: ContentOp[] = [], fetching = false;
+  let hasBaseline = false;
+  let attentionReads: {
+    events: ContentOp[];
+    pending: Set<"permission" | "question">;
+  } | undefined;
   let controller: AbortController | undefined;
   let models: ModelCatalogOwner | undefined, catalogVersion = 0;
   // IDs only: the selected transcript remains the sole owner of part data.
@@ -126,10 +134,15 @@ export function createSession(
     const target = selected, id = generation, request = ++load;
     controller?.abort();
     const abort = controller = new AbortController();
-    buffer = [];
     fetching = true;
+    const attention = attentionReads = {
+      events: [] as ContentOp[],
+      pending: new Set<"permission" | "question">(["permission", "question"]),
+    };
     setState((draft) => {
       draft.loading = true;
+      draft.paging = false;
+      draft.continuity = hasBaseline ? "ready" : "loading";
       draft.error = undefined;
       draft.exhausted = false;
     });
@@ -137,7 +150,62 @@ export function createSession(
       const sidecar = connection(target.sidecarId), rpc = sidecar.rpc;
       models?.connect();
       void usage.load(target);
-      const [info, messages, permissions, questions] = await Promise.all([
+      const diagnostic = (error: unknown) => {
+        if (current(id, request)) {
+          setState((draft) => {
+            draft.error = errorMessage(error);
+          });
+        }
+      };
+      const optional = async (kind: "permission" | "question") => {
+        try {
+          if (kind === "permission") {
+            const permissions = sidecar.supports("permissions")
+              ? await rpc.call("permission.list", {
+                sessionID: target.sessionID,
+              }, abort.signal)
+              : [];
+            if (!current(id, request)) return;
+            setState((draft) => {
+              let content = { ...draft.content, permissions };
+              for (const op of attention.events) {
+                if (
+                  op.op === "permission.upsert" || op.op === "permission.remove"
+                ) content = reduce(content, op);
+              }
+              draft.content = content;
+            });
+          } else {
+            const questions = sidecar.supports("questions")
+              ? await rpc.call(
+                "question.list",
+                { sessionID: target.sessionID },
+                abort.signal,
+              )
+              : [];
+            if (!current(id, request)) return;
+            setState((draft) => {
+              let content = { ...draft.content, questions };
+              for (const op of attention.events) {
+                if (
+                  op.op === "question.upsert" || op.op === "question.remove"
+                ) content = reduce(content, op);
+              }
+              draft.content = content;
+            });
+          }
+        } catch (error) {
+          diagnostic(error);
+        } finally {
+          attention.pending.delete(kind);
+          if (!attention.pending.size && attentionReads === attention) {
+            attentionReads = undefined;
+          }
+        }
+      };
+      void optional("permission");
+      void optional("question");
+      const [info, messages] = await Promise.all([
         rpc.call(
           "session.get",
           { sessionID: target.sessionID },
@@ -147,50 +215,54 @@ export function createSession(
           sessionID: target.sessionID,
           limit: 100,
         }, abort.signal),
-        sidecar.supports("permissions")
-          ? rpc.call("permission.list", {
-            sessionID: target.sessionID,
-          }, abort.signal)
-          : [],
-        sidecar.supports("questions")
-          ? rpc.call("question.list", {
-            sessionID: target.sessionID,
-          }, abort.signal)
-          : [],
       ]);
       if (!current(id, request)) return;
-      const siblings = info.parentID
-        ? await rpc.call("session.children", {
-          sessionID: info.parentID,
-        }, abort.signal)
-        : [];
-      if (!current(id, request)) return;
+      if (info.parentID) {
+        void rpc.call(
+          "session.children",
+          { sessionID: info.parentID },
+          abort.signal,
+        ).then((siblings) => {
+          if (current(id, request)) {
+            setState((draft) => {
+              draft.siblings = siblings;
+            });
+          }
+        }).catch(diagnostic);
+      } else {setState((draft) => {
+          draft.siblings = [];
+        });}
       baseline(messages);
-      let content: ContentState = {
-        ...emptyContent(),
-        messages,
-        permissions,
-        questions,
-        revert: info.revert || null,
-        error: info.error,
-        errorState: info.errorState,
-      };
-      for (const op of buffer) content = reduce(content, op);
+      const replay = buffer;
       buffer = [];
       fetching = false;
+      hasBaseline = true;
       setState((draft) => {
+        let content: ContentState = {
+          ...draft.content,
+          messages,
+          revert: info.revert || null,
+          error: info.error,
+          errorState: info.errorState,
+        };
+        for (const op of replay) content = reduce(content, op);
         draft.info = info;
-        draft.siblings = siblings;
         draft.content = content;
         draft.loading = false;
+        draft.continuity = "ready";
         draft.exhausted = messages.length < 100;
       });
     } catch (error) {
       if (!current(id, request)) return;
-      fetching = false;
-      buffer = [];
+      const replay = hasBaseline ? buffer : [];
+      if (hasBaseline) {
+        buffer = [];
+        fetching = false;
+      }
       setState((draft) => {
+        for (const op of replay) draft.content = reduce(draft.content, op);
         draft.loading = false;
+        draft.continuity = hasBaseline ? "ready" : "missing";
         draft.error = errorMessage(error);
       });
     }
@@ -231,12 +303,15 @@ export function createSession(
     liveCompleted.clear();
     buffer = [];
     fetching = false;
+    hasBaseline = false;
+    attentionReads = undefined;
     setState((draft) => {
       draft.selection = selection;
       draft.info = undefined;
       draft.siblings = [];
       draft.content = emptyContent();
       draft.loading = !!selection;
+      draft.continuity = selection ? "loading" : "ready";
       draft.paging = false;
       draft.exhausted = false;
       draft.error = undefined;
@@ -301,6 +376,9 @@ export function createSession(
       } else if (frame.sessionID !== selected.sessionID) return;
       if (frame.event.op === "part.upsert") notePart(frame.event.part, true);
       if (frame.event.op === "message.upsert") baseline([frame.event.message]);
+      if (isAttentionOp(frame.event) && attentionReads) {
+        attentionReads.events.push(frame.event);
+      }
       if (fetching) buffer.push(frame.event);
       else {setState((draft) => {
           draft.content = reduce(draft.content, frame.event);

@@ -49,10 +49,11 @@ function agentColor(color?: string | null): AgentColor | undefined {
 export async function agentColors(
   client: Client,
   directory?: string,
+  signal?: AbortSignal,
 ): Promise<Map<string, AgentColor>> {
   const agents = await client.json<{ name: string; color?: string | null }[]>(
     "/agent",
-    { query: { directory } },
+    { query: { directory }, signal },
   );
   return new Map(agents.flatMap((agent) => {
     const color = agentColor(agent.color);
@@ -61,26 +62,76 @@ export async function agentColors(
 }
 
 /** Directory configuration is shared across transcript pages and live events. */
+interface ColorResource {
+  work: Promise<Map<string, AgentColor>>;
+  controller: AbortController;
+  value?: Map<string, AgentColor>;
+  sessions: Map<string, object | undefined>;
+  failed?: boolean;
+}
 export class AgentColors {
   #directories = new Map<
     string | undefined,
-    Promise<Map<string, AgentColor>>
+    ColorResource
   >();
-  constructor(readonly client: Client) {}
+  constructor(
+    readonly client: Client,
+    readonly ready: (
+      colors: ReadonlyMap<string, AgentColor>,
+      sessions: ReadonlyMap<string, object | undefined>,
+    ) => void = () => {},
+    readonly scope: () => object | undefined = () => undefined,
+  ) {}
   get(directory?: string): Promise<Map<string, AgentColor>> {
-    let colors = this.#directories.get(directory);
-    if (!colors) {
-      colors = agentColors(this.client, directory).catch((error) => {
-        if (this.#directories.get(directory) === colors) {
-          this.#directories.delete(directory);
-        }
-        throw error;
-      });
-      this.#directories.set(directory, colors);
+    let resource = this.#directories.get(directory);
+    if (!resource || resource.failed) {
+      const controller = new AbortController();
+      const current: ColorResource = {
+        controller,
+        sessions: resource?.sessions ?? new Map(),
+        work: Promise.resolve().then(() =>
+          agentColors(this.client, directory, controller.signal)
+        ).then((value) => {
+          if (this.#directories.get(directory) === current) {
+            current.value = value;
+            this.ready(value, current.sessions);
+          }
+          return value;
+        }).catch((error) => {
+          if (this.#directories.get(directory) === current) {
+            current.failed = true;
+            console.warn(
+              `Optional agent colors for ${directory ?? "default directory"}:`,
+              error,
+            );
+          }
+          throw error;
+        }),
+      };
+      this.#directories.set(directory, resource = current);
     }
-    return colors;
+    return resource.work;
+  }
+  /** Essential content reads only available decoration; the resource owns failure. */
+  peek(
+    directory?: string,
+    sessionID?: string,
+  ): ReadonlyMap<string, AgentColor> | undefined {
+    void this.get(directory).catch(
+      () => {/* diagnosed by the directory owner */},
+    );
+    const resource = this.#directories.get(directory)!;
+    if (sessionID) resource.sessions.set(sessionID, this.scope());
+    return resource.value;
+  }
+  release(sessionID: string): void {
+    for (const resource of this.#directories.values()) {
+      resource.sessions.delete(sessionID);
+    }
   }
   clear(): void {
+    const retired = [...this.#directories.values()];
     this.#directories.clear();
+    for (const resource of retired) resource.controller.abort();
   }
 }

@@ -7,6 +7,7 @@ interface Link {
   parent: string;
   message: string;
   part: string;
+  owner: object;
 }
 interface Summary {
   tools: Set<string>;
@@ -27,7 +28,7 @@ export class TaskProgress {
     ) => Promise<Iterable<NativeMessage> | AsyncIterable<NativeMessage>>,
     readonly subscribed: (id: string) => boolean,
     readonly emit: (parent: string, message: string, part: Part) => void,
-    readonly recover: () => void,
+    readonly recover: (parent: string, error: unknown) => void,
   ) {}
   #apply(summary: Summary, info?: Info, part?: RawPart) {
     if (info?.role === "user") {
@@ -104,6 +105,7 @@ export class TaskProgress {
         parent: raw.sessionID,
         message: raw.messageID,
         part: raw.id,
+        owner,
       });
     }
     return this.#decorate(call, summary);
@@ -117,10 +119,7 @@ export class TaskProgress {
       id,
       setTimeout(() => {
         this.#timers.delete(id);
-        void this.#refresh(id, summary).catch((error) => {
-          console.warn("task summary:", error);
-          this.recover();
-        });
+        void this.#refresh(id, summary);
       }, 50),
     );
   }
@@ -128,21 +127,30 @@ export class TaskProgress {
     const links = this.#links.get(id);
     if (!links) return;
     for (const link of links.values()) {
-      if (!this.subscribed(link.parent)) continue;
-      let raw: RawPart | undefined;
-      for await (const message of await this.read(link.parent, link.message)) {
-        raw = message.parts.find((part) => part.id === link.part);
-        break;
-      }
-      if (this.#links.get(id) !== links || !this.subscribed(link.parent)) {
-        return;
-      }
-      if (raw?.tool === "task") {
-        this.emit(link.parent, link.message, {
-          kind: "tool",
-          id: raw.id,
-          call: this.#decorate(mapTool(raw) as TaskCall, summary),
-        });
+      const current = () =>
+        this.#links.get(id) === links &&
+        links.get(link.part) === link &&
+        this.#parents.get(link.parent) === link.owner &&
+        this.subscribed(link.parent);
+      if (!current()) continue;
+      try {
+        let raw: RawPart | undefined;
+        for await (
+          const message of await this.read(link.parent, link.message)
+        ) {
+          raw = message.parts.find((part) => part.id === link.part);
+          break;
+        }
+        if (!current()) continue;
+        if (raw?.tool === "task") {
+          this.emit(link.parent, link.message, {
+            kind: "tool",
+            id: raw.id,
+            call: this.#decorate(mapTool(raw) as TaskCall, summary),
+          });
+        }
+      } catch (error) {
+        if (current()) this.recover(link.parent, error);
       }
     }
   }

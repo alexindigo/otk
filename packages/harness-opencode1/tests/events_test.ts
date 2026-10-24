@@ -214,6 +214,7 @@ test("adapter maps legacy event chain while ignoring its captured durable sync c
       "question.upsert",
       "question.remove",
       "message.upsert",
+      "agent.colors",
       "part.upsert",
       "part.remove",
       "diff.set",
@@ -221,6 +222,10 @@ test("adapter maps legacy event chain while ignoring its captured durable sync c
       "message.remove",
       "session.error",
     ]);
+    assertEquals(ops.find((op) => op.op === "agent.colors"), {
+      op: "agent.colors",
+      colors: {},
+    });
     assertEquals(ops.slice(0, 2), [
       {
         op: "session.error",
