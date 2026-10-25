@@ -454,6 +454,12 @@ ModelLabel and SelectionContent likewise accept a caller class. Consumers style
 their supplied class/content rather than another component's private wrapper or
 descendants.
 
+Breadcrumb folding and command-menu separators are projected from one coherent
+list snapshot into identity-bound rows. Keyed views consume those flags instead
+of looking up their old position in a changing parent collection; menu rows keep
+the exact hub-owned action reference for invocation. Replacement, shrink and
+reorder therefore cannot make row presentation dereference a different item.
+
 Consumers bundle IBM Plex Sans 400/500/600 and IBM Plex Mono 400/600; all
 selection uses `--font-ui` / `--font-mono`. Interface text is 13/20, prose
 14/24, headings 16/24 600 and metadata 12px sans; mono is for code, paths,
@@ -640,6 +646,14 @@ until idle and seen. Project rows share their existing Mark active / Mark
 inactive command with the visible project CommandMenu projection, including
 shared invocation and row error feedback. Project/task kinds carry sidecar,
 directory and task identities instead of component-specific kinds.
+
+Session targets also carry their title origin (`tab`, `chip` or `row`). The
+session-action command owner contributes Rename when `sessionActions` is
+available. Tabs, breadcrumbs and Sessions rows receive the same framework-free
+rename owner; only the matching identity/origin renders `TitleEditor` in its
+title slot. The native input selects its text, commits on Enter or blur, cancels
+on Escape and retains typed text with local feedback on failure. An editing
+control uses a non-button frame so the input is never nested inside a button.
 
 `TranscriptContext` registers each `prompt`, `reply`, `code`, `diff` and `tool`
 action once, independent of transcript length. Targets carry sidecar/session,

@@ -4,12 +4,15 @@ import "./ProjectSessions.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { createMemo, createSignal, For, Show } from "solid-js";
+import { dynamic } from "@solidjs/web";
+import TitleEditor from "./TitleEditor.tsx";
 import type { InboxSnapshot } from "@otk/protocol";
 import {
   inboxStatus,
   type MergedEntry,
   type ProjectSelection,
   type Selection,
+  type SessionRename,
   sessionTree,
   usageCost,
 } from "@otk/client";
@@ -29,6 +32,7 @@ export default function ProjectSessions(props: {
   entries: MergedEntry[];
   project?: ProjectSelection;
   selected?: Selection;
+  rename?: SessionRename;
   cost?(sessionID: string): number | undefined;
   auto?(sessionID: string): boolean;
   connected(id: string): boolean;
@@ -140,125 +144,149 @@ export default function ProjectSessions(props: {
                 </h3>
                 <ul class="otk-project-session-list">
                   <For each={group().rows} keyed={(row) => row.session.id}>
-                    {(row) => (
-                      <li data-depth={row().depth} data-parent={row().parentID}>
-                        <button
-                          type="button"
-                          ref={contextTarget(() => ({
-                            kind: "session",
-                            data: {
-                              ...props.project!,
-                              sessionID: row().session.id,
-                              title: row().session.title,
-                            },
-                          }))}
-                          {...selection({
-                            class: "otk-session-row",
-                            kind: "current",
-                            selected: props.selected?.sidecarId ===
-                                props.project!.sidecarId &&
-                              props.selected.sessionID === row().session.id,
-                          })}
-                          data-otk-selection="vertical"
-                          data-session={row().session.id}
-                          data-status={row().session.status}
-                          style={{ "--session-depth": row().depth }}
-                          title={row().session.title}
-                          aria-description={costDescription(row().session.id)}
-                          aria-label={`${row().session.title}${
-                            row().parentID
-                              ? `, child of ${merged(row().parentID!).title}`
-                              : ""
-                          }${
-                            costLabel(row().session.id) === undefined
-                              ? ""
-                              : `, session cost ${costLabel(row().session.id)}`
-                          }${
-                            props.auto?.(row().session.id)
-                              ? ", auto-approve on"
-                              : ""
-                          }`}
-                          onClick={() =>
-                            run(open(merged(row().session.id)))}
-                          onDblClick={() =>
-                            run(pin(merged(row().session.id)))}
+                    {(row) => {
+                      const editing = () =>
+                        props.rename?.matches({
+                          sidecarId: props.project!.sidecarId,
+                          sessionID: row().session.id,
+                        }, "row");
+                      const Control = dynamic(() =>
+                        editing() ? "div" : "button"
+                      );
+                      return (
+                        <li
+                          data-depth={row().depth}
+                          data-parent={row().parentID}
                         >
-                          <SelectionContent>
-                            <span class="otk-session-leading">
-                              <Show when={row().depth > 0}>
-                                <span
-                                  class="otk-session-indent"
-                                  aria-hidden="true"
-                                >
-                                  <svg
-                                    class="otk-session-branch"
-                                    viewBox="0 0 20 30"
-                                    fill="none"
-                                    stroke="currentColor"
+                          <Control
+                            type="button"
+                            ref={contextTarget(() => ({
+                              kind: "session",
+                              data: {
+                                ...props.project!,
+                                sessionID: row().session.id,
+                                title: row().session.title,
+                                origin: "row" as const,
+                              },
+                            }))}
+                            {...selection({
+                              class: `otk-session-row${
+                                editing() ? " is-editing" : ""
+                              }`,
+                              kind: "current",
+                              selected: props.selected?.sidecarId ===
+                                  props.project!.sidecarId &&
+                                props.selected.sessionID === row().session.id,
+                            })}
+                            data-otk-selection="vertical"
+                            data-session={row().session.id}
+                            data-status={row().session.status}
+                            style={{ "--session-depth": row().depth }}
+                            title={row().session.title}
+                            aria-description={costDescription(row().session.id)}
+                            aria-label={`${row().session.title}${
+                              row().parentID
+                                ? `, child of ${merged(row().parentID!).title}`
+                                : ""
+                            }${
+                              costLabel(row().session.id) === undefined
+                                ? ""
+                                : `, session cost ${
+                                  costLabel(row().session.id)
+                                }`
+                            }${
+                              props.auto?.(row().session.id)
+                                ? ", auto-approve on"
+                                : ""
+                            }`}
+                            onClick={() => run(open(merged(row().session.id)))}
+                            onDblClick={() =>
+                              run(pin(merged(row().session.id)))}
+                          >
+                            <SelectionContent>
+                              <span class="otk-session-leading">
+                                <Show when={row().depth > 0}>
+                                  <span
+                                    class="otk-session-indent"
+                                    aria-hidden="true"
                                   >
-                                    <path d="M4 0v10a5 5 0 0 0 5 5h7" />
-                                  </svg>
-                                </span>
-                              </Show>
-                              <StatusLight
-                                small
-                                state={inboxStatus(
-                                  row().session,
-                                  props.inbox(props.project!.sidecarId),
-                                )}
-                                event={row().session.timeUpdated}
-                              />
-                            </span>
-                            <span class="otk-row-title">
-                              {row().session.title}
-                            </span>
-                            <Show when={row().session.status === "retry"}>
-                              <span>retry {row().session.retry?.attempt}</span>
-                            </Show>
-                            <Show
-                              when={row().session.attention.permissions +
-                                row().session.attention.childPermissions}
-                            >
-                              <span title="Pending permissions">
-                                P {row().session.attention.permissions +
-                                  row().session.attention.childPermissions}
-                              </span>
-                            </Show>
-                            <Show
-                              when={row().session.attention.questions +
-                                row().session.attention.childQuestions}
-                            >
-                              <span title="Pending questions">
-                                Q {row().session.attention.questions +
-                                  row().session.attention.childQuestions}
-                              </span>
-                            </Show>
-                            <Show when={row().session.attention.error}>
-                              <span
-                                title={row().session.attention.error}
-                                aria-label="Session error"
-                              >
-                                Error
-                              </span>
-                            </Show>
-                            <AutoMark
-                              active={!!props.auto?.(row().session.id)}
-                            />
-                            <Show when={costLabel(row().session.id)}>
-                              <span
-                                class="otk-session-cost"
-                                aria-hidden="true"
-                                title="Session cost"
-                              >
-                                <UsageCost
-                                  value={props.cost!(row().session.id)!}
+                                    <svg
+                                      class="otk-session-branch"
+                                      viewBox="0 0 20 30"
+                                      fill="none"
+                                      stroke="currentColor"
+                                    >
+                                      <path d="M4 0v10a5 5 0 0 0 5 5h7" />
+                                    </svg>
+                                  </span>
+                                </Show>
+                                <StatusLight
+                                  small
+                                  state={inboxStatus(
+                                    row().session,
+                                    props.inbox(props.project!.sidecarId),
+                                  )}
+                                  event={row().session.timeUpdated}
                                 />
                               </span>
-                            </Show>
-                          </SelectionContent>
-                        </button>
-                      </li>
-                    )}
+                              <span class="otk-row-title">
+                                <Show
+                                  when={editing()}
+                                  fallback={row().session.title}
+                                >
+                                  <TitleEditor owner={props.rename!} />
+                                </Show>
+                              </span>
+                              <Show when={row().session.status === "retry"}>
+                                <span>
+                                  retry {row().session.retry?.attempt}
+                                </span>
+                              </Show>
+                              <Show
+                                when={row().session.attention.permissions +
+                                  row().session.attention.childPermissions}
+                              >
+                                <span title="Pending permissions">
+                                  P {row().session.attention.permissions +
+                                    row().session.attention.childPermissions}
+                                </span>
+                              </Show>
+                              <Show
+                                when={row().session.attention.questions +
+                                  row().session.attention.childQuestions}
+                              >
+                                <span title="Pending questions">
+                                  Q {row().session.attention.questions +
+                                    row().session.attention.childQuestions}
+                                </span>
+                              </Show>
+                              <Show when={row().session.attention.error}>
+                                <span
+                                  title={row().session.attention.error}
+                                  aria-label="Session error"
+                                >
+                                  Error
+                                </span>
+                              </Show>
+                              <AutoMark
+                                active={!!props.auto?.(row().session.id)}
+                              />
+                              <Show when={costLabel(row().session.id)}>
+                                <span
+                                  class="otk-session-cost"
+                                  aria-hidden="true"
+                                  title="Session cost"
+                                >
+                                  <UsageCost
+                                    value={props.cost!(row().session.id)!}
+                                  />
+                                </span>
+                              </Show>
+                            </SelectionContent>
+                          </Control>
+                        </li>
+                      );
+                    }}
                   </For>
                 </ul>
                 <Show when={!group().rows.length}>

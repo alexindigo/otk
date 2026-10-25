@@ -88,6 +88,70 @@ async function consumer(
   }
 }
 
+test("keyed breadcrumbs and menu rows retain identity through folding, replacement and shrinking", () =>
+  consumer("lists", async (browser) => {
+    const ids = Array.from({ length: 10 }, (_, i) => `session-${i}`);
+    await browser.evaluate(
+      `styleTest.lists(${JSON.stringify(ids)},'session-4','session-7')`,
+    );
+    await browser.poll(
+      "document.querySelector('[data-crumb=\"session-7\"] input')?.value==='session-7'",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "[...document.querySelectorAll('[data-crumb]')].map(el=>el.dataset.crumb)",
+      ),
+      [
+        "session-0",
+        "session-1",
+        "session-3",
+        "session-4",
+        "session-5",
+        "session-7",
+        "session-8",
+        "session-9",
+      ],
+    );
+    await browser.evaluate("styleTest.lists(['replacement'],'replacement')");
+    await browser.poll(
+      "document.querySelectorAll('[data-crumb]').length===1 && !!document.querySelector('[data-crumb=\"replacement\"]')",
+    );
+    await browser.evaluate("styleTest.lists([])");
+    await browser.poll("document.querySelectorAll('[data-crumb]').length===0");
+    await browser.evaluate(
+      `styleTest.lists(${JSON.stringify(ids.slice().reverse())},'session-4')`,
+    );
+    await browser.poll(
+      "!!document.querySelector('[data-crumb=\"session-4\"]')",
+    );
+    await browser.click('button[aria-label="Reactive list menu"]');
+    await browser.poll(
+      "document.querySelectorAll(':popover-open [role=menuitem]').length===3",
+    );
+    await browser.evaluate("styleTest.menuItems(['delete'])");
+    await browser.poll(
+      "document.querySelectorAll(':popover-open [role=menuitem]').length===1",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector(':popover-open [role=menuitem]').dataset.contextCommand",
+      ),
+      "list.delete",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelectorAll(':popover-open [role=group] [role=separator]').length",
+      ),
+      1,
+    );
+    await browser.evaluate("styleTest.menuItems(['one','two','delete'])");
+    await browser.poll(
+      "document.querySelectorAll(':popover-open [role=menuitem]').length===3",
+    );
+    await browser.key("Escape");
+    await browser.evaluate("styleTest.lists([])");
+  }));
+
 test("Blocks owns prose and concealment equally standalone, in reasoning and as a text part", () =>
   consumer("prose", async (browser) => {
     await browser.evaluate("styleTest.conceal(false)");

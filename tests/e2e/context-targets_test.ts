@@ -886,6 +886,7 @@ test("C2 stock capabilities: targeted auto-approve and reply usage menu reach th
     assertEquals(await labels(b), [
       "Open",
       "Pin as task",
+      "Rename",
       "Turn auto-approve on",
       "Copy session title",
       "Close session",
@@ -924,6 +925,7 @@ test("C2 stock capabilities: targeted auto-approve and reply usage menu reach th
     assertEquals(await labels(b), [
       "Copy reply",
       "Show usage breakdown",
+      "Rename",
       "Turn auto-approve on",
       "Copy session title",
       "Close session",

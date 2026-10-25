@@ -23,6 +23,7 @@ export { staticResponse } from "./http/static.ts";
 export { object, text } from "./ws/params.ts";
 export { MAX_UPLOAD_BYTES, promptParts } from "./features/prompt-parts.ts";
 export { register as registerSessions } from "./features/sessions.ts";
+export { register as registerSessionActions } from "./features/session-actions.ts";
 export { register as registerPrompt } from "./features/prompt.ts";
 export { register as registerShell } from "./features/shell.ts";
 export { register as registerCommands } from "./features/commands.ts";

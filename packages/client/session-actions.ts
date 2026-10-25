@@ -27,6 +27,7 @@ export interface SessionActions {
   attachments(parts: PromptPart[], sidecarId: string): Promise<PromptPart[]>;
   prompt(parts: PromptPart[], selection: PromptChoices): Promise<void>;
   abort(): Promise<void>;
+  rename(target: Selection, title: string): Promise<ContentSession>;
   permission(input: PermissionReply & { sidecarId?: string }): Promise<void>;
   question(input: { requestID: string; answers?: string[][] }): Promise<void>;
   location(target: Selection, id: string): string;
@@ -102,6 +103,14 @@ export function createSessionActions(o: {
     act,
     submission,
     attachments,
+    rename(target, title) {
+      const rpc = resources.sidecars.connection(target.sidecarId).rpc;
+      return act(target, () =>
+        rpc.call("session.rename", {
+          sessionID: target.sessionID,
+          title,
+        }));
+    },
     async prompt(parts, selection) {
       const { selection: target, rpc } = current.context();
       await submission(target)(async () => {

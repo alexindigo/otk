@@ -17,6 +17,7 @@ import {
 } from "./commands/sessions.ts";
 import { registerAttentionCommands } from "./commands/attention.ts";
 import { registerApprovalCommands } from "./commands/approvals.ts";
+import { registerSessionActionCommands } from "./commands/session-actions.ts";
 import { applicationNotifications } from "./notifications.ts";
 import { permissionNotificationDetail } from "../features/permission-notification.tsx";
 import { CommandProvider } from "../keyboard/context.tsx";
@@ -49,7 +50,7 @@ import type { SessionContextTarget } from "../features/session-context.ts";
 export default function Shell(
   props: { theme: ThemeEngine; api: URL },
 ): import("solid-js").Element {
-  const { resources, session, drafts, actions, guard, navigation } =
+  const { resources, session, drafts, actions, rename, guard, navigation } =
     createShellState({ api: props.api });
   const {
     sidecars,
@@ -223,6 +224,12 @@ export default function Shell(
     resources.server(session.state.selection?.sidecarId ?? "")
   );
   const info = createMemo(actions.info);
+  onCleanup(registerSessionActionCommands(commands, {
+    available: (target) =>
+      resources.connected(target.sidecarId) &&
+      resources.advertised(target.sidecarId, "sessionActions"),
+    rename,
+  }));
   onCleanup(registerAttentionCommands(commands, actions));
   onCleanup(registerApprovalCommands(commands, {
     current: (input) => {
@@ -353,6 +360,7 @@ export default function Shell(
           theme: props.theme,
           toggles,
           usage: session.usage,
+          rename,
           servers: () => sidecars.state.list,
           connection: (id) => sidecars.connection(id),
           inbox,
@@ -462,6 +470,7 @@ export default function Shell(
                         auto={(id) =>
                           !!approvals(project()!.sidecarId).owner(id)}
                         session={info()}
+                        rename={rename}
                         displayMenu={
                           <DisplayMenu
                             prefs={toggles.state.prefs}

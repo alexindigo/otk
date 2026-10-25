@@ -6,6 +6,7 @@ import type {
   MergedEntry,
   ProjectSelection,
   Selection,
+  SessionRename,
   SessionUsageOwner,
   SidecarConnection,
   SidecarState,
@@ -18,6 +19,7 @@ export interface ShellPorts {
   theme: ThemeEngine;
   toggles: Toggles;
   usage: SessionUsageOwner;
+  rename?: SessionRename;
   servers(): SidecarState[];
   connection(id: string): SidecarConnection;
   inbox(id: string): InboxModel;

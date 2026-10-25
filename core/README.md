@@ -51,6 +51,11 @@ primary/all agents for cycling, or subagent/all agents for mentions.
 capability. Its catalog and agent metadata are neutral protocol shapes; native
 provider/config requests and credential filtering belong to the adapter.
 
+`registerSessionActions` contributes `session.rename` only when the optional
+`sessionActions` capability is present. It validates the session ID and a
+trimmed 1–200-character title, then forwards to that capability. Application
+composition selects this feature alongside the existing session registrations.
+
 `usage.get` delegates to the optional usage capability. Its whole-session and
 user-turn summaries include source-model totals and keyed message-usage
 baselines, call clocks and small existing tool labels, never transcript parts or

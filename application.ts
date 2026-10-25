@@ -38,6 +38,7 @@ import {
   registerQuestions,
   registerResources,
   registerRevert,
+  registerSessionActions,
   registerSessions,
   registerShell,
   registerUsage,
@@ -86,6 +87,7 @@ export function startApplication(
     registerLayout(rpc, prefs);
     registerFrecency(rpc, backend, new Frecency(store, frecencyOptions));
     registerSessions(rpc, backend, (directory) => inbox.activate(directory));
+    registerSessionActions(rpc, backend);
     registerPrompt(rpc, backend);
     registerShell(rpc, backend);
     registerCommands(rpc, backend);

@@ -113,6 +113,11 @@ the original feature-owned legacy contributions; explicit empty/subset lists
 remain authoritative. New extensions are never implicitly available on legacy
 servers.
 
+The optional `sessionActions` capability owns session title mutations through
+`rename(sessionID, title)` and `session.rename`. It is explicitly advertised and
+never inferred from a legacy welcome. Titles are trimmed and bounded to 1–200
+characters by the feature's server validator.
+
 The optional `models` capability supplies `listModels(sessionID)` and the
 feature-owned `models.list { sessionID }` RPC. `ModelCatalog` contains only
 connected providers' IDs/names and model IDs/names, variant names, status,

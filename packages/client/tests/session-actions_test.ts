@@ -61,6 +61,25 @@ Deno.test("session actions act uses its target directory and returns the success
   f.resources.stop();
 });
 
+Deno.test("session rename captures the target server and uses act without promotion", async () => {
+  const f = shellFixture(), actions = client.createSessionActions(f);
+  const action = actions.rename({
+    sidecarId: "remote",
+    sessionID: "background",
+  }, "New title");
+  f.session.state.selection = { sidecarId: "local", sessionID: "different" };
+  await action;
+  assertEquals(f.calls, [
+    ["remote", "session.get", { sessionID: "background" }],
+    ["remote", "session.rename", {
+      sessionID: "background",
+      title: "New title",
+    }],
+    ["remote", "projects.visit", { directory: "/resolved", active: true }],
+  ]);
+  f.resources.stop();
+});
+
 Deno.test("session actions prompt captures invocation target and enters submission once with attachment ownership", async () => {
   const f = shellFixture(), actions = client.createSessionActions(f);
   f.entries("local", [shellEntry("selected")]);

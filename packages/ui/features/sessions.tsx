@@ -43,6 +43,7 @@ export function registerSessionsPanel(
           project={shell.project()}
           entries={shell.entries()}
           selected={shell.selection()}
+          rename={shell.rename}
           auto={(id) =>
             !!shell.project() &&
             !!shell.approvals(shell.project()!.sidecarId).owner(id)}

@@ -44,6 +44,7 @@ import { commands } from "./commands.ts";
 import { type Launch, shell } from "./shell.ts";
 import { type PendingPermission, permissions } from "./permissions.ts";
 import { revert } from "./revert.ts";
+import { sessionActions } from "./session-actions.ts";
 import { sessionDirectory } from "./directory.ts";
 import { Messages } from "./messages.ts";
 import { Attention } from "./attention.ts";
@@ -236,6 +237,7 @@ export class Opencode1Adapter implements Harness {
     registry.register("models", models(this.client, directory));
     registry.register("usage", usage(this.#db, this.#messages, directory));
     registry.register("resources", resources(this.client, directory));
+    registry.register("sessionActions", sessionActions(this.client, directory));
     registry.register(
       "permissions",
       permissions(

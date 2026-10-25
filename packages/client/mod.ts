@@ -55,6 +55,7 @@ export * from "./inbox.ts";
 export * from "./tabs.ts";
 export * from "./session-submission.ts";
 export * from "./session-actions.ts";
+export * from "./session-rename.ts";
 export * from "./input-guard.ts";
 export * from "./shell-navigation.ts";
 export {

@@ -1,0 +1,19 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-title-editor {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  color: var(--otk-fg);
+}
+.otk-title-editor input {
+  min-width: 0;
+  padding: 0 4px;
+  line-height: inherit;
+  font: inherit;
+  color: inherit;
+}
+.otk-title-editor .otk-error {
+  font-size: var(--text-meta);
+}

@@ -127,3 +127,13 @@
   height: 100%;
   background: var(--otk-fg-3);
 }
+.otk-tab-open.is-editing,
+.otk-session-crumb.is-editing {
+  height: auto;
+  min-height: var(--control-size);
+  font-weight: 500;
+}
+.otk-tab-open.is-editing .otk-control-label,
+.otk-session-crumb.is-editing .otk-crumb-title {
+  overflow: visible;
+}

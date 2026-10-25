@@ -14,6 +14,7 @@ import type { LayoutRpcMethods } from "./preferences/layout.ts";
 import type { ModelsRpcMethods } from "./models.ts";
 import type { UsageRpcMethods } from "./usage.ts";
 import type { ApprovalRpcMethods } from "./approvals.ts";
+import type { SessionActionsRpcMethods } from "./capabilities/session-actions.ts";
 export type PromptPart =
   | { kind: "text"; text: string }
   | {
@@ -115,6 +116,7 @@ export interface RpcMethods
     LayoutRpcMethods,
     ModelsRpcMethods,
     UsageRpcMethods,
+    SessionActionsRpcMethods,
     ApprovalRpcMethods {
   "session.get": { params: { sessionID: string }; result: ContentSession };
   "session.children": {

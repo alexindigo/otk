@@ -121,3 +121,11 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
+.otk-project-sessions .otk-session-row.is-editing {
+  height: auto;
+  min-height: 30px;
+  font-weight: 500;
+}
+.otk-project-sessions .otk-session-row.is-editing .otk-row-title {
+  overflow: visible;
+}

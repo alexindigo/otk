@@ -4,6 +4,8 @@ import "./ProjectTabs.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { createMemo, createSignal, type Element, For, Show } from "solid-js";
+import { dynamic } from "@solidjs/web";
+import TitleEditor from "./TitleEditor.tsx";
 import type {
   ContentSession,
   InboxSnapshot,
@@ -20,6 +22,7 @@ import {
   type MergedEntry,
   projectName,
   type ProjectSelection,
+  type SessionRename,
   type TaskActions,
   taskBreadcrumbs,
 } from "@otk/client";
@@ -37,6 +40,7 @@ import { createTaskControls } from "../features/task-controls.ts";
 import { countLabel } from "./tools/count.ts";
 import { contextTarget } from "./context-target.ts";
 import type { SessionContextTarget } from "../features/session-context.ts";
+import { breadcrumbRows } from "./list-presentation.ts";
 interface TaskContextTarget extends ProjectSelection {
   taskID: string;
 }
@@ -55,6 +59,7 @@ export default function ProjectTabs(props: {
   showCost?: boolean;
   auto?(sessionID: string): boolean;
   session?: ContentSession;
+  rename?: SessionRename;
   displayMenu?: Element;
   /** Reserve space for consumer chrome without inspecting its class or state. */
   reserveTrailing?: boolean;
@@ -151,11 +156,12 @@ export default function ProjectTabs(props: {
         sessionID: target.sessionID,
       }),
   });
-  const sessionTarget = (id: string) => ({
+  const sessionTarget = (id: string, origin: "tab" | "chip" = "chip") => ({
     kind: "session",
     data: {
       ...props.project,
       sessionID: id,
+      origin,
       title: props.session?.id === id
         ? props.session.title
         : entry(id)?.title ?? "Session",
@@ -179,11 +185,17 @@ export default function ProjectTabs(props: {
       props.model.state.closed,
     );
   });
-  const visibleCrumb = (n: number) =>
-    crumbs().length <= 7 || n < 2 || n >= crumbs().length - 2 ||
-    Math.abs(
-        n - crumbs().findIndex((c) => c.id === props.model.state.sessionID),
-      ) <= 1;
+  const crumbRows = createMemo(() =>
+    breadcrumbRows(
+      crumbs(),
+      props.model.state.sessionID,
+      (id) =>
+        !!props.rename?.matches({
+          sidecarId: props.project.sidecarId,
+          sessionID: id,
+        }, "chip"),
+    )
+  );
   const openCrumb = ownedAction("task.session.open", (id: string) => {
     const task = active();
     if (props.onOpen(id)) {
@@ -223,62 +235,77 @@ export default function ProjectTabs(props: {
           aria-label="Tasks and active sessions"
         >
           <For each={props.model.tabs()} keyed={(t) => `${t.kind}/${t.id}`}>
-            {(tab) => (
-              <div
-                class="otk-tab"
-                ref={contextTarget<SessionContextTarget | TaskContextTarget>(
-                  () =>
-                    tab().kind === "task"
-                      ? {
-                        kind: "task",
-                        data: { ...props.project, taskID: tab().id },
-                      }
-                      : sessionTarget(tab().id),
-                )}
-                data-kind={tab().kind}
-                data-preview={String(tab().preview)}
-              >
-                <button
-                  type="button"
-                  role="tab"
-                  {...selection({
-                    class: "otk-tab-open",
-                    kind: "selected",
-                    selected: props.model.state.selected?.id === tab().id,
-                  })}
-                  data-otk-selection="horizontal"
-                  title={tab().title}
-                  aria-label={`${tab().title || "Session"}${
-                    tab().sessions.some((id) => !!props.auto?.(id))
-                      ? tab().kind === "task"
-                        ? ", Auto-approve is on for a session in this task"
-                        : ", Auto-approve on"
-                      : ""
-                  }`}
-                  data-tab={tab().id}
-                  data-status={entry(props.model.state.sessionID ?? "")?.status}
-                  onClick={() => run(select(tab()))}
-                  onDblClick={() =>
-                    tab().kind === "phantom" && run(pin(tab().id))}
+            {(tab) => {
+              const editing = () =>
+                tab().kind === "phantom" &&
+                props.rename?.matches({
+                  sidecarId: props.project.sidecarId,
+                  sessionID: tab().id,
+                }, "tab");
+              const Control = dynamic(() => editing() ? "div" : "button");
+              return (
+                <div
+                  class="otk-tab"
+                  ref={contextTarget<SessionContextTarget | TaskContextTarget>(
+                    () =>
+                      tab().kind === "task"
+                        ? {
+                          kind: "task",
+                          data: { ...props.project, taskID: tab().id },
+                        }
+                        : sessionTarget(tab().id, "tab"),
+                  )}
+                  data-kind={tab().kind}
+                  data-preview={String(tab().preview)}
                 >
-                  <SelectionContent>
-                    <StatusLight small state={tab().status} />
-                    <span class="otk-control-label">
-                      {tab().title || "Session"}
-                    </span>
-                    <AutoMark
-                      active={tab().sessions.some((id) => !!props.auto?.(id))}
-                      label={tab().kind === "task"
-                        ? "Auto-approve is on for a session in this task"
-                        : undefined}
-                    />
-                    <Show when={tab().preview}>
-                      <span class="otk-preview-label">Preview</span>
-                    </Show>
-                  </SelectionContent>
-                </button>
-              </div>
-            )}
+                  <Control
+                    type="button"
+                    role="tab"
+                    {...selection({
+                      class: "otk-tab-open" + (editing() ? " is-editing" : ""),
+                      kind: "selected",
+                      selected: props.model.state.selected?.id === tab().id,
+                    })}
+                    data-otk-selection="horizontal"
+                    title={tab().title}
+                    aria-label={`${tab().title || "Session"}${
+                      tab().sessions.some((id) => !!props.auto?.(id))
+                        ? tab().kind === "task"
+                          ? ", Auto-approve is on for a session in this task"
+                          : ", Auto-approve on"
+                        : ""
+                    }`}
+                    data-tab={tab().id}
+                    data-status={entry(props.model.state.sessionID ?? "")
+                      ?.status}
+                    onClick={() => run(select(tab()))}
+                    onDblClick={() =>
+                      tab().kind === "phantom" && run(pin(tab().id))}
+                  >
+                    <SelectionContent>
+                      <StatusLight small state={tab().status} />
+                      <span class="otk-control-label">
+                        <Show
+                          when={editing()}
+                          fallback={tab().title || "Session"}
+                        >
+                          <TitleEditor owner={props.rename!} />
+                        </Show>
+                      </span>
+                      <AutoMark
+                        active={tab().sessions.some((id) => !!props.auto?.(id))}
+                        label={tab().kind === "task"
+                          ? "Auto-approve is on for a session in this task"
+                          : undefined}
+                      />
+                      <Show when={tab().preview}>
+                        <span class="otk-preview-label">Preview</span>
+                      </Show>
+                    </SelectionContent>
+                  </Control>
+                </div>
+              );
+            }}
           </For>
         </div>
         <button
@@ -295,91 +322,108 @@ export default function ProjectTabs(props: {
       </div>
       <div class="otk-breadcrumb-row">
         <nav class="otk-task-crumbs" aria-label="Task sessions">
-          <For each={crumbs()} keyed={(c) => c.id}>
-            {(crumb, n) => (
-              <Show
-                when={visibleCrumb(n())}
-                fallback={
-                  <Show when={n() === 0 || visibleCrumb(n() - 1)}>
-                    <Menu
-                      class="otk-folded-crumbs"
-                      triggerClass="otk-folded-crumbs-trigger"
-                      label="More task sessions"
-                      trigger="…"
-                    >
-                      <For
-                        each={crumbs().filter((_, i) => !visibleCrumb(i))}
-                        keyed={(c) => c.id}
+          <For each={crumbRows()} keyed={(c) => c.id}>
+            {(crumb) => {
+              const editing = () =>
+                props.rename?.matches({
+                  sidecarId: props.project.sidecarId,
+                  sessionID: crumb().id,
+                }, "chip");
+              const Control = dynamic(() => editing() ? "div" : "button");
+              return (
+                <Show
+                  when={crumb().visible}
+                  fallback={
+                    <Show when={crumb().foldStart}>
+                      <Menu
+                        class="otk-folded-crumbs"
+                        triggerClass="otk-folded-crumbs-trigger"
+                        label="More task sessions"
+                        trigger="…"
                       >
-                        {(c) => (
-                          <button
-                            type="button"
-                            ref={contextTarget(() => sessionTarget(c().id))}
-                            data-otk-selection="vertical"
-                            {...selection({
-                              kind: "current",
-                              selected: props.model.state.sessionID === c().id,
-                            })}
-                            onClick={() => run(openCrumb(c().id))}
-                            aria-label={`${entry(c().id)?.title ?? c().id}${
-                              props.auto?.(c().id) ? ", Auto-approve on" : ""
-                            }`}
-                          >
-                            <SelectionContent>
-                              {entry(c().id)?.title ?? c().id}
-                              <AutoMark active={!!props.auto?.(c().id)} />
-                            </SelectionContent>
-                          </button>
-                        )}
-                      </For>
-                    </Menu>
-                  </Show>
-                }
-              >
-                <span class="otk-crumb-link">
-                  <Show when={n() > 0}>
-                    <span class="otk-crumb-separator">
-                      <ChevronIcon class="otk-crumb-chevron" />
-                    </span>
-                  </Show>
-                  <button
-                    type="button"
-                    ref={contextTarget(() => sessionTarget(crumb().id))}
-                    {...selection({
-                      class: "otk-session-crumb",
-                      kind: "current",
-                      selected: props.model.state.sessionID === crumb().id,
-                    })}
-                    data-otk-selection="horizontal"
-                    title={props.project.directory}
-                    data-helper={String(crumb().helper)}
-                    data-depth={crumb().depth}
-                    data-crumb={crumb().id}
-                    aria-label={`${
-                      props.session?.id === crumb().id
-                        ? props.session.title
-                        : entry(crumb().id)?.title ?? "Session unavailable"
-                    }${props.auto?.(crumb().id) ? ", Auto-approve on" : ""}`}
-                    onClick={() => run(openCrumb(crumb().id))}
-                  >
-                    <SelectionContent>
-                      <StatusLight
-                        small
-                        state={entry(crumb().id)
-                          ? inboxStatus(entry(crumb().id)!, props.inbox)
-                          : "idle"}
-                      />
-                      <span class="otk-crumb-title">
-                        {props.session?.id === crumb().id
-                          ? props.session.title
-                          : entry(crumb().id)?.title ?? "Session unavailable"}
+                        <For
+                          each={crumbRows().filter((row) => !row.visible)}
+                          keyed={(c) => c.id}
+                        >
+                          {(c) => (
+                            <button
+                              type="button"
+                              ref={contextTarget(() => sessionTarget(c().id))}
+                              data-otk-selection="vertical"
+                              {...selection({
+                                kind: "current",
+                                selected:
+                                  props.model.state.sessionID === c().id,
+                              })}
+                              onClick={() => run(openCrumb(c().id))}
+                              aria-label={`${entry(c().id)?.title ?? c().id}${
+                                props.auto?.(c().id) ? ", Auto-approve on" : ""
+                              }`}
+                            >
+                              <SelectionContent>
+                                {entry(c().id)?.title ?? c().id}
+                                <AutoMark active={!!props.auto?.(c().id)} />
+                              </SelectionContent>
+                            </button>
+                          )}
+                        </For>
+                      </Menu>
+                    </Show>
+                  }
+                >
+                  <span class="otk-crumb-link">
+                    <Show when={!crumb().first}>
+                      <span class="otk-crumb-separator">
+                        <ChevronIcon class="otk-crumb-chevron" />
                       </span>
-                      <AutoMark active={!!props.auto?.(crumb().id)} />
-                    </SelectionContent>
-                  </button>
-                </span>
-              </Show>
-            )}
+                    </Show>
+                    <Control
+                      type="button"
+                      ref={contextTarget(() => sessionTarget(crumb().id))}
+                      {...selection({
+                        class: `otk-session-crumb${
+                          editing() ? " is-editing" : ""
+                        }`,
+                        kind: "current",
+                        selected: props.model.state.sessionID === crumb().id,
+                      })}
+                      data-otk-selection="horizontal"
+                      title={props.project.directory}
+                      data-helper={String(crumb().helper)}
+                      data-depth={crumb().depth}
+                      data-crumb={crumb().id}
+                      aria-label={`${
+                        props.session?.id === crumb().id
+                          ? props.session.title
+                          : entry(crumb().id)?.title ?? "Session unavailable"
+                      }${props.auto?.(crumb().id) ? ", Auto-approve on" : ""}`}
+                      onClick={() => run(openCrumb(crumb().id))}
+                    >
+                      <SelectionContent>
+                        <StatusLight
+                          small
+                          state={entry(crumb().id)
+                            ? inboxStatus(entry(crumb().id)!, props.inbox)
+                            : "idle"}
+                        />
+                        <span class="otk-crumb-title">
+                          <Show
+                            when={editing()}
+                            fallback={props.session?.id === crumb().id
+                              ? props.session.title
+                              : entry(crumb().id)?.title ??
+                                "Session unavailable"}
+                          >
+                            <TitleEditor owner={props.rename!} />
+                          </Show>
+                        </span>
+                        <AutoMark active={!!props.auto?.(crumb().id)} />
+                      </SelectionContent>
+                    </Control>
+                  </span>
+                </Show>
+              );
+            }}
           </For>
           <button
             type="button"

@@ -317,6 +317,15 @@ attachment's server ownership. Abort and attention replies use `act` without tab
 promotion. Its live info/key projections are framework-free; memoisation stays
 with the UI.
 
+SessionActions `rename(target, title)` captures the target's server and performs
+the typed mutation inside `act`, preserving directory and successful-action
+bookkeeping without promoting a task. `createSessionRename` owns one
+identity-and-origin-scoped editor (`tab`, `chip` or `row`),
+trimmed/empty/unchanged admission, pending state and retryable errors.
+Replacement editors retire late results. With a title lookup, `observe()` keeps
+the typed editor mounted until the authoritative index catches up to a
+successful rename.
+
 The hierarchy owner also exports `sessionFamily`, `familyTask` and
 `familySelection`. Shell's location projection intentionally matches only the
 requested ID and the selected root without filtering directories; its task

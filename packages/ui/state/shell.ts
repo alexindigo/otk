@@ -7,12 +7,14 @@ import {
   createInputGuard,
   createServerResources,
   createSessionActions,
+  createSessionRename,
   createShellNavigation,
   type CurrentClient,
   type Drafts,
   type InputGuard,
   type ServerResources,
   type SessionActions,
+  type SessionRename,
   type ShellNavigation,
 } from "@otk/client";
 import { solidState } from "./binding.ts";
@@ -26,6 +28,7 @@ export interface ShellState {
   drafts: Drafts;
   current: CurrentClient;
   actions: SessionActions;
+  rename: SessionRename;
   guard: InputGuard;
   navigation: ShellNavigation;
 }
@@ -55,6 +58,16 @@ export function createShellState(o: { api: URL }): ShellState {
     (id) => sidecars.connection(id),
   );
   const actions = createSessionActions({ resources, session, current });
+  const rename = createSessionRename({
+    rename: actions.rename,
+    title: (target) =>
+      resources.entry(target.sidecarId, target.sessionID)?.title,
+    factory: solidState,
+  });
+  createEffect(() => {
+    const target = rename.state.editing;
+    return target && resources.entry(target.sidecarId, target.sessionID)?.title;
+  }, () => rename.observe());
   const guard = createInputGuard({
     drafts,
     key: actions.key,
@@ -95,5 +108,14 @@ export function createShellState(o: { api: URL }): ShellState {
   }, (value) => {
     if (value) resources.syncTabs(value.p, value.input, value.selected);
   });
-  return { resources, session, drafts, current, actions, guard, navigation };
+  return {
+    resources,
+    session,
+    drafts,
+    current,
+    actions,
+    rename,
+    guard,
+    navigation,
+  };
 }

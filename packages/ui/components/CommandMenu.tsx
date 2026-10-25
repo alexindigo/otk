@@ -2,6 +2,7 @@
 import { errorMessage } from "@otk/protocol";
 import {
   createEffect,
+  createMemo,
   createSignal,
   createUniqueId,
   type Element,
@@ -17,6 +18,7 @@ import {
 import { useCommandPorts } from "../keyboard/context.tsx";
 import Menu from "./surface/Menu.tsx";
 import type { PopoverControl } from "./surface/Popover.tsx";
+import { commandRows } from "./list-presentation.ts";
 
 /** Shared hub projection, invocation and feedback for every command-menu entry. */
 export default function CommandMenu(props: {
@@ -34,6 +36,7 @@ export default function CommandMenu(props: {
   const [captured, setCaptured] = createSignal<readonly ContextTarget[]>();
   const [revision, setRevision] = createSignal(0);
   const [groups, setGroups] = createSignal<ContextAction[][]>([]);
+  const rows = createMemo(() => groups().map(commandRows));
   const [error, setError] = createSignal<{ key: string; text: string }>();
   const errorId = `context-error-${createUniqueId()}`;
   let menu!: PopoverControl, generation = 0;
@@ -120,40 +123,42 @@ export default function CommandMenu(props: {
         </Show>
       }
     >
-      <For each={groups()} keyed={false}>
+      <For each={rows()} keyed={false}>
         {(group, index) => (
           <>
             <Show when={index > 0}>
               <hr role="separator" />
             </Show>
             <div role="group">
-              <For each={group()} keyed={(action) => action.key}>
-                {(action, at) => (
-                  <>
-                    <Show
-                      when={action().destructive &&
-                        (at() === 0 || !group()[at() - 1].destructive)}
-                    >
-                      <hr role="separator" />
-                    </Show>
-                    <button
-                      type="button"
-                      role="menuitem"
-                      data-context-command={action().id}
-                      aria-describedby={error()?.key === action().key
-                        ? errorId
-                        : undefined}
-                      class={action().destructive
-                        ? "otk-menu-destructive"
-                        : undefined}
-                      onClick={() => void run(action())}
-                    >
-                      <span class="otk-control-label" title={action().title}>
-                        {action().title}
-                      </span>
-                    </button>
-                  </>
-                )}
+              <For each={group()} keyed={(row) => row.action.key}>
+                {(row) => {
+                  const action = () => row().action;
+                  return (
+                    <>
+                      <Show
+                        when={row().separator}
+                      >
+                        <hr role="separator" />
+                      </Show>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        data-context-command={action().id}
+                        aria-describedby={error()?.key === action().key
+                          ? errorId
+                          : undefined}
+                        class={action().destructive
+                          ? "otk-menu-destructive"
+                          : undefined}
+                        onClick={() => void run(action())}
+                      >
+                        <span class="otk-control-label" title={action().title}>
+                          {action().title}
+                        </span>
+                      </button>
+                    </>
+                  );
+                }}
               </For>
             </div>
           </>
