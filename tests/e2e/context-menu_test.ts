@@ -113,13 +113,13 @@ test("context menu: trusted right click, native escape hatch, keyboard navigatio
     );
     await browser.key("Escape");
     await browser.poll("!document.querySelector('dialog[open]')");
-    await browser.click("textarea[name=prompt]");
+    await browser.evaluate("document.activeElement.blur()");
     await browser.key("F10", 8);
-    assert((await labels(browser)).includes("Paste"));
+    assert((await labels(browser)).includes("New session"));
     await browser.key("Escape");
     await closed(browser);
     await browser.poll(
-      'document.activeElement === document.querySelector("textarea[name=prompt]")',
+      "document.activeElement === document.body",
     );
     await browser.key("ContextMenu");
     await labels(browser);
@@ -238,143 +238,9 @@ test("context menu: trusted right click, native escape hatch, keyboard navigatio
   }
 });
 
-test("context menu: editing uses captured ranges and the real clipboard, paste rejection stays in place, links/images/selection copy", async () => {
+test("context menu: links, images and selection outside fields use the real clipboard", async () => {
   const { browser, client, f, root, stop } = await setup();
-  const field = 'textarea[name="prompt"]';
   try {
-    await browser.fill(field, "Cut this, keep that");
-    await browser.evaluate(
-      `document.querySelector('${field}').setSelectionRange(0,8)`,
-    );
-    await rightClick(browser, field);
-    assertEquals(await labels(browser), [
-      "Cut",
-      "Copy",
-      "Paste",
-      "Select all",
-      "Edit prompt",
-      "Attach files",
-    ]);
-    await action(browser, "context.editable.copy");
-    await closed(browser);
-    assertEquals(
-      await browser.evaluate("navigator.clipboard.readText()"),
-      "Cut this",
-    );
-    await rightClick(browser, field);
-    await labels(browser);
-    await action(browser, "context.editable.cut");
-    await browser.poll(
-      `document.querySelector('${field}').value === ', keep that'`,
-    );
-    await closed(browser);
-    await rightClick(browser, field);
-    await labels(browser);
-    const pasted = await browser.evaluate<string>(
-      `(() => {const el=document.querySelector('${field}');return el.value.slice(0,el.selectionStart)+'Cut this'+el.value.slice(el.selectionEnd)})()`,
-    );
-    await action(browser, "context.editable.paste");
-    await browser.poll(
-      `document.querySelector('${field}').value === ${JSON.stringify(pasted)}`,
-    );
-    await closed(browser);
-    // Native undo proves the field owner receives a real browser editing intent.
-    await browser.key("z", 2);
-    await browser.poll(
-      `document.querySelector('${field}').value === ', keep that'`,
-    );
-    await rightClick(browser, field);
-    await action(browser, "context.editable.selectAll");
-    await closed(browser);
-    await browser.poll(
-      `(() => {const el=document.querySelector('${field}');return el.selectionStart===0&&el.selectionEnd===el.value.length})()`,
-    );
-    for (const type of ["number", "email"]) {
-      const original = type === "number" ? "123" : "old@example.com";
-      const replacement = type === "number" ? "456" : "new@example.com";
-      await browser.evaluate(
-        `(()=>{const el=document.createElement('input');el.type='${type}';el.id='edit-${type}';el.value='${original}';el.addEventListener('input',()=>el.dataset.observed=el.value);document.querySelector('.otk-messages').prepend(el)})()`,
-      );
-      await rightClick(browser, `#edit-${type}`);
-      assertEquals(await labels(browser), [
-        "Paste",
-        "Select all",
-        "Pin as task",
-        "Copy session title",
-        "Close session",
-      ]);
-      await action(browser, "context.editable.selectAll");
-      await closed(browser);
-      await browser.evaluate(`navigator.clipboard.writeText('${replacement}')`);
-      await rightClick(browser, `#edit-${type}`);
-      assertEquals(await labels(browser), [
-        "Paste",
-        "Select all",
-        "Pin as task",
-        "Copy session title",
-        "Close session",
-      ]);
-      await action(browser, "context.editable.paste");
-      await closed(browser);
-      await browser.poll(
-        `document.querySelector('#edit-${type}').dataset.observed === '${replacement}'`,
-      );
-      await browser.key("z", 2);
-      await browser.poll(
-        `document.querySelector('#edit-${type}').value === '${original}'`,
-      );
-    }
-    for (const theme of ["otk-dark", "otk-light"]) {
-      await client.rpc("prefs.set", { key: "theme", value: theme });
-      await browser.poll(
-        `document.documentElement.dataset.otkTheme==='${theme}'`,
-      );
-      await rightClick(browser, field);
-      await labels(browser);
-      if (Deno.env.get("OTK_CONTEXT_SCREENSHOTS")) {
-        await browser.screenshot(`${root}/${theme}-editable.png`);
-      }
-      await browser.key("Escape");
-      await closed(browser);
-    }
-    await browser.send("Browser.resetPermissions");
-    await browser.send("Browser.setPermission", {
-      permission: { name: "clipboard-read" },
-      setting: "denied",
-    });
-    await rightClick(browser, field);
-    await action(browser, "context.editable.paste");
-    await browser.poll(
-      `${
-        JSON.stringify(
-          "The browser didn't allow pasting from the menu — paste from the keyboard",
-        )
-      } === document.querySelector(':popover-open [role=alert]')?.textContent`,
-    );
-    assertEquals(
-      await browser.evaluate(
-        `(()=>{const alert=document.querySelector(':popover-open [role=alert]'),item=document.querySelector('[data-context-command="context.editable.paste"]');return !alert.closest('[role=menu]')&&item.getAttribute('aria-describedby')===alert.id})()`,
-      ),
-      true,
-    );
-    assertEquals(
-      await browser.evaluate(`document.querySelector('${field}').value`),
-      ", keep that",
-    );
-    if (Deno.env.get("OTK_CONTEXT_SCREENSHOTS")) {
-      for (const theme of ["otk-dark", "otk-light"]) {
-        await client.rpc("prefs.set", { key: "theme", value: theme });
-        await browser.poll(
-          `document.documentElement.dataset.otkTheme === '${theme}'`,
-        );
-        await capture(browser, root, `${theme}-paste-error`);
-      }
-    }
-    await browser.key("Escape");
-    await closed(browser);
-    await browser.send("Browser.grantPermissions", {
-      permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"],
-    });
     // Real semantic DOM built-ins need no context binding or per-element listener.
     await browser.evaluate(
       `(() => {const host=document.querySelector('.otk-welcome') || document.querySelector('.otk-messages'); const p=document.createElement('p');p.id='context-probe'; const link=document.createElement('a');link.href=location.origin+'/api/health';link.textContent='Context link';p.append(link);const image=document.createElement('img');image.src='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="orange"/></svg>';image.alt='Context image';p.append(image);host.prepend(p)})()`,
@@ -467,35 +333,6 @@ test("context menu: editing uses captured ranges and the real clipboard, paste r
     assertEquals(
       await browser.evaluate("navigator.clipboard.readText()"),
       "Context link",
-    );
-    await browser.evaluate(
-      `(() => { const el=document.createElement('div');el.id='context-edit';el.contentEditable='true';el.style.minHeight='24px';el.innerHTML='<span>Editable content</span>';document.querySelector('.otk-messages').prepend(el);el.focus();const range=document.createRange();range.selectNodeContents(el.querySelector('span'));const selection=document.getSelection();selection.removeAllRanges();selection.addRange(range) })()`,
-    );
-    await rightClick(browser, "#context-edit span");
-    assertEquals(await labels(browser), [
-      "Cut",
-      "Copy",
-      "Paste",
-      "Select all",
-      "Pin as task",
-      "Copy session title",
-      "Close session",
-    ]);
-    await action(browser, "context.editable.cut");
-    await closed(browser);
-    await browser.poll(
-      'document.querySelector("#context-edit").textContent === ""',
-    );
-    assertEquals(
-      await browser.evaluate("navigator.clipboard.readText()"),
-      "Editable content",
-    );
-    await rightClick(browser, "#context-edit");
-    await labels(browser);
-    await action(browser, "context.editable.paste");
-    await closed(browser);
-    await browser.poll(
-      'document.querySelector("#context-edit").textContent === "Editable content"',
     );
     if (Deno.env.get("OTK_CONTEXT_SCREENSHOTS")) {
       for (const theme of ["otk-dark", "otk-light"]) {
@@ -693,18 +530,20 @@ test("context binding: external command contributions, live target data, nested 
     await browser.poll(
       'document.activeElement === document.querySelector("dialog .otk-display-menu > button")',
     );
-    await browser.click("#modal-field");
+    await browser.click("dialog .otk-display-menu > button");
+    await browser.key("Escape");
+    await browser.poll("!document.querySelector('dialog :popover-open')");
     await browser.key("F10", 8);
     await labels(browser);
     await browser.poll(
       '!!document.activeElement?.closest("dialog [role=menu]")',
     );
     await browser.key("ArrowDown");
-    await browser.poll('document.activeElement?.textContent === "Select all"');
+    await browser.poll('document.activeElement?.textContent === "app"');
     await browser.key("Escape");
     await closed(browser);
     await browser.poll(
-      'document.activeElement === document.querySelector("#modal-field") && !!document.querySelector("dialog[open]")',
+      'document.activeElement === document.querySelector("dialog .otk-display-menu > button") && !!document.querySelector("dialog[open]")',
     );
     assertEquals(
       await browser.evaluate(
@@ -720,7 +559,9 @@ test("context binding: external command contributions, live target data, nested 
     await browser.poll('!document.querySelector("dialog[open]")');
     await browser.click("#open-modal");
     await browser.poll('!!document.querySelector("dialog[open]")');
-    await browser.click("#modal-field");
+    await browser.click("dialog .otk-display-menu > button");
+    await browser.key("Escape");
+    await browser.poll("!document.querySelector('dialog :popover-open')");
     await browser.key("ContextMenu");
     await labels(browser);
     // Removing the active Portal destination must clear the originating owner's
@@ -835,22 +676,12 @@ test("all shared Menu callers distinguish pointer and keyboard opening with comp
       await browser.poll(
         `document.documentElement.dataset.otkTheme==='${theme}'`,
       );
-      await browser.fill('textarea[name="prompt"]', "Menu selection");
-      await browser.evaluate(
-        `document.querySelector('textarea[name="prompt"]').select()`,
-      );
-      await rightClick(browser, 'textarea[name="prompt"]');
-      assertEquals(await labels(browser), [
-        "Cut",
-        "Copy",
-        "Paste",
-        "Select all",
-        "Edit prompt",
-        "Attach files",
-      ]);
+      await browser.click('[data-crumb="otk"]');
+      await rightClick(browser, '[data-crumb="otk"]');
+      assert((await labels(browser)).includes("Copy session title"));
       await pointerFocus(menu);
       await density(menu);
-      await capture(browser, root, `${theme}-editable-pointer`);
+      await capture(browser, root, `${theme}-session-pointer`);
       await browser.key("ArrowDown");
       await itemFocus(menu);
       await browser.key("Escape");
@@ -859,7 +690,7 @@ test("all shared Menu callers distinguish pointer and keyboard opening with comp
         await browser.key(key, key === "F10" ? 8 : 0);
         await labels(browser);
         await itemFocus(menu);
-        await capture(browser, root, `${theme}-editable-${key.toLowerCase()}`);
+        await capture(browser, root, `${theme}-session-${key.toLowerCase()}`);
         await browser.key("Escape");
         await closed(browser);
       }

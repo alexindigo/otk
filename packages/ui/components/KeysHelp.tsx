@@ -106,9 +106,10 @@ export default function KeysHelp(props: {
         on macOS. Esc closes the top layer first.
       </p>
       <p class="otk-muted">
-        Right click opens the app context menu. Shift + right click opens the
-        browser menu. Use the ContextMenu key or Shift+F10 for the focused item;
-        arrow keys, Home, End and typing navigate its actions.
+        Text fields keep the browser menu for spelling and dictionary actions.
+        Elsewhere, right click opens the app context menu; Shift + right click
+        keeps the browser menu. ContextMenu or Shift+F10 opens the focused
+        item's menu. Arrow keys, Home, End and typing navigate app menu actions.
       </p>
       <div class="otk-keys-list">
         <For each={rows()} keyed={(row) => row.id}>

@@ -47,6 +47,11 @@ transcript, send prompts, or press Esc twice to interrupt. Message history for
 the previous session is released on switching. Web assets and fonts are bundled
 locally; no dev server or CDN is used.
 
+Text fields retain the browser's native context menu for spelling corrections
+and dictionary lookup, including ContextMenu and Shift+F10. Elsewhere right
+click opens OTK's menu; Shift + right click keeps the native menu. Selection
+Copy outside fields remains available in OTK's menu.
+
 Pending permissions for the open session and its descendants take over the
 composer. Allow once, confirm the displayed future grant patterns for Allow
 always, or reject with optional feedback. Child requests retain their

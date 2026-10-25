@@ -4,6 +4,7 @@ import type { ContextTarget } from "@otk/client";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import {
   browserContextTargets,
+  nativeTextContext,
   registerBrowserContextCommands,
 } from "../features/context-menu.ts";
 import { contextTargets } from "./context-target.ts";
@@ -69,6 +70,12 @@ export default function ContextMenu(
     };
     const pointer = (event: MouseEvent) => {
       if (event.shiftKey) return;
+      if (nativeTextContext(event.composedPath())) {
+        pending = undefined;
+        clearTimeout(opening);
+        menu.close(() => {});
+        return;
+      }
       event.preventDefault();
       if (event.target instanceof Node && menu.contains(event.target)) return;
       const focused = document.activeElement instanceof HTMLElement
@@ -89,6 +96,12 @@ export default function ContextMenu(
         ? document.activeElement
         : null;
       if (focused && focused !== document.body && !root.contains(focused)) {
+        return;
+      }
+      if (nativeTextContext(event.composedPath())) {
+        pending = undefined;
+        clearTimeout(opening);
+        menu.close(() => {});
         return;
       }
       event.preventDefault();

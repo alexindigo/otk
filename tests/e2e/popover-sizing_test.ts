@@ -107,9 +107,11 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await browser.evaluate("document.fonts.ready.then(()=>true)");
       // Reusing a bottom-anchored menu exposes the empty-side shrink; a fresh
       // first invocation alone can accidentally choose the useful fallback.
-      await browser.click("textarea[name=prompt]");
+      await browser.evaluate(
+        "document.querySelector('.otk-keys-entry').focus()",
+      );
       await keyboardContext(browser);
-      contained(await geometry(browser, context), "initial editable menu");
+      contained(await geometry(browser, context), "initial footer menu");
       await close(browser);
       await browser.evaluate("document.activeElement.blur()");
       await keyboardContext(browser);

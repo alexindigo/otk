@@ -22,16 +22,17 @@ negatives reject per-element listeners and target data attributes. Client units
 observe available command contributions, captured args, bounded nested grouping,
 destructive ordering and invocation-time availability. Trusted browser tests
 exercise point bounds, keyboard navigation/focus return, native passthrough,
-clipboard/editing effects, built-in semantic targets and independent feature
-contributions through the public entries. Client tests distinguish no-target app
-fallback from target groups, including unavailable targets. Browser checks cover
-pointer-container versus keyboard-item focus and compact shared row geometry
-across context, project and folded-session menus. Rect anchors belong to Popover
-alongside the panel; point and focused-element anchors share native CSS
-placement/flipping with triggers. Browser checks cover non-overlap at all four
-element-rect corners, body focus with an unrelated selection, live contribution
-release, callback-ref composition, Tab focus return, menu-internal right click,
-pointer cancellation and host/owner teardown. Transcript views declare shared
+clipboard effects, native text-field pointer/keyboard passthrough, built-in
+semantic targets and independent feature contributions through the public
+entries. Client tests distinguish no-target app fallback from target groups,
+including unavailable targets. Browser checks cover pointer-container versus
+keyboard-item focus and compact shared row geometry across context, project and
+folded-session menus. Rect anchors belong to Popover alongside the panel; point
+and focused-element anchors share native CSS placement/flipping with triggers.
+Browser checks cover non-overlap at all four element-rect corners, body focus
+with an unrelated selection, live contribution release, callback-ref
+composition, Tab focus return, menu-internal right click, pointer cancellation
+and host/owner teardown. Transcript views declare shared
 prompt/reply/code/diff/tool targets and keyed state ports; one feature owner
 contributes their commands. Browser tests grow the real transcript from1 to40
 messages with a constant context-command count and invoke an independently
