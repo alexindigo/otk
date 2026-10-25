@@ -5,18 +5,143 @@ reusable kit modules, serves the browser UI and distributes a small live session
 index. Opencode 1.x is the current backend; its native implementation converts
 content into OTK shapes and owns history/database queries.
 
-Requires Deno 2.9.6 and opencode 1.18.34. Start opencode separately, then:
+## Alpha: run OTK next to your opencode
+
+Use Deno **2.9.6** and an already-running opencode server on the same machine,
+under the same user. Tested with opencode **1.18.34, 1.18.35 and 1.19.3**;
+intermediate versions have not each been tested. OTK does not start opencode.
+From your OTK checkout, build the browser app:
 
 ```sh
 deno task build:web
+```
+
+Create `config/otk.toml` in the checkout (create `config/` if needed):
+
+```toml
+[server]
+host = "127.0.0.1"
+port = 1502
+
+[harness]
+url = "http://127.0.0.1:4097"
+username = "opencode"
+password = "" # Set to your opencode server's Basic auth password, if enabled.
+```
+
+Replace the URL and credentials with those of your existing server. An empty
+password disables Basic auth; these are opencode credentials, separate from
+OTK's browser login. `OTK_HARNESS_URL`, `OTK_HARNESS_USERNAME` and
+`OTK_HARNESS_PASSWORD` override the same settings. If opencode uses a
+non-default data directory, also set `harness.db` (or `OTK_HARNESS_DB`) to its
+existing `opencode.db`; the default is `$XDG_DATA_HOME/opencode/opencode.db`,
+falling back to `~/.local/share/opencode/opencode.db`.
+
+**Bind the alpha to localhost only.** `server.host = "127.0.0.1"` is the shipped
+default; its environment override is `OTK_SERVER_HOST`. Do not expose it to your
+LAN or the Internet. The security report flags
+[WebSocket origin checks](./docs/alpha-security-findings.md#1-websocket-origin-check),
+[DNS rebinding](./docs/alpha-security-findings.md#2-dns-rebinding),
+[TOTP guessing](./docs/alpha-security-findings.md#3-totp-guessing) and
+[Basic credential forwarding](./docs/alpha-security-findings.md#6-basic-credential-forwarding)
+(findings 1–3 and 6) for beta work. Loopback reduces exposure; it does not fix
+these findings.
+
+Start OTK, then open `http://127.0.0.1:1502/`:
+
+```sh
 deno task start
 ```
 
-Open `http://127.0.0.1:1502/` to choose authentication on first run. Operator
-configuration is layered: `defaults/otk.toml` → generated auth state → optional
-`config/otk.toml` → `OTK_*` environment variables. Every leaf and its
-environment name is documented in the defaults file. `OTK_CONFIG` selects
-another operator overlay. Unknown nodes and invalid types fail loudly.
+On first run, choose **Password**, enter a username and password, and select
+**Configure sidecar**. Then log in with those credentials. Setup also offers
+**None**, which disables OTK login. Password setup saves a PBKDF2 hash and a
+generated signing key in private `auth.toml` in OTK's state directory. Usernames
+are case-insensitive. After login, the project list and Sessions view show your
+opencode sessions; the live index defaults to the last 30 days.
+
+TOTP is configured in the operator file, not the setup form. After password
+setup, add this to `config/otk.toml` and restart OTK:
+
+```toml
+[auth]
+type = "totp"
+totpkey = "replace-with-a-private-random-text-key"
+```
+
+The existing username, password hash and signing key remain in `auth.toml`.
+Enroll the **base32 encoding of the UTF-8 text** in `totpkey` in your
+authenticator (six digits, 30-second interval). There is no QR/enrollment
+screen. At login, append the current six-digit code directly to your password,
+with no space. The equivalent overrides are `OTK_AUTH_TYPE` and
+`OTK_AUTH_TOTPKEY`.
+
+Configuration layers are `defaults/otk.toml` → generated auth state → optional
+`config/otk.toml` → `OTK_*` environment variables. `OTK_CONFIG` selects another
+operator file. All keys are documented in [the defaults](./defaults/otk.toml);
+unknown keys and invalid types stop startup. Keep credential files private.
+
+### Run as a user service
+
+Stop your foreground OTK with Ctrl+C before starting the service. Save this as
+`~/.config/systemd/user/otk.service`, replacing `/absolute/path/to/otk` with
+your checkout and `/absolute/path/to/deno` with your Deno executable. The PATH
+must also include Deno's directory because the start task invokes `deno` itself.
+Keep server URL/auth in `config/otk.toml` so the service uses the same settings.
+
+```ini
+[Unit]
+Description=OTK
+
+[Service]
+Type=simple
+WorkingDirectory=/absolute/path/to/otk
+Environment=PATH=/absolute/path/to/deno-directory:/usr/local/bin:/usr/bin:/bin
+ExecStart=/absolute/path/to/deno task start
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+```
+
+```sh
+systemctl --user daemon-reload
+systemctl --user enable --now otk.service
+```
+
+To update, run these from the checkout:
+
+```sh
+git pull --ff-only
+deno task build:web
+systemctl --user restart otk.service
+```
+
+## What OTK reads and writes
+
+| # | Area              | Behavior                                                                                                                                                                                                                                                                               |
+| - | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 | Opencode database | Opens the existing SQLite database read-only, including live WAL-backed history. It does not migrate or write opencode's DB/WAL.                                                                                                                                                       |
+| 2 | Opencode API      | Reads health, global events, session/status metadata and pending permissions/questions; opening a session reads its content and related resources. Startup does not wake idle projects' native instances.                                                                              |
+| 3 | Actions           | Sends mutations only for actions you request, such as prompts, session creation, interrupts and permission/question replies. Auto-approve is off by default; explicitly enabling it authorizes ongoing Allow once replies for that session and its helpers, even with no browser open. |
+| 4 | OTK state         | Writes its own `auth.toml` and `otk.db` (preferences, inbox/task metadata and approval policy/journal) under `$XDG_STATE_HOME/otk/1502` or `~/.local/state/otk/1502`. The final component follows the configured port; `state.path` / `OTK_STATE_PATH` overrides it.                   |
+| 5 | Project templates | Lists direct directory candidates and reads small Git marker files to exclude linked worktrees. No writes, Git commands or recursive repository walk.                                                                                                                                  |
+
+## Known gaps in the alpha
+
+| # | Area                                       | Missing or limited                                                                                                                                                                                                                                                                                                                                                                                                        |
+| - | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 | M5 A: session actions                      | Revert, undo/redo, fork, rename, delete, compact and timeline controls. Close session only closes the OTK view/task membership; it does not delete the backend session.                                                                                                                                                                                                                                                   |
+| 2 | M5 B: transcript                           | Whole-transcript copy/export. Existing selection Copy remains available.                                                                                                                                                                                                                                                                                                                                                  |
+| 3 | M5 C: status dialogs                       | MCP, LSP, formatter, provider-connect and plugin management/status dialogs.                                                                                                                                                                                                                                                                                                                                               |
+| 4 | M5 D: stash                                | Prompt stash management. Unsent browser drafts are retained separately.                                                                                                                                                                                                                                                                                                                                                   |
+| 5 | M5 E: changes                              | Full changes/diff viewer; inline tool diffs already render.                                                                                                                                                                                                                                                                                                                                                               |
+| 6 | M5 F: navigation                           | Quick session switcher. Use the project's Sessions view.                                                                                                                                                                                                                                                                                                                                                                  |
+| 7 | Automatic recovery                         | No automatic continue, retry limits or fallback-provider recovery for provider errors. Permission auto-approve is a separate feature.                                                                                                                                                                                                                                                                                     |
+| 8 | Stock opencode 1.18.x permission inventory | Observed on 1.18.34: a pending websearch request omitting optional `livecrawl` makes `GET /permission` return 400 (`Expected JSON value, got undefined`). An OTK adapter starting in that state can remain reconnecting without an index or pending-request inventory. Resolve the request in opencode; OTK cannot recover its missing identity from that response. This case has not been requalified on newer versions. |
+| 9 | Security                                   | [Ten scanner findings](./docs/alpha-security-findings.md), six medium and four low, await triage and fixes for beta. They are unverified reports, not a completed security audit.                                                                                                                                                                                                                                         |
+
+## Using OTK
 
 The production Solid UI merges projects across connected servers into an inbox.
 Each project has an always-visible roll-up light, unread name and visit clock;
@@ -123,10 +248,11 @@ independent image attachments until they are explicitly removed or sent.
 | 11 | Index window                          | `OTK_INDEX_DAYS`                                           | 30 days                                                                        |
 
 API endpoints live under `/api/`; everything else is static UI. Authentication
-uses server-set HttpOnly cookies. Browser mutations and WebSocket upgrades
-require an allowed Origin even in `none` mode. Cross-sidecar browser access
-requires that browser's origin in the remote sidecar's `server.origins`. TLS
-termination belongs to the operator's reverse proxy.
+uses server-set HttpOnly cookies. Browser mutations and WebSocket upgrades have
+Origin checks, with [known alpha gaps](./docs/alpha-security-findings.md).
+Cross-sidecar browser access requires that browser's origin in the remote
+sidecar's `server.origins`. TLS termination belongs to the operator's reverse
+proxy.
 
 The conventional port for a second sidecar is `31502` (set
 `OTK_SERVER_PORT=31502`). The sidecar binds exactly its configured port and
