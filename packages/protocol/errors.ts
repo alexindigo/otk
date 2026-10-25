@@ -33,7 +33,7 @@ export interface ErrorObservation {
   ref?: string;
   status?: number;
   requestID?: string;
-  operation?: "shell" | "command";
+  operation?: "shell" | "command" | "compact";
   eventID?: string;
   cleared?: boolean;
 }

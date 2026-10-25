@@ -43,5 +43,6 @@ export function sessionPorts(o: {
     submit: actions.submission(target),
     history: () => loadHistory(resources.historySources()),
     attachments: (parts) => actions.attachments(parts, target.sidecarId),
+    compact: (model) => actions.compact(target, model),
   };
 }

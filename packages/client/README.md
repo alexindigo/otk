@@ -350,6 +350,9 @@ session's note, retaining it after a rejected submission. Reply projections
 expose `lastID` alongside their stable first-step identity so inclusive forks
 retain the whole grouped reply.
 
+`compact(target, model)` captures the session/server and explicit next-prompt
+model through the same non-submitting `act` owner, without task promotion.
+
 The hierarchy owner also exports `sessionFamily`, `familyTask` and
 `familySelection`. Shell's location projection intentionally matches only the
 requested ID and the selected root without filtering directories; its task

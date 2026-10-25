@@ -2,6 +2,7 @@
 import type {
   ContentSession,
   IndexEntry,
+  ModelRef,
   PermissionReply,
   PromptPart,
 } from "@otk/protocol";
@@ -30,6 +31,7 @@ export interface SessionActions {
   rename(target: Selection, title: string): Promise<ContentSession>;
   remove(target: Selection): Promise<void>;
   fork(target: Selection, through?: string): Promise<ContentSession>;
+  compact(target: Selection, model: ModelRef): Promise<void>;
   working(target: Selection): boolean;
   familyEntries(target: Selection): IndexEntry[];
   permission(input: PermissionReply & { sidecarId?: string }): Promise<void>;
@@ -136,6 +138,14 @@ export function createSessionActions(o: {
         target,
         () =>
           rpc.call("session.fork", { sessionID: target.sessionID, through }),
+      );
+    },
+    async compact(target, model) {
+      const rpc = resources.sidecars.connection(target.sidecarId).rpc;
+      await act(
+        target,
+        () =>
+          rpc.call("session.compact", { sessionID: target.sessionID, model }),
       );
     },
     rename(target, title) {

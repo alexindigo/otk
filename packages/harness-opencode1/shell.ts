@@ -2,9 +2,10 @@
 import { HarnessError, type ShellCapability } from "@otk/harness";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
+import type { ErrorRequest } from "./errors.ts";
 export type Launch = (
   sessionID: string,
-  operation: "shell" | "command",
+  operation: ErrorRequest["operation"],
   path: string,
   options: Parameters<Client["request"]>[1],
 ) => void;

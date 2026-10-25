@@ -123,6 +123,11 @@ server validator.
 session through the supplied message (inclusive). Without a boundary it copies
 the visible conversation, respecting a pending rollback.
 
+`sessionActions.compact(sessionID, model)` / `session.compact` admits a summary
+with an explicit next-prompt `ModelRef`; completion and `compact` request
+failures use ordinary session events and error observations, not a long-running
+RPC.
+
 The optional `models` capability supplies `listModels(sessionID)` and the
 feature-owned `models.list { sessionID }` RPC. `ModelCatalog` contains only
 connected providers' IDs/names and model IDs/names, variant names, status,

@@ -172,3 +172,58 @@ test("delete removes a real native family and committed task membership", async 
     await f.stop();
   }
 });
+
+test("compact admits native summarization and publishes a terminal compaction message", async () => {
+  const f = await browserFixture();
+  let client: WsClient | undefined;
+  try {
+    const session = await f.oc.request<{ id: string }>("/session", {
+      method: "POST",
+      body: { title: "Compact source" },
+    });
+    await f.oc.request(`/session/${session.id}/message`, {
+      method: "POST",
+      body: {
+        noReply: true,
+        parts: [{ type: "text", text: "Context to summarize" }],
+        model: { providerID: "fake", modelID: "scripted" },
+      },
+    });
+    const server = await f.sidecar();
+    client = new WsClient(server.url);
+    await client.connect();
+    f.fake.queue({ chunks: ["Compaction summary."] });
+    const start = performance.now();
+    assertEquals(
+      await client.rpc("session.compact", {
+        sessionID: session.id,
+        model: { provider: "fake", model: "scripted" },
+      }),
+      null,
+    );
+    assertEquals(performance.now() - start < 5_000, true);
+    const messages = await waitFor(
+      () =>
+        f.oc.request<
+          {
+            info: { role: string; time: { completed?: number } };
+            parts: { type: string; text?: string }[];
+          }[]
+        >(`/session/${session.id}/message`),
+      (messages) =>
+        messages.some((m) =>
+          m.info.role === "assistant" && m.info.time.completed !== undefined &&
+          m.parts.some((p) =>
+            p.type === "text" && p.text === "Compaction summary."
+          )
+        ),
+    );
+    assertEquals(
+      messages.some((m) => m.parts.some((p) => p.type === "compaction")),
+      true,
+    );
+  } finally {
+    await client?.close();
+    await f.stop();
+  }
+});

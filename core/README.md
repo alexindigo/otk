@@ -64,6 +64,10 @@ never removes membership; task-store broadcasts publish each committed removal.
 the returned session's project through the same creation bookkeeping port as
 `session.create`.
 
+`session.compact` requires a session ID and nonempty provider/model strings,
+delegates to `sessionActions.compact` and returns admission only. Native summary
+requests and their lifecycle remain in the harness adapter.
+
 `usage.get` delegates to the optional usage capability. Its whole-session and
 user-turn summaries include source-model totals and keyed message-usage
 baselines, call clocks and small existing tool labels, never transcript parts or

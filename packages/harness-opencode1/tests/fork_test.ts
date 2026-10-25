@@ -61,6 +61,9 @@ Deno.test("fork translates inclusive boundaries with scalar DB and bounded API f
     db,
     new Messages(client, () => "/p"),
     () => Promise.resolve(cutoff),
+    () => {
+      throw new Error("Unexpected launch");
+    },
   );
   try {
     for (const fallback of [false, true]) {

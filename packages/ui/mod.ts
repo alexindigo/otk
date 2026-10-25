@@ -160,3 +160,4 @@ export {
   default as NotificationSettings,
   type NotificationPreference,
 } from "./components/NotificationSettings.tsx";
+export { registerCompactPrompt } from "./features/prompt/compact.ts";

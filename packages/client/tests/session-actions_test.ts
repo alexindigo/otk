@@ -99,6 +99,25 @@ Deno.test("session fork captures its target and inclusive boundary without promo
   f.resources.stop();
 });
 
+Deno.test("session compact captures its target and next-prompt model inside act without promotion", async () => {
+  const f = shellFixture(), actions = client.createSessionActions(f);
+  const pending = actions.compact({
+    sidecarId: "remote",
+    sessionID: "background",
+  }, { provider: "chosen", model: "model" });
+  f.session.state.selection = { sidecarId: "local", sessionID: "newer" };
+  await pending;
+  assertEquals(f.calls, [
+    ["remote", "session.get", { sessionID: "background" }],
+    ["remote", "session.compact", {
+      sessionID: "background",
+      model: { provider: "chosen", model: "model" },
+    }],
+    ["remote", "projects.visit", { directory: "/resolved", active: true }],
+  ]);
+  f.resources.stop();
+});
+
 Deno.test("session removal aborts a working captured target before delete and records one successful action", async () => {
   const f = shellFixture(), actions = client.createSessionActions(f);
   f.entries("remote", [{ ...shellEntry("busy", "/busy"), status: "busy" }]);

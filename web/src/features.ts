@@ -9,6 +9,7 @@ import {
   registerBashTool,
   registerCommandDialogs,
   registerCompactionPart,
+  registerCompactPrompt,
   registerComposerPickers,
   registerEditorDialog,
   registerEditorPrompt,
@@ -82,6 +83,7 @@ export function applicationUi(): UiRegistries {
   registerEditorDialog(ui.dialogs);
   registerAutoApprovePrompt(ui.prompt);
   registerComposerPickers(ui.prompt);
+  registerCompactPrompt(ui.prompt);
   registerPermissionTakeover(ui.takeovers);
   registerQuestionTakeover(ui.takeovers);
   registerCommandDialogs(ui.dialogs);

@@ -251,6 +251,7 @@ export class Opencode1Adapter implements Harness {
               query: { directory: await directory.resolve(id) },
             },
           )).revert?.messageID,
+        launch,
       ),
     );
     registry.register(
@@ -394,7 +395,7 @@ export class Opencode1Adapter implements Harness {
   }
   #launch(
     sessionID: string,
-    operation: "shell" | "command",
+    operation: Parameters<Launch>[1],
     path: string,
     options: Parameters<Client["request"]>[1],
   ): void {

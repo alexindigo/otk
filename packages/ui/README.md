@@ -673,6 +673,13 @@ transcript feature owns Copy source projection. Fork results open with a joined
 `ComposerNotice` / `ForkNote` above the input; Dismiss and the first successful
 submission clear the note through the framework-free client owner.
 
+`registerCompactPrompt` contributes Compact while a root composer with a known
+next-prompt model is mounted. The command is shared by that session's context
+menu and the palette; background or cross-server targets do not list it. After
+composer readiness it captures `nextSelection` and delegates through the
+session-bound client compact port. It preserves the unsent draft and uses normal
+server-work progress and session errors, including while queued behind a reply.
+
 `TranscriptContext` registers each `prompt`, `reply`, `code`, `diff` and `tool`
 action once, independent of transcript length. Targets carry sidecar/session,
 message, part/call and directory identity plus source data. Features can

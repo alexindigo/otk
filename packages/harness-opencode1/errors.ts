@@ -4,7 +4,7 @@ import type { ErrorObservation, SessionErrorState } from "@otk/protocol";
 export interface ErrorRequest {
   id: string;
   sessionID: string;
-  operation: "shell" | "command";
+  operation: NonNullable<ErrorObservation["operation"]>;
 }
 type Detail = Pick<ErrorObservation, "message" | "kind" | "ref" | "status">;
 

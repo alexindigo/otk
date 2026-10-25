@@ -934,6 +934,7 @@ test("C2 stock capabilities: targeted auto-approve and reply usage menu reach th
       "Rename",
       "Fork session",
       "Turn auto-approve on",
+      "Compact",
       "Copy session title",
       "Close session",
       "Delete",

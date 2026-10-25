@@ -58,6 +58,12 @@ message ID before `POST /session/{id}/fork`. `BootstrapDb.nextMessageID` reads
 one scalar, with bounded Messages pages as fallback. Both whole-session and
 response forks cap the native boundary at an authoritative pending revert.
 
+`sessionActions.compact` launches native `POST /session/{id}/summarize` with
+`{providerID, modelID}` through the existing owned request lifetime and
+`timeout: null`. Admission returns immediately; progress, completion and HTTP
+failures reconcile through ordinary session events/errors. Native summarization
+joins current work and commits a pending rollback, as the next prompt does.
+
 The adapter retains ownership of events, stream buffers, task watchers, admitted
 shell/command requests and reconciled HTTP/SSE errors. Stop aborts and joins
 owned requests and releases readers. History lists contain metadata, not upload

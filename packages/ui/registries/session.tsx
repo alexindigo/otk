@@ -11,6 +11,7 @@ import type {
   CapabilityName,
   HistoryEntry,
   IndexEntry,
+  ModelRef,
   PermissionRequest,
   Preferences,
   PromptPart,
@@ -43,6 +44,7 @@ export interface SessionPorts {
   submit: SessionSubmission;
   history(): Promise<HistoryEntry[]>;
   attachments(parts: PromptPart[]): Promise<PromptPart[]>;
+  compact?(model: ModelRef): Promise<void>;
 }
 const Context = createContext<SessionPorts>();
 export function SessionProvider(

@@ -36,6 +36,7 @@ test("session actions are capability-gated and validate before forwarding a trim
     const calls: unknown[] = [];
     const harness = stub({
       sessionActions: {
+        compact: () => Promise.reject(new Error("Unexpected compact")),
         fork: (id, through) => {
           calls.push(["fork", id, through]);
           return harness.core.getSession(id);
@@ -108,6 +109,64 @@ test("session actions are capability-gated and validate before forwarding a trim
     const expected = await harness.core.getSession("s");
     assertEquals(result, expected);
     assertEquals(created, [expected.directory]);
+  } finally {
+    db.close();
+  }
+});
+
+test("compact validates model references and session identity and requires its advertised capability", async () => {
+  const db = new OtkDb(await fixture(), []);
+  try {
+    const absent = stub(), unavailable = new RpcRegistry(absent, db);
+    registerSessionActions(unavailable, absent);
+    assertEquals(
+      (await assertRejects(
+        () => unavailable.dispatch("session.compact", {}),
+        HarnessError,
+      )).code,
+      "method",
+    );
+    const calls: unknown[] = [];
+    const harness = stub({
+      sessionActions: {
+        rename: () => Promise.reject(new Error("Unexpected rename")),
+        remove: () => Promise.reject(new Error("Unexpected removal")),
+        fork: () => Promise.reject(new Error("Unexpected fork")),
+        compact: (id, model) => {
+          calls.push([id, model]);
+          return Promise.resolve();
+        },
+      },
+    });
+    const rpc = new RpcRegistry(harness, db);
+    registerSessionActions(rpc, harness);
+    for (
+      const params of [
+        {},
+        { sessionID: "s" },
+        { sessionID: "", model: { provider: "p", model: "m" } },
+        { sessionID: "s", model: { provider: "p" } },
+        { sessionID: "s", model: { provider: "", model: "m" } },
+        { sessionID: "s", model: { provider: 1, model: "m" } },
+      ]
+    ) {
+      assertEquals(
+        (await assertRejects(
+          () => rpc.dispatch("session.compact", params),
+          HarnessError,
+        )).code,
+        "params",
+      );
+    }
+    assertEquals(calls, []);
+    assertEquals(
+      await rpc.dispatch("session.compact", {
+        sessionID: "s",
+        model: { provider: "p", model: "m" },
+      }),
+      null,
+    );
+    assertEquals(calls, [["s", { provider: "p", model: "m" }]]);
   } finally {
     db.close();
   }

@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { ContentSession } from "../content.ts";
+import type { ContentSession, ModelRef } from "../content.ts";
 
 export interface SessionActionsCapability {
   rename(sessionID: string, title: string): Promise<ContentSession>;
   remove(sessionID: string): Promise<void>;
   /** Include through and everything before it; absent = visible conversation. */
   fork(sessionID: string, through?: string): Promise<ContentSession>;
+  /** Admits compaction; ordinary session events report its completion. */
+  compact(sessionID: string, model: ModelRef): Promise<void>;
 }
 export interface SessionActionsCapabilities {
   sessionActions: SessionActionsCapability;
@@ -19,5 +21,9 @@ export interface SessionActionsRpcMethods {
   "session.fork": {
     params: { sessionID: string; through?: string };
     result: ContentSession;
+  };
+  "session.compact": {
+    params: { sessionID: string; model: ModelRef };
+    result: null;
   };
 }

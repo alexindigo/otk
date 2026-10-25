@@ -13,6 +13,134 @@ import { WsClient } from "../support/ws-client.ts";
 
 const menu = ':popover-open [role="menu"][aria-label="Context menu"]';
 
+test("compact uses the next-prompt model, survives a 20-second summary and queues behind current work", async () => {
+  const f = await browserFixture();
+  let client: WsClient | undefined;
+  try {
+    const session = await f.oc.request<{ id: string }>("/session", {
+      method: "POST",
+      body: { title: "Compact session" },
+    });
+    const background = await f.oc.request<{ id: string }>("/session", {
+      method: "POST",
+      body: { title: "Background session" },
+    });
+    const server = await f.sidecar();
+    client = new WsClient(server.url);
+    await client.connect();
+    const b = await f.browser(server.url);
+    await openSession(b, session.id);
+    f.fake.queue({ chunks: ["Context ready."] });
+    await b.fill('textarea[name="prompt"]', "Give context for compaction");
+    await b.key("Enter");
+    await waitForReply(b, session.id, "Context ready.");
+    await sessionContext(b, `[data-session="${background.id}"]`);
+    assertEquals(
+      await b.evaluate(
+        `!!document.querySelector('${menu} [data-context-command="session.compact"]')`,
+      ),
+      false,
+    );
+    await b.key("Escape");
+    for (const theme of ["otk-dark", "otk-light"]) {
+      await client.rpc("prefs.set", { key: "theme", value: theme });
+      await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
+      await sessionContext(b, `[data-session="${session.id}"]`);
+      await b.poll(
+        `!!document.querySelector('${menu} [data-context-command="session.compact"]')`,
+      );
+      await capture(b, `${theme}-compact-menu`);
+      await b.key("Escape");
+    }
+    f.fake.queue({ chunks: ["Long compaction summary."], delay: 20_000 });
+    await sessionContext(b, `[data-session="${session.id}"]`);
+    await b.click(`${menu} [data-context-command="session.compact"]`);
+    await b.poll(
+      `!!document.querySelector('.otk-compaction-divider') && document.querySelector('[data-session="${session.id}"]')?.dataset.status==='busy' && !!document.querySelector('.otk-response-progress')`,
+    );
+    for (const theme of ["otk-dark", "otk-light"]) {
+      await client.rpc("prefs.set", { key: "theme", value: theme });
+      await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
+      await capture(b, `${theme}-compact-progress`);
+    }
+    await waitForReply(b, session.id, "Long compaction summary.");
+    assertEquals(
+      await b.evaluate("!!document.querySelector('.otk-session-error')"),
+      false,
+    );
+    const first = f.fake.queueHeld({ chunks: ["Busy reply finished."] });
+    const summary = f.fake.queueHeld({
+      chunks: ["Queued compaction summary."],
+    });
+    await b.fill('textarea[name="prompt"]', "Keep working until released");
+    await b.key("Enter");
+    await b.poll(
+      `document.querySelector('[data-session="${session.id}"]')?.dataset.status==='busy' && document.querySelector('.otk-messages').textContent.includes('Busy reply finished.')`,
+    );
+    const requests = f.fake.requests.length;
+    await sessionContext(b, `[data-session="${session.id}"]`);
+    await b.click(`${menu} [data-context-command="session.compact"]`);
+    await b.poll(
+      "document.querySelectorAll('.otk-compaction-divider').length===2",
+    );
+    assertEquals(f.fake.requests.length, requests);
+    first.release();
+    await b.poll(
+      "document.querySelector('.otk-messages').textContent.includes('Queued compaction summary.')",
+    );
+    assert(f.fake.requests.length > requests);
+    summary.release();
+    await waitForReply(b, session.id, "Queued compaction summary.");
+    assertEquals(
+      await b.evaluate("!!document.querySelector('.otk-session-error')"),
+      false,
+    );
+    assertEquals(b.errors, []);
+  } finally {
+    await client?.close();
+    await f.stop();
+  }
+});
+
+test("compact HTTP failure reaches ordinary session error presentation", async () => {
+  const f = await browserFixture();
+  const proxy = Deno.serve(
+    { hostname: "127.0.0.1", port: 0, onListen() {} },
+    (request) => {
+      const url = new URL(request.url);
+      if (url.pathname.endsWith("/summarize")) {
+        return Response.json({
+          name: "CompactFailure",
+          data: { message: "Compact refused" },
+        }, { status: 500 });
+      }
+      url.host = new URL(f.oc.url).host;
+      return fetch(new Request(url, request));
+    },
+  );
+  try {
+    const session = await f.oc.request<{ id: string }>("/session", {
+      method: "POST",
+      body: { title: "Compact error" },
+    });
+    const server = await f.sidecar({
+      harness: { url: `http://127.0.0.1:${proxy.addr.port}` },
+    });
+    const b = await f.browser(server.url);
+    await openSession(b, session.id);
+    await b.poll("!!document.querySelector('.otk-model-picker')");
+    await sessionContext(b, `[data-session="${session.id}"]`);
+    await b.click(`${menu} [data-context-command="session.compact"]`);
+    await b.poll(
+      "document.querySelector('.otk-session-error-message')?.textContent==='Compact refused' && document.querySelector('.otk-error-observation-origin')?.textContent.includes('compact request')",
+    );
+    assertEquals(b.errors, []);
+  } finally {
+    await f.stop();
+    await proxy.shutdown();
+  }
+});
+
 for (const theme of ["otk-dark", "otk-light"]) {
   test(`fork hover actions retain grouped replies and fork notes in ${theme}`, async () => {
     const f = await browserFixture({ bash: "allow" });

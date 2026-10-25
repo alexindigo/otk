@@ -6,6 +6,7 @@ import { mapSession } from "./map.ts";
 import type { Session } from "./types.ts";
 import type { BootstrapDb } from "./db.ts";
 import type { Messages } from "./messages.ts";
+import type { Launch } from "./shell.ts";
 
 export function sessionActions(
   client: Client,
@@ -13,8 +14,18 @@ export function sessionActions(
   db: BootstrapDb,
   messages: Messages,
   revertCutoff: (id: string) => Promise<string | undefined>,
+  launch: Launch,
 ): SessionActionsCapability {
   return {
+    async compact(id, model) {
+      const dir = await directory.resolve(id);
+      launch(id, "compact", `/session/${encodeURIComponent(id)}/summarize`, {
+        method: "POST",
+        query: { directory: dir },
+        timeout: null,
+        body: { providerID: model.provider, modelID: model.model },
+      });
+    },
     async fork(id, through) {
       const dir = await directory.resolve(id);
       let next: string | null | undefined;

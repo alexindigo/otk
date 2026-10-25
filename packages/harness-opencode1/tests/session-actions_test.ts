@@ -43,6 +43,9 @@ Deno.test("rename resolves the target directory, encodes its ID and maps the nat
     db,
     new Messages(client, () => "/project"),
     () => Promise.resolve(undefined),
+    () => {
+      throw new Error("Unexpected launch");
+    },
   );
   const result = await actions.rename("s/id", "New");
   assertEquals(result.title, "New");
