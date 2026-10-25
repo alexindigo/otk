@@ -338,9 +338,18 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
           ),
           0,
         );
+        assertEquals(
+          await b.evaluate(
+            "getComputedStyle(document.querySelector('.otk-work-fold .otk-divider-label')).font",
+          ),
+          await b.evaluate(
+            "getComputedStyle(document.querySelector('.otk-work-fold')).font",
+          ),
+          "The shared divider must preserve its disclosure's typography",
+        );
         const rule = await b.evaluate<
           { width: string; style: string; ratio: number }
-        >(`(()=>{const e=document.querySelector('.otk-work-rule'),s=getComputedStyle(e),canvas=document.createElement('canvas');canvas.width=canvas.height=1;const c=canvas.getContext('2d'),rgb=color=>{c.clearRect(0,0,1,1);c.fillStyle=getComputedStyle(document.documentElement).backgroundColor;c.fillRect(0,0,1,1);c.fillStyle=color;c.fillRect(0,0,1,1);return [...c.getImageData(0,0,1,1).data].slice(0,3)},bg=rgb('transparent'),distance=a=>a.reduce((n,v,i)=>n+Math.abs(v-bg[i]),0);return {width:s.borderTopWidth,style:s.borderTopStyle,ratio:distance(rgb(s.borderTopColor))/distance(rgb(s.color))}})()`);
+        >(`(()=>{const e=document.querySelector('.otk-work-fold .otk-divider-rule'),s=getComputedStyle(e),canvas=document.createElement('canvas');canvas.width=canvas.height=1;const c=canvas.getContext('2d'),rgb=color=>{c.clearRect(0,0,1,1);c.fillStyle=getComputedStyle(document.documentElement).backgroundColor;c.fillRect(0,0,1,1);c.fillStyle=color;c.fillRect(0,0,1,1);return [...c.getImageData(0,0,1,1).data].slice(0,3)},bg=rgb('transparent'),distance=a=>a.reduce((n,v,i)=>n+Math.abs(v-bg[i]),0);return {width:s.borderTopWidth,style:s.borderTopStyle,ratio:distance(rgb(s.borderTopColor))/distance(rgb(s.color))}})()`);
         assertEquals([rule.width, rule.style], ["1px", "solid"]);
         assert(
           rule.ratio > 0 && rule.ratio < .2,

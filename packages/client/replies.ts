@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { AssistantMessage, Message } from "@otk/protocol";
+import { queuedMessages } from "./messages.ts";
 
 /** One projection owns a turn's backend reply identity, content and clocks. */
 function replyGroups(
@@ -58,11 +59,28 @@ export function replyMetadata(
   );
 }
 /** Stable first-step keys keep tool and reasoning state mounted as a reply grows. */
-export type ReplyMessage = Message & { lastID: string };
-export function replyMessages(messages: readonly Message[]): ReplyMessage[] {
-  return replyGroups(messages).map((group) => ({
+export type ReplyMessage = Message & { lastID: string; pending?: boolean };
+export function replyMessages(
+  messages: readonly Message[],
+  busy = false,
+): ReplyMessage[] {
+  const groups = replyGroups(messages);
+  const current = messages.findLast((message) => message.role === "user")?.id;
+  const queued = queuedMessages(messages, busy);
+  const unfinished = new Set(
+    groups.flatMap(({ message }) =>
+      message.role === "assistant" &&
+        message.time.completed === undefined && message.replyTo
+        ? [message.replyTo]
+        : []
+    ),
+  );
+  return groups.map((group) => ({
     ...group.message,
     id: group.firstID,
     lastID: group.lastID,
+    pending: group.message.role === "user" && busy &&
+      (group.message.id === current || queued.has(group.message.id) ||
+        unfinished.has(group.message.id)),
   }));
 }

@@ -1,0 +1,12 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-divider-label {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+}
+.otk-divider-rule {
+  flex: 1;
+  border-top: 1px solid var(--otk-border);
+}

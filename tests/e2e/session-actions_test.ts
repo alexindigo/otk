@@ -58,12 +58,30 @@ test("compact uses the next-prompt model, survives a 20-second summary and queue
     await b.poll(
       `!!document.querySelector('.otk-compaction-divider') && document.querySelector('[data-session="${session.id}"]')?.dataset.status==='busy' && !!document.querySelector('.otk-response-progress')`,
     );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('.otk-compaction-divider').closest('.otk-user-bubble')===null && !document.querySelector('.otk-compaction-divider').closest('[data-message]').querySelector('.otk-user-bubble')",
+      ),
+      true,
+      "Compaction must render outside the prompt bubble",
+    );
+    await b.poll(
+      "document.querySelector('.otk-compaction-divider')?.textContent==='Compacting…'",
+    );
     for (const theme of ["otk-dark", "otk-light"]) {
       await client.rpc("prefs.set", { key: "theme", value: theme });
       await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
       await capture(b, `${theme}-compact-progress`);
     }
     await waitForReply(b, session.id, "Long compaction summary.");
+    await b.poll(
+      "document.querySelector('.otk-compaction-divider')?.textContent==='Session compacted'",
+    );
+    for (const theme of ["otk-dark", "otk-light"]) {
+      await client.rpc("prefs.set", { key: "theme", value: theme });
+      await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
+      await capture(b, `${theme}-compact-complete`);
+    }
     assertEquals(
       await b.evaluate("!!document.querySelector('.otk-session-error')"),
       false,
@@ -83,6 +101,12 @@ test("compact uses the next-prompt model, survives a 20-second summary and queue
     await b.poll(
       "document.querySelectorAll('.otk-compaction-divider').length===2",
     );
+    assertEquals(
+      await b.evaluate(
+        "[...document.querySelectorAll('.otk-compaction-divider')].map(marker=>marker.textContent)",
+      ),
+      ["Session compacted", "Compacting…"],
+    );
     assertEquals(f.fake.requests.length, requests);
     first.release();
     await b.poll(
@@ -91,6 +115,9 @@ test("compact uses the next-prompt model, survives a 20-second summary and queue
     assert(f.fake.requests.length > requests);
     summary.release();
     await waitForReply(b, session.id, "Queued compaction summary.");
+    await b.poll(
+      "[...document.querySelectorAll('.otk-compaction-divider')].every(marker=>marker.textContent==='Session compacted' && !marker.closest('.otk-user-bubble'))",
+    );
     assertEquals(
       await b.evaluate("!!document.querySelector('.otk-session-error')"),
       false,

@@ -69,7 +69,7 @@ export default function SessionView(props: {
 }): Element {
   const writeDraft = props.onDraft;
   const queued = () => queuedMessages(props.messages, props.busy);
-  const messages = createMemo(() => replyMessages(props.messages));
+  const messages = createMemo(() => replyMessages(props.messages, props.busy));
   const [now, setNow] = createSignal(Date.now());
   const older = ownedAction("session.page", () => props.onOlder());
   const retry = ownedAction("session.refetch", () => props.onRetry());
@@ -205,6 +205,7 @@ export default function SessionView(props: {
                   sidecarId={props.sidecarId}
                   message={message()}
                   lastID={message().lastID}
+                  pending={message().pending}
                   usage={turnUsage(props.usage, message(), props.catalog)}
                   prefs={props.prefs}
                   directory={props.info?.directory}

@@ -42,14 +42,14 @@ other's shape. `parts.register(name, Component)` receives an external part;
 `parts.registerTyped(kind, Component)` derives its shape from the open
 `PartKinds` map. The same namespace separation applies to parts;
 `registerUnknownPart` supplies unsupported-part fallback. Part registrations can
-contribute `{work?, text?, hidden?}` presentation data: the message groups
-adjacent contributed work clocks into expandable folds and copies contributed
-source text without dispatching concrete part kinds or reading child DOM. Read,
-search, fetch, web search, skill and task bodies render their inherited native
-result through the same `ToolOutput` owner as bash. The adapter's decoded
-results contain user content and metadata, not model-facing envelopes.
-Unrecognized formats retain verbatim fallback. Headers alone summarize
-operations; bodies contain results, metadata, diagnostics and
+contribute `{work?, text?, hidden?, frame?}` presentation data: the message
+groups adjacent contributed work clocks into expandable folds and copies
+contributed source text without dispatching concrete part kinds or reading child
+DOM. Read, search, fetch, web search, skill and task bodies render their
+inherited native result through the same `ToolOutput` owner as bash. The
+adapter's decoded results contain user content and metadata, not model-facing
+envelopes. Unrecognized formats retain verbatim fallback. Headers alone
+summarize operations; bodies contain results, metadata, diagnostics and
 navigation/progress actions. All UI noun-count labels use the shared count-label
 helper, including tokens, reverted messages, pastes and favicon attention.
 Optional display text preserves compact/locale formatting while the numeric
@@ -59,6 +59,14 @@ preference and provenance-neutral truncation notice. Unknown task agents have an
 identity-free “Unknown agent” label. Invisible bookkeeping owners declare
 themselves hidden so wire steps cannot split a visible work fold. Reply metadata
 combines contiguous source parts for one whole-reply copy.
+
+`frame: "transcript"` places a contributed part outside the ordinary message
+bubble, preserving adjacent normal content in its own frame even in mixed
+messages. Compaction owns that declaration and renders a shared DividerLabel,
+the same label/rule pattern as WorkLog: “Compacting…” for a pending request and
+“Session compacted” afterward. The generic message view dispatches no concrete
+part kinds. Part renderers receive the client projection's optional `pending`
+input; the summary reply retains its normal rendering.
 
 Unfinished assistant replies end with a thin in-flow glimmer beneath their last
 content and before metadata. The grouped reply's completion clock owns its

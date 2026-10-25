@@ -6,7 +6,7 @@ import WorkLog from "./WorkLog.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
 import type { TurnUsage as Usage } from "@otk/client";
-import { elapsed, partGroups } from "./work-log.ts";
+import { elapsed, partFrames, partGroups } from "./work-log.ts";
 import MessageActions from "./MessageActions.tsx";
 import { contextTarget } from "./context-target.ts";
 import type {
@@ -31,6 +31,7 @@ function PartView(
     paneWidth: number;
     onOpenChild(id: string): void;
     user: boolean;
+    pending?: boolean;
   },
 ) {
   const { parts } = useUiRegistries();
@@ -64,6 +65,7 @@ function PartsView(props: Omit<PartProps, "part"> & { parts: Part[] }) {
           onOpenChild={props.onOpenChild}
           user={props.user}
           streaming={props.streaming}
+          pending={props.pending}
         />
       )}
     </For>
@@ -74,6 +76,7 @@ export default function Message(
     sidecarId?: string;
     message: OtkMessage;
     lastID?: string;
+    pending?: boolean;
     metadata?: import("@otk/protocol").AssistantMessage | null;
     usage?: Usage;
     prefs: Preferences;
@@ -85,15 +88,20 @@ export default function Message(
   },
 ): import("solid-js").Element {
   const { parts } = useUiRegistries();
-  const groups = createMemo(() =>
-    partGroups(
+  const frames = createMemo(() => {
+    const result = partFrames(
       props.message.parts,
-      (part) =>
-        props.message.role === "assistant"
-          ? parts.presentation(part, props.prefs)
-          : {},
-    )
-  );
+      (part) => parts.presentation(part, props.prefs),
+    );
+    return result.length || props.message.role === "user" ? result : [{
+      id: props.message.id,
+      parts: [],
+      transcript: false,
+    }];
+  });
+  const prompt = () =>
+    props.message.role === "user" &&
+    frames().some((frame) => !frame.transcript);
   const identity = () => ({
     sidecarId: props.sidecarId,
     sessionID: props.message.sessionID,
@@ -146,56 +154,75 @@ export default function Message(
           })),
         ]}
         class={["otk-message", {
-          "otk-user-message": props.message.role === "user",
+          "otk-user-message": prompt(),
           "is-revealed": revealed(),
         }]}
         data-message={props.message.id}
         data-role={props.message.role}
       >
-        <div
-          class={props.message.role === "user"
-            ? "otk-user-bubble otk-created-trigger"
-            : "otk-message-content"}
-          tabindex={props.message.role === "user" ? "0" : undefined}
-          data-otk-focus={props.message.role === "user" ? "content" : undefined}
-        >
-          <For each={groups()} keyed={(group) => group.id}>
-            {(group) => (
-              <Show
-                when={group().work}
-                fallback={
-                  <PartsView
-                    parts={group().parts}
-                    prefs={props.prefs}
-                    directory={props.directory}
-                    permissions={props.permissions}
-                    paneWidth={props.paneWidth}
-                    onOpenChild={props.onOpenChild}
-                    user={props.message.role === "user"}
-                    streaming={streaming()}
-                  />
-                }
+        <For each={frames()} keyed={(frame) => frame.id}>
+          {(frame) => (
+            <div
+              class={frame().transcript
+                ? "otk-transcript-frame"
+                : props.message.role === "user"
+                ? "otk-user-bubble otk-created-trigger"
+                : "otk-message-content"}
+              tabindex={!frame().transcript && props.message.role === "user"
+                ? "0"
+                : undefined}
+              data-otk-focus={!frame().transcript &&
+                  props.message.role === "user"
+                ? "content"
+                : undefined}
+            >
+              <For
+                each={partGroups(frame().parts, (part) =>
+                  props.message.role === "assistant"
+                    ? parts.presentation(part, props.prefs)
+                    : {})}
+                keyed={(group) => group.id}
               >
-                <WorkLog time={time()}>
-                  <PartsView
-                    parts={group().parts}
-                    prefs={props.prefs}
-                    directory={props.directory}
-                    permissions={props.permissions}
-                    paneWidth={props.paneWidth}
-                    onOpenChild={props.onOpenChild}
-                    user={props.message.role === "user"}
-                    streaming={streaming()}
-                  />
-                </WorkLog>
+                {(group) => (
+                  <Show
+                    when={group().work}
+                    fallback={
+                      <PartsView
+                        parts={group().parts}
+                        prefs={props.prefs}
+                        directory={props.directory}
+                        permissions={props.permissions}
+                        paneWidth={props.paneWidth}
+                        onOpenChild={props.onOpenChild}
+                        user={props.message.role === "user"}
+                        streaming={streaming()}
+                        pending={props.pending}
+                      />
+                    }
+                  >
+                    <WorkLog time={time()}>
+                      <PartsView
+                        parts={group().parts}
+                        prefs={props.prefs}
+                        directory={props.directory}
+                        permissions={props.permissions}
+                        paneWidth={props.paneWidth}
+                        onOpenChild={props.onOpenChild}
+                        user={props.message.role === "user"}
+                        streaming={streaming()}
+                        pending={props.pending}
+                      />
+                    </WorkLog>
+                  </Show>
+                )}
+              </For>
+              <Show when={streaming() && frame().id === frames().at(-1)?.id}>
+                <ResponseProgress />
               </Show>
-            )}
-          </For>
-          <Show when={streaming()}>
-            <ResponseProgress />
-          </Show>
-        </div>
-        <Show when={props.message.role === "user"}>
+            </div>
+          )}
+        </For>
+        <Show when={prompt()}>
           <footer
             class={["otk-user-meta", {
               "otk-time-always": props.prefs.timestamps,

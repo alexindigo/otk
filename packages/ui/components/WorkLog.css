@@ -17,7 +17,3 @@
 .otk-work-fold[aria-expanded=true] .otk-work-chevron {
   rotate: 90deg;
 }
-.otk-work-rule {
-  flex: 1;
-  border-top: 1px solid var(--otk-border);
-}

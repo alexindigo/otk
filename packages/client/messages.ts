@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Message } from "@otk/protocol";
 export function queuedMessages(
-  messages: Message[],
+  messages: readonly Message[],
   busy: boolean,
 ): Set<string> {
   if (!busy) return new Set();

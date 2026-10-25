@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import type { AssistantMessage } from "@otk/protocol";
+import type { AssistantMessage, Message, UserMessage } from "@otk/protocol";
 import { usageHeader, UsageLedger } from "@otk/protocol";
 import { replyMessages, replyMetadata } from "../replies.ts";
 Deno.test("reply metadata combines backend steps once, without combining unrelated or unparented replies", () => {
@@ -52,4 +52,50 @@ Deno.test("reply metadata combines backend steps once, without combining unrelat
     "text-1",
     "text-2",
   ]);
+});
+
+Deno.test("reply pending projection follows current and queued user requests without reviving completed history", () => {
+  const user = (id: string, created: number): UserMessage => ({
+    id,
+    sessionID: "s",
+    role: "user",
+    parts: [],
+    time: { created },
+  });
+  const reply = (
+    id: string,
+    replyTo: string,
+    created: number,
+    completed?: number,
+  ): AssistantMessage => ({
+    id,
+    replyTo,
+    sessionID: "s",
+    role: "assistant",
+    agent: "build",
+    model: { provider: "p", model: "m" },
+    parts: [],
+    time: { created, completed },
+    interrupted: false,
+    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    cost: 0,
+  });
+  const messages: Message[] = [
+    user("old", 1),
+    reply("old-reply", "old", 2, 3),
+    user("current", 4),
+    reply("step", "current", 5),
+    user("queued", 6),
+  ];
+  const pending = (busy: boolean) =>
+    replyMessages(messages, busy).filter((message) => message.pending).map((
+      message,
+    ) => message.id);
+  assertEquals(pending(true), ["current", "queued"]);
+  messages.push(reply("final-step", "current", 7, 8));
+  assertEquals(pending(true), ["queued"]);
+  messages.push(reply("queued-reply", "queued", 9, 10));
+  assertEquals(pending(false), []);
+  messages.push(user("newer", 11));
+  assertEquals(pending(true), ["newer"]);
 });

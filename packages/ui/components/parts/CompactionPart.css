@@ -1,15 +1,7 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-compaction-divider {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  color: var(--secondary);
+  width: 100%;
   margin: 12px 0;
-}
-.otk-compaction-divider::before,
-.otk-compaction-divider::after {
-  content: "";
-  height: 1px;
-  background: var(--muted);
-  flex: 1;
+  color: var(--otk-fg-3);
+  font: 500 var(--text-meta)/var(--line-prose) var(--font-ui);
 }

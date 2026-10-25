@@ -105,6 +105,19 @@ test("real harness history renders file/agent chips and compaction divider", asy
     await browser.poll(
       "document.querySelector('.otk-messages').textContent.includes('File: fixture.txt') && document.querySelector('.otk-messages').textContent.includes('Agent: general') && !!document.querySelector('.otk-compaction-divider')",
     );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector('.otk-compaction-divider').closest('.otk-user-bubble')===null",
+      ),
+      true,
+      "Transcript markers must not inherit a prompt bubble in mixed messages",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector('.otk-user-bubble').textContent.includes('Historical parts')",
+      ),
+      true,
+    );
     await browser.screenshot(join(f.oc.root, "message-chips-compaction.png"));
   } finally {
     await f.stop();

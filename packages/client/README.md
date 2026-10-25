@@ -206,6 +206,12 @@ No session content is duplicated into a second store; the projection also
 combines source parts for whole-reply copying. No session content is stored
 outside the currently loaded transcript.
 
+`replyMessages(messages, busy?)` additionally projects generic pending user
+requests from the current/queued turn and unfinished grouped replies. A later
+request cannot revive completed history, and idle retires pending state. Views
+forward that projection to part renderers; they do not infer native part kinds
+or retain another transcript store.
+
 `createSession().usage` is the framework-free shared SessionUsageOwner. Its
 target-keyed load/get API supplies full session and user-turn metadata from the
 optional usage capability, independently of transcript pages. Public

@@ -8,6 +8,8 @@ export interface PartPresentation {
   work?: WorkTime;
   text?: string;
   hidden?: boolean;
+  /** Flow directly in the transcript rather than inside a message bubble. */
+  frame?: "transcript";
 }
 import type {
   CapabilityName,
@@ -136,6 +138,7 @@ export interface PartProps {
   paneWidth: number;
   onOpenChild(id: string): void;
   user: boolean;
+  pending?: boolean;
 }
 export type PartRenderer = (props: PartProps) => Element;
 export class PartRegistry {
