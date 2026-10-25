@@ -45,9 +45,9 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         name: "Review",
         sessions: ["otk", "running", "done"],
       });
-      // Individual idle / blue / amber / red tabs alongside the mixed task.
+      // Individual idle / green / amber / red tabs alongside the mixed task.
       for (
-        const [id, name] of [["idle-tab", "Quiet"], ["blue-tab", "Working"], [
+        const [id, name] of [["idle-tab", "Quiet"], ["green-tab", "Working"], [
           "amber-tab",
           "Finished",
         ]]
@@ -67,7 +67,7 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         "Healthy connection must use its own connected indicator, never a session attention state",
       );
       f.update("running", { status: "busy" });
-      f.update("blue-tab", { status: "busy" });
+      f.update("green-tab", { status: "busy" });
       f.update("done", { status: "busy" });
       f.update("done", { status: "idle" });
       f.update("amber-tab", { status: "busy" });
@@ -125,13 +125,70 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       if (Deno.env.get("OTK_STATUS_LIGHT_SHOTS")) {
         await b.screenshot(join(root, `lights-r2-${theme}.png`));
       }
+      const shots = Deno.env.get("OTK_NITS_SHOTS");
+      if (shots) await b.screenshot(join(shots, `nits-steady-${theme}.png`));
       await c.rpc("prefs.set", { key: "animationsOff", value: false });
       await b.poll(
         "getComputedStyle(document.querySelector('.otk-project-tabs [data-state=working] .otk-lamp-glow')).animationName==='otk-lamp-breathe'",
       );
+      const cycle = await b.evaluate<
+        {
+          duration: number;
+          iterations: string;
+          progressing: boolean;
+          bodySteady: boolean;
+          shadows: string[];
+          green: boolean;
+        }
+      >(`(async()=>{
+        const lamp=document.querySelector('.otk-project-tabs [data-state=working]');
+        const glow=lamp.querySelector('.otk-lamp-glow'), body=lamp.querySelector('.otk-lamp-body');
+        const animation=glow.getAnimations()[0], timing=animation.effect.getTiming();
+        const start=animation.currentTime, paint=getComputedStyle(body).cssText+getComputedStyle(body).backgroundImage;
+        await new Promise(r=>setTimeout(r,160));
+        const progressing=animation.currentTime>start;
+        animation.pause();
+        const shadows=[];
+        for(const time of [0,1300,2600]) {animation.currentTime=time;await new Promise(requestAnimationFrame);shadows.push(getComputedStyle(glow).boxShadow)}
+        const token=getComputedStyle(lamp).getPropertyValue('--lamp-color').trim();
+        const rgb=[1,3,5].map(i=>parseInt(token.slice(i,i+2),16));
+        return {duration:timing.duration,iterations:String(timing.iterations),progressing,bodySteady:paint===getComputedStyle(body).cssText+getComputedStyle(body).backgroundImage,shadows,green:rgb[1]>rgb[0]&&rgb[1]>rgb[2]};
+      })()`);
+      assert(cycle.green, "Working must use a green theme token");
+      assertEquals(cycle.duration, 2600);
+      assertEquals(cycle.iterations, "Infinity");
+      assert(cycle.progressing && cycle.bodySteady);
+      assert(cycle.shadows[0] !== cycle.shadows[1]);
+      assertEquals(cycle.shadows[0], cycle.shadows[2]);
+      for (const [frame, time] of [["trough", 0], ["peak", 1300]] as const) {
+        await b.evaluate(
+          `(async()=>{for(const el of document.querySelectorAll('.otk-status-light[data-state=working] .otk-lamp-glow')){const a=el.getAnimations()[0];a.pause();a.currentTime=${time}}await new Promise(requestAnimationFrame)})()`,
+        );
+        if (shots) {
+          await b.screenshot(join(shots, `nits-${frame}-${theme}.png`));
+        }
+      }
+      await b.send("Emulation.setEmulatedMedia", {
+        features: [{ name: "prefers-reduced-motion", value: "reduce" }],
+      });
+      await b.poll(
+        "getComputedStyle(document.querySelector('.otk-project-tabs [data-state=working] .otk-lamp-glow')).animationName==='none'",
+      );
+      const steady =
+        "(()=>{const s=getComputedStyle(document.querySelector('.otk-project-tabs [data-state=working] .otk-lamp-glow'));return {shadow:s.boxShadow,opacity:s.opacity}})()";
+      const reduced = await b.evaluate(steady);
+      assert((reduced as { shadow: string }).shadow !== "none");
+      await b.send("Emulation.setEmulatedMedia", {
+        features: [{ name: "prefers-reduced-motion", value: "no-preference" }],
+      });
       await c.rpc("prefs.set", { key: "animationsOff", value: true });
       await b.poll(
         "getComputedStyle(document.querySelector('.otk-project-tabs [data-state=working] .otk-lamp-glow')).animationName==='none'",
+      );
+      assertEquals(
+        await b.evaluate(steady),
+        reduced,
+        "Both motion settings retain the same steady glow",
       );
       await c.rpc("prefs.set", { key: "reducedColors", value: true });
       await b.poll(

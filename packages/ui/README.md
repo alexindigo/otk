@@ -706,26 +706,27 @@ UI provider does not install concrete data.
 
 `StatusLight` takes a state (`blocked`, `working`, `finished`, `idle`), optional
 small sizing and an event identity. Rows use 10px marbles, small lights 8px;
-working breathes only its glow and a new event blinks once. Accessible labels
-and native tooltips accompany every state. The four semantic `lamp-*` theme
-slots paint needs-you red, unseen-finished amber, working cool blue and idle
-grey. `theme.css` exposes shared `--status-light-*` aliases; the component owns
-only construction: radial top highlight, colour-mixed dark rim and glow. Each
-theme's gel colours meet 3:1 non-text contrast across base, hover and selected
-surfaces. `sessionLight` maps the existing session index without inventing
-unread marks; the caller supplies a finished state when its model has seen
-information.
+working breathes only its glow in a slow 2.6-second eased cycle, while its
+marble body stays steady; a new event blinks once. Accessible labels and native
+tooltips accompany every state. The four semantic `lamp-*` theme slots paint
+needs-you red, unseen-finished amber, working green and idle grey. `theme.css`
+exposes shared `--status-light-*` aliases; the component owns only construction:
+radial top highlight, colour-mixed dark rim and glow. Each theme's gel colours
+meet 3:1 non-text contrast across base, hover and selected surfaces.
+`sessionLight` maps the existing session index without inventing unread marks;
+the caller supplies a finished state when its model has seen information.
 
 Connection health uses `ConnectionLight` and its own connected, connecting,
 reconnecting, disconnected and error states. Its pure `connectionState`
 projection requires both the serving transport and agent link to be connected
 for green; authentication/setup/protocol failures and reported errors are red.
 Four `connection-*` theme slots paint quiet discs/rings, independently of
-session attention lamps. Sidebar column/rail, legacy server listing and Settings
-use this same component; reduced colours exposes connection-owned glyphs and
-descriptions. `ActivityIndicator` owns the neutral tool/thinking spinner,
-without a session state input. It retains reduced-colour and reduced-motion
-support.
+session attention lamps. The flat, steady health disc/ring stays distinct from
+the glossy working marble and its breathing halo, even though both use green.
+Sidebar column/rail, legacy server listing and Settings use this same component;
+reduced colours exposes connection-owned glyphs and descriptions.
+`ActivityIndicator` owns the neutral tool/thinking spinner, without a session
+state input. It retains reduced-colour and reduced-motion support.
 
 `paintVisualPreferences` paints authoritative `reducedColors` / `animationsOff`
 preferences supplied by the consumer; `VisualSettings` takes those preferences,

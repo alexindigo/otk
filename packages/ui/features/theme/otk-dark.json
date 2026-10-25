@@ -37,7 +37,7 @@
     "status-error": "#ff8080",
     "lamp-blocked": "#ff2e4d",
     "lamp-finished": "#e8bd42",
-    "lamp-working": "#64a9df",
+    "lamp-working": "#65c88b",
     "lamp-idle": "#8e949b",
     "connection-connected": "#5cb880",
     "connection-connecting": "#64a9df",

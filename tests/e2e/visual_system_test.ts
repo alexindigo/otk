@@ -187,17 +187,17 @@ test("public lights render all states, themed gel colours, sizing, event blink, 
     assert(dark[0].gradient.includes("radial-gradient"));
     assert(dark[0].gradient.includes("linear-gradient"));
     assertEquals(dark[1].breathe, "otk-lamp-breathe");
-    assertEquals(dark[1].duration, "1.1s");
+    assertEquals(dark[1].duration, "2.6s");
     assertEquals(dark[3].glow, "none");
     assertEquals(dark[0].blink, "none");
     const breathing = await browser.evaluate<(string | number)[]>(`(() => {
       const lamp=document.querySelector('[data-visual-gallery] [data-state=working]'),glow=lamp.querySelector('.otk-lamp-glow'),body=lamp.querySelector('.otk-lamp-body'),animation=glow.getAnimations()[0];
       animation.pause();animation.currentTime=0;const low=getComputedStyle(glow).boxShadow,steady=Number(getComputedStyle(body).opacity);
-      animation.currentTime=1100;const high=getComputedStyle(glow).boxShadow,still=Number(getComputedStyle(body).opacity);animation.play();return [low,high,steady,still];
+      animation.currentTime=1300;const high=getComputedStyle(glow).boxShadow,still=Number(getComputedStyle(body).opacity);animation.play();return [low,high,steady,still];
     })()`);
     assert(breathing[0] !== breathing[1]);
-    assert(String(breathing[0]).includes("6px"));
-    assert(String(breathing[1]).includes("11px"));
+    assert(String(breathing[0]).includes("3px"));
+    assert(String(breathing[1]).includes("12px"));
     assertEquals(
       breathing.slice(2),
       [1, 1],
@@ -231,7 +231,7 @@ test("public lights render all states, themed gel colours, sizing, event blink, 
         size: lamp.size,
         height: lamp.height,
         rim: lamp.rim.includes("0px 0px 0px 1px"),
-        halo: lamp.halo.includes("6px"),
+        halo: lamp.halo.includes(lamp.state === "working" ? "3px" : "6px"),
         radial: lamp.gradient.includes("radial-gradient"),
         linear: lamp.gradient.includes("linear-gradient"),
       }));
