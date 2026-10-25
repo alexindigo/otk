@@ -38,6 +38,8 @@ export default function CommandMenu(props: {
   const [groups, setGroups] = createSignal<ContextAction[][]>([]);
   const rows = createMemo(() => groups().map(commandRows));
   const [error, setError] = createSignal<{ key: string; text: string }>();
+  const [armed, setArmed] = createSignal<{ key: string; title: string }>();
+  const [pending, setPending] = createSignal<string>();
   const errorId = `context-error-${createUniqueId()}`;
   let menu!: PopoverControl, generation = 0;
   const clear = () => {
@@ -45,18 +47,27 @@ export default function CommandMenu(props: {
     setCaptured(undefined);
     setGroups([]);
     setError(undefined);
+    setArmed(undefined);
+    setPending(undefined);
     props.onClose?.();
   };
   const capture = () => {
     generation++;
     setError(undefined);
+    setArmed(undefined);
+    setPending(undefined);
     const targets = props.targets();
     setCaptured(targets);
     const next = contextGroups(commands, targets);
     setGroups(next);
     return next.length > 0;
   };
-  onSettled(() => commands.subscribe(() => setRevision((value) => value + 1)));
+  onSettled(() =>
+    commands.subscribe(() => {
+      setArmed(undefined);
+      setRevision((value) => value + 1);
+    })
+  );
   createEffect(() => {
     revision();
     const targets = captured();
@@ -64,17 +75,35 @@ export default function CommandMenu(props: {
   }, (next) => {
     if (!next) return;
     setGroups(next);
+    const active = armed();
+    if (
+      active &&
+      !next.flat().some((item) =>
+        item.key === active.key && item.confirm === active.title
+      )
+    ) setArmed(undefined);
     if (!next.length) menu.close();
   });
   const run = async (action: ContextAction) => {
+    if (pending()) return;
     const current = generation;
     setError(undefined);
     const next = contextGroups(commands, captured() ?? []);
     setGroups(next);
-    if (!next.some((group) => group.some((item) => item.key === action.key))) {
+    const item = next.flat().find((item) => item.key === action.key);
+    if (!item) {
       if (!next.length) menu.close();
       return;
     }
+    if (
+      item.confirm &&
+      (armed()?.key !== item.key || armed()?.title !== item.confirm)
+    ) {
+      setArmed({ key: item.key, title: item.confirm });
+      return;
+    }
+    setArmed(undefined);
+    setPending(item.key);
     props.beforeRun?.();
     try {
       await commands.runContext(action);
@@ -90,6 +119,8 @@ export default function CommandMenu(props: {
         : message;
       setError({ key: action.key, text });
       props.onError?.(text);
+    } finally {
+      if (current === generation) setPending(undefined);
     }
   };
   return (
@@ -117,6 +148,7 @@ export default function CommandMenu(props: {
         if (!captured() && !capture()) menu.close();
       }}
       onClose={clear}
+      onItemChange={() => setArmed(undefined)}
       status={
         <Show when={error()}>
           <p id={errorId} role="alert">{error()?.text}</p>
@@ -147,13 +179,24 @@ export default function CommandMenu(props: {
                         aria-describedby={error()?.key === action().key
                           ? errorId
                           : undefined}
-                        class={action().destructive
-                          ? "otk-menu-destructive"
+                        aria-busy={pending() === action().key
+                          ? "true"
                           : undefined}
+                        class={[
+                          action().destructive ? "otk-menu-destructive" : "",
+                          armed()?.key === action().key ? "is-armed" : "",
+                        ].filter(Boolean).join(" ")}
                         onClick={() => void run(action())}
                       >
-                        <span class="otk-control-label" title={action().title}>
-                          {action().title}
+                        <span
+                          class="otk-control-label"
+                          title={armed()?.key === action().key
+                            ? action().confirm
+                            : action().title}
+                        >
+                          {armed()?.key === action().key
+                            ? action().confirm
+                            : action().title}
                         </span>
                       </button>
                     </>

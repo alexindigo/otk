@@ -654,6 +654,15 @@ rename owner; only the matching identity/origin renders `TitleEditor` in its
 title slot. The native input selects its text, commits on Enter or blur, cancels
 on Escape and retains typed text with local feedback on failure. An editing
 control uses a non-button frame so the input is never nested inside a button.
+The session-action owner also contributes Delete, whose first activation arms a
+shared CommandMenu item in attention paint. Its title names working-session
+interruption and the helper count. A second activation executes; row-to-row
+pointer/focus movement, Tab and dismissal disarm it. Generic Menu owns row
+transitions; CommandMenu owns confirmation state and prevents concurrent
+execution. The shell passes deletion to the shared client view-release owner.
+The guard's draft-survival input asks only when a stored draft would be lost;
+Close keeps ordinary drafts, while successful native deletion drops the family
+drafts.
 
 `TranscriptContext` registers each `prompt`, `reply`, `code`, `diff` and `tool`
 action once, independent of transcript length. Targets carry sidecar/session,

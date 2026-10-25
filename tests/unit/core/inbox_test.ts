@@ -129,3 +129,49 @@ test("synchronous index observers see committed detached metadata on reset and e
   index.upsert(entry);
   assertEquals(transitions.length, 3);
 });
+
+test("explicit deletion removes membership in every task, including out-of-window sessions, but window eviction keeps it", async () => {
+  const db = new OtkDb(await fixture(), [
+    projectsMigrations,
+    tasksMigrations,
+    seenMigrations,
+    finishesMigrations,
+    projectTemplatesMigrations,
+  ]);
+  const stores = {
+    projects: new Projects(db),
+    tasks: new Tasks(db),
+    seen: new Seen(db),
+    finishes: new Finishes(db),
+    templates: new ProjectTemplates(db),
+  };
+  const index = new IndexStore(),
+    feature = new InboxFeature(
+      stores,
+      index,
+      "local",
+      () => Promise.resolve([]),
+    );
+  try {
+    const a = stores.tasks.create("/p", "A", ["deleted", "retained"]);
+    const b = stores.tasks.create("/p", "B", ["also-deleted"]);
+    index.reset([]);
+    assertEquals(stores.tasks.get(a.id).sessions, ["deleted", "retained"]);
+    const frames: unknown[] = [];
+    const stop = feature.listen((frame) => frames.push(frame));
+    index.remove("deleted");
+    index.remove("also-deleted");
+    await Promise.resolve();
+    await Promise.resolve();
+    assertEquals(stores.tasks.get(a.id).sessions, ["retained"]);
+    assertEquals(stores.tasks.get(b.id).sessions, []);
+    assertEquals(feature.get().tasks.flatMap((task) => task.sessions), [
+      "retained",
+    ]);
+    assertEquals(frames.length > 0, true);
+    stop();
+  } finally {
+    feature.close();
+    db.close();
+  }
+});

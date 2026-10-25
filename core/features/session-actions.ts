@@ -6,6 +6,13 @@ import { text } from "../ws/params.ts";
 export function register(rpc: RpcRegistry, harness: Harness): void {
   const actions = harness.capabilities.sessionActions;
   if (!actions) return;
+  rpc.register("session.delete", {
+    params: (p) => text(p, "sessionID")!,
+    async handler(_ctx, id) {
+      await actions.remove(id);
+      return null;
+    },
+  });
   rpc.register("session.rename", {
     params(p) {
       const sessionID = text(p, "sessionID")!;

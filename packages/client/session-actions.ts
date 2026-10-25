@@ -28,6 +28,9 @@ export interface SessionActions {
   prompt(parts: PromptPart[], selection: PromptChoices): Promise<void>;
   abort(): Promise<void>;
   rename(target: Selection, title: string): Promise<ContentSession>;
+  remove(target: Selection): Promise<void>;
+  working(target: Selection): boolean;
+  familyEntries(target: Selection): IndexEntry[];
   permission(input: PermissionReply & { sidecarId?: string }): Promise<void>;
   question(input: { requestID: string; answers?: string[][] }): Promise<void>;
   location(target: Selection, id: string): string;
@@ -92,6 +95,10 @@ export function createSessionActions(o: {
           : part
       ),
     );
+  const working = (target: Selection) => {
+    const status = resources.entry(target.sidecarId, target.sessionID)?.status;
+    return !!status && status !== "idle";
+  };
   return {
     key() {
       const selected = session.state.selection;
@@ -103,6 +110,22 @@ export function createSessionActions(o: {
     act,
     submission,
     attachments,
+    working,
+    familyEntries: (target) =>
+      resources.entries().filter((entry) =>
+        entry.sidecarId === target.sidecarId &&
+        sessionFamily(entry.id, (id) => resources.entry(target.sidecarId, id))
+          .includes(target.sessionID)
+      ),
+    async remove(target) {
+      const rpc = resources.sidecars.connection(target.sidecarId).rpc;
+      await act(target, async () => {
+        if (working(target)) {
+          await rpc.call("session.abort", { sessionID: target.sessionID });
+        }
+        await rpc.call("session.delete", { sessionID: target.sessionID });
+      });
+    },
     rename(target, title) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
       return act(target, () =>

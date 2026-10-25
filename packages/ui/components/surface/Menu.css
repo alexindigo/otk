@@ -31,3 +31,6 @@
   max-width: 28rem;
   margin: 0;
 }
+.otk-menu-items .is-armed {
+  color: var(--otk-attention);
+}

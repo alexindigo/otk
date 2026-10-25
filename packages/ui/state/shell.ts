@@ -77,6 +77,7 @@ export function createShellState(o: { api: URL }): ShellState {
     resources,
     actions,
     guard,
+    drafts,
     session,
     factory: solidState,
     presence: () => ({

@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Drafts } from "./drafts.ts";
 
+export interface ReleaseInput {
+  /** Stored drafts survive ordinary navigation; destructive releases say otherwise. */
+  draft: "kept" | "dropped";
+  /** Captured draft identities being released; defaults to the current session. */
+  keys?: readonly string[];
+}
+
 export interface InputGuard {
   mark(owner: string, dirty: boolean): void;
   dirty(owner: string): boolean;
   clear(): void;
-  release(): boolean;
+  release(input?: ReleaseInput): boolean;
   permit(owner: string, message: string): boolean;
 }
 export function createInputGuard(
@@ -20,18 +27,33 @@ export function createInputGuard(
     clear() {
       dirty.clear();
     },
-    release() {
-      // Frameworks can batch painted reads during input events. Use the same
-      // owner-current writer port as the composer, not the previous paint.
-      const current = o.drafts.writer(o.key())((value) => value);
-      if (!current.editor && ![...dirty.values()].some(Boolean)) return true;
+    release(input = { draft: "kept" }) {
+      // Frameworks can batch painted reads during input events. The plain
+      // current read never creates a draft while checking what would be lost.
+      const key = o.key(), keys = input.keys ?? [key];
+      const drafts = keys.map((key) => o.drafts.current(key));
+      // Stored attachments survive mode switches, even when the current mode
+      // would not submit them. Losing a draft is distinct from sendability.
+      const losesDraft = input.draft === "dropped" &&
+        drafts.some((draft) => !!draft.input.trim() || draft.chips.length > 0);
+      const losesInput = drafts.some((draft) => !!draft.editor) ||
+        (keys.includes(key) && [...dirty.values()].some(Boolean));
+      if (!losesDraft && !losesInput) return true;
       if (
         !o.confirm(
-          "Discard unsaved editor or attention input before switching sessions?",
+          losesDraft
+            ? "Discard unsent draft and unsaved input before continuing?"
+            : "Discard unsaved editor or attention input before switching sessions?",
         )
       ) return false;
-      if (current.editor) {
-        o.drafts.writer(o.key())((value) => ({ ...value, editor: undefined }));
+      // A destructive mutation may still fail. Its caller drops drafts only
+      // after success; consent alone never consumes the draft or its editor.
+      if (input.draft === "kept") {
+        for (const key of keys) {
+          o.drafts.writer(key)((value) =>
+            value.editor ? { ...value, editor: undefined } : value
+          );
+        }
       }
       return true;
     },

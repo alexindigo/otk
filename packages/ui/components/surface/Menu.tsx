@@ -15,11 +15,23 @@ export default function Menu(props: {
   dismissOnAction?: boolean;
   onClose?(): void;
   onOpen?(reason: PopoverOpenReason): void;
+  /** An actual pointer/focus transition between rows, never repeated motion. */
+  onItemChange?(): void;
   status?: Element;
   children: Element;
 }): Element {
   let root!: HTMLDivElement, popover!: PopoverControl;
   let query = "", typedAt = 0;
+  let tracked: HTMLButtonElement | undefined;
+  const track = (target: EventTarget | null) => {
+    const item = target instanceof globalThis.Element
+      ? target.closest("button") ?? undefined
+      : undefined;
+    const next = item?.closest('[role="menu"]') === root ? item : undefined;
+    if (next === tracked) return;
+    tracked = next;
+    props.onItemChange?.();
+  };
   const items = () =>
     [...root.querySelectorAll<HTMLButtonElement>("button")]
       .filter((button) =>
@@ -49,6 +61,7 @@ export default function Menu(props: {
         props.onOpen?.(reason);
         query = "";
         typedAt = 0;
+        tracked = undefined;
         onSettled(() => {
           const first = reason === "keyboard" ? items()[0] : undefined;
           rove(first);
@@ -66,6 +79,7 @@ export default function Menu(props: {
           root = element;
         }}
         onFocusIn={(event) => {
+          track(event.target);
           const target = event.target;
           if (target instanceof HTMLButtonElement) {
             for (const item of items()) {
@@ -73,6 +87,8 @@ export default function Menu(props: {
             }
           }
         }}
+        onPointerMove={(event) => track(event.target)}
+        onPointerDown={(event) => track(event.target)}
         onKeyDown={(event) => {
           if (
             event.isComposing || event.ctrlKey || event.metaKey || event.altKey

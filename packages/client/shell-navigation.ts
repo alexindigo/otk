@@ -2,6 +2,7 @@
 import { errorMessage } from "@otk/protocol";
 import type { ProjectLocation, TaskRecord } from "@otk/protocol";
 import type { InputGuard } from "./input-guard.ts";
+import type { Drafts } from "./drafts.ts";
 import { sessionKey } from "./index.ts";
 import { inboxStatus } from "./inbox.ts";
 import { createNavigation, type NavigationEnvironment } from "./navigation.ts";
@@ -44,6 +45,7 @@ export interface ShellNavigation {
   preview(target: Selection): boolean;
   pin(target: Selection): Promise<boolean>;
   close(target?: Selection): Promise<boolean>;
+  remove(target: Selection): Promise<boolean>;
   available(input?: ProjectSelection): boolean;
   create(input?: ProjectSelection): Promise<void>;
   createIn(
@@ -65,6 +67,7 @@ export function createShellNavigation(o: {
   resources: ServerResources;
   actions: SessionActions;
   guard: InputGuard;
+  drafts: Drafts;
   session: Pick<ClientSession, "state" | "open">;
   presence(): { focused: boolean; visible: boolean };
   confirm(message: string): boolean;
@@ -211,6 +214,60 @@ export function createShellNavigation(o: {
     input?: ProjectSelection,
   ): ProjectSelection | Selection | undefined =>
     input ?? session.state.selection ?? store.state.project;
+  /** Close and native deletion share captured view-release and routing policy.
+   * The disposition tells the guard whether the stored draft survives. */
+  const releaseSession = async (
+    input: Selection | undefined,
+    disposition: "kept" | "dropped",
+  ): Promise<boolean> => {
+    const selected = input ?? session.state.selection;
+    if (!selected || !resources.connected(selected.sidecarId)) return false;
+    const target = { ...selected }, intent = revision;
+    const directory = await actions.directory(target);
+    if (intent !== revision) return false;
+    const p = { sidecarId: target.sidecarId, directory };
+    const entries = resources.projectEntries(p);
+    const entry = entries.find((entry) => entry.id === target.sessionID);
+    if (!entry) return false;
+    const inbox = resources.inbox(target.sidecarId).state.inbox;
+    if (
+      disposition === "kept" && inboxStatus(entry, inbox) !== "idle" &&
+      !o.confirm(
+        `Close “${entry.title}”? It will stay visible as a phantom tab until it is idle and seen. The session remains in Sessions and in the agent service.`,
+      )
+    ) return false;
+    const ids = disposition === "kept"
+      ? [target.sessionID]
+      : actions.familyEntries(target).map((entry) => entry.id);
+    const keys = ids.map((id) => sessionKey(target.sidecarId, id));
+    const shown = () =>
+      session.state.selection?.sidecarId === target.sidecarId &&
+      ids.includes(session.state.selection.sessionID);
+    if (
+      (shown() || disposition === "dropped") &&
+      !guard.release({ draft: disposition, keys })
+    ) return false;
+    const model = resources.tabs(p);
+    const task = inbox.tasks.find((task) =>
+      task.directory === directory && task.sessions.includes(target.sessionID)
+    );
+    const remaining = task?.sessions.find((id) => !ids.includes(id));
+    if (disposition === "dropped") {
+      await actions.remove(target);
+      for (const key of keys) o.drafts.drop(key);
+      if (shown()) guard.clear();
+    } else if (task) {
+      await resources.taskActions(p).remove(task, target.sessionID);
+    }
+    if (ids.includes(lastLocation(p)?.sessionID ?? "")) remember(p);
+    if (intent === revision && shown()) {
+      const next = entry.parentID ?? remaining;
+      if (next) navigate({ sidecarId: target.sidecarId, sessionID: next });
+      else navigation.open(projectHash(p));
+    }
+    for (const id of ids) model.close(id);
+    return true;
+  };
   return {
     state: store.state,
     subscribe: store.subscribe,
@@ -271,42 +328,8 @@ export function createShellNavigation(o: {
       await model.pin(target.sessionID);
       return true;
     },
-    async close(input) {
-      const target = input ?? session.state.selection;
-      if (!target || !resources.connected(target.sidecarId)) return false;
-      const intent = revision;
-      const directory = await actions.directory(target);
-      if (intent !== revision) return false;
-      const p = { sidecarId: target.sidecarId, directory };
-      const entry = resources.projectEntries(p).find((e) =>
-        e.id === target.sessionID
-      );
-      if (!entry) return false;
-      const inbox = resources.inbox(target.sidecarId).state.inbox;
-      if (
-        inboxStatus(entry, inbox) !== "idle" && !o.confirm(
-          `Close “${entry.title}”? It will stay visible as a phantom tab until it is idle and seen. The session remains in Sessions and in the agent service.`,
-        )
-      ) return false;
-      const shown = () =>
-        session.state.selection?.sidecarId === target.sidecarId &&
-        session.state.selection?.sessionID === target.sessionID;
-      if (shown() && !guard.release()) return false;
-      const model = resources.tabs(p);
-      const task = inbox.tasks.find((t) =>
-        t.directory === directory && t.sessions.includes(target.sessionID)
-      );
-      const remaining = task?.sessions.find((id) => id !== target.sessionID);
-      if (task) await resources.taskActions(p).remove(task, target.sessionID);
-      if (lastLocation(p)?.sessionID === target.sessionID) remember(p);
-      if (intent === revision && shown()) {
-        const next = entry.parentID ?? remaining;
-        if (next) navigate({ sidecarId: target.sidecarId, sessionID: next });
-        else navigation.open(projectHash(p));
-      }
-      model.close(target.sessionID);
-      return true;
-    },
+    close: (target) => releaseSession(target, "kept"),
+    remove: (target) => releaseSession(target, "dropped"),
     available(input) {
       const target = creationTarget(input);
       return !!target && resources.connected(target.sidecarId);

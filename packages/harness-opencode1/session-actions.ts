@@ -10,6 +10,12 @@ export function sessionActions(
   directory: Directory,
 ): SessionActionsCapability {
   return {
+    async remove(id) {
+      await client.json(`/session/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        query: { directory: await directory.resolve(id) },
+      });
+    },
     async rename(id, title) {
       return mapSession(
         await client.json<Session>(

@@ -1,7 +1,47 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertRejects } from "@std/assert";
-import { CommandHub, type Selection } from "@otk/client";
+import { CommandHub, createSessionRename, type Selection } from "@otk/client";
 import { registerSessionTargetCommands } from "../shell/commands/sessions.ts";
+import { registerSessionActionCommands } from "../shell/commands/session-actions.ts";
+
+for (
+  const [working, helpers, expected] of [
+    [false, 0, "Press again to delete"],
+    [false, 1, "Press again to delete, including 1 helper"],
+    [false, 3, "Press again to delete, including 3 helpers"],
+    [true, 0, "Press again to stop and delete"],
+    [true, 1, "Press again to stop and delete, including 1 helper"],
+    [true, 3, "Press again to stop and delete, including 3 helpers"],
+  ] as const
+) {
+  Deno.test(`armed Delete label working=${working} helpers=${helpers}`, () => {
+    const commands = new CommandHub();
+    const release = registerSessionActionCommands(commands, {
+      available: () => true,
+      rename: createSessionRename({ rename: () => Promise.resolve() }),
+      working: () => working,
+      helpers: () => helpers,
+      remove: () => Promise.resolve(true),
+    });
+    try {
+      const actions = commands.contextActions({
+        kind: "session",
+        data: {
+          sidecarId: "server",
+          sessionID: "session",
+          directory: "/p",
+          title: "Title",
+        },
+      });
+      assertEquals(
+        actions.find((action) => action.id === "session.delete")?.confirm,
+        expected,
+      );
+    } finally {
+      release();
+    }
+  });
+}
 
 Deno.test("session context transitions: current-place no-ops vanish, background and cross-server actions retain captured effects", async () => {
   const commands = new CommandHub();

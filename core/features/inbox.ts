@@ -43,6 +43,17 @@ export class InboxFeature implements FrameSource {
   ) {
     this.#stops.push(
       index.observe((entry, previous) => this.#observe(entry, previous)),
+      index.listen((frame) => {
+        if (frame.t !== "index.patch") return;
+        for (const op of frame.ops) {
+          if (op.op !== "remove") continue;
+          for (const task of stores.tasks.list()) {
+            if (task.sessions.includes(op.id)) {
+              stores.tasks.removeSession(task.id, op.id);
+            }
+          }
+        }
+      }),
     );
     for (const store of Object.values(stores)) {
       this.#stops.push(store.listen(() => this.#emit()));

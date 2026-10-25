@@ -55,6 +55,10 @@ provider/config requests and credential filtering belong to the adapter.
 `sessionActions` capability is present. It validates the session ID and a
 trimmed 1–200-character title, then forwards to that capability. Application
 composition selects this feature alongside the existing session registrations.
+It also contributes validated `session.delete` through `sessionActions.remove`.
+InboxFeature removes explicit deleted IDs from task membership on index `remove`
+operations, including IDs outside the current window. Snapshot/window eviction
+never removes membership; task-store broadcasts publish each committed removal.
 
 `usage.get` delegates to the optional usage capability. Its whole-session and
 user-turn summaries include source-model totals and keyed message-usage

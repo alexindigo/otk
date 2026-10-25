@@ -229,6 +229,9 @@ export default function Shell(
       resources.connected(target.sidecarId) &&
       resources.advertised(target.sidecarId, "sessionActions"),
     rename,
+    working: actions.working,
+    helpers: (target) => Math.max(0, actions.familyEntries(target).length - 1),
+    remove: navigation.remove,
   }));
   onCleanup(registerAttentionCommands(commands, actions));
   onCleanup(registerApprovalCommands(commands, {

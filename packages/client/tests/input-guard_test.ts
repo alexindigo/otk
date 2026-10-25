@@ -84,3 +84,44 @@ Deno.test("input guard permit consults only the named owner and does not consume
   guard.mark("permissions", false);
   assertEquals(guard.permit("permissions", "message"), true);
 });
+
+Deno.test("release asks only when its disposition loses unsent draft content", () => {
+  const drafts = client.createDrafts(), messages: string[] = [];
+  const draft = { ...client.emptyDraft(), input: "Unsent prompt" };
+  drafts.writer("one")(draft);
+  const guard = client.createInputGuard({
+    drafts,
+    key: () => "one",
+    confirm: (message) => {
+      messages.push(message);
+      return false;
+    },
+  });
+  assertEquals(guard.release({ draft: "kept" }), true);
+  assertEquals(messages, []);
+  assertStrictEquals(drafts.get("one"), draft);
+  assertEquals(guard.release({ draft: "dropped" }), false);
+  assertEquals(messages.length, 1);
+  assertStrictEquals(drafts.get("one"), draft);
+  assertEquals(guard.release({ draft: "dropped", keys: ["empty"] }), true);
+  assertEquals(messages.length, 1);
+  drafts.writer("attachment")({
+    ...client.emptyDraft(),
+    chips: [{
+      id: "file",
+      label: "file",
+      part: { kind: "file", source: "path", path: "/file" },
+    }],
+  });
+  assertEquals(
+    guard.release({ draft: "dropped", keys: ["empty", "attachment"] }),
+    false,
+  );
+  assertEquals(messages.length, 2);
+  drafts.writer("attachment")((draft) => ({ ...draft, mode: "shell" }));
+  assertEquals(
+    guard.release({ draft: "dropped", keys: ["attachment"] }),
+    false,
+  );
+  assertEquals(messages.length, 3);
+});

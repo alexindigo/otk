@@ -890,6 +890,7 @@ test("C2 stock capabilities: targeted auto-approve and reply usage menu reach th
       "Turn auto-approve on",
       "Copy session title",
       "Close session",
+      "Delete",
       ...panelArea,
     ]);
     for (const theme of ["otk-dark", "otk-light"]) {
@@ -929,6 +930,7 @@ test("C2 stock capabilities: targeted auto-approve and reply usage menu reach th
       "Turn auto-approve on",
       "Copy session title",
       "Close session",
+      "Delete",
     ]);
     for (const theme of ["otk-dark", "otk-light"]) {
       await client.rpc("prefs.set", { key: "theme", value: theme });

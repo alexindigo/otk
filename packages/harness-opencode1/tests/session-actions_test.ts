@@ -30,7 +30,7 @@ Deno.test("rename resolves the target directory, encodes its ID and maps the nat
       options?.method,
       url.pathname,
       url.searchParams.get("directory"),
-      JSON.parse(String(options?.body)),
+      options?.body ? JSON.parse(String(options.body)) : undefined,
     ]);
     return Promise.resolve(Response.json(native));
   });
@@ -42,5 +42,12 @@ Deno.test("rename resolves the target directory, encodes its ID and maps the nat
     "/session/s%2Fid",
     "/project",
     { title: "New" },
+  ]]);
+  await sessionActions(client, directory).remove("s/id");
+  assertEquals(calls.slice(-2), [["resolve", "s/id"], [
+    "DELETE",
+    "/session/s%2Fid",
+    "/project",
+    undefined,
   ]]);
 });

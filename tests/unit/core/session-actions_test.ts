@@ -19,9 +19,20 @@ test("session actions are capability-gated and validate before forwarding a trim
       )).code,
       "method",
     );
+    assertEquals(
+      (await assertRejects(
+        () => unavailable.dispatch("session.delete", {}),
+        HarnessError,
+      )).code,
+      "method",
+    );
     const calls: unknown[] = [];
     const harness = stub({
       sessionActions: {
+        remove: (id) => {
+          calls.push(["delete", id]);
+          return Promise.resolve();
+        },
         rename: async (id, title) => {
           calls.push([id, title]);
           return { ...(await harness.core.getSession(id)), title };
@@ -47,6 +58,18 @@ test("session actions are capability-gated and validate before forwarding a trim
     assertEquals(calls, []);
     await rpc.dispatch("session.rename", { sessionID: "s", title: " New " });
     assertEquals(calls, [["s", "New"]]);
+    assertEquals(
+      (await assertRejects(
+        () => rpc.dispatch("session.delete", { sessionID: "" }),
+        HarnessError,
+      )).code,
+      "params",
+    );
+    assertEquals(
+      await rpc.dispatch("session.delete", { sessionID: "s" }),
+      null,
+    );
+    assertEquals(calls, [["s", "New"], ["delete", "s"]]);
   } finally {
     db.close();
   }

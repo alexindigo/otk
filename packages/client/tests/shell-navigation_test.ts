@@ -58,6 +58,7 @@ function fixture(hash = "#/local/selected") {
     ...f,
     actions,
     guard,
+    drafts,
     environment,
     presence: () => presence,
     confirm: (message) => {
@@ -494,6 +495,106 @@ Deno.test("close session removes only captured membership, clears its view and r
     assertEquals(tabs.state.sessionID, undefined);
     assert(f.resources.entry("local", "selected"));
     assertEquals(f.calls.some((c) => c[1] === "session.delete"), false);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("close keeps an unsent draft without asking, while delete cancel preserves session and draft", async () => {
+  const f = fixture();
+  try {
+    const draft = { ...client.emptyDraft(), input: "Keep this draft" };
+    f.drafts.writer("local/selected")(draft);
+    assertEquals(await f.navigation.close(), true);
+    assertEquals(f.messages, []);
+    assertEquals(f.drafts.get("local/selected"), draft);
+    f.navigation.navigate({ sidecarId: "local", sessionID: "selected" });
+    f.calls.length = 0;
+    f.consent(false);
+    assertEquals(
+      await f.navigation.remove({ sidecarId: "local", sessionID: "selected" }),
+      false,
+    );
+    assertEquals(f.messages.length, 1);
+    assertEquals(f.calls, []);
+    assert(f.resources.entry("local", "selected"));
+    assertEquals(f.drafts.get("local/selected"), draft);
+    assertEquals(f.location.hash, "#/local/selected");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("delete confirmation drops only successfully deleted family drafts and failure preserves them", async () => {
+  const f = fixture();
+  try {
+    f.entries("local", [
+      shellEntry("selected"),
+      shellEntry("helper", "/p", "selected"),
+      shellEntry("other"),
+    ]);
+    const draft = {
+      ...client.emptyDraft(),
+      input: "Unsent",
+      editor: { text: "Unsubmitted edit" },
+    };
+    f.drafts.writer("local/selected")(draft);
+    f.drafts.writer("local/helper")(draft);
+    f.drafts.writer("local/other")(draft);
+    f.reply((_id, method) =>
+      method === "session.delete"
+        ? Promise.reject(new Error("Delete failed"))
+        : Promise.resolve(null)
+    );
+    let error: unknown;
+    try {
+      await f.navigation.remove({ sidecarId: "local", sessionID: "selected" });
+    } catch (cause) {
+      error = cause;
+    }
+    assertEquals((error as Error).message, "Delete failed");
+    assertEquals(f.drafts.get("local/selected"), draft);
+    assertEquals(f.drafts.get("local/helper"), draft);
+    assertEquals(f.location.hash, "#/local/selected");
+    f.reply((_id, method) => {
+      if (method === "session.delete") {
+        f.entries("local", [shellEntry("other")]);
+      }
+      return Promise.resolve(null);
+    });
+    assertEquals(
+      await f.navigation.remove({ sidecarId: "local", sessionID: "selected" }),
+      true,
+    );
+    assertEquals(f.resources.entry("local", "selected"), undefined);
+    assertEquals(f.resources.entry("local", "helper"), undefined);
+    assertEquals(f.drafts.get("local/selected"), client.emptyDraft());
+    assertEquals(f.drafts.get("local/helper"), client.emptyDraft());
+    assertEquals(f.drafts.get("local/other"), draft);
+    assertEquals(f.location.hash, "#project/local/%2Fp");
+    assertEquals(f.messages.length, 2);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("delete without a draft asks no extra question and cannot steal a later navigation", async () => {
+  const f = fixture();
+  try {
+    const held = Promise.withResolvers<null>();
+    f.reply((_id, method) =>
+      method === "session.delete" ? held.promise : Promise.resolve(null)
+    );
+    const removing = f.navigation.remove({
+      sidecarId: "local",
+      sessionID: "selected",
+    });
+    await settled();
+    assertEquals(f.messages, []);
+    f.navigation.navigate({ sidecarId: "local", sessionID: "other" });
+    held.resolve(null);
+    await removing;
+    assertEquals(f.location.hash, "#/local/other");
   } finally {
     f.stop();
   }

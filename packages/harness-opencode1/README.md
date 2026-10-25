@@ -49,6 +49,9 @@ contract never promises that this stock adapter installs that port.
 `sessionActions.rename` resolves the target's directory and sends native
 `PATCH /session/{id}` with `{title}`, returning the neutral mapped session. The
 ordinary native session-updated event remains authoritative for the index.
+`sessionActions.remove` sends native `DELETE /session/{id}` in that same
+resolved directory. The existing native deletion-event path owns disposal of the
+session and its helpers; callers abort working sessions before removal.
 
 The adapter retains ownership of events, stream buffers, task watchers, admitted
 shell/command requests and reconciled HTTP/SSE errors. Stop aborts and joins

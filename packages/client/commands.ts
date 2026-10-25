@@ -19,6 +19,7 @@ export interface Command<A = unknown, R = unknown> extends CommandMetadata {
   context?: {
     kind: string | readonly string[];
     title?(args: A): string;
+    confirm?(args: A): string;
     /** One feature registration may project several invocation-specific choices. */
     items?(args: A): { key?: string; title: string; args: A }[];
     destructive?: boolean;
@@ -134,12 +135,14 @@ export class CommandHub {
       return items.filter((item) =>
         this.enabled(command.id, context, item.args)
       ).map((item) => {
+        const confirm = command.context?.confirm?.(item.args);
         const action = {
           id: command.id,
           key: JSON.stringify([command.id, item.key ?? item.title]),
           title: item.title,
           args: item.args,
           destructive: command.context?.destructive ?? false,
+          ...(confirm === undefined ? {} : { confirm }),
         };
         this.#actions.set(action, { command, target });
         return action;
@@ -182,6 +185,7 @@ export interface ContextAction {
   title: string;
   args: unknown;
   destructive: boolean;
+  confirm?: string;
 }
 /** Two innermost thing groups, then the nearest area; app only without a thing. */
 export function contextGroups(

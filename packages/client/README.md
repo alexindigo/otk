@@ -277,12 +277,19 @@ checks in the assigned OTK VM.
 ## Inbox metadata and tabs
 
 `createInputGuard({drafts, key, confirm})` owns dirty-input marks and
-confirmation policy. Release reads the invocation-current draft through its
-writer and clears only an accepted editor, preserving the prompt and choices;
+confirmation policy. Release reads the invocation-current draft through
+`Drafts.current(key)` (non-creating and independent of framework publication)
+and clears only an accepted editor, preserving the prompt and choices;
 navigation clears attention marks only when the session identity changes.
 `permit` checks a single input owner without consuming its dirty state.
+`release({draft: "kept" | "dropped", keys?})` states whether released stored
+drafts survive. Ordinary navigation defaults to kept. Dropping unsent content
+asks first, including background/family drafts named by keys; consent does not
+consume those drafts before the mutation succeeds. `Drafts.drop(key)` removes
+committed deletions and retires captured writers, so late uploads/sends cannot
+resurrect their deleted draft lifetime.
 
-`createShellNavigation({resources, actions, guard, session, presence,
+`createShellNavigation({resources, actions, guard, drafts, session, presence,
 environment?, factory?})`
 owns project/settings/error state, accepted routing, guarded preview/pin/open,
 creation revisions and seen/visit bookkeeping. It wraps the existing
@@ -308,6 +315,12 @@ later navigation authoritative across an asynchronous mutation. Current input
 uses the same release guard; mandatory activity uses an injected confirmation.
 `ClientTabs.close` clears only preview/selection and remembered member state, so
 the ordinary activity projection still retains every mandatory phantom.
+`remove(target)` shares that same captured view-release owner, declares that the
+family's drafts will be dropped, then invokes SessionActions.remove. Only a
+successful native deletion drops those drafts and releases the affected view.
+Cancellation or failure preserves the draft; later navigation remains
+authoritative. Native deletion events, rather than a second client task
+mutation, remove membership.
 
 `createSessionActions({resources, session, current})` owns session-target
 directory resolution (index, matching selected info, then authoritative lookup),
@@ -324,7 +337,9 @@ identity-and-origin-scoped editor (`tab`, `chip` or `row`),
 trimmed/empty/unchanged admission, pending state and retryable errors.
 Replacement editors retire late results. With a title lookup, `observe()` keeps
 the typed editor mounted until the authoritative index catches up to a
-successful rename.
+successful rename. `remove(target)` captures the same server identity, aborts a
+working session before the typed delete RPC and records one successful `act`
+without promotion.
 
 The hierarchy owner also exports `sessionFamily`, `familyTask` and
 `familySelection`. Shell's location projection intentionally matches only the
@@ -501,13 +516,14 @@ consumer. The plain Deno consumer in `tests/reuse/commands_test.ts` uses this
 public entry to update independent selected counters, resolve aliases and
 release ownership.
 
-Commands may contribute `context: {kind, title?, items?, order?, destructive?}`.
-The kind is feature-owned (a string or a list of shared kinds for one action),
-and the optional title projects a captured target's data. A contribution can
-instead return `items(data) → [{key?, title, args}]` to offer several choices
-through one registration. Give choices stable keys when their order can change.
-The ordinary enabled predicate and run handler receive each choice's args (or
-the target data for a single action). `contextActions({kind, data})` exposes
+Commands may contribute
+`context: {kind, title?, items?, order?, destructive?, confirm?}`. The kind is
+feature-owned (a string or a list of shared kinds for one action), and the
+optional title projects a captured target's data. A contribution can instead
+return `items(data) → [{key?, title, args}]` to offer several choices through
+one registration. Give choices stable keys when their order can change. The
+ordinary enabled predicate and run handler receive each choice's args (or the
+target data for a single action). `contextActions({kind, data})` exposes
 data-only available actions, including hidden commands, without exposing
 callbacks. Targets may declare `area: true` for an enclosing application region,
 through the same target contract and kinds. `contextGroups(hub, targets)` keeps
@@ -523,7 +539,10 @@ rechecks availability before ordinary execution. A released owner cannot invoke
 a replacement with the same command ID. Subscribe and reproject captured targets
 while a menu is open; data and availability can change independently of a
 command's ID. The hub retains no DOM, selection, clipboard or target state
-outside the returned action's weak owner metadata.
+outside the returned action's weak owner metadata. Optional `confirm(args)`
+projects an armed title as data on a ContextAction. The menu owns its
+press-twice lifetime; the hub still owns invocation-time availability and
+registration identity, including after an item was armed.
 
 ## Notifications
 

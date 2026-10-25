@@ -80,6 +80,18 @@ Deno.test("session rename captures the target server and uses act without promot
   f.resources.stop();
 });
 
+Deno.test("session removal aborts a working captured target before delete and records one successful action", async () => {
+  const f = shellFixture(), actions = client.createSessionActions(f);
+  f.entries("remote", [{ ...shellEntry("busy", "/busy"), status: "busy" }]);
+  await actions.remove({ sidecarId: "remote", sessionID: "busy" });
+  assertEquals(f.calls, [
+    ["remote", "session.abort", { sessionID: "busy" }],
+    ["remote", "session.delete", { sessionID: "busy" }],
+    ["remote", "projects.visit", { directory: "/busy", active: true }],
+  ]);
+  f.resources.stop();
+});
+
 Deno.test("session actions prompt captures invocation target and enters submission once with attachment ownership", async () => {
   const f = shellFixture(), actions = client.createSessionActions(f);
   f.entries("local", [shellEntry("selected")]);
