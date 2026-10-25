@@ -359,6 +359,13 @@ retain the whole grouped reply.
 `compact(target, model)` captures the session/server and explicit next-prompt
 model through the same non-submitting `act` owner, without task promotion.
 
+`revert(target, messageID)` and `restore(target)` use the same captured-target
+`act` owner. `createSessionRevert({session, actions, factory?})` serializes
+selected-session revert/restore intents, exposes pending/error and projects the
+authoritative `content.revert` into the composer strip. Selection changes retire
+late results and errors; no RPC result optimistically mutates session content.
+`dispose` releases its subscription. No file-overlap confirmation is added.
+
 The hierarchy owner also exports `sessionFamily`, `familyTask` and
 `familySelection`. Shell's location projection intentionally matches only the
 requested ID and the selected root without filtering directories; its task

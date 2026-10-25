@@ -7,6 +7,107 @@ import type { ContentSession } from "@otk/protocol";
 import type { InboxSnapshot, TaskRecord } from "@otk/protocol";
 import { waitFor } from "../support/opencode.ts";
 
+test("busy revert reports the real native reason through the RPC error mapper without JSON", async () => {
+  const f = await browserFixture();
+  let client: WsClient | undefined;
+  const held = f.fake.queueHeld({ chunks: ["Working until interrupted."] });
+  try {
+    const s = await f.oc.request<{ id: string }>("/session", {
+      method: "POST",
+      body: { title: "Busy rollback reason" },
+    });
+    const server = await f.sidecar();
+    client = new WsClient(server.url);
+    await client.connect();
+    await client.rpc("session.prompt", {
+      sessionID: s.id,
+      mode: "normal",
+      parts: [{ kind: "text", text: "Keep working" }],
+      model: { provider: "fake", model: "scripted" },
+    });
+    await waitFor(
+      () => f.oc.request<Record<string, { type: string }>>("/session/status"),
+      (status) => status[s.id]?.type === "busy",
+    );
+    const messages = await f.oc.request<
+      { info: { id: string; role: string } }[]
+    >(`/session/${s.id}/message`);
+    const messageID = messages.find((message) =>
+      message.info.role === "user"
+    )!.info.id;
+    const error = await assertRejects(
+      () => client!.rpc("session.revert", { sessionID: s.id, messageID }),
+      Error,
+    );
+    assertEquals(
+      error.message,
+      "harness_409: The session is working. Try again when it finishes.",
+    );
+  } finally {
+    held.release();
+    await client?.close();
+    await f.stop();
+  }
+});
+
+test("restore returns rolled-back prompts to the real native conversation", async () => {
+  const f = await browserFixture();
+  let client: WsClient | undefined;
+  try {
+    const session = await f.oc.request<{ id: string }>("/session", {
+      method: "POST",
+      body: { title: "Restore source" },
+    });
+    const first = await f.oc.request<{ info: { id: string } }>(
+      `/session/${session.id}/message`,
+      {
+        method: "POST",
+        body: {
+          noReply: true,
+          parts: [{ type: "text", text: "Boundary prompt" }],
+        },
+      },
+    );
+    await f.oc.request(`/session/${session.id}/message`, {
+      method: "POST",
+      body: { noReply: true, parts: [{ type: "text", text: "Later prompt" }] },
+    });
+    const server = await f.sidecar();
+    client = new WsClient(server.url);
+    await client.connect();
+    const reverted = await client.rpc<ContentSession>("session.revert", {
+      sessionID: session.id,
+      messageID: first.info.id,
+    });
+    assertEquals(reverted.revert?.prompts?.map((p) => p.preview), [
+      "Boundary prompt",
+      "Later prompt",
+    ]);
+    assertEquals(reverted.revert?.prompt?.input, "Boundary prompt");
+    assertEquals(
+      await client.rpc("session.messages", {
+        sessionID: session.id,
+        limit: 100,
+      }),
+      [],
+    );
+    const restored = await client.rpc<ContentSession>("session.restore", {
+      sessionID: session.id,
+    });
+    assertEquals(restored.revert, undefined);
+    assertEquals(
+      (await client.rpc<unknown[]>("session.messages", {
+        sessionID: session.id,
+        limit: 100,
+      })).length,
+      2,
+    );
+  } finally {
+    await client?.close();
+    await f.stop();
+  }
+});
+
 test("fork copies through a grouped reply, respects pending rollback and activates its project", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;

@@ -1,6 +1,59 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Opencode1Config } from "./config.ts";
 import { HarnessError } from "@otk/harness";
+import { errorMessage } from "@otk/protocol";
+// Native diagnostics name opaque resources; display copy never interpolates them.
+const nativeMessages = new Map<string, string>([
+  ["SessionBusyError", "The session is working. Try again when it finishes."],
+  ["MessageNotFoundError", "That message is no longer in the session."],
+  ["SessionNotFoundError", "That session is no longer available."],
+  ["PermissionNotFoundError", "That permission request is no longer pending."],
+  ["QuestionNotFoundError", "That question is no longer pending."],
+  ["PtyNotFoundError", "That terminal is no longer available."],
+  ["ProjectNotFoundError", "That project is no longer available."],
+  ["ProviderNotFoundError", "That provider is no longer available."],
+  ["ModelNotFoundError", "That model is no longer available."],
+  ["McpServerNotFoundError", "That MCP server is no longer available."],
+]);
+function displayMessage(
+  kind: string | undefined,
+  reason: string,
+  fallback: string,
+  identities: string[],
+): string {
+  const mapped = nativeMessages.get(kind || "");
+  if (mapped) return mapped;
+  if (kind === "NotFoundError") {
+    if (
+      /^Message not found\b|^Resource not found: .*[/\\]message[/\\]/i.test(
+        reason,
+      )
+    ) {
+      return nativeMessages.get("MessageNotFoundError")!;
+    }
+    if (
+      /^Part not found\b|^Resource not found: .*[/\\]part[/\\]/i.test(reason)
+    ) {
+      return "That message part is no longer in the session.";
+    }
+    if (
+      /^Session not found\b|^Resource not found: .*[/\\]session[/\\]/i.test(
+        reason,
+      )
+    ) {
+      return nativeMessages.get("SessionNotFoundError")!;
+    }
+    return "The requested item is no longer available.";
+  }
+  // Characterized native Identifier prefixes, including identities absent from
+  // the envelope. Unknown kinds still cannot leak them through fallback copy.
+  return /(?:job|evt|ses|msg|per|que|prt|pty|tool|wrk)_[a-z0-9]+/i.test(
+      reason,
+    ) ||
+      identities.some((id) => reason.includes(id))
+    ? fallback
+    : reason;
+}
 export class HttpFailure extends HarnessError {
   constructor(
     readonly status: number,
@@ -60,27 +113,52 @@ export class Client {
     });
     if (!response.ok) {
       const text = await response.text();
-      let message = text;
+      const fallback = `Request failed (HTTP ${response.status}).`;
+      let message = text.trim() || fallback;
       let kind: string | undefined, ref: string | undefined;
+      const identities: string[] = [];
       try {
         const value: unknown = JSON.parse(text);
-        if (value && typeof value === "object" && "data" in value) {
-          if ("name" in value && typeof value.name === "string") {
+        message = fallback;
+        if (typeof value === "string" && value.trim()) {
+          message = errorMessage(value);
+        }
+        if (value && typeof value === "object") {
+          if ("_tag" in value && typeof value._tag === "string") {
+            kind = value._tag;
+          } else if ("name" in value && typeof value.name === "string") {
             kind = value.name;
           }
-          const data = value.data;
+          const data = "data" in value ? value.data : undefined;
+          for (const envelope of [value, data]) {
+            if (!envelope || typeof envelope !== "object") continue;
+            for (const [key, id] of Object.entries(envelope)) {
+              if (
+                /(?:ID$|^id$|^ref$)/.test(key) && typeof id === "string" && id
+              ) {
+                identities.push(id);
+              }
+            }
+          }
           if (
             data && typeof data === "object" && "message" in data &&
-            typeof data.message === "string"
-          ) message = data.message;
+            typeof data.message === "string" && data.message.trim()
+          ) message = errorMessage(data);
+          else if (
+            "message" in value && typeof value.message === "string" &&
+            value.message.trim()
+          ) message = errorMessage(value);
           if (
             data && typeof data === "object" && "ref" in data &&
             typeof data.ref === "string"
           ) ref = data.ref;
+          else if ("ref" in value && typeof value.ref === "string") {
+            ref = value.ref;
+          }
         }
       } catch { /* Non-JSON errors retain the existing HTTP text. */ }
       throw new HttpFailure(response.status, {
-        message,
+        message: displayMessage(kind, message, fallback, identities),
         ...(kind ? { kind } : {}),
         ...(ref ? { ref } : {}),
       });

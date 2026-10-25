@@ -123,6 +123,11 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
           expected.includes("models"),
           "Models require an explicit advertisement, never a legacy default",
         );
+        assertEquals(
+          connection.supports("restore"),
+          expected.includes("restore"),
+          "Restore is never implied by the legacy revert capability",
+        );
         assertEquals(Socket.current.sent.map((value) => JSON.parse(value).t), [
           "hello",
           "subscribe",

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { SessionErrorState } from "./errors.ts";
+import type { HistoryEntry } from "./history.ts";
 /** A concrete hex colour or a semantic role, resolved by the consumer's theme. */
 export type AgentColor = `#${string}` | "accent" | "secondary";
 export interface ModelRef {
@@ -293,10 +294,19 @@ export interface ContentSession {
   error?: string;
   errorState?: SessionErrorState;
 }
+export interface RevertedPrompt {
+  messageID: string;
+  time: number;
+  preview: string;
+}
 export interface RevertInfo {
   messageID: string;
   messageCount: number;
   files: { path: string; additions: number; deletions: number }[];
+  /** Oldest first, at most 50, whitespace collapsed and at most 200 characters. */
+  prompts?: RevertedPrompt[];
+  /** Boundary prompt content; attachments retain metadata-only history refs. */
+  prompt?: HistoryEntry;
 }
 export interface PermissionRequest {
   id: string;
@@ -328,6 +338,8 @@ export type ContentOp =
     messageID?: string;
     messageCount: number;
     files: RevertInfo["files"];
+    prompts?: RevertedPrompt[];
+    prompt?: HistoryEntry;
   }
   | { op: "message.upsert"; message: Message }
   | { op: "message.remove"; messageID: string }

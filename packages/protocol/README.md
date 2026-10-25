@@ -128,6 +128,13 @@ with an explicit next-prompt `ModelRef`; completion and `compact` request
 failures use ordinary session events and error observations, not a long-running
 RPC.
 
+`restore` is a separately advertised capability: `restore(sessionID)` and
+`session.restore` return the authoritative session after unreverting. Legacy
+`revert` alone never implies Restore support. `RevertInfo` and live
+`session.revert` operations optionally carry oldest-first `prompts` (at most 50,
+200-character whitespace-collapsed previews) and a metadata-only boundary
+`prompt: HistoryEntry` for draft recall. Older peers can omit both fields.
+
 The optional `models` capability supplies `listModels(sessionID)` and the
 feature-owned `models.list { sessionID }` RPC. `ModelCatalog` contains only
 connected providers' IDs/names and model IDs/names, variant names, status,

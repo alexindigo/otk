@@ -74,6 +74,29 @@ export class BootstrapDb {
     `).get(id, cutoff)!.count,
     );
   }
+  /** First non-synthetic text or attachment labels, oldest first, bounded rows. */
+  revertedPrompts(
+    id: string,
+    cutoff: string,
+    limit: number,
+  ): { messageID: string; time: number; text: string }[] | undefined {
+    if (!this.#db) return;
+    try {
+      return this.#db.prepare(
+        `SELECT m.id, json_extract(m.data,'$.time.created') AS time,
+        coalesce((SELECT json_extract(p.data,'$.text') FROM part p WHERE p.message_id=m.id AND json_extract(p.data,'$.type')='text' AND coalesce(json_extract(p.data,'$.synthetic'),0)=0 ORDER BY p.id LIMIT 1),
+          (SELECT group_concat(json_extract(p.data,'$.filename'), ', ') FROM part p WHERE p.message_id=m.id AND json_extract(p.data,'$.type')='file'),
+          (SELECT 'Compacted conversation' FROM part p WHERE p.message_id=m.id AND json_extract(p.data,'$.type')='compaction' LIMIT 1), '') AS text
+        FROM message m WHERE m.session_id=? AND m.id>=? AND json_extract(m.data,'$.role')='user' ORDER BY m.id LIMIT ?`,
+      ).all(id, cutoff, limit).map((row) => ({
+        messageID: String(row.id),
+        time: Number(row.time),
+        text: String(row.text),
+      }));
+    } catch {
+      return;
+    }
+  }
   /** Bounded, metadata-only projections; never hydrate child text/tool output. */
   taskMessages(id: string): Iterable<NativeMessage> | undefined {
     if (!this.#db) return;

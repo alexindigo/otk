@@ -115,3 +115,11 @@ export const CloseIcon = () => (
     <path d="m6 6 12 12M18 6 6 18" />
   </Icon>
 );
+export const RevertIcon = () => (
+  <Icon>
+    <path
+      d="M3 10h11a7 7 0 0 1 0 14M3 10l5-5M3 10l5 5"
+      transform="translate(0 -3)"
+    />
+  </Icon>
+);

@@ -1,0 +1,35 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-rollback-status,
+.otk-rollback-prompt,
+.otk-rollback-file,
+.otk-rollback-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.otk-rollback-disclosure strong {
+  font-weight: 500;
+  color: var(--otk-fg);
+  flex-shrink: 0;
+}
+.otk-rollback-preview,
+.otk-rollback-prompt time {
+  color: var(--otk-fg-3);
+}
+.otk-rollback-disclosure .is-expanded {
+  transform: rotate(180deg);
+}
+.otk-rollback-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 12px;
+}
+.otk-rollback-prompt time {
+  font-size: var(--text-meta);
+  flex-shrink: 0;
+}
+.otk-rollback-footer {
+  justify-content: space-between;
+  color: var(--otk-fg-3);
+}

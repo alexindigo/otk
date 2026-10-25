@@ -4,11 +4,11 @@ import { createSignal, For, onCleanup, onSettled, Show } from "solid-js";
 import { errorMessage } from "@otk/protocol";
 import type { ContentTarget } from "../features/transcript-context.tsx";
 import { commandHints, useCommandPorts } from "../keyboard/context.tsx";
-import { CopyIcon, ForkIcon } from "./ChromeIcons.tsx";
+import { CopyIcon, ForkIcon, RevertIcon } from "./ChromeIcons.tsx";
 import { hoverIntent } from "./hover-intent.ts";
 
 const actions = {
-  prompt: ["prompt.copy"],
+  prompt: ["prompt.revert", "prompt.copy"],
   reply: ["reply.fork", "reply.copy"],
 };
 /** Data-only command consumer; the message supplies its hover region and state. */
@@ -81,7 +81,17 @@ export default function MessageActions(props: {
               aria-busy={pending() === action().id ? "true" : undefined}
               onClick={() => void run(action().id)}
             >
-              <Show when={action().id === "reply.fork"} fallback={<CopyIcon />}>
+              <Show
+                when={action().id === "reply.fork"}
+                fallback={
+                  <Show
+                    when={action().id === "prompt.revert"}
+                    fallback={<CopyIcon />}
+                  >
+                    <RevertIcon />
+                  </Show>
+                }
+              >
                 <ForkIcon />
               </Show>
             </button>

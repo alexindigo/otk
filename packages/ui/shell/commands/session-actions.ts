@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { CommandHub, Selection, SessionRename } from "@otk/client";
+import type {
+  CommandHub,
+  Selection,
+  SessionRename,
+  SessionRevert,
+} from "@otk/client";
 import { countLabel } from "@otk/client";
 import type { SessionContextTarget } from "../../features/session-context.ts";
 import type { ContentTarget } from "../../features/transcript-context.tsx";
@@ -13,7 +18,46 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
   remove(target: Selection): Promise<boolean>;
   current(): SessionContextTarget | undefined;
   fork(target: Selection & { title?: string }, through?: string): Promise<void>;
+  revert?: SessionRevert;
+  revertAvailable?(
+    target: Selection,
+    capability: "revert" | "restore",
+  ): boolean;
+  rolledBack?(): boolean;
 }): () => void {
+  const rollback = commands.register({
+    id: "prompt.revert",
+    title: "Revert to here",
+    category: "Transcript",
+    hidden: true,
+    context: { kind: "prompt", order: 5 },
+    enabled: (_ctx, target?: ContentTarget) =>
+      !!target?.sidecarId && !!target.sessionID && !!target.messageID &&
+      !target.queued &&
+      !!ports.revert?.matches({
+        sidecarId: target.sidecarId,
+        sessionID: target.sessionID,
+      }) &&
+      !!ports.revertAvailable?.({
+        sidecarId: target.sidecarId,
+        sessionID: target.sessionID,
+      }, "revert"),
+    run: (_ctx, target: ContentTarget) =>
+      ports.revert!.revertTo(target.messageID!),
+  });
+  const restore = commands.register({
+    id: "session.restore",
+    title: "Restore",
+    category: "Session",
+    hidden: true,
+    context: { kind: "session", order: 25 },
+    enabled: (_ctx, input?: SessionContextTarget) => {
+      const target = input ?? ports.current();
+      return !!target && !!ports.revert?.matches(target) &&
+        !!ports.rolledBack?.() && !!ports.revertAvailable?.(target, "restore");
+    },
+    run: () => ports.revert!.restore(),
+  });
   const fork = commands.register({
     id: "session.fork",
     title: "Fork session",
@@ -80,5 +124,7 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     remove();
     fork();
     reply();
+    rollback();
+    restore();
   };
 }

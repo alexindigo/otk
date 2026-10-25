@@ -220,10 +220,20 @@ test("PermissionActivity preserves the independent summary file and scope list g
     assertEquals(values[0].length, 4);
   }));
 
-test("WorkLog Settings RevertBanner and empty Sidebar own their styles without sibling renderers", () =>
+test("WorkLog Settings RolledBackStrip and empty Sidebar own their styles without sibling renderers", () =>
   consumer("siblings", async (browser) => {
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector('.otk-rollback-disclosure').getAttribute('aria-expanded')",
+      ),
+      "false",
+    );
+    await browser.click(".otk-rollback-disclosure");
+    await browser.poll(
+      "document.querySelector('.otk-rollback-disclosure').getAttribute('aria-expanded')==='true' && document.querySelectorAll('.otk-rollback-file').length===1",
+    );
     const colors = await browser.evaluate<string[]>(
-      "[...document.querySelectorAll('.otk-revert-banner span')].map(el=>getComputedStyle(el).color)",
+      "['.otk-path','.otk-diff-add','.otk-diff-del'].map(selector=>getComputedStyle(document.querySelector('.otk-rollback-file '+selector)).color)",
     );
     assertEquals({
       work: await browser.evaluate(
@@ -248,6 +258,10 @@ test("WorkLog Settings RevertBanner and empty Sidebar own their styles without s
     await browser.poll("document.querySelector('.otk-work-body').hidden");
     await browser.click(".otk-work-fold");
     await browser.poll("!document.querySelector('.otk-work-body').hidden");
+    await browser.click(".otk-rollback-disclosure");
+    await browser.poll(
+      "document.querySelector('.otk-rollback-disclosure').getAttribute('aria-expanded')==='false' && !document.querySelector('.otk-rollback-file')",
+    );
   }));
 
 test("ProjectTabs layout is input-owned and collapsed inbox hides only its label", () =>

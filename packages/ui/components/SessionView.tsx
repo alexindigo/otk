@@ -23,7 +23,7 @@ import Prompt from "./Prompt.tsx";
 import ComposerTakeovers from "./ComposerTakeovers.tsx";
 import type { Preferences } from "@otk/protocol";
 import SubagentBar from "./SubagentBar.tsx";
-import RevertBanner from "./RevertBanner.tsx";
+import RolledBackStrip from "./RolledBackStrip.tsx";
 import ForkNote from "./ForkNote.tsx";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
@@ -59,6 +59,8 @@ export default function SessionView(props: {
   onOpenChild(id: string): void;
   child: boolean;
   revert: RevertInfo | null;
+  rollback?: import("@otk/client").SessionRevert;
+  strip?: import("@otk/client").RevertStrip;
   busy: boolean;
   retryState?: { attempt: number; message: string; next: number };
   onOlder(): Promise<void>;
@@ -69,6 +71,10 @@ export default function SessionView(props: {
 }): Element {
   const writeDraft = props.onDraft;
   const queued = () => queuedMessages(props.messages, props.busy);
+  const rollbackNotice = () =>
+    !!props.strip || !!props.rollback?.state.pending ||
+    !!props.rollback?.state.error;
+  const noticed = () => rollbackNotice() || !!props.forkNote;
   const messages = createMemo(() => replyMessages(props.messages, props.busy));
   const [now, setNow] = createSignal(Date.now());
   const older = ownedAction("session.page", () => props.onOlder());
@@ -163,9 +169,6 @@ export default function SessionView(props: {
               flow = element;
             }}
           >
-            <Show when={props.revert}>
-              {(revert) => <RevertBanner revert={revert()} />}
-            </Show>
             <Show when={!props.exhausted && props.messages.length}>
               <button
                 type="button"
@@ -229,12 +232,18 @@ export default function SessionView(props: {
             {(active) => (
               <div
                 class={["otk-composer-stack", {
-                  "is-noticed": !props.revert && !!props.forkNote,
+                  "is-noticed": noticed(),
                 }]}
                 hidden={active()}
                 inert={active()}
               >
-                <Show when={!props.revert && props.forkNote}>
+                <Show when={rollbackNotice()}>
+                  <RolledBackStrip
+                    strip={props.strip}
+                    state={props.rollback?.state ?? {}}
+                  />
+                </Show>
+                <Show when={!rollbackNotice() && props.forkNote}>
                   {(note) => (
                     <ForkNote
                       note={note()}
@@ -244,7 +253,7 @@ export default function SessionView(props: {
                 </Show>
                 <div
                   class={["otk-composer-input", {
-                    "is-noticed": !props.revert && !!props.forkNote,
+                    "is-noticed": noticed(),
                   }]}
                 >
                   <Prompt

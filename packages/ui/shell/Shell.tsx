@@ -56,6 +56,7 @@ export default function Shell(
     drafts,
     actions,
     rename,
+    revert,
     forkNotes,
     guard,
     navigation,
@@ -247,6 +248,13 @@ export default function Shell(
         : undefined;
     },
     fork: navigation.fork,
+    revert,
+    rolledBack: () => !!session.state.content.revert,
+    revertAvailable: (target, capability) =>
+      revert.matches(target) && !target.rootID && !info()?.parentID &&
+      resources.connected(target.sidecarId) &&
+      resources.advertised(target.sidecarId, capability) &&
+      !actions.working(target) && !revert.state.pending,
   }));
   onCleanup(registerAttentionCommands(commands, actions));
   onCleanup(registerApprovalCommands(commands, {
@@ -344,6 +352,7 @@ export default function Shell(
       unbindHelp();
       unbindAuto();
       navigation.stop();
+      revert.dispose();
       session.stop();
       resources.stop();
     };
@@ -546,6 +555,8 @@ export default function Shell(
                         <SessionView
                           sidecarId={session.state.selection?.sidecarId}
                           revert={session.state.content.revert}
+                          rollback={revert}
+                          strip={revert.strip(session.state.content)}
                           busy={!!session.state.selection &&
                             entry(
                                 session.state.selection.sidecarId,

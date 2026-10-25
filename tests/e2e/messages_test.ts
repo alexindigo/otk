@@ -5,7 +5,7 @@ import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { runTool } from "../support/rendering.ts";
 import { WsClient } from "../support/ws-client.ts";
-test("R8 revert RPC restores files, hides reverted turns and persists a counted file banner on reload", async () => {
+test("R8 revert RPC restores files, hides reverted turns and persists a joined counted strip on reload", async () => {
   const f = await browserFixture({ edit: "allow", read: "allow" }, {
     prepare: async (oc) => {
       await Deno.writeTextFile(join(oc.directory, "revert.txt"), "before\n");
@@ -44,7 +44,11 @@ test("R8 revert RPC restores files, hides reverted turns and persists a counted 
       frame.event.messageCount === 1
     );
     await browser.poll(
-      "document.querySelector('.otk-revert-banner')?.textContent.includes('1 message reverted') && document.querySelector('.otk-revert-banner')?.textContent.includes('revert.txt') && document.querySelectorAll('[data-message]').length===0",
+      "document.querySelector('.otk-rolled-back-strip')?.textContent.includes('1 prompt rolled back') && document.querySelectorAll('[data-message]').length===0",
+    );
+    await browser.click(".otk-rollback-disclosure");
+    await browser.poll(
+      "document.querySelector('.otk-rollback-details')?.textContent.includes('revert.txt')",
     );
     assertEquals(
       await Deno.readTextFile(join(f.oc.directory, "revert.txt")),
@@ -52,7 +56,7 @@ test("R8 revert RPC restores files, hides reverted turns and persists a counted 
     );
     await browser.reload();
     await browser.poll(
-      "document.querySelector('.otk-revert-banner')?.textContent.includes('1 message reverted') && document.querySelectorAll('[data-message]').length===0",
+      "document.querySelector('.otk-rolled-back-strip')?.textContent.includes('1 prompt rolled back') && document.querySelectorAll('[data-message]').length===0",
     );
     await browser.screenshot(join(f.oc.root, "r8-revert.png"));
     const session = await f.oc.request(`/session/${s.id}`);

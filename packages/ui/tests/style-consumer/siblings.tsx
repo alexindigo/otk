@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import WorkLog from "../../components/WorkLog.tsx";
 import Settings from "../../components/Settings.tsx";
-import RevertBanner from "../../components/RevertBanner.tsx";
+import RolledBackStrip from "../../components/RolledBackStrip.tsx";
 import Sidebar from "../../components/Sidebar.tsx";
 export default function Scene() {
   return (
@@ -11,10 +11,13 @@ export default function Scene() {
         <WorkLog time={{ start: 0, end: 4200 }}>
           <p>Owned work content</p>
         </WorkLog>
-        <RevertBanner
-          revert={{
-            messageID: "reverted",
-            messageCount: 2,
+        <RolledBackStrip
+          state={{}}
+          strip={{
+            count: 2,
+            preview: "Boundary prompt",
+            prompts: [],
+            more: 2,
             files: [{ path: "src/owner.ts", additions: 3, deletions: 1 }],
           }}
         />

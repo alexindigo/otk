@@ -26,6 +26,7 @@ import {
 import type { ModelsCapabilities } from "./capabilities/models.ts";
 import type { SessionActionsCapabilities } from "./capabilities/session-actions.ts";
 import type { UsageCapabilities } from "./capabilities/usage.ts";
+import type { RestoreCapabilities } from "./capabilities/restore.ts";
 import {
   legacyResourcesCapabilities,
   type ResourcesCapabilities,
@@ -58,7 +59,8 @@ export interface CapabilityContracts
     ResourcesCapabilities,
     PermissionsCapabilities,
     QuestionsCapabilities,
-    RevertCapabilities {}
+    RevertCapabilities,
+    RestoreCapabilities {}
 export type CapabilityName = Extract<keyof CapabilityContracts, string>;
 export type Capabilities = Partial<CapabilityContracts>;
 
@@ -101,4 +103,5 @@ export type { ResourcesCapability } from "./capabilities/resources.ts";
 export type { PermissionsCapability } from "./capabilities/permissions.ts";
 export type { QuestionsCapability } from "./capabilities/questions.ts";
 export type { RevertCapability } from "./capabilities/revert.ts";
+export type { RestoreCapability } from "./capabilities/restore.ts";
 export type { SessionActionsCapability } from "./capabilities/session-actions.ts";

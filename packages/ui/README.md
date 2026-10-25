@@ -688,6 +688,22 @@ composer readiness it captures `nextSelection` and delegates through the
 session-bound client compact port. It preserves the unsent draft and uses normal
 server-work progress and session errors, including while queued behind a reply.
 
+Revert to here uses the same prompt context/hover command and selected-session
+client revert owner. Root idle sessions advertise it only with `revert`; queued
+prompts and read-only helpers omit it. `RolledBackStrip` replaces the transcript
+banner using exactly the same joined `ComposerNotice` frame as ForkNote. Its
+local disclosure shows bounded prompt previews, times, Copy and file counts, the
+permanence note and an available neutral Restore action. Pending and errors
+remain in that composer area; rollback takes precedence over the fork note.
+Restore requires the separately advertised `restore` capability. No confirmation
+is added to the native file/conversation rollback.
+
+Primary notice content shares `ComposerNoticeRow`: disclosure, error and fork
+facts use one control-height row with the same leading icon slot and
+flex-centred content. Error reasons are plain text in that row, not paragraphs
+with independent margins or placement. The joined frame remains owned by
+ComposerNotice.
+
 `TranscriptContext` registers each `prompt`, `reply`, `code`, `diff` and `tool`
 action once, independent of transcript length. Targets carry sidecar/session,
 message, part/call and directory identity plus source data. Features can

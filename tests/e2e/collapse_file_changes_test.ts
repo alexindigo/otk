@@ -357,7 +357,7 @@ test("U6 one-token labels and literal fallback phrases reach plain and picker fo
           files: [{ path: "example.ts", additions: 1, deletions: 1 }],
         });
         await b.poll(
-          "document.querySelector('.otk-revert-banner strong')?.textContent==='1 message reverted'",
+          "document.querySelector('.otk-rolled-back-strip strong')?.textContent==='1 prompt rolled back'",
         );
         await capture("paste-revert");
       }

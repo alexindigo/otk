@@ -32,6 +32,8 @@ export interface SessionActions {
   remove(target: Selection): Promise<void>;
   fork(target: Selection, through?: string): Promise<ContentSession>;
   compact(target: Selection, model: ModelRef): Promise<void>;
+  revert(target: Selection, messageID: string): Promise<ContentSession>;
+  restore(target: Selection): Promise<ContentSession>;
   working(target: Selection): boolean;
   familyEntries(target: Selection): IndexEntry[];
   permission(input: PermissionReply & { sidecarId?: string }): Promise<void>;
@@ -155,6 +157,24 @@ export function createSessionActions(o: {
           sessionID: target.sessionID,
           title,
         }));
+    },
+    revert(target, messageID) {
+      const rpc = resources.sidecars.connection(target.sidecarId).rpc;
+      return act(
+        target,
+        () =>
+          rpc.call("session.revert", {
+            sessionID: target.sessionID,
+            messageID,
+          }),
+      );
+    },
+    restore(target) {
+      const rpc = resources.sidecars.connection(target.sidecarId).rpc;
+      return act(
+        target,
+        () => rpc.call("session.restore", { sessionID: target.sessionID }),
+      );
     },
     async prompt(parts, selection) {
       const { selection: target, rpc } = current.context();

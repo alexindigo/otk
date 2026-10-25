@@ -68,6 +68,11 @@ the returned session's project through the same creation bookkeeping port as
 delegates to `sessionActions.compact` and returns admission only. Native summary
 requests and their lifecycle remain in the harness adapter.
 
+`registerRevert` independently selects `session.revert` and `session.restore`
+from the respective `revert` and `restore` capabilities. Both validate session
+identity; revert additionally validates the boundary message. Neither operation
+adds confirmation or overlap detection around the backend's native semantics.
+
 `usage.get` delegates to the optional usage capability. Its whole-session and
 user-turn summaries include source-model totals and keyed message-usage
 baselines, call clocks and small existing tool labels, never transcript parts or

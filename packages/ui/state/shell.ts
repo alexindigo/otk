@@ -9,6 +9,7 @@ import {
   createServerResources,
   createSessionActions,
   createSessionRename,
+  createSessionRevert,
   createShellNavigation,
   type CurrentClient,
   type Drafts,
@@ -18,6 +19,7 @@ import {
   type SessionActions,
   sessionKey,
   type SessionRename,
+  type SessionRevert,
   type ShellNavigation,
 } from "@otk/client";
 import { solidState } from "./binding.ts";
@@ -32,6 +34,7 @@ export interface ShellState {
   current: CurrentClient;
   actions: SessionActions;
   rename: SessionRename;
+  revert: SessionRevert;
   forkNotes: ForkNotes;
   guard: InputGuard;
   navigation: ShellNavigation;
@@ -78,6 +81,7 @@ export function createShellState(o: { api: URL }): ShellState {
       resources.entry(target.sidecarId, target.sessionID)?.title,
     factory: solidState,
   });
+  const revert = createSessionRevert({ session, actions, factory: solidState });
   createEffect(() => {
     const target = rename.state.editing;
     return target && resources.entry(target.sidecarId, target.sessionID)?.title;
@@ -131,6 +135,7 @@ export function createShellState(o: { api: URL }): ShellState {
     current,
     actions,
     rename,
+    revert,
     forkNotes,
     guard,
     navigation,

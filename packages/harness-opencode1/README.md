@@ -64,6 +64,24 @@ response forks cap the native boundary at an authoritative pending revert.
 failures reconcile through ordinary session events/errors. Native summarization
 joins current work and commits a pending rollback, as the next prompt does.
 
+The shared HTTP failure mapper reads both legacy `{name,data}` errors and native
+`_tag` errors with top-level reasons/references (`_tag` takes precedence over
+resource fields such as an MCP server's `name`). Busy and identity-bearing
+not-found errors use fixed user-facing messages, including legacy storage
+diagnostics. Other readable reasons pass through the protocol helper only when
+they contain no native opaque ID or identity supplied by the envelope. Missing
+or identity-bearing fallback reasons receive plain HTTP-status text, never raw
+JSON or resource IDs. Machine-facing kind/reference metadata remains separate
+from display copy. This HTTP boundary owns the mapping for every caller.
+
+`restore.restore` posts `/session/{id}/unrevert` in the resolved directory and
+returns the authoritative session. Revert projections include up to 50 oldest
+rolled-back prompt previews and the boundary's metadata-only history entry.
+`BootstrapDb.revertedPrompts` bounds SQL rows; missing schemas use the existing
+bounded Messages scan without retaining a transcript. History lists and point
+entries share one mapper, including upload references without bytes. Live revert
+operations and reload snapshots carry the same projection.
+
 The adapter retains ownership of events, stream buffers, task watchers, admitted
 shell/command requests and reconciled HTTP/SSE errors. Stop aborts and joins
 owned requests and releases readers. History lists contain metadata, not upload

@@ -118,6 +118,27 @@ Deno.test("session compact captures its target and next-prompt model inside act 
   f.resources.stop();
 });
 
+Deno.test("revert and restore capture target RPCs inside act without promotion", async () => {
+  for (const method of ["revert", "restore"] as const) {
+    const f = shellFixture(), actions = client.createSessionActions(f);
+    const target = { sidecarId: "remote", sessionID: "background" };
+    const pending = method === "revert"
+      ? actions.revert(target, "boundary")
+      : actions.restore(target);
+    f.session.state.selection = { sidecarId: "local", sessionID: "newer" };
+    await pending;
+    assertEquals(f.calls, [
+      ["remote", "session.get", { sessionID: "background" }],
+      ["remote", `session.${method}`, {
+        sessionID: "background",
+        ...(method === "revert" ? { messageID: "boundary" } : {}),
+      }],
+      ["remote", "projects.visit", { directory: "/resolved", active: true }],
+    ]);
+    f.resources.stop();
+  }
+});
+
 Deno.test("session removal aborts a working captured target before delete and records one successful action", async () => {
   const f = shellFixture(), actions = client.createSessionActions(f);
   f.entries("remote", [{ ...shellEntry("busy", "/busy"), status: "busy" }]);

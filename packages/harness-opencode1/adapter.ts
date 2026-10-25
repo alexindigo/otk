@@ -43,7 +43,8 @@ import { resources } from "./resources.ts";
 import { commands } from "./commands.ts";
 import { type Launch, shell } from "./shell.ts";
 import { type PendingPermission, permissions } from "./permissions.ts";
-import { revert } from "./revert.ts";
+import { restore, revert, revertPreview } from "./revert.ts";
+import { historyEntry } from "./history.ts";
 import { sessionActions } from "./session-actions.ts";
 import { sessionDirectory } from "./directory.ts";
 import { Messages } from "./messages.ts";
@@ -277,6 +278,10 @@ export class Opencode1Adapter implements Harness {
       "revert",
       revert(this.client, directory, (id) => this.core.getSession(id)),
     );
+    registry.register(
+      "restore",
+      restore(this.client, directory, (id) => this.core.getSession(id)),
+    );
     this.capabilities = registry.capabilities;
   }
   #start(sink: HarnessSink): Promise<void> {
@@ -369,15 +374,70 @@ export class Opencode1Adapter implements Harness {
       session.id,
       session.revert.messageID,
     );
-    if (messageCount === undefined) {
+    const projected = this.#db.revertedPrompts(
+      session.id,
+      session.revert.messageID,
+      50,
+    );
+    let prompt = this.#history.entry(session.id, session.revert.messageID);
+    let prompts = projected?.map(({ text, ...row }) => ({
+      ...row,
+      preview: revertPreview(text),
+    }));
+    if (messageCount === undefined || !prompts) {
       messageCount = 0;
+      const bounded: NonNullable<RevertInfo["prompts"]> = [];
+      let boundary: import("./messages.ts").NativeMessage | undefined;
+      let command: string | undefined;
       for await (
         const message of this.#messages.scan(session.id, session.directory)
       ) {
         if (
+          message.info.role === "assistant" &&
+          message.info.parentID === session.revert.messageID
+        ) {
+          const input = message.parts.find((p) =>
+            p.type === "tool" && p.tool === "bash"
+          )?.state?.input.command;
+          if (typeof input === "string") command = input;
+        }
+        if (
           message.info.role === "user" &&
           message.info.id >= session.revert.messageID
-        ) messageCount++;
+        ) {
+          messageCount++;
+          const text = message.parts.find((p) =>
+            p.type === "text" && !p.synthetic
+          )?.text ?? (message.parts.filter((p) =>
+            p.type === "file"
+          ).map((p) => p.filename ?? "attachment").join(", ") ||
+            (message.parts.some((p) =>
+                p.type === "compaction"
+              )
+              ? "Compacted conversation"
+              : ""));
+          bounded.push({
+            messageID: message.info.id,
+            time: message.info.time.created,
+            preview: revertPreview(text),
+          });
+          bounded.sort((a, b) => a.messageID.localeCompare(b.messageID));
+          if (bounded.length > 50) bounded.pop();
+          if (message.info.id === session.revert.messageID) boundary = message;
+        }
+      }
+      prompts = bounded;
+      if (boundary) {
+        const shell = boundary.parts.some((p) =>
+          p.type === "text" && p.synthetic &&
+          p.text === "The following tool was executed by the user"
+        );
+        prompt = historyEntry(
+          boundary.info.id,
+          boundary.info.time.created,
+          boundary.parts,
+          shell ? command : undefined,
+        );
       }
     }
     const files = session.revert.diff
@@ -386,6 +446,8 @@ export class Opencode1Adapter implements Harness {
     return {
       messageID: session.revert.messageID,
       messageCount,
+      prompts,
+      prompt,
       files: files.map(({ path, additions, deletions }) => ({
         path,
         additions,
@@ -850,6 +912,8 @@ export class Opencode1Adapter implements Harness {
           messageID: revert?.messageID,
           messageCount: revert?.messageCount || 0,
           files: revert?.files || [],
+          prompts: revert?.prompts,
+          prompt: revert?.prompt,
         });
         sink.resync("all");
       }

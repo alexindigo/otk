@@ -6,12 +6,19 @@
   font: 400 var(--text-ui)/var(--line-ui) var(--font-ui);
   color: var(--otk-fg-2);
 }
-.otk-fork-note {
+.otk-composer-notice-row {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
+  min-height: var(--control-size);
+  padding: 0;
+  text-align: left;
 }
-.otk-fork-note > span {
+.otk-composer-notice-content {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: 1;
   min-width: 0;
 }

@@ -89,6 +89,8 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
           messageID: op.messageID,
           messageCount: op.messageCount,
           files: op.files,
+          ...(op.prompts === undefined ? {} : { prompts: op.prompts }),
+          ...(op.prompt === undefined ? {} : { prompt: op.prompt }),
         }
         : null,
     };

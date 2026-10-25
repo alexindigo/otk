@@ -5,7 +5,7 @@ import { fromFileUrl } from "@std/path";
 import { type HistoryEntry, sameHistory } from "@otk/protocol";
 import type { PromptPart } from "@otk/protocol";
 import type { HistoryAttachmentRef, HistoryCapability } from "@otk/harness";
-interface StoredPart {
+export interface StoredPart {
   type: string;
   text?: string;
   synthetic?: boolean;
@@ -17,7 +17,7 @@ interface StoredPart {
     type?: string;
     clientName?: string;
     uri?: string;
-    path?: string;
+    path?: string | null;
     text?: { value?: string };
   };
   state?: { input?: { command?: string } };
@@ -80,6 +80,36 @@ function map(
     };
   }
 }
+/** Shared SQL/API mapping; inline upload bytes never enter a history entry. */
+export function historyEntry(
+  messageID: string,
+  time: number,
+  parts: (StoredPart & { id: string; size?: number })[],
+  command?: string,
+): HistoryEntry | undefined {
+  const mapped = parts.map((part) => {
+    const data = part.url?.match(/^data:([^;]*);base64,([\s\S]*)$/);
+    const size = part.size ??
+      (data
+        ? data[2].length / 4 * 3 -
+          (data[2].endsWith("==") ? 2 : data[2].endsWith("=") ? 1 : 0)
+        : undefined);
+    return map(part, messageID, part.id, size);
+  }).filter((part): part is PromptPart => !!part);
+  if (command !== undefined) {
+    return {
+      input: command,
+      mode: "shell",
+      parts: [{ kind: "text", text: command }],
+      time,
+    };
+  }
+  const input = mapped.filter((part) => part.kind === "text").map((part) =>
+    part.text
+  ).join("\n");
+  if (!input.trim() && !mapped.length) return;
+  return { input, mode: "normal", parts: mapped, time };
+}
 /** Read-only OTK projection, never creates/writes the harness DB or stores history. */
 export class History implements HistoryCapability {
   #db: DatabaseSync | null = null;
@@ -109,12 +139,41 @@ export class History implements HistoryCapability {
   listHistory(): Promise<HistoryEntry[]> {
     return new Promise((resolve) => resolve(this.#list()));
   }
+  entry(sessionID: string, messageID: string): HistoryEntry | undefined {
+    try {
+      const row = this.#open().prepare(
+        "SELECT id,session_id,time_created FROM message WHERE session_id=? AND id=? AND json_extract(data,'$.role')='user'",
+      ).get(sessionID, messageID);
+      return row ? this.#entry(row) : undefined;
+    } catch {
+      return;
+    }
+  }
   #list(): HistoryEntry[] {
     try {
       const db = this.#open(), result: HistoryEntry[] = [];
       const rows = db.prepare(
         "SELECT id,session_id,time_created FROM message WHERE CASE WHEN json_valid(data) THEN json_extract(data,'$.role')='user' ELSE 0 END ORDER BY time_created DESC,id DESC LIMIT 50",
       ).all();
+      for (const row of rows) {
+        const entry = this.#entry(row);
+        if (entry && !sameHistory(result.at(-1), entry)) result.push(entry);
+      }
+      this.#error = "";
+      return result;
+    } catch (error) {
+      this.close();
+      const message = errorMessage(error);
+      if (message !== this.#error) {
+        console.warn(`history db: degraded (empty history): ${message}`);
+      }
+      this.#error = message;
+      return [];
+    }
+  }
+  #entry(row: Record<string, unknown>): HistoryEntry | undefined {
+    const db = this.#open();
+    try {
       const parts = db.prepare(
           `SELECT id,
             CASE WHEN json_valid(data) THEN CASE WHEN json_extract(data,'$.url') LIKE 'data:%;base64,%'
@@ -129,81 +188,54 @@ export class History implements HistoryCapability {
       const nextUser = db.prepare(
         "SELECT time_created FROM message WHERE session_id=? AND time_created>? AND CASE WHEN json_valid(data) THEN json_extract(data,'$.role')='user' ELSE 0 END ORDER BY time_created LIMIT 1",
       );
-      for (const row of rows) {
-        try {
-          const stored = parts.all(String(row.id));
-          const raw = stored.map((part) =>
-              JSON.parse(String(part.data)) as StoredPart
-            ),
-            mapped = raw.map((part, i) =>
-              map(
-                part,
-                String(row.id),
-                String(stored[i].id),
-                typeof stored[i].size === "number" ? stored[i].size : undefined,
-              )
-            ).filter((part): part is PromptPart => !!part);
-          let input = mapped.filter((part) => part.kind === "text").map((
-              part,
-            ) => part.text
-            ).join("\n"),
-            mode: HistoryEntry["mode"] = "normal",
-            promptParts = mapped;
-          if (
-            raw.some((part) =>
-              part.type === "text" && part.synthetic &&
-              part.text === "The following tool was executed by the user"
-            ) && !mapped.length
-          ) {
-            const bound = Number(
-              nextUser.get(String(row.session_id), Number(row.time_created))
-                ?.time_created ?? Number.MAX_SAFE_INTEGER,
-            );
-            const tool = shell.get(
-                String(row.session_id),
-                Number(row.time_created),
-                bound,
-                String(row.id),
-              ),
-              command = tool
-                ? (JSON.parse(String(tool.data)) as StoredPart).state?.input
-                  ?.command
-                : undefined;
-            if (typeof command !== "string") continue;
-            input = command;
-            mode = "shell";
-            promptParts = [{ kind: "text", text: command }];
-          }
-          if (!input.trim() && !promptParts.length) continue;
-          const entry = {
-            input,
-            mode,
-            parts: promptParts,
-            time: Number(row.time_created),
-          };
-          if (!sameHistory(result.at(-1), entry)) result.push(entry);
-        } catch (error) {
-          const id = String(row.id);
-          if (!this.#malformed.has(id)) {
-            console.warn(
-              `history db: skipped malformed message ${id}: ${
-                errorMessage(error)
-              }`,
-            );
-            this.#malformed.add(id);
-          }
-        }
+      const stored = parts.all(String(row.id));
+      const raw = stored.map((part) => ({
+        ...JSON.parse(String(part.data)) as StoredPart,
+        id: String(part.id),
+        size: typeof part.size === "number" ? part.size : undefined,
+      }));
+      const mapped = historyEntry(
+        String(row.id),
+        Number(row.time_created),
+        raw,
+      );
+      if (
+        raw.some((part) =>
+          part.type === "text" && part.synthetic &&
+          part.text === "The following tool was executed by the user"
+        ) && !mapped
+      ) {
+        const bound = Number(
+          nextUser.get(String(row.session_id), Number(row.time_created))
+            ?.time_created ?? Number.MAX_SAFE_INTEGER,
+        );
+        const tool = shell.get(
+            String(row.session_id),
+            Number(row.time_created),
+            bound,
+            String(row.id),
+          ),
+          command = tool
+            ? (JSON.parse(String(tool.data)) as StoredPart).state?.input
+              ?.command
+            : undefined;
+        if (typeof command !== "string") return;
+        return historyEntry(
+          String(row.id),
+          Number(row.time_created),
+          raw,
+          command,
+        );
       }
-      this.#error = "";
-      return result;
+      return mapped;
     } catch (error) {
-      this.close();
-      const message = errorMessage(error);
-      if (message !== this.#error) {
-        console.warn(`history db: degraded (empty history): ${message}`);
+      const id = String(row.id);
+      if (!this.#malformed.has(id)) {
+        console.warn(
+          `history db: skipped malformed message ${id}: ${errorMessage(error)}`,
+        );
+        this.#malformed.add(id);
       }
-      this.#error = message;
-      return [];
     }
   }
   attachment(
