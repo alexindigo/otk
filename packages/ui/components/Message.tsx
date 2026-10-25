@@ -1,14 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Message.css" with { type: "text" };
 import { agentColor } from "../theme/agent-color.ts";
-import { createMemo, createSignal, For, onCleanup, Show } from "solid-js";
+import { createMemo, createSignal, For, Show } from "solid-js";
 import WorkLog from "./WorkLog.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
 import type { TurnUsage as Usage } from "@otk/client";
 import { elapsed, partGroups } from "./work-log.ts";
-import { CopyIcon } from "./ChromeIcons.tsx";
-import { ownedAction } from "../keyboard/context.tsx";
+import MessageActions from "./MessageActions.tsx";
 import { contextTarget } from "./context-target.ts";
 import type {
   Message as OtkMessage,
@@ -20,10 +19,8 @@ import type { Preferences } from "@otk/protocol";
 import type { PartProps } from "../registries/renderers.ts";
 import {
   ContentIdentityProvider,
-  copyContent,
   useContentIdentity,
 } from "../features/transcript-context.tsx";
-import { errorMessage } from "@otk/protocol";
 function PartView(
   props: {
     part: Part;
@@ -76,6 +73,7 @@ export default function Message(
   props: {
     sidecarId?: string;
     message: OtkMessage;
+    lastID?: string;
     metadata?: import("@otk/protocol").AssistantMessage | null;
     usage?: Usage;
     prefs: Preferences;
@@ -106,21 +104,16 @@ export default function Message(
     (assistant()?.parts ?? props.message.parts).map((part) =>
       parts.presentation(part, props.prefs).text
     ).filter(Boolean).join("\n\n");
-  const copy = ownedAction(
-    "message.copy",
-    copyContent,
-  );
-  const [copyError, setCopyError] = createSignal("");
-  let active = true;
-  onCleanup(() => {
-    active = false;
+  let article!: HTMLElement;
+  const [revealed, setRevealed] = createSignal(false);
+  const target = () => ({
+    ...identity(),
+    text: text(),
+    lastID: props.lastID ?? props.message.id,
+    completed: props.message.role === "assistant" &&
+      props.message.time.completed !== undefined,
+    queued: props.queued,
   });
-  const copyReply = () => {
-    setCopyError("");
-    void copy(text()).catch((error) => {
-      if (active) setCopyError(errorMessage(error));
-    });
-  };
   const assistant = () =>
     props.metadata === null ? undefined : props.metadata ??
       (props.message.role === "assistant" ? props.message : undefined);
@@ -143,12 +136,18 @@ export default function Message(
   return (
     <ContentIdentityProvider value={identity()}>
       <article
-        ref={contextTarget(() => ({
-          kind: props.message.role === "user" ? "prompt" : "reply",
-          data: { ...identity(), text: text() },
-        }))}
+        ref={[
+          (element) => {
+            article = element;
+          },
+          contextTarget(() => ({
+            kind: props.message.role === "user" ? "prompt" : "reply",
+            data: target(),
+          })),
+        ]}
         class={["otk-message", {
           "otk-user-message": props.message.role === "user",
+          "is-revealed": revealed(),
         }]}
         data-message={props.message.id}
         data-role={props.message.role}
@@ -202,15 +201,24 @@ export default function Message(
               "otk-time-always": props.prefs.timestamps,
             }]}
           >
-            <time
-              class="otk-created-time"
-              datetime={new Date(props.message.time.created).toISOString()}
-            >
-              {new Date(props.message.time.created).toLocaleString()}
-            </time>
-            <Show when={props.queued}>
-              <span class="otk-queued">Queued</span>
-            </Show>
+            <span class="otk-user-details">
+              <time
+                class="otk-created-time"
+                datetime={new Date(props.message.time.created).toISOString()}
+              >
+                {new Date(props.message.time.created).toLocaleString()}
+              </time>
+              <Show when={props.queued}>
+                <span class="otk-queued">Queued</span>
+              </Show>
+            </span>
+            <MessageActions
+              kind="prompt"
+              revealed={revealed()}
+              target={target()}
+              region={() => article}
+              onReveal={setRevealed}
+            />
           </footer>
         </Show>
         <Show when={assistant()}>
@@ -240,6 +248,11 @@ export default function Message(
                   >
                     {new Date(message().time.created).toLocaleString()}
                   </time>
+                  <span class="otk-last-output-date" aria-hidden="true">
+                    {new Date(
+                      message().time.lastOutput ?? message().time.created,
+                    ).toLocaleDateString()}
+                  </span>
                   <span>
                     {message().model.provider}/{message().model.model}
                   </span>
@@ -261,22 +274,14 @@ export default function Message(
                     <span>interrupted</span>
                   </Show>
                 </span>
-                <button
-                  type="button"
-                  class="otk-icon-button otk-copy-message"
-                  aria-label="Copy reply"
-                  title="Copy reply"
-                  onClick={copyReply}
-                >
-                  <CopyIcon />
-                </button>
+                <MessageActions
+                  kind="reply"
+                  revealed={revealed()}
+                  target={target()}
+                  region={() => article}
+                  onReveal={setRevealed}
+                />
                 <span class="otk-output-time-group">
-                  <span class="otk-last-output-date" aria-hidden="true">
-                    {new Date(
-                      message().time.lastOutput ?? message().time.created,
-                    )
-                      .toLocaleDateString()}
-                  </span>
                   <time
                     class="otk-last-output-time"
                     tabindex="0"
@@ -303,9 +308,6 @@ export default function Message(
         </Show>
         <Show when={error()}>
           <p class="otk-error" role="alert">{error()}</p>
-        </Show>
-        <Show when={copyError()}>
-          <p class="otk-error" role="alert">{copyError()}</p>
         </Show>
       </article>
     </ContentIdentityProvider>

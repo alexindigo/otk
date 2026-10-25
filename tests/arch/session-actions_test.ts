@@ -88,3 +88,24 @@ Deno.test("native session mutations stay inside the opencode adapter", async () 
     );
   }
 });
+
+Deno.test("messages contribute no commands and hover rows invoke only command identities", async () => {
+  const files = await productionSources();
+  const message = new Source(
+    files.get("packages/ui/components/Message.tsx")!,
+    "Message.tsx",
+  );
+  for (const name of ["register", "ownedCommand", "ownedAction"]) {
+    assertEquals(message.calls(name).length, 0);
+  }
+  const actions = new Source(
+    files.get("packages/ui/components/MessageActions.tsx")!,
+    "MessageActions.tsx",
+  );
+  for (
+    const name of ["register", "ownedCommand", "ownedAction", "call", "fetch"]
+  ) {
+    assertEquals(actions.calls(name).length, 0);
+  }
+  assertEquals(actions.calls("run").length > 0, true);
+});

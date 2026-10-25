@@ -119,6 +119,10 @@ through `rename(sessionID, title)` / `session.rename` and `remove(sessionID)` /
 welcome. Titles are trimmed and bounded to 1–200 characters by the feature's
 server validator.
 
+`sessionActions.fork(sessionID, through?)` / `session.fork` creates a new
+session through the supplied message (inclusive). Without a boundary it copies
+the visible conversation, respecting a pending rollback.
+
 The optional `models` capability supplies `listModels(sessionID)` and the
 feature-owned `models.list { sessionID }` RPC. `ModelCatalog` contains only
 connected providers' IDs/names and model IDs/names, variant names, status,

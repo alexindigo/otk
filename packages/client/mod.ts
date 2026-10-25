@@ -74,3 +74,8 @@ export {
   type SessionTreeGroup,
   type SessionTreeRow,
 } from "./session-tree.ts";
+export {
+  createForkNotes,
+  type ForkNote,
+  type ForkNotes,
+} from "./fork-notes.ts";

@@ -4,6 +4,7 @@ import {
   type ClientSession,
   createCurrentClient,
   createDrafts,
+  createForkNotes,
   createInputGuard,
   createServerResources,
   createSessionActions,
@@ -11,9 +12,11 @@ import {
   createShellNavigation,
   type CurrentClient,
   type Drafts,
+  type ForkNotes,
   type InputGuard,
   type ServerResources,
   type SessionActions,
+  sessionKey,
   type SessionRename,
   type ShellNavigation,
 } from "@otk/client";
@@ -29,6 +32,7 @@ export interface ShellState {
   current: CurrentClient;
   actions: SessionActions;
   rename: SessionRename;
+  forkNotes: ForkNotes;
   guard: InputGuard;
   navigation: ShellNavigation;
 }
@@ -57,7 +61,17 @@ export function createShellState(o: { api: URL }): ShellState {
     () => session.state.selection,
     (id) => sidecars.connection(id),
   );
-  const actions = createSessionActions({ resources, session, current });
+  const forkNotes = createForkNotes(solidState);
+  const actions = createSessionActions({
+    resources,
+    session,
+    current,
+    submitted: (target, action) =>
+      forkNotes.submission(
+        sessionKey(target.sidecarId, target.sessionID),
+        action,
+      ),
+  });
   const rename = createSessionRename({
     rename: actions.rename,
     title: (target) =>
@@ -78,6 +92,7 @@ export function createShellState(o: { api: URL }): ShellState {
     actions,
     guard,
     drafts,
+    forkNotes,
     session,
     factory: solidState,
     presence: () => ({
@@ -116,6 +131,7 @@ export function createShellState(o: { api: URL }): ShellState {
     current,
     actions,
     rename,
+    forkNotes,
     guard,
     navigation,
   };

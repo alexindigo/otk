@@ -13,17 +13,21 @@ export function createSessionSubmission({
   directory,
   inbox,
   tabs,
+  wrap,
 }: {
   sessionID: string;
   directory(): Promise<string>;
   inbox: Pick<InboxModel, "act">;
   tabs(directory: string): Pick<ClientTabs, "send">;
+  /** Session-owned completion lifetime around the same real admission port. */
+  wrap?: SessionSubmission;
 }): SessionSubmission {
-  return async (action) => {
+  const admit: SessionSubmission = async (action) => {
     const project = await directory();
     return await tabs(project).send(
       sessionID,
       () => inbox.act(project, action),
     );
   };
+  return (action) => wrap ? wrap(() => admit(action)) : admit(action);
 }

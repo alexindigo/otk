@@ -34,3 +34,16 @@
   margin-bottom: 16px;
   color: var(--otk-fg-2);
 }
+.otk-composer-input {
+  position: relative;
+  background: var(--otk-bg-elevated);
+  border-radius: var(--radius-composer);
+}
+.otk-composer-input.is-noticed {
+  grid-area: 2 / 1 / 4 / 2;
+  border-top: 1px solid var(--otk-border);
+}
+.otk-composer-stack.is-noticed {
+  display: grid;
+  grid-template-rows: auto var(--radius-composer) auto;
+}

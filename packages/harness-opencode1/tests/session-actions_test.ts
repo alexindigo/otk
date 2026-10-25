@@ -3,6 +3,8 @@ import { assertEquals } from "@std/assert";
 import { Client } from "../client.ts";
 import { sessionDirectory } from "../directory.ts";
 import { sessionActions } from "../session-actions.ts";
+import { BootstrapDb } from "../db.ts";
+import { Messages } from "../messages.ts";
 
 Deno.test("rename resolves the target directory, encodes its ID and maps the native session", async () => {
   const calls: unknown[] = [];
@@ -34,7 +36,15 @@ Deno.test("rename resolves the target directory, encodes its ID and maps the nat
     ]);
     return Promise.resolve(Response.json(native));
   });
-  const result = await sessionActions(client, directory).rename("s/id", "New");
+  const db = new BootstrapDb(":memory:");
+  const actions = sessionActions(
+    client,
+    directory,
+    db,
+    new Messages(client, () => "/project"),
+    () => Promise.resolve(undefined),
+  );
+  const result = await actions.rename("s/id", "New");
   assertEquals(result.title, "New");
   assertEquals(result.directory, "/project");
   assertEquals(calls, [["resolve", "s/id"], [
@@ -43,11 +53,12 @@ Deno.test("rename resolves the target directory, encodes its ID and maps the nat
     "/project",
     { title: "New" },
   ]]);
-  await sessionActions(client, directory).remove("s/id");
+  await actions.remove("s/id");
   assertEquals(calls.slice(-2), [["resolve", "s/id"], [
     "DELETE",
     "/session/s%2Fid",
     "/project",
     undefined,
   ]]);
+  db.close();
 });

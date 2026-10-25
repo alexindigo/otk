@@ -178,12 +178,17 @@ test("creation-time hover and persistent visibility, structural footer date/cloc
     );
     await browser.key("Tab");
     await browser.poll(
+      `document.activeElement===document.querySelector('[data-message-command="reply.fork"]')`,
+    );
+    await browser.key("Tab");
+    await browser.poll(
       "document.activeElement===document.querySelector('.otk-copy-message')",
     );
     await browser.key("Tab");
     await browser.poll(
       "document.activeElement===document.querySelector('.otk-last-output-time') && getComputedStyle(document.querySelector('.otk-last-output-date')).visibility==='visible'",
     );
+    await browser.key("Tab", 8);
     await browser.key("Tab", 8);
     await browser.key("Tab", 8);
     await browser.key("Tab", 8);

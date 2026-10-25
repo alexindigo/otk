@@ -52,6 +52,18 @@ export class BootstrapDb {
       return;
     }
   }
+  /** Undefined = unavailable; null = no following native message. */
+  nextMessageID(id: string, through: string): string | null | undefined {
+    if (!this.#db) return;
+    try {
+      const row = this.#db.prepare(
+        "SELECT id FROM message WHERE session_id = ? AND id > ? ORDER BY id LIMIT 1",
+      ).get(id, through);
+      return row ? String(row.id) : null;
+    } catch {
+      return;
+    }
+  }
   /** One scalar result, never message/part JSON or transcript content. */
   revertedUserCount(id: string, cutoff: string): number | undefined {
     if (!this.#db) return;

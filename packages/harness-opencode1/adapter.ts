@@ -237,7 +237,22 @@ export class Opencode1Adapter implements Harness {
     registry.register("models", models(this.client, directory));
     registry.register("usage", usage(this.#db, this.#messages, directory));
     registry.register("resources", resources(this.client, directory));
-    registry.register("sessionActions", sessionActions(this.client, directory));
+    registry.register(
+      "sessionActions",
+      sessionActions(
+        this.client,
+        directory,
+        this.#db,
+        this.#messages,
+        async (id) =>
+          (await this.client.json<Session>(
+            `/session/${encodeURIComponent(id)}`,
+            {
+              query: { directory: await directory.resolve(id) },
+            },
+          )).revert?.messageID,
+      ),
+    );
     registry.register(
       "permissions",
       permissions(

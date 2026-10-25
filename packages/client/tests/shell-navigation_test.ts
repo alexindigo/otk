@@ -54,11 +54,13 @@ function fixture(hash = "#/local/selected") {
     },
   });
   const presence = { focused: true, visible: true };
+  const forkNotes = client.createForkNotes();
   const navigation = client.createShellNavigation({
     ...f,
     actions,
     guard,
     drafts,
+    forkNotes,
     environment,
     presence: () => presence,
     confirm: (message) => {
@@ -71,6 +73,7 @@ function fixture(hash = "#/local/selected") {
   return {
     ...f,
     drafts,
+    forkNotes,
     actions,
     guard,
     navigation,
@@ -108,6 +111,46 @@ Deno.test("removing a direct-route server detaches even while its project metada
       f.calls.findIndex((call) => call[0] === "open") <
         f.calls.findIndex((call) => call[0] === "remove"),
     );
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("fork navigation preserves original drafts, notes successful forks and fences later navigation", async () => {
+  const f = fixture();
+  try {
+    f.drafts.writer("local/selected")({
+      ...client.emptyDraft(),
+      input: "Keep me",
+    });
+    f.reply((_id, method) =>
+      Promise.resolve(method === "session.fork" ? shellInfo("fork") : null)
+    );
+    await f.navigation.fork({
+      sidecarId: "local",
+      sessionID: "selected",
+      title: "Source",
+    }, "last");
+    assertEquals(f.session.state.selection?.sessionID, "fork");
+    assertEquals(f.forkNotes.get("local/fork"), { from: "Source" });
+    assertEquals(f.drafts.get("local/fork").input, "");
+    assertEquals(f.drafts.get("local/selected").input, "Keep me");
+    assertEquals(f.messages, []);
+    const held = Promise.withResolvers<unknown>();
+    f.reply((_id, method) =>
+      method === "session.fork" ? held.promise : Promise.resolve(null)
+    );
+    const pending = f.navigation.fork({
+      sidecarId: "local",
+      sessionID: "selected",
+      title: "Source",
+    });
+    await settled();
+    f.navigation.navigate({ sidecarId: "local", sessionID: "other" });
+    held.resolve(shellInfo("late-fork"));
+    await pending;
+    assertEquals(f.session.state.selection?.sessionID, "other");
+    assertEquals(f.forkNotes.get("local/late-fork"), { from: "Source" });
   } finally {
     f.stop();
   }

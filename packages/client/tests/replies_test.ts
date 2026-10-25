@@ -44,6 +44,7 @@ Deno.test("reply metadata combines backend steps once, without combining unrelat
     step("3", "another"),
   ]);
   assertEquals(projected.map((message) => message.id), ["1", "3"]);
+  assertEquals(projected.map((message) => message.lastID), ["2", "3"]);
   assertEquals(projected[0].parts.map((part) => part.id), ["text-1", "text-2"]);
   assertEquals(projected[0].time.created, 1);
   assertEquals(replyMessages([step("1", ""), step("2", "")]).length, 1);

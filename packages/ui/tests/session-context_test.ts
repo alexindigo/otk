@@ -22,6 +22,8 @@ for (
       working: () => working,
       helpers: () => helpers,
       remove: () => Promise.resolve(true),
+      current: () => undefined,
+      fork: () => Promise.resolve(),
     });
     try {
       const actions = commands.contextActions({
@@ -117,4 +119,57 @@ Deno.test("session context transitions: current-place no-ops vanish, background 
   assertEquals(effects.at(-1), ["close", target]);
   release();
   assertEquals(items(), []);
+});
+
+Deno.test("fork commands share availability and capture complete reply boundaries", async () => {
+  const commands = new CommandHub();
+  const target = {
+    sidecarId: "one",
+    sessionID: "source",
+    title: "Source",
+    directory: "/p",
+  };
+  let available = true;
+  const calls: unknown[] = [];
+  const release = registerSessionActionCommands(commands, {
+    available: () => available,
+    current: () => target,
+    rename: createSessionRename({ rename: () => Promise.resolve() }),
+    remove: () => Promise.resolve(true),
+    working: () => false,
+    helpers: () => 0,
+    fork: (target, through) => {
+      calls.push([target, through]);
+      return Promise.resolve();
+    },
+  });
+  try {
+    const data = {
+      ...target,
+      messageID: "first",
+      lastID: "last",
+      completed: false,
+    };
+    assertEquals(commands.contextActions({ kind: "reply", data }), []);
+    data.completed = true;
+    await commands.runContext(
+      commands.contextActions({ kind: "reply", data })[0],
+    );
+    assertEquals(calls, [[{ sidecarId: "one", sessionID: "source" }, "last"]]);
+    await commands.run("session.fork");
+    assertEquals(calls.at(-1), [target, undefined]);
+    available = false;
+    assertEquals(commands.contextActions({ kind: "reply", data }), []);
+    assertEquals(
+      commands.contextActions({ kind: "session", data: target }),
+      [],
+    );
+    await assertRejects(
+      () => commands.run("session.fork"),
+      Error,
+      "unavailable",
+    );
+  } finally {
+    release();
+  }
 });

@@ -60,6 +60,10 @@ InboxFeature removes explicit deleted IDs from task membership on index `remove`
 operations, including IDs outside the current window. Snapshot/window eviction
 never removes membership; task-store broadcasts publish each committed removal.
 
+`session.fork` validates its optional inclusive `through` message and activates
+the returned session's project through the same creation bookkeeping port as
+`session.create`.
+
 `usage.get` delegates to the optional usage capability. Its whole-session and
 user-turn summaries include source-model totals and keyed message-usage
 baselines, call clocks and small existing tool labels, never transcript parts or

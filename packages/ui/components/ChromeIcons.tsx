@@ -102,3 +102,16 @@ export const PencilIcon = () => (
     <path d="m16 4 4 4M3 21l5-1L21 7a2.8 2.8 0 0 0-4-4L4 16l-1 5Z" />
   </Icon>
 );
+export const ForkIcon = () => (
+  <Icon>
+    <circle cx="7" cy="5" r="2" />
+    <circle cx="17" cy="5" r="2" />
+    <circle cx="7" cy="19" r="2" />
+    <path d="M7 7v10M17 7v2a4 4 0 0 1-4 4H7" />
+  </Icon>
+);
+export const CloseIcon = () => (
+  <Icon>
+    <path d="m6 6 12 12M18 6 6 18" />
+  </Icon>
+);

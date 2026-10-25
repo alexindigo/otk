@@ -50,8 +50,16 @@ import type { SessionContextTarget } from "../features/session-context.ts";
 export default function Shell(
   props: { theme: ThemeEngine; api: URL },
 ): import("solid-js").Element {
-  const { resources, session, drafts, actions, rename, guard, navigation } =
-    createShellState({ api: props.api });
+  const {
+    resources,
+    session,
+    drafts,
+    actions,
+    rename,
+    forkNotes,
+    guard,
+    navigation,
+  } = createShellState({ api: props.api });
   const {
     sidecars,
     inbox,
@@ -232,6 +240,13 @@ export default function Shell(
     working: actions.working,
     helpers: (target) => Math.max(0, actions.familyEntries(target).length - 1),
     remove: navigation.remove,
+    current: () => {
+      const target = session.state.selection, value = info();
+      return target && value
+        ? { ...target, title: value.title, directory: value.directory }
+        : undefined;
+    },
+    fork: navigation.fork,
   }));
   onCleanup(registerAttentionCommands(commands, actions));
   onCleanup(registerApprovalCommands(commands, {
@@ -565,6 +580,9 @@ export default function Shell(
                           sessionError={session.state.content.error}
                           errorState={session.state.content.errorState}
                           draft={draft()}
+                          forkNote={forkNotes.get(draftKey())}
+                          onDismissForkNote={() =>
+                            forkNotes.dismiss(draftKey())}
                           connected={selectedSidecar()?.status === "connected"}
                           onOlder={() => commands.run("session.older")}
                           onRetry={() => commands.run("session.retry")}

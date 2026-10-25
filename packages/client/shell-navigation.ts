@@ -3,6 +3,7 @@ import { errorMessage } from "@otk/protocol";
 import type { ProjectLocation, TaskRecord } from "@otk/protocol";
 import type { InputGuard } from "./input-guard.ts";
 import type { Drafts } from "./drafts.ts";
+import type { ForkNotes } from "./fork-notes.ts";
 import { sessionKey } from "./index.ts";
 import { inboxStatus } from "./inbox.ts";
 import { createNavigation, type NavigationEnvironment } from "./navigation.ts";
@@ -46,6 +47,7 @@ export interface ShellNavigation {
   pin(target: Selection): Promise<boolean>;
   close(target?: Selection): Promise<boolean>;
   remove(target: Selection): Promise<boolean>;
+  fork(target: Selection & { title?: string }, through?: string): Promise<void>;
   available(input?: ProjectSelection): boolean;
   create(input?: ProjectSelection): Promise<void>;
   createIn(
@@ -68,6 +70,7 @@ export function createShellNavigation(o: {
   actions: SessionActions;
   guard: InputGuard;
   drafts: Drafts;
+  forkNotes?: ForkNotes;
   session: Pick<ClientSession, "state" | "open">;
   presence(): { focused: boolean; visible: boolean };
   confirm(message: string): boolean;
@@ -330,6 +333,19 @@ export function createShellNavigation(o: {
     },
     close: (target) => releaseSession(target, "kept"),
     remove: (target) => releaseSession(target, "dropped"),
+    async fork(input, through) {
+      const target = { ...input };
+      if (!guard.release({ draft: "kept" })) return;
+      const intent = ++revision;
+      const title = target.title ??
+        resources.entry(target.sidecarId, target.sessionID)?.title ??
+        target.sessionID;
+      const created = await actions.fork(target, through);
+      o.forkNotes?.add(sessionKey(target.sidecarId, created.id), title);
+      if (intent === revision) {
+        navigate({ sidecarId: target.sidecarId, sessionID: created.id });
+      }
+    },
     available(input) {
       const target = creationTarget(input);
       return !!target && resources.connected(target.sidecarId);

@@ -3,9 +3,24 @@ import { type Harness, HarnessError } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { text } from "../ws/params.ts";
 
-export function register(rpc: RpcRegistry, harness: Harness): void {
+export function register(
+  rpc: RpcRegistry,
+  harness: Harness,
+  created?: (directory: string) => void,
+): void {
   const actions = harness.capabilities.sessionActions;
   if (!actions) return;
+  rpc.register("session.fork", {
+    params: (p) => ({
+      sessionID: text(p, "sessionID")!,
+      through: p.through === undefined ? undefined : text(p, "through"),
+    }),
+    async handler(_ctx, p) {
+      const session = await actions.fork(p.sessionID, p.through);
+      created?.(session.directory);
+      return session;
+    },
+  });
   rpc.register("session.delete", {
     params: (p) => text(p, "sessionID")!,
     async handler(_ctx, id) {

@@ -7,6 +7,90 @@ import type { ContentSession } from "@otk/protocol";
 import type { InboxSnapshot, TaskRecord } from "@otk/protocol";
 import { waitFor } from "../support/opencode.ts";
 
+test("fork copies through a grouped reply, respects pending rollback and activates its project", async () => {
+  const f = await browserFixture();
+  let client: WsClient | undefined;
+  try {
+    const original = await f.oc.request<{ id: string }>("/session", {
+      method: "POST",
+      body: { title: "Fork source" },
+    });
+    const server = await f.sidecar();
+    client = new WsClient(server.url);
+    await client.connect();
+    for (const [index, text] of ["First prompt", "Second prompt"].entries()) {
+      f.fake.queue({ chunks: [`Reply to ${text}`] });
+      await client.rpc("session.prompt", {
+        sessionID: original.id,
+        mode: "normal",
+        parts: [{ kind: "text", text }],
+        model: { provider: "fake", model: "scripted" },
+      });
+      await waitFor(
+        () =>
+          f.oc.request<
+            { info: { role: string; time: { completed?: number } } }[]
+          >(`/session/${original.id}/message`),
+        (messages) =>
+          messages.length === (index + 1) * 2 &&
+          messages.at(-1)?.info.role === "assistant" &&
+          messages.at(-1)?.info.time.completed !== undefined,
+      );
+    }
+    const messages = await f.oc.request<
+      { info: { id: string }; parts: { type: string; text?: string }[] }[]
+    >(`/session/${original.id}/message`);
+    const text = (rows: typeof messages) =>
+      rows.flatMap((m) =>
+        m.parts.filter((p) => p.type === "text").map((p) => p.text)
+      );
+    const fork = await client.rpc<ContentSession>("session.fork", {
+      sessionID: original.id,
+      through: messages[1].info.id,
+    });
+    assertEquals(
+      text(await f.oc.request(`/session/${fork.id}/message`)),
+      text(messages.slice(0, 2)),
+    );
+    const all = await client.rpc<ContentSession>("session.fork", {
+      sessionID: original.id,
+      through: messages.at(-1)!.info.id,
+    });
+    assertEquals(
+      text(await f.oc.request(`/session/${all.id}/message`)),
+      text(messages),
+    );
+    await client.rpc("projects.inactive", {
+      directory: f.oc.directory,
+      inactive: true,
+    });
+    await client.rpc("session.revert", {
+      sessionID: original.id,
+      messageID: messages[2].info.id,
+    });
+    const visible = await client.rpc<ContentSession>("session.fork", {
+      sessionID: original.id,
+    });
+    assertEquals(
+      text(await f.oc.request(`/session/${visible.id}/message`)),
+      text(messages.slice(0, 2)),
+    );
+    const inbox = await client.rpc<InboxSnapshot>("inbox.get", {});
+    assertEquals(
+      inbox.projects.find((p) => p.directory === f.oc.directory)?.inactive,
+      false,
+    );
+    await assertRejects(
+      () =>
+        client!.rpc("session.fork", { sessionID: original.id, through: 42 }),
+      Error,
+    );
+  } finally {
+    await client?.close();
+    await f.stop();
+  }
+});
+
 test("session rename validates titles and persists through the real native API", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;

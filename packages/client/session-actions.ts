@@ -29,6 +29,7 @@ export interface SessionActions {
   abort(): Promise<void>;
   rename(target: Selection, title: string): Promise<ContentSession>;
   remove(target: Selection): Promise<void>;
+  fork(target: Selection, through?: string): Promise<ContentSession>;
   working(target: Selection): boolean;
   familyEntries(target: Selection): IndexEntry[];
   permission(input: PermissionReply & { sidecarId?: string }): Promise<void>;
@@ -43,6 +44,8 @@ export function createSessionActions(o: {
   resources: ServerResources;
   session: Pick<ClientSession, "state">;
   current: CurrentClient;
+  /** Wrap the common submission lifetime, including shell/native commands. */
+  submitted?<T>(target: Selection, action: () => Promise<T>): Promise<T>;
 }): SessionActions {
   const { resources, session, current } = o;
   const selectedEntry = (): IndexEntry | undefined => {
@@ -80,6 +83,7 @@ export function createSessionActions(o: {
       inbox: resources.inbox(target.sidecarId),
       tabs: (directory) =>
         resources.tabs({ sidecarId: target.sidecarId, directory }),
+      wrap: o.submitted && ((action) => o.submitted!(target, action)),
     });
   const attachments = (
     parts: PromptPart[],
@@ -125,6 +129,14 @@ export function createSessionActions(o: {
         }
         await rpc.call("session.delete", { sessionID: target.sessionID });
       });
+    },
+    fork(target, through) {
+      const rpc = resources.sidecars.connection(target.sidecarId).rpc;
+      return act(
+        target,
+        () =>
+          rpc.call("session.fork", { sessionID: target.sessionID, through }),
+      );
     },
     rename(target, title) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;

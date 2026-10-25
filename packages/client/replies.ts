@@ -58,10 +58,11 @@ export function replyMetadata(
   );
 }
 /** Stable first-step keys keep tool and reasoning state mounted as a reply grows. */
-export function replyMessages(messages: readonly Message[]): Message[] {
-  return replyGroups(messages).map((group) =>
-    group.message.id === group.firstID
-      ? group.message
-      : { ...group.message, id: group.firstID }
-  );
+export type ReplyMessage = Message & { lastID: string };
+export function replyMessages(messages: readonly Message[]): ReplyMessage[] {
+  return replyGroups(messages).map((group) => ({
+    ...group.message,
+    id: group.firstID,
+    lastID: group.lastID,
+  }));
 }

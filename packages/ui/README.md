@@ -664,6 +664,15 @@ The guard's draft-survival input asks only when a stored draft would be lost;
 Close keeps ordinary drafts, while successful native deletion drops the family
 drafts.
 
+The session-action owner also contributes Fork session to session targets and
+the palette, and Fork from here to completed replies. `MessageActions` renders
+available command IDs only, sharing `hoverIntent` with Popover (500ms rest,
+150ms leave, immediate focus). Prompt Copy and reply Fork/Copy reserve their
+metadata-row space while concealed. Message contributes no commands; the shared
+transcript feature owns Copy source projection. Fork results open with a joined
+`ComposerNotice` / `ForkNote` above the input; Dismiss and the first successful
+submission clear the note through the framework-free client owner.
+
 `TranscriptContext` registers each `prompt`, `reply`, `code`, `diff` and `tool`
 action once, independent of transcript length. Targets carry sidecar/session,
 message, part/call and directory identity plus source data. Features can

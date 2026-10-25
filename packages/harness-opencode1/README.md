@@ -53,6 +53,11 @@ ordinary native session-updated event remains authoritative for the index.
 resolved directory. The existing native deletion-event path owns disposal of the
 session and its helpers; callers abort working sessions before removal.
 
+`sessionActions.fork` translates OTK's inclusive `through` to the next native
+message ID before `POST /session/{id}/fork`. `BootstrapDb.nextMessageID` reads
+one scalar, with bounded Messages pages as fallback. Both whole-session and
+response forks cap the native boundary at an authoritative pending revert.
+
 The adapter retains ownership of events, stream buffers, task watchers, admitted
 shell/command requests and reconciled HTTP/SSE errors. Stop aborts and joins
 owned requests and releases readers. History lists contain metadata, not upload

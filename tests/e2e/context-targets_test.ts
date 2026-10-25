@@ -492,6 +492,9 @@ test("C2 shared reply contributions stay constant across N real messages and ext
         sidecarId: "probe-sidecar",
         sessionID: "probe-session",
         messageID: "probe-reply-0",
+        lastID: "probe-reply-0",
+        completed: true,
+        queued: false,
         directory: "/probe",
         text: "Reply 0",
       },
@@ -887,6 +890,7 @@ test("C2 stock capabilities: targeted auto-approve and reply usage menu reach th
       "Open",
       "Pin as task",
       "Rename",
+      "Fork session",
       "Turn auto-approve on",
       "Copy session title",
       "Close session",
@@ -925,8 +929,10 @@ test("C2 stock capabilities: targeted auto-approve and reply usage menu reach th
     await rightClick(b, '[data-role="assistant"] .otk-text p');
     assertEquals(await labels(b), [
       "Copy reply",
+      "Fork from here",
       "Show usage breakdown",
       "Rename",
+      "Fork session",
       "Turn auto-approve on",
       "Copy session title",
       "Close session",

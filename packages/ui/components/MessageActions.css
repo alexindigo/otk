@@ -1,0 +1,17 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-message-action-group {
+  display: inline-flex;
+  flex: none;
+  flex-direction: column;
+  align-items: flex-start;
+}
+.otk-message-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+}
+.otk-message-action-group.is-revealed .otk-message-actions,
+.otk-message-action-group:focus-within .otk-message-actions {
+  opacity: 1;
+}

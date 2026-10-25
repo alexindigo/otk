@@ -341,6 +341,15 @@ successful rename. `remove(target)` captures the same server identity, aborts a
 working session before the typed delete RPC and records one successful `act`
 without promotion.
 
+`fork(target, through?)` captures the same target and `act` bookkeeping. The
+navigation owner's fork intent preserves stored drafts, creates a
+browser-lifetime `createForkNotes` entry and opens the result through guarded
+navigation; newer navigation retires its late routing. The common submission
+port wraps successful normal, shell and native-command sends to dismiss that
+session's note, retaining it after a rejected submission. Reply projections
+expose `lastID` alongside their stable first-step identity so inclusive forks
+retain the whole grouped reply.
+
 The hierarchy owner also exports `sessionFamily`, `familyTask` and
 `familySelection`. Shell's location projection intentionally matches only the
 requested ID and the selected root without filtering directories; its task

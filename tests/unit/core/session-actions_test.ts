@@ -26,9 +26,20 @@ test("session actions are capability-gated and validate before forwarding a trim
       )).code,
       "method",
     );
+    assertEquals(
+      (await assertRejects(
+        () => unavailable.dispatch("session.fork", {}),
+        HarnessError,
+      )).code,
+      "method",
+    );
     const calls: unknown[] = [];
     const harness = stub({
       sessionActions: {
+        fork: (id, through) => {
+          calls.push(["fork", id, through]);
+          return harness.core.getSession(id);
+        },
         remove: (id) => {
           calls.push(["delete", id]);
           return Promise.resolve();
@@ -40,7 +51,12 @@ test("session actions are capability-gated and validate before forwarding a trim
       },
     });
     const rpc = new RpcRegistry(harness, db);
-    registerSessionActions(rpc, harness);
+    const created: string[] = [];
+    registerSessionActions(
+      rpc,
+      harness,
+      (directory) => created.push(directory),
+    );
     for (
       const params of [{}, { sessionID: "", title: "x" }, {
         sessionID: "s",
@@ -70,6 +86,28 @@ test("session actions are capability-gated and validate before forwarding a trim
       null,
     );
     assertEquals(calls, [["s", "New"], ["delete", "s"]]);
+    for (
+      const params of [{}, { sessionID: "" }, { sessionID: "s", through: "" }, {
+        sessionID: "s",
+        through: 1,
+      }]
+    ) {
+      assertEquals(
+        (await assertRejects(
+          () => rpc.dispatch("session.fork", params),
+          HarnessError,
+        )).code,
+        "params",
+      );
+    }
+    const result = await rpc.dispatch("session.fork", {
+      sessionID: "s",
+      through: "last",
+    });
+    assertEquals(calls.at(-1), ["fork", "s", "last"]);
+    const expected = await harness.core.getSession("s");
+    assertEquals(result, expected);
+    assertEquals(created, [expected.directory]);
   } finally {
     db.close();
   }

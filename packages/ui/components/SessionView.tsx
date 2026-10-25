@@ -24,6 +24,7 @@ import ComposerTakeovers from "./ComposerTakeovers.tsx";
 import type { Preferences } from "@otk/protocol";
 import SubagentBar from "./SubagentBar.tsx";
 import RevertBanner from "./RevertBanner.tsx";
+import ForkNote from "./ForkNote.tsx";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
 import { queuedMessages, replyMessages, turnUsage } from "@otk/client";
@@ -48,6 +49,8 @@ export default function SessionView(props: {
   sessionError?: string;
   errorState?: SessionErrorState;
   draft: Draft;
+  forkNote?: import("@otk/client").ForkNote;
+  onDismissForkNote?(): void;
   connected: boolean;
   displayMenu?: Element;
   prefs: Preferences;
@@ -201,6 +204,7 @@ export default function SessionView(props: {
                 <Message
                   sidecarId={props.sidecarId}
                   message={message()}
+                  lastID={message().lastID}
                   usage={turnUsage(props.usage, message(), props.catalog)}
                   prefs={props.prefs}
                   directory={props.info?.directory}
@@ -222,20 +226,40 @@ export default function SessionView(props: {
         <Show when={!props.child}>
           <ComposerTakeovers>
             {(active) => (
-              <div hidden={active()} inert={active()}>
-                <Prompt
-                  suspended={active()}
-                  context={props.messages.findLast((message) =>
-                    message.role === "user"
+              <div
+                class={["otk-composer-stack", {
+                  "is-noticed": !props.revert && !!props.forkNote,
+                }]}
+                hidden={active()}
+                inert={active()}
+              >
+                <Show when={!props.revert && props.forkNote}>
+                  {(note) => (
+                    <ForkNote
+                      note={note()}
+                      onDismiss={() => props.onDismissForkNote?.()}
+                    />
                   )}
-                  busy={props.busy}
-                  value={props.draft}
-                  connected={props.connected}
-                  onChange={writeDraft}
-                  onSubmit={(parts, mode, selection) =>
-                    props.onPrompt(parts, mode, selection)}
-                  onAbort={() => props.onAbort()}
-                />
+                </Show>
+                <div
+                  class={["otk-composer-input", {
+                    "is-noticed": !props.revert && !!props.forkNote,
+                  }]}
+                >
+                  <Prompt
+                    suspended={active()}
+                    context={props.messages.findLast((message) =>
+                      message.role === "user"
+                    )}
+                    busy={props.busy}
+                    value={props.draft}
+                    connected={props.connected}
+                    onChange={writeDraft}
+                    onSubmit={(parts, mode, selection) =>
+                      props.onPrompt(parts, mode, selection)}
+                    onAbort={() => props.onAbort()}
+                  />
+                </div>
               </div>
             )}
           </ComposerTakeovers>

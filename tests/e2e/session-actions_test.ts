@@ -1,13 +1,290 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { test } from "../support/resources.ts";
-import { browserFixture, openSession } from "../support/browser-fixture.ts";
+import {
+  browserFixture,
+  openSession,
+  waitForReply,
+} from "../support/browser-fixture.ts";
 import { Cdp } from "../support/cdp.ts";
 import { menuReady } from "../support/menu.ts";
 import { WsClient } from "../support/ws-client.ts";
 
 const menu = ':popover-open [role="menu"][aria-label="Context menu"]';
+
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`fork hover actions retain grouped replies and fork notes in ${theme}`, async () => {
+    const f = await browserFixture({ bash: "allow" });
+    let client: WsClient | undefined;
+    try {
+      const original = await f.oc.request<{ id: string }>("/session", {
+        method: "POST",
+        body: { title: "Fork source" },
+      });
+      const server = await f.sidecar();
+      client = new WsClient(server.url);
+      await client.connect();
+      await client.rpc("prefs.set", { key: "theme", value: theme });
+      const b = await f.browser(server.url);
+      await openSession(b, original.id);
+      f.fake.queue({
+        tool: {
+          name: "bash",
+          input: { command: "pwd", description: "Read shared directory" },
+        },
+      }, { chunks: ["First grouped reply."] });
+      await b.fill('textarea[name="prompt"]', "First prompt");
+      await b.key("Enter");
+      await waitForReply(b, original.id, "First grouped reply.");
+      f.fake.queue({ chunks: ["Second reply."] });
+      await b.fill('textarea[name="prompt"]', "Second prompt");
+      await b.key("Enter");
+      await waitForReply(b, original.id, "Second reply.");
+      const reply = '[data-role="assistant"]';
+      await b.evaluate(
+        `document.querySelector('${reply}').scrollIntoView({block:'center',behavior:'instant'})`,
+      );
+      await b.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: 1,
+        y: 1,
+      });
+      await b.poll(
+        `getComputedStyle(document.querySelector('${reply} .otk-message-actions')).opacity==='0'`,
+      );
+      await b.evaluate(
+        `(()=>{const el=document.querySelector('${reply}');globalThis.hoverOpened=0;el.addEventListener('mouseenter',()=>{globalThis.hoverStart=performance.now()},{once:true});const observer=new MutationObserver(()=>{if(el.classList.contains('is-revealed')){globalThis.hoverOpened=performance.now()-globalThis.hoverStart;observer.disconnect()}});observer.observe(el,{attributes:true,attributeFilter:['class']})})()`,
+      );
+      const point = await b.evaluate<{ x: number; y: number }>(
+        `(()=>{const r=document.querySelector('${reply} .otk-message-content').getBoundingClientRect();return {x:r.x+10,y:r.y+r.height-10}})()`,
+      );
+      await b.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        ...point,
+      });
+      await b.poll("globalThis.hoverOpened>0");
+      assert(await b.evaluate<number>("globalThis.hoverOpened") >= 500);
+      assertEquals(
+        await b.evaluate(
+          `(()=>{const footer=document.querySelector('${reply} .otk-message-footer'),copy=footer.querySelector('[data-message-command="reply.copy"]').getBoundingClientRect(),clock=footer.querySelector('.otk-last-output-time').getBoundingClientRect();return clock.left-copy.right===parseFloat(getComputedStyle(footer).columnGap)})()`,
+        ),
+        true,
+        "Actions must sit one normal gap before the clock",
+      );
+      await capture(b, `${theme}-reply-hover`);
+      const geometry = await b.evaluate(
+        `(()=>{const el=document.querySelector('${reply}');return {height:el.getBoundingClientRect().height,top:el.getBoundingClientRect().top}})()`,
+      );
+      await b.evaluate(
+        `(()=>{const el=document.querySelector('${reply}');globalThis.hoverClosed=0;el.addEventListener('mouseleave',()=>{globalThis.hoverLeaveStart=performance.now()},{once:true});const observer=new MutationObserver(()=>{if(!el.classList.contains('is-revealed')){globalThis.hoverClosed=performance.now()-globalThis.hoverLeaveStart;observer.disconnect()}});observer.observe(el,{attributes:true,attributeFilter:['class']})})()`,
+      );
+      await b.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: 1,
+        y: 1,
+      });
+      assertEquals(
+        await b.evaluate(
+          `document.querySelector('${reply}').classList.contains('is-revealed')`,
+        ),
+        true,
+      );
+      await b.poll(
+        `!document.querySelector('${reply}').classList.contains('is-revealed')`,
+      );
+      assert(await b.evaluate<number>("globalThis.hoverClosed") >= 150);
+      assertEquals(
+        await b.evaluate(
+          `(()=>{const el=document.querySelector('${reply}');return {height:el.getBoundingClientRect().height,top:el.getBoundingClientRect().top}})()`,
+        ),
+        geometry,
+      );
+      const forkSelector = `${reply} [data-message-command="reply.fork"]`;
+      const forkRect = () =>
+        b.evaluate(
+          `document.querySelector('${forkSelector}').getBoundingClientRect().toJSON()`,
+        );
+      const fixedSlot = await forkRect();
+      await b.key("Tab");
+      await b.evaluate(
+        `document.querySelector('${reply} .otk-message-agent').focus({preventScroll:true})`,
+      );
+      await b.poll(
+        `getComputedStyle(document.querySelector('${reply} .otk-created-time')).display!=='none'`,
+      );
+      assertEquals(
+        await forkRect(),
+        fixedSlot,
+        "Agent focus must not move Fork",
+      );
+      await b.evaluate(
+        "document.querySelector('textarea[name=prompt]').focus({preventScroll:true})",
+      );
+      await b.poll(
+        `getComputedStyle(document.querySelector('${reply} .otk-created-time')).display==='none'`,
+      );
+      assertEquals(
+        await forkRect(),
+        fixedSlot,
+        "Agent blur must not move Fork",
+      );
+      const agentPoint = await b.evaluate<{ x: number; y: number }>(
+        `(()=>{const r=document.querySelector('${reply} .otk-message-agent').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
+      );
+      await b.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        ...agentPoint,
+      });
+      await b.poll(
+        `getComputedStyle(document.querySelector('${reply} .otk-created-time')).display!=='none'`,
+      );
+      assertEquals(
+        await forkRect(),
+        fixedSlot,
+        "Agent hover must not move Fork",
+      );
+      await b.send("Input.dispatchMouseEvent", {
+        type: "mouseMoved",
+        x: 1,
+        y: 1,
+      });
+      await b.poll(
+        `getComputedStyle(document.querySelector('${reply} .otk-created-time')).display==='none'`,
+      );
+      assertEquals(
+        await forkRect(),
+        fixedSlot,
+        "Agent leave must not move Fork",
+      );
+      await b.click(`${reply} .otk-message-agent`);
+      await b.poll(
+        `getComputedStyle(document.querySelector('${reply} .otk-message-actions')).opacity==='1'`,
+      );
+      await b.click(`${reply} [data-message-command="reply.fork"]`);
+      await b.poll(
+        `!location.hash.endsWith('/${original.id}') && !!document.querySelector('.otk-fork-note')`,
+      );
+      const forkID = await b.evaluate<string>(
+        "location.hash.split('/').at(-1)",
+      );
+      await b.poll(
+        `document.querySelectorAll('[data-role="user"]').length===1 && document.querySelectorAll('[data-role="assistant"]').length===1`,
+      );
+      assertEquals(
+        await b.evaluate(
+          "document.querySelector('textarea[name=prompt]').value",
+        ),
+        "",
+      );
+      assertEquals(
+        await b.evaluate(
+          "document.querySelector('.otk-fork-note').textContent.includes('Files are shared with the original.')",
+        ),
+        true,
+      );
+      await capture(b, `${theme}-fork-note`);
+      assertEquals(
+        await b.evaluate(
+          `(()=>{const note=document.querySelector('.otk-fork-note'),button=note.querySelector('button'),icons=[note.querySelector(':scope > svg'),button.querySelector('svg')];return {button:[button.getBoundingClientRect().width,button.getBoundingClientRect().height],icons:icons.map(icon=>[icon.getBoundingClientRect().width,icon.getBoundingClientRect().height])}})()`,
+        ),
+        { button: [28, 28], icons: [[16, 16], [16, 16]] },
+      );
+      const raw = await f.oc.request<{ info: { role: string } }[]>(
+        `/session/${forkID}/message`,
+      );
+      assertEquals(raw.map((m) => m.info.role), [
+        "user",
+        "assistant",
+        "assistant",
+      ]);
+      await b.evaluate(
+        `document.querySelector('[data-role="user"]').scrollIntoView({block:'center',behavior:'instant'})`,
+      );
+      const copySelector =
+        '[data-role="user"] [data-message-command="prompt.copy"]';
+      const copyRect = () =>
+        b.evaluate(
+          `document.querySelector('${copySelector}').getBoundingClientRect().toJSON()`,
+        );
+      const fixedCopy = await copyRect();
+      await b.evaluate(
+        `document.querySelector('[data-role="user"] .otk-user-bubble').focus({preventScroll:true})`,
+      );
+      await b.poll(
+        `getComputedStyle(document.querySelector('[data-role="user"] .otk-message-actions')).opacity==='1'`,
+      );
+      assertEquals(
+        await copyRect(),
+        fixedCopy,
+        "Bubble focus must not move Copy",
+      );
+      await capture(b, `${theme}-prompt-hover`);
+      await b.send("Browser.grantPermissions", {
+        origin: server.url,
+        permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"],
+      });
+      await b.click(copySelector);
+      await b.poll(
+        `navigator.clipboard.readText().then(text=>text==='First prompt')`,
+      );
+      assertEquals(
+        await copyRect(),
+        fixedCopy,
+        "Copy activation must retain its slot",
+      );
+      await b.fill('textarea[name="prompt"]', "Fork writes a shared file");
+      f.fake.queue({
+        tool: {
+          name: "bash",
+          input: {
+            command: "echo shared > fork-shared.txt",
+            description: "Write shared file",
+          },
+        },
+      }, { chunks: ["Shared file written."] });
+      await b.key("Enter");
+      await waitForReply(b, forkID, "Shared file written.");
+      await b.poll("!document.querySelector('.otk-fork-note')");
+      assertEquals(
+        await Deno.readTextFile(join(f.oc.directory, "fork-shared.txt")),
+        "shared\n",
+      );
+      await openSession(b, original.id);
+      await b.poll(
+        `document.querySelectorAll('[data-role="user"]').length===2`,
+      );
+      await b.fill('textarea[name="prompt"]', "Keep original draft");
+      await sessionContext(b, `[data-session="${original.id}"]`);
+      await b.click(`${menu} [data-context-command="session.fork"]`);
+      await b.poll(
+        `!location.hash.endsWith('/${original.id}') && !!document.querySelector('.otk-fork-note')`,
+      );
+      await b.poll(
+        `document.querySelectorAll('[data-role="user"]').length===2`,
+      );
+      assertEquals(
+        await b.evaluate(
+          "document.querySelector('textarea[name=prompt]').value",
+        ),
+        "",
+      );
+      await b.click('[aria-label="Dismiss fork note"]');
+      await b.poll("!document.querySelector('.otk-fork-note')");
+      await openSession(b, original.id);
+      assertEquals(
+        await b.evaluate(
+          "document.querySelector('textarea[name=prompt]').value",
+        ),
+        "Keep original draft",
+      );
+      assertEquals(b.errors, []);
+    } finally {
+      await client?.close();
+      await f.stop();
+    }
+  });
+}
 export async function sessionContext(b: Cdp, selector: string) {
   const point = await b.evaluate<{ x: number; y: number }>(`(async()=>{
     const el=document.querySelector(${JSON.stringify(selector)});

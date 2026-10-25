@@ -23,6 +23,7 @@
   padding-inline: 8px;
   font-size: var(--text-meta);
   color: var(--otk-fg-3);
+  max-width: 100%;
 }
 .otk-created-time {
   color: var(--otk-fg-3);
@@ -36,19 +37,27 @@
 .otk-message-footer {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px 16px;
   margin-top: 4px;
   font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
   color: var(--otk-fg-3);
   font-variant-numeric: tabular-nums;
 }
-.otk-message-details {
+.otk-message-details,
+.otk-user-details {
   display: flex;
   align-items: center;
-  flex-wrap: wrap;
+  flex: 1;
+  flex-wrap: nowrap;
   gap: 8px 16px;
   min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.otk-message-details > *,
+.otk-user-details > * {
+  flex: none;
 }
 .otk-message-agent:is(:hover,:focus-visible) {
   color: var(--message-agent-color);
@@ -62,25 +71,21 @@
 }
 .otk-output-time-group {
   display: inline-flex;
+  flex: none;
   align-items: center;
   gap: 8px;
-  margin-inline-start: auto;
   white-space: nowrap;
 }
 .otk-last-output-time {
   white-space: nowrap;
 }
 .otk-last-output-date {
+  display: none;
   visibility: hidden;
 }
-.otk-output-time-group:has(.otk-last-output-time:is(:hover,:focus-visible)) .otk-last-output-date {
+.otk-message-footer:has(.otk-last-output-time:is(:hover,:focus-visible)) .otk-last-output-date {
+  display: inline;
   visibility: visible;
-}
-.otk-copy-message {
-  opacity: 0;
-}
-.otk-message:is(:hover,:focus-within) .otk-copy-message {
-  opacity: 1;
 }
 .otk-queued {
   background: var(--otk-surface-2);

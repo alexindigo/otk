@@ -23,6 +23,9 @@ export interface ContentIdentity {
   directory?: string;
 }
 export interface ContentTarget extends ContentIdentity {
+  lastID?: string;
+  completed?: boolean;
+  queued?: boolean;
   text?: string;
   command?: string;
   path?: string;

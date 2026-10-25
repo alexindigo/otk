@@ -2,15 +2,49 @@
 import type { CommandHub, Selection, SessionRename } from "@otk/client";
 import { countLabel } from "@otk/client";
 import type { SessionContextTarget } from "../../features/session-context.ts";
+import type { ContentTarget } from "../../features/transcript-context.tsx";
 
 /** Feature command contributions; target state and operations are injected. */
 export function registerSessionActionCommands(commands: CommandHub, ports: {
-  available(target: SessionContextTarget): boolean;
+  available(target: Selection): boolean;
   rename: SessionRename;
   working(target: Selection): boolean;
   helpers(target: Selection): number;
   remove(target: Selection): Promise<boolean>;
+  current(): SessionContextTarget | undefined;
+  fork(target: Selection & { title?: string }, through?: string): Promise<void>;
 }): () => void {
+  const fork = commands.register({
+    id: "session.fork",
+    title: "Fork session",
+    category: "Session",
+    context: { kind: "session", order: 30 },
+    enabled: (_ctx, input?: SessionContextTarget) => {
+      const target = input ?? ports.current();
+      return !!target && ports.available(target);
+    },
+    run: (_ctx, input?: SessionContextTarget) =>
+      ports.fork((input ?? ports.current())!),
+  });
+  const reply = commands.register({
+    id: "reply.fork",
+    title: "Fork from here",
+    category: "Transcript",
+    hidden: true,
+    context: { kind: "reply", order: 5 },
+    enabled: (_ctx, target?: ContentTarget) =>
+      !!target?.sidecarId && !!target.sessionID && !!target.lastID &&
+      !!target.completed &&
+      ports.available({
+        sidecarId: target.sidecarId,
+        sessionID: target.sessionID,
+      }),
+    run: (_ctx, target: ContentTarget) =>
+      ports.fork(
+        { sidecarId: target.sidecarId!, sessionID: target.sessionID! },
+        target.lastID,
+      ),
+  });
   const rename = commands.register({
     id: "session.rename",
     title: "Rename",
@@ -44,5 +78,7 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
   return () => {
     rename();
     remove();
+    fork();
+    reply();
   };
 }

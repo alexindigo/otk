@@ -95,7 +95,7 @@ Deno.test("interrupt admission deadline and disarming timer share one owner poli
   duration(source, [disarm[0].arguments[1], deadline[0].right]);
 });
 
-Deno.test("hover intent has one theme policy, one reader and a shared Popover consumer", async () => {
+Deno.test("hover intent has one theme policy, one reader and two shared consumers", async () => {
   const files = await uiSources();
   const owner = "packages/ui/components/hover-intent.ts";
   assert(files.has(owner), "Hover intent must have a shared owner");
@@ -134,4 +134,12 @@ Deno.test("hover intent has one theme policy, one reader and a shared Popover co
     "Popover must consume the shared hover owner",
   );
   assertEquals(popover.calls("setTimeout").length, 0);
+  const actions = await component("components/MessageActions.tsx");
+  assert(
+    actions.calls("hoverIntent").some((call) =>
+      actions.imported(call.callee)?.module === "./hover-intent.ts"
+    ),
+    "MessageActions must consume the shared hover owner",
+  );
+  assertEquals(actions.calls("setTimeout").length, 0);
 });

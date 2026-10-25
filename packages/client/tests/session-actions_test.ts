@@ -80,6 +80,25 @@ Deno.test("session rename captures the target server and uses act without promot
   f.resources.stop();
 });
 
+Deno.test("session fork captures its target and inclusive boundary without promoting the original", async () => {
+  const f = shellFixture(), actions = client.createSessionActions(f);
+  const action = actions.fork(
+    { sidecarId: "remote", sessionID: "background" },
+    "last-step",
+  );
+  f.session.state.selection = { sidecarId: "local", sessionID: "newer" };
+  await action;
+  assertEquals(f.calls, [
+    ["remote", "session.get", { sessionID: "background" }],
+    ["remote", "session.fork", {
+      sessionID: "background",
+      through: "last-step",
+    }],
+    ["remote", "projects.visit", { directory: "/resolved", active: true }],
+  ]);
+  f.resources.stop();
+});
+
 Deno.test("session removal aborts a working captured target before delete and records one successful action", async () => {
   const f = shellFixture(), actions = client.createSessionActions(f);
   f.entries("remote", [{ ...shellEntry("busy", "/busy"), status: "busy" }]);

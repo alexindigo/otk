@@ -41,6 +41,7 @@ import {
   SessionProvider,
   Sidebar,
   ToolLine,
+  TranscriptContext,
   UiProvider,
   VisualSettings,
 } from "@otk/ui";
@@ -214,63 +215,66 @@ export function InteractionFailures(
               Asynchronous refusal
             </button>
           </header>
-          <Message
-            sidecarId="probe"
-            message={{
-              id: "probe",
-              sessionID: "probe",
-              role: "assistant",
-              time: { created: 1, completed: 2 },
-              agent: "Consumer",
-              model: { provider: "Independent", model: "Fixture" },
-              tokens: {
-                input: 0,
-                output: 0,
-                reasoning: 0,
-                cache: { read: 0, write: 0 },
-              },
-              cost: 0,
-              interrupted: false,
-              parts: [
-                {
-                  kind: "text",
-                  id: "text",
-                  synthetic: false,
-                  blocks: [{
-                    b: "paragraph",
-                    inline: [{
-                      i: "text",
-                      text:
-                        "Keep this reply available after a clipboard refusal.",
+          <TranscriptContext>
+            <Message
+              sidecarId="probe"
+              message={{
+                id: "probe",
+                sessionID: "probe",
+                role: "assistant",
+                time: { created: 1, completed: 2 },
+                agent: "Consumer",
+                model: { provider: "Independent", model: "Fixture" },
+                tokens: {
+                  input: 0,
+                  output: 0,
+                  reasoning: 0,
+                  cache: { read: 0, write: 0 },
+                },
+                cost: 0,
+                interrupted: false,
+                parts: [
+                  {
+                    kind: "text",
+                    id: "text",
+                    synthetic: false,
+                    blocks: [{
+                      b: "paragraph",
+                      inline: [{
+                        i: "text",
+                        text:
+                          "Keep this reply available after a clipboard refusal.",
+                      }],
                     }],
-                  }],
-                },
-                {
-                  kind: "consumer.unregistered",
-                  id: "part",
-                  label: "Extension label must not render",
-                },
-                {
-                  kind: "tool",
-                  id: "tool",
-                  call: {
-                    tool: "consumer.unregistered",
-                    callID: "tool",
-                    status: "completed",
-                    time: {},
-                    awaitingPermission: false,
-                    output: "Common output survives an unregistered extension.",
-                    outputTruncated: "collision",
                   },
-                },
-              ],
-            }}
-            prefs={{ ...DEFAULT_PREFS, genericToolOutput: true }}
-            permissions={[]}
-            paneWidth={736}
-            queued={false}
-            onOpenChild={() => {}}
-          />
+                  {
+                    kind: "consumer.unregistered",
+                    id: "part",
+                    label: "Extension label must not render",
+                  },
+                  {
+                    kind: "tool",
+                    id: "tool",
+                    call: {
+                      tool: "consumer.unregistered",
+                      callID: "tool",
+                      status: "completed",
+                      time: {},
+                      awaitingPermission: false,
+                      output:
+                        "Common output survives an unregistered extension.",
+                      outputTruncated: "collision",
+                    },
+                  },
+                ],
+              }}
+              prefs={{ ...DEFAULT_PREFS, genericToolOutput: true }}
+              permissions={[]}
+              paneWidth={736}
+              queued={false}
+              onOpenChild={() => {}}
+            />
+          </TranscriptContext>
           <SessionProvider
             ports={{
               supports: () => true,
