@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import * as css from "css-tree";
-import { Source } from "./analysis.ts";
+import { Source, uiSources } from "./analysis.ts";
 import { property, type t } from "./syntax.ts";
 
 async function component(path: string) {
@@ -95,49 +95,43 @@ Deno.test("interrupt admission deadline and disarming timer share one owner poli
   duration(source, [disarm[0].arguments[1], deadline[0].right]);
 });
 
-Deno.test("preview exits from trigger and panel share their component delay", async () => {
-  const source = await component("components/surface/Popover.tsx");
-  const exits = source.all.filter((node): node is t.JSXAttribute =>
-    node.type === "JSXAttribute" && node.name.type === "JSXIdentifier" &&
-    node.name.name === "onMouseLeave"
-  );
-  assertEquals(exits.length, 2);
-  duration(
-    source,
-    exits.map((node) =>
-      node.value?.type === "JSXExpressionContainer"
-        ? node.value.expression
-        : null
-    ),
-  );
-  const sheet = css.parse(
-    await Deno.readTextFile(
-      new URL(
-        "../../packages/ui/components/surface/Popover.css",
-        import.meta.url,
-      ),
-    ),
-  );
-  const policy: Record<string, string[]> = {};
-  css.walk(sheet, (node) => {
-    if (
-      node.type === "Declaration" &&
-      ["--hover-open-delay", "--hover-close-delay"].includes(node.property)
-    ) (policy[node.property] ??= []).push(css.generate(node.value).trim());
-  });
-  assertEquals(policy, {
-    "--hover-open-delay": ["500ms"],
-    "--hover-close-delay": ["150ms"],
-  });
-  for (const token of Object.keys(policy)) {
-    assertEquals(
-      source.all.filter((node) =>
-        node.type === "CallExpression" && property(node.callee) === "delay" &&
-        node.arguments[0]?.type === "StringLiteral" &&
-        node.arguments[0].value === token
-      ).length,
-      1,
-      `${token} is read once by its shared owner`,
-    );
+Deno.test("hover intent has one theme policy, one reader and a shared Popover consumer", async () => {
+  const files = await uiSources();
+  const owner = "packages/ui/components/hover-intent.ts";
+  assert(files.has(owner), "Hover intent must have a shared owner");
+  for (
+    const [token, value] of Object.entries({
+      "--hover-open-delay": "500ms",
+      "--hover-close-delay": "150ms",
+    })
+  ) {
+    const declarations: { path: string; value: string }[] = [];
+    const readers: string[] = [];
+    for (const [path, text] of files) {
+      if (path.endsWith(".css")) {
+        css.walk(css.parse(text), (node) => {
+          if (node.type === "Declaration" && node.property === token) {
+            declarations.push({ path, value: css.generate(node.value).trim() });
+          }
+        });
+      } else {
+        const source = new Source(text, path);
+        for (const node of source.all) {
+          if (node.type === "StringLiteral" && node.value === token) {
+            readers.push(path);
+          }
+        }
+      }
+    }
+    assertEquals(declarations, [{ path: "packages/ui/theme.css", value }]);
+    assertEquals(readers, [owner], `${token} is read once by its shared owner`);
   }
+  const popover = await component("components/surface/Popover.tsx");
+  assert(
+    popover.calls("hoverIntent").some((call) =>
+      popover.imported(call.callee)?.module === "../hover-intent.ts"
+    ),
+    "Popover must consume the shared hover owner",
+  );
+  assertEquals(popover.calls("setTimeout").length, 0);
 });

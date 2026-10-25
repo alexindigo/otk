@@ -419,11 +419,14 @@ size cannot leave a different layer on its own copied boundary.
 Interaction durations stay with their component owners. StatusLight supplies its
 250ms blink duration to both the pulse timer and CSS animation through one
 custom property; Prompt's 5-second interrupt window owns its deadline and
-disarming timer. Popover owns hover intent for every preview: pointer motion
-restarts `--hover-open-delay` (500ms); leaving cancels pending opening. Trigger
-and portalled panel share `--hover-close-delay` (150ms), so surface travel and
-re-entry retain the preview. Keyboard focus and explicit opening bypass the
-hover delay. Reduced motion does not change either interaction deadline.
+disarming timer. The shared `hoverIntent` owner reads the theme's opening and
+closing tokens once per lifetime and owns timers and focus across a trigger and
+retained portalled regions. Popover consumes it for every preview: pointer
+motion restarts `--hover-open-delay` (500ms); leaving cancels pending opening.
+Trigger and portalled panel share `--hover-close-delay` (150ms), so surface
+travel and re-entry retain the preview. Keyboard focus and explicit opening
+bypass the hover delay. Reduced motion does not change either interaction
+deadline.
 
 ## Example
 

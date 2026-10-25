@@ -13,6 +13,7 @@ import { Portal } from "@solidjs/web";
 import { ownedCommand, useCommandPorts } from "../../keyboard/context.tsx";
 import Surface from "./Surface.tsx";
 import { selection } from "../selection.ts";
+import { hoverIntent } from "../hover-intent.ts";
 
 export type PopoverOpenReason = "pointer" | "keyboard";
 export interface PopoverControl {
@@ -65,20 +66,15 @@ export default function Popover(props: {
   let panel!: HTMLDivElement, trigger!: HTMLButtonElement;
   let previewFocus: HTMLElement | undefined;
   let restoringFocus = false;
-  let hoverTimer: ReturnType<typeof setTimeout> | undefined;
-  let leaveTimer: ReturnType<typeof setTimeout> | undefined;
+  let hover: ReturnType<typeof hoverIntent> | undefined;
+  let releaseHoverPanel: (() => void) | undefined;
   let stopWatching: (() => void) | undefined;
-  const cancelLeave = () => clearTimeout(leaveTimer);
-  const cancelHover = () => clearTimeout(hoverTimer);
-  const delay = (token: string) => {
-    const value = getComputedStyle(root()!).getPropertyValue(token).trim();
-    return parseFloat(value) * (value.endsWith("ms") ? 1 : 1000);
-  };
   const ports = useCommandPorts(), closeId = `${anchor}.close`;
   const release = () => {
     invocation++;
-    cancelHover();
-    cancelLeave();
+    hover?.cancel();
+    releaseHoverPanel?.();
+    releaseHoverPanel = undefined;
     stopWatching?.();
     stopWatching = undefined;
     const notify = active;
@@ -104,59 +100,19 @@ export default function Popover(props: {
       restoringFocus = false;
     }
   };
-  const preview = (focused = false) => {
-    cancelHover();
-    cancelLeave();
+  const preview = (reason: PopoverOpenReason) => {
     if (!props.preview || restoringFocus) return;
-    if (focused) previewFocus = trigger;
+    if (reason === "keyboard") previewFocus = trigger;
     if (panel.matches(":popover-open")) return;
-    if (focused) {
-      show(undefined, "keyboard");
-      return;
-    }
-    const deadline = performance.now() + delay("--hover-open-delay");
-    const rest = () => {
-      const remaining = deadline - performance.now();
-      if (remaining > 0) {
-        hoverTimer = setTimeout(rest, remaining);
-        return;
-      }
-      if (
-        !props.preview || !root()?.matches(":hover") || !trigger.isConnected
-      ) {
-        return;
-      }
+    if (reason === "pointer") {
       previewFocus = document.activeElement instanceof HTMLElement
         ? document.activeElement
         : undefined;
-      show(undefined, "pointer");
-    };
-    hoverTimer = setTimeout(rest, deadline - performance.now());
-  };
-  // Trigger and portalled panel share one lifetime; neither content nor callers
-  // own timers. A brief exit can cross the anchored surface's boundary.
-  const leavePreview = () => {
-    cancelHover();
-    cancelLeave();
-    if (!props.preview || !active) return;
-    const deadline = performance.now() + delay("--hover-close-delay");
-    const leave = () => {
-      const remaining = deadline - performance.now();
-      if (remaining > 0) {
-        leaveTimer = setTimeout(leave, remaining);
-        return;
-      }
-      if (
-        !root()?.matches(":hover") && !panel.matches(":hover") &&
-        !root()?.contains(document.activeElement) &&
-        !panel.contains(document.activeElement)
-      ) panel.hidePopover();
-    };
-    leaveTimer = setTimeout(leave, deadline - performance.now());
+    }
+    show(undefined, reason);
   };
   const show = (at?: PointAnchor, reason: PopoverOpenReason = "keyboard") => {
-    cancelHover();
-    cancelLeave();
+    hover?.cancel();
     openedBy = reason;
     const origin = at?.origin ?? trigger;
     setPoint(at);
@@ -176,6 +132,8 @@ export default function Popover(props: {
         return;
       }
       panel.showPopover({ source: next.origin });
+      releaseHoverPanel?.();
+      releaseHoverPanel = hover?.retain(panel);
       stopWatching?.();
       const element = panel;
       const detached = new MutationObserver(() => {
@@ -202,6 +160,15 @@ export default function Popover(props: {
       };
     });
   };
+  onSettled(() => {
+    hover = hoverIntent(root()!, {
+      open: preview,
+      close: () => {
+        if (props.preview) panel.hidePopover();
+      },
+    });
+    return () => hover?.dispose();
+  });
   props.control?.({
     open: show,
     close: dismiss,
@@ -227,24 +194,6 @@ export default function Popover(props: {
       class={`otk-popover ${props.class ?? ""}`}
       ref={setRoot}
       data-open={String(open())}
-      onMouseEnter={() => preview()}
-      onMouseMove={(event) => {
-        if (!panel.contains(event.target as Node)) preview();
-      }}
-      onMouseLeave={leavePreview}
-      onFocusIn={(event) => {
-        if (event.target === trigger) preview(true);
-        else cancelLeave();
-      }}
-      onFocusOut={(event) => {
-        if (
-          props.preview &&
-          !event.currentTarget.contains(event.relatedTarget as Node | null) &&
-          !panel.contains(event.relatedTarget as Node | null) &&
-          !panel.matches(":hover") &&
-          !event.currentTarget.matches(":hover")
-        ) panel.hidePopover();
-      }}
     >
       <Show when={props.trigger !== undefined}>
         <button
@@ -327,17 +276,6 @@ export default function Popover(props: {
               if (props.dismissOnAction && button && !button.disabled) {
                 dismiss();
               }
-            }}
-            onMouseEnter={cancelLeave}
-            onMouseLeave={leavePreview}
-            onFocusIn={cancelLeave}
-            onFocusOut={(event) => {
-              if (
-                props.preview &&
-                !panel.contains(event.relatedTarget as Node | null) &&
-                !root()?.contains(event.relatedTarget as Node | null) &&
-                !panel.matches(":hover") && !root()?.matches(":hover")
-              ) panel.hidePopover();
             }}
           >
             <Surface title={props.title ? <h2>{props.title}</h2> : undefined}>

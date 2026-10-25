@@ -60,6 +60,8 @@
   --corner: 12px;
   --corner-zone: calc(var(--corner) + var(--control-size) + 8px);
   --chrome-gap: 4px;
+  --hover-open-delay: 500ms;
+  --hover-close-delay: 150ms;
   --chrome-inset: 12px;
   --project-inset: 12px;
   --project-gap: 8px;
