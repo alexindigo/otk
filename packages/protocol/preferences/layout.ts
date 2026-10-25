@@ -6,6 +6,11 @@ export const SHELL_WIDTHS = Object.freeze({
   left: Object.freeze({ min: 200, max: 360, default: 248 }),
   right: Object.freeze({ min: 280, max: 480, default: 320 }),
 });
+export interface ProjectLocation {
+  sidecarId: string;
+  directory: string;
+  sessionID?: string;
+}
 export interface ShellLayout {
   leftWidth: number;
   leftCollapsed: boolean;
@@ -13,12 +18,24 @@ export interface ShellLayout {
   rightWidth?: number;
   rightView?: string;
   discoveredCollapsed?: boolean;
+  projectLocations?: ProjectLocation[];
 }
 export interface LayoutPreferences {
   shellLayout: ShellLayout;
 }
 export interface LayoutRpcMethods {
   "layout.patch": { params: Partial<ShellLayout>; result: Preferences };
+  "layout.location": { params: ProjectLocation; result: Preferences };
+}
+export function isProjectLocation(value: unknown): value is ProjectLocation {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const location = value as Record<string, unknown>;
+  return Object.keys(location).every((key) =>
+    ["sidecarId", "directory", "sessionID"].includes(key)
+  ) && typeof location.sidecarId === "string" && !!location.sidecarId &&
+    typeof location.directory === "string" && !!location.directory &&
+    (location.sessionID === undefined ||
+      (typeof location.sessionID === "string" && !!location.sessionID));
 }
 export function registerLayoutPreferences(registry: PreferenceRegistry): void {
   registry.register({
@@ -44,6 +61,7 @@ export function registerLayoutPreferences(registry: PreferenceRegistry): void {
           "rightWidth",
           "rightView",
           "discoveredCollapsed",
+          "projectLocations",
         ].includes(key)
       ) &&
         typeof layout.leftWidth === "number" &&
@@ -59,6 +77,14 @@ export function registerLayoutPreferences(registry: PreferenceRegistry): void {
             layout.rightWidth <= SHELL_WIDTHS.right.max)) &&
         (layout.discoveredCollapsed === undefined ||
           typeof layout.discoveredCollapsed === "boolean") &&
+        (layout.projectLocations === undefined ||
+          (Array.isArray(layout.projectLocations) &&
+            layout.projectLocations.every(isProjectLocation) &&
+            new Set(
+                layout.projectLocations.map((p) =>
+                  JSON.stringify([p.sidecarId, p.directory])
+                ),
+              ).size === layout.projectLocations.length)) &&
         (layout.rightView === undefined ||
           (typeof layout.rightView === "string" &&
             layout.rightView.length <= 128));

@@ -66,6 +66,7 @@ test("core-only welcome loads a session without optional RPCs and preserves a dr
           "session.messages",
           "prefs.get",
           "layout.patch",
+          "layout.location",
           "frecency.list",
           "projects.visit",
           "sessions.seen",

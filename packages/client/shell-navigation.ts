@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { errorMessage } from "@otk/protocol";
-import type { TaskRecord } from "@otk/protocol";
+import type { ProjectLocation, TaskRecord } from "@otk/protocol";
 import type { InputGuard } from "./input-guard.ts";
 import { sessionKey } from "./index.ts";
 import { inboxStatus } from "./inbox.ts";
@@ -19,6 +19,7 @@ import {
   type Selection,
 } from "./session.ts";
 import { createState, type StateFactory } from "./state.ts";
+import { LOCAL_SIDECAR } from "./sidecars.ts";
 
 export interface ShellNavigationState {
   project?: ProjectSelection;
@@ -84,6 +85,30 @@ export function createShellNavigation(o: {
     store.update((draft) => {
       draft.error = "";
     });
+  let locations: readonly ProjectLocation[] = [];
+  const pendingLocations = new Map<string, ProjectLocation>();
+  const locationKey = (p: ProjectSelection) =>
+    JSON.stringify([p.sidecarId, p.directory]);
+  const lastLocation = (p: ProjectSelection) =>
+    pendingLocations.get(locationKey(p)) ??
+      locations.find((location) =>
+        location.sidecarId === p.sidecarId && location.directory === p.directory
+      );
+  const remember = (p: ProjectSelection, sessionID?: string) => {
+    if (lastLocation(p)?.sessionID === sessionID) return;
+    const key = locationKey(p), location = { ...p, sessionID };
+    pendingLocations.set(key, location);
+    void resources.rememberLocation(location).catch(fail).finally(() => {
+      if (pendingLocations.get(key) === location) pendingLocations.delete(key);
+    });
+  };
+  const releaseLocations = resources.observe({
+    frame(id, frame) {
+      if (id === LOCAL_SIDECAR && frame.t === "prefs") {
+        locations = frame.prefs.shellLayout.projectLocations ?? [];
+      }
+    },
+  });
   const project = (value?: ProjectSelection): void =>
     store.update((draft) => {
       draft.project = value;
@@ -204,10 +229,14 @@ export function createShellNavigation(o: {
           .catch(fail);
         if (session.state.selection) return;
       }
-      const existing = resources.entries().find((entry) =>
-        entry.sidecarId === target.sidecarId &&
-        entry.directory === target.directory && !entry.parentID
-      );
+      const remembered = lastLocation(target)?.sessionID;
+      const saved = remembered && resources.entry(target.sidecarId, remembered);
+      const existing = saved && saved.directory === target.directory
+        ? saved
+        : resources.entries().find((entry) =>
+          entry.sidecarId === target.sidecarId &&
+          entry.directory === target.directory && !entry.parentID
+        );
       if (existing) {
         navigate({ sidecarId: target.sidecarId, sessionID: existing.id });
         return;
@@ -269,6 +298,7 @@ export function createShellNavigation(o: {
       );
       const remaining = task?.sessions.find((id) => id !== target.sessionID);
       if (task) await resources.taskActions(p).remove(task, target.sessionID);
+      if (lastLocation(p)?.sessionID === target.sessionID) remember(p);
       if (intent === revision && shown()) {
         const next = entry.parentID ?? remaining;
         if (next) navigate({ sidecarId: target.sidecarId, sessionID: next });
@@ -326,6 +356,10 @@ export function createShellNavigation(o: {
       const target = value.selected,
         key = sessionKey(target.sidecarId, target.sessionID);
       project({ sidecarId: target.sidecarId, directory: value.directory });
+      remember(
+        { sidecarId: target.sidecarId, directory: value.directory },
+        target.sessionID,
+      );
       if (viewed !== key) {
         viewed = key;
         viewedFinish = value.finish;
@@ -345,6 +379,10 @@ export function createShellNavigation(o: {
       }
     },
     start: navigation.start,
-    stop: navigation.stop,
+    stop() {
+      navigation.stop();
+      releaseLocations();
+      pendingLocations.clear();
+    },
   };
 }

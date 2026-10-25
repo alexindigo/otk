@@ -35,6 +35,8 @@ reported token usage and whole-session reported cost. The collapsible right
 panel hosts feature-registered views; its collapsed rail keeps their icons
 available and clicking an icon opens that view. Sessions shows the selected
 project's task-grouped parent/child tree with status lights and title search.
+Switching projects restores the last session and its task tab, including after
+reload; missing or closed sessions fall back to the default project session.
 Click to preview or double-click to make a task. Panel width (280–480px) and
 selected view persist with its collapsed state per user. Close session in the
 context menu or palette releases task membership and the view while keeping the

@@ -293,6 +293,14 @@ subsequent finish observations mark seen only while focused and visible. Browser
 confirmation, history and presence remain injectable. `shellTitle` is the pure
 session/project/application title projection.
 
+Project switches restore the last accepted session through this same navigation
+owner. Locations live in the existing host-sidecar `shellLayout` preference;
+`layout.location` merges one server/directory intent at the persistence owner,
+so concurrent project visits cannot overwrite one another. Pending saves bridge
+immediate switches; preference broadcasts own the saved snapshot. Current task
+membership resolves the restored session's tab, including helper ancestry.
+Missing or closed locations fall back to the ordinary first-root selection.
+
 `close(target?)` captures the target's server/project and removes only explicit
 task membership through `TaskActions.remove`. It releases the tab view without
 deleting backend metadata, returns helpers to their immediate parent, and keeps

@@ -3,6 +3,7 @@ import type {
   CapabilityName,
   IndexEntry,
   Preferences,
+  ProjectLocation,
   ServerFrame,
   ShellLayout,
 } from "@otk/protocol";
@@ -64,6 +65,7 @@ export interface ServerResources {
   add(url: string, label: string): Promise<string>;
   remove(id: string): void;
   layout(patch: Partial<ShellLayout>): Promise<void>;
+  rememberLocation(location: ProjectLocation): Promise<void>;
   inactive(project: ProjectSelection, inactive: boolean): Promise<void>;
   setPreference(key: keyof Preferences, value: unknown): Promise<void>;
   stop(): void;
@@ -257,6 +259,12 @@ export function createServerResources(o: {
     },
     async layout(patch) {
       await sidecars.connection(LOCAL_SIDECAR).rpc.call("layout.patch", patch);
+    },
+    async rememberLocation(location) {
+      await sidecars.connection(LOCAL_SIDECAR).rpc.call(
+        "layout.location",
+        location,
+      );
     },
     async inactive(p, inactive) {
       await sidecars.connection(p.sidecarId).rpc.call("projects.inactive", {

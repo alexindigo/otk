@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import * as client from "@otk/client";
+import { DEFAULT_PREFS } from "@otk/protocol";
 import {
   shellEntry,
   shellFixture,
@@ -243,6 +244,71 @@ Deno.test("shell navigation opens existing project roots or project-only hashes 
   await settled();
   f.stop();
 });
+Deno.test("project memory restores helpers through guarded navigation and rejects stale project identities", () => {
+  const f = fixture();
+  try {
+    f.entries("local", [
+      shellEntry("selected"),
+      shellEntry("helper", "/p", "selected"),
+      shellEntry("away", "/away"),
+    ]);
+    f.resources.receive("local", {
+      t: "prefs",
+      prefs: {
+        ...DEFAULT_PREFS,
+        shellLayout: {
+          ...DEFAULT_PREFS.shellLayout,
+          projectLocations: [{
+            sidecarId: "local",
+            directory: "/p",
+            sessionID: "helper",
+          }, { sidecarId: "local", directory: "/away", sessionID: "selected" }],
+        },
+      },
+    });
+    f.navigation.openProject({ sidecarId: "local", directory: "/away" });
+    assertEquals(f.location.hash, "#/local/away");
+    f.guard.mark("permissions", true);
+    f.consent(false);
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    assertEquals(f.location.hash, "#/local/away");
+    f.consent(true);
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    assertEquals(f.location.hash, "#/local/selected/helper");
+  } finally {
+    f.stop();
+  }
+});
+Deno.test("pending location writes bridge fast switches without accepting older preference broadcasts", async () => {
+  const f = fixture(), held = Promise.withResolvers<unknown>();
+  try {
+    f.entries("local", [
+      shellEntry("selected"),
+      shellEntry("other"),
+      shellEntry("away", "/away"),
+    ]);
+    f.reply((_id, method) =>
+      method === "layout.location" ? held.promise : Promise.resolve(null)
+    );
+    f.navigation.navigate({ sidecarId: "local", sessionID: "other" });
+    f.navigation.observeView({
+      selected: f.session.state.selection,
+      directory: "/p",
+      loading: false,
+      settings: false,
+      connected: true,
+      finish: 0,
+    });
+    f.resources.receive("local", { t: "prefs", prefs: DEFAULT_PREFS });
+    f.navigation.openProject({ sidecarId: "local", directory: "/away" });
+    f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+    assertEquals(f.location.hash, "#/local/other");
+    held.resolve(null);
+    await settled();
+  } finally {
+    f.stop();
+  }
+});
 Deno.test("shell navigation refuses create and removal when input release is cancelled", async () => {
   const f = fixture();
   f.drafts.writer(f.actions.key())({
@@ -343,11 +409,29 @@ Deno.test("shell navigation first-view and finish seen rules observe readiness, 
   f.presence.visible = false;
   f.navigation.observeView(view);
   await settled();
-  assertEquals(f.calls, [["local", "projects.visit", { directory: "/p" }], [
-    "local",
-    "sessions.seen",
-    { sessionID: "selected" },
-  ]]);
+  assertEquals(f.calls, [
+    ["local", "layout.location", {
+      sidecarId: "local",
+      directory: "/p",
+      sessionID: "selected",
+    }],
+    ["local", "projects.visit", { directory: "/p" }],
+    [
+      "local",
+      "sessions.seen",
+      { sessionID: "selected" },
+    ],
+  ]);
+  f.resources.receive("local", {
+    t: "prefs",
+    prefs: {
+      ...DEFAULT_PREFS,
+      shellLayout: {
+        ...DEFAULT_PREFS.shellLayout,
+        projectLocations: [{ ...selected, directory: "/p" }],
+      },
+    },
+  });
   f.calls.length = 0;
   f.navigation.observeView({ ...view, finish: 2 });
   f.presence.focused = true;
