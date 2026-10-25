@@ -11,18 +11,6 @@ import { resources, withResources } from "./resources.ts";
 
 /** Task prerequisite, never a lazy registry fallback in an isolated fixture. */
 export async function prepareProviderCache(): Promise<void> {
-  const binary = await new Deno.Command("/usr/local/bin/opencode", {
-    args: ["--version"],
-    signal: AbortSignal.timeout(15_000),
-  }).output();
-  const version = new TextDecoder().decode(binary.stdout).trim();
-  if (!binary.success || version !== nativeVersion) {
-    throw new Error(
-      `Native fixture requires opencode ${nativeVersion}, received ${version}: ${
-        new TextDecoder().decode(binary.stderr)
-      }`,
-    );
-  }
   const target = providerCachePath();
   await Deno.mkdir(dirname(target), { recursive: true });
   await withResources("prepare native provider dependencies", async () => {

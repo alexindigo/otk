@@ -7,7 +7,10 @@ import { SessionIndex } from "@otk/harness";
 import { cfg } from "../support/config.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
-import { seedProviderPackages } from "../support/provider-cache.ts";
+import {
+  nativeVersion,
+  seedProviderPackages,
+} from "../support/provider-cache.ts";
 import { test } from "../support/resources.ts";
 
 test("idle project bootstrap leaves native instances and project visit clocks untouched", async () => {
@@ -60,7 +63,7 @@ test("idle project bootstrap leaves native instances and project visit clocks un
     await oc.restart();
     assertEquals(
       (await oc.request<{ version: string }>("/global/health")).version,
-      "1.18.34",
+      nativeVersion,
     );
     const projects = () => {
       const db = new DatabaseSync(oc.db, { readOnly: true });
@@ -124,7 +127,7 @@ test("idle project bootstrap leaves native instances and project visit clocks un
     console.info(
       "NATIVE BOOTSTRAP COST",
       JSON.stringify({
-        version: "1.18.34",
+        version: nativeVersion,
         projects: directories.length,
         instancesCreated: created.length,
         rssBeforeKiB: rssBefore,

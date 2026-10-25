@@ -25,6 +25,7 @@ test("template discovery excludes linked worktrees but retains ordinary director
   for (const name of ["main", "linked", "plain", "module"]) {
     await Deno.mkdir(join(root, name));
   }
+  await Deno.writeTextFile(join(root, "not-a-directory"), "Not a project");
   const metadata = join(root, "main", ".git", "worktrees", "linked");
   await Deno.mkdir(metadata, { recursive: true });
   await Deno.writeTextFile(join(metadata, "commondir"), "../..\n");

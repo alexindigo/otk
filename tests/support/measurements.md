@@ -206,11 +206,17 @@ before that path exists; health or built-in IDs alone are not cache preparation.
 The native SDK used by the scripted provider is bundled; the characterized live
 install is `@opencode-ai/plugin` and its transitive provider dependencies.
 
+`OTK_TEST_OPENCODE` optionally selects the native binary; the default remains
+`/usr/local/bin/opencode` (1.18.34 in the devbase). `tests/support/native.ts`
+reads that binary's `--version` once per runner. Process start/restart, native
+health, package preparation and synthetic registry fixtures share this owner.
 `OTK_TEST_PROVIDER_CACHE` optionally selects the cache; the default is
-`provider-cache/opencode-1.18.34` beside TMPDIR, outside disposable scratch.
-Preparation checks the installed opencode binary's version before using that
-version's cache. The binary, native health, prepared plugin, package lock and
-ready manifest must all match the fixture's pinned1.18.34 contract.
+`provider-cache/opencode-<detected version>` beside TMPDIR, outside disposable
+scratch. The binary, native health, prepared plugin, package lock and ready
+manifest must all match the detected version. Recorded version-specific fixtures
+and mock responses retain their source version; explicit history capture writes
+`history-<detected version>-v4.db` without replacing another version's
+recording.
 
 Independent task processes join one exclusive kernel file lock and revalidate
 after acquiring it. The `.lock` inode stays beside the cache (never unlink it

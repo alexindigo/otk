@@ -7,15 +7,16 @@ import { OpencodeTest } from "./opencode.ts";
 import { DatabaseSync } from "node:sqlite";
 import { fromFileUrl } from "@std/path";
 import { History } from "@otk/harness-opencode1";
+import { nativeVersion } from "./native.ts";
 const pixel =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
-test("capture prompt history fixture from real opencode 1.18.34", async () => {
+test("capture prompt history fixture from selected real opencode", async () => {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
   let stopped = false;
   try {
     assertEquals(
       (await oc.request<{ version: string }>("/global/health")).version,
-      "1.18.34",
+      nativeVersion,
     );
     const a = await oc.request<{ id: string }>("/session", {
         method: "POST",
@@ -58,7 +59,7 @@ test("capture prompt history fixture from real opencode 1.18.34", async () => {
       },
     });
     const destination = new URL(
-        "../fixtures/opencode1/history-1.18.34-v4.db",
+        `../fixtures/opencode1/history-${nativeVersion}-v4.db`,
         import.meta.url,
       ),
       fresh = oc.root + "/history-snapshot.db";

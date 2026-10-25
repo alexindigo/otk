@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { dirname, isAbsolute, join } from "@std/path";
-
-export const nativeVersion = "1.18.34";
+import { nativeVersion } from "./native.ts";
+export { nativeVersion } from "./native.ts";
 export function providerCachePath(): string {
   const tmp = Deno.env.get("TMPDIR");
   if (!tmp || !isAbsolute(tmp)) {

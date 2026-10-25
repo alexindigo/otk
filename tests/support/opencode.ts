@@ -5,6 +5,7 @@ import type { FakeLlm } from "./fake-llm.ts";
 import { acquire, tempDir } from "./resources.ts";
 import { ownedProcess } from "./process.ts";
 import { nativeVersion, seedProviderPackages } from "./provider-cache.ts";
+import { nativeBinary } from "./native.ts";
 export function freePort(): number {
   const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
   const port = (listener.addr as Deno.NetAddr).port;
@@ -145,7 +146,7 @@ export class OpencodeTest {
       test.url = `http://127.0.0.1:${test.port}`;
       test.db = join(env.XDG_DATA_HOME, "opencode/opencode.db");
       test.#env = env;
-      const owner = ownedProcess("/usr/local/bin/opencode", [
+      const owner = ownedProcess(nativeBinary, [
         "serve",
         "--hostname",
         "127.0.0.1",
@@ -198,7 +199,7 @@ export class OpencodeTest {
   }
   async restart(): Promise<void> {
     await this.stop();
-    const owner = ownedProcess("/usr/local/bin/opencode", [
+    const owner = ownedProcess(nativeBinary, [
       "serve",
       "--hostname",
       "127.0.0.1",
