@@ -144,13 +144,22 @@ export function loadServiceConfig(
       errors,
     );
   }
-  const overlay = sources.env.OTK_CONFIG || sources.overlayPath;
-  if (overlay) {
-    const data = read(overlay, sources.env.OTK_CONFIG !== undefined, errors);
+  const configHome = sources.env.XDG_CONFIG_HOME ||
+    (sources.env.HOME ? join(sources.env.HOME, ".config") : undefined);
+  const explicit = sources.env.OTK_CONFIG;
+  const candidates = explicit !== undefined ? [explicit] : [
+    configHome ? join(configHome, "otk/otk.toml") : undefined,
+    sources.overlayPath,
+  ];
+  for (const overlay of candidates) {
+    if (overlay === undefined) continue;
+    const data = read(overlay, explicit !== undefined, errors);
     if (data) {
       layer(data, schema, tree, overlay, errors);
       loaded.push(overlay);
+      break;
     }
+    if (errors.length) break;
   }
   const leaves = new Map(schemaLeaves(schema));
   for (const [name, raw] of Object.entries(sources.env)) {

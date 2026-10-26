@@ -87,3 +87,78 @@ test("config rejects inherited property names as unknown schema nodes", () => {
     ),
   );
 });
+
+test("config selects explicit file before XDG before legacy, then applies env leaves", async () => {
+  const root = await fixture();
+  const xdg = join(root, "settings");
+  await Deno.mkdir(join(xdg, "otk"), { recursive: true });
+  const user = join(xdg, "otk/otk.toml");
+  const legacy = join(root, "legacy.toml");
+  const explicit = join(root, "explicit.toml");
+  await Deno.writeTextFile(user, "[server]\nport=9001\n");
+  await Deno.writeTextFile(legacy, "[server]\nport=9002\n");
+  await Deno.writeTextFile(explicit, "[server]\nport=9003\n");
+  const sources = {
+    defaultsPath,
+    overlayPath: legacy,
+    env: { HOME: root, XDG_CONFIG_HOME: xdg },
+  };
+  assertEquals(loadServiceConfig(sources).config.server.port, 9001);
+  assertEquals(loadServiceConfig(sources).loaded, [defaultsPath, user]);
+  assertEquals(
+    loadServiceConfig({
+      ...sources,
+      env: { ...sources.env, OTK_CONFIG: explicit },
+    }).config.server.port,
+    9003,
+  );
+  assertEquals(
+    loadServiceConfig({
+      ...sources,
+      env: { ...sources.env, OTK_CONFIG: explicit, OTK_SERVER_PORT: "9004" },
+    }).config.server.port,
+    9004,
+  );
+  await Deno.remove(user);
+  assertEquals(loadServiceConfig(sources).config.server.port, 9002);
+});
+
+test("config uses HOME config when XDG is unset or empty, with optional absence", async () => {
+  const home = await fixture();
+  await Deno.mkdir(join(home, ".config/otk"), { recursive: true });
+  const user = join(home, ".config/otk/otk.toml");
+  await Deno.writeTextFile(user, "[server]\nport=9100\n");
+  const environments: Record<string, string>[] = [{ HOME: home }, {
+    HOME: home,
+    XDG_CONFIG_HOME: "",
+  }];
+  for (const env of environments) {
+    assertEquals(
+      loadServiceConfig({ defaultsPath, env }).config.server.port,
+      9100,
+    );
+  }
+  await Deno.remove(user);
+  assertEquals(
+    loadServiceConfig({ defaultsPath, env: { HOME: home } }).config.server.port,
+    1502,
+  );
+});
+
+test("config never falls back from a broken user file or a missing explicit file", async () => {
+  const home = await fixture();
+  await Deno.mkdir(join(home, ".config/otk"), { recursive: true });
+  await Deno.writeTextFile(
+    join(home, ".config/otk/otk.toml"),
+    '[server]\nport="bad"\n',
+  );
+  assertThrows(
+    () => loadServiceConfig({ defaultsPath, env: { HOME: home } }),
+    ConfigError,
+  );
+  assertThrows(() =>
+    loadServiceConfig({
+      defaultsPath,
+      env: { HOME: home, OTK_CONFIG: join(home, "missing.toml") },
+    }), ConfigError);
+});

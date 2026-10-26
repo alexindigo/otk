@@ -1,5 +1,10 @@
 # SPDX-License-Identifier: LGPL-3.0-only
 
+# Layers: defaults -> generated auth state -> one operator file -> OTK_* env.
+# Operator file: OTK_CONFIG (required when set), otherwise
+# ${XDG_CONFIG_HOME:-$HOME/.config}/otk/otk.toml when present, otherwise the
+# existing config/otk.toml next to the application source. Only one is loaded.
+
 [server]
 host = "127.0.0.1" # OTK_SERVER_HOST — listener address
 port = 1502 # OTK_SERVER_PORT — sidecar HTTP port
