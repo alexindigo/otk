@@ -65,6 +65,64 @@ async function consumer(run: (browser: Cdp, root: string) => Promise<void>) {
   }
 }
 
+for (const initialQuery of ["", "Consumer action"]) {
+  test(`palette omits unavailable actions and restores availability (query=${JSON.stringify(initialQuery)})`, () =>
+    consumer(async (browser) => {
+      await browser.evaluate(
+        "dialogTest.available(false);dialogTest.palette()",
+      );
+      await browser.poll(
+        "!!document.querySelector('input[name=command-search]')",
+      );
+      await browser.fill('input[name="command-search"]', initialQuery);
+      assertEquals(
+        await browser.evaluate(
+          "!!document.querySelector('[data-command=\"consumer.action\"]')",
+        ),
+        false,
+      );
+      assertEquals(
+        await browser.evaluate(
+          "document.querySelectorAll('.otk-palette-list button:disabled').length",
+        ),
+        0,
+      );
+      await browser.evaluate("dialogTest.available(true)");
+      await browser.poll(
+        "!!document.querySelector('[data-command=\"consumer.action\"]')",
+      );
+      assertEquals(
+        await browser.evaluate(
+          "document.querySelector('[data-command=\"consumer.action\"]').disabled",
+        ),
+        false,
+      );
+      await browser.evaluate("dialogTest.available(false)");
+      await browser.poll(
+        "!document.querySelector('[data-command=\"consumer.action\"]')",
+      );
+      await browser.fill('input[name="command-search"]', "");
+      assertEquals(
+        await browser.evaluate(
+          "!!document.querySelector('[data-command=\"consumer.action\"]')",
+        ),
+        false,
+      );
+      await browser.evaluate("dialogTest.available(true)");
+      await browser.poll(
+        "!!document.querySelector('[data-command=\"consumer.action\"]')",
+      );
+      await browser.click('[data-command="consumer.action"]');
+      await browser.poll(
+        "!document.querySelector('input[name=command-search]')",
+      );
+      assertEquals(await browser.evaluate("dialogTest.events"), [
+        "action",
+        "palette:closed",
+      ]);
+    }));
+}
+
 test("same-type dialog replacement mounts a fresh task form with its own save callback", () =>
   consumer(async (browser) => {
     await browser.evaluate("dialogTest.task('First task')");

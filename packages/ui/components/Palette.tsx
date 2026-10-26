@@ -22,7 +22,7 @@ export default function Palette(
   });
   const rows = () => {
     revision();
-    return commands.list().filter((row) =>
+    return commands.list().filter((row) => row.enabled).filter((row) =>
       `${row.cmd.title} ${row.cmd.category} ${row.cmd.slash?.join(" ") ?? ""}`
         .toLowerCase().includes(query().toLowerCase())
     );
@@ -47,7 +47,7 @@ export default function Palette(
         onKeyDown={(event) => {
           if (event.key === "Enter") {
             event.preventDefault();
-            const row = rows().find((row) => row.enabled);
+            const row = rows()[0];
             if (row) void invoke(row.cmd.id);
           }
         }}
@@ -62,11 +62,8 @@ export default function Palette(
                 data-otk-selection="vertical"
                 {...selection({
                   kind: "candidate",
-                  selected: rows().find((item) =>
-                    item.enabled
-                  )?.cmd.id === row().cmd.id,
+                  selected: rows()[0]?.cmd.id === row().cmd.id,
                 })}
-                disabled={!row().enabled}
                 onClick={() => void invoke(row().cmd.id)}
               >
                 <SelectionContent class="otk-palette-content">

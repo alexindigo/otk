@@ -538,14 +538,18 @@ stop function runs. Layers contain close-command IDs, a predicate and priority,
 with latest registration breaking ties. Composition and repeat events do not
 invoke commands.
 
-`Palette` lists the injected registry; `KeysHelp` lists the injected keymap,
-checks overlap conflicts and supplies proposed overrides to `onSave`. Production
-OTK uses the host core's ordered `keymap` preference broadcast; failed saves do
-not optimistically change bindings. The shared Dialog owns focus return, modal
-keyboard priority and styles, including the prompt editor. The essential shipped
-bindings are Tab/reverse agent cycle, Enter submission, Mod+K palette,
-outside-text `?` help and top-layer Esc before double-Esc interrupt. Shift+Enter
-inserts a newline through the prompt-owned input port.
+`Palette` lists the injected registry and omits unavailable commands from both
+the ordinary list and search results using the hub's existing availability
+projection. Availability changes restore or remove rows while it stays open;
+invocation still rechecks through the hub. No disabled command buttons are
+rendered. `KeysHelp` lists the injected keymap, checks overlap conflicts and
+supplies proposed overrides to `onSave`. Production OTK uses the host core's
+ordered `keymap` preference broadcast; failed saves do not optimistically change
+bindings. The shared Dialog owns focus return, modal keyboard priority and
+styles, including the prompt editor. The essential shipped bindings are
+Tab/reverse agent cycle, Enter submission, Mod+K palette, outside-text `?` help
+and top-layer Esc before double-Esc interrupt. Shift+Enter inserts a newline
+through the prompt-owned input port.
 
 The shared `commandHints` binding observes keymap registration, override/reset
 and command lifetimes. Prompt and inbox tooltips consume current command keys,

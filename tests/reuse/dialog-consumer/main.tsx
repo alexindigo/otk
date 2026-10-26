@@ -29,10 +29,12 @@ const events: string[] = [],
   dismissCloses: (() => void)[] = [],
   inputs: (() => string)[] = [];
 const [palette, setPalette] = createSignal(false);
+const [available, setAvailable] = createSignal(true);
 commands.register({
   id: "consumer.action",
   title: "Consumer action",
   category: "Consumer",
+  enabled: available,
   run: () => events.push("action"),
 });
 let finish: (() => void) | undefined;
@@ -63,6 +65,7 @@ const driver = {
   dismissCloses,
   inputs,
   palette: () => setPalette(true),
+  available: (value: boolean) => setAvailable(value),
   theme: (id: string) => theme.commit(id),
   finish: () => finish?.(),
   close: () => commands.run("dialog.close"),
