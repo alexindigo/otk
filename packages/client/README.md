@@ -206,6 +206,11 @@ No session content is duplicated into a second store; the projection also
 combines source parts for whole-reply copying. No session content is stored
 outside the currently loaded transcript.
 
+`timelinePrompts(messages, busy?)` projects that same loaded transcript into
+chronological prompt identities, creation clocks, shared queued flags and
+borrowed source parts. It retains no content or paging state; consumers present
+parts through their own registry and page through the original session owner.
+
 `replyMessages(messages, busy?)` additionally projects generic pending user
 requests from the current/queued turn and unfinished grouped replies. A later
 request cannot revive completed history, and idle retires pending state. Views

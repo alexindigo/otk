@@ -14,6 +14,7 @@ export * from "./session.ts";
 export * from "./sidecars.ts";
 export * from "./server-resources.ts";
 export * from "./messages.ts";
+export * from "./timeline.ts";
 export * from "./permissions.ts";
 export * from "./approvals.ts";
 export * from "./approval-attention.ts";

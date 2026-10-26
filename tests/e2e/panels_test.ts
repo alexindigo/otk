@@ -127,11 +127,11 @@ test("registered panel views, width and collapsed state persist in host preferen
       await b.evaluate(
         "[...document.querySelectorAll('.otk-right-rail [data-panel-view]')].map(e=>e.dataset.panelView)",
       ),
-      ["sessions", "external-view"],
+      ["sessions", "timeline", "external-view"],
     );
     assert(
       await b.evaluate(
-        "(()=>{const rows=[...document.querySelectorAll('.otk-right-rail [data-panel-view]')].map(e=>e.getBoundingClientRect());return rows[0].y>=52 && rows[1].y>=rows[0].bottom && Math.abs(rows[0].x-rows[1].x)<.5})()",
+        "(()=>{const rows=[...document.querySelectorAll('.otk-right-rail [data-panel-view]')].map(e=>e.getBoundingClientRect());return rows[0].y>=52 && rows.slice(1).every((row,i)=>row.y>=rows[i].bottom && Math.abs(row.x-rows[i].x)<.5)})()",
       ),
     );
     await b.click('.otk-right-rail [data-panel-view="sessions"]');

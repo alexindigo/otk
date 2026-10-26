@@ -390,6 +390,12 @@ export default function Shell(
           toggles,
           usage: session.usage,
           rename,
+          transcript: {
+            messages: () => session.state.content.messages,
+            exhausted: () => session.state.exhausted,
+            paging: () => session.state.paging || session.state.loading,
+            older: () => session.older(),
+          },
           servers: () => sidecars.state.list,
           connection: (id) => sidecars.connection(id),
           inbox,

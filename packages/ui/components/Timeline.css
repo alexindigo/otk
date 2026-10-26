@@ -1,0 +1,42 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-timeline {
+  min-height: 0;
+  overflow: auto;
+  padding: 0 8px 8px;
+}
+.otk-timeline-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.otk-timeline-trailing {
+  display: grid;
+  align-items: center;
+}
+.otk-timeline-clock,
+.otk-timeline-actions {
+  grid-area: 1 / 1;
+  justify-self: end;
+}
+.otk-timeline-clock {
+  font-size: var(--text-meta);
+  color: var(--otk-fg-3);
+  font-variant-numeric: tabular-nums;
+}
+.otk-timeline-actions {
+  visibility: hidden;
+}
+.otk-timeline-queued {
+  color: var(--otk-fg-3);
+  font-size: var(--text-meta);
+}
+.otk-timeline-row.is-revealed .otk-timeline-clock,
+.otk-timeline-row:focus-within .otk-timeline-clock,
+.otk-timeline-row.is-selected .otk-timeline-clock {
+  visibility: hidden;
+}
+.otk-timeline-row.is-revealed .otk-timeline-actions,
+.otk-timeline-row:focus-within .otk-timeline-actions,
+.otk-timeline-row.is-selected .otk-timeline-actions {
+  visibility: visible;
+}

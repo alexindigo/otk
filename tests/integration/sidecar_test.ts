@@ -32,7 +32,9 @@ test("I11 message paging accepts OTK message IDs without leaking harness cursors
       "prompt",
       "questions",
       "resources",
+      "restore",
       "revert",
+      "sessionActions",
       "shell",
       "usage",
     ]);

@@ -462,9 +462,13 @@ test("C3 stock areas: picker and approval commands, Activity panel and Dark/Line
           : name === "transcript"
           ? [[
             "Pin as task",
+            "Rename",
+            "Fork session",
             "Turn auto-approve on",
+            "Compact",
             "Copy session title",
             "Close session",
+            "Delete",
           ], app]
           : [
             ["Choose agent", "Choose model", "Edit prompt", "Attach files"],

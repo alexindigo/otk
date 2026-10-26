@@ -140,6 +140,12 @@ export function followViewport(
   document.addEventListener("touchcancel", up);
   schedule();
   return {
+    /** Explicit transcript navigation supersedes pending and future tail follow. */
+    pause() {
+      invalidateFollow();
+      following = false;
+      gesture = undefined;
+    },
     reset() {
       invalidateFollow();
       position = viewport.scrollTop;

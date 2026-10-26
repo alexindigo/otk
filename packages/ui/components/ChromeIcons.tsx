@@ -75,6 +75,14 @@ export const ActivityIcon = () => (
     <path d="M12 7v5l3 2" />
   </Icon>
 );
+export const TimelineIcon = () => (
+  <Icon>
+    <path d="M6 3v18M11 5h10M11 12h10M11 19h10" />
+    <circle cx="6" cy="5" r="2" />
+    <circle cx="6" cy="12" r="2" />
+    <circle cx="6" cy="19" r="2" />
+  </Icon>
+);
 export const ShieldCheckIcon = () => (
   <Icon>
     <path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6l8-3Z" />

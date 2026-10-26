@@ -131,7 +131,6 @@ systemctl --user restart otk.service
 
 | # | Area                                       | Missing or limited                                                                                                                                                                                                                                                                                                                                                                                                        |
 | - | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1 | M5 A: session actions                      | Revert, undo/redo, fork, rename, delete, compact and timeline controls. Close session only closes the OTK view/task membership; it does not delete the backend session.                                                                                                                                                                                                                                                   |
 | 2 | M5 B: transcript                           | Whole-transcript copy/export. Existing selection Copy remains available.                                                                                                                                                                                                                                                                                                                                                  |
 | 3 | M5 C: status dialogs                       | MCP, LSP, formatter, provider-connect and plugin management/status dialogs.                                                                                                                                                                                                                                                                                                                                               |
 | 4 | M5 D: stash                                | Prompt stash management. Unsent browser drafts are retained separately.                                                                                                                                                                                                                                                                                                                                                   |
@@ -176,6 +175,22 @@ Text fields retain the browser's native context menu for spelling corrections
 and dictionary lookup, including ContextMenu and Shift+F10. Elsewhere right
 click opens OTK's menu; Shift + right click keeps the native menu. Selection
 Copy outside fields remains available in OTK's menu.
+
+Right click a session tab, breadcrumb or Sessions row to Rename in place, Fork
+session or Delete. Delete asks for a second press and stops active work first;
+Close session keeps the backend session. Compact is available for the shown root
+session and uses its next-prompt model. Hover or focus a prompt for Revert to
+here and Copy, or a completed reply for Fork from here and Copy. Forks open
+through the chosen reply with an empty composer; their files are shared with the
+original. Revert rolls back files and conversation using opencode's native
+semantics, without confirmation. The joined composer strip lists rolled-back
+prompts and files and offers Restore until the next prompt makes the rollback
+permanent; Compact also makes it permanent. Undo previous prompt and Redo are in
+the palette and available as `/undo` and `/redo`; Undo can interrupt active
+work. Recalled content never overwrites an edited draft. Timeline in the right
+panel lists the loaded prompts chronologically: click to scroll and focus a
+prompt, use the same Revert/Copy actions, or Load earlier prompts to page the
+transcript.
 
 Pending permissions for the open session and its descendants take over the
 composer. Allow once, confirm the displayed future grant patterns for Allow
@@ -225,7 +240,7 @@ progress. Click a task to open its child; the subagent bar returns to the parent
 or cycles siblings. Child sessions are read-only. Code highlighting runs in a
 shared Shiki worker with on-demand grammars; session changes release it. The
 Display menu persists preferences in the serving sidecar's `otk.db` and updates
-other connected tabs. Reverted turns show a file-summary banner.
+other connected tabs. Reverted turns appear in the joined composer strip.
 
 Pasted or dropped images appear once as thumbnail attachment chips, separate
 from prompt text. Image-only prompts can be sent directly. Sent images render as

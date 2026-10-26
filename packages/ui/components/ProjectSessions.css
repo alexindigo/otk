@@ -35,23 +35,6 @@
   margin: 0;
   padding: 0;
 }
-.otk-project-sessions .otk-session-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  max-width: 100%;
-  width: 100%;
-  text-align: left;
-  height: 30px;
-  padding: 0 var(--chrome-inset);
-  color: var(--otk-fg-2);
-}
-.otk-project-sessions .otk-row-title {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 .otk-project-sessions input[type="search"] {
   width: 100%;
   min-width: 0;
@@ -110,22 +93,10 @@
   height: 1px;
   background: var(--otk-border);
 }
-.otk-project-sessions .otk-row-title {
-  flex: 1;
-  min-width: 0;
-}
 .otk-session-cost {
   flex: none;
   color: var(--otk-fg-3);
   font-size: var(--text-meta);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-.otk-project-sessions .otk-session-row.is-editing {
-  height: auto;
-  min-height: 30px;
-  font-weight: 500;
-}
-.otk-project-sessions .otk-session-row.is-editing .otk-row-title {
-  overflow: visible;
 }

@@ -341,6 +341,27 @@ preference. `registerSessionsPanel` contributes the project-local, task-grouped
 searchable parent/child tree. Its feature adapter reads common `ShellPorts`
 resources; the panel knows no views.
 
+`registerTimelinePanel` contributes Timeline between Sessions and Activity in
+the application composition. Its adapter projects `ShellPorts.transcript`
+through the client `timelinePrompts` helper and the part registry's source
+presentation. The shared `messageFrames` projection owns both transcript framing
+and prompt-bubble visibility: Timeline lists a message iff that projection gives
+it a prompt bubble. Transcript-only markers and hidden-only messages are
+omitted; mixed ordinary content remains a prompt. Rows share prompt context
+targets and `MessageActions`; the most recently revealed row uses the shared
+vertical selection. Load earlier prompts pages the same client session. The
+hidden `transcript.reveal` command belongs to the mounted SessionView; Message
+exposes a reveal control that scrolls and focuses its own bubble, while the
+viewport suspends tail following for that explicit navigation. No panel reads
+another component's DOM or maintains a second transcript store.
+
+Sessions and Timeline use the same `ListRow` frame: shared 30px height,
+selection pointer, highlight bounds, padding and leading/label/trailing slots.
+Consumers inject content and callbacks. Timeline's trailing clock/actions share
+one grid area; visibility switches on hover intent, keyboard focus or selection
+while the cell keeps the larger intrinsic width. Action hit targets do not move,
+and the label has no independent inset hover highlight.
+
 `SidebarRail` is the shared frame for both collapsed sides: one 48px rail, 52px
 corner reservation, leading controls, scrolling body and optional footer. The
 shared `--rail-width`, `--chrome-header-height` and `--control-size` tokens own

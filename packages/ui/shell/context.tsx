@@ -12,6 +12,7 @@ import type {
   SidecarState,
 } from "@otk/client";
 import type { Toggles } from "../components/Toggles.ts";
+import type { Message } from "@otk/protocol";
 import type { ThemeEngine } from "../theme/engine.ts";
 export type { ProjectSelection } from "@otk/client";
 /** Live shell resources passed to features, never a component's internal state. */
@@ -20,6 +21,12 @@ export interface ShellPorts {
   toggles: Toggles;
   usage: SessionUsageOwner;
   rename?: SessionRename;
+  transcript: {
+    messages(): Message[];
+    exhausted(): boolean;
+    paging(): boolean;
+    older(): Promise<void>;
+  };
   servers(): SidecarState[];
   connection(id: string): SidecarConnection;
   inbox(id: string): InboxModel;

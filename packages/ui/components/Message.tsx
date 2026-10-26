@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Message.css" with { type: "text" };
 import { agentColor } from "../theme/agent-color.ts";
-import { createMemo, createSignal, For, Show } from "solid-js";
+import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import WorkLog from "./WorkLog.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
 import type { TurnUsage as Usage } from "@otk/client";
-import { elapsed, partFrames, partGroups } from "./work-log.ts";
+import { elapsed, messageFrames, partGroups } from "./work-log.ts";
 import MessageActions from "./MessageActions.tsx";
 import { contextTarget } from "./context-target.ts";
 import type {
@@ -71,6 +71,9 @@ function PartsView(props: Omit<PartProps, "part"> & { parts: Part[] }) {
     </For>
   );
 }
+export interface MessageControl {
+  reveal(): void;
+}
 export default function Message(
   props: {
     sidecarId?: string;
@@ -85,23 +88,18 @@ export default function Message(
     paneWidth: number;
     onOpenChild(id: string): void;
     queued: boolean;
+    control?(control: MessageControl): (() => void) | void;
   },
 ): import("solid-js").Element {
   const { parts } = useUiRegistries();
-  const frames = createMemo(() => {
-    const result = partFrames(
-      props.message.parts,
+  const framing = createMemo(() =>
+    messageFrames(
+      props.message,
       (part) => parts.presentation(part, props.prefs),
-    );
-    return result.length || props.message.role === "user" ? result : [{
-      id: props.message.id,
-      parts: [],
-      transcript: false,
-    }];
-  });
-  const prompt = () =>
-    props.message.role === "user" &&
-    frames().some((frame) => !frame.transcript);
+    )
+  );
+  const frames = () => framing().frames;
+  const prompt = () => framing().prompt;
   const identity = () => ({
     sidecarId: props.sidecarId,
     sessionID: props.message.sessionID,
@@ -113,6 +111,16 @@ export default function Message(
       parts.presentation(part, props.prefs).text
     ).filter(Boolean).join("\n\n");
   let article!: HTMLElement;
+  let bubble: HTMLDivElement | undefined;
+  onSettled(() =>
+    props.control?.({
+      reveal() {
+        if (!bubble) return;
+        bubble.scrollIntoView({ block: "center", inline: "nearest" });
+        bubble.focus({ preventScroll: true });
+      },
+    })
+  );
   const [revealed, setRevealed] = createSignal(false);
   const target = () => ({
     ...identity(),
@@ -168,6 +176,11 @@ export default function Message(
                 : props.message.role === "user"
                 ? "otk-user-bubble otk-created-trigger"
                 : "otk-message-content"}
+              ref={(element) => {
+                if (!frame().transcript && props.message.role === "user") {
+                  bubble = element;
+                }
+              }}
               tabindex={!frame().transcript && props.message.role === "user"
                 ? "0"
                 : undefined}

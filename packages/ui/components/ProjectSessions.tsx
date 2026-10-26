@@ -1,10 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { errorMessage } from "@otk/protocol";
 import "./ProjectSessions.css" with { type: "text" };
-import { selection } from "./selection.ts";
-import SelectionContent from "./SelectionContent.tsx";
+import ListRow from "./ListRow.tsx";
 import { createMemo, createSignal, For, Show } from "solid-js";
-import { dynamic } from "@solidjs/web";
 import TitleEditor from "./TitleEditor.tsx";
 import type { InboxSnapshot } from "@otk/protocol";
 import {
@@ -150,16 +148,13 @@ export default function ProjectSessions(props: {
                           sidecarId: props.project!.sidecarId,
                           sessionID: row().session.id,
                         }, "row");
-                      const Control = dynamic(() =>
-                        editing() ? "div" : "button"
-                      );
                       return (
                         <li
                           data-depth={row().depth}
                           data-parent={row().parentID}
                         >
-                          <Control
-                            type="button"
+                          <ListRow
+                            editing={editing()}
                             ref={contextTarget(() => ({
                               kind: "session",
                               data: {
@@ -169,41 +164,41 @@ export default function ProjectSessions(props: {
                                 origin: "row" as const,
                               },
                             }))}
-                            {...selection({
-                              class: `otk-session-row${
-                                editing() ? " is-editing" : ""
+                            class="otk-session-row"
+                            selected={props.selected?.sidecarId ===
+                                props.project!.sidecarId &&
+                              props.selected.sessionID === row().session.id}
+                            attributes={{
+                              "data-session": row().session.id,
+                              "data-status": row().session.status,
+                              style: { "--session-depth": row().depth },
+                              title: row().session.title,
+                              "aria-description": costDescription(
+                                row().session.id,
+                              ),
+                              "aria-label": `${row().session.title}${
+                                row().parentID
+                                  ? `, child of ${
+                                    merged(row().parentID!).title
+                                  }`
+                                  : ""
+                              }${
+                                costLabel(row().session.id) === undefined
+                                  ? ""
+                                  : `, session cost ${
+                                    costLabel(row().session.id)
+                                  }`
+                              }${
+                                props.auto?.(row().session.id)
+                                  ? ", auto-approve on"
+                                  : ""
                               }`,
-                              kind: "current",
-                              selected: props.selected?.sidecarId ===
-                                  props.project!.sidecarId &&
-                                props.selected.sessionID === row().session.id,
-                            })}
-                            data-otk-selection="vertical"
-                            data-session={row().session.id}
-                            data-status={row().session.status}
-                            style={{ "--session-depth": row().depth }}
-                            title={row().session.title}
-                            aria-description={costDescription(row().session.id)}
-                            aria-label={`${row().session.title}${
-                              row().parentID
-                                ? `, child of ${merged(row().parentID!).title}`
-                                : ""
-                            }${
-                              costLabel(row().session.id) === undefined
-                                ? ""
-                                : `, session cost ${
-                                  costLabel(row().session.id)
-                                }`
-                            }${
-                              props.auto?.(row().session.id)
-                                ? ", auto-approve on"
-                                : ""
-                            }`}
-                            onClick={() => run(open(merged(row().session.id)))}
-                            onDblClick={() =>
-                              run(pin(merged(row().session.id)))}
-                          >
-                            <SelectionContent>
+                              onClick: () =>
+                                run(open(merged(row().session.id))),
+                              onDblClick: () =>
+                                run(pin(merged(row().session.id))),
+                            }}
+                            leading={
                               <span class="otk-session-leading">
                                 <Show when={row().depth > 0}>
                                   <span
@@ -229,61 +224,65 @@ export default function ProjectSessions(props: {
                                   event={row().session.timeUpdated}
                                 />
                               </span>
-                              <span class="otk-row-title">
-                                <Show
-                                  when={editing()}
-                                  fallback={row().session.title}
-                                >
-                                  <TitleEditor owner={props.rename!} />
+                            }
+                            labelClass="otk-row-title"
+                            trailing={
+                              <>
+                                <Show when={row().session.status === "retry"}>
+                                  <span>
+                                    retry {row().session.retry?.attempt}
+                                  </span>
                                 </Show>
-                              </span>
-                              <Show when={row().session.status === "retry"}>
-                                <span>
-                                  retry {row().session.retry?.attempt}
-                                </span>
-                              </Show>
-                              <Show
-                                when={row().session.attention.permissions +
-                                  row().session.attention.childPermissions}
-                              >
-                                <span title="Pending permissions">
-                                  P {row().session.attention.permissions +
+                                <Show
+                                  when={row().session.attention.permissions +
                                     row().session.attention.childPermissions}
-                                </span>
-                              </Show>
-                              <Show
-                                when={row().session.attention.questions +
-                                  row().session.attention.childQuestions}
-                              >
-                                <span title="Pending questions">
-                                  Q {row().session.attention.questions +
+                                >
+                                  <span title="Pending permissions">
+                                    P {row().session.attention.permissions +
+                                      row().session.attention.childPermissions}
+                                  </span>
+                                </Show>
+                                <Show
+                                  when={row().session.attention.questions +
                                     row().session.attention.childQuestions}
-                                </span>
-                              </Show>
-                              <Show when={row().session.attention.error}>
-                                <span
-                                  title={row().session.attention.error}
-                                  aria-label="Session error"
                                 >
-                                  Error
-                                </span>
-                              </Show>
-                              <AutoMark
-                                active={!!props.auto?.(row().session.id)}
-                              />
-                              <Show when={costLabel(row().session.id)}>
-                                <span
-                                  class="otk-session-cost"
-                                  aria-hidden="true"
-                                  title="Session cost"
-                                >
-                                  <UsageCost
-                                    value={props.cost!(row().session.id)!}
-                                  />
-                                </span>
-                              </Show>
-                            </SelectionContent>
-                          </Control>
+                                  <span title="Pending questions">
+                                    Q {row().session.attention.questions +
+                                      row().session.attention.childQuestions}
+                                  </span>
+                                </Show>
+                                <Show when={row().session.attention.error}>
+                                  <span
+                                    title={row().session.attention.error}
+                                    aria-label="Session error"
+                                  >
+                                    Error
+                                  </span>
+                                </Show>
+                                <AutoMark
+                                  active={!!props.auto?.(row().session.id)}
+                                />
+                                <Show when={costLabel(row().session.id)}>
+                                  <span
+                                    class="otk-session-cost"
+                                    aria-hidden="true"
+                                    title="Session cost"
+                                  >
+                                    <UsageCost
+                                      value={props.cost!(row().session.id)!}
+                                    />
+                                  </span>
+                                </Show>
+                              </>
+                            }
+                          >
+                            <Show
+                              when={editing()}
+                              fallback={row().session.title}
+                            >
+                              <TitleEditor owner={props.rename!} />
+                            </Show>
+                          </ListRow>
                         </li>
                       );
                     }}

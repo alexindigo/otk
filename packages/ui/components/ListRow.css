@@ -1,0 +1,47 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-list-row {
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
+  height: 30px;
+  padding: 0 var(--chrome-inset);
+  text-align: left;
+  color: var(--otk-fg-2);
+  font-weight: 500;
+}
+.otk-list-row-content {
+  height: 100%;
+}
+.otk-list-row-leading {
+  display: flex;
+  align-items: center;
+  min-width: 8px;
+  flex: none;
+}
+.otk-list-row-label {
+  flex: 1;
+  min-width: 0;
+}
+.otk-list-row-action,
+.otk-list-row-action:hover {
+  align-self: stretch;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  font-weight: inherit;
+}
+.otk-list-row-trailing {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 8px;
+}
+.otk-list-row.is-editing {
+  height: auto;
+  min-height: 30px;
+  font-weight: 500;
+}
+.otk-list-row.is-editing .otk-list-row-label {
+  overflow: visible;
+}

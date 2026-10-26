@@ -14,6 +14,7 @@ const actions = {
 /** Data-only command consumer; the message supplies its hover region and state. */
 export default function MessageActions(props: {
   kind: "prompt" | "reply";
+  class?: string;
   target: ContentTarget;
   revealed: boolean;
   region(): HTMLElement;
@@ -65,7 +66,9 @@ export default function MessageActions(props: {
   };
   return (
     <span
-      class={["otk-message-action-group", { "is-revealed": props.revealed }]}
+      class={["otk-message-action-group", props.class, {
+        "is-revealed": props.revealed,
+      }]}
     >
       <span class="otk-message-actions">
         <For each={available()} keyed={(action) => action.id}>

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Part } from "@otk/protocol";
+import type { Message, Part } from "@otk/protocol";
 
 import type { PartPresentation } from "../registries/renderers.ts";
 export type { WorkTime } from "../registries/renderers.ts";
@@ -29,6 +29,22 @@ export function partFrames(
     } else frames.push({ id: part.id, parts: [part], transcript });
   }
   return frames;
+}
+/** One presentation contract for transcript frames and prompt navigation. */
+export function messageFrames(
+  message: Pick<Message, "id" | "role" | "parts">,
+  presentation: (part: Part) => PartPresentation,
+): { frames: PartFrame[]; prompt: boolean } {
+  const frames = partFrames(message.parts, presentation);
+  return {
+    frames: frames.length || message.role === "user" ? frames : [{
+      id: message.id,
+      parts: [],
+      transcript: false,
+    }],
+    prompt: message.role === "user" &&
+      frames.some((frame) => !frame.transcript),
+  };
 }
 /** Layout groups follow feature contributions, never a central part-kind list. */
 export function partGroups(

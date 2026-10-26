@@ -38,6 +38,7 @@ import {
   registerTaskDialogs,
   registerTaskTool,
   registerTextPart,
+  registerTimelinePanel,
   registerTodoTool,
   registerToolPart,
   registerUnknownPart,
@@ -90,6 +91,7 @@ export function applicationUi(): UiRegistries {
   registerProjectDialogs(ui.dialogs);
   registerTaskDialogs(ui.dialogs);
   registerSessionsPanel(ui.panels);
+  registerTimelinePanel(ui.panels);
   registerActivityPanel(ui.panels);
   return ui;
 }

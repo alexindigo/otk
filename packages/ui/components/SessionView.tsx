@@ -18,7 +18,7 @@ import type {
   RevertInfo,
   SessionUsage,
 } from "@otk/protocol";
-import Message from "./Message.tsx";
+import Message, { type MessageControl } from "./Message.tsx";
 import Prompt from "./Prompt.tsx";
 import ComposerTakeovers from "./ComposerTakeovers.tsx";
 import type { Preferences } from "@otk/protocol";
@@ -32,7 +32,11 @@ import { followViewport } from "./viewport.ts";
 import { highlightingScope } from "../highlight/client.ts";
 import type { Draft, DraftChange } from "./prompt/model.ts";
 import type { PromptProps } from "../registries/prompt.ts";
-import { ownedAction } from "../keyboard/context.tsx";
+import {
+  ownedAction,
+  ownedCommand,
+  useCommandPorts,
+} from "../keyboard/context.tsx";
 import { TranscriptContext } from "../features/transcript-context.tsx";
 import { contextTarget } from "./context-target.ts";
 export default function SessionView(props: {
@@ -83,6 +87,19 @@ export default function SessionView(props: {
   let view!: HTMLElement;
   let list!: HTMLDivElement, flow!: HTMLDivElement;
   let following: ReturnType<typeof followViewport> | undefined;
+  const controls = new Map<string, MessageControl>();
+  ownedCommand(useCommandPorts(), {
+    id: "transcript.reveal",
+    title: "Reveal prompt",
+    category: "Transcript",
+    hidden: true,
+    enabled: (_ctx, target?: { messageID: string }) =>
+      !!target && controls.has(target.messageID),
+    run: (_ctx, target: { messageID: string }) => {
+      following?.pause();
+      controls.get(target.messageID)?.reveal();
+    },
+  });
   let releaseHighlighting: (() => void) | undefined;
   createEffect(() => props.busy, (busy) => {
     if (busy) releaseHighlighting ||= highlightingScope();
@@ -216,6 +233,13 @@ export default function SessionView(props: {
                   paneWidth={paneWidth()}
                   onOpenChild={props.onOpenChild}
                   queued={queued().has(message().id)}
+                  control={(control) => {
+                    const id = message().id;
+                    controls.set(id, control);
+                    return () => {
+                      if (controls.get(id) === control) controls.delete(id);
+                    };
+                  }}
                 />
               )}
             </For>
