@@ -27,7 +27,7 @@ export interface SessionActions {
   submission(target: Selection): SessionSubmission;
   attachments(parts: PromptPart[], sidecarId: string): Promise<PromptPart[]>;
   prompt(parts: PromptPart[], selection: PromptChoices): Promise<void>;
-  abort(): Promise<void>;
+  abort(target?: Selection): Promise<void>;
   rename(target: Selection, title: string): Promise<ContentSession>;
   remove(target: Selection): Promise<void>;
   fork(target: Selection, through?: string): Promise<ContentSession>;
@@ -187,8 +187,8 @@ export function createSessionActions(o: {
         });
       });
     },
-    async abort() {
-      const { selection: target, rpc } = current.context();
+    async abort(target = current.context().selection) {
+      const rpc = resources.sidecars.connection(target.sidecarId).rpc;
       await act(
         target,
         () => rpc.call("session.abort", { sessionID: target.sessionID }),

@@ -17,6 +17,8 @@ export function revertFixture() {
   const calls: unknown[] = [];
   let result = Promise.resolve({ id: "a" } as ContentSession);
   const owner = client.createSessionRevert({
+    drafts: client.createDrafts(),
+    status: { working: () => false, subscribe: () => () => {} },
     session: {
       state,
       subscribe: (listener: (state: client.SessionState) => void) => {
@@ -27,6 +29,7 @@ export function revertFixture() {
       },
     },
     actions: {
+      abort: () => Promise.resolve(),
       revert: (target, messageID) => {
         calls.push(["revert", target, messageID]);
         return result;

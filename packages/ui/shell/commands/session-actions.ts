@@ -22,6 +22,7 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
   revertAvailable?(
     target: Selection,
     capability: "revert" | "restore",
+    interrupt?: boolean,
   ): boolean;
   rolledBack?(): boolean;
 }): () => void {
@@ -45,17 +46,38 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     run: (_ctx, target: ContentTarget) =>
       ports.revert!.revertTo(target.messageID!),
   });
+  const canRestore = (input?: SessionContextTarget) => {
+    const target = input ?? ports.current();
+    return !!target && !!ports.revert?.matches(target) &&
+      !!ports.rolledBack?.() && !!ports.revertAvailable?.(target, "restore");
+  };
+  const undo = commands.register({
+    id: "session.undo",
+    title: "Undo previous prompt",
+    category: "Session",
+    slash: ["undo"],
+    enabled: () => {
+      const target = ports.current();
+      return !!target && !!ports.revert?.hasPrompt() &&
+        !!ports.revertAvailable?.(target, "revert", true);
+    },
+    run: () => ports.revert!.undo(),
+  });
+  const redo = commands.register({
+    id: "session.redo",
+    title: "Redo",
+    category: "Session",
+    slash: ["redo"],
+    enabled: (_ctx, input?: SessionContextTarget) => canRestore(input),
+    run: () => ports.revert!.redo(),
+  });
   const restore = commands.register({
     id: "session.restore",
     title: "Restore",
     category: "Session",
     hidden: true,
     context: { kind: "session", order: 25 },
-    enabled: (_ctx, input?: SessionContextTarget) => {
-      const target = input ?? ports.current();
-      return !!target && !!ports.revert?.matches(target) &&
-        !!ports.rolledBack?.() && !!ports.revertAvailable?.(target, "restore");
-    },
+    enabled: (_ctx, input?: SessionContextTarget) => canRestore(input),
     run: () => ports.revert!.restore(),
   });
   const fork = commands.register({
@@ -126,5 +148,7 @@ export function registerSessionActionCommands(commands: CommandHub, ports: {
     reply();
     rollback();
     restore();
+    undo();
+    redo();
   };
 }

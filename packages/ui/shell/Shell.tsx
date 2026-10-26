@@ -250,11 +250,13 @@ export default function Shell(
     fork: navigation.fork,
     revert,
     rolledBack: () => !!session.state.content.revert,
-    revertAvailable: (target, capability) =>
+    revertAvailable: (target, capability, interrupt = false) =>
       revert.matches(target) && !target.rootID && !info()?.parentID &&
       resources.connected(target.sidecarId) &&
       resources.advertised(target.sidecarId, capability) &&
-      !actions.working(target) && !revert.state.pending,
+      (!actions.working(target) ||
+        (interrupt && resources.advertised(target.sidecarId, "prompt"))) &&
+      !revert.state.pending,
   }));
   onCleanup(registerAttentionCommands(commands, actions));
   onCleanup(registerApprovalCommands(commands, {

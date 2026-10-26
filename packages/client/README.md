@@ -360,11 +360,28 @@ retain the whole grouped reply.
 model through the same non-submitting `act` owner, without task promotion.
 
 `revert(target, messageID)` and `restore(target)` use the same captured-target
-`act` owner. `createSessionRevert({session, actions, factory?})` serializes
-selected-session revert/restore intents, exposes pending/error and projects the
-authoritative `content.revert` into the composer strip. Selection changes retire
-late results and errors; no RPC result optimistically mutates session content.
-`dispose` releases its subscription. No file-overlap confirmation is added.
+`act` owner. `createSessionRevert({session, actions, drafts, status, factory?})`
+serializes selected-session revert/restore/undo/redo intents, exposes
+pending/error and projects the authoritative `content.revert` into the composer
+strip. Selection changes retire late results and errors; no RPC result
+optimistically mutates session content. `dispose` releases its subscription. No
+file-overlap confirmation is added.
+
+Undo targets the last visible prompt, interrupts a working captured session,
+then waits at most ten seconds for authoritative idle before reverting. Its
+history refill preserves prompt choices and replaces only empty or identical
+owner-written content. Redo unreverts and clears only the identical
+owner-written draft; newer text, attachments and unsaved editors survive.
+Captured draft writers cannot resurrect a dropped lifetime, and
+selection/disposal retire pending waits and draft effects. `abort(target?)`
+accepts a captured target for that same owner.
+
+Intent completion waits for authoritative transcript publication, including an
+in-flight resync. A rollback must remove its boundary prompt; restoring must
+publish restored message identities. Only then can another intent select its
+target and draft effects run. Publication has the ordinary 30-second RPC-sized
+bound; selection/disposal cancels it. RPC admission never substitutes for the
+consumer seeing the result.
 
 The hierarchy owner also exports `sessionFamily`, `familyTask` and
 `familySelection`. Shell's location projection intentionally matches only the

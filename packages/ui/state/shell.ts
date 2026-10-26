@@ -81,7 +81,20 @@ export function createShellState(o: { api: URL }): ShellState {
       resources.entry(target.sidecarId, target.sessionID)?.title,
     factory: solidState,
   });
-  const revert = createSessionRevert({ session, actions, factory: solidState });
+  const revert = createSessionRevert({
+    session,
+    actions,
+    drafts,
+    status: {
+      working: actions.working,
+      subscribe: (listener) =>
+        resources.observe({
+          frame: () => listener(),
+          removed: () => listener(),
+        }),
+    },
+    factory: solidState,
+  });
   createEffect(() => {
     const target = rename.state.editing;
     return target && resources.entry(target.sidecarId, target.sessionID)?.title;

@@ -151,6 +151,34 @@ function catalogConsumer(load: () => Promise<CommandOption[]>) {
     },
   };
 }
+Deno.test("built-in slash discovery omits unavailable commands and reflects current availability", async () => {
+  const consumer = catalogConsumer(() => Promise.resolve([]));
+  let available = false;
+  const release = consumer.commands.register({
+    id: "consumer.available",
+    title: "Available action",
+    category: "Consumer",
+    slash: ["available"],
+    enabled: () => available,
+    run: () => {},
+  });
+  const token = { start: 0, end: 1, query: "available" };
+  try {
+    assertEquals(await consumer.source.options(token), []);
+    available = true;
+    assertEquals(
+      (await consumer.source.options(token)).map((option) =>
+        option.command?.name
+      ),
+      ["available"],
+    );
+    available = false;
+    assertEquals(await consumer.source.options(token), []);
+  } finally {
+    release();
+    consumer.stop();
+  }
+});
 Deno.test("slash catalog owns response generations and updates changed native metadata without stale aliases", async () => {
   const pending: ((value: CommandOption[]) => void)[] = [];
   const consumer = catalogConsumer(() =>

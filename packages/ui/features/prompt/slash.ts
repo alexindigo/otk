@@ -38,19 +38,21 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
         registered.clear();
       });
       const options = () => {
-        const rows = ctx.commands.list().flatMap(({ cmd }) => {
-          if (!cmd.slash?.length) return [];
-          const name = cmd.slash[0];
-          return [{
-            name,
-            description: cmd.title,
-            aliases: cmd.slash.slice(1),
-            source: cmd.id.startsWith("server.command:")
-              ? server.find((row) => row.name === name)?.source ??
-                "server" as const
-              : "builtin" as const,
-          }];
-        });
+        const rows = ctx.commands.list().filter((row) => row.enabled).flatMap(
+          ({ cmd }) => {
+            if (!cmd.slash?.length) return [];
+            const name = cmd.slash[0];
+            return [{
+              name,
+              description: cmd.title,
+              aliases: cmd.slash.slice(1),
+              source: cmd.id.startsWith("server.command:")
+                ? server.find((row) => row.name === name)?.source ??
+                  "server" as const
+                : "builtin" as const,
+            }];
+          },
+        );
         return rows.filter((option, index) =>
           rows.findIndex((row) => row.name === option.name) === index
         );

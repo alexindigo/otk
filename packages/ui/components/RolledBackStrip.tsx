@@ -35,7 +35,9 @@ export default function RolledBackStrip(
         <Show when={props.state.pending}>
           <div class="otk-rollback-status" role="status">
             <RevertIcon />
-            {props.state.pending === "restore" ? "Restoring…" : "Rolling back…"}
+            {props.state.pending === "restore" || props.state.pending === "redo"
+              ? "Restoring…"
+              : "Rolling back…"}
           </div>
         </Show>
         <Show when={props.strip}>

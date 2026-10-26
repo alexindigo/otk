@@ -708,6 +708,14 @@ flex-centred content. Error reasons are plain text in that row, not paragraphs
 with independent margins or placement. The joined frame remains owned by
 ComposerNotice.
 
+Undo previous prompt and Redo share that same client owner through palette
+commands and `/undo` / `/redo` aliases. Undo can interrupt root-session work
+when the prompt capability is available; the owner waits for idle before
+rollback. Helpers omit both actions. Built-in slash discovery, like the Palette,
+projects the hub's current availability for every command rather than listing
+actions that cannot run. Redo pending state uses the same Restoring presentation
+as Restore; only owner-written draft content is cleared.
+
 `TranscriptContext` registers each `prompt`, `reply`, `code`, `diff` and `tool`
 action once, independent of transcript length. Targets carry sidecar/session,
 message, part/call and directory identity plus source data. Features can
