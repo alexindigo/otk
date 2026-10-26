@@ -16,6 +16,7 @@
     },
     "check": "deno check main.ts application.ts core/ packages/ tests/ web/src/ web/vite.config.ts",
     "build:web": "deno run -A npm:vite@8.2.0 build --config web/vite.config.ts",
+    "compile": "bash scripts/compile.sh",
     "build:web:watch": "deno run -A npm:vite@8.2.0 build --config web/vite.config.ts --watch",
     "test:e2e": {
       "command": "deno test --allow-net --allow-read --allow-write --allow-env --allow-run tests/e2e/",
