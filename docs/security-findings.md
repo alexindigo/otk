@@ -1,15 +1,15 @@
-# Alpha security findings
+# Security findings
 
 These ten CodeRabbit LLM-sourced findings were exported on 2026-10-25 UTC
 (2026-10-24 Pacific), against revision
-`7a6c542d1d384808d1e6bcee12f8f0b6421a9b4e`. They await triage and fixes for
-beta. They have **not been independently verified**; scanner evidence was not
+`7a6c542d1d384808d1e6bcee12f8f0b6421a9b4e`. All ten remain open, awaiting
+triage. They have **not been independently verified**; scanner evidence was not
 loaded in the export and false positives are possible. Six are medium severity
 and four are low; none were reported critical or high.
 
-This is the public summary of the alpha security report. Keep the alpha bound to
-`127.0.0.1` with password authentication. Loopback is not a fix for these
-reports, including browser-origin attacks.
+This is the public summary of the security report. Keep OTK bound to `127.0.0.1`
+with password authentication. Loopback is not a fix for these reports, including
+browser-origin attacks.
 
 ## 1. WebSocket origin check
 

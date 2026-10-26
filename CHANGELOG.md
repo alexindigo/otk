@@ -1,5 +1,77 @@
 # Changelog
 
+## [0.1.0-beta.1] — 2026-10-26
+
+**Highlights.** Sessions gain in-place rename, confirmed deletion, inclusive
+forking, compaction, revert/restore, undo/redo and a prompt timeline. Native
+session actions share guarded navigation and preserve newer draft edits. Every
+install channel now uses one compiled executable and a systemd user unit; OTK
+discovers the user's XDG config itself. A shared build recipe produces Linux
+x86_64 and aarch64 release archives with checksums (`fbedde9`, `b25738c`,
+`c24f9e5`, `7f98acf`, `ae7232f`, `7b4cce3`, `d93f3db`, `6fabeec`, `dc45651`).
+
+**Known gaps.** Whole-transcript copy/export, MCP/LSP/formatter/provider/plugin
+dialogs, prompt stash management, a full changes viewer and a quick session
+switcher remain missing. Inline diffs, selection Copy, retained browser drafts
+and the Sessions view remain available. There is no automatic continue,
+retry-limit or fallback-provider recovery. On stock opencode 1.18.34, a pending
+websearch permission missing optional `livecrawl` metadata can make
+`GET /permission` return 400 and leave OTK reconnecting without an index;
+resolve that request in opencode. This case has not been requalified on newer
+versions (`91d27da`, `d93f3db`).
+
+All ten security scanner findings remain open and unverified; keep OTK bound to
+localhost. See the
+[install instructions](./README.md#install-run-otk-next-to-your-opencode),
+[security findings](./docs/security-findings.md) and
+[packaging recipe](./packaging/README.md) (`91d27da`, `dc45651`).
+
+### 2026-10-25
+
+#### Fix
+
+Compaction appears as a transcript marker rather than a user prompt bubble, and
+the palette lists only currently available commands. These changes make session
+state and available actions clearer without changing native semantics.
+
+- Frame compaction markers separately from ordinary prompt content (`9b5e014`).
+- Omit unavailable commands from the palette (`aa6501a`).
+
+#### Feature
+
+Sessions can be renamed in place, deleted with a second press, forked through a
+selected reply and compacted with the next-prompt model. Revert and restore
+expose native rollback, while undo/redo wait for authoritative transcript
+publication and preserve independently edited drafts. The timeline navigates
+loaded prompts and can load earlier history; OTK also finds the optional XDG
+operator file without a packaging launcher.
+
+- Rename sessions in place (`fbedde9`).
+- Delete sessions while guarding unsaved family drafts (`b25738c`).
+- Fork complete sessions or through a chosen reply (`c24f9e5`).
+- Compact sessions using the selected model (`7f98acf`).
+- Revert to a prompt and restore rolled-back conversation (`ae7232f`).
+- Undo and redo prompts without overwriting newer drafts (`7b4cce3`).
+- Navigate prompts in the timeline panel (`d93f3db`).
+- Discover the operator config in the XDG config directory (`6fabeec`).
+
+#### Refactor
+
+Popover hover and focus lifetimes share one intent owner, including portalled
+regions and cancellation. This centralizes interaction timing without adding a
+new visible control.
+
+- Share the hover-intent owner (`c3b35fa`).
+
+#### Build
+
+Source packages and release automation use the same frozen compile recipe,
+embedding browser assets, reflective routes, defaults and migrations. The
+release workflow builds both Linux architectures and publishes checksummed
+archives containing the executable and shared systemd user unit.
+
+- Add the compiled binary recipe, service and release workflow (`dc45651`).
+
 ## [0.1.0-alpha.1] — 2026-10-24
 
 **Highlights.** OTK (Open Terminal Kit) is a browser workspace for coding-agent
@@ -22,13 +94,13 @@ stock opencode 1.18.34, a pending websearch permission without optional
 `livecrawl` metadata can make `GET /permission` return 400 and leave OTK
 reconnecting without an index; resolve that request in opencode. This case has
 not been requalified on newer versions. Ten unverified security scanner findings
-(six medium, four low) await beta triage and fixes; keep this alpha bound to
+(six medium, four low) remain open, awaiting triage; keep this alpha bound to
 localhost (`91d27da`).
 
 See the
-[README alpha install instructions](./README.md#alpha-run-otk-next-to-your-opencode)
-and [alpha security findings](./docs/alpha-security-findings.md) before
-installing (`91d27da`).
+[README install instructions](./README.md#install-run-otk-next-to-your-opencode)
+and [security findings](./docs/security-findings.md) before installing
+(`91d27da`).
 
 ### 2026-10-24
 

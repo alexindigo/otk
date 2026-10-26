@@ -5,18 +5,61 @@ reusable kit modules, serves the browser UI and distributes a small live session
 index. Opencode 1.x is the current backend; its native implementation converts
 content into OTK shapes and owns history/database queries.
 
-## Alpha: run OTK next to your opencode
+## Install: run OTK next to your opencode
 
-Use Deno **2.9.6** and an already-running opencode server on the same machine,
-under the same user. Tested with opencode **1.18.34, 1.18.35 and 1.19.3**;
-intermediate versions have not each been tested. OTK does not start opencode.
-From your OTK checkout, build the browser app:
+The **0.1.0-beta.1** Linux release ships one executable and a systemd user unit.
+Connect it to an already-running opencode server on the same machine, under the
+same user. Tested with opencode **1.18.34, 1.18.35 and 1.19.3**; intermediate
+versions have not each been tested. OTK does not start opencode.
+
+### Arch Linux
+
+Choose one AUR package:
+
+| # | Package   | Source                                          |
+| - | --------- | ----------------------------------------------- |
+| 1 | `otk-bin` | Prebuilt release executable                     |
+| 2 | `otk`     | Versioned source, compiled during installation  |
+| 3 | `otk-git` | Latest Git source, compiled during installation |
+
+For example, `yay -S otk-bin`. All three install `/usr/bin/otk` and
+`otk.service`. Source builds need Deno; the installed executable does not.
+
+### Release tarball
+
+Download the matching `otk-0.1.0-beta.1-<arch>-linux.tar.zst` and `SHA256SUMS`
+from the
+[GitHub release](https://github.com/alexindigo/otk/releases/tag/v0.1.0-beta.1).
+Choose `x86_64` or `aarch64` on a glibc-based Linux system with systemd. Verify
+and extract the download (x86_64 example):
 
 ```sh
-deno task build:web
+sha256sum --check --ignore-missing SHA256SUMS
+mkdir otk-release
+tar -xf otk-0.1.0-beta.1-x86_64-linux.tar.zst -C otk-release
+cd otk-release
+sha256sum --check SHA256SUMS
+sudo install -m755 otk /usr/bin/otk
+sudo install -Dm644 otk.service /usr/lib/systemd/user/otk.service
 ```
 
-Create `config/otk.toml` in the checkout (create `config/` if needed):
+The tarball also includes `LICENSE`, this README and `otk.toml.example`. It
+needs no source checkout, separately installed Deno or dependency downloads at
+runtime. To build from source, use the shared
+[compile recipe](./packaging/README.md).
+
+### Configure and start
+
+Create the private operator config (use `$XDG_CONFIG_HOME/otk/otk.toml` instead
+if you set `XDG_CONFIG_HOME`):
+
+```sh
+install -dm700 ~/.config/otk
+touch ~/.config/otk/otk.toml
+chmod 600 ~/.config/otk/otk.toml
+```
+
+Enter your backend settings in `~/.config/otk/otk.toml`:
 
 ```toml
 [server]
@@ -37,20 +80,21 @@ non-default data directory, also set `harness.db` (or `OTK_HARNESS_DB`) to its
 existing `opencode.db`; the default is `$XDG_DATA_HOME/opencode/opencode.db`,
 falling back to `~/.local/share/opencode/opencode.db`.
 
-**Bind the alpha to localhost only.** `server.host = "127.0.0.1"` is the shipped
+**Keep OTK bound to localhost only.** `server.host = "127.0.0.1"` is the shipped
 default; its environment override is `OTK_SERVER_HOST`. Do not expose it to your
 LAN or the Internet. The security report flags
-[WebSocket origin checks](./docs/alpha-security-findings.md#1-websocket-origin-check),
-[DNS rebinding](./docs/alpha-security-findings.md#2-dns-rebinding),
-[TOTP guessing](./docs/alpha-security-findings.md#3-totp-guessing) and
-[Basic credential forwarding](./docs/alpha-security-findings.md#6-basic-credential-forwarding)
-(findings 1–3 and 6) for beta work. Loopback reduces exposure; it does not fix
-these findings.
+[WebSocket origin checks](./docs/security-findings.md#1-websocket-origin-check),
+[DNS rebinding](./docs/security-findings.md#2-dns-rebinding),
+[TOTP guessing](./docs/security-findings.md#3-totp-guessing) and
+[Basic credential forwarding](./docs/security-findings.md#6-basic-credential-forwarding).
+All ten findings remain open and unverified. Loopback reduces exposure; it does
+not fix these findings.
 
 Start OTK, then open `http://127.0.0.1:1502/`:
 
 ```sh
-deno task start
+systemctl --user daemon-reload
+systemctl --user enable --now otk.service
 ```
 
 On first run, choose **Password**, enter a username and password, and select
@@ -61,7 +105,7 @@ are case-insensitive. After login, the project list and Sessions view show your
 opencode sessions; the live index defaults to the last 30 days.
 
 TOTP is configured in the operator file, not the setup form. After password
-setup, add this to `config/otk.toml` and restart OTK:
+setup, add this to `~/.config/otk/otk.toml` and restart OTK:
 
 ```toml
 [auth]
@@ -76,46 +120,21 @@ screen. At login, append the current six-digit code directly to your password,
 with no space. The equivalent overrides are `OTK_AUTH_TYPE` and
 `OTK_AUTH_TOTPKEY`.
 
-Configuration layers are `defaults/otk.toml` → generated auth state → optional
-`config/otk.toml` → `OTK_*` environment variables. `OTK_CONFIG` selects another
-operator file. All keys are documented in [the defaults](./defaults/otk.toml);
-unknown keys and invalid types stop startup. Keep credential files private.
+Config layers, operator-file precedence and all keys are documented in
+[the defaults](./defaults/otk.toml), also shipped as `otk.toml.example`.
+`OTK_CONFIG` selects an explicit operator file. Unknown keys and invalid types
+stop startup. Keep credential files private. The executable can also run in the
+foreground as `otk`.
 
-### Run as a user service
-
-Stop your foreground OTK with Ctrl+C before starting the service. Save this as
-`~/.config/systemd/user/otk.service`, replacing `/absolute/path/to/otk` with
-your checkout and `/absolute/path/to/deno` with your Deno executable. The PATH
-must also include Deno's directory because the start task invokes `deno` itself.
-Keep server URL/auth in `config/otk.toml` so the service uses the same settings.
-
-```ini
-[Unit]
-Description=OTK
-
-[Service]
-Type=simple
-WorkingDirectory=/absolute/path/to/otk
-Environment=PATH=/absolute/path/to/deno-directory:/usr/local/bin:/usr/bin:/bin
-ExecStart=/absolute/path/to/deno task start
-Restart=on-failure
-
-[Install]
-WantedBy=default.target
-```
+After upgrading the AUR package or replacing the tarball executable/unit, run:
 
 ```sh
 systemctl --user daemon-reload
-systemctl --user enable --now otk.service
-```
-
-To update, run these from the checkout:
-
-```sh
-git pull --ff-only
-deno task build:web
 systemctl --user restart otk.service
 ```
+
+Before uninstalling, run `systemctl --user disable --now otk.service`. Removing
+the executable and unit preserves your user config and state.
 
 ## What OTK reads and writes
 
@@ -127,7 +146,7 @@ systemctl --user restart otk.service
 | 4 | OTK state         | Writes its own `auth.toml` and `otk.db` (preferences, inbox/task metadata and approval policy/journal) under `$XDG_STATE_HOME/otk/1502` or `~/.local/state/otk/1502`. The final component follows the configured port; `state.path` / `OTK_STATE_PATH` overrides it.                   |
 | 5 | Project templates | Lists direct directory candidates and reads small Git marker files to exclude linked worktrees. No writes, Git commands or recursive repository walk.                                                                                                                                  |
 
-## Known gaps in the alpha
+## Known gaps in the beta
 
 | # | Area                                       | Missing or limited                                                                                                                                                                                                                                                                                                                                                                                                        |
 | - | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -138,7 +157,7 @@ systemctl --user restart otk.service
 | 6 | M5 F: navigation                           | Quick session switcher. Use the project's Sessions view.                                                                                                                                                                                                                                                                                                                                                                  |
 | 7 | Automatic recovery                         | No automatic continue, retry limits or fallback-provider recovery for provider errors. Permission auto-approve is a separate feature.                                                                                                                                                                                                                                                                                     |
 | 8 | Stock opencode 1.18.x permission inventory | Observed on 1.18.34: a pending websearch request omitting optional `livecrawl` makes `GET /permission` return 400 (`Expected JSON value, got undefined`). An OTK adapter starting in that state can remain reconnecting without an index or pending-request inventory. Resolve the request in opencode; OTK cannot recover its missing identity from that response. This case has not been requalified on newer versions. |
-| 9 | Security                                   | [Ten scanner findings](./docs/alpha-security-findings.md), six medium and four low, await triage and fixes for beta. They are unverified reports, not a completed security audit.                                                                                                                                                                                                                                         |
+| 9 | Security                                   | [Ten scanner findings](./docs/security-findings.md), six medium and four low, remain open and unverified. Keep OTK bound to localhost.                                                                                                                                                                                                                                                                                    |
 
 ## Using OTK
 
@@ -264,7 +283,7 @@ independent image attachments until they are explicitly removed or sent.
 
 API endpoints live under `/api/`; everything else is static UI. Authentication
 uses server-set HttpOnly cookies. Browser mutations and WebSocket upgrades have
-Origin checks, with [known alpha gaps](./docs/alpha-security-findings.md).
+Origin checks, with [known security gaps](./docs/security-findings.md).
 Cross-sidecar browser access requires that browser's origin in the remote
 sidecar's `server.origins`. TLS termination belongs to the operator's reverse
 proxy.
