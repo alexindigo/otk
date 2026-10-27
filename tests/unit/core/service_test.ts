@@ -29,7 +29,7 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
   await Deno.mkdir(join(root, "assets"));
   await Deno.writeTextFile(join(root, "assets/app.js"), "/* Caller script */");
   const session = {
-    id: "s",
+    id: "tstv1-s",
     projectID: "p",
     directory: root,
     title: "Caller",
@@ -122,7 +122,7 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
         t: "rpc",
         id: "owned",
         method: "session.get",
-        params: { sessionID: "s" },
+        params: { sessionID: "tstv1-s" },
       }),
     );
     assertEquals(

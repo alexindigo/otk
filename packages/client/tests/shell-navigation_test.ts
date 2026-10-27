@@ -11,8 +11,11 @@ import {
 
 const settled = (): Promise<void> =>
   new Promise((resolve) => setTimeout(resolve, 0));
-function fixture(hash = "#/local/selected") {
-  const f = shellFixture(),
+function fixture(hash = "#/local/tstv1-selected") {
+  const f = shellFixture({
+      selected: "tstv1-selected",
+      created: "tstv1-created",
+    }),
     drafts = client.createDrafts(),
     messages: string[] = [];
   let consent = true, listener: (() => void) | undefined, historyState: unknown;
@@ -43,7 +46,7 @@ function fixture(hash = "#/local/selected") {
       };
     },
   };
-  f.entries("local", [shellEntry("selected"), shellEntry("other")]);
+  f.entries("local", [shellEntry("tstv1-selected"), shellEntry("tstv1-other")]);
   const actions = client.createSessionActions(f);
   const guard = client.createInputGuard({
     drafts,
@@ -97,7 +100,7 @@ function fixture(hash = "#/local/selected") {
 }
 
 Deno.test("removing a direct-route server detaches even while its project metadata is unknown", () => {
-  const f = fixture("#/remote/loading");
+  const f = fixture("#/remote/tstv1-loading");
   try {
     assertEquals(f.navigation.state.project, undefined);
     assertEquals(f.navigation.removeServer("remote"), true);
@@ -116,25 +119,47 @@ Deno.test("removing a direct-route server detaches even while its project metada
   }
 });
 
+Deno.test("legacy session links show the compatibility notice without requesting native session resources", () => {
+  const f = fixture("#/local/ses_legacy");
+  try {
+    assertEquals(
+      f.navigation.state.error,
+      "This session link is from an older version. Open Sessions to choose a session.",
+    );
+    assertEquals(f.session.state.selection, undefined);
+    assertEquals(
+      f.calls.some((call) =>
+        typeof call[1] === "string" &&
+        /^(session\.|models\.|permission\.|question\.|usage\.)/.test(call[1])
+      ),
+      false,
+    );
+  } finally {
+    f.stop();
+  }
+});
+
 Deno.test("fork navigation preserves original drafts, notes successful forks and fences later navigation", async () => {
   const f = fixture();
   try {
-    f.drafts.writer("local/selected")({
+    f.drafts.writer("local/tstv1-selected")({
       ...client.emptyDraft(),
       input: "Keep me",
     });
     f.reply((_id, method) =>
-      Promise.resolve(method === "session.fork" ? shellInfo("fork") : null)
+      Promise.resolve(
+        method === "session.fork" ? shellInfo("tstv1-fork") : null,
+      )
     );
     await f.navigation.fork({
       sidecarId: "local",
-      sessionID: "selected",
+      sessionID: "tstv1-selected",
       title: "Source",
     }, "last");
-    assertEquals(f.session.state.selection?.sessionID, "fork");
-    assertEquals(f.forkNotes.get("local/fork"), { from: "Source" });
-    assertEquals(f.drafts.get("local/fork").input, "");
-    assertEquals(f.drafts.get("local/selected").input, "Keep me");
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-fork");
+    assertEquals(f.forkNotes.get("local/tstv1-fork"), { from: "Source" });
+    assertEquals(f.drafts.get("local/tstv1-fork").input, "");
+    assertEquals(f.drafts.get("local/tstv1-selected").input, "Keep me");
     assertEquals(f.messages, []);
     const held = Promise.withResolvers<unknown>();
     f.reply((_id, method) =>
@@ -142,15 +167,15 @@ Deno.test("fork navigation preserves original drafts, notes successful forks and
     );
     const pending = f.navigation.fork({
       sidecarId: "local",
-      sessionID: "selected",
+      sessionID: "tstv1-selected",
       title: "Source",
     });
     await settled();
-    f.navigation.navigate({ sidecarId: "local", sessionID: "other" });
-    held.resolve(shellInfo("late-fork"));
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
+    held.resolve(shellInfo("tstv1-late-fork"));
     await pending;
-    assertEquals(f.session.state.selection?.sessionID, "other");
-    assertEquals(f.forkNotes.get("local/late-fork"), { from: "Source" });
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
+    assertEquals(f.forkNotes.get("local/tstv1-late-fork"), { from: "Source" });
   } finally {
     f.stop();
   }
@@ -171,7 +196,7 @@ Deno.test("shell navigation owns route state, unknown-server errors, project vis
     "projects.visit",
     { directory: "/empty" },
   ]]);
-  f.external("#/unknown/session");
+  f.external("#/unknown/tstv1-session");
   assertEquals(
     f.navigation.state.error,
     "The URL refers to an unknown server. Add it in Settings.",
@@ -222,21 +247,21 @@ Deno.test("shell navigation confirms and clears dirty owners only on selection c
   assertEquals(
     f.navigation.navigate({
       sidecarId: "local",
-      sessionID: "selected",
-      rootID: "hint",
+      sessionID: "tstv1-selected",
+      rootID: "tstv1-hint",
     }),
     true,
   );
   assertEquals(f.messages, []);
   assertEquals(f.guard.dirty("permissions"), true);
   assertEquals(
-    f.navigation.navigate({ sidecarId: "local", sessionID: "other" }),
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" }),
     false,
   );
   assertEquals(f.guard.dirty("permissions"), true);
   f.consent(true);
   assertEquals(
-    f.navigation.navigate({ sidecarId: "local", sessionID: "other" }),
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" }),
     true,
   );
   assertEquals(f.guard.dirty("permissions"), false);
@@ -245,29 +270,31 @@ Deno.test("shell navigation confirms and clears dirty owners only on selection c
 Deno.test("shell navigation normalizes roots and same-session reselection visits without another push", async () => {
   const f = fixture();
   f.entries("local", [
-    shellEntry("root"),
-    shellEntry("middle", "/p", "root"),
-    shellEntry("leaf", "/p", "middle"),
+    shellEntry("tstv1-root"),
+    shellEntry("tstv1-middle", "/p", "tstv1-root"),
+    shellEntry("tstv1-leaf", "/p", "tstv1-middle"),
   ]);
   assert(
     f.navigation.navigate({
       sidecarId: "local",
-      sessionID: "leaf",
-      rootID: "middle",
+      sessionID: "tstv1-leaf",
+      rootID: "tstv1-middle",
     }),
   );
-  assertEquals(f.location.hash, "#/local/root/leaf");
+  assertEquals(f.location.hash, "#/local/tstv1-root/tstv1-leaf");
   const count = f.pushes.length;
-  assert(f.navigation.navigate({ sidecarId: "local", sessionID: "leaf" }));
+  assert(
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-leaf" }),
+  );
   await settled();
   assertEquals(f.pushes.length, count);
   assertEquals(f.calls.filter((c) => c[1] === "sessions.seen"), [[
     "local",
     "sessions.seen",
-    { sessionID: "leaf" },
+    { sessionID: "tstv1-leaf" },
   ]]);
-  f.navigation.openChild("unknown");
-  assertEquals(f.location.hash, "#/local/root/unknown");
+  f.navigation.openChild("tstv1-unknown");
+  assertEquals(f.location.hash, "#/local/tstv1-root/tstv1-unknown");
   f.stop();
 });
 Deno.test("shell navigation opens existing project roots or project-only hashes and home", async () => {
@@ -277,7 +304,7 @@ Deno.test("shell navigation opens existing project roots or project-only hashes 
   assertEquals(f.location.hash, "#project/local/%2Fempty");
   assertEquals(f.navigation.state.settings, false);
   f.navigation.openProject({ sidecarId: "local", directory: "/p" });
-  assertEquals(f.location.hash, "#/local/selected");
+  assertEquals(f.location.hash, "#/local/tstv1-selected");
   f.navigation.showSettings();
   const count = f.pushes.length;
   f.navigation.openProject({ sidecarId: "local", directory: "/p" });
@@ -292,9 +319,9 @@ Deno.test("project memory restores helpers through guarded navigation and reject
   const f = fixture();
   try {
     f.entries("local", [
-      shellEntry("selected"),
-      shellEntry("helper", "/p", "selected"),
-      shellEntry("away", "/away"),
+      shellEntry("tstv1-selected"),
+      shellEntry("tstv1-helper", "/p", "tstv1-selected"),
+      shellEntry("tstv1-away", "/away"),
     ]);
     f.resources.receive("local", {
       t: "prefs",
@@ -305,20 +332,24 @@ Deno.test("project memory restores helpers through guarded navigation and reject
           projectLocations: [{
             sidecarId: "local",
             directory: "/p",
-            sessionID: "helper",
-          }, { sidecarId: "local", directory: "/away", sessionID: "selected" }],
+            sessionID: "tstv1-helper",
+          }, {
+            sidecarId: "local",
+            directory: "/away",
+            sessionID: "tstv1-selected",
+          }],
         },
       },
     });
     f.navigation.openProject({ sidecarId: "local", directory: "/away" });
-    assertEquals(f.location.hash, "#/local/away");
+    assertEquals(f.location.hash, "#/local/tstv1-away");
     f.guard.mark("permissions", true);
     f.consent(false);
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
-    assertEquals(f.location.hash, "#/local/away");
+    assertEquals(f.location.hash, "#/local/tstv1-away");
     f.consent(true);
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
-    assertEquals(f.location.hash, "#/local/selected/helper");
+    assertEquals(f.location.hash, "#/local/tstv1-selected/tstv1-helper");
   } finally {
     f.stop();
   }
@@ -327,14 +358,14 @@ Deno.test("pending location writes bridge fast switches without accepting older 
   const f = fixture(), held = Promise.withResolvers<unknown>();
   try {
     f.entries("local", [
-      shellEntry("selected"),
-      shellEntry("other"),
-      shellEntry("away", "/away"),
+      shellEntry("tstv1-selected"),
+      shellEntry("tstv1-other"),
+      shellEntry("tstv1-away", "/away"),
     ]);
     f.reply((_id, method) =>
       method === "layout.location" ? held.promise : Promise.resolve(null)
     );
-    f.navigation.navigate({ sidecarId: "local", sessionID: "other" });
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
     f.navigation.observeView({
       selected: f.session.state.selection,
       directory: "/p",
@@ -346,7 +377,7 @@ Deno.test("pending location writes bridge fast switches without accepting older 
     f.resources.receive("local", { t: "prefs", prefs: DEFAULT_PREFS });
     f.navigation.openProject({ sidecarId: "local", directory: "/away" });
     f.navigation.openProject({ sidecarId: "local", directory: "/p" });
-    assertEquals(f.location.hash, "#/local/other");
+    assertEquals(f.location.hash, "#/local/tstv1-other");
     held.resolve(null);
     await settled();
   } finally {
@@ -378,11 +409,11 @@ for (const rejected of [false, true]) {
     const creating = rejected
       ? f.navigation.createIn("local", "/p")
       : f.navigation.create({ sidecarId: "local", directory: "/p" });
-    f.navigation.navigate({ sidecarId: "local", sessionID: "other" });
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
     if (rejected) held.reject(new Error("old failure"));
-    else held.resolve(shellInfo("created"));
+    else held.resolve(shellInfo("tstv1-created"));
     await creating;
-    assertEquals(f.session.state.selection?.sessionID, "other");
+    assertEquals(f.session.state.selection?.sessionID, "tstv1-other");
     assertEquals(f.navigation.state.error, "");
     assertEquals(f.calls.filter((c) => c[0] === "open").length, 1);
     f.stop();
@@ -401,12 +432,15 @@ Deno.test("shell navigation create-in-task captures the owning task action befor
   f.resources.taskActions = () => {
     throw new Error("must use captured actions");
   };
-  held.resolve(shellInfo("created", "/remote"));
+  held.resolve(shellInfo("tstv1-created", "/remote"));
   await creating;
   assertEquals(f.calls.slice(0, 2), [["remote", "session.create", {
     directory: "/remote",
-  }], ["remote", "tasks.addSession", { id: "task", sessionID: "created" }]]);
-  assertEquals(f.location.hash, "#/remote/created");
+  }], ["remote", "tasks.addSession", {
+    id: "task",
+    sessionID: "tstv1-created",
+  }]]);
+  assertEquals(f.location.hash, "#/remote/tstv1-created");
   f.stop();
 });
 Deno.test("shell navigation create resolves current directory but drops on settings revision change", async () => {
@@ -419,9 +453,11 @@ Deno.test("shell navigation create resolves current directory but drops on setti
   assertEquals(f.navigation.available(), true);
   const creating = f.navigation.create();
   f.navigation.showSettings();
-  held.resolve(shellInfo("selected", "/resolved"));
+  held.resolve(shellInfo("tstv1-selected", "/resolved"));
   await creating;
-  assertEquals(f.calls, [["local", "session.get", { sessionID: "selected" }]]);
+  assertEquals(f.calls, [["local", "session.get", {
+    sessionID: "tstv1-selected",
+  }]]);
   f.navigation.closeSettings();
   assertEquals(f.navigation.state.settings, false);
   f.servers.update((s) => {
@@ -434,7 +470,8 @@ Deno.test("shell navigation create resolves current directory but drops on setti
   f.stop();
 });
 Deno.test("shell navigation first-view and finish seen rules observe readiness, presence and deselection", async () => {
-  const f = fixture(), selected = { sidecarId: "local", sessionID: "selected" };
+  const f = fixture(),
+    selected = { sidecarId: "local", sessionID: "tstv1-selected" };
   const view = {
     selected,
     directory: "/p",
@@ -457,13 +494,13 @@ Deno.test("shell navigation first-view and finish seen rules observe readiness, 
     ["local", "layout.location", {
       sidecarId: "local",
       directory: "/p",
-      sessionID: "selected",
+      sessionID: "tstv1-selected",
     }],
     ["local", "projects.visit", { directory: "/p" }],
     [
       "local",
       "sessions.seen",
-      { sessionID: "selected" },
+      { sessionID: "tstv1-selected" },
     ],
   ]);
   f.resources.receive("local", {
@@ -486,7 +523,7 @@ Deno.test("shell navigation first-view and finish seen rules observe readiness, 
   f.navigation.observeView({ ...view, finish: 2 });
   await settled();
   assertEquals(f.calls, [["local", "sessions.seen", {
-    sessionID: "selected",
+    sessionID: "tstv1-selected",
   }]]);
   f.calls.length = 0;
   f.navigation.observeView({ ...view, selected: undefined });
@@ -498,23 +535,23 @@ Deno.test("shell navigation first-view and finish seen rules observe readiness, 
 Deno.test("shell navigation preview and pin share guarded target transitions and avoid duplicate helper tasks", async () => {
   const f = fixture();
   f.entries("local", [
-    shellEntry("selected"),
-    shellEntry("helper", "/p", "selected"),
+    shellEntry("tstv1-selected"),
+    shellEntry("tstv1-helper", "/p", "tstv1-selected"),
   ]);
   f.resources.inbox("local").state.inbox.tasks = [
-    shellTask("existing", ["selected"]),
+    shellTask("existing", ["tstv1-selected"]),
   ];
   assertEquals(
-    f.navigation.preview({ sidecarId: "local", sessionID: "helper" }),
+    f.navigation.preview({ sidecarId: "local", sessionID: "tstv1-helper" }),
     true,
   );
   assertEquals(
-    await f.navigation.pin({ sidecarId: "local", sessionID: "helper" }),
+    await f.navigation.pin({ sidecarId: "local", sessionID: "tstv1-helper" }),
     true,
   );
   assertEquals(f.calls.some((c) => c[1] === "tasks.create"), false);
   assertEquals(
-    await f.navigation.pin({ sidecarId: "local", sessionID: "missing" }),
+    await f.navigation.pin({ sidecarId: "local", sessionID: "tstv1-missing" }),
     false,
   );
   await settled();
@@ -525,18 +562,21 @@ Deno.test("close session removes only captured membership, clears its view and r
   const f = fixture();
   try {
     const inbox = f.resources.inbox("local").state.inbox;
-    inbox.tasks = [shellTask("task", ["selected", "other"])];
+    inbox.tasks = [shellTask("task", ["tstv1-selected", "tstv1-other"])];
     const tabs = f.resources.tabs({ sidecarId: "local", directory: "/p" });
-    tabs.preview("selected");
-    await f.navigation.close({ sidecarId: "local", sessionID: "selected" });
+    tabs.preview("tstv1-selected");
+    await f.navigation.close({
+      sidecarId: "local",
+      sessionID: "tstv1-selected",
+    });
     assertEquals(f.calls.filter((c) => String(c[1]).startsWith("tasks.")), [[
       "local",
       "tasks.removeSession",
-      { id: "task", sessionID: "selected" },
+      { id: "task", sessionID: "tstv1-selected" },
     ]]);
-    assertEquals(f.location.hash, "#/local/other");
+    assertEquals(f.location.hash, "#/local/tstv1-other");
     assertEquals(tabs.state.sessionID, undefined);
-    assert(f.resources.entry("local", "selected"));
+    assert(f.resources.entry("local", "tstv1-selected"));
     assertEquals(f.calls.some((c) => c[1] === "session.delete"), false);
   } finally {
     f.stop();
@@ -547,22 +587,25 @@ Deno.test("close keeps an unsent draft without asking, while delete cancel prese
   const f = fixture();
   try {
     const draft = { ...client.emptyDraft(), input: "Keep this draft" };
-    f.drafts.writer("local/selected")(draft);
+    f.drafts.writer("local/tstv1-selected")(draft);
     assertEquals(await f.navigation.close(), true);
     assertEquals(f.messages, []);
-    assertEquals(f.drafts.get("local/selected"), draft);
-    f.navigation.navigate({ sidecarId: "local", sessionID: "selected" });
+    assertEquals(f.drafts.get("local/tstv1-selected"), draft);
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-selected" });
     f.calls.length = 0;
     f.consent(false);
     assertEquals(
-      await f.navigation.remove({ sidecarId: "local", sessionID: "selected" }),
+      await f.navigation.remove({
+        sidecarId: "local",
+        sessionID: "tstv1-selected",
+      }),
       false,
     );
     assertEquals(f.messages.length, 1);
     assertEquals(f.calls, []);
-    assert(f.resources.entry("local", "selected"));
-    assertEquals(f.drafts.get("local/selected"), draft);
-    assertEquals(f.location.hash, "#/local/selected");
+    assert(f.resources.entry("local", "tstv1-selected"));
+    assertEquals(f.drafts.get("local/tstv1-selected"), draft);
+    assertEquals(f.location.hash, "#/local/tstv1-selected");
   } finally {
     f.stop();
   }
@@ -572,18 +615,18 @@ Deno.test("delete confirmation drops only successfully deleted family drafts and
   const f = fixture();
   try {
     f.entries("local", [
-      shellEntry("selected"),
-      shellEntry("helper", "/p", "selected"),
-      shellEntry("other"),
+      shellEntry("tstv1-selected"),
+      shellEntry("tstv1-helper", "/p", "tstv1-selected"),
+      shellEntry("tstv1-other"),
     ]);
     const draft = {
       ...client.emptyDraft(),
       input: "Unsent",
       editor: { text: "Unsubmitted edit" },
     };
-    f.drafts.writer("local/selected")(draft);
-    f.drafts.writer("local/helper")(draft);
-    f.drafts.writer("local/other")(draft);
+    f.drafts.writer("local/tstv1-selected")(draft);
+    f.drafts.writer("local/tstv1-helper")(draft);
+    f.drafts.writer("local/tstv1-other")(draft);
     f.reply((_id, method) =>
       method === "session.delete"
         ? Promise.reject(new Error("Delete failed"))
@@ -591,29 +634,35 @@ Deno.test("delete confirmation drops only successfully deleted family drafts and
     );
     let error: unknown;
     try {
-      await f.navigation.remove({ sidecarId: "local", sessionID: "selected" });
+      await f.navigation.remove({
+        sidecarId: "local",
+        sessionID: "tstv1-selected",
+      });
     } catch (cause) {
       error = cause;
     }
     assertEquals((error as Error).message, "Delete failed");
-    assertEquals(f.drafts.get("local/selected"), draft);
-    assertEquals(f.drafts.get("local/helper"), draft);
-    assertEquals(f.location.hash, "#/local/selected");
+    assertEquals(f.drafts.get("local/tstv1-selected"), draft);
+    assertEquals(f.drafts.get("local/tstv1-helper"), draft);
+    assertEquals(f.location.hash, "#/local/tstv1-selected");
     f.reply((_id, method) => {
       if (method === "session.delete") {
-        f.entries("local", [shellEntry("other")]);
+        f.entries("local", [shellEntry("tstv1-other")]);
       }
       return Promise.resolve(null);
     });
     assertEquals(
-      await f.navigation.remove({ sidecarId: "local", sessionID: "selected" }),
+      await f.navigation.remove({
+        sidecarId: "local",
+        sessionID: "tstv1-selected",
+      }),
       true,
     );
-    assertEquals(f.resources.entry("local", "selected"), undefined);
-    assertEquals(f.resources.entry("local", "helper"), undefined);
-    assertEquals(f.drafts.get("local/selected"), client.emptyDraft());
-    assertEquals(f.drafts.get("local/helper"), client.emptyDraft());
-    assertEquals(f.drafts.get("local/other"), draft);
+    assertEquals(f.resources.entry("local", "tstv1-selected"), undefined);
+    assertEquals(f.resources.entry("local", "tstv1-helper"), undefined);
+    assertEquals(f.drafts.get("local/tstv1-selected"), client.emptyDraft());
+    assertEquals(f.drafts.get("local/tstv1-helper"), client.emptyDraft());
+    assertEquals(f.drafts.get("local/tstv1-other"), draft);
     assertEquals(f.location.hash, "#project/local/%2Fp");
     assertEquals(f.messages.length, 2);
   } finally {
@@ -630,47 +679,47 @@ Deno.test("delete without a draft asks no extra question and cannot steal a late
     );
     const removing = f.navigation.remove({
       sidecarId: "local",
-      sessionID: "selected",
+      sessionID: "tstv1-selected",
     });
     await settled();
     assertEquals(f.messages, []);
-    f.navigation.navigate({ sidecarId: "local", sessionID: "other" });
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
     held.resolve(null);
     await removing;
-    assertEquals(f.location.hash, "#/local/other");
+    assertEquals(f.location.hash, "#/local/tstv1-other");
   } finally {
     f.stop();
   }
 });
 
 Deno.test("close helper returns to its immediate parent without removing inherited membership", async () => {
-  const f = fixture("#/local/selected/helper");
+  const f = fixture("#/local/tstv1-selected/tstv1-helper");
   try {
     f.entries("local", [
-      shellEntry("selected"),
-      shellEntry("helper", "/p", "selected"),
+      shellEntry("tstv1-selected"),
+      shellEntry("tstv1-helper", "/p", "tstv1-selected"),
     ]);
     f.resources.inbox("local").state.inbox.tasks = [
-      shellTask("task", ["selected"]),
+      shellTask("task", ["tstv1-selected"]),
     ];
     const tabs = f.resources.tabs({ sidecarId: "local", directory: "/p" });
-    tabs.preview("helper");
-    await f.navigation.close({ sidecarId: "local", sessionID: "helper" });
-    assertEquals(f.location.hash, "#/local/selected");
+    tabs.preview("tstv1-helper");
+    await f.navigation.close({ sidecarId: "local", sessionID: "tstv1-helper" });
+    assertEquals(f.location.hash, "#/local/tstv1-selected");
     assertEquals(f.calls.some((c) => c[1] === "tasks.removeSession"), false);
     assertEquals(f.resources.inbox("local").state.inbox.tasks[0].sessions, [
-      "selected",
+      "tstv1-selected",
     ]);
     assertEquals(
       client.taskBreadcrumbs(
-        shellTask("task", ["selected"]),
+        shellTask("task", ["tstv1-selected"]),
         f.resources.projectEntries({ sidecarId: "local", directory: "/p" }),
-        "selected",
+        "tstv1-selected",
         tabs.state.closed,
       ).map((c) => c.id),
-      ["selected"],
+      ["tstv1-selected"],
     );
-    tabs.preview("helper");
+    tabs.preview("tstv1-helper");
     assertEquals(tabs.state.closed, []);
   } finally {
     f.stop();
@@ -681,18 +730,18 @@ for (const status of ["working", "blocked", "finished"] as const) {
   Deno.test(`close ${status} session confirms and retains its mandatory phantom until idle and seen`, async () => {
     const f = fixture();
     try {
-      const entry = shellEntry("selected");
+      const entry = shellEntry("tstv1-selected");
       if (status === "working") entry.status = "busy";
       if (status === "blocked") entry.attention.permissions = 1;
       f.entries("local", [entry]);
       const inbox = f.resources.inbox("local").state.inbox;
-      if (status === "finished") inbox.finishes.selected = 10;
+      if (status === "finished") inbox.finishes["tstv1-selected"] = 10;
       const tabs = f.resources.tabs({ sidecarId: "local", directory: "/p" });
-      tabs.preview("selected");
+      tabs.preview("tstv1-selected");
       f.consent(false);
       assertEquals(await f.navigation.close(), false);
-      assertEquals(f.location.hash, "#/local/selected");
-      assertEquals(tabs.state.sessionID, "selected");
+      assertEquals(f.location.hash, "#/local/tstv1-selected");
+      assertEquals(tabs.state.sessionID, "tstv1-selected");
       assert(
         f.messages.at(-1)?.includes("phantom tab until it is idle and seen"),
       );
@@ -701,12 +750,12 @@ for (const status of ["working", "blocked", "finished"] as const) {
       assertEquals(f.location.hash, "#project/local/%2Fp");
       assertEquals(
         tabs.tabs().map((tab) => [tab.id, tab.status, tab.preview]),
-        [["selected", status, false]],
+        [["tstv1-selected", status, false]],
       );
       entry.status = "idle";
       entry.attention.permissions = 0;
       f.entries("local", [entry]);
-      inbox.seen.selected = 11;
+      inbox.seen["tstv1-selected"] = 11;
       tabs.update(
         f.resources.tabSnapshot({ sidecarId: "local", directory: "/p" }),
       );
@@ -727,7 +776,7 @@ Deno.test("close cancellation, failed membership and a later route preserve the 
     assertEquals(f.guard.dirty("permissions"), true);
     f.consent(true);
     f.resources.inbox("local").state.inbox.tasks = [
-      shellTask("task", ["selected"]),
+      shellTask("task", ["tstv1-selected"]),
     ];
     f.reply(() => Promise.reject(new Error("membership failed")));
     let failure: unknown;
@@ -737,15 +786,15 @@ Deno.test("close cancellation, failed membership and a later route preserve the 
       failure = error;
     }
     assertEquals((failure as Error).message, "membership failed");
-    assertEquals(f.location.hash, "#/local/selected");
+    assertEquals(f.location.hash, "#/local/tstv1-selected");
     const held = Promise.withResolvers<unknown>();
     f.reply(() => held.promise);
     const closing = f.navigation.close();
     await settled();
-    f.navigation.navigate({ sidecarId: "local", sessionID: "other" });
+    f.navigation.navigate({ sidecarId: "local", sessionID: "tstv1-other" });
     held.resolve(null);
     await closing;
-    assertEquals(f.location.hash, "#/local/other");
+    assertEquals(f.location.hash, "#/local/tstv1-other");
   } finally {
     f.stop();
   }

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Harness } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
-import { text } from "../ws/params.ts";
+import { sessionID } from "../ws/params.ts";
 import { HarnessError } from "@otk/harness";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
@@ -13,7 +13,7 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
         throw new HarnessError("params", "primary must be a boolean");
       }
       return {
-        id: text(p, "sessionID")!,
+        id: sessionID(p)!,
         primary: p.primary as boolean | undefined,
       };
     },

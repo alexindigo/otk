@@ -7,7 +7,7 @@ import {
   mentionQuery,
 } from "../components/prompt/autocomplete.ts";
 import { promptParts } from "../../../core/mod.ts";
-import { mapPromptParts } from "@otk/harness-opencode1";
+import { mapPromptParts } from "@otk/harness-opencode-v1";
 import { fixture } from "../../../tests/support/config.ts";
 
 test("TUI start-only, open and reversed mention ranges retain an optional end", () => {

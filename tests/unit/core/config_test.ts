@@ -2,7 +2,7 @@
 import { test } from "../../support/resources.ts";
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { join } from "@std/path";
-import { ConfigError, loadServiceConfig } from "../../../core/mod.ts";
+import { config, ConfigError, loadServiceConfig } from "../../../core/mod.ts";
 import { cfg, defaultsPath, fixture } from "./support.ts";
 
 test("config collects unknown, missing and wrong-type diagnostics with env names", async () => {
@@ -86,6 +86,36 @@ test("config rejects inherited property names as unknown schema nodes", () => {
       problem.includes("unknown node")
     ),
   );
+});
+
+test("canonical provider config keeps environment precedence and diagnoses the legacy spelling once without rewriting it", async () => {
+  const root = await fixture(), overlayPath = join(root, "legacy.toml");
+  const raw = '[harness]\ntype="opencode1"\n';
+  await Deno.writeTextFile(overlayPath, raw);
+  const warnings: unknown[][] = [], original = console.warn;
+  console.warn = (...value) => warnings.push(value);
+  try {
+    const sources = {
+      defaultsPath,
+      overlayPath,
+      env: { OTK_STATE_PATH: root },
+    };
+    assertEquals(config(sources).harness.type, "opencode-v1");
+    assertEquals(warnings.length, 1);
+    assert(String(warnings[0]).includes("OTK_HARNESS_TYPE"));
+    warnings.length = 0;
+    assertEquals(
+      config({
+        ...sources,
+        env: { ...sources.env, OTK_HARNESS_TYPE: "opencode-v1" },
+      }).harness.type,
+      "opencode-v1",
+    );
+    assertEquals(warnings, []);
+    assertEquals(await Deno.readTextFile(overlayPath), raw);
+  } finally {
+    console.warn = original;
+  }
 });
 
 test("config selects explicit file before XDG before legacy, then applies env leaves", async () => {

@@ -6,6 +6,21 @@ import { acquire, tempDir } from "./resources.ts";
 import { ownedProcess } from "./process.ts";
 import { nativeVersion, seedProviderPackages } from "./provider-cache.ts";
 import { nativeBinary } from "./native.ts";
+import { opencodeV1SessionID } from "@otk/harness-opencode-v1";
+import { isSessionID } from "@otk/protocol";
+function sessionFixture<T extends { id: string }>(
+  raw: T,
+): T & { nativeID: string } {
+  const parentID = Reflect.get(raw, "parentID");
+  return {
+    ...raw,
+    id: opencodeV1SessionID.encode(raw.id),
+    ...(typeof parentID === "string"
+      ? { parentID: opencodeV1SessionID.encode(parentID) }
+      : {}),
+    nativeID: raw.id,
+  };
+}
 export function freePort(): number {
   const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
   const port = (listener.addr as Deno.NetAddr).port;
@@ -178,18 +193,48 @@ export class OpencodeTest {
       return test;
     });
   }
+  /** OTK-facing session fixture, with the native identity retained explicitly. */
+  async session<T extends { id: string }>(
+    path: "/session",
+    options: { method: string; body?: unknown; directory?: string },
+  ): Promise<T & { nativeID: string }> {
+    if (options.method !== "POST") {
+      throw new Error("Session fixtures require creation");
+    }
+    return sessionFixture(await this.request<T>(path, options));
+  }
+  /** OTK-facing metadata collection; use request() when observing native rows. */
+  async sessionList<T extends { id: string }>(
+    path: string,
+  ): Promise<(T & { nativeID: string })[]> {
+    return (await this.request<T[]>(path)).map(sessionFixture);
+  }
+  /** Native reads/seeds keep raw responses. Qualified fixture references decode
+   * only in typed session paths and session-create parent inputs. */
   async request<T>(
     path: string,
     options: { method?: string; body?: unknown; directory?: string } = {},
   ): Promise<T> {
+    path = path.replace(
+      /^\/session\/([^/]+)/,
+      (segment, id: string) =>
+        isSessionID(id)
+          ? `/session/${opencodeV1SessionID.decode(id)}`
+          : segment,
+    );
+    let body = options.body;
+    if (path === "/session" && body && typeof body === "object") {
+      const parentID = Reflect.get(body, "parentID");
+      if (isSessionID(parentID)) {
+        body = { ...body, parentID: opencodeV1SessionID.decode(parentID) };
+      }
+    }
     const url = new URL(this.url + path);
     url.searchParams.set("directory", options.directory || this.directory);
     const response = await fetch(url, {
       method: options.method || "GET",
       headers: { "Content-Type": "application/json" },
-      body: options.body === undefined
-        ? undefined
-        : JSON.stringify(options.body),
+      body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(15_000),
     });
     if (!response.ok) {

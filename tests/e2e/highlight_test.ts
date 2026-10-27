@@ -21,7 +21,7 @@ const colourPrefix =
 test("R6 shiki worker colours streaming TS before fence closure and unknown languages remain plain", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Highlighting" },
     });
@@ -123,11 +123,11 @@ test("R6 shiki worker colours streaming TS before fence closure and unknown lang
 test("highlighted history releases its worker and session objects when switching sessions", async () => {
   const f = await browserFixture();
   try {
-    const a = await f.oc.request<{ id: string }>("/session", {
+    const a = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Large code" },
     });
-    const b = await f.oc.request<{ id: string }>("/session", {
+    const b = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Plain history" },
     });
@@ -196,7 +196,7 @@ test("highlighted history releases its worker and session objects when switching
 test("R-perf visible-source to styled-range latency for 2000 TS lines, acknowledged updates and free-running revisions", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Highlight budget" },
     });

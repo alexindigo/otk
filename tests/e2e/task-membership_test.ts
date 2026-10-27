@@ -45,8 +45,8 @@ test("create-in-task preserves membership changes made while session creation is
     });
     const base = f.entries[0];
     for (
-      const [id, title] of [["kept", "Kept session"], [
-        "added",
+      const [id, title] of [["tstv1-kept", "Kept session"], [
+        "tstv1-added",
         "Concurrent addition",
       ]]
     ) {
@@ -55,31 +55,34 @@ test("create-in-task preserves membership changes made while session creation is
     const task = await c.rpc<TaskRecord>("tasks.create", {
       directory: base.directory,
       name: "Shared task",
-      sessions: [base.id, "kept"],
+      sessions: [base.id, "tstv1-kept"],
     });
-    await b.goto(f.url + "/#/local/otk");
+    await b.goto(f.url + "/#/local/tstv1-otk");
     await b.poll(
-      "!!document.querySelector('[data-crumb=kept]') && !!document.querySelector('.otk-prompt')",
+      "!!document.querySelector('[data-crumb=tstv1-kept]') && !!document.querySelector('.otk-prompt')",
     );
     await b.evaluate("window.holdInbox = true");
     await b.click(".otk-new-session");
     await entered.promise;
-    await c.rpc("tasks.sessions", { id: task.id, sessions: ["kept", "added"] });
+    await c.rpc("tasks.sessions", {
+      id: task.id,
+      sessions: ["tstv1-kept", "tstv1-added"],
+    });
     await b.poll("window.heldInbox.length > 0");
     release.resolve();
     await b.poll(
-      "location.hash.startsWith('#/local/') && !location.hash.endsWith('/otk') && !!document.querySelector('.otk-prompt')",
+      "location.hash.startsWith('#/local/') && !location.hash.endsWith('/tstv1-otk') && !!document.querySelector('.otk-prompt')",
     );
     const created = await b.evaluate<string>("location.hash.split('/').at(-1)");
     assertEquals((await c.rpc<TaskRecord[]>("tasks.list", {}))[0].sessions, [
-      "kept",
-      "added",
+      "tstv1-kept",
+      "tstv1-added",
       created,
     ], "Session creation replaced newer membership");
     await b.evaluate("window.releaseInbox()");
     await b.reload();
     await b.poll(
-      "!!document.querySelector('[data-crumb=kept]') && !!document.querySelector('[data-crumb=added]') && !document.querySelector('[data-crumb=otk]') && !!document.querySelector('.otk-prompt')",
+      "!!document.querySelector('[data-crumb=tstv1-kept]') && !!document.querySelector('[data-crumb=tstv1-added]') && !document.querySelector('[data-crumb=tstv1-otk]') && !!document.querySelector('.otk-prompt')",
     );
     assertEquals(
       await b.evaluate("document.querySelectorAll('[data-crumb]').length"),

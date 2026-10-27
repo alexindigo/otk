@@ -10,7 +10,7 @@ import {
 } from "../support/browser-fixture.ts";
 import { recordTools, runTool } from "../support/rendering.ts";
 import { waitFor } from "../support/opencode.ts";
-import type { RawPart } from "@otk/harness-opencode1";
+import type { RawPart } from "@otk/harness-opencode-v1";
 test("R1 bash output is ten lines, expands to thirty, and displays differing cwd", async () => {
   const f = await browserFixture({ bash: "allow" }, {
     prepare: async (oc) => {
@@ -18,7 +18,7 @@ test("R1 bash output is ten lines, expands to thirty, and displays differing cwd
     },
   });
   try {
-    const s = await f.oc.request<{ id: string }>("/session", {
+    const s = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Bash rendering" },
     });
@@ -99,7 +99,7 @@ test("R4 real read, directory listing, glob, grep, local fetch, skill and generi
     },
   });
   try {
-    const s = await f.oc.request<{ id: string }>("/session", {
+    const s = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Tool forms" },
     });
@@ -194,7 +194,7 @@ test("tool permission warning, denied strikethrough and expandable errors use on
     env: { OPENCODE_ENABLE_EXA: "1" },
   });
   try {
-    const s = await f.oc.request<{ id: string }>("/session", {
+    const s = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Tool states" },
     });

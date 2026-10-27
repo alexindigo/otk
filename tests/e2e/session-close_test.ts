@@ -51,21 +51,21 @@ for (const theme of ["otk-dark", "otk-light"]) {
     try {
       const directory = f.entries[0].directory;
       await client.rpc("prefs.set", { key: "theme", value: theme });
-      f.add({ ...f.entries[0], id: "second", title: "Review session" });
+      f.add({ ...f.entries[0], id: "tstv1-second", title: "Review session" });
       f.add({
         ...f.entries[0],
-        id: "child",
-        parentID: "otk",
+        id: "tstv1-child",
+        parentID: "tstv1-otk",
         title: "Helper session",
       });
       await b.goto(f.url);
-      await openSession(b, "otk");
+      await openSession(b, "tstv1-otk");
       // The same command is available on every session target, including nested message areas.
       for (
         const selector of [
-          '[data-tab="otk"]',
-          '[data-crumb="otk"]',
-          '[data-session="otk"]',
+          '[data-tab="tstv1-otk"]',
+          '[data-crumb="tstv1-otk"]',
+          '[data-session="tstv1-otk"]',
           ".otk-user-bubble",
         ]
       ) {
@@ -73,53 +73,56 @@ for (const theme of ["otk-dark", "otk-light"]) {
         await b.key("Escape");
       }
       await capture(b, root, `${theme}-before`);
-      await context(b, '[data-tab="otk"]');
+      await context(b, '[data-tab="tstv1-otk"]');
       await capture(b, root, `${theme}-menu`);
       await b.click(closeItem);
       await b.poll(
-        `location.hash.startsWith('#project/') && !document.querySelector('[data-tab="otk"]') && !!document.querySelector('[data-session="otk"]')`,
+        `location.hash.startsWith('#project/') && !document.querySelector('[data-tab="tstv1-otk"]') && !!document.querySelector('[data-session="tstv1-otk"]')`,
       );
       await capture(b, root, `${theme}-closed`);
       // Reopening from Sessions restores the ordinary preview.
-      await b.click('[data-session="otk"]');
+      await b.click('[data-session="tstv1-otk"]');
       await b.poll(
-        `location.hash.endsWith('/otk') && !!document.querySelector('[data-tab="otk"]')`,
+        `location.hash.endsWith('/tstv1-otk') && !!document.querySelector('[data-tab="tstv1-otk"]')`,
       );
       const task = await client.rpc<TaskRecord>("tasks.create", {
         directory,
         name: "Delivery",
-        sessions: ["otk", "second"],
+        sessions: ["tstv1-otk", "tstv1-second"],
       });
       await b.poll(`!!document.querySelector('[data-tab="${task.id}"]')`);
-      await b.click('[data-session="child"]');
+      await b.click('[data-session="tstv1-child"]');
       await b.poll(
-        `location.hash.endsWith('/otk/child') && !!document.querySelector('[data-crumb="child"]')`,
+        `location.hash.endsWith('/tstv1-otk/tstv1-child') && !!document.querySelector('[data-crumb="tstv1-child"]')`,
       );
-      await context(b, '[data-crumb="child"]');
+      await context(b, '[data-crumb="tstv1-child"]');
       await capture(b, root, `${theme}-child-menu`);
       await b.click(closeItem);
       await b.poll(
-        `location.hash.endsWith('/otk') && !document.querySelector('[data-crumb="child"]') && !!document.querySelector('[data-session="child"]')`,
+        `location.hash.endsWith('/tstv1-otk') && !document.querySelector('[data-crumb="tstv1-child"]') && !!document.querySelector('[data-session="tstv1-child"]')`,
       );
       assertEquals(
         (await client.rpc<TaskRecord[]>("tasks.list", { directory }))[0]
           .sessions,
-        ["otk", "second"],
+        ["tstv1-otk", "tstv1-second"],
       );
       // Closing a background explicit member mutates only that member and does not navigate.
-      await context(b, '[data-session="second"]');
+      await context(b, '[data-session="tstv1-second"]');
       await b.click(closeItem);
       await b.poll(
-        `!document.querySelector('[data-crumb="second"]') && !!document.querySelector('[data-session="second"]')`,
+        `!document.querySelector('[data-crumb="tstv1-second"]') && !!document.querySelector('[data-session="tstv1-second"]')`,
       );
       assertEquals(
         (await client.rpc<TaskRecord[]>("tasks.list", { directory }))[0]
           .sessions,
-        ["otk"],
+        ["tstv1-otk"],
       );
-      assertEquals(await b.evaluate("location.hash.endsWith('/otk')"), true);
+      assertEquals(
+        await b.evaluate("location.hash.endsWith('/tstv1-otk')"),
+        true,
+      );
       // Closing working sessions confirms, then leaves their mandatory phantom visible.
-      f.update("otk", { status: "busy" });
+      f.update("tstv1-otk", { status: "busy" });
       await b.poll(
         `document.querySelector('[data-tab="${task.id}"] .otk-status-light')?.getAttribute('data-state')==='working'`,
       );
@@ -128,7 +131,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       assertEquals(
         (await client.rpc<TaskRecord[]>("tasks.list", { directory }))[0]
           .sessions,
-        ["otk"],
+        ["tstv1-otk"],
       );
       await context(b, ".otk-user-bubble");
       await b.dialog(() => b.click(closeItem), true);
@@ -141,7 +144,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
         ),
       );
       await b.poll(
-        `location.hash.startsWith('#project/') && !!document.querySelector('[data-tab="otk"]')`,
+        `location.hash.startsWith('#project/') && !!document.querySelector('[data-tab="tstv1-otk"]')`,
       );
       assertEquals(
         (await client.rpc<TaskRecord[]>("tasks.list", { directory }))[0]
@@ -150,24 +153,26 @@ for (const theme of ["otk-dark", "otk-light"]) {
       );
       await client.rpc("layout.patch", { rightCollapsed: true });
       await b.reload();
-      await b.poll(`!!document.querySelector('[data-tab="otk"]')`);
+      await b.poll(`!!document.querySelector('[data-tab="tstv1-otk"]')`);
       await capture(b, root, `${theme}-working-phantom`);
-      f.update("otk", { status: "idle" });
+      f.update("tstv1-otk", { status: "idle" });
       await b.poll(
-        `document.querySelector('[data-tab="otk"] .otk-status-light')?.getAttribute('data-state')==='finished'`,
+        `document.querySelector('[data-tab="tstv1-otk"] .otk-status-light')?.getAttribute('data-state')==='finished'`,
       );
-      await client.rpc("sessions.seen", { sessionID: "otk" });
-      await b.poll(`!document.querySelector('[data-tab="otk"]')`);
+      await client.rpc("sessions.seen", { sessionID: "tstv1-otk" });
+      await b.poll(`!document.querySelector('[data-tab="tstv1-otk"]')`);
       await client.rpc("layout.patch", { rightCollapsed: false });
-      await b.poll(`!!document.querySelector('[data-session="otk"]')`);
+      await b.poll(`!!document.querySelector('[data-session="tstv1-otk"]')`);
       assertEquals(
-        (await client.rpc<{ id: string }>("session.get", { sessionID: "otk" }))
+        (await client.rpc<{ id: string }>("session.get", {
+          sessionID: "tstv1-otk",
+        }))
           .id,
-        "otk",
+        "tstv1-otk",
       );
-      await b.click('[data-session="otk"]');
+      await b.click('[data-session="tstv1-otk"]');
       await b.poll(
-        `location.hash.endsWith('/otk') && !!document.querySelector('[data-tab="otk"]')`,
+        `location.hash.endsWith('/tstv1-otk') && !!document.querySelector('[data-tab="tstv1-otk"]')`,
       );
       assertEquals(b.errors, []);
       console.info("S1 screenshot root", root);
@@ -182,7 +187,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
 test("S1 closing a real opencode session preserves its record and reopens from Sessions", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Retained in opencode" },
     });
@@ -195,7 +200,7 @@ test("S1 closing a real opencode session preserves its record and reopens from S
     );
     assertEquals(
       (await f.oc.request<{ id: string }>(`/session/${session.id}`)).id,
-      session.id,
+      session.nativeID,
     );
     await b.click(`[data-session="${session.id}"]`);
     await b.poll(
@@ -210,7 +215,7 @@ test("S1 closing a real opencode session preserves its record and reopens from S
     );
     assertEquals(
       (await f.oc.request<{ id: string }>(`/session/${session.id}`)).id,
-      session.id,
+      session.nativeID,
     );
     assertEquals(b.errors, []);
   } finally {

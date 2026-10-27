@@ -20,15 +20,15 @@ test("U9 footer auto-approve, command, inherited marks and persisted activity re
   let client: WsClient | undefined;
   const shots = Deno.env.get("OTK_AUTO_SHOTS");
   try {
-    const root = await f.oc.request<{ id: string }>("/session", {
+    const root = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Session auto-approve" },
     });
-    const child = await f.oc.request<{ id: string }>("/session", {
+    const child = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Inherited helper", parentID: root.id },
     });
-    const other = await f.oc.request<{ id: string }>("/session", {
+    const other = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Manual session" },
     });
@@ -220,7 +220,7 @@ test("U9 footer auto-approve, command, inherited marks and persisted activity re
     );
     await waitFor(
       () => f.oc.request<Record<string, unknown>>("/session/status"),
-      (state) => !state[root.id],
+      (state) => !state[root.nativeID],
     );
     await b.poll(
       "[...document.querySelectorAll('[data-role=assistant] .otk-text')].some(e=>e.textContent==='Guarded auto reply finished') && [...document.querySelectorAll('.otk-message-footer')].every(e=>!e.textContent.includes('streaming'))",
@@ -279,7 +279,7 @@ test("U9 footer auto-approve, command, inherited marks and persisted activity re
     );
     await waitFor(
       () => f.oc.request<Record<string, unknown>>("/session/status"),
-      (state) => !state[root.id],
+      (state) => !state[root.nativeID],
     );
     await b.poll(
       "document.querySelectorAll('.otk-permission-activity [data-activity]').length===3 && document.querySelector('.otk-permission-activity').textContent.includes('Manual') && !document.querySelector('.otk-permission-activity [role=status]')",

@@ -7,7 +7,7 @@ import { waitFor } from "../support/opencode.ts";
 test("P7/P8 200-line paste and whole-prompt editor save/cancel preserve chips and emit expanded text", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Editor" },
       }),
@@ -107,7 +107,7 @@ test("P7/P8 200-line paste and whole-prompt editor save/cancel preserve chips an
 test("editor changes and attachment completion retain one owner-current draft and submitted bytes", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Editor upload ownership" },
     });

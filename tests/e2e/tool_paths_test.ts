@@ -30,7 +30,7 @@ test("tool headers, bodies and path-list results share project context, includin
     },
   });
   try {
-    const s = await f.oc.request<{ id: string }>("/session", {
+    const s = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Shared path presentation" },
     });

@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
-import { Opencode1Adapter, type Opencode1Config } from "@otk/harness-opencode1";
+import {
+  OpencodeV1Adapter as Opencode1Adapter,
+  type OpencodeV1Config as Opencode1Config,
+} from "@otk/harness-opencode-v1";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest } from "../support/opencode.ts";
 import { listSessions } from "./harness-consumer.ts";

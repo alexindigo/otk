@@ -47,7 +47,7 @@ function focusContrast([outline, fill]: string[]): number {
 test("U15 own-answer Enter and all question transitions focus visible controls; composer owns its rounded focus border", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Focus ownership" },
     });

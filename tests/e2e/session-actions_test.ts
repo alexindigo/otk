@@ -17,11 +17,11 @@ test("compact uses the next-prompt model, survives a 20-second summary and queue
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Compact session" },
     });
-    const background = await f.oc.request<{ id: string }>("/session", {
+    const background = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Background session" },
     });
@@ -146,7 +146,7 @@ test("compact HTTP failure reaches ordinary session error presentation", async (
     },
   );
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Compact error" },
     });
@@ -173,7 +173,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
     const f = await browserFixture({ bash: "allow" });
     let client: WsClient | undefined;
     try {
-      const original = await f.oc.request<{ id: string }>("/session", {
+      const original = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Fork source" },
       });
@@ -479,11 +479,11 @@ test("working family deletion names helpers and aborts before native removal", a
   );
   let client: WsClient | undefined;
   try {
-    const root = await f.oc.request<{ id: string }>("/session", {
+    const root = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Working family" },
     });
-    const child = await f.oc.request<{ id: string }>("/session", {
+    const child = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Family helper", parentID: root.id },
     });
@@ -529,8 +529,8 @@ test("working family deletion names helpers and aborts before native removal", a
       `!document.querySelector('[data-session="${root.id}"]') && !document.querySelector('[data-session="${child.id}"]') && location.hash.startsWith('#project/')`,
     );
     assertEquals(mutations, [
-      `POST /session/${root.id}/abort`,
-      `DELETE /session/${root.id}`,
+      `POST /session/${root.nativeID}/abort`,
+      `DELETE /session/${root.nativeID}`,
     ]);
     await assertRejects(
       () => f.oc.request(`/session/${child.id}`),
@@ -550,7 +550,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
     const f = await browserFixture();
     let client: WsClient | undefined;
     try {
-      const session = await f.oc.request<{ id: string }>("/session", {
+      const session = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Session actions" },
       });
@@ -649,7 +649,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
     const f = await browserFixture();
     let client: WsClient | undefined;
     try {
-      const session = await f.oc.request<{ id: string }>("/session", {
+      const session = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Draft to protect" },
       });
@@ -683,7 +683,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await b.poll(`!document.querySelector(':popover-open')`);
       assertEquals(
         (await f.oc.request<{ id: string }>(`/session/${session.id}`)).id,
-        session.id,
+        session.nativeID,
       );
       assertEquals(
         await b.evaluate(
@@ -703,7 +703,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
         "404",
       );
 
-      const empty = await f.oc.request<{ id: string }>("/session", {
+      const empty = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Empty draft" },
       });

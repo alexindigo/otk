@@ -60,9 +60,9 @@ test("session actions are capability-gated and validate before forwarding a trim
     );
     for (
       const params of [{}, { sessionID: "", title: "x" }, {
-        sessionID: "s",
+        sessionID: "tstv1-s",
         title: "  ",
-      }, { sessionID: "s", title: "x".repeat(201) }]
+      }, { sessionID: "tstv1-s", title: "x".repeat(201) }]
     ) {
       assertEquals(
         (await assertRejects(
@@ -73,8 +73,11 @@ test("session actions are capability-gated and validate before forwarding a trim
       );
     }
     assertEquals(calls, []);
-    await rpc.dispatch("session.rename", { sessionID: "s", title: " New " });
-    assertEquals(calls, [["s", "New"]]);
+    await rpc.dispatch("session.rename", {
+      sessionID: "tstv1-s",
+      title: " New ",
+    });
+    assertEquals(calls, [["tstv1-s", "New"]]);
     assertEquals(
       (await assertRejects(
         () => rpc.dispatch("session.delete", { sessionID: "" }),
@@ -83,13 +86,16 @@ test("session actions are capability-gated and validate before forwarding a trim
       "params",
     );
     assertEquals(
-      await rpc.dispatch("session.delete", { sessionID: "s" }),
+      await rpc.dispatch("session.delete", { sessionID: "tstv1-s" }),
       null,
     );
-    assertEquals(calls, [["s", "New"], ["delete", "s"]]);
+    assertEquals(calls, [["tstv1-s", "New"], ["delete", "tstv1-s"]]);
     for (
-      const params of [{}, { sessionID: "" }, { sessionID: "s", through: "" }, {
-        sessionID: "s",
+      const params of [{}, { sessionID: "" }, {
+        sessionID: "tstv1-s",
+        through: "",
+      }, {
+        sessionID: "tstv1-s",
         through: 1,
       }]
     ) {
@@ -102,11 +108,11 @@ test("session actions are capability-gated and validate before forwarding a trim
       );
     }
     const result = await rpc.dispatch("session.fork", {
-      sessionID: "s",
+      sessionID: "tstv1-s",
       through: "last",
     });
-    assertEquals(calls.at(-1), ["fork", "s", "last"]);
-    const expected = await harness.core.getSession("s");
+    assertEquals(calls.at(-1), ["fork", "tstv1-s", "last"]);
+    const expected = await harness.core.getSession("tstv1-s");
     assertEquals(result, expected);
     assertEquals(created, [expected.directory]);
   } finally {
@@ -143,11 +149,11 @@ test("compact validates model references and session identity and requires its a
     for (
       const params of [
         {},
-        { sessionID: "s" },
+        { sessionID: "tstv1-s" },
         { sessionID: "", model: { provider: "p", model: "m" } },
-        { sessionID: "s", model: { provider: "p" } },
-        { sessionID: "s", model: { provider: "", model: "m" } },
-        { sessionID: "s", model: { provider: 1, model: "m" } },
+        { sessionID: "tstv1-s", model: { provider: "p" } },
+        { sessionID: "tstv1-s", model: { provider: "", model: "m" } },
+        { sessionID: "tstv1-s", model: { provider: 1, model: "m" } },
       ]
     ) {
       assertEquals(
@@ -161,12 +167,12 @@ test("compact validates model references and session identity and requires its a
     assertEquals(calls, []);
     assertEquals(
       await rpc.dispatch("session.compact", {
-        sessionID: "s",
+        sessionID: "tstv1-s",
         model: { provider: "p", model: "m" },
       }),
       null,
     );
-    assertEquals(calls, [["s", { provider: "p", model: "m" }]]);
+    assertEquals(calls, [["tstv1-s", { provider: "p", model: "m" }]]);
   } finally {
     db.close();
   }

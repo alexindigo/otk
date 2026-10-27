@@ -24,20 +24,20 @@ test("U7 shared rails keep Search and project light geometry, open Sessions and 
     );
   try {
     await c.connect();
-    f.update("otk", { status: "busy" });
-    f.update("atmosphera", {
+    f.update("tstv1-otk", { status: "busy" });
+    f.update("tstv1-atmosphera", {
       attention: { ...f.entries[1].attention, permissions: 1 },
     });
-    f.update("globnotes", { status: "busy" });
-    f.update("globnotes", { status: "idle" });
+    f.update("tstv1-globnotes", { status: "busy" });
+    f.update("tstv1-globnotes", { status: "idle" });
     await c.rpc("prefs.set", { key: "animationsOff", value: true });
     await c.rpc("layout.patch", {
       leftCollapsed: false,
       rightCollapsed: false,
     });
-    await b.goto(f.url + "/#/local/otk");
+    await b.goto(f.url + "/#/local/tstv1-otk");
     await b.poll(
-      "document.querySelectorAll('.otk-project-open').length===4 && !!document.querySelector('[data-session=otk]')",
+      "document.querySelectorAll('.otk-project-open').length===4 && !!document.querySelector('[data-session=tstv1-otk]')",
     );
     for (
       const [theme, name] of [["otk-dark", "dark"], ["otk-light", "light"]]
@@ -100,7 +100,7 @@ test("U7 shared rails keep Search and project light geometry, open Sessions and 
       );
       await b.click(".otk-right-rail [data-panel-view=sessions]");
       await b.poll(
-        "!document.querySelector('.otk-right-panel').hidden && !!document.querySelector('[data-session=otk]')",
+        "!document.querySelector('.otk-right-panel').hidden && !!document.querySelector('[data-session=tstv1-otk]')",
       );
       await capture(`sessions-${name}`);
       await b.click(".otk-corner-right");
@@ -111,8 +111,11 @@ test("U7 shared rails keep Search and project light geometry, open Sessions and 
       );
       assertEquals((await geometry()).lights, before.lights);
       for (
-        const [id, status] of [["otk", "working"], ["atmosphera", "blocked"], [
-          "globnotes",
+        const [id, status] of [["tstv1-otk", "working"], [
+          "tstv1-atmosphera",
+          "blocked",
+        ], [
+          "tstv1-globnotes",
           "finished",
         ]]
       ) {
@@ -124,7 +127,7 @@ test("U7 shared rails keep Search and project light geometry, open Sessions and 
       }
       assert(
         await b.evaluate(
-          "(()=>{const e=document.querySelector('[data-tab=otk]'),r=e?.getBoundingClientRect();return !!r?.width && !!r?.height})()",
+          "(()=>{const e=document.querySelector('[data-tab=tstv1-otk]'),r=e?.getBoundingClientRect();return !!r?.width && !!r?.height})()",
         ),
       );
     }

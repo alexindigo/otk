@@ -127,7 +127,7 @@ test("U4 stored multi-step turn usage reaches the footer and hover/focus split; 
   });
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Charged turn usage" },
     });
@@ -459,7 +459,7 @@ test("U4 unknown model prices show all five charged token categories without inv
   f.app.backend.core.listMessages = () =>
     Promise.resolve([{
       id: "usage",
-      sessionID: "core",
+      sessionID: "tstv1-core",
       role: "assistant",
       agent: "build",
       model: { provider: "unknown", model: "model" },
@@ -476,7 +476,7 @@ test("U4 unknown model prices show all five charged token categories without inv
     }]);
   const b = await Cdp.launch(root);
   try {
-    await b.goto(`${f.url}/#/local/core`);
+    await b.goto(`${f.url}/#/local/tstv1-core`);
     await b.poll(
       `document.querySelector(${
         JSON.stringify(trigger)
@@ -562,7 +562,7 @@ test("U4 queued prompts do not split a turn and category costs use each step's e
   });
   const step = (id: string, provider: string): AssistantMessage => ({
     id,
-    sessionID: "core",
+    sessionID: "tstv1-core",
     role: "assistant",
     replyTo: "user",
     agent: "build",
@@ -581,14 +581,14 @@ test("U4 queued prompts do not split a turn and category costs use each step's e
   f.app.backend.core.listMessages = () =>
     Promise.resolve([step("first-step", "first"), {
       id: "queued",
-      sessionID: "core",
+      sessionID: "tstv1-core",
       role: "user",
       time: { created: 2 },
       parts: [],
     }, step("last-step", "second")]);
   const b = await Cdp.launch(root);
   try {
-    await b.goto(`${f.url}/#/local/core`);
+    await b.goto(`${f.url}/#/local/tstv1-core`);
     await b.poll(
       `document.querySelector(${
         JSON.stringify(trigger)

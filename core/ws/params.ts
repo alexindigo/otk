@@ -1,5 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { HarnessError } from "@otk/harness";
+import { isSessionID } from "@otk/protocol";
+export function sessionID(
+  params: Record<string, unknown>,
+  key = "sessionID",
+  optional = false,
+): string | undefined {
+  const value = text(params, key, optional);
+  if (optional && value === undefined) return;
+  if (!isSessionID(value)) {
+    throw new HarnessError("params", `Expected qualified ${key}`);
+  }
+  return value;
+}
 export function object(value: unknown): Record<string, unknown> {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw new HarnessError("params", "Expected object");

@@ -6,7 +6,7 @@ import { FakeLlm } from "./fake-llm.ts";
 import { OpencodeTest } from "./opencode.ts";
 import { DatabaseSync } from "node:sqlite";
 import { fromFileUrl } from "@std/path";
-import { History } from "@otk/harness-opencode1";
+import { History } from "@otk/harness-opencode-v1";
 import { nativeVersion } from "./native.ts";
 const pixel =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";

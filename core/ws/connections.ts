@@ -6,7 +6,7 @@ import { capabilityNames, checkClientFrameSize } from "@otk/protocol";
 import { PROTOCOL_VERSION, SIDECAR_VERSION } from "@otk/protocol";
 import { type Harness, HarnessError } from "@otk/harness";
 import type { IndexStore } from "../index/store.ts";
-import { object, text } from "./params.ts";
+import { object, sessionID, text } from "./params.ts";
 import type { RpcRegistry } from "./registry.ts";
 import type { Prefs } from "@otk/store";
 interface Connection {
@@ -196,7 +196,7 @@ export class Connections {
         if (frame.t === "subscribe" || frame.t === "unsubscribe") {
           this.#subscribe(
             connection,
-            text(raw, "sessionID")!,
+            sessionID(raw)!,
             frame.t === "subscribe",
           );
         } else if (frame.t === "resnapshot") {

@@ -43,10 +43,10 @@ test("restore is independently capability gated and validates the session before
     }
     assertEquals(calls, []);
     assertEquals(
-      await rpc.dispatch("session.restore", { sessionID: "s" }),
-      await harness.core.getSession("s"),
+      await rpc.dispatch("session.restore", { sessionID: "tstv1-s" }),
+      await harness.core.getSession("tstv1-s"),
     );
-    assertEquals(calls, ["s"]);
+    assertEquals(calls, ["tstv1-s"]);
   } finally {
     db.close();
   }

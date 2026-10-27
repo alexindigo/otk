@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { type Harness, HarnessError } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
-import { text } from "../ws/params.ts";
+import { sessionID, text } from "../ws/params.ts";
 
 export function register(
   rpc: RpcRegistry,
@@ -9,11 +9,11 @@ export function register(
   created?: (directory: string) => void,
 ): void {
   rpc.register("session.get", {
-    params: (p) => text(p, "sessionID")!,
+    params: (p) => sessionID(p)!,
     handler: (ctx, id) => ctx.harness.core.getSession(id),
   });
   rpc.register("session.children", {
-    params: (p) => text(p, "sessionID")!,
+    params: (p) => sessionID(p)!,
     handler: (ctx, id) => ctx.harness.core.listChildren(id),
   });
   rpc.register("session.messages", {
@@ -25,7 +25,7 @@ export function register(
         throw new HarnessError("params", "limit must be 1..200");
       }
       return {
-        sessionID: text(p, "sessionID")!,
+        sessionID: sessionID(p)!,
         limit: Number(p.limit),
         before: text(p, "before", true),
       };
@@ -40,7 +40,7 @@ export function register(
     params: (p) => ({
       directory: text(p, "directory")!,
       title: text(p, "title", true),
-      parentID: text(p, "parentID", true),
+      parentID: sessionID(p, "parentID", true),
     }),
     async handler(ctx, p) {
       const session = await ctx.harness.core.createSession(p);

@@ -40,7 +40,7 @@ independent trusted-host list (`core/auth/middleware.ts`).
 
 **Medium.** The exported backend client's path argument may alter the
 destination host while retaining Basic credentials
-(`packages/harness-opencode1/client.ts`).
+(`packages/harness-opencode-v1/client.ts`).
 
 ## 7. Code layout rescanning
 

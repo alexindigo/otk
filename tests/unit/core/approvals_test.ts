@@ -22,7 +22,13 @@ const backend = (permissions: PermissionsCapability): Harness => ({
     stop: () => Promise.resolve(),
     subscriptions() {},
     getSession: (id) =>
-      ["root", "child", "other", "cycle-a", "cycle-b"].includes(id)
+      [
+          "tstv1-root",
+          "tstv1-child",
+          "tstv1-other",
+          "tstv1-cycle-a",
+          "tstv1-cycle-b",
+        ].includes(id)
         ? Promise.resolve({
           id,
           directory: "/owned",
@@ -57,7 +63,7 @@ const entry = (id: string, parentID?: string): IndexEntry => ({
     childQuestions: 0,
   },
 });
-const request = (id: string, sessionID = "child"): PermissionRequest => ({
+const request = (id: string, sessionID = "tstv1-child"): PermissionRequest => ({
   id,
   sessionID,
   kind: "bash",
@@ -93,8 +99,8 @@ test("server-owned auto-approve can be turned off and its activity read while th
   const rpc = new RpcRegistry(unavailable, db);
   feature.register(rpc);
   try {
-    index.reset([entry("root"), entry("child", "root")]);
-    store.setAuto("root", true);
+    index.reset([entry("tstv1-root"), entry("tstv1-child", "tstv1-root")]);
+    store.setAuto("tstv1-root", true);
     const item = request("recorded");
     store.finish(
       store.start({
@@ -103,13 +109,16 @@ test("server-owned auto-approve can be turned off and its activity read while th
         request: JSON.stringify(item),
         reply: "once",
         source: "auto",
-        owner: "root",
-      }, ["root"]),
+        owner: "tstv1-root",
+      }, ["tstv1-root"]),
       { outcome: "confirmed" },
     );
     const results = await Promise.allSettled([
-      rpc.dispatch("permission.auto", { sessionID: "root", enabled: false }),
-      rpc.dispatch("permission.activity", { sessionID: "root" }),
+      rpc.dispatch("permission.auto", {
+        sessionID: "tstv1-root",
+        enabled: false,
+      }),
+      rpc.dispatch("permission.activity", { sessionID: "tstv1-root" }),
     ]);
     assertEquals(results.map((result) => result.status), [
       "fulfilled",
@@ -143,8 +152,8 @@ test("server session auto-approve rechecks off after held lists, isolates ancest
   const replies: unknown[] = [];
   const requests = [
     request("one"),
-    request("outside", "other"),
-    request("cycle", "cycle-a"),
+    request("outside", "tstv1-other"),
+    request("cycle", "tstv1-cycle-a"),
   ];
   const capability = {
     listPermissions: () => hold ? held.promise : Promise.resolve(requests),
@@ -160,45 +169,57 @@ test("server session auto-approve rechecks off after held lists, isolates ancest
   registerPermissions(rpc, harness, (input) => feature.reply(input));
   try {
     index.reset([
-      entry("root"),
-      entry("child", "root"),
-      entry("other"),
-      entry("cycle-a", "cycle-b"),
-      entry("cycle-b", "cycle-a"),
+      entry("tstv1-root"),
+      entry("tstv1-child", "tstv1-root"),
+      entry("tstv1-other"),
+      entry("tstv1-cycle-a", "tstv1-cycle-b"),
+      entry("tstv1-cycle-b", "tstv1-cycle-a"),
     ]);
     assertEquals(store.enabled(), []);
-    assertEquals(feature.owner("child"), undefined);
+    assertEquals(feature.owner("tstv1-child"), undefined);
     await assertRejects(() =>
-      rpc.dispatch("permission.auto", { sessionID: "root", enabled: "true" })
+      rpc.dispatch("permission.auto", {
+        sessionID: "tstv1-root",
+        enabled: "true",
+      })
     );
     await assertRejects(
       () =>
         rpc.dispatch("permission.auto", {
-          sessionID: "missing",
+          sessionID: "tstv1-missing",
           enabled: true,
         }),
       Error,
       "Unknown session",
     );
     assertEquals(store.enabled(), []);
-    await rpc.dispatch("permission.auto", { sessionID: "root", enabled: true });
     await rpc.dispatch("permission.auto", {
-      sessionID: "root",
+      sessionID: "tstv1-root",
+      enabled: true,
+    });
+    await rpc.dispatch("permission.auto", {
+      sessionID: "tstv1-root",
       enabled: false,
     });
     held.resolve(requests);
     await new Promise((resolve) => setTimeout(resolve, 10));
     assertEquals(replies, [], "Off wins over a previously started list");
-    assertEquals(store.list(["root", "child"]), []);
+    assertEquals(store.list(["tstv1-root", "tstv1-child"]), []);
     hold = false;
-    await rpc.dispatch("permission.auto", { sessionID: "root", enabled: true });
-    await waitFor(() => store.list(["child"]), (rows) => rows.length === 1);
-    assertEquals(store.list(["child"])[0].outcome, "started");
-    index.upsert(entry("child", "root"));
+    await rpc.dispatch("permission.auto", {
+      sessionID: "tstv1-root",
+      enabled: true,
+    });
+    await waitFor(
+      () => store.list(["tstv1-child"]),
+      (rows) => rows.length === 1,
+    );
+    assertEquals(store.list(["tstv1-child"])[0].outcome, "started");
+    index.upsert(entry("tstv1-child", "tstv1-root"));
     await assertRejects(
       () =>
         rpc.dispatch("permission.reply", {
-          sessionID: "child",
+          sessionID: "tstv1-child",
           requestID: "one",
           reply: "reject",
           message: "conflicting action",
@@ -208,29 +229,29 @@ test("server session auto-approve rechecks off after held lists, isolates ancest
     );
     ack.resolve();
     await waitFor(
-      () => store.list(["child"])[0].outcome,
+      () => store.list(["tstv1-child"])[0].outcome,
       (outcome) => outcome === "confirmed",
     );
-    index.upsert(entry("root"));
+    index.upsert(entry("tstv1-root"));
     await new Promise((resolve) => setTimeout(resolve, 10));
     assertEquals(replies, [{
-      sessionID: "child",
+      sessionID: "tstv1-child",
       requestID: "one",
       reply: "once",
     }]);
-    assertEquals(feature.owner("other"), undefined);
-    assertEquals(feature.owner("cycle-a"), undefined);
-    const rows = store.list(["child"]);
-    assertEquals([rows[0].source, rows[0].owner], ["auto", "root"]);
+    assertEquals(feature.owner("tstv1-other"), undefined);
+    assertEquals(feature.owner("tstv1-cycle-a"), undefined);
+    const rows = store.list(["tstv1-child"]);
+    assertEquals([rows[0].source, rows[0].owner], ["auto", "tstv1-root"]);
     feature.close();
     db.close();
     closed = true;
     const reopened = new OtkDb(root, [permissionMigrations]);
     try {
       const persisted = new PermissionStore(reopened);
-      assertEquals(persisted.enabled(), ["root"]);
-      assert(persisted.confirmed("child", "one"));
-      assertEquals(persisted.list(["child"])[0].outcome, "confirmed");
+      assertEquals(persisted.enabled(), ["tstv1-root"]);
+      assert(persisted.confirmed("tstv1-child", "one"));
+      assertEquals(persisted.list(["tstv1-child"])[0].outcome, "confirmed");
       const restoredIndex = new IndexStore();
       const restoredFeature = new PermissionFeature(
         persisted,
@@ -239,11 +260,11 @@ test("server session auto-approve rechecks off after held lists, isolates ancest
       );
       try {
         restoredIndex.reset([
-          entry("root"),
-          entry("child", "root"),
-          entry("other"),
-          entry("cycle-a", "cycle-b"),
-          entry("cycle-b", "cycle-a"),
+          entry("tstv1-root"),
+          entry("tstv1-child", "tstv1-root"),
+          entry("tstv1-other"),
+          entry("tstv1-cycle-a", "tstv1-cycle-b"),
+          entry("tstv1-cycle-b", "tstv1-cycle-a"),
         ]);
         await new Promise((resolve) => setTimeout(resolve, 10));
         assertEquals(
@@ -252,9 +273,12 @@ test("server session auto-approve rechecks off after held lists, isolates ancest
           "A confirmed request cannot be sent again after reopening otk.db",
         );
         requests.push(request("late-child"));
-        restoredIndex.reset([entry("child", "root"), entry("other")]);
+        restoredIndex.reset([
+          entry("tstv1-child", "tstv1-root"),
+          entry("tstv1-other"),
+        ]);
         await waitFor(
-          () => persisted.confirmed("child", "late-child"),
+          () => persisted.confirmed("tstv1-child", "late-child"),
           (confirmed) => confirmed,
         );
         assertEquals(
@@ -263,7 +287,7 @@ test("server session auto-approve rechecks off after held lists, isolates ancest
           "A known helper inherits even when its policy owner is outside the live index window",
         );
         assertEquals(
-          persisted.list(["root"]).length,
+          persisted.list(["tstv1-root"]).length,
           2,
           "Historical family membership is persisted, not reconstructed from the current index",
         );
@@ -311,11 +335,11 @@ test("automatic Allow once is kind-agnostic for bash, edit and optional-metadata
     },
   });
   try {
-    store.setAuto("root", true);
-    index.reset([entry("root"), entry("child", "root")]);
+    store.setAuto("tstv1-root", true);
+    index.reset([entry("tstv1-root"), entry("tstv1-child", "tstv1-root")]);
     await waitFor(
       () =>
-        store.list(["root"]).filter((row) => row.outcome === "confirmed")
+        store.list(["tstv1-root"]).filter((row) => row.outcome === "confirmed")
           .length,
       (count) => count === 3,
     );
@@ -337,7 +361,7 @@ test("permission activity journals manual outcomes, errors and shutdown uncertai
   const db = new OtkDb(await fixture(), [permissionMigrations]),
     store = new PermissionStore(db, () => 123),
     index = new IndexStore();
-  let pending = request("manual", "root");
+  let pending = request("manual", "tstv1-root");
   let fail = false;
   let failure: unknown = new Error("native failure");
   let hold: ReturnType<typeof deferred<void>> | undefined;
@@ -350,31 +374,35 @@ test("permission activity journals manual outcomes, errors and shutdown uncertai
     rpc = new RpcRegistry(backend(capability), db);
   feature.register(rpc);
   try {
-    index.reset([entry("root"), entry("child", "root"), entry("other")]);
+    index.reset([
+      entry("tstv1-root"),
+      entry("tstv1-child", "tstv1-root"),
+      entry("tstv1-other"),
+    ]);
     await feature.reply({
-      sessionID: "root",
+      sessionID: "tstv1-root",
       requestID: pending.id,
       reply: "reject",
       message: "Keep exact feedback",
     });
-    assertEquals(store.list(["root"])[0].message, "Keep exact feedback");
-    assertEquals(store.list(["root"])[0].source, "manual");
+    assertEquals(store.list(["tstv1-root"])[0].message, "Keep exact feedback");
+    assertEquals(store.list(["tstv1-root"])[0].source, "manual");
     await assertRejects(
       () =>
         feature.reply({
-          sessionID: "child",
+          sessionID: "tstv1-child",
           requestID: pending.id,
           reply: "once",
         }),
       Error,
       "no longer pending",
     );
-    pending = request("failed", "root");
+    pending = request("failed", "tstv1-root");
     fail = true;
     await assertRejects(
       () =>
         feature.reply({
-          sessionID: "root",
+          sessionID: "tstv1-root",
           requestID: pending.id,
           reply: "once",
         }),
@@ -382,8 +410,8 @@ test("permission activity journals manual outcomes, errors and shutdown uncertai
       "native failure",
     );
     assertEquals([
-      store.list(["root"])[0].outcome,
-      store.list(["root"])[0].error,
+      store.list(["tstv1-root"])[0].outcome,
+      store.list(["tstv1-root"])[0].error,
     ], ["failed", "native failure"]);
     for (
       const [id, rejection] of [["string-failure", "plain rejection"], [
@@ -391,10 +419,10 @@ test("permission activity journals manual outcomes, errors and shutdown uncertai
         undefined,
       ]] as const
     ) {
-      pending = request(id, "root");
+      pending = request(id, "tstv1-root");
       failure = rejection;
       await feature.reply({
-        sessionID: "root",
+        sessionID: "tstv1-root",
         requestID: pending.id,
         reply: "once",
       }).then(
@@ -402,32 +430,32 @@ test("permission activity journals manual outcomes, errors and shutdown uncertai
         (error) => assertEquals(error, rejection),
       );
       assertEquals(
-        store.list(["root"])[0].outcome,
+        store.list(["tstv1-root"])[0].outcome,
         "failed",
         "A non-Error rejection must never be recorded as a confirmed reply",
       );
-      assertEquals(store.confirmed("root", pending.id), false);
+      assertEquals(store.confirmed("tstv1-root", pending.id), false);
     }
     fail = false;
     for (let n = 0; n < 105; n++) {
-      const req = request(`history-${n}`, n % 2 ? "child" : "root");
+      const req = request(`history-${n}`, n % 2 ? "tstv1-child" : "tstv1-root");
       const id = store.start({
         session: req.sessionID,
         requestID: req.id,
         request: JSON.stringify(req),
         reply: "once",
         source: "auto",
-        owner: "root",
-      }, req.sessionID === "child" ? ["root"] : []);
+        owner: "tstv1-root",
+      }, req.sessionID === "tstv1-child" ? ["tstv1-root"] : []);
       store.finish(id, { outcome: "confirmed" });
     }
-    index.reset([entry("root"), entry("other")]);
+    index.reset([entry("tstv1-root"), entry("tstv1-other")]);
     const first = await rpc.dispatch("permission.activity", {
-      sessionID: "root",
+      sessionID: "tstv1-root",
     }) as { entries: { id: number }[]; before: number };
     assertEquals(first.entries.length, 100);
     const next = await rpc.dispatch("permission.activity", {
-      sessionID: "root",
+      sessionID: "tstv1-root",
       before: first.before,
     }) as { entries: { id: number }[]; before?: number };
     assertEquals(next.entries.length, 9);
@@ -436,27 +464,27 @@ test("permission activity journals manual outcomes, errors and shutdown uncertai
       new Set([...first.entries, ...next.entries].map((row) => row.id)).size,
       109,
     );
-    pending = request("uncertain", "root");
+    pending = request("uncertain", "tstv1-root");
     hold = deferred<void>();
     const reply = feature.reply({
-      sessionID: "root",
+      sessionID: "tstv1-root",
       requestID: pending.id,
       reply: "once",
     });
     await waitFor(
-      () => store.list(["root"])[0].requestID,
+      () => store.list(["tstv1-root"])[0].requestID,
       (id) => id === "uncertain",
     );
     feature.close();
     hold.resolve();
     await reply;
     assertEquals(
-      store.list(["root"])[0].outcome,
+      store.list(["tstv1-root"])[0].outcome,
       "started",
       "Shutdown cannot claim an unobserved acknowledgement succeeded",
     );
     assert(
-      !belongsToSession("child", "root", (id) => index.get(id)),
+      !belongsToSession("tstv1-child", "tstv1-root", (id) => index.get(id)),
       "The helper is absent from the live family while its historical activity remains complete",
     );
   } finally {

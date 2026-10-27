@@ -49,7 +49,9 @@ export function shellTask(
 ): TaskRecord {
   return { id, name: id, sessions, directory, order: 0 };
 }
-export function shellFixture() {
+export function shellFixture(
+  ids = { selected: "selected", created: "created" },
+) {
   const calls: unknown[][] = [];
   const servers = client.createState<client.SidecarsState>({
     list: ["local", "remote"].map((id) => ({
@@ -72,10 +74,10 @@ export function shellFixture() {
       return Promise.resolve(shellInfo(p.sessionID, "/resolved"));
     }
     if (method === "session.create") {
-      return Promise.resolve(shellInfo("created", p.directory));
+      return Promise.resolve(shellInfo(ids.created, p.directory));
     }
     if (method === "tasks.create") {
-      return Promise.resolve(shellTask("promoted", ["selected"], "/p"));
+      return Promise.resolve(shellTask("promoted", [ids.selected], "/p"));
     }
     if (method === "history.attachment") {
       return Promise.resolve({ kind: "text", text: `bytes:${p.partID}` });
@@ -113,8 +115,8 @@ export function shellFixture() {
   });
   const session: Pick<client.ClientSession, "state" | "open"> = {
     state: {
-      selection: { sidecarId: "local", sessionID: "selected" },
-      info: shellInfo("selected"),
+      selection: { sidecarId: "local", sessionID: ids.selected },
+      info: shellInfo(ids.selected),
       content: client.emptyContent(),
       siblings: [],
       loading: false,

@@ -48,11 +48,11 @@ test("V7 completed plan_exit and plan_enter switch the footer and the next promp
     },
   });
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Plan/build switch" },
     });
-    const other = await f.oc.request<{ id: string }>("/session", {
+    const other = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Other session" },
     });

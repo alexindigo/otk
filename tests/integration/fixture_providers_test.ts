@@ -109,7 +109,7 @@ test("V4 extra provider advertises variants and exclusively receives its selecte
         2,
       ),
     );
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Variant routing fixture" },
     });

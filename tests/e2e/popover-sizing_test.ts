@@ -100,7 +100,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await client.connect();
       await client.rpc("prefs.set", { key: "theme", value: theme });
       await browser.goto(f.url);
-      await openSession(browser, "otk");
+      await openSession(browser, "tstv1-otk");
       await browser.poll(
         `document.documentElement.dataset.otkTheme==='${theme}'`,
       );
@@ -210,7 +210,7 @@ test("tall anchored Surface keeps its positioned bounds and scrolls within the a
   try {
     await client.connect();
     await browser.goto(f.url);
-    await openSession(browser, "otk");
+    await openSession(browser, "tstv1-otk");
     await browser.evaluate("document.fonts.ready.then(()=>true)");
     for (const theme of ["otk-dark", "otk-light"]) {
       await client.rpc("prefs.set", { key: "theme", value: theme });

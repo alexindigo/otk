@@ -15,11 +15,11 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Image review" },
     });
-    const other = await f.oc.request<{ id: string }>("/session", {
+    const other = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Other draft" },
     });
@@ -236,11 +236,11 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
 test("U8 a pending image stays with its session draft and explicit removal cannot be undone by a late upload", async () => {
   const f = await browserFixture();
   try {
-    const a = await f.oc.request<{ id: string }>("/session", {
+    const a = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Pending image" },
     });
-    const z = await f.oc.request<{ id: string }>("/session", {
+    const z = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Independent draft" },
     });

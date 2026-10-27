@@ -3,7 +3,7 @@ import { HarnessError } from "@otk/harness";
 import type { Frecency, FrecencyOptions } from "@otk/store";
 import type { Harness } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
-import { text } from "../ws/params.ts";
+import { sessionID, text } from "../ws/params.ts";
 
 export const frecencyOptions: FrecencyOptions = {
   invalid: () =>
@@ -16,12 +16,12 @@ export function register(
   frecency: Frecency,
 ): void {
   rpc.register("frecency.list", {
-    params: (p) => text(p, "sessionID")!,
+    params: (p) => sessionID(p)!,
     handler: async (ctx, id) => frecency.list(await ctx.sessionDirectory(id)),
   });
   rpc.register("frecency.bump", {
     // Path validation stays after authoritative session lookup, as before.
-    params: (p) => ({ sessionID: text(p, "sessionID")!, value: p }),
+    params: (p) => ({ sessionID: sessionID(p)!, value: p }),
     async handler(ctx, p) {
       frecency.bump(
         await ctx.sessionDirectory(p.sessionID),

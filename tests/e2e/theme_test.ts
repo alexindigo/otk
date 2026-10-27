@@ -163,7 +163,7 @@ test("D5 actual session/code/diff paint changes with no worker work; preview/can
     },
   });
   try {
-    const seed = await f.oc.request<{ id: string }>("/session", {
+    const seed = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Theme consumers" },
     });

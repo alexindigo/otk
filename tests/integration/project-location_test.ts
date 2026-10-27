@@ -14,8 +14,16 @@ test("project location intents preserve independent visits and unrelated layout 
   try {
     await a.connect();
     await b.connect();
-    const first = { sidecarId: "local", directory: "/a", sessionID: "one" };
-    const second = { sidecarId: "remote", directory: "/a", sessionID: "two" };
+    const first = {
+      sidecarId: "local",
+      directory: "/a",
+      sessionID: "tstv1-one",
+    };
+    const second = {
+      sidecarId: "remote",
+      directory: "/a",
+      sessionID: "tstv1-two",
+    };
     await Promise.all([
       a.rpc("layout.location", first),
       b.rpc("layout.location", second),

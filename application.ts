@@ -16,6 +16,7 @@ import {
   projectTemplatesMigrations,
   Seen,
   seenMigrations,
+  sessionReferenceMigrations,
   Tasks,
   tasksMigrations,
 } from "@otk/store";
@@ -54,6 +55,7 @@ export function startApplication(
   cfg: ServiceConfig,
   backend: Harness,
   staticRoot: string,
+  options: { upgrade?: (store: OtkDb) => void } = {},
 ): Promise<CoreServer> {
   const store = new OtkDb(cfg.state.path, [
     prefsMigrations,
@@ -64,9 +66,11 @@ export function startApplication(
     finishesMigrations,
     projectTemplatesMigrations,
     permissionMigrations,
+    sessionReferenceMigrations,
   ]);
   const sources: FrameSource[] = [];
   try {
+    options.upgrade?.(store);
     const prefs = new Prefs(store, prefsOptions);
     const rpc = new RpcRegistry(backend, store);
     const index = new IndexStore();

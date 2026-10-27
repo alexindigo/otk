@@ -10,7 +10,7 @@ import {
 test("created-session readiness: trusted send reaches the provider and transcript while index delivery is held", async () => {
   const f = await browserFixture();
   try {
-    const seed = await f.oc.request<{ id: string }>("/session", {
+    const seed = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Existing project" },
     });

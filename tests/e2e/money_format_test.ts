@@ -18,7 +18,7 @@ test("U14 r2 one money rule and exact title-free accessibility reach overlay, fo
   let amount = 0;
   const message = (): AssistantMessage => ({
     id: "call",
-    sessionID: "core",
+    sessionID: "tstv1-core",
     role: "assistant",
     replyTo: "user",
     agent: "build",
@@ -60,7 +60,7 @@ test("U14 r2 one money rule and exact title-free accessibility reach overlay, fo
     usage: {
       getUsage: () =>
         Promise.resolve(
-          new UsageLedger("core", [usageHeader(message())]).snapshot(),
+          new UsageLedger("tstv1-core", [usageHeader(message())]).snapshot(),
         ),
     },
     models: { listModels: () => Promise.resolve(catalog) },
@@ -88,7 +88,7 @@ test("U14 r2 one money rule and exact title-free accessibility reach overlay, fo
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await b.goto(`${f.url}/#/local/core`);
+    await b.goto(`${f.url}/#/local/tstv1-core`);
     for (
       const [value, label, exact] of [
         [0, "$0.00", "$0"],

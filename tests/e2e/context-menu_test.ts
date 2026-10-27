@@ -59,7 +59,7 @@ async function setup() {
     client = new WsClient(f.url);
   await client.connect();
   await browser.goto(f.url);
-  await openSession(browser, "otk");
+  await openSession(browser, "tstv1-otk");
   await browser.send("Browser.grantPermissions", {
     origin: f.url,
     permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"],
@@ -591,7 +591,7 @@ test("context binding: external command contributions, live target data, nested 
 test("all shared Menu callers distinguish pointer and keyboard opening with compact rows", async () => {
   const { root, f, browser, client, stop } = await setup();
   const projectTrigger =
-    "[data-project-sessions~=otk] .otk-project-menu > button";
+    "[data-project-sessions~=tstv1-otk] .otk-project-menu > button";
   const projectMenu = ".otk-project-menu :popover-open [role=menu]";
   const foldedTrigger = ".otk-folded-crumbs > button";
   const foldedMenu = ".otk-folded-crumbs :popover-open [role=menu]";
@@ -661,9 +661,9 @@ test("all shared Menu callers distinguish pointer and keyboard opening with comp
       directory: f.entries[0].directory,
       name: "Compact menus",
     });
-    const ids = ["otk"];
+    const ids = ["tstv1-otk"];
     for (let n = 1; n < 10; n++) {
-      const id = `r2-session-${n}`;
+      const id = `tstv1-r2-session-${n}`;
       f.add({ ...f.entries[0], id, title: `Menu session ${n}` });
       ids.push(id);
     }
@@ -676,8 +676,8 @@ test("all shared Menu callers distinguish pointer and keyboard opening with comp
       await browser.poll(
         `document.documentElement.dataset.otkTheme==='${theme}'`,
       );
-      await browser.click('[data-crumb="otk"]');
-      await rightClick(browser, '[data-crumb="otk"]');
+      await browser.click('[data-crumb="tstv1-otk"]');
+      await rightClick(browser, '[data-crumb="tstv1-otk"]');
       assert((await labels(browser)).includes("Copy session title"));
       await pointerFocus(menu);
       await density(menu);
@@ -707,7 +707,7 @@ test("all shared Menu callers distinguish pointer and keyboard opening with comp
         true,
       );
       const point = await browser.evaluate<{ x: number; y: number }>(
-        `(()=>{const r=document.querySelector('[data-project-sessions~=otk]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
+        `(()=>{const r=document.querySelector('[data-project-sessions~=tstv1-otk]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
       );
       await browser.send("Input.dispatchMouseEvent", {
         type: "mouseMoved",

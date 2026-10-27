@@ -10,7 +10,7 @@ test("request owners report RPC failures once while unsolicited errors still rea
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root);
   try {
-    await b.goto(f.url + "/#/local/otk");
+    await b.goto(f.url + "/#/local/tstv1-otk");
     await b.poll(
       "!!document.querySelector('[aria-label=\"Collapse projects\"]')",
     );

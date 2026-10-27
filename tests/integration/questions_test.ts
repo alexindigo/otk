@@ -9,15 +9,15 @@ test("question snapshot, originating descendant events, reply and rejection use 
   const f = await browserFixture();
   let rootClient: WsClient | undefined, otherClient: WsClient | undefined;
   try {
-    const root = await f.oc.request<{ id: string }>("/session", {
+    const root = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Root" },
       }),
-      child = await f.oc.request<{ id: string }>("/session", {
+      child = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Child", parentID: root.id },
       }),
-      other = await f.oc.request<{ id: string }>("/session", {
+      other = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Other" },
       });

@@ -56,6 +56,10 @@ compose one `SidecarConnection` directly. Navigation accepts an injected
 history/location environment, so its accepted-route model is usable without
 browser globals.
 
+Session routes validate `isSessionID` from the protocol for both session and
+optional root segments. Bare legacy links select no session and the shell
+navigation owner presents the compatibility notice, without native reads.
+
 Legacy welcome frames retain their supported RPC families; explicit capability
 lists are authoritative. Connection metadata remains mounted across reconnects,
 while `supports` reports live availability. Session generations, aborted

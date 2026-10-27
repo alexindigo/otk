@@ -12,7 +12,7 @@ test("busy revert reports the real native reason through the RPC error mapper wi
   let client: WsClient | undefined;
   const held = f.fake.queueHeld({ chunks: ["Working until interrupted."] });
   try {
-    const s = await f.oc.request<{ id: string }>("/session", {
+    const s = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Busy rollback reason" },
     });
@@ -27,7 +27,7 @@ test("busy revert reports the real native reason through the RPC error mapper wi
     });
     await waitFor(
       () => f.oc.request<Record<string, { type: string }>>("/session/status"),
-      (status) => status[s.id]?.type === "busy",
+      (status) => status[s.nativeID]?.type === "busy",
     );
     const messages = await f.oc.request<
       { info: { id: string; role: string } }[]
@@ -54,7 +54,7 @@ test("restore returns rolled-back prompts to the real native conversation", asyn
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Restore source" },
     });
@@ -112,7 +112,7 @@ test("fork copies through a grouped reply, respects pending rollback and activat
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const original = await f.oc.request<{ id: string }>("/session", {
+    const original = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Fork source" },
     });
@@ -196,7 +196,7 @@ test("session rename validates titles and persists through the real native API",
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Original" },
     });
@@ -242,11 +242,11 @@ test("delete removes a real native family and committed task membership", async 
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const root = await f.oc.request<{ id: string }>("/session", {
+    const root = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Delete family" },
     });
-    const child = await f.oc.request<{ id: string }>("/session", {
+    const child = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Helper", parentID: root.id },
     });
@@ -278,7 +278,7 @@ test("compact admits native summarization and publishes a terminal compaction me
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Compact source" },
     });

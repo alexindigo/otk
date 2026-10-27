@@ -35,7 +35,7 @@ test("HTTP-only failure is visible with real transport provenance, current draft
     );
   });
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "HTTP-only failure" },
     });
@@ -83,7 +83,7 @@ test("native-only failure from an independently invoked stock operation reaches 
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Native-only failure" },
     });
@@ -159,7 +159,7 @@ test("native detail remains current when its independently delivered stock HTTP 
     });
   });
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Native detail before HTTP" },
     });

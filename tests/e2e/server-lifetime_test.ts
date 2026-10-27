@@ -43,7 +43,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
         window.releaseSessionFrames = () => { window.holdSessionFrames=false; for(const deliver of window.heldSessionFrames.splice(0)) deliver(); };
       `,
       });
-      await browser.goto(app.url + "/#/remote/core");
+      await browser.goto(`${app.url}/#/remote/${app.session.id}`);
       await browser.poll(
         "window.heldSessionFrames.length>=3 && window.lifetimeSockets.length===2 && window.lifetimeSockets.every(socket=>socket.readyState===1)",
       );

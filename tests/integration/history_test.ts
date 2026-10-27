@@ -9,11 +9,11 @@ test("history RPC includes prompts across sessions and user shell entries direct
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const a = await f.oc.request<{ id: string }>("/session", {
+    const a = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "History A" },
       }),
-      b = await f.oc.request<{ id: string }>("/session", {
+      b = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "History B" },
       });

@@ -34,7 +34,7 @@ test("command hints follow mounted hidden bindings, saved overrides, unbinding a
     b.evaluate<string>(`document.querySelector('${button}').title`);
   try {
     await c.connect();
-    await b.goto(`${f.url}/#/local/core`);
+    await b.goto(`${f.url}/#/local/${f.session.id}`);
     await b.poll("!!document.querySelector('.otk-prompt textarea')");
     await b.click(".otk-keys-entry");
     await b.poll(
@@ -82,9 +82,9 @@ test("command hints follow mounted hidden bindings, saved overrides, unbinding a
     await b.poll("document.querySelector('textarea[name=prompt]').value===''");
     assertEquals(sends.length, 1);
     assertEquals(sends[0].parts, [{ kind: "text", text: "First line\n" }]);
-    f.app.index.upsert({ ...f.app.index.get("core")!, status: "busy" });
+    f.app.index.upsert({ ...f.app.index.get(f.session.id)!, status: "busy" });
     await b.poll(
-      "document.querySelector('[data-session=core]')?.dataset.status==='busy'",
+      `document.querySelector('[data-session="${f.session.id}"]')?.dataset.status==='busy'`,
     );
     await b.key("q", 2);
     await b.poll(
@@ -157,7 +157,7 @@ test("Dialog and Editor omit surface key hints while retaining save, cancel and 
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await b.goto(`${f.url}/#/local/core`);
+    await b.goto(`${f.url}/#/local/tstv1-core`);
     await b.poll("!!document.querySelector('.otk-prompt textarea')");
     for (const theme of ["otk-dark", "otk-light"]) {
       await c.rpc("prefs.set", { key: "theme", value: theme });
@@ -232,7 +232,7 @@ test("fixed permission keys and question Escape hints match their focused widget
             listPermissions: () =>
               Promise.resolve([{
                 id: "permission",
-                sessionID: "core",
+                sessionID: "tstv1-core",
                 kind: "bash",
                 title: "Probe",
                 time: 1,
@@ -251,7 +251,7 @@ test("fixed permission keys and question Escape hints match their focused widget
             listQuestions: () =>
               Promise.resolve([{
                 id: "question",
-                sessionID: "core",
+                sessionID: "tstv1-core",
                 questions: [{
                   header: "Choice",
                   text: "Choose one",
@@ -269,7 +269,7 @@ test("fixed permission keys and question Escape hints match their focused widget
     );
     const b = await Cdp.launch(root);
     try {
-      await b.goto(`${f.url}/#/local/core`);
+      await b.goto(`${f.url}/#/local/tstv1-core`);
       if (kind === "permission") {
         await b.poll("!!document.querySelector('.otk-permission-actions')");
         assertEquals(

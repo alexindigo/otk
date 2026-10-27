@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { errorMessage, isSessionID } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import type { ContentOp, ContentSession, Message, Part } from "@otk/protocol";
 import { isAttentionOp } from "@otk/protocol";
@@ -24,10 +24,15 @@ export function route(hash: string): Selection | undefined {
   const parts = hash.match(/^#\/([^/]+)\/([^/]+)(?:\/([^/]+))?$/);
   if (!parts) return;
   try {
+    const sessionID = decodeURIComponent(parts[3] || parts[2]);
+    const rootID = parts[3] ? decodeURIComponent(parts[2]) : undefined;
+    if (
+      !isSessionID(sessionID) || (rootID !== undefined && !isSessionID(rootID))
+    ) return;
     return {
       sidecarId: decodeURIComponent(parts[1]),
-      sessionID: decodeURIComponent(parts[3] || parts[2]),
-      ...(parts[3] ? { rootID: decodeURIComponent(parts[2]) } : {}),
+      sessionID,
+      ...(rootID ? { rootID } : {}),
     };
   } catch {
     return;

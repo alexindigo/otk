@@ -2,14 +2,14 @@
 import { type Harness, HarnessError } from "@otk/harness";
 import type { PromptPart } from "@otk/protocol";
 import type { RpcRegistry } from "../ws/registry.ts";
-import { object, text } from "../ws/params.ts";
+import { object, sessionID, text } from "../ws/params.ts";
 import { promptParts } from "./prompt-parts.ts";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
   const capability = harness.capabilities.commands;
   if (!capability) return;
   rpc.register("commands.list", {
-    params: (p) => text(p, "sessionID")!,
+    params: (p) => sessionID(p)!,
     handler: (_ctx, id) => capability.listCommands(id),
   });
   rpc.register("session.command", {
@@ -26,7 +26,7 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
         );
       }
       return {
-        sessionID: text(p, "sessionID")!,
+        sessionID: sessionID(p)!,
         command: text(p, "command")!,
         arguments: text(p, "arguments", true) ?? "",
         agent: text(p, "agent", true),

@@ -33,7 +33,7 @@ test("automatic failure is attempted once across unrelated index changes; reques
   const store = new PermissionStore(db), index = new IndexStore();
   let request: PermissionRequest = {
     id: "ask",
-    sessionID: "root",
+    sessionID: "tstv1-root",
     kind: "bash",
     title: "bash",
     time: 1,
@@ -53,17 +53,17 @@ test("automatic failure is attempted once across unrelated index changes; reques
     },
   });
   try {
-    store.setAuto("root", true);
-    index.reset([entry("root")]);
+    store.setAuto("tstv1-root", true);
+    index.reset([entry("tstv1-root")]);
     await waitFor(
-      () => store.list(["root"])[0]?.outcome,
+      () => store.list(["tstv1-root"])[0]?.outcome,
       (s) => s === "failed",
     );
     for (let n = 0; n < 12; n++) {
-      index.upsert({ ...entry("other"), timeUpdated: n + 2 });
+      index.upsert({ ...entry("tstv1-other"), timeUpdated: n + 2 });
       await tick();
     }
-    assertEquals([attempts, store.list(["root"]).length], [1, 1]);
+    assertEquals([attempts, store.list(["tstv1-root"]).length], [1, 1]);
     assertEquals(
       lists > 1,
       true,
@@ -73,12 +73,12 @@ test("automatic failure is attempted once across unrelated index changes; reques
       ...request,
       detail: { kind: "bash", command: "printf changed" },
     };
-    index.upsert(entry("root"));
-    await waitFor(() => store.list(["root"]).length, (n) => n === 2);
+    index.upsert(entry("tstv1-root"));
+    await waitFor(() => store.list(["tstv1-root"]).length, (n) => n === 2);
     await tick();
     assertEquals(attempts, 2);
-    index.reset([entry("root")]);
-    await waitFor(() => store.list(["root"]).length, (n) => n === 3);
+    index.reset([entry("tstv1-root")]);
+    await waitFor(() => store.list(["tstv1-root"]).length, (n) => n === 3);
     await tick();
     assertEquals(attempts, 3);
   } finally {
@@ -99,7 +99,7 @@ test("server rejects helper policy and removes deleted session policy durably wi
     core: {
       getSession: (id: string) =>
         Promise.resolve({
-          ...entry(id, id === "child" ? "root" : undefined),
+          ...entry(id, id === "tstv1-child" ? "tstv1-root" : undefined),
           time: { created: 1, updated: 1 },
         }),
     },
@@ -111,22 +111,28 @@ test("server rejects helper policy and removes deleted session policy durably wi
   try {
     await assertRejects(
       () =>
-        rpc.dispatch("permission.auto", { sessionID: "child", enabled: true }),
+        rpc.dispatch("permission.auto", {
+          sessionID: "tstv1-child",
+          enabled: true,
+        }),
       Error,
       "helper",
     );
     assertEquals(store.enabled(), []);
-    index.reset([entry("root"), entry("child", "root")]);
-    await rpc.dispatch("permission.auto", { sessionID: "root", enabled: true });
+    index.reset([entry("tstv1-root"), entry("tstv1-child", "tstv1-root")]);
+    await rpc.dispatch("permission.auto", {
+      sessionID: "tstv1-root",
+      enabled: true,
+    });
     const revision = feature.get().revision;
     const id = store.start({
-      session: "child",
+      session: "tstv1-child",
       requestID: "record",
       request: "{}",
       reply: "once",
       source: "auto",
-      owner: "root",
-    }, ["root"]);
+      owner: "tstv1-root",
+    }, ["tstv1-root"]);
     store.finish(id, { outcome: "confirmed" });
     assertEquals(
       feature.get().revision,
@@ -135,16 +141,16 @@ test("server rejects helper policy and removes deleted session policy durably wi
     );
     assertEquals(frames.filter((f) => f.t === "approvals").length, 1);
     assertEquals(frames.filter((f) => f.t === "approval.activity"), [
-      { t: "approval.activity", sessions: ["child", "root"] },
-      { t: "approval.activity", sessions: ["child", "root"] },
+      { t: "approval.activity", sessions: ["tstv1-child", "tstv1-root"] },
+      { t: "approval.activity", sessions: ["tstv1-child", "tstv1-root"] },
     ]);
-    index.remove("root");
+    index.remove("tstv1-root");
     await tick();
     assertEquals(store.enabled(), []);
     assertEquals(feature.get().revision, revision + 1);
     assertEquals(frames.at(-1), { t: "approvals", approvals: feature.get() });
-    store.setAuto("outside-window", true);
-    index.remove("outside-window");
+    store.setAuto("tstv1-outside-window", true);
+    index.remove("tstv1-outside-window");
     await tick();
     assertEquals(
       store.enabled(),

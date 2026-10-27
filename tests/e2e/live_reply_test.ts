@@ -9,15 +9,15 @@ test("reload, switching and an initially unwatched reply retain all current text
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const a = await f.oc.request<{ id: string }>("/session", {
+    const a = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Live reply A" },
     });
-    const b = await f.oc.request<{ id: string }>("/session", {
+    const b = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Other session" },
     });
-    const c = await f.oc.request<{ id: string }>("/session", {
+    const c = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Initially unwatched" },
     });

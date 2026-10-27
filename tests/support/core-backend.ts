@@ -9,6 +9,7 @@ import { resources } from "./resources.ts";
 export async function coreBackendFixture(
   root: string,
   capabilities: Capabilities = {},
+  identity = "tstv1-core",
 ) {
   const scope = resources();
   const settings = cfg();
@@ -16,7 +17,7 @@ export async function coreBackendFixture(
   settings.server.port = 0;
   settings.state.path = join(root, "state");
   const session = {
-    id: "core",
+    id: identity,
     directory: root,
     projectID: "project",
     title: "Core-only backend",
@@ -55,7 +56,7 @@ export async function coreBackendFixture(
       listMessages: () =>
         Promise.resolve([{
           id: "message",
-          sessionID: "core",
+          sessionID: identity,
           role: "user",
           time: { created: 1 },
           parts: [{

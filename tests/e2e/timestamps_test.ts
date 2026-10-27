@@ -22,7 +22,7 @@ test("creation-time hover and persistent visibility, structural footer date/cloc
   const f = await browserFixture();
   let server: SidecarTest | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Message timestamps" },
     });
@@ -241,6 +241,7 @@ test("creation-time hover and persistent visibility, structural footer date/cloc
           { feature: "project-templates", version: 2 },
           { feature: "projects", version: 1 },
           { feature: "seen", version: 1 },
+          { feature: "session-reference-upgrade", version: 1 },
           { feature: "tasks", version: 1 },
         ],
       );

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertThrows } from "@std/assert";
 import { promptParts } from "../../core/mod.ts";
-import { mapPromptParts } from "@otk/harness-opencode1";
+import { mapPromptParts } from "@otk/harness-opencode-v1";
 Deno.test("prompt mapping preserves upload bytes and validates sizes and ranges", async () => {
   const parts = promptParts([{ kind: "text", text: "inspect" }, {
     kind: "file",

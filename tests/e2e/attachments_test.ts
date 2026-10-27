@@ -11,11 +11,11 @@ import { waitFor } from "../support/opencode.ts";
 test("P9 client drop and image paste reach stock opencode as file parts; paths become references", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Attachments" },
       }),
-      other = await f.oc.request<{ id: string }>("/session", {
+      other = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Other" },
       });
@@ -77,7 +77,7 @@ test("P9 client drop and image paste reach stock opencode as file parts; paths b
 test("P9 oversized combined uploads show an immediate error without sending or losing the draft", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Combined uploads" },
     });

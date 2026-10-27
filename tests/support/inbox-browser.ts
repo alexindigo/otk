@@ -20,7 +20,7 @@ export async function inboxBrowserFixture(
     const directory = join(root, "projects", name);
     await Deno.mkdir(directory, { recursive: true });
     entries.push({
-      id: name,
+      id: `tstv1-${name}`,
       directory,
       projectID: name,
       title: ["Execution", "Approval", "Research", "Quiet session"][n],
@@ -36,7 +36,11 @@ export async function inboxBrowserFixture(
       },
     });
   }
-  entries.push({ ...entries[2], id: "other-finished", title: "Other session" });
+  entries.push({
+    ...entries[2],
+    id: "tstv1-other-finished",
+    title: "Other session",
+  });
   let sink!: HarnessSink;
   const content = (entry: IndexEntry): ContentSession => ({
     id: entry.id,
@@ -75,17 +79,17 @@ export async function inboxBrowserFixture(
       listMessages: (id) =>
         Promise.resolve(
           messages[id] ?? [{
-            id: `${id}-message`,
+            id: `${id.slice(6)}-message`,
             sessionID: id,
             role: "user",
             time: { created: 1 },
             parts: [{
-              id: `${id}-text`,
+              id: `${id.slice(6)}-text`,
               kind: "text",
               synthetic: false,
               blocks: [{
                 b: "paragraph",
-                inline: [{ i: "text", text: `Transcript for ${id}` }],
+                inline: [{ i: "text", text: `Transcript for ${id.slice(6)}` }],
               }],
             }],
           }],
@@ -93,7 +97,7 @@ export async function inboxBrowserFixture(
       createSession(input) {
         const entry = {
           ...entries[0],
-          id: crypto.randomUUID(),
+          id: `tstv1-${crypto.randomUUID()}`,
           directory: input.directory,
           title: "New session",
         };

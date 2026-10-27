@@ -11,7 +11,7 @@ const keys = "dialog[aria-label='Keyboard shortcuts'][open]";
 test("D1 palette, project button and slash create sessions through the same registered command", async () => {
   const f = await browserFixture();
   try {
-    const seed = await f.oc.request<{ id: string }>("/session", {
+    const seed = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Command invokers" },
     });
@@ -59,7 +59,7 @@ test("D1 palette, project button and slash create sessions through the same regi
 test("D3 Esc closes palette before permission confirmation and real double Esc interrupts", async () => {
   const f = await browserFixture();
   try {
-    const seed = await f.oc.request<{ id: string }>("/session", {
+    const seed = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Escape layers" },
     });
@@ -123,7 +123,7 @@ test("D3 Esc closes palette before permission confirmation and real double Esc i
 test("D4 production rebind UI rejects conflicts, applies the new key, persists on reload and resets", async () => {
   const f = await browserFixture();
   try {
-    const seed = await f.oc.request<{ id: string }>("/session", {
+    const seed = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Rebind proof" },
     });
@@ -183,7 +183,7 @@ test("D4 production rebind UI rejects conflicts, applies the new key, persists o
 test("essential Tab cycling selects primary agents in prompt, reverse cycles and sent messages carry selection", async () => {
   const f = await browserFixture();
   try {
-    const seed = await f.oc.request<{ id: string }>("/session", {
+    const seed = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Agent keys" },
     });
@@ -242,7 +242,7 @@ test("agent cycling honors the native configured-default primary order without c
     config: { default_agent: "plan" },
   });
   try {
-    const seed = await f.oc.request<{ id: string }>("/session", {
+    const seed = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Configured default cycle" },
     });

@@ -16,7 +16,7 @@ test("shared type tokens reach rendered chrome prose code and metadata in both t
   f.app.backend.core.listMessages = () =>
     Promise.resolve([{
       id: "message",
-      sessionID: "core",
+      sessionID: "tstv1-core",
       role: "user",
       time: { created: 1 },
       parts: [{
@@ -43,7 +43,7 @@ test("shared type tokens reach rendered chrome prose code and metadata in both t
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await b.goto(`${f.url}/#/local/core`);
+    await b.goto(`${f.url}/#/local/tstv1-core`);
     await b.poll(
       "!!document.querySelector('.otk-code pre') && !!document.querySelector('.otk-prompt textarea')",
     );

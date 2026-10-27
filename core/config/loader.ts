@@ -211,6 +211,12 @@ export function config(sources: Omit<LoadSources, "authState">): ServiceConfig {
     authState: authState ?? undefined,
   });
   result.config.state.path = path;
+  if (result.config.harness.type === "opencode1") {
+    console.warn(
+      'harness.type (OTK_HARNESS_TYPE): "opencode1" is deprecated; use "opencode-v1".',
+    );
+    result.config.harness.type = "opencode-v1";
+  }
   for (const p of result.loaded) console.info(`config: loaded ${p}`);
   if (result.envOverridden.length) {
     console.info(`config: env overrides ${result.envOverridden.join(", ")}`);

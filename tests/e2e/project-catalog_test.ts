@@ -31,7 +31,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await Deno.mkdir(finishedDirectory);
       f.add({
         ...f.entries[0],
-        id: "discovered-finish",
+        id: "tstv1-discovered-finish",
         directory: finishedDirectory,
         title: "Unseen discovery",
       });
@@ -97,7 +97,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
         console.info("CATALOG SCREENSHOTS", root);
       }
       // Opening both an indexed session and a session-free directory is viewing.
-      await openSession(b, "atmosphera");
+      await openSession(b, "tstv1-atmosphera");
       await b.click(`${row(empty)} .otk-project-open`);
       assertEquals(
         (await snap()).projects.map((p) => p.directory).includes(empty),
@@ -114,8 +114,8 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await b.poll(
         "document.querySelector('.otk-discovered-toggle')?.getAttribute('aria-expanded')==='false'",
       );
-      f.update("atmosphera", { status: "busy" });
-      f.update("globnotes", {
+      f.update("tstv1-atmosphera", { status: "busy" });
+      f.update("tstv1-globnotes", {
         attention: {
           permissions: 1,
           questions: 0,
@@ -123,9 +123,15 @@ for (const theme of ["otk-dark", "otk-light"]) {
           childQuestions: 0,
         },
       });
-      f.update("discovered-finish", { status: "busy" });
-      f.update("discovered-finish", { status: "idle" });
-      for (const id of ["atmosphera", "globnotes", "discovered-finish"]) {
+      f.update("tstv1-discovered-finish", { status: "busy" });
+      f.update("tstv1-discovered-finish", { status: "idle" });
+      for (
+        const id of [
+          "tstv1-atmosphera",
+          "tstv1-globnotes",
+          "tstv1-discovered-finish",
+        ]
+      ) {
         const directory = f.entries.find((e) => e.id === id)!.directory;
         await b.poll(`!!${find(directory)}`);
         assert(
@@ -155,9 +161,9 @@ for (const theme of ["otk-dark", "otk-light"]) {
         await b.screenshot(join(root, `catalog-collapsed-${theme}.png`));
       }
       // Existing phantom ownership remains available in a discovered project.
-      await openSession(b, "atmosphera");
+      await openSession(b, "tstv1-atmosphera");
       await b.poll("!!document.querySelector('[data-kind=phantom]')");
-      f.update("atmosphera", { status: "idle" });
+      f.update("tstv1-atmosphera", { status: "idle" });
       await b.click(".otk-discovered-toggle");
       await b.poll(`!!${find(empty)}`);
       const lightPositions = () =>
@@ -207,7 +213,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       );
       // A successful ordinary prompt uses the same action owner as shell,
       // command, permission and question replies.
-      await openSession(b, "atmosphera");
+      await openSession(b, "tstv1-atmosphera");
       await b.type("textarea[name=prompt]", "Track this interaction");
       await b.key("Enter");
       await b.poll(
@@ -228,7 +234,7 @@ test("idle discovered catalog renders without creating a native opencode instanc
     const directories = [f.oc.directory, join(f.oc.root, "another-project")];
     await Deno.mkdir(directories[1]);
     for (const directory of directories) {
-      await f.oc.request("/session", {
+      await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         directory,
         body: { title: "Idle discovery" },

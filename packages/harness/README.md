@@ -4,6 +4,10 @@ Harness-neutral session and lifecycle contracts, `HarnessSink`, `HarnessError`,
 and typed optional capabilities. Depends only on `@otk/protocol`. Import the
 public entry `@otk/harness`; native schemas and endpoints belong to adapters.
 
+Session references use the protocol's qualified-ID grammar. An adapter owns its
+native codec and validates its own provider at the boundary; the shared harness
+contracts never infer a provider from a bare native identity.
+
 ```ts
 import {
   CapabilityRegistry,

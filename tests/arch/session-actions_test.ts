@@ -49,7 +49,7 @@ function nativeMutationErrors(files: Map<string, string>): string[] {
   const errors: string[] = [];
   for (const [path, text] of files) {
     if (
-      path.startsWith("packages/harness-opencode1/") || path.endsWith(".css")
+      path.startsWith("packages/harness-opencode-v1/") || path.endsWith(".css")
     ) continue;
     const source = new Source(text, path);
     for (const call of source.all) {

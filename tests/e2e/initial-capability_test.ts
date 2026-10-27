@@ -52,7 +52,7 @@ test("initial direct route and reload render an already pending native permissio
   const f = await browserFixture({ bash: "ask" });
   let browser: Cdp | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Direct pending permission" },
     });
@@ -68,10 +68,10 @@ test("initial direct route and reload render an already pending native permissio
     });
     const native = await waitFor(
       () => f.oc.request<{ id: string; sessionID: string }[]>("/permission"),
-      (rows) => rows.some((row) => row.sessionID === session.id),
+      (rows) => rows.some((row) => row.sessionID === session.nativeID),
       60_000,
     );
-    const pending = native.find((row) => row.sessionID === session.id)!;
+    const pending = native.find((row) => row.sessionID === session.nativeID)!;
     const server = await f.sidecar();
     browser = await Cdp.launch(f.oc.root);
     await holdHandshake(browser);
@@ -114,7 +114,7 @@ test("initial advertised session capabilities activate question and prompt consu
       listQuestions: () =>
         Promise.resolve([{
           id: "initial-question",
-          sessionID: "core",
+          sessionID: "tstv1-core",
           questions: [{
             text: "Initial question",
             options: [],
@@ -124,10 +124,10 @@ test("initial advertised session capabilities activate question and prompt consu
         }]),
       answerQuestion: (requestID): Promise<void> => {
         rejected.push(requestID);
-        app.connections.content("core", {
+        app.connections.content("tstv1-core", {
           op: "question.remove",
           requestID,
-          sessionID: "core",
+          sessionID: "tstv1-core",
         });
         return Promise.resolve();
       },
@@ -140,7 +140,7 @@ test("initial advertised session capabilities activate question and prompt consu
   const browser = await Cdp.launch(root);
   try {
     await holdHandshake(browser);
-    await browser.goto(`${url}/#/local/core`);
+    await browser.goto(`${url}/#/local/tstv1-core`);
     for (const phase of ["direct", "reload"]) {
       if (phase === "reload") await browser.reload();
       await browser.poll("!!document.querySelector('textarea[name=prompt]')");
@@ -164,7 +164,10 @@ test("initial advertised session capabilities activate question and prompt consu
         ),
         "Keep initial draft",
       );
-      assertEquals(await browser.evaluate("location.hash"), "#/local/core");
+      assertEquals(
+        await browser.evaluate("location.hash"),
+        "#/local/tstv1-core",
+      );
       await browser.click(".otk-question-actions button:not(.otk-primary)");
       await browser.poll(
         "!document.querySelector('.otk-question-dock') && !document.querySelector('.otk-prompt').closest('[hidden]') && !document.querySelector('.otk-prompt button[type=submit]').disabled",
@@ -177,7 +180,10 @@ test("initial advertised session capabilities activate question and prompt consu
         ),
         "Keep initial draft",
       );
-      assertEquals(await browser.evaluate("location.hash"), "#/local/core");
+      assertEquals(
+        await browser.evaluate("location.hash"),
+        "#/local/tstv1-core",
+      );
       console.info("Initial question/prompt capability outcome:", phase);
     }
     assertEquals(browser.errors, []);

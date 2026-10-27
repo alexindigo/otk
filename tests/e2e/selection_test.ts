@@ -44,7 +44,10 @@ test("selection flow, state and stable boxes span chrome, menu, palette and pick
   try {
     await c.connect();
     const base = f.entries[0],
-      ids = [base.id, ...Array.from({ length: 9 }, (_, i) => `selection-${i}`)];
+      ids = [
+        base.id,
+        ...Array.from({ length: 9 }, (_, i) => `tstv1-selection-${i}`),
+      ];
     for (const id of ids.slice(1)) f.add({ ...base, id, title: id });
     await c.rpc("tasks.create", {
       directory: base.directory,
@@ -52,7 +55,7 @@ test("selection flow, state and stable boxes span chrome, menu, palette and pick
       sessions: ids,
     });
     await c.rpc("layout.patch", { rightCollapsed: false });
-    await b.goto(f.url + "/#/local/otk");
+    await b.goto(f.url + "/#/local/tstv1-otk");
     await b.poll(
       "!!document.querySelector('.otk-folded-crumbs') && !!document.querySelector('.otk-session-row[aria-current=page]')",
     );

@@ -22,20 +22,20 @@ test("project switches restore the last session and task across reload; closed a
     }] .otk-project-open`;
   try {
     await c.connect();
-    f.add({ ...f.entries[0], id: "remembered", title: "Last session" });
+    f.add({ ...f.entries[0], id: "tstv1-remembered", title: "Last session" });
     const task = await c.rpc<TaskRecord>("tasks.create", {
       directory,
       name: "Remember this task",
-      sessions: ["remembered"],
+      sessions: ["tstv1-remembered"],
     });
     await c.rpc("layout.patch", { rightCollapsed: false });
     await b.goto(f.url);
-    await openSession(b, "remembered");
+    await openSession(b, "tstv1-remembered");
     const restored =
-      `location.hash.endsWith('/remembered') && document.querySelector('[data-tab="${task.id}"]')?.getAttribute('aria-selected')==='true' && document.querySelector('.otk-user-bubble')?.textContent.includes('Transcript for remembered')`;
+      `location.hash.endsWith('/tstv1-remembered') && document.querySelector('[data-tab="${task.id}"]')?.getAttribute('aria-selected')==='true' && document.querySelector('.otk-user-bubble')?.textContent.includes('Transcript for remembered')`;
     await b.poll(restored);
     await b.click(row(f.entries[1].directory));
-    await b.poll("location.hash.endsWith('/atmosphera')");
+    await b.poll("location.hash.endsWith('/tstv1-atmosphera')");
     await b.click(row(directory));
     await b.poll(restored);
     await b.click(row(f.entries[1].directory));
@@ -45,7 +45,7 @@ test("project switches restore the last session and task across reload; closed a
     await b.poll(restored);
     // Close the remembered session through its actual context command.
     const point = await b.evaluate<{ x: number; y: number }>(
-      `(()=>{const r=document.querySelector('[data-crumb="remembered"]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
+      `(()=>{const r=document.querySelector('[data-crumb="tstv1-remembered"]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
     );
     for (const type of ["mousePressed", "mouseReleased"]) {
       await b.send("Input.dispatchMouseEvent", {
@@ -65,32 +65,32 @@ test("project switches restore the last session and task across reload; closed a
     await b.poll("!!document.querySelector('.otk-project-row')");
     await b.click(row(directory));
     await b.poll(
-      "location.hash.endsWith('/otk') && document.querySelector('.otk-user-bubble')?.textContent.includes('Transcript for otk')",
+      "location.hash.endsWith('/tstv1-otk') && document.querySelector('.otk-user-bubble')?.textContent.includes('Transcript for otk')",
     );
     // A stale persisted identity cannot select a session from another project.
     await b.click(row(f.entries[1].directory));
     await c.rpc("layout.location", {
       sidecarId: "local",
       directory,
-      sessionID: "missing",
+      sessionID: "tstv1-missing",
     });
     await b.reload();
     await b.poll("!!document.querySelector('.otk-project-row')");
     await b.click(row(directory));
     await b.poll(
-      "location.hash.endsWith('/otk') && document.querySelector('.otk-user-bubble')?.textContent.includes('Transcript for otk')",
+      "location.hash.endsWith('/tstv1-otk') && document.querySelector('.otk-user-bubble')?.textContent.includes('Transcript for otk')",
     );
     const prefs = await waitFor(
       () => c.rpc<Preferences>("prefs.get", {}),
       (prefs) =>
         prefs.shellLayout.projectLocations?.find((p) =>
           p.directory === directory
-        )?.sessionID === "otk",
+        )?.sessionID === "tstv1-otk",
     );
     assertEquals(
       prefs.shellLayout.projectLocations?.find((p) => p.directory === directory)
         ?.sessionID,
-      "otk",
+      "tstv1-otk",
     );
     assertEquals(b.errors, []);
   } finally {

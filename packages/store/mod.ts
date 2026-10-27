@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 /** SQLite storage and caller-composed feature migrations, without app policy. */
 export { OtkDb } from "./db.ts";
+export { sessionReferenceMigrations } from "./features/session-references.ts";
 export type { FeatureMigrations, Migration } from "./migrations.ts";
 export {
   type ProjectRecord,

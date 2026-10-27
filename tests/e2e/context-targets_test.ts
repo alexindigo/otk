@@ -133,9 +133,9 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
       directory: f.entries[0].directory,
       active: true,
     });
-    f.add({ ...f.entries[0], id: "second", title: "Second session" });
+    f.add({ ...f.entries[0], id: "tstv1-second", title: "Second session" });
     await b.goto(f.url);
-    await openSession(b, "otk");
+    await openSession(b, "tstv1-otk");
     await grant(b, f.url);
     const spare = await client.rpc<TaskRecord>("tasks.create", {
       directory: f.entries[0].directory,
@@ -155,9 +155,9 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
     ];
     for (
       const [name, selector] of [
-        ["tab", '[data-tab="otk"]'],
-        ["chip", '[data-crumb="otk"]'],
-        ["session-row", '[data-session="otk"]'],
+        ["tab", '[data-tab="tstv1-otk"]'],
+        ["chip", '[data-crumb="tstv1-otk"]'],
+        ["session-row", '[data-session="tstv1-otk"]'],
       ]
     ) {
       await rightClick(b, selector);
@@ -195,7 +195,9 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
       await clipboard(b, "Execution");
       await b.poll(`!document.querySelector('${menu}')`);
     }
-    await b.evaluate(`document.querySelector('[data-tab="otk"]').focus()`);
+    await b.evaluate(
+      `document.querySelector('[data-tab="tstv1-otk"]').focus()`,
+    );
     for (const key of ["ContextMenu", "F10"]) {
       await b.key(key, key === "F10" ? 8 : 0);
       await b.poll(
@@ -207,21 +209,21 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
       );
       await dismiss(b);
       await b.poll(
-        `document.activeElement===document.querySelector('[data-tab="otk"]')`,
+        `document.activeElement===document.querySelector('[data-tab="tstv1-otk"]')`,
       );
     }
     // Opening a background row must use that row, not the currently viewed session.
-    await rightClick(b, '[data-session="second"]');
+    await rightClick(b, '[data-session="tstv1-second"]');
     await invoke(b, "Open");
     await b.poll(
-      `location.hash.endsWith('/second') && !!document.querySelector('[data-message="second-message"]')`,
+      `location.hash.endsWith('/tstv1-second') && !!document.querySelector('[data-message="second-message"]')`,
     );
-    await rightClick(b, '[data-session="otk"]');
+    await rightClick(b, '[data-session="tstv1-otk"]');
     await invoke(b, "Add to task: Delivery");
     await b.poll(
-      `!!document.querySelector('[data-session-group="${task.id}"] [data-session="otk"]')`,
+      `!!document.querySelector('[data-session-group="${task.id}"] [data-session="tstv1-otk"]')`,
     );
-    await rightClick(b, '[data-session="otk"]');
+    await rightClick(b, '[data-session="tstv1-otk"]');
     assertEquals(await labels(b), [
       "Open",
       "Open as task",
@@ -232,18 +234,18 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
     ]);
     await invoke(b, "Open as task");
     await b.poll(
-      `location.hash.endsWith('/otk') && document.querySelector('[data-tab="${task.id}"]').getAttribute('aria-selected')==='true'`,
+      `location.hash.endsWith('/tstv1-otk') && document.querySelector('[data-tab="${task.id}"]').getAttribute('aria-selected')==='true'`,
     );
     // Pin the other session through its chip and observe persisted task membership.
-    await rightClick(b, '[data-session="second"]');
+    await rightClick(b, '[data-session="tstv1-second"]');
     await invoke(b, "Open");
-    await b.poll(`!!document.querySelector('[data-crumb="second"]')`);
+    await b.poll(`!!document.querySelector('[data-crumb="tstv1-second"]')`);
     // Task grouping is serving-sidecar metadata, independent of the native link.
     f.app.connections.connection("reconnecting");
     await b.poll(
       `document.querySelector('.otk-server-status')?.getAttribute('aria-label').includes('agent service reconnecting')`,
     );
-    await rightClick(b, '[data-crumb="second"]');
+    await rightClick(b, '[data-crumb="tstv1-second"]');
     assert((await labels(b)).includes("Pin as task"));
     for (const theme of ["otk-dark", "otk-light"]) {
       await client.rpc("prefs.set", { key: "theme", value: theme });
@@ -259,7 +261,7 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
     });
     assert(
       saved.some((t) =>
-        t.name === "Second session" && t.sessions.includes("second")
+        t.name === "Second session" && t.sessions.includes("tstv1-second")
       ),
     );
     await client.rpc("tasks.close", { id: spare.id });
@@ -304,14 +306,17 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
       })).some((t) => t.id === task.id),
     );
     assertEquals(
-      await b.evaluate(`location.hash.endsWith('/second')`),
+      await b.evaluate(`location.hash.endsWith('/tstv1-second')`),
       true,
       "Closing another task must preserve the selected session",
     );
     for (const theme of ["otk-dark", "otk-light"]) {
       await client.rpc("prefs.set", { key: "theme", value: theme });
       await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
-      await rightClick(b, '[data-project-sessions~="otk"] .otk-project-open');
+      await rightClick(
+        b,
+        '[data-project-sessions~="tstv1-otk"] .otk-project-open',
+      );
       assertEquals(await labels(b), [
         "Mark inactive",
         "Add project",
@@ -320,13 +325,19 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
       await capture(b, root, `${theme}-project`);
       await dismiss(b);
     }
-    await rightClick(b, '[data-project-sessions~="otk"] .otk-project-open');
+    await rightClick(
+      b,
+      '[data-project-sessions~="tstv1-otk"] .otk-project-open',
+    );
     await invoke(b, "Mark inactive");
     await b.click(".otk-inactive-toggle");
     await b.poll(
-      `!!document.querySelector('[data-project-sessions~="otk"][data-inactive="true"]')`,
+      `!!document.querySelector('[data-project-sessions~="tstv1-otk"][data-inactive="true"]')`,
     );
-    await rightClick(b, '[data-project-sessions~="otk"] .otk-project-open');
+    await rightClick(
+      b,
+      '[data-project-sessions~="tstv1-otk"] .otk-project-open',
+    );
     assertEquals(await labels(b), [
       "Mark active",
       "Add project",
@@ -335,7 +346,7 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
     ]);
     await invoke(b, "Mark active");
     await b.poll(
-      `!!document.querySelector('[data-project-sessions~="otk"][data-inactive="false"]')`,
+      `!!document.querySelector('[data-project-sessions~="tstv1-otk"][data-inactive="false"]')`,
     );
     assertEquals(b.errors, []);
     console.info("C2 screenshot root", root);
@@ -374,7 +385,7 @@ const file: FileDiff = {
 };
 const reply: AssistantMessage = {
   id: "reply",
-  sessionID: "otk",
+  sessionID: "tstv1-otk",
   replyTo: "prompt",
   role: "assistant",
   agent: "build",
@@ -490,7 +501,7 @@ test("C2 shared reply contributions stay constant across N real messages and ext
       ),
       {
         sidecarId: "probe-sidecar",
-        sessionID: "probe-session",
+        sessionID: "tstv1-probe-session",
         messageID: "probe-reply-0",
         lastID: "probe-reply-0",
         completed: true,
@@ -527,7 +538,7 @@ test("C2 stale task and phantom menus follow captured identities across session 
   await client.connect();
   try {
     await b.goto(f.url);
-    await openSession(b, "otk");
+    await openSession(b, "tstv1-otk");
     const task = await client.rpc<TaskRecord>("tasks.create", {
       directory: f.entries[0].directory,
       name: "Captured task",
@@ -541,10 +552,10 @@ test("C2 stale task and phantom menus follow captured identities across session 
     assertEquals(await labels(b), ["Rename task", "Close task"]);
     // Programmatic navigation preserves the open menu, exposing stale-target work.
     await b.evaluate(
-      `location.hash=location.hash.slice(0,location.hash.lastIndexOf('/')+1)+'atmosphera'`,
+      `location.hash=location.hash.slice(0,location.hash.lastIndexOf('/')+1)+'tstv1-atmosphera'`,
     );
     await b.poll(
-      `location.hash.endsWith('/atmosphera') && !document.querySelector('${menu}')`,
+      `location.hash.endsWith('/tstv1-atmosphera') && !document.querySelector('${menu}')`,
     );
     assert(
       (await client.rpc<TaskRecord[]>("tasks.list", {
@@ -556,21 +567,21 @@ test("C2 stale task and phantom menus follow captured identities across session 
       false,
     );
     await b.evaluate(
-      `location.hash=location.hash.slice(0,location.hash.lastIndexOf('/')+1)+'otk'`,
+      `location.hash=location.hash.slice(0,location.hash.lastIndexOf('/')+1)+'tstv1-otk'`,
     );
-    await b.poll(`location.hash.endsWith('/otk')`);
-    await rightClick(b, '[data-tab="otk"]');
+    await b.poll(`location.hash.endsWith('/tstv1-otk')`);
+    await rightClick(b, '[data-tab="tstv1-otk"]');
     await b.evaluate(
-      `location.hash=location.hash.slice(0,location.hash.lastIndexOf('/')+1)+'atmosphera'`,
+      `location.hash=location.hash.slice(0,location.hash.lastIndexOf('/')+1)+'tstv1-atmosphera'`,
     );
-    await b.poll(`location.hash.endsWith('/atmosphera')`);
+    await b.poll(`location.hash.endsWith('/tstv1-atmosphera')`);
     // Global session commands remain meaningful: copy targets the original session.
     await grant(b, f.url);
     await b.poll(`!!document.querySelector('${menu}')`);
     await invoke(b, "Copy session title");
     await clipboard(b, "Execution");
     assertEquals(
-      await b.evaluate("location.hash.endsWith('/atmosphera')"),
+      await b.evaluate("location.hash.endsWith('/tstv1-atmosphera')"),
       true,
     );
     assertEquals(b.errors, []);
@@ -692,7 +703,7 @@ test("C2 content targets: prompt, whole reply, nested code/diff and feature-cont
   const root = await fixture();
   const prompt: Message = {
     id: "prompt",
-    sessionID: "otk",
+    sessionID: "tstv1-otk",
     role: "user",
     time: { created: 1 },
     parts: [{
@@ -720,14 +731,14 @@ test("C2 content targets: prompt, whole reply, nested code/diff and feature-cont
     }],
   };
   const f = await inboxBrowserFixture(root, [], {
-      otk: [prompt, reply, followup],
+      "tstv1-otk": [prompt, reply, followup],
     }),
     b = await Cdp.launch(root),
     client = new WsClient(f.url);
   await client.connect();
   try {
     await b.goto(f.url);
-    await openSession(b, "otk");
+    await openSession(b, "tstv1-otk");
     await grant(b, f.url);
     await b.poll(`!!document.querySelector('[data-message="reply"]')`);
     for (const theme of ["otk-dark", "otk-light"]) {
@@ -873,11 +884,11 @@ test("C2 stock capabilities: targeted auto-approve and reply usage menu reach th
   const f = await browserFixture({ bash: "allow" });
   let client: WsClient | undefined;
   try {
-    const first = await f.oc.request<{ id: string }>("/session", {
+    const first = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Viewed session" },
     });
-    const other = await f.oc.request<{ id: string }>("/session", {
+    const other = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Context session" },
     });

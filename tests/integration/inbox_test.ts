@@ -47,7 +47,7 @@ function projectCreation(app: Awaited<ReturnType<typeof coreBackendFixture>>) {
   app.app.backend.core.createSession = (input) =>
     Promise.resolve({
       ...app.session,
-      id: crypto.randomUUID(),
+      id: `tstv1-${crypto.randomUUID()}`,
       directory: input.directory,
     });
 }
@@ -63,7 +63,7 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
       a.inbox().projects.map((p) => [p.directory, p.added, p.order]),
       [],
     );
-    await a.model.openSession("core", root);
+    await a.model.openSession("tstv1-core", root);
     assertEquals((await rpc.call("projects.list", {})).length, 0);
     await a.model.act(root, () => Promise.resolve());
     await waitFor(() => a.inbox().projects.length === 1, Boolean);
@@ -85,9 +85,12 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
       name: "exec",
     });
     await rpc.call("tasks.rename", { id: first.id, name: "research" });
-    await rpc.call("tasks.sessions", { id: first.id, sessions: ["core"] });
+    await rpc.call("tasks.sessions", {
+      id: first.id,
+      sessions: ["tstv1-core"],
+    });
     await assertRejects(() =>
-      rpc.call("tasks.sessions", { id: second.id, sessions: ["core"] })
+      rpc.call("tasks.sessions", { id: second.id, sessions: ["tstv1-core"] })
     );
     await rpc.call("tasks.reorder", {
       directory: root,
@@ -96,27 +99,27 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
     await waitFor(
       () =>
         b.inbox().tasks[0]?.id === second.id &&
-        b.inbox().tasks[1]?.sessions[0] === "core",
+        b.inbox().tasks[1]?.sessions[0] === "tstv1-core",
       Boolean,
     );
     await rpc.call("projects.inactive", { directory: root, inactive: true });
     await waitFor(() => b.inbox().projects[0].inactive, Boolean);
-    const entry = app.app.index.get("core")!;
+    const entry = app.app.index.get("tstv1-core")!;
     app.app.index.upsert({ ...entry, status: "busy" });
     app.app.index.upsert({ ...entry, status: "idle" });
     await waitFor(
-      () => b.inbox().finishes.core && !b.inbox().projects[0].inactive,
+      () => b.inbox().finishes["tstv1-core"] && !b.inbox().projects[0].inactive,
       Boolean,
     );
-    const finish = b.inbox().finishes.core;
+    const finish = b.inbox().finishes["tstv1-core"];
     assert(finish > 0);
     const projected = inboxProjects([entry], b.model.state.inbox, Date.now());
     assertEquals([projected[0].status, projected[0].unread], [
       "finished",
       true,
     ]);
-    await a.model.openSession("core", root);
-    await waitFor(() => (b.inbox().seen.core ?? 0) >= finish, Boolean);
+    await a.model.openSession("tstv1-core", root);
+    await waitFor(() => (b.inbox().seen["tstv1-core"] ?? 0) >= finish, Boolean);
     assertEquals(
       inboxProjects([entry], b.model.state.inbox, Date.now())[0].unread,
       false,
@@ -137,16 +140,19 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
     });
     await waitFor(() => !b.inbox().projects[0].inactive, Boolean);
     app.app.index.upsert(entry);
-    assertEquals((await rpc.call("sessions.finishes", {})).core, finish);
+    assertEquals(
+      (await rpc.call("sessions.finishes", {}))["tstv1-core"],
+      finish,
+    );
     await rpc.call("tasks.close", { id: first.id });
     await waitFor(() => b.inbox().tasks.length === 1, Boolean);
-    assert(app.app.index.get("core"));
+    assert(app.app.index.get("tstv1-core"));
     const promoted = await a.model.promote(entry);
     await waitFor(
       () => b.inbox().tasks.some((t) => t.id === promoted.id),
       Boolean,
     );
-    assertEquals(promoted.sessions, ["core"]);
+    assertEquals(promoted.sessions, ["tstv1-core"]);
     assertEquals(promoted.name, entry.title);
     assertEquals(
       (await rpc.call("tasks.list", { directory: root })).map((t) => t.id),
@@ -164,8 +170,8 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
     a = await consumer(app.url);
     b = await consumer(app.url);
     assertEquals(a.inbox(), b.inbox());
-    assertEquals(a.inbox().finishes.core, finish);
-    assert(a.inbox().seen.core >= finish);
+    assertEquals(a.inbox().finishes["tstv1-core"], finish);
+    assert(a.inbox().seen["tstv1-core"] >= finish);
     assertEquals(a.inbox().tasks.map((t) => t.id), [second.id]);
     assertEquals(a.inbox().projects.map((p) => [p.directory, p.order]), [[
       root,
@@ -276,7 +282,7 @@ test("first-run setup and restart retain the same user's inbox metadata", async 
     await Deno.mkdir(empty);
     await first.rpc("projects.add", { directory: empty });
     const seen = await first.rpc<number>("sessions.seen", {
-      sessionID: "core",
+      sessionID: "tstv1-core",
     });
     await first.close();
     await app.stop();
@@ -289,7 +295,7 @@ test("first-run setup and restart retain the same user's inbox metadata", async 
     await second.connect();
     const inbox = await second.rpc<InboxSnapshot>("inbox.get", {});
     assert(inbox.projects.some((p) => p.directory === empty && p.added));
-    assertEquals(inbox.seen.core, seen);
+    assertEquals(inbox.seen["tstv1-core"], seen);
   } finally {
     for (const client of clients) await client.close();
     await app.stop();

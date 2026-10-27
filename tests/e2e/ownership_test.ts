@@ -14,7 +14,7 @@ import { SidecarTest } from "../support/sidecar.ts";
 test("web late creation reply retains a draft typed while RPC was pending", async () => {
   const f = await browserFixture(), proxy = new FreezeProxy(f.oc.port);
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Keep this draft" },
     });
@@ -135,11 +135,11 @@ test("web removed sidecar cannot reconnect after an in-flight login returns", as
 test("web newer selection supersedes a pending session creation without losing its draft", async () => {
   const f = await browserFixture(), proxy = new FreezeProxy(f.oc.port);
   try {
-    const a = await f.oc.request<{ id: string }>("/session", {
+    const a = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Original A" },
     });
-    const b = await f.oc.request<{ id: string }>("/session", {
+    const b = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Newer selection B" },
     });

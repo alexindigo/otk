@@ -17,7 +17,7 @@ const allowed: Record<string, readonly string[]> = {
   protocol: [],
   content: ["protocol"],
   harness: ["protocol"],
-  "harness-opencode1": ["protocol", "content", "harness"],
+  "harness-opencode-v1": ["protocol", "content", "harness"],
   store: [],
   client: ["protocol"],
   ui: ["protocol", "client"],
@@ -107,9 +107,9 @@ export function dependencyError(
   }
   if (production && from === "client") return "client depends only on protocol";
   if (
-    production && from !== "harness-opencode1" && /opencode/i.test(specifier)
+    production && from !== "harness-opencode-v1" && /opencode/i.test(specifier)
   ) {
-    return "native opencode dependencies belong to harness-opencode1";
+    return "native opencode dependencies belong to harness-opencode-v1";
   }
 }
 
@@ -166,12 +166,12 @@ export function sourceErrors(path: string, source: string): string[] {
     );
   }
   if (
-    (from === "harness-opencode1" || path.startsWith("core/index/")) &&
+    (from === "harness-opencode-v1" || path.startsWith("core/index/")) &&
     /#[\w]+\s*(?::[^=;]+)?=\s*new Map<string,\s*IndexEntry>/.test(source)
   ) errors.push("session entries belong only to the shared SessionIndex owner");
   if (
-    from === "harness-opencode1" &&
-    path !== "packages/harness-opencode1/messages.ts" &&
+    from === "harness-opencode-v1" &&
+    path !== "packages/harness-opencode-v1/messages.ts" &&
     /["'`]\/session\/[^\n]*\/message["'`]/.test(source)
   ) {
     errors.push(
@@ -337,18 +337,18 @@ export function sourceErrors(path: string, source: string): string[] {
     }
   }
   if (
-    from !== "harness-opencode1" &&
+    from !== "harness-opencode-v1" &&
     /["'`]\/(?:global\/(?:event|health)|experimental\/(?:session|resource)|session(?:\/|["'`])|permission(?:\/|["'`])|question(?:\/|["'`])|find\/file|agent["'`]|command["'`]|skill["'`]|mcp["'`])/
       .test(source)
   ) {
-    errors.push("native opencode endpoints belong to harness-opencode1");
+    errors.push("native opencode endpoints belong to harness-opencode-v1");
   }
   if (
-    from !== "harness-opencode1" &&
+    from !== "harness-opencode-v1" &&
     /(?:FROM|JOIN|CREATE TABLE|PRAGMA table_info\()\s*(?:message|part|session)\b/i
       .test(source)
   ) {
-    errors.push("native database schema belongs to harness-opencode1");
+    errors.push("native database schema belongs to harness-opencode-v1");
   }
   if (
     /(?:^|\/)(?:registries\/|registry(?:\.ts|\/)|[^/]+-registry\.ts)/.test(
@@ -480,13 +480,13 @@ Deno.test("dependency checks reject private paths, upward edges and legacy escap
       ["main.ts", "@otk/sidecar"],
       ["main.ts", "@otk/server"],
       ["main.ts", "@otk/app"],
-      ["packages/harness-opencode1/adapter.ts", "../../core/mod.ts"],
+      ["packages/harness-opencode-v1/adapter.ts", "../../core/mod.ts"],
       ["packages/client/mod.ts", "../../main.ts"],
       ["tests/unit/example.ts", "../../sidecar/auth/state.ts"],
       ["packages/client/rpc.ts", "npm:ws"],
       ["tests/unit/example.ts", "../../web/src/state/reduce.ts"],
       ["packages/ui/mod.ts", "../../web/src/ui/App.tsx"],
-      ["packages/ui/mod.ts", "@otk/harness-opencode1"],
+      ["packages/ui/mod.ts", "@otk/harness-opencode-v1"],
       ["web/src/ui/App.tsx", "../state/session.ts"],
     ]
   ) assert(dependencyError(path, specifier, present), `${path}: ${specifier}`);
@@ -495,7 +495,7 @@ Deno.test("dependency checks reject private paths, upward edges and legacy escap
   for (
     const [path, specifier] of [
       ["packages/content/mod.ts", "@otk/protocol"],
-      ["packages/harness-opencode1/mod.ts", "@otk/content"],
+      ["packages/harness-opencode-v1/mod.ts", "@otk/content"],
       ["packages/ui/mod.ts", "@otk/client"],
       ["main.ts", "@otk/ui"],
       ["packages/protocol/mod.ts", "./messages.ts"],
@@ -503,7 +503,7 @@ Deno.test("dependency checks reject private paths, upward edges and legacy escap
       ["core/ws/registry.ts", "@otk/protocol"],
       ["main.ts", "@otk/store"],
       ["packages/store/features/prefs.ts", "../db.ts"],
-      ["main.ts", "@otk/harness-opencode1"],
+      ["main.ts", "@otk/harness-opencode-v1"],
       ["core/service.ts", "@otk/store"],
     ]
   ) assertEquals(dependencyError(path, specifier, present), undefined);
@@ -540,7 +540,7 @@ Deno.test("native endpoints and feature imports cannot leak into extracted share
   const endpoint = "fetch(`/session/${id}/message`)";
   assertEquals(sourceErrors("packages/protocol/rpc.ts", endpoint).length, 1);
   assertEquals(
-    sourceErrors("packages/harness-opencode1/messages.ts", endpoint),
+    sourceErrors("packages/harness-opencode-v1/messages.ts", endpoint),
     [],
   );
   assertEquals(sourceErrors("tests/integration/example.ts", endpoint), []);
@@ -554,7 +554,7 @@ Deno.test("native endpoints and feature imports cannot leak into extracted share
   );
   assertEquals(
     sourceErrors(
-      "packages/harness-opencode1/history.ts",
+      "packages/harness-opencode-v1/history.ts",
       'db.prepare("SELECT data FROM message")',
     ),
     [],
@@ -623,7 +623,7 @@ Deno.test("native message collection reads cannot bypass their bounded owner", (
   ) {
     assertEquals(
       sourceErrors(
-        `packages/harness-opencode1/${path}`,
+        `packages/harness-opencode-v1/${path}`,
         "client.json(`/session/${id}/message`)",
       ),
       [
@@ -633,7 +633,7 @@ Deno.test("native message collection reads cannot bypass their bounded owner", (
   }
   assertEquals(
     sourceErrors(
-      "packages/harness-opencode1/adapter.ts",
+      "packages/harness-opencode-v1/adapter.ts",
       "client.json(`/session/${id}/message/${message}`)",
     ),
     [],
@@ -643,8 +643,8 @@ Deno.test("native message collection reads cannot bypass their bounded owner", (
 Deno.test("connector and core cannot retain a second session-index map", async () => {
   for (
     const path of [
-      "packages/harness-opencode1/adapter.ts",
-      "packages/harness-opencode1/future.ts",
+      "packages/harness-opencode-v1/adapter.ts",
+      "packages/harness-opencode-v1/future.ts",
       "core/index/store.ts",
     ]
   ) {
@@ -664,7 +664,7 @@ Deno.test("connector and core cannot retain a second session-index map", async (
     ),
   );
   assert(
-    (await read("packages/harness-opencode1/adapter.ts")).includes(
+    (await read("packages/harness-opencode-v1/adapter.ts")).includes(
       "this.#index = sink.index ?? new SessionIndex()",
     ),
   );
@@ -674,7 +674,7 @@ Deno.test("standalone sessions consumer imports only the harness public entries"
   const consumer = await Deno.readTextFile(
     new URL("tests/reuse/harness-consumer.ts", root),
   );
-  assertEquals(imports(consumer), ["@otk/harness", "@otk/harness-opencode1"]);
+  assertEquals(imports(consumer), ["@otk/harness", "@otk/harness-opencode-v1"]);
 });
 
 Deno.test("database upgrades stay feature-owned and the global sequence is frozen compatibility only", async () => {
@@ -970,7 +970,7 @@ Deno.test("final application entries compose public kit modules and keep reflect
   );
   assertEquals(
     imports(await read("main.ts")).filter((name) => name?.startsWith("@otk/")),
-    ["@otk/harness-opencode1", "@otk/content"],
+    ["@otk/harness-opencode-v1", "@otk/content"],
   );
   assertEquals(imports(await read("web/src/features.ts")), ["@otk/ui"]);
   assertEquals(

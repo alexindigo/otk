@@ -11,7 +11,7 @@ import {
 test("a pasted literal bang remains prompt text when subsequent ordinary characters are typed", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Literal bang" },
     });
@@ -47,7 +47,7 @@ test("a pasted literal bang remains prompt text when subsequent ordinary charact
 test("P2 shell mode emits bash output without permission, exits locally, and survives long commands", async () => {
   const f = await browserFixture({ bash: "deny" });
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Shell" },
       }),
@@ -112,7 +112,7 @@ test("deferred shell failure reaches the session consumer and reload without cha
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Deferred shell failure" },
     });

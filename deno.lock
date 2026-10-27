@@ -1151,7 +1151,7 @@
           "npm:marked@17.0.6"
         ]
       },
-      "packages/harness-opencode1": {
+      "packages/harness-opencode-v1": {
         "dependencies": [
           "jsr:@std/path@1.1.5"
         ]

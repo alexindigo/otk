@@ -11,7 +11,7 @@ test("project time and menu share a stable flowing cell on hover and focus; no t
     f = await inboxBrowserFixture(root),
     b = await Cdp.launch(root),
     c = new WsClient(f.url);
-  const row = "[data-project-sessions~=otk]";
+  const row = "[data-project-sessions~=tstv1-otk]";
   const geometry =
     `(()=>{const row=document.querySelector('${row}'),cell=row.querySelector('.otk-project-trailing'),time=cell.querySelector('time'),trigger=cell.querySelector('.otk-popover-trigger'),r=cell.getBoundingClientRect(),t=time.getBoundingClientRect(),m=trigger.getBoundingClientRect();return {box:[r.x,r.y,r.width,r.height],row:row.getBoundingClientRect().toJSON(),centre:Math.max(Math.abs(t.y+t.height/2-m.y-m.height/2),Math.abs(m.y+m.height/2-r.y-r.height/2)),positions:[row,cell,time,trigger,...cell.children].map(e=>getComputedStyle(e).position),inside:t.left>=r.left&&t.right<=r.right&&m.left>=r.left&&m.right<=r.right}})()`;
   try {
@@ -22,20 +22,20 @@ test("project time and menu share a stable flowing cell on hover and focus; no t
     });
     f.add({
       ...f.entries[0],
-      id: "row-action-phantom",
+      id: "tstv1-row-action-phantom",
       title: "Working",
       status: "busy",
     });
-    await b.goto(f.url + "/#/local/otk/otk");
+    await b.goto(f.url + "/#/local/tstv1-otk/tstv1-otk");
     await b.poll(
-      `!!document.querySelector('${row} .otk-project-trailing') && !!document.querySelector('[data-tab=row-action-phantom]')`,
+      `!!document.querySelector('${row} .otk-project-trailing') && !!document.querySelector('[data-tab=tstv1-row-action-phantom]')`,
     );
     for (const theme of ["otk-dark", "otk-light"]) {
       await c.rpc("prefs.set", { key: "theme", value: theme });
       await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
       assertEquals(
         await b.evaluate(
-          `(()=>{const sample=document.createElement('span');sample.style.color='var(--otk-fg-2)';document.body.append(sample);const expected=getComputedStyle(sample).color;sample.remove();const row=document.querySelector('[data-project-sessions~=atmosphera]');return [row,row.querySelector('.otk-project-open')].every(e=>getComputedStyle(e).color===expected)})()`,
+          `(()=>{const sample=document.createElement('span');sample.style.color='var(--otk-fg-2)';document.body.append(sample);const expected=getComputedStyle(sample).color;sample.remove();const row=document.querySelector('[data-project-sessions~=tstv1-atmosphera]');return [row,row.querySelector('.otk-project-open')].every(e=>getComputedStyle(e).color===expected)})()`,
         ),
         true,
         "Unselected project text retains its secondary tone when the row owns selection",

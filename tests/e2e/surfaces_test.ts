@@ -12,7 +12,7 @@ test("Display preferences title flows fully inside its surface in every theme", 
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Surface geometry" },
     });
@@ -116,13 +116,13 @@ test("every registered dialog and anchored menu shares contained flow and native
     });
     const sessions: string[] = [];
     for (let n = 0; n < 10; n++) {
-      const id = n === 0 ? "otk" : `surface-session-${n}`;
+      const id = n === 0 ? "tstv1-otk" : `tstv1-surface-session-${n}`;
       if (n) f.add({ ...f.entries[0], id, title: `Surface session ${n}` });
       sessions.push(id);
     }
     await client.rpc("tasks.sessions", { id: task.id, sessions });
     await browser.goto(f.url);
-    await openSession(browser, "otk");
+    await openSession(browser, "tstv1-otk");
     await browser.click(`[data-tab='${task.id}']`);
     for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       await client.rpc("prefs.set", { key: "theme", value: theme });

@@ -70,7 +70,7 @@ function TranscriptProbe() {
             directory="/probe"
             message={{
               id: `probe-reply-${index()}`,
-              sessionID: "probe-session",
+              sessionID: "tstv1-probe-session",
               role: "assistant",
               agent: "probe",
               model: { provider: "probe", model: "probe" },

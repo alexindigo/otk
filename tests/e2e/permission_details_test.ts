@@ -12,11 +12,11 @@ test("U9 permission toast and takeover share exact bash, generic and edit summar
   let client: WsClient | undefined;
   const shots = Deno.env.get("OTK_PERMISSION_SHOTS");
   try {
-    const foreground = await f.oc.request<{ id: string }>("/session", {
+    const foreground = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Current conversation" },
     });
-    const background = await f.oc.request<{ id: string }>("/session", {
+    const background = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Review exact permission targets" },
     });
@@ -97,7 +97,7 @@ test("U9 permission toast and takeover share exact bash, generic and edit summar
     );
     await waitFor(
       () => f.oc.request<Record<string, { type: string }>>("/session/status"),
-      (state) => !state[background.id],
+      (state) => !state[background.nativeID],
     );
     const file = join(f.oc.directory, "README.md");
     f.fake.queue({ tool: { name: "read", input: { filePath: file } } }, {

@@ -46,7 +46,7 @@ test("registered panel views, width and collapsed state persist in host preferen
   try {
     await c.connect();
     await b.goto(f.url);
-    await openSession(b, "otk");
+    await openSession(b, "tstv1-otk");
     await b.poll(
       "document.querySelector('.otk-right-panel').getBoundingClientRect().width===320",
     );
@@ -229,50 +229,64 @@ test("Sessions groups the selected project's parent-child tree by task, filters 
   try {
     await c.connect();
     const base = f.entries[0];
-    f.add({ ...base, id: "helper", parentID: "otk", title: "Explore callers" });
     f.add({
       ...base,
-      id: "nested",
-      parentID: "helper",
+      id: "tstv1-helper",
+      parentID: "tstv1-otk",
+      title: "Explore callers",
+    });
+    f.add({
+      ...base,
+      id: "tstv1-nested",
+      parentID: "tstv1-helper",
       title: "Find references",
     });
-    f.add({ ...base, id: "preview", title: "Idle preview" });
+    f.add({ ...base, id: "tstv1-preview", title: "Idle preview" });
     f.add({
       ...base,
-      id: "blocked",
+      id: "tstv1-blocked",
       title: "Needs answer",
       attention: { ...base.attention, questions: 1 },
     });
-    f.add({ ...base, id: "finished", title: "Unseen finish" });
-    f.update("otk", { status: "busy" });
-    f.update("finished", { status: "busy" });
-    f.update("finished", { status: "idle" });
+    f.add({ ...base, id: "tstv1-finished", title: "Unseen finish" });
+    f.update("tstv1-otk", { status: "busy" });
+    f.update("tstv1-finished", { status: "busy" });
+    f.update("tstv1-finished", { status: "idle" });
     const task = await c.rpc<TaskRecord>("tasks.create", {
       directory: base.directory,
       name: "Execution",
-      sessions: ["otk"],
+      sessions: ["tstv1-otk"],
     });
     await b.goto(f.url);
-    await openSession(b, "helper");
-    await b.poll("location.hash==='#/local/otk/helper'");
+    await openSession(b, "tstv1-helper");
+    await b.poll("location.hash==='#/local/tstv1-otk/tstv1-helper'");
     assertEquals(
       await b.evaluate(
         "[...document.querySelectorAll('.otk-session-group')].map(e=>({title:e.getAttribute('aria-label'),ids:[...e.querySelectorAll('[data-session]')].map(e=>e.dataset.session)}))",
       ),
       [
-        { title: "Execution", ids: ["otk", "helper", "nested"] },
-        { title: "Not in a task", ids: ["preview", "blocked", "finished"] },
+        {
+          title: "Execution",
+          ids: ["tstv1-otk", "tstv1-helper", "tstv1-nested"],
+        },
+        {
+          title: "Not in a task",
+          ids: ["tstv1-preview", "tstv1-blocked", "tstv1-finished"],
+        },
       ],
     );
     assertEquals(
       await b.evaluate(
-        "document.querySelector('[data-session=nested]').closest('li').dataset.depth",
+        "document.querySelector('[data-session=tstv1-nested]').closest('li').dataset.depth",
       ),
       "2",
     );
     for (
-      const [id, state] of [["otk", "working"], ["blocked", "blocked"], [
-        "finished",
+      const [id, state] of [["tstv1-otk", "working"], [
+        "tstv1-blocked",
+        "blocked",
+      ], [
+        "tstv1-finished",
         "finished",
       ]]
     ) {
@@ -288,40 +302,40 @@ test("Sessions groups the selected project's parent-child tree by task, filters 
     assert(alignment.every((n) => n < .5));
     await b.fill("input[type=search]", "references");
     await b.poll(
-      "document.querySelectorAll('[data-session]').length===3 && !!document.querySelector('[data-session=nested]')",
+      "document.querySelectorAll('[data-session]').length===3 && !!document.querySelector('[data-session=tstv1-nested]')",
     );
     await b.fill("input[type=search]", "no such title");
     await b.poll(
       "document.querySelector('.otk-project-sessions').textContent.includes('No matching sessions')",
     );
     await b.fill("input[type=search]", "");
-    await b.click("[data-session=preview]");
+    await b.click("[data-session=tstv1-preview]");
     await b.poll(
-      "document.querySelector('[data-tab=preview]')?.closest('.otk-tab').dataset.preview==='true' && document.querySelector('.otk-messages').textContent.includes('Transcript for preview')",
+      "document.querySelector('[data-tab=tstv1-preview]')?.closest('.otk-tab').dataset.preview==='true' && document.querySelector('.otk-messages').textContent.includes('Transcript for preview')",
     );
     await b.type("textarea[name=prompt]", "Keep this draft");
-    await b.click("[data-session=blocked]");
-    await b.poll("location.hash.endsWith('/blocked')");
-    await b.click("[data-session=preview]");
-    await b.poll("location.hash.endsWith('/preview')");
+    await b.click("[data-session=tstv1-blocked]");
+    await b.poll("location.hash.endsWith('/tstv1-blocked')");
+    await b.click("[data-session=tstv1-preview]");
+    await b.poll("location.hash.endsWith('/tstv1-preview')");
     assertEquals(
       await b.evaluate("document.querySelector('textarea[name=prompt]').value"),
       "Keep this draft",
     );
-    assertEquals(await b.evaluate("location.hash"), "#/local/preview");
+    assertEquals(await b.evaluate("location.hash"), "#/local/tstv1-preview");
     await b.fill("textarea[name=prompt]", "");
-    await b.click("[data-session=preview]", 2);
+    await b.click("[data-session=tstv1-preview]", 2);
     await b.poll(
       "[...document.querySelectorAll('.otk-tab[data-kind=task]')].some(e=>e.textContent.includes('Idle preview'))",
     );
     assertEquals((await c.rpc<TaskRecord[]>("tasks.list", {})).length, 2);
-    await b.click("[data-session=nested]");
+    await b.click("[data-session=tstv1-nested]");
     await b.poll(
-      `location.hash==='#/local/otk/nested' && document.querySelector('[data-tab="${task.id}"]')?.getAttribute('aria-selected')==='true' && document.querySelector('.otk-messages').textContent.includes('Transcript for nested')`,
+      `location.hash==='#/local/tstv1-otk/tstv1-nested' && document.querySelector('[data-tab="${task.id}"]')?.getAttribute('aria-selected')==='true' && document.querySelector('.otk-messages').textContent.includes('Transcript for nested')`,
     );
     await b.reload();
     await b.poll(
-      "document.querySelector('[data-session=nested]')?.getAttribute('aria-current')==='page'",
+      "document.querySelector('[data-session=tstv1-nested]')?.getAttribute('aria-current')==='page'",
     );
     assertEquals(b.errors, []);
   } finally {

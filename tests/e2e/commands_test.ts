@@ -34,7 +34,7 @@ test("P5 project, MCP and skill slash commands run with multiline arguments; bui
       },
     });
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Commands" },
       }),
@@ -138,7 +138,7 @@ test("long slash admission clears the sent draft and keeps a new draft usable un
       chunks: ["Long slash ", "finished."],
       delay: 16000,
     });
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Long slash" },
     });
@@ -178,7 +178,7 @@ test("deferred slash failure reaches the session consumer and reload while prese
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Slash failure" },
     });

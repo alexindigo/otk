@@ -8,12 +8,12 @@ test("children RPC returns sorted normalized sessions without harness fields", a
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const root = await f.oc.request<{ id: string }>("/session", {
+    const root = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Children API" },
     });
     for (const title of ["One", "Two"]) {
-      await f.oc.request("/session", {
+      await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { parentID: root.id, title },
       });

@@ -13,7 +13,7 @@ test("appearance settings persist, broadcast and paint real session status light
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
-    const seed = await f.oc.request<{ id: string }>("/session", {
+    const seed = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Visual system" },
     });

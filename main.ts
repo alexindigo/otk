@@ -6,7 +6,11 @@ import {
   type ServiceConfig,
 } from "./core/mod.ts";
 import { startApplication } from "./application.ts";
-import { Opencode1Adapter } from "@otk/harness-opencode1";
+import {
+  OpencodeV1Adapter,
+  opencodeV1SessionID,
+} from "@otk/harness-opencode-v1";
+import { createSessionReferenceUpgrade } from "./core/features/session-ids.ts";
 import { StreamBuffers } from "@otk/content";
 let memo: ServiceConfig | undefined;
 export function config(): ServiceConfig {
@@ -17,13 +21,16 @@ export function config(): ServiceConfig {
   });
 }
 export async function start(cfg: ServiceConfig): Promise<CoreServer> {
-  if (cfg.harness.type !== "opencode1") {
-    throw new Error(`Unsupported backend: ${cfg.harness.type}`);
+  if (cfg.harness.type !== "opencode-v1") {
+    throw new Error(
+      `harness.type (OTK_HARNESS_TYPE): unsupported backend ${cfg.harness.type}`,
+    );
   }
   return await startApplication(
     cfg,
-    new Opencode1Adapter(cfg, new StreamBuffers()),
+    new OpencodeV1Adapter(cfg, new StreamBuffers()),
     fromFileUrl(new URL("./web/dist/", import.meta.url)),
+    { upgrade: createSessionReferenceUpgrade(opencodeV1SessionID.legacy) },
   );
 }
 if (import.meta.main) {

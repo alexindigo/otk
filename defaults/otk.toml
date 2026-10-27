@@ -24,7 +24,7 @@ cookiesamesite = "strict" # OTK_AUTH_COOKIESAMESITE — strict/none; none requir
 path = "" # OTK_STATE_PATH — empty means XDG state home/otk/<port>
 
 [harness]
-type = "opencode1" # OTK_HARNESS_TYPE — harness adapter
+type = "opencode-v1" # OTK_HARNESS_TYPE — harness adapter (opencode1 is a deprecated alias)
 url = "http://127.0.0.1:4097" # OTK_HARNESS_URL — opencode server base URL
 username = "opencode" # OTK_HARNESS_USERNAME — Basic auth username
 password = "" # OTK_HARNESS_PASSWORD — empty disables Basic auth

@@ -8,6 +8,7 @@ import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { FreezeProxy } from "../support/freeze-proxy.ts";
+import { opencodeV1SessionID } from "@otk/harness-opencode-v1";
 
 test("U9 stock session auto-approve executes bash and helpers with every OTK connection closed, survives restart and off restores waiting", async () => {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
@@ -27,7 +28,7 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
     return c;
   };
   const create = (title: string) =>
-    oc.request<{ id: string }>("/session", { method: "POST", body: { title } });
+    oc.session<{ id: string }>("/session", { method: "POST", body: { title } });
   const prompt = (id: string, text: string) =>
     oc.request(`/session/${id}/prompt_async`, {
       method: "POST",
@@ -70,7 +71,7 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
     assert(messages.length > 0);
     await waitFor(
       () => oc.request<Record<string, unknown>>("/session/status"),
-      (value) => !value[id],
+      (value) => !value[opencodeV1SessionID.decode(id)],
       60_000,
     );
   };
@@ -106,21 +107,21 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
     );
     await prompt(root.id, "Delegate the unattended helper command");
     const children = await waitFor(
-      () => oc.request<{ id: string }[]>(`/session/${root.id}/children`),
+      () => oc.sessionList<{ id: string }>(`/session/${root.id}/children`),
       (rows) => rows.length > 0,
       60_000,
     );
     await outcome(children[0].id, "child-auto");
     await waitFor(
       () => oc.request<Record<string, unknown>>("/session/status"),
-      (value) => !value[root.id],
+      (value) => !value[root.nativeID],
       60_000,
     );
     fake.queue(bash("unrelated-waits"), { chunks: ["Unrelated rejected"] });
     await prompt(other.id, "This unrelated request must wait");
     const unrelated = await waitFor(
       () => oc.request<PermissionRequest[]>("/permission"),
-      (rows) => rows.some((row) => row.sessionID === other.id),
+      (rows) => rows.some((row) => row.sessionID === other.nativeID),
       60_000,
     );
     assertEquals(
@@ -131,7 +132,7 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
       false,
     );
     client = await connect();
-    const request = unrelated.find((row) => row.sessionID === other.id)!;
+    const request = unrelated.find((row) => row.sessionID === other.nativeID)!;
     await client.rpc("permission.reply", {
       sessionID: other.id,
       requestID: request.id,
@@ -140,7 +141,7 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
     });
     await waitFor(
       () => oc.request<Record<string, unknown>>("/session/status"),
-      (value) => !value[other.id],
+      (value) => !value[other.nativeID],
       60_000,
     );
     await client.close();
@@ -151,7 +152,7 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
     await prompt(root.id, "Wait for the restarted sidecar");
     await waitFor(
       () => oc.request<PermissionRequest[]>("/permission"),
-      (rows) => rows.some((row) => row.sessionID === root.id),
+      (rows) => rows.some((row) => row.sessionID === root.nativeID),
       60_000,
     );
     assertEquals(
@@ -235,7 +236,7 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
     await prompt(root.id, "Off must wait for a new manual permission");
     const waiting = await waitFor(
       () => oc.request<PermissionRequest[]>("/permission"),
-      (rows) => rows.some((row) => row.sessionID === root.id),
+      (rows) => rows.some((row) => row.sessionID === root.nativeID),
       60_000,
     );
     assertEquals(
@@ -248,7 +249,7 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
     client = await connect();
     await client.rpc("permission.reply", {
       sessionID: root.id,
-      requestID: waiting.find((row) => row.sessionID === root.id)!.id,
+      requestID: waiting.find((row) => row.sessionID === root.nativeID)!.id,
       reply: "once",
     });
     await outcome(root.id, "off-waits");

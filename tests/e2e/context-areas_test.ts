@@ -105,19 +105,19 @@ test("C3 session menus omit current-place no-ops while background Open and task 
   try {
     f.add({
       ...f.entries[0],
-      id: "second",
+      id: "tstv1-second",
       title: "Background",
       status: "busy",
     });
     await b.goto(f.url);
-    await openSession(b, "otk");
+    await openSession(b, "tstv1-otk");
     for (
       const selector of [
         ".otk-user-bubble",
         ".otk-messages",
-        '[data-tab="otk"]',
-        '[data-crumb="otk"]',
-        '[data-session="otk"]',
+        '[data-tab="tstv1-otk"]',
+        '[data-crumb="tstv1-otk"]',
+        '[data-session="tstv1-otk"]',
       ]
     ) {
       await rightClick(b, selector, selector === ".otk-messages");
@@ -126,7 +126,12 @@ test("C3 session menus omit current-place no-ops while background Open and task 
       assert(labels.includes("Pin as task"));
       await dismiss(b);
     }
-    for (const selector of ['[data-tab="second"]', '[data-session="second"]']) {
+    for (
+      const selector of [
+        '[data-tab="tstv1-second"]',
+        '[data-session="tstv1-second"]',
+      ]
+    ) {
       await rightClick(b, selector, false);
       assert((await groups(b)).flat().includes("Open"));
       await dismiss(b);
@@ -156,13 +161,13 @@ test("C3 session menus omit current-place no-ops while background Open and task 
       directory: f.entries[0].directory,
     });
     assertEquals(tasks.length, 1);
-    assert(tasks[0].sessions.includes("otk"));
+    assert(tasks[0].sessions.includes("tstv1-otk"));
     for (
       const selector of [
         ".otk-user-bubble",
         ".otk-messages",
-        '[data-crumb="otk"]',
-        '[data-session="otk"]',
+        '[data-crumb="tstv1-otk"]',
+        '[data-session="tstv1-otk"]',
       ]
     ) {
       await rightClick(b, selector, selector === ".otk-messages");
@@ -175,19 +180,19 @@ test("C3 session menus omit current-place no-ops while background Open and task 
       );
       await dismiss(b);
     }
-    await rightClick(b, '[data-session="second"]', false);
+    await rightClick(b, '[data-session="tstv1-second"]', false);
     await pick(b, "Open");
     await b.poll(
-      `location.hash.endsWith('/second') && !!document.querySelector('[data-message="second-message"]')`,
+      `location.hash.endsWith('/tstv1-second') && !!document.querySelector('[data-message="second-message"]')`,
     );
-    await rightClick(b, '[data-session="otk"]', false);
+    await rightClick(b, '[data-session="tstv1-otk"]', false);
     const background = (await groups(b)).flat();
     assert(background.includes("Open"));
     assert(background.includes("Open as task"));
     assert(!background.includes("Pin as task"));
     await pick(b, "Open as task");
     await b.poll(
-      `location.hash.endsWith('/otk') && document.querySelector('[data-tab="${
+      `location.hash.endsWith('/tstv1-otk') && document.querySelector('[data-tab="${
         tasks[0].id
       }"]').getAttribute('aria-selected')==='true'`,
     );
@@ -224,7 +229,7 @@ test("C3 areas: empty regions, inner groups and shared control commands reach th
       inactive: true,
     });
     await b.goto(f.url);
-    await openSession(b, "otk");
+    await openSession(b, "tstv1-otk");
     await b.send("Browser.grantPermissions", {
       origin: f.url,
       permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"],
@@ -238,7 +243,7 @@ test("C3 areas: empty regions, inner groups and shared control commands reach th
     assertEquals(await groups(b), [projects, app]);
     await pick(b, "Show inactive projects");
     await b.poll(
-      `!!document.querySelector('.otk-inactive-projects [data-project-sessions~="luch"]')`,
+      `!!document.querySelector('.otk-inactive-projects [data-project-sessions~="tstv1-luch"]')`,
     );
     await rightClick(b, areas.projects);
     assertEquals(await groups(b), [[
@@ -271,7 +276,7 @@ test("C3 areas: empty regions, inner groups and shared control commands reach th
         await b.poll(`!document.querySelector('.otk-inactive-projects')`);
         await rightClick(
           b,
-          '[data-project-sessions~="otk"] .otk-project-open',
+          '[data-project-sessions~="tstv1-otk"] .otk-project-open',
           false,
           join(root, `C3-${theme}-project-row`),
         );
@@ -289,7 +294,7 @@ test("C3 areas: empty regions, inner groups and shared control commands reach th
     }
     await rightClick(
       b,
-      '[data-project-sessions~="otk"] .otk-project-open',
+      '[data-project-sessions~="tstv1-otk"] .otk-project-open',
       false,
     );
     assertEquals(await groups(b), [["Mark inactive"], projects]);
@@ -350,10 +355,10 @@ test("C3 areas: empty regions, inner groups and shared control commands reach th
     await rightClick(b, areas.panel);
     await pick(b, "New session");
     await b.poll(
-      `!location.hash.endsWith('/otk') && !!document.querySelector('textarea[name=prompt]')`,
+      `!location.hash.endsWith('/tstv1-otk') && !!document.querySelector('textarea[name=prompt]')`,
     );
     assertEquals(f.entries.length, before + 1);
-    await openSession(b, "otk");
+    await openSession(b, "tstv1-otk");
     await rightClick(b, areas.transcript);
     assertEquals(await groups(b), [session, app]);
     await pick(b, "Copy session title");
@@ -400,10 +405,10 @@ test("C3 areas: empty regions, inner groups and shared control commands reach th
       `!!document.querySelector('.otk-prompt-chip button[title="area-attachment.txt"]') && !document.querySelector('.otk-prompt-chip').textContent.includes('reading')`,
     );
     await openSession(b, f.entries.at(-1)!.id);
-    await rightClick(b, '[data-session="otk"]', false);
+    await rightClick(b, '[data-session="tstv1-otk"]', false);
     await pick(b, "Open");
     await b.poll(
-      `location.hash.endsWith('/otk') && !!document.querySelector('[data-message="otk-message"]')`,
+      `location.hash.endsWith('/tstv1-otk') && !!document.querySelector('[data-message="otk-message"]')`,
     );
     await rightClick(b, areas.transcript);
     await pick(b, "Pin as task");
@@ -411,7 +416,7 @@ test("C3 areas: empty regions, inner groups and shared control commands reach th
     assert(
       (await client.rpc<TaskRecord[]>("tasks.list", {
         directory: f.entries[0].directory,
-      })).some((task) => task.sessions.includes("otk")),
+      })).some((task) => task.sessions.includes("tstv1-otk")),
     );
     assertEquals(b.errors, []);
     console.info("C3 external screenshot root", root);
@@ -426,7 +431,7 @@ test("C3 stock areas: picker and approval commands, Activity panel and Dark/Line
   const f = await browserFixture({ bash: "allow" });
   let client: WsClient | undefined;
   try {
-    const created = await f.oc.request<{ id: string }>("/session", {
+    const created = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Area commands" },
     });

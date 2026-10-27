@@ -13,15 +13,15 @@ import type { HistoryEntry } from "@otk/protocol";
 test("P6 history merges connected sidecars by time, recalls shell mode and protects edited recalled drafts", async () => {
   const a = await browserFixture(), b = await browserFixture();
   try {
-    const first = await a.oc.request<{ id: string }>("/session", {
+    const first = await a.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "History local" },
       }),
-      blank = await a.oc.request<{ id: string }>("/session", {
+      blank = await a.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Blank" },
       }),
-      other = await b.oc.request<{ id: string }>("/session", {
+      other = await b.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "History remote" },
       });
@@ -114,11 +114,11 @@ test("recalled image metadata resolves exact bytes only on send through its orig
   const bytes =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
   try {
-    const blank = await a.oc.request<{ id: string }>("/session", {
+    const blank = await a.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Recall image here" },
     });
-    const source = await b.oc.request<{ id: string }>("/session", {
+    const source = await b.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Remote image source" },
     });
@@ -205,11 +205,11 @@ test("recalled image metadata resolves exact bytes only on send through its orig
 test("history keeps valid local prompts when a connected sibling transport fails during recall", async () => {
   const f = await browserFixture();
   try {
-    const source = await f.oc.request<{ id: string }>("/session", {
+    const source = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "History source" },
     });
-    const blank = await f.oc.request<{ id: string }>("/session", {
+    const blank = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Recall here" },
     });
@@ -253,11 +253,11 @@ test("history keeps valid local prompts when a connected sibling transport fails
 test("recalled prompt caret is ready for the next native history key before a paint callback", async () => {
   const f = await browserFixture();
   try {
-    const source = await f.oc.request<{ id: string }>("/session", {
+    const source = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Caret history source" },
     });
-    const blank = await f.oc.request<{ id: string }>("/session", {
+    const blank = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Caret recall" },
     });

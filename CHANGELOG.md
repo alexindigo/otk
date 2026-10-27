@@ -1,5 +1,20 @@
 # Changelog
 
+## Unreleased
+
+**Compatibility.** The native adapter/package is now `opencode-v1` /
+`@otk/harness-opencode-v1`. The old `harness.type = "opencode1"` spelling still
+loads with a deprecation message; environment precedence is unchanged. Session
+identities are derived `opcv1-<native id>` values throughout protocol 14. Older
+browser clients must reload, and bare-ID bookmarks show a compatibility notice
+instead of reaching the native service. Existing task, seen, finish, approval
+and saved-location references migrate atomically in `otk.db`, preserving
+unrelated metadata. Conflicting task ownership stops the upgrade without losing
+membership. Downgrading to beta.1 after this migration is unsupported.
+
+**Fix.** SQLite startup installs its busy timeout before selecting WAL mode, so
+concurrent openers can wait before the session-reference upgrade begins.
+
 ## [0.1.0-beta.1] — 2026-10-26
 
 **Highlights.** Sessions gain in-place rename, confirmed deletion, inclusive

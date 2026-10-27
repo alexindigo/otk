@@ -2,7 +2,7 @@
 import { type Harness, HarnessError } from "@otk/harness";
 import type { PermissionReply } from "@otk/protocol";
 import type { RpcRegistry } from "../ws/registry.ts";
-import { text } from "../ws/params.ts";
+import { sessionID, text } from "../ws/params.ts";
 
 export function register(
   rpc: RpcRegistry,
@@ -12,7 +12,7 @@ export function register(
   const capability = harness.capabilities.permissions;
   if (!capability) return;
   rpc.register("permission.list", {
-    params: (p) => text(p, "sessionID")!,
+    params: (p) => sessionID(p)!,
     handler: (_ctx, id) => capability.listPermissions(id),
   });
   rpc.register("permission.reply", {
@@ -22,7 +22,7 @@ export function register(
         throw new HarnessError("params", "Invalid permission reply");
       }
       return {
-        sessionID: text(p, "sessionID")!,
+        sessionID: sessionID(p)!,
         requestID: text(p, "requestID")!,
         reply,
         message: text(p, "message", true),

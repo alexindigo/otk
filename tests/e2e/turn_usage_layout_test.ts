@@ -31,7 +31,7 @@ async function setup(count: number) {
   const root = await fixture();
   const messages = Array.from({ length: count }, (_, i): AssistantMessage => ({
     id: `call-${String(i + 1).padStart(3, "0")}`,
-    sessionID: "core",
+    sessionID: "tstv1-core",
     role: "assistant",
     replyTo: "user",
     agent: "build",
@@ -58,7 +58,7 @@ async function setup(count: number) {
       : [],
   }));
   const ledger = new UsageLedger(
-    "core",
+    "tstv1-core",
     messages.map((message, i) => ({
       ...usageHeader(message),
       tools: i < count - 1
@@ -90,7 +90,7 @@ async function setup(count: number) {
     Promise.resolve(messages.slice(-opts.limit));
   const b = await Cdp.launch(root), client = new WsClient(f.url);
   await client.connect();
-  await b.goto(`${f.url}/#/local/core`);
+  await b.goto(`${f.url}/#/local/tstv1-core`);
   await b.poll(
     `document.querySelector('${trigger}')?.textContent.startsWith('${count} model calls')`,
   );

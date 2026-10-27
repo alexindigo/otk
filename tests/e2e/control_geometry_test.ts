@@ -205,7 +205,7 @@ test("shared field geometry excludes native compact inputs without consumer over
 test("Display and Markdown consumers retain native checkbox bounds and field/select semantics", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Control geometry" },
     });

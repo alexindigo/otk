@@ -27,17 +27,17 @@ async function capture(browser: Cdp, root: string, name: string) {
 test("E1 project inbox and Sessions tree scoped by directory, descendants nested, SPA assets and API boundary", async () => {
   const f = await browserFixture();
   try {
-    const root = await f.oc.request<{ id: string }>("/session", {
+    const root = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Root session" },
     });
-    const child = await f.oc.request<{ id: string }>("/session", {
+    const child = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Child session", parentID: root.id },
     });
     const second = join(f.oc.root, "second-project");
     await Deno.mkdir(second);
-    const other = await f.oc.request<{ id: string }>("/session", {
+    const other = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       directory: second,
       body: { title: "Other project" },
@@ -129,7 +129,7 @@ test("E1 project inbox and Sessions tree scoped by directory, descendants nested
 test("E2 new session, trusted prompt, incremental structured markdown and idle outcome", async () => {
   const f = await browserFixture();
   try {
-    const seed = await f.oc.request<{ id: string }>("/session", {
+    const seed = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Existing project" },
     });
@@ -198,7 +198,7 @@ test("E2 new session, trusted prompt, incremental structured markdown and idle o
 test("E5 Esc confirmation then abort yields interrupted footer and idle session", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Interrupt" },
     });
@@ -242,7 +242,7 @@ test("E5 Esc confirmation then abort yields interrupted footer and idle session"
 test("E6 frozen harness stream resyncs complete reply and idle without reload", async () => {
   const f = await browserFixture(), proxy = new FreezeProxy(f.oc.port);
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Recovery" },
     });
@@ -296,11 +296,11 @@ test("E7 add authenticated second sidecar, merged groups, prompt and persistence
     oc2 = await OpencodeTest.start(fake2);
   let second: SidecarTest | undefined;
   try {
-    await f.oc.request("/session", {
+    await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "First host" },
     });
-    const remote = await oc2.request<{ id: string }>("/session", {
+    const remote = await oc2.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Second host" },
     });
@@ -371,11 +371,11 @@ test("E7 add authenticated second sidecar, merged groups, prompt and persistence
 test("E8 switch releases >=2 MB session objects, unsubscribes and removes its DOM", async () => {
   const f = await browserFixture();
   try {
-    const a = await f.oc.request<{ id: string }>("/session", {
+    const a = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Large session A" },
     });
-    const b = await f.oc.request<{ id: string }>("/session", {
+    const b = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Small session B" },
     });
@@ -448,7 +448,7 @@ test("E8 switch releases >=2 MB session objects, unsubscribes and removes its DO
 test("E9 serving-sidecar wrong password error then correct login", async () => {
   const f = await browserFixture();
   try {
-    await f.oc.request("/session", {
+    await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Password session" },
     });
@@ -527,11 +527,11 @@ test("E10 75-second idle browser stays connected and sends JSON pongs at 20-seco
 test("web setup persists auth choice and routes back/forward select the correct session", async () => {
   const f = await browserFixture();
   try {
-    const a = await f.oc.request<{ id: string }>("/session", {
+    const a = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "History A" },
     });
-    const b = await f.oc.request<{ id: string }>("/session", {
+    const b = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "History B" },
     });
@@ -576,7 +576,7 @@ test("web setup persists auth choice and routes back/forward select the correct 
 test("web history paging preserves viewport and autoscroll follows only the bottom", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Long history" },
     });
@@ -660,11 +660,11 @@ test("web history paging preserves viewport and autoscroll follows only the bott
 test("web history navigation retains each session's draft and keeps URL and content together", async () => {
   const f = await browserFixture();
   try {
-    const a = await f.oc.request<{ id: string }>("/session", {
+    const a = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Draft A" },
     });
-    const b = await f.oc.request<{ id: string }>("/session", {
+    const b = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Draft B" },
     });
@@ -691,7 +691,7 @@ test("web history navigation retains each session's draft and keeps URL and cont
 test("web sidecar restart resubscribes open session and refetches final content without reload", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Socket recovery" },
     });
@@ -733,7 +733,7 @@ test("web sidecar restart resubscribes open session and refetches final content 
 test("web renders all remaining markdown block and inline kinds from the real adapter", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Typed markdown" },
     });

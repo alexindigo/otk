@@ -38,11 +38,11 @@ test("U9 r2 browser-open automatic permission stays quiet through toast OS takeo
   });
   let client: WsClient | undefined, restore: (() => Promise<void>) | undefined;
   try {
-    const root = await f.oc.request<{ id: string }>("/session", {
+    const root = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Quiet automatic session" },
     });
-    const other = await f.oc.request<{ id: string }>("/session", {
+    const other = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Manual observer" },
     });
@@ -211,7 +211,7 @@ test("U9 r2 browser-open automatic permission stays quiet through toast OS takeo
       value === "other-auto");
     await waitFor(() =>
       f.oc.request<Record<string, unknown>>("/session/status"), (value) =>
-      !value[other.id]);
+      !value[other.nativeID]);
     const otherHistory = await client.rpc("permission.activity", {
       sessionID: other.id,
     }) as { entries: { outcome: string }[] };

@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { type Harness, HarnessError } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
-import { text } from "../ws/params.ts";
+import { sessionID, text } from "../ws/params.ts";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
   const capability = harness.capabilities.questions;
   if (!capability) return;
   rpc.register("question.list", {
-    params: (p) => text(p, "sessionID")!,
+    params: (p) => sessionID(p)!,
     handler: (_ctx, id) => capability.listQuestions(id),
   });
   rpc.register("question.reply", {

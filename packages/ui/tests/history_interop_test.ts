@@ -3,7 +3,7 @@ import { test } from "../../../tests/support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
-import { History } from "@otk/harness-opencode1";
+import { History } from "@otk/harness-opencode-v1";
 import { historyDraft, PromptHistory } from "../components/prompt/history.ts";
 import {
   editDraft,

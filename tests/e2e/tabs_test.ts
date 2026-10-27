@@ -59,9 +59,9 @@ async function createTask(b: Cdp, name: string) {
 test("task tabs create rename reorder and close without deleting sessions; ordered crumbs nest helpers and meter matches backend", async () => {
   const root = await fixture(),
     messages: Record<string, Message[]> = {
-      otk: [{
+      "tstv1-otk": [{
         id: "reply",
-        sessionID: "otk",
+        sessionID: "tstv1-otk",
         role: "assistant",
         time: { created: 1, completed: 2 },
         agent: "build",
@@ -96,31 +96,34 @@ test("task tabs create rename reorder and close without deleting sessions; order
   registerUsage(f.app.connections.rpc, f.app.backend);
   try {
     await c.connect();
-    f.add({ ...f.entries[0], id: "second", title: "After review" });
+    f.add({ ...f.entries[0], id: "tstv1-second", title: "After review" });
     f.add({
       ...f.entries[0],
-      id: "helper",
-      parentID: "otk",
+      id: "tstv1-helper",
+      parentID: "tstv1-otk",
       title: "explore: callers",
     });
     f.add({
       ...f.entries[0],
-      id: "nested",
-      parentID: "helper",
+      id: "tstv1-nested",
+      parentID: "tstv1-helper",
       title: "Inspect caller",
     });
     await b.goto(f.url);
-    await openSession(b, "otk");
+    await openSession(b, "tstv1-otk");
     await createTask(b, "Plan");
     await createTask(b, "Execution");
     let tasks = await c.rpc<TaskRecord[]>("tasks.list", {});
     const plan = tasks.find((t) => t.name === "Plan")!,
       exec = tasks.find((t) => t.name === "Execution")!;
-    await c.rpc("tasks.sessions", { id: exec.id, sessions: ["otk", "second"] });
+    await c.rpc("tasks.sessions", {
+      id: exec.id,
+      sessions: ["tstv1-otk", "tstv1-second"],
+    });
     await b.poll(`!!document.querySelector(${JSON.stringify(tab(exec.id))})`);
     await b.click(tab(exec.id));
     await b.poll(
-      "document.querySelector('[data-crumb=otk]')?.getAttribute('aria-current')==='page' && !!document.querySelector('[data-crumb=helper][data-helper=true]')",
+      "document.querySelector('[data-crumb=tstv1-otk]')?.getAttribute('aria-current')==='page' && !!document.querySelector('[data-crumb=tstv1-helper][data-helper=true]')",
     );
     await b.poll(
       "document.querySelector('.otk-context-meter')?.dataset.tokens==='2670'",
@@ -164,41 +167,41 @@ test("task tabs create rename reorder and close without deleting sessions; order
     );
     assertEquals(
       await b.evaluate(
-        "document.querySelector('[data-crumb=otk] .otk-status-light').getBoundingClientRect().width",
+        "document.querySelector('[data-crumb=tstv1-otk] .otk-status-light').getBoundingClientRect().width",
       ),
       8,
     );
-    await b.click("[data-crumb=helper]");
+    await b.click("[data-crumb=tstv1-helper]");
     await b.poll(
-      "location.hash.includes('/helper') && document.querySelector('[data-crumb=helper]')?.getAttribute('aria-current')==='page'",
+      "location.hash.includes('/tstv1-helper') && document.querySelector('[data-crumb=tstv1-helper]')?.getAttribute('aria-current')==='page'",
     );
     await b.poll(
-      "document.querySelector('[data-crumb=nested]')?.dataset.depth==='2'",
+      "document.querySelector('[data-crumb=tstv1-nested]')?.dataset.depth==='2'",
     );
-    await b.click("[data-crumb=nested]");
+    await b.click("[data-crumb=tstv1-nested]");
     await b.poll(
-      "location.hash==='#/local/otk/nested' && document.querySelector('[data-crumb=nested]')?.getAttribute('aria-current')==='page'",
+      "location.hash==='#/local/tstv1-otk/tstv1-nested' && document.querySelector('[data-crumb=tstv1-nested]')?.getAttribute('aria-current')==='page'",
     );
-    await b.click("[data-crumb=helper]");
-    await b.poll("location.hash==='#/local/otk/helper'");
+    await b.click("[data-crumb=tstv1-helper]");
+    await b.poll("location.hash==='#/local/tstv1-otk/tstv1-helper'");
     await b.reload();
     await b.poll(
-      `document.querySelector('[data-crumb=helper]')?.getAttribute('aria-current')==='page' && document.querySelector(${
+      `document.querySelector('[data-crumb=tstv1-helper]')?.getAttribute('aria-current')==='page' && document.querySelector(${
         JSON.stringify(tab(exec.id))
       })?.getAttribute('aria-selected')==='true'`,
     );
-    await b.click("[data-crumb=second]");
-    await b.poll("location.hash.endsWith('/second')");
+    await b.click("[data-crumb=tstv1-second]");
+    await b.poll("location.hash.endsWith('/tstv1-second')");
     await b.click(tab(plan.id));
     await b.click(tab(exec.id));
     await b.poll(
-      "location.hash.endsWith('/second') && document.querySelector('[data-crumb=second]')?.getAttribute('aria-current')==='page'",
+      "location.hash.endsWith('/tstv1-second') && document.querySelector('[data-crumb=tstv1-second]')?.getAttribute('aria-current')==='page'",
     );
     await b.type("textarea[name=prompt]", "Keep the task draft");
     await b.click(tab(plan.id));
-    await b.poll("!location.hash.endsWith('/second')");
+    await b.poll("!location.hash.endsWith('/tstv1-second')");
     await b.click(tab(exec.id));
-    await b.poll("location.hash.endsWith('/second')");
+    await b.poll("location.hash.endsWith('/tstv1-second')");
     assertEquals(
       await b.evaluate("document.querySelector('textarea[name=prompt]').value"),
       "Keep the task draft",
@@ -264,7 +267,7 @@ test("task tabs create rename reorder and close without deleting sessions; order
     );
     await owner.actions.close(exec.id);
     await b.poll(`!document.querySelector(${JSON.stringify(tab(exec.id))})`);
-    for (const id of ["otk", "second"]) {
+    for (const id of ["tstv1-otk", "tstv1-second"]) {
       assert(await c.rpc("session.get", { sessionID: id }));
     }
     assert(
@@ -289,21 +292,24 @@ test("long task chains fold in the middle, reveal a chosen session and preserve 
   try {
     await c.connect();
     const base = f.entries[0],
-      ids = ["otk", ...Array.from({ length: 9 }, (_, i) => `chain-${i}`)];
+      ids = [
+        "tstv1-otk",
+        ...Array.from({ length: 9 }, (_, i) => `tstv1-chain-${i}`),
+      ];
     for (const id of ids.slice(1)) f.add({ ...base, id, title: id });
     const task = await c.rpc<TaskRecord>("tasks.create", {
       directory: base.directory,
       name: "Long chain",
       sessions: ids,
     });
-    await b.goto(f.url + "/#/local/otk");
+    await b.goto(f.url + "/#/local/tstv1-otk");
     await b.poll(
       "!!document.querySelector('.otk-folded-crumbs') && document.querySelectorAll('[data-crumb]').length<10",
     );
     await b.click(".otk-folded-crumbs > button");
     await b.click(".otk-folded-crumbs .otk-menu-items button:nth-child(2)");
     await b.poll(
-      "document.querySelector('[data-crumb=chain-2]')?.getAttribute('aria-current')==='page' && location.hash.endsWith('/chain-2')",
+      "document.querySelector('[data-crumb=tstv1-chain-2]')?.getAttribute('aria-current')==='page' && location.hash.endsWith('/tstv1-chain-2')",
     );
     assertEquals(
       await b.evaluate(
@@ -319,7 +325,7 @@ test("long task chains fold in the middle, reveal a chosen session and preserve 
     );
     assertEquals(
       await b.evaluate(
-        "getComputedStyle(document.querySelector('[data-crumb=chain-2] .otk-lamp-shape')).display",
+        "getComputedStyle(document.querySelector('[data-crumb=tstv1-chain-2] .otk-lamp-shape')).display",
       ),
       "block",
     );
@@ -340,70 +346,76 @@ test("all four phantom rules render through preview pin double-click send and id
   try {
     await c.connect();
     const base = f.entries[0];
-    for (const id of ["preview-a", "preview-b", "pin", "double", "send"]) {
-      f.add({ ...base, id, title: id });
+    for (const name of ["preview-a", "preview-b", "pin", "double", "send"]) {
+      f.add({ ...base, id: `tstv1-${name}`, title: name });
     }
-    f.update("otk", { status: "busy" });
+    f.update("tstv1-otk", { status: "busy" });
     await b.goto(f.url);
-    await openSession(b, "preview-a");
+    await openSession(b, "tstv1-preview-a");
     await b.poll(
       `document.querySelector(${
-        JSON.stringify(tab("preview-a"))
+        JSON.stringify(tab("tstv1-preview-a"))
       })?.closest('.otk-tab').dataset.preview==='true'`,
     );
-    await openSession(b, "preview-b");
+    await openSession(b, "tstv1-preview-b");
     await b.poll(
       `!document.querySelector(${
-        JSON.stringify(tab("preview-a"))
+        JSON.stringify(tab("tstv1-preview-a"))
       }) && !!document.querySelector(${
-        JSON.stringify(tab("otk"))
-      }) && !!document.querySelector(${JSON.stringify(tab("preview-b"))})`,
+        JSON.stringify(tab("tstv1-otk"))
+      }) && !!document.querySelector(${
+        JSON.stringify(tab("tstv1-preview-b"))
+      })`,
     );
     assertEquals(
       await b.evaluate(
         `getComputedStyle(document.querySelector(${
-          JSON.stringify(tab("preview-b"))
+          JSON.stringify(tab("tstv1-preview-b"))
         })).fontStyle`,
       ),
       "italic",
     );
-    await (await taskControls(c, f)).model.pin("preview-b");
+    await (await taskControls(c, f)).model.pin("tstv1-preview-b");
     await b.poll(
       "document.querySelector('.otk-tab[data-kind=task]')?.textContent.includes('preview-b')",
     );
-    await openSession(b, "double");
-    await b.click(tab("double"), 2);
+    await openSession(b, "tstv1-double");
+    await b.click(tab("tstv1-double"), 2);
     await b.poll(
       "[...document.querySelectorAll('.otk-tab[data-kind=task]')].some(e=>e.textContent.includes('double'))",
     );
-    await openSession(b, "send");
+    await openSession(b, "tstv1-send");
     await b.type("textarea[name=prompt]", "Promote by sending");
     await b.key("Enter");
     await b.poll(
       "[...document.querySelectorAll('.otk-tab[data-kind=task]')].some(e=>e.textContent.includes('send')) && document.querySelector('textarea[name=prompt]').value===''",
     );
-    await openSession(b, "pin");
+    await openSession(b, "tstv1-pin");
     const task = (await c.rpc<TaskRecord[]>("tasks.list", {})).find((t) =>
       t.name === "send"
     )!;
-    await (await taskControls(c, f)).actions.add(task, "pin");
-    await b.poll(`!document.querySelector(${JSON.stringify(tab("pin"))})`);
+    await (await taskControls(c, f)).actions.add(task, "tstv1-pin");
+    await b.poll(
+      `!document.querySelector(${JSON.stringify(tab("tstv1-pin"))})`,
+    );
     assert(
       (await c.rpc<TaskRecord[]>("tasks.list", {})).find((t) =>
         t.id === task.id
-      )!.sessions.includes("pin"),
+      )!.sessions.includes("tstv1-pin"),
     );
-    await b.click(tab("otk"));
-    f.update("otk", { status: "idle" });
+    await b.click(tab("tstv1-otk"));
+    f.update("tstv1-otk", { status: "idle" });
     await b.poll(
       `document.querySelector(${
-        JSON.stringify(tab("otk"))
+        JSON.stringify(tab("tstv1-otk"))
       })?.getAttribute('aria-selected')==='true'`,
     );
-    await c.rpc("sessions.seen", { sessionID: "otk" });
+    await c.rpc("sessions.seen", { sessionID: "tstv1-otk" });
     await b.click(tab(task.id));
-    await b.poll(`!document.querySelector(${JSON.stringify(tab("otk"))})`);
-    assert(await c.rpc("session.get", { sessionID: "otk" }));
+    await b.poll(
+      `!document.querySelector(${JSON.stringify(tab("tstv1-otk"))})`,
+    );
+    assert(await c.rpc("session.get", { sessionID: "tstv1-otk" }));
     assertEquals(b.errors, []);
   } finally {
     await evidence(b, root);
@@ -421,18 +433,22 @@ test("axiom 1: working blocked and unseen-finished ungrouped tabs and rail light
   try {
     await c.connect();
     const base = f.entries[0];
-    for (const id of ["blocked", "finished"]) f.add({ ...base, id, title: id });
+    for (const name of ["blocked", "finished"]) {
+      f.add({ ...base, id: `tstv1-${name}`, title: name });
+    }
     await c.rpc("projects.visit", { directory: base.directory, active: true });
     await c.rpc("projects.inactive", {
       directory: base.directory,
       inactive: true,
     });
-    f.update("otk", { status: "busy" });
-    f.update("blocked", { attention: { ...base.attention, questions: 1 } });
-    f.update("finished", { status: "busy" });
-    f.update("finished", { status: "idle" });
+    f.update("tstv1-otk", { status: "busy" });
+    f.update("tstv1-blocked", {
+      attention: { ...base.attention, questions: 1 },
+    });
+    f.update("tstv1-finished", { status: "busy" });
+    f.update("tstv1-finished", { status: "idle" });
     await b.goto(f.url);
-    await openSession(b, "otk");
+    await openSession(b, "tstv1-otk");
     await b.click('[aria-label="Collapse projects"]');
     await b.click(".otk-panel-collapse");
     for (let reload = 0; reload < 2; reload++) {
@@ -441,8 +457,11 @@ test("axiom 1: working blocked and unseen-finished ungrouped tabs and rail light
       // Observe activity only once both requested collapses reach the screen.
       await waitForCollapsedPanels(b);
       for (
-        const [id, status] of [["otk", "working"], ["blocked", "blocked"], [
-          "finished",
+        const [id, status] of [["tstv1-otk", "working"], [
+          "tstv1-blocked",
+          "blocked",
+        ], [
+          "tstv1-finished",
           "finished",
         ]]
       ) {

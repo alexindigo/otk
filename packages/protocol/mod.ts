@@ -15,4 +15,5 @@ export * from "./prefs.ts";
 export * from "./preferences.ts";
 export * from "./rpc.ts";
 export * from "./session-tree.ts";
+export * from "./session-id.ts";
 export * from "./version.ts";

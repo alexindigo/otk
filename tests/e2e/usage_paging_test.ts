@@ -18,14 +18,14 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
   const messages: Message[] = [
     {
       id: "user",
-      sessionID: "core",
+      sessionID: "tstv1-core",
       role: "user",
       time: { created: 1 },
       parts: [],
     },
     ...Array.from({ length: 102 }, (_, i): AssistantMessage => ({
       id: `step-${String(i).padStart(3, "0")}`,
-      sessionID: "core",
+      sessionID: "tstv1-core",
       role: "assistant",
       replyTo: "user",
       agent: "build",
@@ -51,7 +51,7 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     })),
   ];
   const ledger = new UsageLedger(
-    "core",
+    "tstv1-core",
     messages.filter((m): m is AssistantMessage => m.role === "assistant").map(
       usageHeader,
     ),
@@ -85,7 +85,7 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
   const emit = (input: number, completed = false) => {
     const message: AssistantMessage = {
       id: "live",
-      sessionID: "core",
+      sessionID: "tstv1-core",
       role: "assistant",
       replyTo: "next-user",
       agent: "build",
@@ -108,10 +108,10 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     if (at < 0) messages.push(message);
     else messages[at] = message;
     ledger.upsert(usageHeader(message));
-    f.app.connections.content("core", { op: "message.upsert", message });
+    f.app.connections.content("tstv1-core", { op: "message.upsert", message });
   };
   try {
-    await b.goto(`${f.url}/#/local/core`);
+    await b.goto(`${f.url}/#/local/tstv1-core`);
     await b.poll(
       `${visible}==='102 model calls · 102 tokens · $1.02' && Math.abs(Number(${cost})-1.02)<.000001`,
     );

@@ -87,7 +87,7 @@ test("transport reconnecting retains advertised features and unsent permission/q
   const root = await fixture();
   const permission: PermissionRequest = {
     id: "permission",
-    sessionID: "core",
+    sessionID: "tstv1-core",
     kind: "bash",
     title: "Run probe",
     patterns: ["probe"],
@@ -97,7 +97,7 @@ test("transport reconnecting retains advertised features and unsent permission/q
   };
   const question: QuestionRequest = {
     id: "question",
-    sessionID: "core",
+    sessionID: "tstv1-core",
     questions: [{
       text: "Keep an unsent answer",
       options: [],

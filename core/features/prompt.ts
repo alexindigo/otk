@@ -2,7 +2,7 @@
 import { type Harness, HarnessError } from "@otk/harness";
 import type { PromptInput } from "@otk/protocol";
 import type { RpcRegistry } from "../ws/registry.ts";
-import { object, text } from "../ws/params.ts";
+import { object, sessionID, text } from "../ws/params.ts";
 import { promptParts } from "./prompt-parts.ts";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
@@ -15,7 +15,7 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
         throw new HarnessError("params", "Expected normal prompt mode");
       }
       const input: PromptInput = {
-        sessionID: text(p, "sessionID")!,
+        sessionID: sessionID(p)!,
         parts,
         mode: "normal",
         agent: text(p, "agent", true),
@@ -36,7 +36,7 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
     },
   });
   rpc.register("session.abort", {
-    params: (p) => text(p, "sessionID")!,
+    params: (p) => sessionID(p)!,
     async handler(_ctx, id) {
       await capability.abort(id);
       return null;

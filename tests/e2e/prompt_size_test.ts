@@ -18,7 +18,7 @@ test("U13 prompt grows line by line up to its cap, keeps the caret and footer vi
   let client: WsClient | undefined;
   const shots = Deno.env.get("OTK_PROMPT_SIZE_SHOTS");
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Growing prompt" },
     });

@@ -11,7 +11,7 @@ import { waitFor } from "../support/opencode.ts";
 test("new-session slash and palette pointer/keyboard invocations resolve their directory while initial project loads are pending", async () => {
   const f = await browserFixture();
   try {
-    const seed = await f.oc.request<{ id: string }>("/session", {
+    const seed = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "New-session readiness" },
     });

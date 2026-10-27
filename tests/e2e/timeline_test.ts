@@ -15,7 +15,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
     const f = await browserFixture();
     let client: WsClient | undefined;
     try {
-      const s = await f.oc.request<{ id: string }>("/session", {
+      const s = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Timeline review" },
       });
@@ -260,7 +260,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
 test("Timeline pages the same transcript and clears on project-only selection", async () => {
   const f = await browserFixture();
   try {
-    const s = await f.oc.request<{ id: string }>("/session", {
+    const s = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Paged prompts" },
     });

@@ -14,7 +14,7 @@ import type { PermissionStore } from "@otk/store";
 import type { IndexStore } from "../index/store.ts";
 import type { FrameSource } from "../ws/connections.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
-import { text } from "../ws/params.ts";
+import { sessionID } from "../ws/params.ts";
 
 /** Server-owned approvals, independent of browser connections/subscriptions. */
 export class PermissionFeature implements FrameSource {
@@ -217,7 +217,7 @@ export class PermissionFeature implements FrameSource {
         if (typeof p.enabled !== "boolean") {
           throw new HarnessError("params", "Expected enabled boolean");
         }
-        return { sessionID: text(p, "sessionID")!, enabled: p.enabled };
+        return { sessionID: sessionID(p)!, enabled: p.enabled };
       },
       handler: async (ctx, input) => {
         if (
@@ -244,7 +244,7 @@ export class PermissionFeature implements FrameSource {
           (!Number.isSafeInteger(p.before) || Number(p.before) <= 0)
         ) throw new HarnessError("params", "Expected positive activity cursor");
         return {
-          sessionID: text(p, "sessionID")!,
+          sessionID: sessionID(p)!,
           before: p.before as number | undefined,
         };
       },

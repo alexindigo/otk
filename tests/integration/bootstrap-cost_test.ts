@@ -2,7 +2,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
-import { Opencode1Adapter } from "@otk/harness-opencode1";
+import { OpencodeV1Adapter as Opencode1Adapter } from "@otk/harness-opencode-v1";
 import { SessionIndex } from "@otk/harness";
 import { cfg } from "../support/config.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
@@ -53,7 +53,7 @@ test("idle project bootstrap leaves native instances and project visit clocks un
       }
       await seedProviderPackages(join(directory, ".opencode"));
       directories.push(directory);
-      const session = await oc.request<{ id: string }>("/session", {
+      const session = await oc.session<{ id: string }>("/session", {
         method: "POST",
         directory,
         body: { title: `Idle ${i}` },
@@ -161,12 +161,12 @@ test("deleted project metadata does not prevent healthy sessions connecting and 
   let adapter: Opencode1Adapter | undefined;
   try {
     await Deno.mkdir(deleted);
-    await oc.request("/session", {
+    await oc.session<{ id: string }>("/session", {
       method: "POST",
       directory: deleted,
       body: { title: "Deleted" },
     });
-    const healthy = await oc.request<{ id: string }>("/session", {
+    const healthy = await oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Healthy" },
     });

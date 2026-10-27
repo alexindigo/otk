@@ -35,11 +35,11 @@ for (const mode of ["prompt", "command"] as const) {
       });
       let client: WsClient | undefined;
       try {
-        const session = await f.oc.request<{ id: string }>("/session", {
+        const session = await f.oc.session<{ id: string }>("/session", {
           method: "POST",
           body: { title: "Required attachments" },
         });
-        const other = await f.oc.request<{ id: string }>("/session", {
+        const other = await f.oc.session<{ id: string }>("/session", {
           method: "POST",
           body: { title: "Other draft" },
         });

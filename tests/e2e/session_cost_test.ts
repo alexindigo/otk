@@ -46,12 +46,15 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
   const messages: Message[] = [
     {
       id: "user",
-      sessionID: "core",
+      sessionID: "tstv1-core",
       role: "user",
       time: { created: 1 },
       parts: [],
     },
-    ...Array.from({ length: 102 }, (_, i) => step("core", `step-${i}`, .01)),
+    ...Array.from(
+      { length: 102 },
+      (_, i) => step("tstv1-core", `step-${i}`, .01),
+    ),
   ];
   messages.at(-1)!.parts = [{
     id: "text",
@@ -67,21 +70,25 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
   }];
   const ledgers = new Map([
     [
-      "core",
+      "tstv1-core",
       new UsageLedger(
-        "core",
+        "tstv1-core",
         messages.filter((m): m is AssistantMessage => m.role === "assistant")
           .map(usageHeader),
       ),
     ],
     [
-      "helper",
-      new UsageLedger("helper", [usageHeader(step("helper", "h", .07))]),
+      "tstv1-helper",
+      new UsageLedger("tstv1-helper", [
+        usageHeader(step("tstv1-helper", "h", .07)),
+      ]),
     ],
-    ["idle", new UsageLedger("idle")],
+    ["tstv1-idle", new UsageLedger("tstv1-idle")],
     [
-      "other",
-      new UsageLedger("other", [usageHeader(step("other", "o", 3.25))]),
+      "tstv1-other",
+      new UsageLedger("tstv1-other", [
+        usageHeader(step("tstv1-other", "o", 3.25)),
+      ]),
     ],
   ]);
   const reads: string[] = [], contentReads: string[] = [];
@@ -95,7 +102,7 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
       },
     },
   });
-  const base = f.app.index.get("core")!;
+  const base = f.app.index.get("tstv1-core")!;
   const entries = [
     {
       ...base,
@@ -105,22 +112,27 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     },
     {
       ...base,
-      id: "helper",
-      parentID: "core",
+      id: "tstv1-helper",
+      parentID: "tstv1-core",
       title: "Explore callers",
       directory: `${root}/otk`,
       attention: { ...base.attention, questions: 1 },
     },
-    { ...base, id: "idle", title: "Fresh session", directory: `${root}/otk` },
     {
       ...base,
-      id: "unknown",
+      id: "tstv1-idle",
+      title: "Fresh session",
+      directory: `${root}/otk`,
+    },
+    {
+      ...base,
+      id: "tstv1-unknown",
       title: "Usage unavailable",
       directory: `${root}/otk`,
     },
     {
       ...base,
-      id: "other",
+      id: "tstv1-other",
       title: "Another project's session",
       directory: `${root}/other-project`,
     },
@@ -142,7 +154,9 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     contentReads.push(id);
     assertEquals(opts.limit, 100);
     assertEquals(opts.before, undefined);
-    return Promise.resolve(id === "core" ? messages.slice(-opts.limit) : []);
+    return Promise.resolve(
+      id === "tstv1-core" ? messages.slice(-opts.limit) : [],
+    );
   };
   const b = await Cdp.launch(root), c = new WsClient(f.url);
   const shots = Deno.env.get("OTK_SESSION_COST_SHOTS");
@@ -161,7 +175,7 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
   try {
     await c.connect();
     await c.rpc("prefs.set", { key: "animationsOff", value: true });
-    await b.goto(`${f.url}/#/local/core`);
+    await b.goto(`${f.url}/#/local/tstv1-core`);
     await b.poll(
       "document.querySelectorAll('.otk-session-row').length===4 && document.querySelector('.otk-turn-usage > button')?.textContent==='102 model calls · 102 tokens · $1.02'",
     );
@@ -170,34 +184,38 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     // Capture visible rows even if their cost assertion fails.
     await capture("rows");
     await b.poll(
-      `${cost("core")}==='$1.02' && ${cost("helper")}==='$0.07' && ${
-        cost("idle")
-      }==='$0.00'`,
+      `${cost("tstv1-core")}==='$1.02' && ${
+        cost("tstv1-helper")
+      }==='$0.07' && ${cost("tstv1-idle")}==='$0.00'`,
     );
-    assertEquals(await b.evaluate(cost("unknown")), undefined);
+    assertEquals(await b.evaluate(cost("tstv1-unknown")), undefined);
     assertEquals(
       contentReads,
-      ["core"],
+      ["tstv1-core"],
       "Unopened rows must not load transcripts",
     );
     assertEquals(
-      reads.filter((id) => id === "core").length,
+      reads.filter((id) => id === "tstv1-core").length,
       1,
       "Panel and transcript join the same usage read",
     );
     assert(
-      !reads.includes("other"),
+      !reads.includes("tstv1-other"),
       "Only the selected project's rows are loaded",
     );
     assertEquals(
       await b.evaluate(
-        `document.querySelector('${row("core")}').getAttribute('aria-label')`,
+        `document.querySelector('${
+          row("tstv1-core")
+        }').getAttribute('aria-label')`,
       ),
       `${entries[0].title}, session cost $1.02`,
     );
     assertEquals(
       await b.evaluate(
-        `document.querySelector('${row("helper")}').getAttribute('aria-label')`,
+        `document.querySelector('${
+          row("tstv1-helper")
+        }').getAttribute('aria-label')`,
       ),
       `Explore callers, child of ${entries[0].title}, session cost $0.07`,
     );
@@ -233,18 +251,28 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     await c.rpc("layout.patch", { rightWidth: prefs.shellLayout.rightWidth });
 
     // Unselected helper changes arrive through the existing metadata refresh owner.
-    ledgers.get("helper")!.upsert(usageHeader(step("helper", "next", .05)));
-    const helper = f.app.index.get("helper")!;
+    ledgers.get("tstv1-helper")!.upsert(
+      usageHeader(step("tstv1-helper", "next", .05)),
+    );
+    const helper = f.app.index.get("tstv1-helper")!;
     f.app.index.upsert({ ...helper, timeUpdated: helper.timeUpdated + 1 });
-    await b.poll(`${cost("helper")}==='$0.12'`);
-    const live = step("core", "live", .03);
-    ledgers.get("core")!.upsert(usageHeader(live));
-    f.app.connections.content("core", { op: "message.upsert", message: live });
-    f.app.connections.content("core", { op: "message.upsert", message: live });
-    await b.poll(`${cost("core")}==='$1.05'`);
-    assertEquals(contentReads, ["core"]);
+    await b.poll(`${cost("tstv1-helper")}==='$0.12'`);
+    const live = step("tstv1-core", "live", .03);
+    ledgers.get("tstv1-core")!.upsert(usageHeader(live));
+    f.app.connections.content("tstv1-core", {
+      op: "message.upsert",
+      message: live,
+    });
+    f.app.connections.content("tstv1-core", {
+      op: "message.upsert",
+      message: live,
+    });
+    await b.poll(`${cost("tstv1-core")}==='$1.05'`);
+    assertEquals(contentReads, ["tstv1-core"]);
     await b.reload();
-    await b.poll(`${cost("core")}==='$1.05' && ${cost("helper")}==='$0.12'`);
+    await b.poll(
+      `${cost("tstv1-core")}==='$1.05' && ${cost("tstv1-helper")}==='$0.12'`,
+    );
 
     await b.click(".otk-display-menu > button");
     await b.click('input[name="showCost"]');
@@ -265,24 +293,26 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     );
     await capture("cost-off");
     await c.rpc("prefs.set", { key: "showCost", value: true });
-    await b.poll(`${cost("core")}==='$1.05'`);
-    await b.click(row("idle"));
+    await b.poll(`${cost("tstv1-core")}==='$1.05'`);
+    await b.click(row("tstv1-idle"));
     await b.poll(
-      `location.hash==='#/local/idle' && ${cost("core")}==='$1.05' && ${
-        cost("idle")
-      }==='$0.00'`,
+      `location.hash==='#/local/tstv1-idle' && ${
+        cost("tstv1-core")
+      }==='$1.05' && ${cost("tstv1-idle")}==='$0.00'`,
     );
-    await b.goto(`${f.url}/#/local/other`);
+    await b.goto(`${f.url}/#/local/tstv1-other`);
     await b.poll(
       `${
-        cost("other")
+        cost("tstv1-other")
       }==='$3.25' && document.querySelectorAll('.otk-session-row').length===1`,
     );
-    await b.goto(`${f.url}/#/local/core`);
-    await b.poll(`${cost("core")}==='$1.05' && ${cost("helper")}==='$0.12'`);
+    await b.goto(`${f.url}/#/local/tstv1-core`);
+    await b.poll(
+      `${cost("tstv1-core")}==='$1.05' && ${cost("tstv1-helper")}==='$0.12'`,
+    );
     assertEquals(b.errors, []);
   } finally {
-    unknown.resolve(new UsageLedger("unknown").snapshot());
+    unknown.resolve(new UsageLedger("tstv1-unknown").snapshot());
     await Deno.writeTextFile(
       `${root}/session-cost-state.html`,
       await b.evaluate<string>("document.documentElement.outerHTML"),

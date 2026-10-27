@@ -21,7 +21,7 @@ test("typed results show highlighted native file ranges, paths and grep matches 
     },
   });
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Decoded tool results" },
     });
@@ -194,7 +194,7 @@ test("empty result pages retain offset and total without inverted ranges or fals
     },
   });
   try {
-    const s = await f.oc.request<{ id: string }>("/session", {
+    const s = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Empty directory page" },
     });

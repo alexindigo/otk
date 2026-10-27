@@ -6,7 +6,7 @@ Deno.test("external UTF-8 preview encoding has one native owner", async () => {
   const encoders: string[] = [];
   for (const [path, text] of await productionSources()) {
     if (
-      !path.startsWith("packages/harness-opencode1/") || !path.endsWith(".ts")
+      !path.startsWith("packages/harness-opencode-v1/") || !path.endsWith(".ts")
     ) continue;
     if (!/previews|map-tools/.test(path)) continue;
     const source = new Source(text, path);
@@ -17,7 +17,7 @@ Deno.test("external UTF-8 preview encoding has one native owner", async () => {
       ) encoders.push(path);
     }
   }
-  assertEquals(encoders, ["packages/harness-opencode1/previews.ts"]);
+  assertEquals(encoders, ["packages/harness-opencode-v1/previews.ts"]);
 });
 
 Deno.test("store transaction boundaries have one feature-neutral owner", async () => {

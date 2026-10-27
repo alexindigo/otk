@@ -12,7 +12,7 @@ import { waitFor } from "../support/opencode.ts";
 test("empty completion results leave Enter, native ArrowUp and normal Escape owned by the prompt", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Empty completions" },
     });
@@ -95,11 +95,11 @@ test("P3/P4 file ranges, persisted frecency, directories, agent and MCP resource
       },
     });
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Mentions" },
       }),
-      other = await f.oc.request<{ id: string }>("/session", {
+      other = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Frecency" },
       }),

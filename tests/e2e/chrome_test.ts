@@ -20,18 +20,21 @@ test("quiet chrome keeps corner geometry and non-colour selection across themes,
       active: true,
     });
     const base = f.entries[0];
-    f.add({
+    const child = {
       ...base,
-      id: "child",
+      id: "tstv1-child",
       parentID: base.id,
       title: "Explore callers",
-    });
-    f.add({
+    };
+    f.add(child);
+    const blocked = {
       ...base,
-      id: "blocked",
+      id: "tstv1-blocked",
       title: "Approve schema",
       attention: { ...base.attention, questions: 1 },
-    });
+    };
+    f.add(blocked);
+    const selectedChild = `[data-session="${child.id}"][aria-current]`;
     f.update(base.id, { status: "busy" });
     await c.rpc<TaskRecord>("tasks.create", {
       directory: base.directory,
@@ -39,9 +42,9 @@ test("quiet chrome keeps corner geometry and non-colour selection across themes,
       sessions: [base.id],
     });
     await c.rpc("layout.patch", { rightCollapsed: false });
-    await b.goto(f.url + "/#/local/otk/child");
+    await b.goto(`${f.url}/#/local/${base.id}/${child.id}`);
     await b.poll(
-      "!!document.querySelector('.otk-session-crumb[aria-current]') && !!document.querySelector('[data-session=child][aria-current]')",
+      `!!document.querySelector('.otk-session-crumb[aria-current]') && !!document.querySelector('${selectedChild}')`,
     );
     let corners: number[][] | undefined;
     for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
@@ -104,7 +107,7 @@ test("quiet chrome keeps corner geometry and non-colour selection across themes,
             );
             assertEquals(
               await b.evaluate(
-                `(()=>{let opacity=1;for(let e=document.querySelector('[data-tab=blocked] .otk-lamp-body');e;e=e.parentElement)opacity*=Number(getComputedStyle(e).opacity);return opacity})()`,
+                `(()=>{const lamp=document.querySelector('[data-tab="${blocked.id}"] .otk-lamp-body');if(!lamp)throw Error('Missing blocked phantom lamp');let opacity=1;for(let e=lamp;e;e=e.parentElement)opacity*=Number(getComputedStyle(e).opacity);return opacity})()`,
               ),
               1,
               "Phantom lamps retain full paint",
@@ -122,7 +125,7 @@ test("quiet chrome keeps corner geometry and non-colour selection across themes,
     await b.poll("!document.querySelector('.otk-right-panel').hidden");
     await b.reload();
     await b.poll(
-      "document.querySelector('.otk-project-inbox')?.dataset.collapsed==='false' && !document.querySelector('.otk-right-panel').hidden && !!document.querySelector('[data-session=child][aria-current]')",
+      `document.querySelector('.otk-project-inbox')?.dataset.collapsed==='false' && !document.querySelector('.otk-right-panel').hidden && !!document.querySelector('${selectedChild}')`,
     );
     assertEquals(
       await b.evaluate(
@@ -187,18 +190,18 @@ test("quiet chrome keeps corner geometry and non-colour selection across themes,
     );
     await b.reload();
     await b.poll(
-      "document.querySelector('.otk-project-inbox')?.getBoundingClientRect().width===312 && !!document.querySelector('[data-session=child][aria-current]')",
+      `document.querySelector('.otk-project-inbox')?.getBoundingClientRect().width===312 && !!document.querySelector('${selectedChild}')`,
     );
     const hover = await b.evaluate<{ x: number; y: number }>(
-      `(()=>{const r=document.querySelector('[data-project-sessions~=atmosphera]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
+      `(()=>{const r=document.querySelector('[data-project-sessions~=tstv1-atmosphera]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
     );
     await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...hover });
     await b.poll(
-      `(()=>{const row=document.querySelector('[data-project-sessions~=atmosphera]');return getComputedStyle(row.querySelector('.otk-project-menu')).opacity==='1' && getComputedStyle(row.querySelector('time')).opacity==='0'})()`,
+      `(()=>{const row=document.querySelector('[data-project-sessions~=tstv1-atmosphera]');return getComputedStyle(row.querySelector('.otk-project-menu')).opacity==='1' && getComputedStyle(row.querySelector('time')).opacity==='0'})()`,
     );
     assertEquals(
       await b.evaluate(
-        `getComputedStyle(document.querySelector('[data-project-sessions~=atmosphera]'),'::before').backgroundColor`,
+        `getComputedStyle(document.querySelector('[data-project-sessions~=tstv1-atmosphera]'),'::before').backgroundColor`,
       ),
       "rgba(0, 0, 0, 0)",
       "Hover alone must not claim selection",

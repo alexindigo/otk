@@ -17,7 +17,10 @@ import { Cdp as Browser } from "../support/cdp.ts";
 import { selectionGeometry } from "../support/selection-geometry.ts";
 import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
-import { mapMessage, Opencode1Adapter } from "@otk/harness-opencode1";
+import {
+  mapMessage,
+  OpencodeV1Adapter as Opencode1Adapter,
+} from "@otk/harness-opencode-v1";
 import { cfg } from "../support/config.ts";
 
 const input = "textarea[name=prompt]";
@@ -245,11 +248,11 @@ test("V5 composer picks reach native messages and the selected provider; restore
   });
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Composer pickers" },
     });
-    const other = await f.oc.request<{ id: string }>("/session", {
+    const other = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Other session" },
     });
@@ -659,7 +662,7 @@ test("V5 restored missing model remains sendable; catalog loading and errors are
     );
   const b = await Browser.launch(root);
   try {
-    await b.goto(`${url}/#/local/core`);
+    await b.goto(`${url}/#/local/tstv1-core`);
     await b.poll(
       "document.querySelector('.otk-model-picker .otk-composer-model-name')?.textContent==='restored-model'",
     );
@@ -728,7 +731,7 @@ test("V5 backend without model capability renders a plain model label and makes 
   const root = await fixture(), { app, url } = await coreBackendFixture(root);
   const b = await Browser.launch(root);
   try {
-    await b.goto(`${url}/#/local/core`);
+    await b.goto(`${url}/#/local/tstv1-core`);
     await b.poll(
       "document.querySelector('.otk-prompt-context')?.textContent.includes('Default model')",
     );
@@ -773,7 +776,7 @@ test("prompt snapshots the agent/model/variant picked while first catalog readin
   });
   const b = await Browser.launch(root);
   try {
-    await b.goto(`${url}/#/local/core`);
+    await b.goto(`${url}/#/local/tstv1-core`);
     await b.poll("!!document.querySelector('.otk-agent-picker')");
     await b.type(input, "Capture the choice made during readiness");
     await b.key("Enter");
@@ -842,7 +845,7 @@ test("failed unknown catalog preserves the restored variant in the footer and at
     );
   const b = await Browser.launch(root);
   try {
-    await b.goto(`${url}/#/local/core`);
+    await b.goto(`${url}/#/local/tstv1-core`);
     await b.poll(
       "document.querySelector('.otk-prompt-context > span:last-child')?.textContent==='High'",
     );
@@ -912,7 +915,7 @@ test("U2 native null selection metadata stays absent while the model catalog is 
       },
       abort: () => Promise.resolve(),
     },
-  });
+  }, "opcv1-core");
   app.backend.core.listMessages = () =>
     Promise.resolve([mapMessage(JSON.parse(JSON.stringify({
       id: "restored",
@@ -924,7 +927,7 @@ test("U2 native null selection metadata stays absent while the model catalog is 
     })))]);
   const b = await Browser.launch(root);
   try {
-    await b.goto(`${url}/#/local/core`);
+    await b.goto(`${url}/#/local/opcv1-core`);
     await b.poll(
       "document.querySelector('.otk-composer-agent')?.textContent==='Build' && !!document.querySelector('.otk-model-picker > button')",
     );

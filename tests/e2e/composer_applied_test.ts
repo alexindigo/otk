@@ -49,7 +49,7 @@ test("P6 Default shows the muted backend-applied variant at the native consumer;
   });
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Backend-applied composer choices" },
     });

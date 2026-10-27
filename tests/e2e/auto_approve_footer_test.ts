@@ -22,7 +22,7 @@ test("U10 auto-approve leads the footer, uses the theme accent when on and prese
   let client: WsClient | undefined;
   const shots = Deno.env.get("OTK_AUTO_FOOTER_SHOTS");
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Auto-approve footer" },
     });

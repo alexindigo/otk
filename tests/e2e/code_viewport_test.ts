@@ -67,7 +67,7 @@ const sourceGeometry = String.raw`(code,index)=>{
 test("programmatic reveal keeps a transcript action in place for its real click", async () => {
   const f = await browserFixture({ task: "allow" });
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Reveal without follow feedback" },
     });
@@ -96,7 +96,7 @@ test("programmatic reveal keeps a transcript action in place for its real click"
         }))`,
       );
     }
-    const children = await f.oc.request<{ id: string; title: string }[]>(
+    const children = await f.oc.sessionList<{ id: string; title: string }>(
       `/session/${session.id}/children`,
     );
     const first = children.find((child) =>
@@ -137,7 +137,7 @@ test("programmatic reveal keeps a transcript action in place for its real click"
 test("actual busy rendering prepares one worker and idle plaintext releases it without code markers", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Rendering capability lifetime" },
     });
@@ -198,7 +198,7 @@ test("actual busy rendering prepares one worker and idle plaintext releases it w
 test("selected complete raw-tail endpoints survive source materialization and real copy", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Raw tail endpoint" },
     });
@@ -290,7 +290,7 @@ test("selected complete raw-tail endpoints survive source materialization and re
 test("genuine far-viewport colour does not wait for dense cold-source materialization", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Demand before dense source" },
     });
@@ -377,7 +377,7 @@ test("genuine far-viewport colour does not wait for dense cold-source materializ
 test("completed worker batches preserve multiline grammar and recalled unfinished source and colours", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Batch grammar and recall" },
     });
@@ -466,7 +466,7 @@ test("real downward wheel retains follow intent when transcript growth precedes 
   try {
     const server = await f.sidecar(), browser = await f.browser(server.url);
     for (const numbered of [false, true]) {
-      const session = await f.oc.request<{ id: string }>("/session", {
+      const session = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Wheel/layout ordering " + numbered },
       });
@@ -664,7 +664,7 @@ async function scrollBoundary(browser: Cdp) {
 test("native raw source at a nested pane's leading clip requests its genuine colour", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Leading clipped source" },
     });
@@ -720,7 +720,7 @@ test("native raw source at a nested pane's leading clip requests its genuine col
 test("source rows and selected raw endpoints survive token catch-up while another viewport warms", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Selected raw source" },
     });
@@ -832,11 +832,11 @@ test("source rows and selected raw endpoints survive token catch-up while anothe
 test("code viewport projection preserves complete text, selection/copy, real scroll colours and numbered write geometry", async () => {
   const f = await browserFixture();
   try {
-    const markdown = await f.oc.request<{ id: string }>("/session", {
+    const markdown = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Viewport markdown" },
     });
-    const write = await f.oc.request<{ id: string }>("/session", {
+    const write = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Viewport write" },
     });
@@ -1023,7 +1023,7 @@ test("code viewport projection preserves complete text, selection/copy, real scr
 test("source commits stay atomic and selected raw/styled endpoints survive genuine appended bytes", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Atomic source append" },
     });
@@ -1189,7 +1189,7 @@ test("numbered source retains natural empty, blank and terminal geometry through
         }]],
       ] as const
     ) {
-      const session = await f.oc.request<{ id: string }>("/session", {
+      const session = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Natural shape " + index },
       });

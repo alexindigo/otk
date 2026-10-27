@@ -34,7 +34,7 @@ async function seed(
   f: Awaited<ReturnType<typeof browserFixture>>,
   title: string,
 ) {
-  return await f.oc.request<{ id: string }>("/session", {
+  return await f.oc.session<{ id: string }>("/session", {
     method: "POST",
     body: { title },
   });
@@ -364,7 +364,7 @@ test("D9 background child Allow once targets originating remote family and produ
       parts: [{ kind: "text", text: "Delegate notification permission" }],
     });
     const children = await waitFor(
-      () => remote.oc.request<{ id: string }[]>(`/session/${b.id}/children`),
+      () => remote.oc.sessionList<{ id: string }>(`/session/${b.id}/children`),
       (rows) => rows.length > 0,
       60000,
     );

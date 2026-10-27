@@ -69,20 +69,20 @@ export function typeContract(
 ): void {
   const result: Promise<{ directory: string; label: string }> = rpc.call(
     "extension.measure",
-    { sessionID: "s", suffix: "!" },
+    { sessionID: "tstv1-s", suffix: "!" },
   );
   const selected: typeof result = current.call("extension.measure", {
     suffix: "!",
   });
   void selected;
   // @ts-expect-error Missing feature-owned parameter.
-  rpc.call("extension.measure", { sessionID: "s" });
+  rpc.call("extension.measure", { sessionID: "tstv1-s" });
   // @ts-expect-error Incorrect feature-owned parameter type.
   current.call("extension.measure", { suffix: 1 });
   // @ts-expect-error Unknown method names are not a string escape hatch.
   rpc.call("extension.unknown", {});
   // @ts-expect-error Callers cannot supply an unrelated result type.
-  rpc.call<number>("extension.measure", { sessionID: "s", suffix: "!" });
+  rpc.call<number>("extension.measure", { sessionID: "tstv1-s", suffix: "!" });
   // @ts-expect-error The result belongs to the method, not the caller.
   const wrong: Promise<number> = result;
   void wrong;
@@ -155,7 +155,7 @@ export function stub(
   calls: unknown[] = [],
 ): Harness {
   const session = {
-    id: "session",
+    id: "tstv1-session",
     directory: "/authoritative",
     title: "Title",
     projectID: "project",
@@ -197,7 +197,7 @@ test("registry accepts external handlers with shared context, rejects duplicates
   const failure = new HarnessError("owned", "Handler failure");
   try {
     rpc.register("external.directory", {
-      params: () => "session",
+      params: () => "tstv1-session",
       handler(ctx, id) {
         assertEquals(ctx.harness, harness);
         assertEquals(ctx.store, db);
@@ -280,8 +280,8 @@ test("each optional registration contributes only its present capability and cor
     assertEquals(rpc.methods(), []);
     registerSessions(rpc, core);
     assertEquals(
-      await rpc.dispatch("session.get", { sessionID: "session" }),
-      await core.core.getSession("session"),
+      await rpc.dispatch("session.get", { sessionID: "tstv1-session" }),
+      await core.core.getSession("tstv1-session"),
     );
     for (const group of methods) {
       for (const method of group) {
@@ -376,17 +376,17 @@ test("feature validators retain limits, optional strings, model/attachment, ques
       ["models.list", { sessionID: "" }, "Expected sessionID string"],
       [
         "session.messages",
-        { sessionID: "s", limit: 0 },
+        { sessionID: "tstv1-s", limit: 0 },
         "limit must be 1..200",
       ],
       [
         "session.messages",
-        { sessionID: "s", limit: 201 },
+        { sessionID: "tstv1-s", limit: 201 },
         "limit must be 1..200",
       ],
       [
         "session.messages",
-        { sessionID: "s", limit: 1.5 },
+        { sessionID: "tstv1-s", limit: 1.5 },
         "limit must be 1..200",
       ],
       ["session.create", { directory: "" }, "Expected directory string"],
@@ -397,7 +397,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
       }, "Expected normal prompt mode"],
       [
         "session.shell",
-        { sessionID: "s", command: "x", model: [] },
+        { sessionID: "tstv1-s", command: "x", model: [] },
         "Expected object",
       ],
       [
@@ -430,20 +430,20 @@ test("feature validators retain limits, optional strings, model/attachment, ques
     }
     assertEquals(calls, []);
     await rpc.dispatch("session.messages", {
-      sessionID: "s",
+      sessionID: "tstv1-s",
       limit: 200,
       before: "",
     });
     await rpc.dispatch("session.create", {
       directory: "/project",
       title: "",
-      parentID: "",
+      parentID: "tstv1-parent",
     });
     const model = { provider: "p", model: "m" },
       parts = [{ kind: "text", text: "" }];
     assertEquals(
       await rpc.dispatch("session.prompt", {
-        sessionID: "s",
+        sessionID: "tstv1-s",
         parts,
         mode: "normal",
         model,
@@ -454,7 +454,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
     );
     assertEquals(
       await rpc.dispatch("session.shell", {
-        sessionID: "s",
+        sessionID: "tstv1-s",
         command: "pwd",
         model,
       }),
@@ -462,18 +462,24 @@ test("feature validators retain limits, optional strings, model/attachment, ques
     );
     assertEquals(
       await rpc.dispatch("session.command", {
-        sessionID: "s",
+        sessionID: "tstv1-s",
         command: "test",
         parts: [],
         model,
       }),
       null,
     );
-    assertEquals(await rpc.dispatch("find.files", { sessionID: "s" }), []);
-    assertEquals(await rpc.dispatch("models.list", { sessionID: "s" }), {
+    assertEquals(
+      await rpc.dispatch("find.files", { sessionID: "tstv1-s" }),
+      [],
+    );
+    assertEquals(await rpc.dispatch("models.list", { sessionID: "tstv1-s" }), {
       providers: [],
     });
-    assertEquals(await rpc.dispatch("session.abort", { sessionID: "s" }), null);
+    assertEquals(
+      await rpc.dispatch("session.abort", { sessionID: "tstv1-s" }),
+      null,
+    );
     assertEquals(
       await rpc.dispatch("question.reply", {
         requestID: "q",
@@ -487,7 +493,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
     );
     assertEquals(
       await rpc.dispatch("permission.reply", {
-        sessionID: "s",
+        sessionID: "tstv1-s",
         requestID: "r",
         reply: "always",
         message: "",
@@ -495,19 +501,28 @@ test("feature validators retain limits, optional strings, model/attachment, ques
       null,
     );
     assertEquals(calls, [
-      ["messages", "s", { limit: 200, before: "" }],
-      ["create", { directory: "/project", title: "", parentID: "" }],
+      ["messages", "tstv1-s", { limit: 200, before: "" }],
+      ["create", {
+        directory: "/project",
+        title: "",
+        parentID: "tstv1-parent",
+      }],
       ["prompt", {
-        sessionID: "s",
+        sessionID: "tstv1-s",
         parts,
         mode: "normal",
         model,
         agent: "",
         variant: "",
       }],
-      ["shell", { sessionID: "s", command: "pwd", agent: undefined, model }],
+      ["shell", {
+        sessionID: "tstv1-s",
+        command: "pwd",
+        agent: undefined,
+        model,
+      }],
       ["command", {
-        sessionID: "s",
+        sessionID: "tstv1-s",
         command: "test",
         arguments: "",
         agent: undefined,
@@ -515,13 +530,13 @@ test("feature validators retain limits, optional strings, model/attachment, ques
         parts: [],
         model,
       }],
-      ["files", "s", ""],
-      ["models", "s"],
-      ["abort", "s"],
+      ["files", "tstv1-s", ""],
+      ["models", "tstv1-s"],
+      ["abort", "tstv1-s"],
       ["question", "q", [[], ["one"]]],
       ["question", "q", undefined],
       ["permission", {
-        sessionID: "s",
+        sessionID: "tstv1-s",
         requestID: "r",
         reply: "always",
         message: "",

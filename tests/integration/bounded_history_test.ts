@@ -4,10 +4,10 @@ import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import {
   type Info,
-  Opencode1Adapter,
+  OpencodeV1Adapter as Opencode1Adapter,
   type RawPart,
   type Session,
-} from "@otk/harness-opencode1";
+} from "@otk/harness-opencode-v1";
 import { Frecency, frecencyMigrations, OtkDb } from "@otk/store";
 import {
   frecencyOptions,
@@ -23,11 +23,11 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
   const adapters: Opencode1Adapter[] = [];
   const store = new OtkDb(join(oc.root, "otk"), [frecencyMigrations]);
   try {
-    const parent = await oc.request<Session>("/session", {
+    const parent = await oc.session<Session>("/session", {
       method: "POST",
       body: { title: "Bounded parent" },
     });
-    const child = await oc.request<Session>("/session", {
+    const child = await oc.session<Session>("/session", {
       method: "POST",
       body: { title: "Bounded child", parentID: parent.id },
     });
@@ -83,7 +83,7 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
               subagent_type: "general",
               prompt: "Inspect",
             },
-            metadata: { sessionId: child.id },
+            metadata: { sessionId: child.nativeID },
           },
         },
       },
@@ -142,7 +142,7 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
         join(oc.directory, "README.md"),
       );
       // Revert hides the parent task, so inspect its un-reverted sibling carrier.
-      const carrier = await oc.request<Session>("/session", {
+      const carrier = await oc.session<Session>("/session", {
         method: "POST",
         body: { title: "Task carrier" },
       });
@@ -165,7 +165,7 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
                 subagent_type: "general",
                 prompt: "Inspect",
               },
-              metadata: { sessionId: child.id },
+              metadata: { sessionId: child.nativeID },
             },
           },
         },
@@ -183,7 +183,7 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
       assert((task.call.duration ?? -1) >= 0);
       assertEquals(
         reads.slice(before).filter((url) =>
-          url.pathname === `/session/${child.id}/message`
+          url.pathname === `/session/${child.nativeID}/message`
         ).length,
         mode === "SQL" ? 0 : 1,
       );

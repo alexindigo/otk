@@ -15,7 +15,7 @@ import {
   RpcRegistry,
 } from "../../core/mod.ts";
 import { HarnessError } from "@otk/harness";
-import { Opencode1Adapter } from "@otk/harness-opencode1";
+import { OpencodeV1Adapter as Opencode1Adapter } from "@otk/harness-opencode-v1";
 import { StreamBuffers } from "@otk/content";
 
 test("frecency RPC uses authoritative session directory instead of a client-claimed project", async () => {
@@ -50,7 +50,7 @@ test("frecency RPC uses authoritative session directory instead of a client-clai
     await rpc.dispatch(
       "frecency.bump",
       {
-        sessionID: "ses_files",
+        sessionID: "opcv1-ses_files",
         directory: "/forged-project",
         path: "src/file.ts",
       },
@@ -60,7 +60,7 @@ test("frecency RPC uses authoritative session directory instead of a client-clai
     assertEquals(
       await rpc.dispatch(
         "frecency.list",
-        { sessionID: "ses_files", directory: "/forged-project" },
+        { sessionID: "opcv1-ses_files", directory: "/forged-project" },
       ),
       store.list(root),
     );

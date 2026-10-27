@@ -72,7 +72,7 @@ test("permission reply validates original literals before capability or journal 
         await assertRejects(
           () =>
             rpc.dispatch("permission.reply", {
-              sessionID: "s",
+              sessionID: "tstv1-s",
               requestID: "r",
               reply,
             }),
@@ -83,7 +83,7 @@ test("permission reply validates original literals before capability or journal 
       assertEquals(received, []);
       for (const reply of ["once", "always", "reject"]) {
         await rpc.dispatch("permission.reply", {
-          sessionID: "s",
+          sessionID: "tstv1-s",
           requestID: "r",
           reply,
         });
@@ -115,7 +115,7 @@ test("unknown backend failures always reach the real WS caller with nonempty tex
   settings.auth.type = "none";
   settings.state.path = join(root, "state");
   const harness = backend((id) => {
-    throw failures[Number(id)];
+    throw failures[Number(id.slice("tstv1-".length))];
   });
   const db = new OtkDb(settings.state.path, [prefsMigrations]),
     rpc = new RpcRegistry(harness, db);
@@ -133,7 +133,7 @@ test("unknown backend failures always reach the real WS caller with nonempty tex
     await ws.connect();
     for (const [index, message] of expected.entries()) {
       await assertRejects(
-        () => ws.rpc("session.get", { sessionID: String(index) }),
+        () => ws.rpc("session.get", { sessionID: `tstv1-${index}` }),
         Error,
         `${index === 4 ? "owned" : "harness"}: ${message}`,
       );

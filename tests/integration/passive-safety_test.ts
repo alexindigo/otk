@@ -28,12 +28,12 @@ test("passive sidecar reports the native version, leaves approvals manual and re
   );
   let sidecar: SidecarTest | undefined, client: WsClient | undefined;
   try {
-    const root = await oc.request<{ id: string }>("/session", {
+    const root = await oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Manual permission" },
     });
     for (const parentID of [root.id, undefined]) {
-      await oc.request("/session", {
+      await oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Default manual scope", parentID },
       });
@@ -54,7 +54,7 @@ test("passive sidecar reports the native version, leaves approvals manual and re
     });
     const pending = await waitFor(
       () => oc.request<{ id: string; sessionID: string }[]>("/permission"),
-      (rows) => rows.some((row) => row.sessionID === root.id),
+      (rows) => rows.some((row) => row.sessionID === root.nativeID),
     );
     // The native writer stays open. The prompt must actually reside in live WAL.
     const files = [oc.db, oc.db + "-wal"];

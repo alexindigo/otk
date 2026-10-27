@@ -31,11 +31,11 @@ for (const variant of ["high", undefined]) {
     });
     let client: WsClient | undefined;
     try {
-      const source = await f.oc.request<{ id: string }>("/session", {
+      const source = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "History source" },
       });
-      const target = await f.oc.request<{ id: string }>("/session", {
+      const target = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Recall with choices" },
       });

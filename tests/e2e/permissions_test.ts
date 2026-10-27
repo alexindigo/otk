@@ -42,7 +42,7 @@ const bash = (command = "echo otk") => ({
 test("web typed edit and generic permission details render before rejected tools leave files unchanged", async () => {
   const f = await browserFixture({ bash: "ask", edit: "ask", read: "ask" });
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Typed permission details" },
     });
@@ -102,7 +102,7 @@ test("web typed edit and generic permission details render before rejected tools
 test("E3 bash permission, real Allow once click, completed output-bearing tool and idle", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Permission once" },
     });
@@ -146,7 +146,7 @@ test("E3 bash permission, real Allow once click, completed output-bearing tool a
 test("E4 real subagent permission appears on parent dock with child title", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Parent delegation" },
     });
@@ -174,7 +174,7 @@ test("E4 real subagent permission appears on parent dock with child title", asyn
     await browser.key("Enter");
     const children = await waitFor(
       () =>
-        f.oc.request<{ id: string; title: string }[]>(
+        f.oc.sessionList<{ id: string; title: string }>(
           `/session/${session.id}/children`,
         ),
       (children) => children.length > 0,
@@ -216,11 +216,11 @@ test("E4 real subagent permission appears on parent dock with child title", asyn
 test("web permission snapshot on reopen, focused keys, always confirmation and rejection message", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Permission choices" },
     });
-    const other = await f.oc.request<{ id: string }>("/session", {
+    const other = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Other session" },
     });
@@ -233,7 +233,7 @@ test("web permission snapshot on reopen, focused keys, always confirmation and r
     });
     await waitFor(
       () => f.oc.request<{ sessionID: string }[]>("/permission"),
-      (requests) => requests.some((p) => p.sessionID === session.id),
+      (requests) => requests.some((p) => p.sessionID === session.nativeID),
     );
     await openSession(browser, session.id);
     await browser.poll("!!document.querySelector('.otk-permission-dock')");

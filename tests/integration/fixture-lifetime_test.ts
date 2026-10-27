@@ -105,7 +105,7 @@ test("pre-populated packages serve independent native tools and complete provide
           "offline_probe",
         ),
       );
-      const session = await f.oc.request<{ id: string }>("/session", {
+      const session = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: `Offline ${i}` },
       });

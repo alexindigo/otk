@@ -166,7 +166,7 @@ async function completed(client: WsClient, id: string): Promise<Message[]> {
 test("I1 startup snapshot includes existing idle sessions", async () => {
   const f = await fixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Existing" },
     });
@@ -335,17 +335,20 @@ test("I5 child permission rolls up to root", async () => {
     );
     await prompt(client, root);
     const children = await waitFor(
-      () => f.oc.request<{ id: string }[]>(`/session/${root.id}/children`),
+      () => f.oc.sessionList<{ id: string }>(`/session/${root.id}/children`),
       (children) => children.length > 0,
       60_000,
     );
     const child = children[0];
     const requests = await waitFor(
       () => f.oc.request<{ id: string; sessionID: string }[]>("/permission"),
-      (requests) => requests.some((request) => request.sessionID === child.id),
+      (requests) =>
+        requests.some((request) => request.sessionID === child.nativeID),
       60_000,
     );
-    const request = requests.find((request) => request.sessionID === child.id)!;
+    const request = requests.find((request) =>
+      request.sessionID === child.nativeID
+    )!;
     await waitFor(
       () => latest(client, root.id),
       (entry) => entry?.attention.childPermissions === 1,
@@ -461,7 +464,7 @@ test("I8 compatible idle projects bootstrap without loading native inventories",
     const sessions: { id: string }[] = [];
     for (const directory of [...directories, f.oc.directory]) {
       sessions.push(
-        await f.oc.request<{ id: string }>("/session", {
+        await f.oc.session<{ id: string }>("/session", {
           method: "POST",
           directory,
           body: { title: "Idle" },

@@ -40,7 +40,7 @@ test("U6 file changes start collapsed, disclose real content and follow the pers
   };
   const reply: AssistantMessage = {
     id: "reply",
-    sessionID: "core",
+    sessionID: "tstv1-core",
     replyTo: "user",
     role: "assistant",
     agent: "build",
@@ -100,7 +100,7 @@ test("U6 file changes start collapsed, disclose real content and follow the pers
   };
   const messages: Message[] = [{
     id: "user",
-    sessionID: "core",
+    sessionID: "tstv1-core",
     role: "user",
     time: { created: 1000 },
     parts: [{
@@ -117,7 +117,7 @@ test("U6 file changes start collapsed, disclose real content and follow the pers
     usage: {
       getUsage: () =>
         Promise.resolve(
-          new UsageLedger("core", [usageHeader(reply)]).snapshot(),
+          new UsageLedger("tstv1-core", [usageHeader(reply)]).snapshot(),
         ),
     },
     prompt: { prompt: () => Promise.resolve(), abort: () => Promise.resolve() },
@@ -157,7 +157,7 @@ test("U6 file changes start collapsed, disclose real content and follow the pers
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await b.goto(`${f.url}/#/local/core`);
+    await b.goto(`${f.url}/#/local/tstv1-core`);
     await b.poll(
       "document.querySelectorAll('.otk-tool-line').length===4 && !!document.querySelector('.otk-turn-usage > button')",
     );
@@ -244,7 +244,7 @@ test("U6 one-token labels and literal fallback phrases reach plain and picker fo
     const root = await fixture();
     const reply: AssistantMessage = {
       id: "reply",
-      sessionID: "core",
+      sessionID: "tstv1-core",
       role: "assistant",
       replyTo: "user",
       agent: "build",
@@ -268,7 +268,7 @@ test("U6 one-token labels and literal fallback phrases reach plain and picker fo
       usage: {
         getUsage: () =>
           Promise.resolve(
-            new UsageLedger("core", [usageHeader(reply)]).snapshot(),
+            new UsageLedger("tstv1-core", [usageHeader(reply)]).snapshot(),
           ),
       },
       ...(picker ? { agents: { listAgents: () => Promise.resolve([]) } } : {}),
@@ -278,7 +278,7 @@ test("U6 one-token labels and literal fallback phrases reach plain and picker fo
     try {
       await c.connect();
       await c.rpc("prefs.set", { key: "animationsOff", value: true });
-      await b.goto(`${f.url}/#/local/core`);
+      await b.goto(`${f.url}/#/local/tstv1-core`);
       await b.poll(
         "!!document.querySelector('.otk-turn-usage > button') && !!document.querySelector('.otk-composer-model-name')",
       );
@@ -350,7 +350,7 @@ test("U6 one-token labels and literal fallback phrases reach plain and picker fo
         await b.poll(
           "document.querySelector('.otk-prompt-chip')?.textContent.includes('[Pasted ~1 line]')",
         );
-        f.app.connections.content("core", {
+        f.app.connections.content("tstv1-core", {
           op: "session.revert",
           messageID: "user",
           messageCount: 1,

@@ -45,7 +45,7 @@ test("inbox activity returns inactive projects and all three required lights rem
     // Select the other session before producing the unseen finish. Switching
     // projects later legitimately opens its first root, so it is not a direct
     // observation of opening only this other session.
-    await openSession(browser, "other-finished");
+    await openSession(browser, "tstv1-other-finished");
     await browser.click(".otk-panel-collapse");
     await browser.poll("document.querySelector('.otk-right-panel').hidden");
     for (const entry of f.entries.slice(0, 3)) {
@@ -59,8 +59,8 @@ test("inbox activity returns inactive projects and all three required lights rem
     await browser.poll(
       "document.querySelector('.otk-inactive-toggle').textContent.includes('(3)')",
     );
-    f.update("otk", { status: "busy" });
-    f.update("atmosphera", {
+    f.update("tstv1-otk", { status: "busy" });
+    f.update("tstv1-atmosphera", {
       attention: {
         permissions: 1,
         questions: 0,
@@ -68,8 +68,8 @@ test("inbox activity returns inactive projects and all three required lights rem
         childQuestions: 0,
       },
     });
-    f.update("globnotes", { status: "busy" });
-    f.update("globnotes", { status: "idle" });
+    f.update("tstv1-globnotes", { status: "busy" });
+    f.update("tstv1-globnotes", { status: "idle" });
     const expected = ["working", "blocked", "finished"];
     for (let i = 0; i < 3; i++) {
       await browser.poll(
@@ -118,7 +118,7 @@ test("inbox activity returns inactive projects and all three required lights rem
       ),
       "true",
     );
-    await openSession(browser, "other-finished");
+    await openSession(browser, "tstv1-other-finished");
     assertEquals(
       await browser.evaluate(
         `document.querySelector(${JSON.stringify(unread)}).dataset.unread`,
@@ -126,7 +126,7 @@ test("inbox activity returns inactive projects and all three required lights rem
       "true",
       "Opening another session must not clear the finish",
     );
-    await openSession(browser, "globnotes");
+    await openSession(browser, "tstv1-globnotes");
     await browser.poll(
       `document.querySelector(${
         JSON.stringify(unread)
@@ -199,7 +199,7 @@ test("inbox mocked-clock ageing, reduced-colour underlines, visit resets on open
         p.directory === entry.directory
       )!.lastVisit;
     assert(opened >= project.lastVisit);
-    await openSession(browser, "otk");
+    await openSession(browser, "tstv1-otk");
     await browser.poll(
       `document.querySelector(${
         JSON.stringify(`${selector} time`)
@@ -207,7 +207,7 @@ test("inbox mocked-clock ageing, reduced-colour underlines, visit resets on open
     );
     const sessionInbox = await waitFor(
       () => client.rpc<InboxSnapshot>("inbox.get", {}),
-      (value) => !!value.seen.otk,
+      (value) => !!value.seen["tstv1-otk"],
     );
     const sessionVisit = sessionInbox.projects.find((p) =>
       p.directory === entry.directory
@@ -331,20 +331,20 @@ test("inbox adds empty and scanned projects, persists layout bounds and keeps ce
       ),
       "relative",
     );
-    await openSession(browser, "otk");
+    await openSession(browser, "tstv1-otk");
     await browser.type("textarea[name=prompt]", "Keep this work");
     const target = `${row(f.entries[1].directory)} .otk-project-open`;
     await browser.click(target);
-    await browser.poll("location.hash.endsWith('/atmosphera')");
-    await openSession(browser, "otk");
+    await browser.poll("location.hash.endsWith('/tstv1-atmosphera')");
+    await openSession(browser, "tstv1-otk");
     assert(
       await browser.evaluate(
-        "location.hash.endsWith('/otk') && document.querySelector('textarea[name=prompt]').value==='Keep this work'",
+        "location.hash.endsWith('/tstv1-otk') && document.querySelector('textarea[name=prompt]').value==='Keep this work'",
       ),
     );
     await browser.click(target);
     await browser.poll(
-      "location.hash.endsWith('/atmosphera') && !!document.querySelector('.otk-prompt') && document.querySelector('textarea[name=prompt]').value===''",
+      "location.hash.endsWith('/tstv1-atmosphera') && !!document.querySelector('.otk-prompt') && document.querySelector('textarea[name=prompt]').value===''",
     );
     assertEquals(browser.errors, []);
   } finally {
@@ -396,7 +396,7 @@ test("inbox merges servers with duplicate-name machine labels and stable order t
     const order = await browser.evaluate(
       "[...document.querySelectorAll('.otk-project-row')].map(e=>e.dataset.project)",
     );
-    b.update("luch", { status: "busy" });
+    b.update("tstv1-luch", { status: "busy" });
     await browser.poll(
       `document.querySelector(${
         JSON.stringify(row(b.entries[3].directory))
@@ -437,10 +437,10 @@ test("opening the already-selected session resets its visit without replacing th
       active: true,
     });
     await browser.goto(f.url);
-    await openSession(browser, "otk");
+    await openSession(browser, "tstv1-otk");
     const snapshot = await waitFor(
       () => client.rpc<InboxSnapshot>("inbox.get", {}),
-      (value) => !!value.seen.otk,
+      (value) => !!value.seen["tstv1-otk"],
     );
     const before = snapshot.projects.find((p) =>
       p.directory === f.entries[0].directory
@@ -450,7 +450,7 @@ test("opening the already-selected session resets its visit without replacing th
       "Keep this draft on the same session",
     );
     const hash = await browser.evaluate("location.hash");
-    await browser.click('[data-session="otk"]');
+    await browser.click('[data-session="tstv1-otk"]');
     await waitFor(
       () => client.rpc<InboxSnapshot>("inbox.get", {}),
       (value) =>

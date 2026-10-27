@@ -14,7 +14,7 @@ test("native bootstrap without SQLite keeps already-working and blocked phantom 
   let client: WsClient | undefined;
   const held = f.fake.queueHeld({ chunks: ["Working before OTK connects"] });
   try {
-    const busy = await f.oc.request<{ id: string }>("/session", {
+    const busy = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Already working" },
     });
@@ -24,7 +24,7 @@ test("native bootstrap without SQLite keeps already-working and blocked phantom 
     });
     await waitFor(
       () => f.oc.request<Record<string, { type: string }>>("/session/status"),
-      (statuses) => statuses[busy.id]?.type === "busy",
+      (statuses) => statuses[busy.nativeID]?.type === "busy",
     );
     // Wait until the held script is consumed before queuing the second session.
     await waitFor(
@@ -44,7 +44,7 @@ test("native bootstrap without SQLite keeps already-working and blocked phantom 
         input: { command: "pwd", description: "Pending before OTK connects" },
       },
     });
-    const blocked = await f.oc.request<{ id: string }>("/session", {
+    const blocked = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Already blocked" },
     });
@@ -54,7 +54,7 @@ test("native bootstrap without SQLite keeps already-working and blocked phantom 
     });
     await waitFor(
       () => f.oc.request<{ sessionID: string }[]>("/permission"),
-      (requests) => requests.some((r) => r.sessionID === blocked.id),
+      (requests) => requests.some((r) => r.sessionID === blocked.nativeID),
     );
     const server = await f.sidecar({
       harness: { url: f.oc.url, db: join(f.oc.root, "unreadable.db") },

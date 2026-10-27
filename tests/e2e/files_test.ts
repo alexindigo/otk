@@ -4,7 +4,7 @@ import { assert, assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { recordTools, runTool } from "../support/rendering.ts";
-import type { RawPart } from "@otk/harness-opencode1";
+import type { RawPart } from "@otk/harness-opencode-v1";
 test("R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/diagnostics and patch statuses", async () => {
   const lsp = fromFileUrl(new URL("../support/fake-lsp.ts", import.meta.url));
   const f = await browserFixture({
@@ -33,7 +33,7 @@ test("R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/dia
     },
   });
   try {
-    const s = await f.oc.request<{ id: string }>("/session", {
+    const s = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "File tools" },
     });

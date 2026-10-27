@@ -7,11 +7,11 @@ import { waitFor } from "../support/opencode.ts";
 test("P9 upload completions preserve edits, removals, concurrent work and replaced session drafts", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Upload ownership" },
     });
-    const other = await f.oc.request<{ id: string }>("/session", {
+    const other = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Other draft" },
     });

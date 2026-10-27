@@ -11,7 +11,11 @@ Root `main.ts` selects the backend/content buffers, resolves layered config and
 web assets, and owns process signals. Root `application.ts` supplies the shipped
 store migrations and feature registrations through
 `startApplication(cfg, backend, staticRoot)`. External-backend fixtures use that
-same composition; subprocess fixtures launch `main.ts` directly.
+same composition. Its optional fourth `{ upgrade(store) }` port runs after the
+user-data schemas are composed and before feature construction/backend startup.
+Main injects the native codec into the application-owned atomic beta.1 reference
+upgrade; alternate backends need not supply it. The schema runner stays
+SQL-only. Subprocess fixtures launch `main.ts` directly.
 `startCore({ cfg, backend, store, prefs, rpc, staticRoot })` starts that backend
 and the application's reflective Pathfinder HTTP/WS service. Its `CoreServer`
 exposes `server`, `backend`, `index`, `connections` and `stop()`. Stop closes

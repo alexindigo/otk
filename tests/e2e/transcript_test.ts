@@ -26,7 +26,7 @@ const part = (id: string, text: string) => ({
 });
 const reply = (id: string): AssistantMessage => ({
   id,
-  sessionID: "otk",
+  sessionID: "tstv1-otk",
   role: "assistant",
   replyTo: "user",
   agent: "build",
@@ -49,7 +49,7 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
   const messages: Message[] = [
     {
       id: "user",
-      sessionID: "otk",
+      sessionID: "tstv1-otk",
       role: "user",
       agent: "build",
       model: { provider: "test", model: "reported-model" },
@@ -158,7 +158,7 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
       parts: [part("done", "The reply is complete.")],
     },
   ];
-  const f = await inboxBrowserFixture(root, [], { otk: messages }),
+  const f = await inboxBrowserFixture(root, [], { "tstv1-otk": messages }),
     b = await Cdp.launch(root);
   Object.assign(f.app.backend.capabilities, {
     usage: {
@@ -186,7 +186,7 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
       origin: f.url,
       permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"],
     });
-    await openSession(b, "otk");
+    await openSession(b, "tstv1-otk");
     await b.poll(
       "document.querySelectorAll('.otk-message-footer').length===1 && document.title==='Execution — otk — OTK'",
     );
@@ -406,7 +406,7 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
       ),
       null,
     );
-    f.update("otk", {
+    f.update("tstv1-otk", {
       status: "retry",
       retry: {
         attempt: 2,
@@ -425,9 +425,9 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
         JSON.stringify(before)
       }`,
     );
-    f.update("otk", { status: "idle", retry: undefined });
+    f.update("tstv1-otk", { status: "idle", retry: undefined });
     await b.poll("!document.querySelector('.otk-retry-banner')");
-    await openSession(b, "atmosphera");
+    await openSession(b, "tstv1-atmosphera");
     await b.poll("document.title==='Approval — atmosphera — OTK'");
   } finally {
     await b.close();
@@ -438,11 +438,11 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
 test("composer takeovers retain a browser draft through permissions, questions and session switches while actions reach stock backend", async () => {
   const f = await browserFixture({ bash: "ask" });
   try {
-    const a = await f.oc.request<{ id: string }>("/session", {
+    const a = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Draft and takeover" },
     });
-    const other = await f.oc.request<{ id: string }>("/session", {
+    const other = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Other draft" },
     });

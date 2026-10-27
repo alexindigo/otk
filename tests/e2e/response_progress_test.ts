@@ -15,7 +15,7 @@ test("U3 response progress follows streaming content, motion preferences, comple
   const holds: { release(): void }[] = [];
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Response progress" },
     });

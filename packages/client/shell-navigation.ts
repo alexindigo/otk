@@ -143,7 +143,14 @@ export function createShellNavigation(o: {
       const changes = target?.sidecarId !== previous?.sidecarId ||
         target?.sessionID !== previous?.sessionID;
       const server = target?.sidecarId ?? projectTarget?.sidecarId;
-      if (server && !resources.server(server)) {
+      if (!target && !projectTarget && /^#\/[^/]+\//.test(hash)) {
+        store.update((draft) => {
+          draft.error =
+            "This session link is from an older version. Open Sessions to choose a session.";
+        });
+        session.open();
+        project();
+      } else if (server && !resources.server(server)) {
         store.update((draft) => {
           draft.error =
             "The URL refers to an unknown server. Add it in Settings.";

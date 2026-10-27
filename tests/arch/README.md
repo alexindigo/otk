@@ -274,7 +274,7 @@ aliases, concrete composition keys, bare string capability surfaces and central
 literal lists. A feature-owned extension reaches the real wire and client; typed
 consumers reject spelling mistakes and newer wire names remain tolerated.
 
-Native endpoints/schema belong to `@otk/harness-opencode1`. Message collection
+Native endpoints/schema belong to `@otk/harness-opencode-v1`. Message collection
 storage is separate from the session metadata index: connector/core index fields
 cannot create a second `Map<string, IndexEntry>`. Core extends the public
 `SessionIndex` owner and injects it through the sink; a native test changes the

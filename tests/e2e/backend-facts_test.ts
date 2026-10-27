@@ -20,7 +20,7 @@ test("neutral backend facts reach reply, agent picker, task and truncation consu
   ]));
   const reply: AssistantMessage = JSON.parse(JSON.stringify({
     id: "reply",
-    sessionID: "core",
+    sessionID: "tstv1-core",
     role: "assistant",
     agent: "action",
     agentColor: "accent",
@@ -40,7 +40,7 @@ test("neutral backend facts reach reply, agent picker, task and truncation consu
         time: { start: 2000, end: 3000 },
         description: "Inspect the result",
         toolCount: 0,
-        childSessionID: "child",
+        childSessionID: "tstv1-child",
       },
     }, {
       id: "external",
@@ -82,7 +82,7 @@ test("neutral backend facts reach reply, agent picker, task and truncation consu
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await b.goto(`${f.url}/#/local/core`);
+    await b.goto(`${f.url}/#/local/tstv1-core`);
     await b.poll(
       "!!document.querySelector('.otk-message-agent') && document.querySelector('.otk-composer-agent')?.textContent==='Action'",
     );

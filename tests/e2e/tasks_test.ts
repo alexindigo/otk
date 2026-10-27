@@ -3,11 +3,11 @@ import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
-import type { Info, RawPart } from "@otk/harness-opencode1";
+import type { Info, RawPart } from "@otk/harness-opencode-v1";
 test("R5 task progress, real child navigation, parent/history and sibling cycle preserve navigation ownership", async () => {
   const f = await browserFixture({ bash: "ask", task: "allow" });
   try {
-    const root = await f.oc.request<{ id: string }>("/session", {
+    const root = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Subagents" },
     });
@@ -70,7 +70,7 @@ test("R5 task progress, real child navigation, parent/history and sibling cycle 
     await browser.poll(
       `document.querySelector('[data-session="${root.id}"]').dataset.status==='idle'`,
     );
-    const children = await f.oc.request<{ id: string; title: string }[]>(
+    const children = await f.oc.sessionList<{ id: string; title: string }>(
       `/session/${root.id}/children`,
     );
     assertEquals(children.length, 2);

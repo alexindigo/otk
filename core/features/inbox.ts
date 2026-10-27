@@ -3,6 +3,7 @@ import {
   errorMessage,
   type InboxSnapshot,
   type IndexEntry,
+  isSessionID,
   type ServerFrame,
 } from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
@@ -16,7 +17,7 @@ import type {
 import type { IndexStore } from "../index/store.ts";
 import type { FrameSource } from "../ws/connections.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
-import { text } from "../ws/params.ts";
+import { sessionID, text } from "../ws/params.ts";
 import { pathTemplate, projectPath, scanProjects } from "./project-scan.ts";
 export interface InboxStores {
   projects: Projects;
@@ -149,6 +150,13 @@ export class InboxFeature implements FrameSource {
       ) throw new HarnessError("params", `Expected unique ${name} strings`);
       return values as string[];
     };
+    const sessions = (p: Record<string, unknown>) => {
+      const values = strings(p, "sessions");
+      if (!values.every(isSessionID)) {
+        throw new HarnessError("params", "Expected qualified session IDs");
+      }
+      return values;
+    };
     rpc.register("inbox.get", {
       params: () => undefined,
       handler: () => this.get(),
@@ -227,7 +235,7 @@ export class InboxFeature implements FrameSource {
       params: (p) => ({
         directory: projectPath(text(p, "directory")!),
         name: text(p, "name")!,
-        sessions: p.sessions === undefined ? [] : strings(p, "sessions"),
+        sessions: p.sessions === undefined ? [] : sessions(p),
       }),
       async handler(ctx, p) {
         for (const id of p.sessions) {
@@ -261,7 +269,7 @@ export class InboxFeature implements FrameSource {
     });
     const member = (p: Record<string, unknown>) => ({
       id: text(p, "id")!,
-      sessionID: text(p, "sessionID")!,
+      sessionID: sessionID(p)!,
     });
     rpc.register("tasks.addSession", {
       params: member,
@@ -281,7 +289,7 @@ export class InboxFeature implements FrameSource {
       handler: (_ctx, p) => s.tasks.removeSession(p.id, p.sessionID),
     });
     rpc.register("tasks.sessions", {
-      params: (p) => ({ id: text(p, "id")!, sessions: strings(p, "sessions") }),
+      params: (p) => ({ id: text(p, "id")!, sessions: sessions(p) }),
       async handler(ctx, p) {
         const directory = s.tasks.get(p.id).directory;
         for (const id of p.sessions) {
@@ -296,7 +304,7 @@ export class InboxFeature implements FrameSource {
       },
     });
     rpc.register("sessions.seen", {
-      params: (p) => text(p, "sessionID")!,
+      params: (p) => sessionID(p)!,
       async handler(ctx, id) {
         await ctx.sessionDirectory(id);
         return s.seen.mark(user(), id);

@@ -18,11 +18,11 @@ async function capture(b: Cdp, name: string) {
 test("shared-directory revert follows native file rollback without confirmation and restore recovers the other session's edit", async () => {
   const f = await browserFixture({ edit: "allow", read: "allow" });
   try {
-    const a = await f.oc.request<{ id: string }>("/session", {
+    const a = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Session A" },
     });
-    const other = await f.oc.request<{ id: string }>("/session", {
+    const other = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Session B" },
     });
@@ -77,7 +77,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
     });
     let client: WsClient | undefined;
     try {
-      const s = await f.oc.request<{ id: string }>("/session", {
+      const s = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Rollback review" },
       });
@@ -206,7 +206,7 @@ test("revert pending and error stay joined to the composer and retry clears fail
   );
   let client: WsClient | undefined;
   try {
-    const s = await f.oc.request<{ id: string }>("/session", {
+    const s = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Rollback feedback" },
     });

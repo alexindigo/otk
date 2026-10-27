@@ -109,6 +109,11 @@ BEGIN without retiring the caller's transaction. Migrations and metadata
 features share this connection primitive; feature notifications run only after
 commit.
 
+`sessionReferenceMigrations` contributes only the neutral
+`session_reference_upgrades` marker schema. Applications own any data
+transformation through an injected codec and `OtkDb.transaction`; the store and
+its SQL migration runner have no native identity knowledge.
+
 Use Deno read/write permissions for the state directory and packaged SQL.
 
 `PermissionStore` / `permissionMigrations` independently contribute explicit

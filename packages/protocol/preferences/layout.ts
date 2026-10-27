@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PreferenceRegistry } from "../prefs.ts";
 import type { Preferences } from "../preference-contract.ts";
+import { isSessionID } from "../session-id.ts";
 /** Persisted column widths, shared by validation and interactive consumers. */
 export const SHELL_WIDTHS = Object.freeze({
   left: Object.freeze({ min: 200, max: 360, default: 248 }),
@@ -35,7 +36,7 @@ export function isProjectLocation(value: unknown): value is ProjectLocation {
   ) && typeof location.sidecarId === "string" && !!location.sidecarId &&
     typeof location.directory === "string" && !!location.directory &&
     (location.sessionID === undefined ||
-      (typeof location.sessionID === "string" && !!location.sessionID));
+      isSessionID(location.sessionID));
 }
 export function registerLayoutPreferences(registry: PreferenceRegistry): void {
   registry.register({

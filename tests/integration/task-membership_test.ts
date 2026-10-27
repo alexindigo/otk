@@ -15,7 +15,9 @@ for (const change of ["add", "remove"]) {
       await a.connect();
       await b.connect();
       const base = f.entries[0];
-      for (const id of ["second", "third"]) f.add({ ...base, id, title: id });
+      for (const id of ["tstv1-second", "tstv1-third"]) {
+        f.add({ ...base, id, title: id });
+      }
       const task = await a.rpc<TaskRecord>("tasks.create", {
         directory: base.directory,
         name: "Shared task",
@@ -27,16 +29,16 @@ for (const change of ["add", "remove"]) {
         }, base.directory);
       if (change === "add") {
         await Promise.all([
-          actions(a).add(task, "second"),
-          actions(b).add(task, "third"),
+          actions(a).add(task, "tstv1-second"),
+          actions(b).add(task, "tstv1-third"),
         ]);
       } else {
         await b.rpc("tasks.sessions", { id: task.id, sessions: [] });
-        await actions(a).add(task, "second");
+        await actions(a).add(task, "tstv1-second");
       }
       const expected = change === "add"
-        ? [base.id, "second", "third"]
-        : ["second"];
+        ? [base.id, "tstv1-second", "tstv1-third"]
+        : ["tstv1-second"];
       const saved = (await a.rpc<TaskRecord[]>("tasks.list", {}))[0];
       assertEquals(
         saved.sessions.slice().sort(),
@@ -69,7 +71,7 @@ test("task member operations are idempotent, ordered, exclusive, validated and d
   try {
     await c.connect();
     const base = f.entries[0];
-    for (const id of ["second", "third", "fourth"]) {
+    for (const id of ["tstv1-second", "tstv1-third", "tstv1-fourth"]) {
       f.add({ ...base, id, title: id });
     }
     const task = await c.rpc<TaskRecord>("tasks.create", {
@@ -80,30 +82,41 @@ test("task member operations are idempotent, ordered, exclusive, validated and d
     const other = await c.rpc<TaskRecord>("tasks.create", {
       directory: base.directory,
       name: "Other task",
-      sessions: ["third"],
+      sessions: ["tstv1-third"],
     });
     const add = (sessionID: string, id = task.id) =>
       c.rpc<TaskRecord>("tasks.addSession", { id, sessionID });
     const remove = (sessionID: string, id = task.id) =>
       c.rpc<TaskRecord>("tasks.removeSession", { id, sessionID });
-    await Promise.all([add("second"), add("second")]);
-    assertEquals((await add(base.id)).sessions, [base.id, "second"]);
-    await assertRejects(() => add("third"));
-    await assertRejects(() => add("atmosphera"), Error, "another project");
-    assertEquals((await remove("third")).sessions, [base.id, "second"]);
-    assertEquals((await remove("third", other.id)).sessions, []);
-    assertEquals((await add("third")).sessions, [base.id, "second", "third"]);
-    await Promise.all([remove(base.id), remove(base.id), add("fourth")]);
+    await Promise.all([add("tstv1-second"), add("tstv1-second")]);
+    assertEquals((await add(base.id)).sessions, [base.id, "tstv1-second"]);
+    await assertRejects(() => add("tstv1-third"));
+    await assertRejects(
+      () => add("tstv1-atmosphera"),
+      Error,
+      "another project",
+    );
+    assertEquals((await remove("tstv1-third")).sessions, [
+      base.id,
+      "tstv1-second",
+    ]);
+    assertEquals((await remove("tstv1-third", other.id)).sessions, []);
+    assertEquals((await add("tstv1-third")).sessions, [
+      base.id,
+      "tstv1-second",
+      "tstv1-third",
+    ]);
+    await Promise.all([remove(base.id), remove(base.id), add("tstv1-fourth")]);
     assertEquals((await add(base.id)).sessions, [
-      "second",
-      "third",
-      "fourth",
+      "tstv1-second",
+      "tstv1-third",
+      "tstv1-fourth",
       base.id,
     ]);
     // Delayed removals cannot ungroup a member that has since moved elsewhere.
-    await remove("third");
-    await add("third", other.id);
-    await remove("third");
+    await remove("tstv1-third");
+    await add("tstv1-third", other.id);
+    await remove("tstv1-third");
     for (const method of ["tasks.addSession", "tasks.removeSession"]) {
       for (const sessionID of [undefined, "", [], 3]) {
         await assertRejects(() => c.rpc(method, { id: task.id, sessionID }));
@@ -114,11 +127,13 @@ test("task member operations are idempotent, ordered, exclusive, validated and d
     }
     const saved = await c.rpc<TaskRecord[]>("tasks.list", {});
     assertEquals(saved.find((t) => t.id === task.id)!.sessions, [
-      "second",
-      "fourth",
+      "tstv1-second",
+      "tstv1-fourth",
       base.id,
     ]);
-    assertEquals(saved.find((t) => t.id === other.id)!.sessions, ["third"]);
+    assertEquals(saved.find((t) => t.id === other.id)!.sessions, [
+      "tstv1-third",
+    ]);
     await c.close();
     await f.app.stop();
     f = await inboxBrowserFixture(root);
@@ -138,10 +153,10 @@ test("task membership validation cannot publish into a task closed while awaitin
     release = Promise.withResolvers<void>();
   const get = f.app.backend.core.getSession;
   f.app.backend.core.getSession = async (id) => {
-    if (id === "late") {
+    if (id === "tstv1-late") {
       entered.resolve();
       await release.promise;
-      return { ...await get("otk"), id };
+      return { ...await get("tstv1-otk"), id };
     }
     return await get(id);
   };
@@ -153,7 +168,7 @@ test("task membership validation cannot publish into a task closed while awaitin
       name: "Closing task",
     });
     const pending = assertRejects(() =>
-      a.rpc("tasks.addSession", { id: task.id, sessionID: "late" })
+      a.rpc("tasks.addSession", { id: task.id, sessionID: "tstv1-late" })
     );
     await entered.promise;
     await b.rpc("tasks.close", { id: task.id });
@@ -162,7 +177,7 @@ test("task membership validation cannot publish into a task closed while awaitin
     const next = await b.rpc<TaskRecord>("tasks.create", {
       directory: f.entries[0].directory,
       name: "Next task",
-      sessions: ["late"],
+      sessions: ["tstv1-late"],
     });
     assertEquals(
       await a.rpc<TaskRecord[]>("tasks.list", {}),

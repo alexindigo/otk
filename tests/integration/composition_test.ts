@@ -90,10 +90,10 @@ test("application composition with an external core-only backend reaches client 
   try {
     assertEquals(client.connection.supports("prompt"), false);
     assertEquals(
-      client.index.state.entries["app/core"].title,
+      client.index.state.entries["app/tstv1-core"].title,
       "Core-only backend",
     );
-    client.session.open({ sidecarId: "app", sessionID: "core" });
+    client.session.open({ sidecarId: "app", sessionID: "tstv1-core" });
     await waitFor(() => !client.session.state.loading, Boolean);
     assertEquals(client.session.state.error, undefined);
     assert(
@@ -107,13 +107,13 @@ test("application composition with an external core-only backend reaches client 
     });
     await waitFor(() => client.prefs()?.timestamps === true, Boolean);
     await client.connection.rpc.call("frecency.bump", {
-      sessionID: "core",
+      sessionID: "tstv1-core",
       path: "src/example.ts",
     });
     await assertRejects(
       () =>
         client.connection.rpc.call("session.prompt", {
-          sessionID: "core",
+          sessionID: "tstv1-core",
           parts: [],
           mode: "normal",
         }),
@@ -132,7 +132,7 @@ test("application composition with an external core-only backend reaches client 
     );
     const entries = await client.connection.rpc.call(
       "frecency.list",
-      { sessionID: "core" },
+      { sessionID: "tstv1-core" },
     );
     assertEquals(entries.length, 1);
     assertEquals(entries[0].path, join(root, "src/example.ts"));
@@ -167,7 +167,7 @@ test("application composition registers only supplied optional capabilities and 
     assert(client.connection.supports("files"));
     assertEquals(client.connection.supports("shell"), false);
     const input: PromptInput = {
-      sessionID: "core",
+      sessionID: "tstv1-core",
       mode: "normal",
       parts: [{ kind: "text", text: "Caller prompt" }],
     };
@@ -175,16 +175,16 @@ test("application composition registers only supplied optional capabilities and 
     assertEquals(JSON.parse(JSON.stringify(prompts)), [input]);
     assertEquals(
       await client.connection.rpc.call("find.files", {
-        sessionID: "core",
+        sessionID: "tstv1-core",
         query: "example",
       }),
       [{ path: "src/example.ts", directory: false }],
     );
-    assertEquals(searches, [["core", "example"]]);
+    assertEquals(searches, [["tstv1-core", "example"]]);
     await assertRejects(
       () =>
         client.connection.rpc.call("session.shell", {
-          sessionID: "core",
+          sessionID: "tstv1-core",
           command: "unused",
         }),
       Error,

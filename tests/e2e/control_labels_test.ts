@@ -35,7 +35,7 @@ test("control labels stay single-line across transcript, chrome, menus, pickers 
     "Review the complete dependency graph and every affected consumer";
   const reply: AssistantMessage = {
     id: "reply",
-    sessionID: "core",
+    sessionID: "tstv1-core",
     role: "assistant",
     agent: "build",
     model: { provider: "external", model: "fixture" },
@@ -93,7 +93,7 @@ test("control labels stay single-line across transcript, chrome, menus, pickers 
           attention === "permission"
             ? [{
               id: "permission",
-              sessionID: "core",
+              sessionID: "tstv1-core",
               kind: "bash",
               title: "Inspect dependencies",
               patterns: ["git status *"],
@@ -111,7 +111,7 @@ test("control labels stay single-line across transcript, chrome, menus, pickers 
           attention === "question"
             ? [{
               id: "question",
-              sessionID: "core",
+              sessionID: "tstv1-core",
               questions: [{
                 header: "Dependency review",
                 text: "Which review should run?",
@@ -158,7 +158,7 @@ test("control labels stay single-line across transcript, chrome, menus, pickers 
       directory: inactive,
       inactive: true,
     });
-    await b.goto(`${f.url}/#/local/core`);
+    await b.goto(`${f.url}/#/local/tstv1-core`);
     await b.poll(
       "!!document.querySelector('.otk-tool-error-toggle') && !!document.querySelector('.otk-agent-picker > button')",
     );

@@ -19,7 +19,11 @@ Deno.test("shell layout preference validates persisted bounds and complete colla
       true,
     );
   }
-  const location = { sidecarId: "local", directory: "/p", sessionID: "s" };
+  const location = {
+    sidecarId: "local",
+    directory: "/p",
+    sessionID: "tstv1-s",
+  };
   assertEquals(
     isPreference("shellLayout", { ...base, projectLocations: [location] }),
     true,

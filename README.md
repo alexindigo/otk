@@ -138,6 +138,25 @@ the executable and unit preserves your user config and state.
 
 ## What OTK reads and writes
 
+### Session identity compatibility (next release)
+
+The adapter/package is now `opencode-v1` / `@otk/harness-opencode-v1`.
+`harness.type = "opencode1"` remains a deprecated config alias and logs a
+message asking you to use `opencode-v1`; OTK does not rewrite your operator
+file. Environment overrides retain precedence.
+
+Session IDs are now `opcv1-<native id>` throughout the API and browser, using
+wire protocol 14. An older browser is rejected with a protocol mismatch and must
+reload. Old bare-ID bookmarks show a compatibility notice; choose the session
+again from Sessions or its task to obtain the canonical URL.
+
+Before backend startup, existing `otk.db` task membership, seen/finish marks,
+approval references/journal and saved project locations migrate together in one
+transaction. A conflicting task membership stops startup with the database
+unchanged. The upgrade is repeat-safe and preserves unrelated metadata; a
+downgrade to beta.1 after this migration is unsupported. Back up your OTK state
+before upgrading if you need to retain a beta.1 installation.
+
 | # | Area              | Behavior                                                                                                                                                                                                                                                                               |
 | - | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1 | Opencode database | Opens the existing SQLite database read-only, including live WAL-backed history. It does not migrate or write opencode's DB/WAL.                                                                                                                                                       |
@@ -312,7 +331,7 @@ contracts and helpers; [`@otk/content`](./packages/content/README.md) converts
 markdown and patches and owns streaming reply buffers.
 [`@otk/harness`](./packages/harness/README.md) provides harness-neutral core and
 optional capabilities;
-[`@otk/harness-opencode1`](./packages/harness-opencode1/README.md) owns the
+[`@otk/harness-opencode-v1`](./packages/harness-opencode-v1/README.md) owns the
 stock native adapter and read-only history. Consumers use public bare imports
 through each package's `mod.ts`. [`@otk/store`](./packages/store/README.md)
 provides feature-contributed persistence migrations. Root `main.ts`,

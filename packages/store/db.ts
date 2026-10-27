@@ -23,7 +23,7 @@ export class OtkDb {
     Deno.mkdirSync(statePath, { recursive: true, mode: 0o700 });
     const db = this.connection = new DatabaseSync(join(statePath, "otk.db"));
     try {
-      db.exec("PRAGMA journal_mode=WAL; PRAGMA busy_timeout=5000");
+      db.exec("PRAGMA busy_timeout=5000; PRAGMA journal_mode=WAL");
       migrate(db, migrations);
     } catch (error) {
       db.close();

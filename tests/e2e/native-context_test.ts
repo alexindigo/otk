@@ -37,7 +37,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await c.rpc("prefs.set", { key: "theme", value: theme });
       await c.rpc("layout.patch", { rightCollapsed: false });
       await b.goto(f.url);
-      await openSession(b, "otk");
+      await openSession(b, "tstv1-otk");
       await b.fill('textarea[name="prompt"]', "Speling stays with the browser");
       await b.evaluate(`(()=>{
         document.addEventListener('contextmenu',e=>globalThis.nativeContext={prevented:e.defaultPrevented,trusted:e.isTrusted});

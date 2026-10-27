@@ -42,7 +42,7 @@ test("U1 composer and meter share exactly one models.list per session open", asy
   app.backend.core.listMessages = () =>
     Promise.resolve([{
       id: "usage",
-      sessionID: "core",
+      sessionID: "tstv1-core",
       role: "assistant",
       agent: "build",
       model: catalog.default!,
@@ -59,13 +59,13 @@ test("U1 composer and meter share exactly one models.list per session open", asy
     }]);
   const b = await Cdp.launch(root);
   try {
-    await b.goto(`${url}/#/local/core`);
+    await b.goto(`${url}/#/local/tstv1-core`);
     await b.poll(
       "!!document.querySelector('.otk-model-picker > button') && document.querySelector('.otk-context-meter')?.dataset.tokens==='2500'",
     );
     assertEquals(
       calls,
-      ["core"],
+      ["tstv1-core"],
       "Composer and meter must join the same initial catalog work",
     );
     assertEquals(
@@ -76,14 +76,14 @@ test("U1 composer and meter share exactly one models.list per session open", asy
     await b.poll(
       "document.querySelector('.otk-model-picker .otk-composer-model-name')?.textContent==='Beam Free' && document.querySelector('.otk-context-bar')?.getAttribute('aria-valuenow')==='25'",
     );
-    assertEquals(calls, ["core"]);
+    assertEquals(calls, ["tstv1-core"]);
     await b.reload();
     await b.poll(
       "document.querySelector('.otk-model-picker .otk-composer-model-name')?.textContent==='Beam Free' && document.querySelector('.otk-context-bar')?.getAttribute('aria-valuenow')==='25'",
     );
     assertEquals(
       calls,
-      ["core", "core"],
+      ["tstv1-core", "tstv1-core"],
       "Reload opens one new shared catalog lifetime",
     );
     assertEquals(b.errors, []);
@@ -165,7 +165,7 @@ test("U1 catalog context limit reaches the meter for OpenCode Beam Free", async 
   });
   let client: WsClient | undefined;
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Beam Free context" },
     });
@@ -272,7 +272,7 @@ test("U1 catalog context limit reaches the meter for OpenCode Beam Free", async 
       .001,
     );
     // Helpers have no editable composer: the meter still gets their catalog.
-    const child = await f.oc.request<{ id: string }>("/session", {
+    const child = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Helper context", parentID: session.id },
     });

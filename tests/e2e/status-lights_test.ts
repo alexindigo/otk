@@ -33,9 +33,9 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       }
       for (
         const [id, title] of [
-          ["running", "Working"],
-          ["done", "Review ready"],
-          ["blocked", "Needs you"],
+          ["tstv1-running", "Working"],
+          ["tstv1-done", "Review ready"],
+          ["tstv1-blocked", "Needs you"],
         ]
       ) {
         f.add({ ...f.entries[0], id, title });
@@ -43,12 +43,15 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       const task = await c.rpc<TaskRecord>("tasks.create", {
         directory,
         name: "Review",
-        sessions: ["otk", "running", "done"],
+        sessions: ["tstv1-otk", "tstv1-running", "tstv1-done"],
       });
       // Individual idle / green / amber / red tabs alongside the mixed task.
       for (
-        const [id, name] of [["idle-tab", "Quiet"], ["green-tab", "Working"], [
-          "amber-tab",
+        const [id, name] of [["tstv1-idle-tab", "Quiet"], [
+          "tstv1-green-tab",
+          "Working",
+        ], [
+          "tstv1-amber-tab",
           "Finished",
         ]]
       ) {
@@ -59,30 +62,30 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
       await c.rpc("prefs.set", { key: "animationsOff", value: true });
       await c.rpc("prefs.set", { key: "notify.toast", value: false });
       await b.goto(f.url);
-      await openSession(b, "otk");
+      await openSession(b, "tstv1-otk");
       assert(
         await b.evaluate(
           "!!document.querySelector('.otk-server-status .otk-connection-light[data-connection-state=connected]') && !document.querySelector('.otk-server-status .otk-status-light')",
         ),
         "Healthy connection must use its own connected indicator, never a session attention state",
       );
-      f.update("running", { status: "busy" });
-      f.update("green-tab", { status: "busy" });
-      f.update("done", { status: "busy" });
-      f.update("done", { status: "idle" });
-      f.update("amber-tab", { status: "busy" });
-      f.update("amber-tab", { status: "idle" });
+      f.update("tstv1-running", { status: "busy" });
+      f.update("tstv1-green-tab", { status: "busy" });
+      f.update("tstv1-done", { status: "busy" });
+      f.update("tstv1-done", { status: "idle" });
+      f.update("tstv1-amber-tab", { status: "busy" });
+      f.update("tstv1-amber-tab", { status: "idle" });
       const attention = {
         permissions: 1,
         questions: 0,
         childPermissions: 0,
         childQuestions: 0,
       };
-      f.update("blocked", { attention });
+      f.update("tstv1-blocked", { attention });
       // Sidebar also presents all four states.
-      f.update("atmosphera", { status: "busy" });
-      f.update("globnotes", { status: "busy" });
-      f.update("globnotes", { status: "idle" });
+      f.update("tstv1-atmosphera", { status: "busy" });
+      f.update("tstv1-globnotes", { status: "busy" });
+      f.update("tstv1-globnotes", { status: "idle" });
       const tab = `[data-tab=${JSON.stringify(task.id)}]`;
       await b.poll(`${light(tab)}?.dataset.state==='finished'`);
       await b.poll(`${light(project)}?.dataset.state==='blocked'`);
@@ -214,11 +217,16 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         );
       }
       await c.rpc("prefs.set", { key: "reducedColors", value: false });
-      await c.rpc("tasks.addSession", { id: task.id, sessionID: "blocked" });
+      await c.rpc("tasks.addSession", {
+        id: task.id,
+        sessionID: "tstv1-blocked",
+      });
       await b.poll(`${light(tab)}?.dataset.state==='blocked'`);
       // Once the blocking request resolves, the unseen finish outranks work in
       // both aggregate consumers, including after reload and in the sidebar rail.
-      f.update("blocked", { attention: { ...attention, permissions: 0 } });
+      f.update("tstv1-blocked", {
+        attention: { ...attention, permissions: 0 },
+      });
       for (let reload = 0; reload < 2; reload++) {
         if (reload) await b.reload();
         await b.poll(`${light(tab)}?.dataset.state==='finished'`);

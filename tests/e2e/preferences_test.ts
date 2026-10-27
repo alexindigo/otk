@@ -11,7 +11,7 @@ import {
 test("R7 host preferences control real reasoning, persist on reload and propagate to an independent browser", async () => {
   const f = await browserFixture();
   try {
-    const session = await f.oc.request<{ id: string }>("/session", {
+    const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Preferences" },
     });

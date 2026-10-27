@@ -61,7 +61,7 @@ test("shared chrome geometry reaches both rails headers controls and corner rese
       deviceScaleFactor: 1,
       mobile: false,
     });
-    await b.goto(`${f.url}/#/local/core`);
+    await b.goto(`${f.url}/#/local/tstv1-core`);
     await b.poll(
       "!!document.querySelector('.otk-prompt textarea') && !!document.querySelector('.otk-display-trigger')",
     );

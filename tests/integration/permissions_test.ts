@@ -54,7 +54,7 @@ test("I13 permission list and originating child events reach parent subscribers 
       parts: [{ kind: "text", text: "Delegate the probe" }],
     });
     const children = await waitFor(
-      () => oc.request<{ id: string }[]>(`/session/${root.id}/children`),
+      () => oc.sessionList<{ id: string }>(`/session/${root.id}/children`),
       (children) => children.length > 0,
       60_000,
     );

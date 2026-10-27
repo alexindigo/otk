@@ -13,7 +13,7 @@ test("R8 revert RPC restores files, hides reverted turns and persists a joined c
   });
   let client: WsClient | undefined;
   try {
-    const s = await f.oc.request<{ id: string }>("/session", {
+    const s = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Revert rendering" },
     });
@@ -72,7 +72,7 @@ test("R8 revert RPC restores files, hides reverted turns and persists a joined c
 test("real harness history renders file/agent chips and compaction divider", async () => {
   const f = await browserFixture();
   try {
-    const s = await f.oc.request<{ id: string }>("/session", {
+    const s = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "History details" },
     });
@@ -101,7 +101,7 @@ test("real harness history renders file/agent chips and compaction divider", asy
       const id = "prt_" + crypto.randomUUID().replaceAll("-", "");
       await f.oc.request(`/session/${s.id}/message/${m.info.id}/part/${id}`, {
         method: "PATCH",
-        body: { id, sessionID: s.id, messageID: m.info.id, ...value },
+        body: { id, sessionID: s.nativeID, messageID: m.info.id, ...value },
       });
     }
     const server = await f.sidecar(), browser = await f.browser(server.url);
@@ -132,7 +132,7 @@ test("message details show configured agent colour, queued-to-answered transitio
     config: { agent: { build: { color: "#6bacff" } } },
   });
   try {
-    const s = await f.oc.request<{ id: string }>("/session", {
+    const s = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Message details" },
     });

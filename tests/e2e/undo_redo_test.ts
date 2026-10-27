@@ -41,7 +41,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       },
     );
     try {
-      const s = await f.oc.request<{ id: string }>("/session", {
+      const s = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
         body: { title: "Undo review" },
       });
@@ -148,11 +148,11 @@ for (const theme of ["otk-dark", "otk-light"]) {
 test("revert controls are absent while working and in read-only helpers", async () => {
   const f = await browserFixture();
   try {
-    const root = await f.oc.request<{ id: string }>("/session", {
+    const root = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Root" },
     });
-    const child = await f.oc.request<{ id: string }>("/session", {
+    const child = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Helper", parentID: root.id },
     });
