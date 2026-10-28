@@ -157,12 +157,12 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
   };
   f.app.backend.core.listMessages = async (id, opts) => {
     contentReads.push(id);
-    assertEquals(opts.before, undefined);
     return fixturePage(
       id,
       id === "tstv1-core" ? messages : [],
       opts.before,
       await f.app.backend.core.getSession(id),
+      f.clock(id),
     );
   };
   const b = await Cdp.launch(root), c = new WsClient(f.url);
@@ -198,10 +198,16 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     );
     assertEquals(await b.evaluate(cost("tstv1-unknown")), undefined);
     assertEquals(
-      contentReads,
-      ["tstv1-core"],
-      "Unopened rows must not load transcripts",
+      contentReads.filter((id) => id === "tstv1-core").length,
+      2,
+      "Selected newest10 + reserve10",
     );
+    assertEquals(
+      [...new Set(contentReads)].sort(),
+      ["tstv1-core", "tstv1-helper", "tstv1-idle", "tstv1-unknown"],
+      "Only the active project receives C2 scope warming",
+    );
+    const hydratedReads = [...contentReads];
     assertEquals(
       reads.filter((id) => id === "tstv1-core").length,
       0,
@@ -267,6 +273,7 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     publishUsage(f.app.index, ledgers.get("tstv1-helper")!.snapshot());
     await b.poll(`${cost("tstv1-helper")}==='$0.12'`);
     const live = step("tstv1-core", "live", .03);
+    messages.push(live);
     ledgers.get("tstv1-core")!.upsert(usageHeader(live));
     f.app.connections.content("tstv1-core", {
       op: "message.upsert",
@@ -278,7 +285,11 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
       message: live,
     });
     await b.poll(`${cost("tstv1-core")}==='$1.05'`);
-    assertEquals(contentReads, ["tstv1-core"]);
+    assertEquals(
+      contentReads,
+      hydratedReads,
+      "Summary changes do not reload warmed bodies",
+    );
     await b.reload();
     await b.poll(
       `${cost("tstv1-core")}==='$1.05' && ${cost("tstv1-helper")}==='$0.12'`,

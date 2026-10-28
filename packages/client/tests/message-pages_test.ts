@@ -3,7 +3,14 @@ import { assert, assertEquals } from "@std/assert";
 import { createSession, SidecarConnection } from "../mod.ts";
 import type { ContentClock, ContentOp, MessagePage } from "@otk/protocol";
 
-const policy = { replayops: 2, replaybytes: 4096, retryms: 1000 };
+const policy = {
+  coolms: 300000,
+  preloadms: 30000,
+  concurrency: 4,
+  replayops: 2,
+  replaybytes: 4096,
+  retryms: 1000,
+};
 const clock = { epoch: "test", seq: 0 };
 const page = (older: string | null = null): MessagePage => ({
   sessionID: "opcv1-s",

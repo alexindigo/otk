@@ -115,7 +115,7 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     await b.poll(
       `${visible}==='102 model calls · 102 tokens · $1.02' && Math.abs(Number(${cost})-1.02)<.000001`,
     );
-    assertEquals(calls, [{ before: undefined }]);
+    assertEquals(calls, [{ before: undefined }, { before: "fixture:93" }]);
     await b.reload();
     await b.poll(`${visible}==='102 model calls · 102 tokens · $1.02'`);
     const point = await b.evaluate<{ x: number; y: number }>(
@@ -199,9 +199,14 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
       x: 1,
       y: 1,
     });
-    assertEquals(calls, [{ before: undefined }, {
-      before: undefined,
-    }]);
+    assertEquals(calls, [
+      { before: undefined },
+      {
+        before: "fixture:93",
+      },
+      { before: undefined },
+      { before: "fixture:93" },
+    ]);
     const shots = Deno.env.get("OTK_USAGE_OWNER_SHOTS");
     if (shots) {
       await Deno.mkdir(shots, { recursive: true });
@@ -260,7 +265,11 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     await b.poll(
       `${last}==='1 model call · 9 tokens · $0.09' && Math.abs(Number(${cost})-1.11)<.000001`,
     );
-    assertEquals(calls.length, 4, "Usage reads never page transcript content");
+    assertEquals(
+      calls.length,
+      8,
+      "Only initial newest10 + reserve10 per reload, never body paging for usage",
+    );
     assertEquals(b.errors, []);
   } finally {
     hold?.resolve(ledger.snapshot());

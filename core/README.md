@@ -94,6 +94,11 @@ and supplied as `welcome.messages`; neither libraries nor browsers invent
 another defaults table. Connections require this policy explicitly in smaller
 compositions too.
 
+The same `[messages]` owner supplies browser scope cooling (`coolms`), temporary
+attention leases (`preloadms`) and per-server page admission (`concurrency`).
+Partial operator files merge leaf-wise before environment overrides. These
+positive safe-integer thresholds do not change the fixed ten-message page size.
+
 The existing `welcome.sidecar.harness` wire shape gains a `capabilities` array
 advertising present backend capabilities. Consumers gate optional features on
 it. Core sessions, prefs and frecency need no optional backend capabilities.

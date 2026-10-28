@@ -1,0 +1,6 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+import { MESSAGE_PAGE_SIZE } from "@otk/protocol";
+
+export const MESSAGE_READY_RESERVE = MESSAGE_PAGE_SIZE;
+export const MESSAGE_ADMISSION_WATERMARK = MESSAGE_PAGE_SIZE +
+  MESSAGE_READY_RESERVE;

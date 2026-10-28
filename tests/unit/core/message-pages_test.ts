@@ -16,6 +16,9 @@ Deno.test("message replay policy is layered and rejects unsafe budgets with prec
     env: { OTK_MESSAGES_REPLAYOPS: "7", OTK_MESSAGES_RETRYMS: "2500" },
   }).config;
   assertEquals(value.messages, {
+    coolms: 300000,
+    preloadms: 30000,
+    concurrency: 4,
     replayops: 7,
     replaybytes: 4194304,
     retryms: 2500,

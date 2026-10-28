@@ -34,6 +34,9 @@ publishrows = 64
 retryms = 1000
 busyms = 100
 [messages]
+coolms = 300000
+preloadms = 30000
+concurrency = 4
 replayops = 128
 replaybytes = 4194304
 retryms = 1000

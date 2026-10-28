@@ -48,6 +48,9 @@ busyms = 100 # OTK_DIGEST_BUSYMS — derived SQLite lock wait in milliseconds
 
 # Memory-only transcript snapshot/replay policy (server and browser).
 [messages]
+coolms = 300000 # OTK_MESSAGES_COOLMS — milliseconds after an inactive scope's last interaction before unloading bodies
+preloadms = 30000 # OTK_MESSAGES_PRELOADMS — attention-edge warm lease in milliseconds
+concurrency = 4 # OTK_MESSAGES_CONCURRENCY — simultaneous body-page reads per connected server in one browser
 replayops = 128 # OTK_MESSAGES_REPLAYOPS — retained operations per pending baseline
 replaybytes = 4194304 # OTK_MESSAGES_REPLAYBYTES — retained serialized UTF-8 bytes per baseline; minimum 128 bookkeeping bytes
 retryms = 1000 # OTK_MESSAGES_RETRYMS — minimum failed-baseline retry backoff in milliseconds

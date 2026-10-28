@@ -108,9 +108,17 @@ for (const theme of ["otk-dark", "otk-light"]) {
         "document.querySelector('.otk-message-flow')?.textContent.includes('The cursor keeps every earlier step.') && !!document.querySelector('textarea[name=prompt]')",
       );
       await b.evaluate("document.querySelector('.otk-messages').scrollTop=0");
-      await b.click(".otk-load-older");
+      // Automatic reserve/top-edge paging may retire Load older before a click.
+      // Observe the requested earlier source, rather than wait for a stale control.
       await b.poll(
         "document.querySelector('.otk-message-flow')?.textContent.includes('Boundary prompt outside newest ten')",
+      );
+      assert(
+        sentFrames(b).some(({ frame }) =>
+          frame.method === "session.messages" &&
+          !!(frame.params as { before?: string }).before
+        ),
+        "earlier content came through the native cursor owner",
       );
       f.fake.queue({
         chunks: ["A fresh ", "stream remains ", "aligned."],

@@ -64,6 +64,7 @@ export default function Shell(
     guard,
     navigation,
     listInteraction,
+    interact,
   } = createShellState({ api: props.api });
   const {
     sidecars,
@@ -441,6 +442,18 @@ export default function Shell(
           class="otk-app"
           ref={(element) => {
             root = element;
+          }}
+          onInput={(event) => {
+            if (event.isTrusted && !settings()) interact();
+          }}
+          onWheel={(event) => {
+            if (event.isTrusted && !settings()) interact();
+          }}
+          onClick={(event) => {
+            if (event.isTrusted && !settings()) interact();
+          }}
+          onKeyDown={(event) => {
+            if (event.isTrusted && !settings()) interact();
           }}
           data-right-collapsed={String(layout().rightCollapsed)}
         >

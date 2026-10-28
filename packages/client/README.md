@@ -67,6 +67,30 @@ recoverable `missing` baselines. Superseding a generation retires its paging
 flag. Late `agent.colors` operations decorate the existing transcript without
 retaining another collection.
 
+`createTranscripts({connection, entry, factory?, clock?})` owns one canonical
+`createTranscript` per `sessionKey(server, session)`. `setDemand` replaces
+active scope/screen demand, `interact` refreshes that scope's clock, and
+`preload` gives an attention scope its temporary lease. Resources wait for an
+explicit/welcomed policy. One shared queue bounds page reads per server and
+prioritizes selection, attention and recently interacted scopes. Hydration
+publishes newest10 before acquiring next10. `viewport({first,last})` uses native
+message identities to refill at `MESSAGE_ADMISSION_WATERMARK` (20), with a
+ten-message reserve; `ensure(id)` follows the same cursor chain and `pin(ids)`
+retains interaction identities. Screen and warm consumers borrow the same
+bodies, not a snapshot cache. Visited pages survive while warm; a background
+live tail stays bounded. Cooling aborts reads and releases subscriptions, replay
+and message maps.
+
+`createSession().transcripts` exposes this collection and `.transcript` borrows
+the selected resource. The compatibility `state.content` references its
+canonical content. Model catalogs and usage leases retain their existing
+selected/open-detail owners. Tool-completion observers start a silent baseline
+on selection of an already-warm resource; hydration/history cannot trigger a
+historical agent switch. `createTranscriptScopes` derives active task families
+and initial/distinct attention edges from reduced server metadata; initial
+membership waits for inbox readiness. Visibility/Settings releases only screen
+demand. Metadata, drafts and seen/finish state are independent of body cooling.
+
 `rpc.call(method, params, signal?)` derives its input and result types from
 `@otk/protocol`'s declaration-mergeable `RpcMethods` interface. Callers do not
 supply result type arguments. `createCurrentClient().call` uses the same

@@ -8,6 +8,9 @@ import {
   type MessagePolicy,
 } from "@otk/protocol";
 export const fixtureMessagePolicy: MessagePolicy = {
+  coolms: 300000,
+  preloadms: 30000,
+  concurrency: 4,
   replayops: 128,
   replaybytes: 4194304,
   retryms: 1000,

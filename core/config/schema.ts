@@ -26,7 +26,14 @@ export const SERVICE_SCHEMA: Schema = {
     reconnectmax: "int",
   },
   index: { days: "int" },
-  messages: { replayops: "int", replaybytes: "int", retryms: "int" },
+  messages: {
+    coolms: "int",
+    preloadms: "int",
+    concurrency: "int",
+    replayops: "int",
+    replaybytes: "int",
+    retryms: "int",
+  },
   digest: {
     batch: "int",
     slicems: "int",

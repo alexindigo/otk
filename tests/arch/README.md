@@ -315,3 +315,10 @@ catch-all. Both shipped and standalone browser consumers must resolve bare kit
 names to the packages' declared public entries, rather than private bundler
 seams. Negative fixtures retain checks for all retired paths and forbidden
 app/server/sidecar package assumptions.
+
+`transcript_test.ts` keeps browser body acquisition at the canonical transcript
+resource and resource construction at its shared collection. Negative fixtures
+reject page reads in the selected facade or a UI cache. Scope/attention/cooling
+tests exercise reduced metadata, bounded queue admission, body release and
+framework publication; real-native browser cases observe warm reuse, draft
+survival, cold unsubscribe and hydration before navigation.

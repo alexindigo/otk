@@ -174,6 +174,16 @@ with live changes. Replay is bounded by `[messages]` configuration; a lost or
 overflowed baseline shows “Refreshing messages…” and reacquires a provider page.
 No transcript content is persisted in OTK's databases.
 
+Message bodies are shared by server/session identity across selection, scope and
+attention demand. The active task (including its helpers), or the ungrouped
+project, warms each session's newest ten plus the next ten through a four-read
+per-server browser queue. Recently left scopes keep their visited pages for five
+minutes after interaction. An attention edge warms its scope for thirty seconds
+without selecting or marking it seen. Cooling cancels body work and releases
+bodies while preserving metadata, lights and unsent drafts. The `[messages]`
+`coolms`, `preloadms` and `concurrency` leaves configure these thresholds; page
+size and the ten-message reserve remain product contracts.
+
 Deleting a native session retains its last metadata and task membership as a
 tombstone. Select its struck-through row to see details, copy its title, remove
 it from its task or close its view. An external deletion retains unsent browser
@@ -229,9 +239,9 @@ context menu or palette releases task membership and the view while keeping the
 session in Sessions and the backend. Closing a helper returns to its parent.
 Working, blocked and unseen-finished sessions retain a phantom tab until idle
 and seen, with an explanation before closing. Open a session to stream its
-transcript, send prompts, or press Esc twice to interrupt. Message history for
-the previous session is released on switching. Web assets and fonts are bundled
-locally; no dev server or CDN is used.
+transcript, send prompts, or press Esc twice to interrupt. Recently visited
+message bodies remain warm until their scope cools. Web assets and fonts are
+bundled locally; no dev server or CDN is used.
 
 Text fields retain the browser's native context menu for spelling corrections
 and dictionary lookup, including ContextMenu and Shift+F10. Elsewhere right

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createEffect } from "solid-js";
+import { createEffect, createSignal, onCleanup } from "solid-js";
 import {
   type ClientSession,
   createCurrentClient,
@@ -12,6 +12,7 @@ import {
   createSessionRename,
   createSessionRevert,
   createShellNavigation,
+  createTranscriptScopes,
   type CurrentClient,
   type Drafts,
   type ForkNotes,
@@ -42,6 +43,7 @@ export interface ShellState {
   forkNotes: ForkNotes;
   guard: InputGuard;
   navigation: ShellNavigation;
+  interact(): void;
 }
 /** Browser capabilities and split reactive effects bind the framework-free owners. */
 export function createShellState(o: { api: URL }): ShellState {
@@ -126,6 +128,21 @@ export function createShellState(o: { api: URL }): ShellState {
     }),
     confirm: (message) => globalThis.confirm(message),
   });
+  const transcriptScopes = createTranscriptScopes({ resources, session });
+  const [visible, setVisible] = createSignal(
+    document.visibilityState === "visible",
+  );
+  const visibility = () => setVisible(document.visibilityState === "visible");
+  document.addEventListener("visibilitychange", visibility);
+  onCleanup(() => {
+    document.removeEventListener("visibilitychange", visibility);
+    transcriptScopes.stop();
+  });
+  createEffect(() => ({
+    project: navigation.state.project,
+    selected: session.state.selection,
+    screen: visible() && !navigation.state.settings,
+  }), (value) => transcriptScopes.update(value));
   createEffect(() => {
     const selected = session.state.selection, data = actions.info();
     const project = selected ? undefined : navigation.state.project;
@@ -150,6 +167,7 @@ export function createShellState(o: { api: URL }): ShellState {
     if (value) resources.syncTabs(value.p, value.input, value.selected);
   });
   return {
+    interact: transcriptScopes.interact,
     listInteraction: listScopes.get,
     resources,
     session,

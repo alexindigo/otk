@@ -53,10 +53,10 @@ carry that clock unchanged. Attention remains outside transcript sequencing.
 `part.blocks.baseVersion` must match the previous published checkpoint exactly.
 
 `MessagePolicy` has no library defaults. The composing application supplies
-`replayops`, `replaybytes`, and `retryms` through `welcome.messages` or an
-explicit standalone connection policy. `messagePolicy` strictly validates
-positive safe integers, rejects unknown keys and requires room for replay
-bookkeeping.
+`coolms`, `preloadms`, `concurrency`, `replayops`, `replaybytes`, and `retryms`
+through `welcome.messages` or an explicit standalone connection policy.
+`messagePolicy` strictly validates positive safe integers, rejects unknown keys
+and requires room for replay bookkeeping.
 
 `RpcMethods` is an open interface containing each shipped method's wire `params`
 and `result`. A feature declares additional entries beside its code using

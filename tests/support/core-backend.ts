@@ -96,6 +96,7 @@ export async function coreBackendFixture(
     app,
     session,
     page,
+    clock: (id = identity) => replay.clock(id),
     url: `http://127.0.0.1:${app.server.addr.port}`,
   };
 }

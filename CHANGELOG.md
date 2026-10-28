@@ -16,6 +16,12 @@ provider snapshot and shows refreshing state instead of applying unaligned
 changes; replay operation/byte budgets and retry backoff use layered
 configuration.
 
+Message bodies now share one resource per server/session across the active
+scope, recent navigation and attention preloads. A bounded per-server queue
+warms ten messages plus the next ten, and inactive scopes unload after their
+configured interaction deadline. Attention preloads do not navigate or mark
+sessions seen; drafts and supervision metadata survive cooling.
+
 **Performance.** Sessions renders a measured window of the active project's
 hierarchy. Search, scroll anchors, focused rows and in-place edits retain their
 identities while panels unmount or lists change. Project and required session

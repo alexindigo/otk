@@ -11,6 +11,14 @@ export * from "./state.ts";
 export * from "./reduce.ts";
 export * from "./index.ts";
 export * from "./session.ts";
+export {
+  createTranscript,
+  type TranscriptOwner,
+  type TranscriptState,
+} from "./transcript.ts";
+export * from "./transcripts.ts";
+export * from "./message-policy.ts";
+export * from "./transcript-scopes.ts";
 export * from "./sidecars.ts";
 export * from "./server-resources.ts";
 export * from "./messages.ts";

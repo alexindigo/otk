@@ -30,7 +30,15 @@ function fixture() {
     subscriptions.push([id, enabled]);
   };
   const answer = (method: string, result: unknown) => {
-    const at = frames.findIndex((frame) => frame.method === method);
+    const sessionID =
+      method === "session.messages" && result && typeof result === "object"
+        ? Reflect.get(result, "sessionID")
+        : undefined;
+    const at = frames.findIndex((frame) =>
+      frame.method === method &&
+      (sessionID === undefined ||
+        Reflect.get(frame.params as object, "sessionID") === sessionID)
+    );
     assert(at >= 0, method);
     const frame = frames.splice(at, 1)[0];
     connection.rpc.receive({ t: "rpc.result", id: frame.id, ok: true, result });
@@ -54,8 +62,7 @@ const message = (id: string): Message => ({
   parts: [],
 });
 const settle = async () => {
-  await Promise.resolve();
-  await Promise.resolve();
+  for (let i = 0; i < 20; i++) await Promise.resolve();
 };
 
 Deno.test("plain session replays buffered ops, refetches resync and releases selection without optional RPCs", async () => {
@@ -102,7 +109,7 @@ Deno.test("plain session replays buffered ops, refetches resync and releases sel
   }
 });
 
-Deno.test("plain session generations cancel superseded loads and paging deduplicates older messages", async () => {
+Deno.test("plain session generations isolate warm loads and paging deduplicates older messages", async () => {
   const { connection, session, answer, subscriptions } = fixture();
   try {
     session.open({ sidecarId: "core", sessionID: "old" });
@@ -127,7 +134,12 @@ Deno.test("plain session generations cancel superseded loads and paging deduplic
     assertEquals(session.state.content.messages[0].id, "older");
     assertEquals(session.state.exhausted, true);
     assertEquals(session.state.paging, false);
-    assertEquals(subscriptions, [["old", true], ["old", false], ["s", true]]);
+    assertEquals(subscriptions, [["old", true], ["s", true]]);
+    assertEquals(
+      session.transcripts.get({ sidecarId: "core", sessionID: "old" })?.state
+        .messageIDs,
+      ["obsolete"],
+    );
   } finally {
     session.stop();
     connection.stop();
@@ -187,6 +199,7 @@ Deno.test("session catalog is optional, nonblocking and generation-bound across 
     await session.models?.ready();
     assertEquals(session.models?.state.value, old);
     assertEquals(session.models?.state.error, "Catalog unavailable");
+    await settle();
     assertEquals(session.state.error, undefined);
     assertEquals(session.state.content.messages[0].id, "still available");
     connection.supports = () => false;

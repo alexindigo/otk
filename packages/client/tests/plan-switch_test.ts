@@ -76,6 +76,10 @@ function fixture(loadAgents = () => Promise.resolve(agents)) {
     frame() {},
   }, { messages: fixtureMessagePolicy });
   connection.send = (frame) => {
+    if (frame.t === "rpc.cancel") {
+      const at = frames.findIndex((pending) => pending.id === frame.id);
+      if (at >= 0) frames.splice(at, 1);
+    }
     if (frame.t === "rpc") {
       frames.push(frame);
       checkpoints.set(frame.id, sequence);
@@ -247,12 +251,8 @@ Deno.test("opening and reopening completed history is silent but completions rec
     owner.dispose();
     f.session.open();
     f.session.open(target);
-    await f.snapshot([
-      message("m", [
-        tool("live-during-open", "plan_enter"),
-        tool("already-completed"),
-      ]),
-    ]);
+    await settle();
+    assertEquals(f.session.state.content.messages[0].id, "history");
     f.change((draft) => ({ ...draft, agent: "build" }));
     const before = f.mutations();
     owner = f.composer();

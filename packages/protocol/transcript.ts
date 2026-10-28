@@ -64,6 +64,9 @@ export interface MessagePageInput {
 }
 /** Values come only from the composing application's layered config. */
 export interface MessagePolicy {
+  coolms: number;
+  preloadms: number;
+  concurrency: number;
   replayops: number;
   replaybytes: number;
   retryms: number;
@@ -73,7 +76,14 @@ export function messagePolicy(value: unknown): MessagePolicy {
     throw new TypeError("Invalid message policy");
   }
   const object = value as Record<string, unknown>;
-  const keys = ["replayops", "replaybytes", "retryms"] as const;
+  const keys = [
+    "coolms",
+    "preloadms",
+    "concurrency",
+    "replayops",
+    "replaybytes",
+    "retryms",
+  ] as const;
   if (
     Object.keys(object).some((key) =>
       !keys.includes(key as typeof keys[number])
@@ -92,6 +102,9 @@ export function messagePolicy(value: unknown): MessagePolicy {
     );
   }
   return {
+    coolms: Number(object.coolms),
+    preloadms: Number(object.preloadms),
+    concurrency: Number(object.concurrency),
     replayops: Number(object.replayops),
     replaybytes: Number(object.replaybytes),
     retryms: Number(object.retryms),
