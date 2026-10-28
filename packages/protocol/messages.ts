@@ -22,6 +22,7 @@ export type ClientFrame =
   | { t: "pong" }
   | { t: "subscribe" | "unsubscribe"; sessionID: string }
   | { t: "resnapshot" }
+  | { t: "rpc.cancel"; id: string }
   | { t: "rpc"; id: string; method: string; params: unknown };
 export type ServerFrame =
   | {

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createEffect, createMemo, onCleanup } from "solid-js";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import { useShellPorts } from "../shell/context.tsx";
 import type { PanelDefinition, SurfaceRegistry } from "../registries/shell.ts";
@@ -15,43 +14,23 @@ export function registerSessionsPanel(
     icon: SessionsIcon,
     component: () => {
       const shell = useShellPorts(), { commands } = useCommandPorts();
-      const usage = shell.usage.scope();
-      onCleanup(() => usage.dispose());
-      const entries = createMemo(() => {
-        const project = shell.project();
-        return shell.entries().filter((entry) =>
-          entry.sidecarId === project?.sidecarId &&
-          entry.directory === project.directory
-        );
-      });
-      createEffect(() => {
-        const server = shell.servers().find((server) =>
-          server.id === shell.project()?.sidecarId
-        );
-        return server?.status === "connected" &&
-            server.capabilities.includes("usage")
-          ? entries()
-          : [];
-      }, (rows) => {
-        usage.set(rows.map((entry) => ({
-          sidecarId: entry.sidecarId,
-          sessionID: entry.id,
-        })));
-      });
       return (
         <ProjectSessions
           project={shell.project()}
           entries={shell.entries()}
           selected={shell.selection()}
           rename={shell.rename}
+          showCost={shell.toggles.state.prefs.showCost}
           auto={(id) =>
             !!shell.project() &&
             !!shell.approvals(shell.project()!.sidecarId).owner(id)}
           cost={(sessionID) => {
             const project = shell.project();
             return shell.toggles.state.prefs.showCost && project
-              ? shell.usage.get({ sidecarId: project.sidecarId, sessionID })
-                ?.total.cost
+              ? shell.entries().find((entry) =>
+                entry.sidecarId === project.sidecarId &&
+                entry.id === sessionID && entry.digest.state === "ready"
+              )?.digest.total?.cost ?? undefined
               : undefined;
           }}
           inbox={(id) => shell.inbox(id).state.inbox}

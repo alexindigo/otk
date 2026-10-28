@@ -1140,7 +1140,14 @@ Deno.test("inbox and tab models remain reusable, framework-free owners with inje
 });
 
 Deno.test("task actions and reported context usage stay in framework-free public client owners", async () => {
-  for (const file of ["context-meter", "task-actions", "task-breadcrumbs"]) {
+  for (
+    const file of [
+      "context-meter",
+      "session-summary",
+      "task-actions",
+      "task-breadcrumbs",
+    ]
+  ) {
     const path = `packages/client/${file}.ts`;
     assertEquals(
       sourceErrors(path, await Deno.readTextFile(new URL(path, root))),
@@ -1162,6 +1169,7 @@ Deno.test("task actions and reported context usage stay in framework-free public
     new URL("packages/ui/components/ProjectTabs.tsx", root),
   );
   assert(ui.includes("props.model.tabs()"));
-  assert(ui.includes("contextMeter(props.messages, props.catalog)"));
+  assert(ui.includes("summaryMeter(props.entry, props.catalog)"));
+  assert(!ui.includes("contextMeter(props.messages"));
   assert(!ui.includes("rpc.call("));
 });

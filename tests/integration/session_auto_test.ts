@@ -265,7 +265,7 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
       (frames) =>
         frames.some((frame) =>
           frame.t === "index.patch" &&
-          frame.ops.some((op) => op.op === "remove" && op.id === deleted.id)
+          client!.entry(deleted.id)?.deleted !== undefined
         ) &&
         frames.some((frame) =>
           frame.t === "approvals" &&
@@ -293,6 +293,10 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
       allConnectionsClosedDuringAutomaticWork: true,
     });
   } finally {
+    await Deno.writeTextFile(
+      join(oc.root, "sidecar-process.log"),
+      server?.log ?? "",
+    );
     await client?.close();
     await server?.stop();
     await proxy.stop();

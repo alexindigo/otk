@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { IndexEntry, ServerFrame } from "@otk/protocol";
-import { acceptsPatch, sessionKey } from "./index.ts";
+import {
+  acceptsPatch,
+  type ClientIndex,
+  createIndex,
+  sessionKey,
+} from "./index.ts";
 import type { Note } from "./notifications.ts";
 type IndexFrame = Extract<ServerFrame, { t: "index.snapshot" | "index.patch" }>;
 function errors(entry: IndexEntry): string {
@@ -19,18 +24,28 @@ export class NotificationTriggers {
     string,
     {
       rev: number;
-      raw: Map<string, IndexEntry>;
       entries: Map<string, IndexEntry>;
     }
   >();
   #kinds = new Map<string, Note["kind"]>();
+  #index?: ClientIndex;
   constructor(
     readonly emit: (note: Note) => void,
     readonly retract: (id: string) => void,
     readonly project: (sidecar: string, entries: IndexEntry[]) => IndexEntry[] =
       (_sidecar, entries) => entries,
+    /** Application callers borrow their already-reduced authoritative index. */
+    readonly read?: (sidecar: string) => readonly IndexEntry[],
   ) {}
+  #entries(sidecar: string): IndexEntry[] {
+    const entries = this.read?.(sidecar) ??
+      Object.values(this.#index?.state.entries ?? {}).filter((entry) =>
+        entry.sidecarId === sidecar
+      );
+    return [...entries];
+  }
   reset(sidecar: string): void {
+    this.#index?.remove(sidecar);
     this.#connections.delete(sidecar);
     for (const key of [...this.#kinds.keys()]) {
       if (key.startsWith(sidecar + "/")) {
@@ -41,39 +56,29 @@ export class NotificationTriggers {
   }
   refresh(sidecar: string): void {
     const state = this.#connections.get(sidecar);
-    if (state) {
-      this.receive(sidecar, {
-        t: "index.snapshot",
-        rev: state.rev,
-        entries: [...state.raw.values()],
-      });
-    }
+    if (state) this.#update(sidecar, state.rev);
   }
   receive(sidecar: string, frame: IndexFrame): boolean {
     const previous = this.#connections.get(sidecar);
-    if (!acceptsPatch(previous?.rev, frame)) return false;
-    const raw = frame.t === "index.snapshot"
-      ? new Map(
-        frame.entries.map((entry) => [entry.id, structuredClone(entry)]),
-      )
-      : new Map(previous!.raw);
-    if (frame.t === "index.patch") {
-      for (const op of frame.ops) {
-        if (op.op === "upsert") {
-          raw.set(op.entry.id, structuredClone(op.entry));
-        } else raw.delete(op.id);
-      }
+    if (this.read) {
+      if (!acceptsPatch(previous?.rev, frame)) return false;
+    } else if (!(this.#index ??= createIndex()).receive(sidecar, frame)) {
+      return false;
     }
+    return this.#update(sidecar, frame.rev);
+  }
+  #update(sidecar: string, rev: number): boolean {
+    const previous = this.#connections.get(sidecar);
     const entries = new Map(
-      this.project(sidecar, [...raw.values()]).map((
+      this.project(sidecar, this.#entries(sidecar)).map((
         entry,
       ) => [entry.id, entry]),
     );
-    this.#connections.set(sidecar, { rev: frame.rev, raw, entries });
+    this.#connections.set(sidecar, { rev, entries });
     if (!previous) return true; // first snapshot after every welcome is baseline
     for (const old of previous.entries.values()) {
       const entry = entries.get(old.id), id = sessionKey(sidecar, old.id);
-      if (!entry || entry.parentID || entry.archived) {
+      if (!entry || entry.deleted || entry.parentID || entry.archived) {
         if (this.#kinds.delete(id)) this.retract(id);
         continue;
       }

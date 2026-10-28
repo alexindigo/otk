@@ -9,23 +9,38 @@ export interface ReleaseInput {
 }
 
 export interface InputGuard {
-  mark(owner: string, dirty: boolean): void;
+  mark(owner: string, dirty: boolean, input?: string): void;
+  retained(): { owner: string; value: string }[];
   dirty(owner: string): boolean;
   clear(): void;
   release(input?: ReleaseInput): boolean;
   permit(owner: string, message: string): boolean;
 }
 export function createInputGuard(
-  o: { drafts: Drafts; key(): string; confirm(message: string): boolean },
+  o: {
+    drafts: Drafts;
+    key(): string;
+    confirm(message: string): boolean;
+    retain?(): boolean;
+  },
 ): InputGuard {
   const dirty = new Map<string, boolean>();
+  const inputs = new Map<string, string>();
   return {
-    mark(owner, value) {
+    mark(owner, value, input) {
+      if (!value && dirty.get(owner) && o.retain?.()) return;
       dirty.set(owner, value);
+      if (input !== undefined) inputs.set(owner, input);
+      if (!value) inputs.delete(owner);
     },
+    retained: () =>
+      [...inputs].filter(([owner]) => dirty.get(owner)).map((
+        [owner, value],
+      ) => ({ owner, value })),
     dirty: (owner) => !!dirty.get(owner),
     clear() {
       dirty.clear();
+      inputs.clear();
     },
     release(input = { draft: "kept" }) {
       // Frameworks can batch painted reads during input events. The plain

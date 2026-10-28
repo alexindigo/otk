@@ -9,32 +9,58 @@ import { waitFor } from "../support/opencode.ts";
 
 // Hold the real handshake until the direct-route consumer has mounted. Replay
 // every received frame in order, without changing capabilities or RPC content.
-async function holdHandshake(browser: Cdp) {
+async function holdHandshake(browser: Cdp, holdQuestions = false) {
   await browser.send("Page.addScriptToEvaluateOnNewDocument", {
     source: `
-      window.heldHandshake = [];
-      window.holdHandshake = true;
-      window.WebSocket = class extends WebSocket {
+        window.heldHandshake = [];
+        window.holdHandshake = true;
+        window.holdInitialQuestions = ${holdQuestions};
+        window.heldInitialQuestions = [];
+        window.initialQuestionReads = new Set();
+        window.WebSocket = class extends WebSocket {
         constructor(...args) {
           super(...args);
           this.addEventListener('message', event => {
             if (window.holdHandshake) {
               event.stopImmediatePropagation();
-              window.heldHandshake.push(() => this.dispatchEvent(new MessageEvent('message', {data:event.data})));
-            }
-          });
+               window.heldHandshake.push(() => this.dispatchEvent(new MessageEvent('message', {data:event.data})));
+            } else if (window.holdInitialQuestions && frameIsInitialQuestion(event)) {
+              event.stopImmediatePropagation();
+              window.heldInitialQuestions.push(() => this.dispatchEvent(new MessageEvent('message', {data:event.data})));
+             }
+           });
+         }
+         send(data) {
+           const frame=JSON.parse(data);
+           if(frame.t==='rpc' && frame.method==='question.list')window.initialQuestionReads.add(frame.id);
+           super.send(data);
+         }
+        };
+        function frameIsInitialQuestion(event) {
+          const frame=JSON.parse(event.data);
+          return frame.t==='rpc.result' && window.initialQuestionReads.has(frame.id);
         }
-      };
       window.releaseHandshake = () => {
         window.holdHandshake = false;
-        for (const deliver of window.heldHandshake.splice(0)) deliver();
-      };
+           for (const deliver of window.heldHandshake.splice(0)) deliver();
+         };
+        window.releaseInitialQuestions = () => {
+          window.holdInitialQuestions=false;
+          for(const deliver of window.heldInitialQuestions.splice(0))deliver();
+        };
     `,
   });
 }
 async function releaseHandshake(browser: Cdp) {
   await browser.poll(
-    "!!document.querySelector('.otk-prompt') && window.heldHandshake.length > 0",
+    "!!document.querySelector('.otk-app') && window.heldHandshake.length > 0",
+  );
+  // Unverified direct routes cannot expose an actionable composer before cataloging.
+  assertEquals(
+    await browser.evaluate(
+      "!!document.querySelector('.otk-prompt button[type=submit]:not(:disabled)')",
+    ),
+    false,
   );
   assertEquals(
     await browser.evaluate("!!document.querySelector('.otk-permission-dock')"),
@@ -139,19 +165,22 @@ test("initial advertised session capabilities activate question and prompt consu
   });
   const browser = await Cdp.launch(root);
   try {
-    await holdHandshake(browser);
+    await holdHandshake(browser, true);
     await browser.goto(`${url}/#/local/tstv1-core`);
     for (const phase of ["direct", "reload"]) {
       if (phase === "reload") await browser.reload();
-      await browser.poll("!!document.querySelector('textarea[name=prompt]')");
+      await releaseHandshake(browser);
+      await browser.poll(
+        "!!document.querySelector('textarea[name=prompt]') && window.heldInitialQuestions.length>0",
+      );
       await browser.type("textarea[name=prompt]", "Keep initial draft");
       assertEquals(
         await browser.evaluate(
-          "document.querySelector('.otk-prompt button[type=submit]').disabled",
+          "!!document.querySelector('.otk-question-dock')",
         ),
-        true,
+        false,
       );
-      await releaseHandshake(browser);
+      await browser.evaluate("window.releaseInitialQuestions()");
       await browser.poll(
         "document.querySelector('.otk-messages')?.textContent.includes('Core transcript')",
       );

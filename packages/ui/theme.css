@@ -399,3 +399,6 @@ h6 {
 :root[data-otk-reduced-colors] .otk-age-3 {
   text-decoration: underline double;
 }
+:root {
+  --deleted-fg: color-mix(in srgb, var(--otk-fg) 70%, var(--otk-bg));
+}

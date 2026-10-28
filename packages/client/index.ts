@@ -38,61 +38,102 @@ export interface IndexState {
 }
 export interface ClientIndex {
   state: IndexState;
+  get(sidecarId: string, sessionID: string): MergedEntry | undefined;
   subscribe(listener: (state: IndexState) => void): () => void;
   receive(sidecarId: string, frame: IndexFrame): boolean;
   remove(sidecarId: string): void;
 }
 export function createIndex(factory: StateFactory = createState): ClientIndex {
-  const store = factory<
-    { entries: Record<string, MergedEntry> }
-  >({ entries: {} });
-  const { state, update: setState, subscribe } = store;
+  // Data is synchronous and framework-free. The binding publishes only keyed
+  // clocks, so deferred painting can never govern action admission.
+  const entries: Record<string, MergedEntry> = {};
+  const clock = factory({ revision: 0, keys: {} as Record<string, number> });
+  const state: IndexState = {
+    get entries() {
+      void clock.state.revision;
+      return entries;
+    },
+  };
+  const publish = (changed: Set<string>) =>
+    clock.update((draft) => {
+      draft.revision++;
+      for (const key of changed) {
+        if (entries[key]) draft.keys[key] = (draft.keys[key] ?? 0) + 1;
+        else delete draft.keys[key];
+      }
+    });
   const revisions = new Map<string, number>();
   return {
     state,
-    subscribe,
+    get(sidecarId, sessionID) {
+      const key = sessionKey(sidecarId, sessionID);
+      void clock.state.keys[key];
+      return entries[key];
+    },
+    subscribe: (listener) => clock.subscribe(() => listener(state)),
     receive(sidecarId: string, frame: IndexFrame): boolean {
       if (!acceptsPatch(revisions.get(sidecarId), frame)) return false;
-      setState((draft) => {
-        if (frame.t === "index.snapshot") {
-          const others = Object.fromEntries(
-            Object.entries(draft.entries).filter(([, entry]) =>
-              entry.sidecarId !== sidecarId
-            ),
+      const changed = new Set<string>();
+      if (frame.t === "index.snapshot") {
+        for (const [key, entry] of Object.entries(entries)) {
+          if (entry.sidecarId === sidecarId) {
+            delete entries[key];
+            changed.add(key);
+          }
+        }
+        for (const entry of frame.entries) {
+          const key = sessionKey(sidecarId, entry.id);
+          entries[key] = { ...structuredClone(entry), sidecarId };
+          changed.add(key);
+        }
+      } else {for (const op of frame.ops) {
+          const key = sessionKey(
+            sidecarId,
+            op.op === "upsert" ? op.entry.id : op.id,
           );
-          const incoming = Object.fromEntries(
-            frame.entries.map((
-              entry,
-            ) => [sessionKey(sidecarId, entry.id), { ...entry, sidecarId }]),
-          );
-          store.reconcile(draft.entries, { ...others, ...incoming });
-        } else {for (const op of frame.ops) {
-            if (op.op === "upsert") {
-              draft.entries[sessionKey(sidecarId, op.entry.id)] = {
-                ...op.entry,
-                sidecarId,
-              };
-            } else if (op.op === "digest") {
-              const entry = draft.entries[sessionKey(sidecarId, op.id)];
-              if (!entry || op.revision < entry.digest.revision) continue;
-              const turns = { ...entry.digest.turns, ...op.turns.upsert };
-              for (const id of op.turns.remove) delete turns[id];
-              entry.digest = { ...op.summary, revision: op.revision, turns };
-              if (op.deleted) entry.deleted = op.deleted;
-              else delete entry.deleted;
-            } else delete draft.entries[sessionKey(sidecarId, op.id)];
-          }}
-      });
+          if (op.op === "upsert") {
+            entries[key] = { ...structuredClone(op.entry), sidecarId };
+          } else if (op.op === "digest") {
+            const entry = entries[key];
+            if (!entry || op.revision < entry.digest.revision) continue;
+            const turns = {
+              ...entry.digest.turns,
+              ...structuredClone(op.turns.upsert),
+            };
+            for (const id of op.turns.remove) delete turns[id];
+            const next = entries[key] = {
+              ...entry,
+              digest: {
+                ...structuredClone(op.summary),
+                revision: op.revision,
+                turns,
+              },
+            };
+            if (op.deleted) next.deleted = structuredClone(op.deleted);
+            else delete next.deleted;
+          } else if (op.op === "remove") delete entries[key];
+          else {
+            const unhandled: never = op;
+            throw new Error(
+              `Unhandled index operation: ${JSON.stringify(unhandled)}`,
+            );
+          }
+          changed.add(key);
+        }}
       revisions.set(sidecarId, frame.rev);
+      publish(changed);
       return true;
     },
     remove(sidecarId: string): void {
       revisions.delete(sidecarId);
-      setState((draft) => {
-        for (const [key, entry] of Object.entries(draft.entries)) {
-          if (entry.sidecarId === sidecarId) delete draft.entries[key];
+      const changed = new Set<string>();
+      for (const [key, entry] of Object.entries(entries)) {
+        if (entry.sidecarId === sidecarId) {
+          delete entries[key];
+          changed.add(key);
         }
-      });
+      }
+      publish(changed);
     },
   };
 }

@@ -45,6 +45,9 @@ import { sessionPorts } from "./session-ports.ts";
 import { ShellProvider } from "./context.tsx";
 import ContextMenu from "../components/ContextMenu.tsx";
 import type { SessionContextTarget } from "../features/session-context.ts";
+import DeletedSession from "../components/DeletedSession.tsx";
+import { deletedFacts } from "@otk/client";
+import { contextTarget } from "../components/context-target.ts";
 
 /** Reusable application shell; web/src selects modules and the API address. */
 export default function Shell(
@@ -105,6 +108,7 @@ export default function Shell(
     connection: (id) => sidecars.connection(id),
     entry,
     attention,
+    entries: resources.indexEntries,
   });
   onCleanup(resources.observe({
     frame: (id, frame, accepted) => {
@@ -114,8 +118,10 @@ export default function Shell(
   }));
   onCleanup(
     resources.observe({
-      frame: (id, frame) => session.receive(id, frame),
-      removed: (id) => session.usage.removeServer(id),
+      frame: (id, frame, accepted) => {
+        if (accepted) session.receive(id, frame);
+      },
+      removed: session.removeServer,
     }),
   );
   onCleanup(resources.observe({
@@ -235,6 +241,7 @@ export default function Shell(
   const info = createMemo(actions.info);
   onCleanup(registerSessionActionCommands(commands, {
     available: (target) =>
+      actions.eligibility(target).live &&
       resources.connected(target.sidecarId) &&
       resources.advertised(target.sidecarId, "sessionActions"),
     rename,
@@ -262,7 +269,10 @@ export default function Shell(
   onCleanup(registerApprovalCommands(commands, {
     current: (input) => {
       const target = input ?? session.state.selection;
-      if (!target || !approvals(target.sidecarId).canEnable(target.sessionID)) {
+      if (
+        !target || !actions.eligibility(target).live ||
+        !approvals(target.sidecarId).canEnable(target.sessionID)
+      ) {
         return undefined;
       }
       const server = resources.server(target.sidecarId);
@@ -295,6 +305,7 @@ export default function Shell(
     current: () => session.state.selection,
     exists: (target) => !!entry(target.sidecarId, target.sessionID),
     connected: (target) => resources.connected(target.sidecarId),
+    eligible: actions.eligibility,
     inTask: actions.inTask,
     open: navigation.preview,
     pin: navigation.pin,
@@ -305,10 +316,26 @@ export default function Shell(
     title: "Copy session title",
     category: "Session",
     hidden: true,
-    context: { kind: "session", order: 40 },
+    context: {
+      kind: "session",
+      order: 40,
+      title: (target: SessionContextTarget) =>
+        actions.eligibility(target).live ? "Copy session title" : "Copy title",
+    },
     enabled: (_ctx, target?: SessionContextTarget) => !!target,
     run: (_ctx, target: SessionContextTarget) =>
       navigator.clipboard.writeText(target.title),
+  }));
+  onCleanup(commands.register({
+    id: "session.task.remove",
+    title: "Remove from task",
+    category: "Session",
+    hidden: true,
+    context: { kind: "session", order: 45 },
+    enabled: (_ctx, target?: SessionContextTarget) =>
+      !!target && !actions.eligibility(target).live &&
+      actions.eligibility(target).member,
+    run: (_ctx, target: SessionContextTarget) => actions.removeFromTask(target),
   }));
   const projects = createMemo(() =>
     resources.projects(now(), toggles.state.prefs.projectAgeing)
@@ -493,14 +520,11 @@ export default function Shell(
                         model={tabsFor(project()!)}
                         entries={resources.projectEntries(project()!)}
                         inbox={inbox(project()!.sidecarId).state.inbox}
-                        messages={session.state.content.messages}
-                        usage={session.state.selection
-                          ? session.usage.get(session.state.selection)?.total
-                          : undefined}
+                        entry={actions.selectedEntry()}
+                        eligible={(target) => actions.eligibility(target).live}
                         catalog={session.models?.state.available
                           ? session.models.state.value
                           : undefined}
-                        exhausted={session.state.exhausted}
                         showCost={toggles.state.prefs.showCost}
                         auto={(id) =>
                           !!approvals(project()!.sidecarId).owner(id)}
@@ -550,67 +574,143 @@ export default function Shell(
                         </div>
                       }
                     >
-                      <SessionProvider
-                        ports={sessionPorts({
-                          target: session.state.selection!,
-                          resources,
-                          actions,
-                          session,
-                          guard,
-                          prefs: () => toggles.state.prefs,
-                        })}
+                      <Show
+                        when={session.state.view !== "deleted" &&
+                          session.state.catalogReady !== false}
+                        fallback={
+                          <Show when={session.state.deleted}>
+                            {(entry) => (
+                              <DeletedSession
+                                title={entry().title}
+                                ref={contextTarget(() => ({
+                                  kind: "session",
+                                  area: true,
+                                  data: {
+                                    ...session.state.selection!,
+                                    title: entry().title,
+                                    directory: entry().directory,
+                                  },
+                                }))}
+                                notice={`${
+                                  entry().deleted?.how === "otk"
+                                    ? "Deleted through OTK"
+                                    : "Deleted from the agent service"
+                                } on ${
+                                  new Date(entry().deleted!.at).toLocaleString()
+                                }`}
+                                facts={deletedFacts(
+                                  entry(),
+                                  toggles.state.prefs.showCost,
+                                  (time) => new Date(time).toLocaleString(),
+                                )}
+                                retained={guard.retained()}
+                                draftNotice={draft().input ||
+                                    draft().chips.length || draft().editor
+                                  ? "Your unsent draft is retained. This session can no longer receive messages."
+                                  : undefined}
+                                copy={() =>
+                                  void commands.run("session.title.copy", {
+                                    ...session.state.selection!,
+                                    title: entry().title,
+                                    directory: entry().directory,
+                                  }).catch(fail)}
+                                remove={actions.eligibility(
+                                    session.state.selection!,
+                                  ).member
+                                  ? () =>
+                                    void commands.run(
+                                      "session.task.remove",
+                                      session.state.selection,
+                                    ).catch(fail)
+                                  : undefined}
+                                close={() =>
+                                  void commands.run("session.close").catch(
+                                    fail,
+                                  )}
+                              />
+                            )}
+                          </Show>
+                        }
                       >
-                        <SessionView
-                          sidecarId={session.state.selection?.sidecarId}
-                          revert={session.state.content.revert}
-                          rollback={revert}
-                          strip={revert.strip(session.state.content)}
-                          busy={!!session.state.selection &&
-                            entry(
+                        <SessionProvider
+                          ports={sessionPorts({
+                            target: session.state.selection!,
+                            resources,
+                            actions,
+                            session,
+                            guard,
+                            prefs: () => toggles.state.prefs,
+                          })}
+                        >
+                          <SessionView
+                            sidecarId={session.state.selection?.sidecarId}
+                            revert={session.state.content.revert}
+                            rollback={revert}
+                            strip={revert.strip(session.state.content)}
+                            busy={!!session.state.selection &&
+                              entry(
+                                  session.state.selection.sidecarId,
+                                  session.state.selection.sessionID,
+                                )?.status !== "idle"}
+                            retryState={session.state.selection
+                              ? entry(
                                 session.state.selection.sidecarId,
                                 session.state.selection.sessionID,
-                              )?.status !== "idle"}
-                          retryState={session.state.selection
-                            ? entry(
-                              session.state.selection.sidecarId,
-                              session.state.selection.sessionID,
-                            )?.retry
-                            : undefined}
-                          child={!!session.state.selection?.rootID ||
-                            !!info()?.parentID}
-                          siblings={session.state.siblings}
-                          onOpenChild={(id) =>
-                            void commands.run("session.child", id)}
-                          permissions={session.state.content.permissions}
-                          prefs={toggles.state.prefs}
-                          info={info()}
-                          label={selectedSidecar()?.label || "Server"}
-                          messages={session.state.content.messages}
-                          usage={session.state.selection
-                            ? session.usage.get(session.state.selection)
-                            : undefined}
-                          catalog={session.models?.state.available
-                            ? session.models.state.value
-                            : undefined}
-                          loading={session.state.loading}
-                          paging={session.state.paging}
-                          exhausted={session.state.exhausted}
-                          error={session.state.error}
-                          sessionError={session.state.content.error}
-                          errorState={session.state.content.errorState}
-                          draft={draft()}
-                          forkNote={forkNotes.get(draftKey())}
-                          onDismissForkNote={() =>
-                            forkNotes.dismiss(draftKey())}
-                          connected={selectedSidecar()?.status === "connected"}
-                          onOlder={() => commands.run("session.older")}
-                          onRetry={() => commands.run("session.retry")}
-                          onDraft={drafts.writer(draftKey())}
-                          onPrompt={(parts, _mode, selection) =>
-                            actions.prompt(parts, selection)}
-                          onAbort={actions.abort}
-                        />
-                      </SessionProvider>
+                              )?.retry
+                              : undefined}
+                            child={!!session.state.selection?.rootID ||
+                              !!info()?.parentID}
+                            siblings={session.state.siblings}
+                            onOpenChild={(id) =>
+                              void commands.run("session.child", id)}
+                            permissions={session.state.content.permissions}
+                            prefs={toggles.state.prefs}
+                            info={info()}
+                            label={selectedSidecar()?.label || "Server"}
+                            messages={session.state.content.messages}
+                            usage={session.state.selection
+                              ? session.usage.get(session.state.selection)
+                              : undefined}
+                            entry={actions.selectedEntry()}
+                            openUsage={resources.declares(
+                                session.state.selection!.sidecarId,
+                                "usage",
+                              ) &&
+                                actions.eligibility(session.state.selection!)
+                                  .live
+                              ? () => {
+                                const target = session.state.selection!;
+                                const release = session.usage.retain(target);
+                                void session.usage.load(target);
+                                return release;
+                              }
+                              : undefined}
+                            usageError={() =>
+                              session.usage.state.entries[draftKey()]?.error}
+                            catalog={session.models?.state.available
+                              ? session.models.state.value
+                              : undefined}
+                            loading={session.state.loading}
+                            paging={session.state.paging}
+                            exhausted={session.state.exhausted}
+                            error={session.state.error}
+                            sessionError={session.state.content.error}
+                            errorState={session.state.content.errorState}
+                            draft={draft()}
+                            forkNote={forkNotes.get(draftKey())}
+                            onDismissForkNote={() =>
+                              forkNotes.dismiss(draftKey())}
+                            connected={selectedSidecar()?.status ===
+                              "connected"}
+                            onOlder={() => commands.run("session.older")}
+                            onRetry={() => commands.run("session.retry")}
+                            onDraft={drafts.writer(draftKey())}
+                            onPrompt={(parts, _mode, selection) =>
+                              actions.prompt(parts, selection)}
+                            onAbort={actions.abort}
+                          />
+                        </SessionProvider>
+                      </Show>
                     </Show>
                   </Show>
                 </Show>

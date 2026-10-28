@@ -87,6 +87,7 @@ export class SidecarTest {
         "--allow-read",
         "--allow-write",
         "--allow-env",
+        "--allow-sys=systemMemoryInfo",
         "main.ts",
       ], { cwd: root, env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
       instance.process = owner.child;

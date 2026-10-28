@@ -153,9 +153,11 @@ export class OpencodeV1DigestSink implements DigestSink {
   #native?: DigestNativeDb;
   #closed = false;
   #connection = 0;
+  #connected = false;
   #nativeVerified = false;
   #observation = 0;
   #observed = new Map<string, number>();
+  #deletions = new Map<string, number>();
   constructor(
     readonly cfg: OpencodeV1Config,
     readonly policy: DigestPolicy,
@@ -181,14 +183,16 @@ export class OpencodeV1DigestSink implements DigestSink {
   }
   connection(value: number): void {
     if (value < this.#connection) return;
-    if (value !== this.#connection) {
+    if (!this.#connected || value !== this.#connection) {
       this.#nativeVerified = false;
       this.#observed.clear();
       this.#observation = 0;
       this.storage.sql.prepare(
-        "DELETE FROM opcv1_delete_intents WHERE connection_generation<>?",
-      ).run(value);
+        "DELETE FROM opcv1_delete_intents",
+      ).run();
+      this.#deletions.clear();
     }
+    this.#connected = true;
     this.#connection = value;
   }
   async #apiCatalog(signal: AbortSignal): Promise<SessionMetadata[]> {
@@ -434,6 +438,63 @@ export class OpencodeV1DigestSink implements DigestSink {
       "INSERT INTO opcv1_scan VALUES(?,?,NULL,0,?,NULL,1) ON CONFLICT(session_id) DO UPDATE SET observed_revision=max(observed_revision,excluded.observed_revision),dirty=1",
     ).run(id, native, revision);
     this.#observed.set(id, ++this.#observation);
+  }
+  async deleted(
+    connection: number,
+    id: string,
+    revision: number,
+    metadata?: SessionMetadata,
+  ): Promise<void> {
+    ids.decode(id);
+    if (connection !== this.#connection) return;
+    if (revision <= (this.#deletions.get(id) ?? -1)) return;
+    if (metadata && metadata.id !== id) {
+      throw new Error("Deletion metadata identity mismatch");
+    }
+    const saved = this.storage.read(id);
+    const previous = saved ??
+      (metadata
+        ? {
+          metadata,
+          summary: {
+            ...emptyDelta().summary,
+            nativeUpdatedAt: metadata.timeUpdated,
+          },
+          deleted: null,
+        }
+        : undefined);
+    if (!previous) return;
+    const intent = this.storage.sql.prepare(
+      "SELECT 1 FROM opcv1_delete_intents WHERE session_id=? AND connection_generation=?",
+    ).get(id, connection);
+    if (previous.deleted && (!intent || previous.deleted.how === "otk")) {
+      this.#deletions.set(id, revision);
+      return;
+    }
+    const delta: DigestDelta = {
+      summary: { ...previous.summary, revision: previous.summary.revision + 1 },
+      turns: { upsert: {}, remove: [] },
+      deleted: {
+        at: previous.deleted?.at ?? Date.now(),
+        how: intent ? "otk" : "provider",
+      },
+    };
+    this.storage.transaction(() => {
+      this.invalidate(id, revision);
+      if (intent) {
+        this.storage.sql.prepare(
+          "UPDATE opcv1_delete_intents SET confirmed=1 WHERE session_id=? AND connection_generation=?",
+        ).run(id, connection);
+      }
+      this.storage.write(previous.metadata, delta);
+    });
+    this.#deletions.set(id, revision);
+    await this.storage.publish({
+      sessionID: id,
+      revision: delta.summary.revision,
+      delta,
+      ...(!saved ? { metadata: previous.metadata } : {}),
+    });
   }
   async deleteIntent(
     id: string,
@@ -917,8 +978,12 @@ export class OpencodeV1DigestSink implements DigestSink {
   }
   async detail(id: string, signal: AbortSignal): Promise<SessionUsage> {
     ids.decode(id);
-    const metadata = this.storage.read(id)?.metadata;
-    if (!metadata) throw new Error("Session usage is unavailable");
+    const saved = this.storage.read(id);
+    if (!saved) throw new Error("Session usage is unavailable");
+    if (saved.deleted) {
+      throw new Error("Session usage is unavailable for a deleted session");
+    }
+    const metadata = saved.metadata;
     const ledger = new UsageLedger(id);
     const consume = (row: DigestHeader): UsageMessage | undefined => {
       row = header(row);

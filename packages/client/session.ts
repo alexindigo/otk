@@ -44,6 +44,9 @@ export function hashFor(selection: Selection): string {
   }${encodeURIComponent(selection.sessionID)}`;
 }
 export interface SessionState {
+  view?: "content" | "deleted";
+  catalogReady?: boolean;
+  deleted?: IndexEntry;
   selection?: Selection;
   info?: ContentSession;
   siblings: ContentSession[];
@@ -73,6 +76,7 @@ export interface ClientSession {
   open(selection?: Selection): void;
   refetch(): Promise<void>;
   receive(sidecarId: string, frame: ServerFrame): void;
+  removeServer(sidecarId: string): void;
   older(): Promise<void>;
   stop(): void;
 }
@@ -81,6 +85,7 @@ export function createSession(
   entry: (sidecarId: string, id: string) => IndexEntry | undefined,
   factory: StateFactory = createState,
   catalogConnection?: (selection: Selection) => ModelCatalogConnection,
+  waitForIndex = false,
 ): ClientSession {
   const { state, update: setState, subscribe } = factory<SessionState>({
     content: emptyContent(),
@@ -89,10 +94,17 @@ export function createSession(
     paging: false,
     exhausted: false,
     continuity: "ready",
+    view: "content",
   });
   let selected: Selection | undefined, generation = 0, load = 0;
-  const usage = createSessionUsage(connection, factory);
-  let releaseUsage: (() => void) | undefined;
+  let view: "content" | "deleted" = "content";
+  const usage = createSessionUsage(
+    connection,
+    factory,
+    (target) => entry(target.sidecarId, target.sessionID),
+  );
+  const indexed = new Set<string>();
+  let subscribed = false;
   let buffer: ContentOp[] = [], fetching = false;
   let hasBaseline = false;
   let attentionReads: {
@@ -137,6 +149,13 @@ export function createSession(
     id === generation && request === load;
   const refetch = async () => {
     if (!selected) return;
+    if (entry(selected.sidecarId, selected.sessionID)?.deleted) {
+      return;
+    }
+    if (
+      waitForIndex && !indexed.has(selected.sidecarId) &&
+      !entry(selected.sidecarId, selected.sessionID)
+    ) return;
     const target = selected, id = generation, request = ++load;
     controller?.abort();
     const abort = controller = new AbortController();
@@ -155,7 +174,6 @@ export function createSession(
     try {
       const sidecar = connection(target.sidecarId), rpc = sidecar.rpc;
       models?.connect();
-      void usage.load(target);
       const diagnostic = (error: unknown) => {
         if (current(id, request)) {
           setState((draft) => {
@@ -273,25 +291,33 @@ export function createSession(
       });
     }
   };
-  const open = (selection?: Selection) => {
+  const open = (
+    selection?: Selection,
+    force = false,
+  ) => {
     if (
       selection?.sidecarId === selected?.sidecarId &&
       selection?.sessionID === selected?.sessionID
-    ) return;
+    ) { if (!force) return; }
     generation++;
     load++;
     controller?.abort();
     models?.dispose();
     models = undefined;
-    releaseUsage?.();
-    releaseUsage = undefined;
-    if (selected) {
+    if (selected && subscribed) {
       connection(selected.sidecarId).subscribe(selected.sessionID, false);
     }
+    subscribed = false;
     selected = selection;
-    if (selection) {
+    const deleted = selection &&
+      entry(selection.sidecarId, selection.sessionID);
+    const nextView = deleted?.deleted ? "deleted" : "content";
+    view = nextView;
+    if (
+      selection && !deleted?.deleted &&
+      (!waitForIndex || indexed.has(selection.sidecarId) || deleted)
+    ) {
       const target = { ...selection }, sidecar = connection(target.sidecarId);
-      releaseUsage = usage.retain(target);
       models = createModelCatalog({
         connection: () =>
           catalogConnection?.(target) ?? {
@@ -316,6 +342,10 @@ export function createSession(
     attentionReads = undefined;
     setState((draft) => {
       draft.selection = selection;
+      draft.catalogReady = !selection || !waitForIndex ||
+        indexed.has(selection.sidecarId) || !!deleted;
+      draft.view = nextView;
+      draft.deleted = deleted?.deleted ? deleted : undefined;
       draft.info = undefined;
       draft.siblings = [];
       draft.content = emptyContent();
@@ -324,9 +354,25 @@ export function createSession(
       draft.paging = false;
       draft.exhausted = false;
       draft.error = undefined;
+      if (deleted?.deleted) {
+        draft.info = {
+          id: deleted.id,
+          directory: deleted.directory,
+          title: deleted.title,
+          projectID: deleted.projectID,
+          parentID: deleted.parentID,
+          archived: deleted.archived,
+          time: { created: deleted.timeCreated, updated: deleted.timeUpdated },
+        };
+        draft.loading = false;
+        draft.continuity = "ready";
+        draft.exhausted = true;
+      }
     });
-    if (selection) {
+    if (selection && !deleted?.deleted) {
+      if (waitForIndex && !indexed.has(selection.sidecarId) && !deleted) return;
       connection(selection.sidecarId).subscribe(selection.sessionID, true);
+      subscribed = true;
       void refetch();
     }
   };
@@ -365,7 +411,23 @@ export function createSession(
     refetch,
     receive(sidecarId: string, frame: ServerFrame): void {
       usage.receive(sidecarId, frame);
+      if (frame.t === "welcome") indexed.delete(sidecarId);
+      if (frame.t === "index.snapshot") indexed.add(sidecarId);
       if (!selected || selected.sidecarId !== sidecarId) return;
+      if (frame.t === "index.snapshot" || frame.t === "index.patch") {
+        const known = entry(sidecarId, selected.sessionID);
+        if (
+          !!known?.deleted !== (view === "deleted") ||
+          (!subscribed && view !== "deleted")
+        ) open(selected, true);
+        else if (known?.deleted) {
+          setState((draft) => {
+            draft.deleted = known;
+          });
+        }
+        return;
+      }
+      if (view === "deleted") return;
       if (frame.t === "welcome" || frame.t === "resync") {
         if (frame.t === "welcome") catalogVersion++;
         models?.connect();
@@ -429,6 +491,11 @@ export function createSession(
           });
         }
       }
+    },
+    removeServer(sidecarId): void {
+      indexed.delete(sidecarId);
+      usage.removeServer(sidecarId);
+      if (selected?.sidecarId === sidecarId) open();
     },
     stop(): void {
       open();

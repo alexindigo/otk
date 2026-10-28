@@ -119,6 +119,12 @@ parents. Agent colours share one in-flight/cache entry per directory until
 native instance disposal or stop. Reconnecting alone does not invalidate
 directory configuration.
 
+Selected-digest bootstrap uses the injected publication row budget for catalog
+preparation as well as final writes. Attention reconciliation yields one step
+per row or ancestor, preserving exact helper counts without an inventory-sized
+pre-publication block. Live index lookups use the shared owner's metadata-only
+read rather than copying historical turn summaries for status/error handling.
+
 Agent-colour reads are optional directory resources, never prerequisites for a
 history page or live header. Essential content uses available colours
 immediately; late colours publish `agent.colors` to current subscribers, whose
@@ -288,6 +294,23 @@ the normal sweep, and a raced dirty marker prevents an empty proof overtaking an
 event. Scan generation/cursor admission commits with its baseline and summary,
 including rollback on a rejected write. `DigestNativeDb` accepts an optional
 read-observation callback for independently composed counting consumers.
+
+An optional fourth adapter argument injects `DigestPort`. With it, bootstrap
+borrows the complete worker catalog/hints, accepted header events enqueue scalar
+invalidations before content-demand filtering, and usage detail runs through the
+worker. The adapter joins worker shutdown. Without it, standalone consumers keep
+the complete bounded API catalog and honest unready index summaries.
+`index.days` prioritizes recent background work; it never filters catalog
+identity. `deleted(connection,id,revision)` carries accepted native deletion
+authority to the sink independently of a new inventory. Tombstones retain
+metadata; current generation OTK deletion intents classify matching events, and
+native ownership is retired without a synthetic finish. Reappearance reconciles
+the same identity.
+
+Accepted deletion events and successful OTK deletions carry allowlisted
+last-known session metadata to the worker. It can commit and publish a new
+tombstone before background cataloging has persisted that identity; a cold
+consumer receives its metadata seed before the digest delta.
 
 Native unit tests live in this package; mixed app-consumer checks retain their
 shared app fixtures. Tool mapping retains native output on the common tool

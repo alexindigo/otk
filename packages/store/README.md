@@ -109,6 +109,14 @@ BEGIN without retiring the caller's transaction. Migrations and metadata
 features share this connection primitive; feature notifications run only after
 commit.
 
+`Projects.policies()` and `Seen.all()` supply batched metadata projections.
+Project listeners carry the committed user/project record (or a discovery
+notice). Seen/finish listeners carry the committed identity and clock, allowing
+observers to update those projections without reading a baseline per session.
+`Finishes.record` returns its `UPSERT ... RETURNING` clock.
+`Projects.reactivate` applies activity reactivation without a preliminary SELECT
+while retaining post-commit notification.
+
 `sessionReferenceMigrations` contributes only the neutral
 `session_reference_upgrades` marker schema. Applications own any data
 transformation through an injected codec and `OtkDb.transaction`; the store and

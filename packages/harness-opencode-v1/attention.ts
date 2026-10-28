@@ -7,7 +7,9 @@ type Counts = Record<Kind, number>;
 export class Attention {
   #direct = new Map<string, Counts>();
   constructor(
-    readonly get: (id: string) => IndexEntry | undefined,
+    readonly get: (
+      id: string,
+    ) => (IndexEntry & { deleted?: unknown }) | undefined,
     readonly publish: (entry: IndexEntry) => void,
     readonly erase: (id: string) => void,
     readonly descendants: (id: string) => Iterable<string>,
@@ -29,14 +31,28 @@ export class Attention {
     permissions: Iterable<string>,
     questions: Iterable<string>,
   ): void {
+    for (
+      const _step of this.reconcile(
+        new Map(entries.map((entry) => [entry.id, entry])),
+        permissions,
+        questions,
+      )
+    ) { /* synchronous standalone reconciliation */ }
+  }
+  /** One step per row or ancestor; the adapter owns cooperative scheduling. */
+  *reconcile(
+    entries: ReadonlyMap<string, IndexEntry>,
+    permissions: Iterable<string>,
+    questions: Iterable<string>,
+  ): IterableIterator<void> {
     this.#direct.clear();
-    const staged = new Map(entries.map((entry) => [entry.id, entry]));
-    for (const entry of entries) {
+    for (const entry of entries.values()) {
       entry.attention.permissions =
         entry.attention.questions =
         entry.attention.childPermissions =
         entry.attention.childQuestions =
           0;
+      yield;
     }
     for (
       const [kind, owners] of [["permissions", permissions], [
@@ -48,12 +64,16 @@ export class Attention {
         const counts = this.#direct.get(id) ?? { permissions: 0, questions: 0 };
         counts[kind]++;
         this.#direct.set(id, counts);
-        for (
-          const [i, ancestor] of this.#path(id, (id) => staged.get(id))
-            .entries()
-        ) {
-          staged.get(ancestor)!.attention[this.#key(kind, i)]++;
+        const seen = new Set<string>();
+        let ancestor = entries.get(id), depth = 0;
+        while (ancestor && !seen.has(ancestor.id)) {
+          seen.add(ancestor.id);
+          ancestor.attention[this.#key(kind, depth++)]++;
+          const parent = ancestor.parentID;
+          yield;
+          ancestor = parent ? entries.get(parent) : undefined;
         }
+        yield;
       }
     }
   }
@@ -77,6 +97,7 @@ export class Attention {
     else this.#direct.delete(id);
     for (const [depth, ancestor] of this.#path(id).entries()) {
       const entry = this.get(ancestor)!;
+      if (entry.deleted) continue;
       entry.attention[this.#key(kind, depth)] += delta;
       this.publish(entry);
     }
@@ -108,7 +129,7 @@ export class Attention {
     }
     for (const [ancestor, change] of changes) {
       const entry = this.get(ancestor);
-      if (!entry) continue;
+      if (!entry || entry.deleted) continue;
       let changed = false;
       for (
         const key of [
@@ -142,13 +163,13 @@ export class Attention {
     });
   }
   /** Explicit deletion, unlike index-window eviction, ends direct ownership. */
-  dispose(id: string): void {
+  dispose(id: string, retain = false): void {
     const counts = this.#direct.get(id);
     if (counts) {
       for (const kind of ["permissions", "questions"] as const) {
         if (counts[kind]) this.change(id, kind, -counts[kind]);
       }
     }
-    this.remove(id);
+    if (!retain) this.remove(id);
   }
 }

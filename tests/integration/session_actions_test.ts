@@ -238,7 +238,7 @@ test("session rename validates titles and persists through the real native API",
   }
 });
 
-test("delete removes a real native family and committed task membership", async () => {
+test("delete tombstones a real native family and retains task membership until explicit removal", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
@@ -262,12 +262,37 @@ test("delete removes a real native family and committed task membership", async 
     for (const id of [root.id, child.id]) {
       await assertRejects(() => f.oc.request(`/session/${id}`), Error, "404");
     }
-    const inbox = await waitFor(
-      () => client!.rpc<InboxSnapshot>("inbox.get", {}),
-      (inbox) =>
-        inbox.tasks.find((item) => item.id === task.id)?.sessions.length === 0,
+    await waitFor(
+      () => [client!.entry(root.id), client!.entry(child.id)],
+      (entries) => entries.every((entry) => entry?.deleted !== undefined),
     );
-    assertEquals(inbox.tasks.find((item) => item.id === task.id)?.sessions, []);
+    assertEquals(client.entry(root.id)!.deleted!.how, "otk");
+    assertEquals(client.entry(child.id)!.title, "Helper");
+    const inbox = await client.rpc<InboxSnapshot>("inbox.get", {});
+    assertEquals(inbox.tasks.find((item) => item.id === task.id)?.sessions, [
+      root.id,
+      child.id,
+    ]);
+    assertEquals(
+      client.frames.some((frame) =>
+        frame.t === "index.patch" &&
+        frame.ops.some((op) =>
+          op.op === "remove" && [root.id, child.id].includes(op.id)
+        )
+      ),
+      false,
+    );
+    for (let attempt = 0; attempt < 2; attempt++) {
+      await client.rpc("tasks.removeSession", {
+        id: task.id,
+        sessionID: root.id,
+      });
+      const updated = await client.rpc<InboxSnapshot>("inbox.get", {});
+      assertEquals(
+        updated.tasks.find((item) => item.id === task.id)!.sessions,
+        [child.id],
+      );
+    }
   } finally {
     await client?.close();
     await f.stop();

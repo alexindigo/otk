@@ -48,3 +48,11 @@ export function selection(input: {
       : undefined,
   };
 }
+import type { IndexEntry } from "@otk/protocol";
+/** Session semantic states share one class binding across chrome and rows. */
+export function sessionState(entry: IndexEntry | undefined): string {
+  return [
+    entry?.deleted ? "is-deleted" : "",
+    entry?.digest.state === "digesting" ? "is-digesting" : "",
+  ].filter(Boolean).join(" ");
+}

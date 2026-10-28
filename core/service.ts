@@ -36,8 +36,8 @@ function startBackend(
   return backend.core.start({
     index,
     connection: (state) => connections.connection(state),
-    indexReset: (entries) => index.reset(entries),
-    indexUpsert: (entry) => index.upsert(entry),
+    indexReset: (entries) => index.resetMetadata(entries),
+    indexUpsert: (entry) => index.upsertMetadata(entry),
     indexRemove: (id) => index.remove(id),
     content: (id, event) => connections.content(id, event),
     resync: (sessionIDs) => connections.broadcast({ t: "resync", sessionIDs }),

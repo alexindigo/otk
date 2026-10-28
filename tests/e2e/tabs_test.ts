@@ -9,6 +9,7 @@ import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { publishUsage } from "../support/usage-summary.ts";
 import {
   openSession,
   waitForCollapsedPanels,
@@ -94,6 +95,10 @@ test("task tabs create rename reorder and close without deleting sessions; order
     },
   });
   registerUsage(f.app.connections.rpc, f.app.backend);
+  publishUsage(
+    f.app.index,
+    await f.app.backend.capabilities.usage!.getUsage("tstv1-otk"),
+  );
   try {
     await c.connect();
     f.add({ ...f.entries[0], id: "tstv1-second", title: "After review" });

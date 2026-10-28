@@ -19,6 +19,10 @@ import {
 import { familySelection, familyTask, sessionFamily } from "./session-tree.ts";
 
 export interface SessionActions {
+  eligibility(
+    target: Selection,
+  ): { live: boolean; member: boolean; close: boolean };
+  removeFromTask(target: Selection): Promise<void>;
   key(): string;
   selectedEntry(): IndexEntry | undefined;
   info(): ContentSession | undefined;
@@ -78,7 +82,15 @@ export function createSessionActions(o: {
     action: () => Promise<T>,
   ): Promise<T> => {
     const path = await directory(target);
-    return await resources.inbox(target.sidecarId).act(path, action);
+    if (resources.entry(target.sidecarId, target.sessionID)?.deleted) {
+      throw new Error("This session was deleted from the agent service");
+    }
+    return await resources.inbox(target.sidecarId).act(path, () => {
+      if (resources.entry(target.sidecarId, target.sessionID)?.deleted) {
+        throw new Error("This session was deleted from the agent service");
+      }
+      return action();
+    });
   };
   const submission = (target: Selection): SessionSubmission =>
     createSessionSubmission({
@@ -87,7 +99,17 @@ export function createSessionActions(o: {
       inbox: resources.inbox(target.sidecarId),
       tabs: (directory) =>
         resources.tabs({ sidecarId: target.sidecarId, directory }),
-      wrap: o.submitted && ((action) => o.submitted!(target, action)),
+      wrap: (action) => {
+        const admit = () => {
+          if (resources.entry(target.sidecarId, target.sessionID)?.deleted) {
+            return Promise.reject(
+              new Error("This session was deleted from the agent service"),
+            );
+          }
+          return action();
+        };
+        return o.submitted ? o.submitted(target, admit) : admit();
+      },
     });
   const attachments = (
     parts: PromptPart[],
@@ -108,6 +130,43 @@ export function createSessionActions(o: {
     return !!status && status !== "idle";
   };
   return {
+    eligibility(target) {
+      const entry = resources.entry(target.sidecarId, target.sessionID);
+      const member = resources.inbox(target.sidecarId).state.inbox.tasks.some((
+        task,
+      ) => task.sessions.includes(target.sessionID));
+      const shown = session.state.selection?.sidecarId === target.sidecarId &&
+        session.state.selection.sessionID === target.sessionID;
+      const tabs = entry &&
+        resources.tabs({
+          sidecarId: target.sidecarId,
+          directory: entry.directory,
+        });
+      return {
+        live: !entry?.deleted,
+        member,
+        close: shown ||
+          !!tabs?.tabs().some((tab) => tab.sessions.includes(target.sessionID)),
+      };
+    },
+    async removeFromTask(target) {
+      const entry = resources.entry(target.sidecarId, target.sessionID);
+      if (!entry) return;
+      const project = {
+        sidecarId: target.sidecarId,
+        directory: entry.directory,
+      };
+      const task = resources.inbox(target.sidecarId).state.inbox.tasks.find((
+        task,
+      ) => task.sessions.includes(target.sessionID));
+      if (task) {
+        await resources.taskActions(project).remove(task, target.sessionID);
+      }
+      if (
+        session.state.selection?.sidecarId === target.sidecarId &&
+        session.state.selection.sessionID === target.sessionID
+      ) resources.tabs(project).preview(target.sessionID);
+    },
     key() {
       const selected = session.state.selection;
       return selected ? sessionKey(selected.sidecarId, selected.sessionID) : "";

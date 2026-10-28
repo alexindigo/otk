@@ -25,6 +25,7 @@ test("I11 message paging accepts OTK message IDs without leaking harness cursors
     assertEquals([...welcome.sidecar.harness.capabilities].sort(), [
       "agents",
       "commands",
+      "digests",
       "files",
       "history",
       "models",
@@ -81,19 +82,7 @@ test("I11 message paging accepts OTK message IDs without leaking harness cursors
 });
 
 function latest(client: WsClient, id: string): IndexEntry | undefined {
-  let entry: IndexEntry | undefined;
-  for (const frame of client.frames) {
-    if (frame.t === "index.snapshot") {
-      entry = frame.entries.find((e) => e.id === id);
-    }
-    if (frame.t === "index.patch") {
-      for (const op of frame.ops) {
-        if (op.op === "upsert" && op.entry.id === id) entry = op.entry;
-        else if (op.op === "remove" && op.id === id) entry = undefined;
-      }
-    }
-  }
-  return entry;
+  return client.entry(id);
 }
 async function fixture() {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
@@ -163,7 +152,7 @@ async function completed(client: WsClient, id: string): Promise<Message[]> {
   );
 }
 
-test("I1 startup snapshot includes existing idle sessions", async () => {
+test("I1 startup catalogue exposes existing idle sessions", async () => {
   const f = await fixture();
   try {
     const session = await f.oc.session<{ id: string }>("/session", {
@@ -171,11 +160,9 @@ test("I1 startup snapshot includes existing idle sessions", async () => {
       body: { title: "Existing" },
     });
     const server = await f.sidecar(), client = await f.client(server);
-    await client.wait((frame) =>
-      frame.t === "index.snapshot" &&
-      frame.entries.some((entry) =>
-        entry.id === session.id && entry.status === "idle"
-      )
+    await waitFor(
+      () => client.entry(session.id),
+      (entry) => entry?.status === "idle",
     );
   } finally {
     await f.stop();
@@ -394,14 +381,17 @@ test("I6 silent drop recovers idle snapshot, resync and complete reply", async (
     await new Promise((resolve) => setTimeout(resolve, 2000));
     proxy.thaw();
     await waitFor(
-      () => client.frames.slice(baseline),
-      (frames) =>
-        frames.some((frame) =>
-          frame.t === "index.snapshot" &&
-          frame.entries.some((entry) =>
-            entry.id === session.id && entry.status === "idle"
-          )
+      () => ({
+        entry: client.entry(session.id),
+        connected: client.frames.slice(baseline).some((frame) =>
+          frame.t === "harness" && frame.state === "connected"
         ),
+        resync: client.frames.slice(baseline).some((frame) =>
+          frame.t === "resync"
+        ),
+      }),
+      (value) =>
+        value.entry?.status === "idle" && value.connected && value.resync,
       30_000,
     );
     assert(client.frames.slice(baseline).some((frame) => frame.t === "resync"));
@@ -420,20 +410,36 @@ test("I6 silent drop recovers idle snapshot, resync and complete reply", async (
     await f.stop();
   }
 });
-test("I7 opencode restart reconnects and resnapshots", async () => {
+test("I7 opencode restart reconnects and reconciles existing indexed sessions", async () => {
   const f = await fixture();
   try {
     const server = await f.sidecar(), client = await f.client(server);
+    const session = await client.rpc<ContentSession>("session.create", {
+      directory: f.oc.directory,
+      title: "Restarted index",
+    });
+    await waitFor(
+      () => client.entry(session.id),
+      (entry) => entry?.status === "idle",
+    );
     const baseline = client.frames.length;
     await f.oc.restart();
     await client.wait((frame) =>
       frame.t === "harness" && frame.state === "reconnecting"
     );
     await waitFor(
-      () => client.frames.slice(baseline),
-      (frames) =>
-        frames.some((frame) => frame.t === "index.snapshot") &&
-        frames.some((frame) => frame.t === "resync"),
+      () => ({
+        entry: client.entry(session.id),
+        connected: client.frames.slice(baseline).some((frame) =>
+          frame.t === "harness" && frame.state === "connected"
+        ),
+        resync: client.frames.slice(baseline).some((frame) =>
+          frame.t === "resync"
+        ),
+      }),
+      (value) =>
+        value.entry?.id === session.id && value.entry.status === "idle" &&
+        value.connected && value.resync,
     );
   } finally {
     await f.stop();
@@ -475,15 +481,12 @@ test("I8 compatible idle projects bootstrap without loading native inventories",
         harness: { url: `http://127.0.0.1:${proxy.addr.port}`, db: f.oc.db },
       }),
       client = await f.client(server);
-    const snapshot = await client.wait((frame) =>
-      frame.t === "index.snapshot" &&
-      sessions.every((session) =>
-        frame.entries.some((entry) => entry.id === session.id)
-      )
+    const entries = await waitFor(
+      () => sessions.map((session) => client.entry(session.id)),
+      (entries) => entries.every((entry) => entry !== undefined),
     );
-    assert(snapshot.t === "index.snapshot");
     for (const session of sessions) {
-      const entry = snapshot.entries.find((entry) => entry.id === session.id)!;
+      const entry = entries.find((entry) => entry?.id === session.id)!;
       assertEquals(entry.status, "idle");
       assertEquals([
         entry.attention.permissions,

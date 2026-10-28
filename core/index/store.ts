@@ -4,6 +4,14 @@ import type { ServerFrame } from "@otk/protocol";
 import { SessionIndex } from "@otk/harness";
 export class IndexStore extends SessionIndex {
   #observers = new Set<(entry: IndexEntry, previous?: IndexEntry) => void>();
+  #removals = new Set<(id: string) => void>();
+  /** Explicit evictions are observed at their owner before wire publication. */
+  observeRemoval(listener: (id: string) => void): () => void {
+    this.#removals.add(listener);
+    return () => {
+      this.#removals.delete(listener);
+    };
+  }
   /** Synchronous observations preserve transitions even within one wire batch. */
   observe(
     listener: (entry: IndexEntry, previous?: IndexEntry) => void,
@@ -20,6 +28,8 @@ export class IndexStore extends SessionIndex {
     return () => this.#listeners.delete(listener);
   }
   snapshot(): Extract<ServerFrame, { t: "index.snapshot" }> {
+    // A replacement baseline must never precede a queued patch it already covers.
+    this.#flush();
     return {
       t: "index.snapshot",
       rev: this.rev,
@@ -41,6 +51,8 @@ export class IndexStore extends SessionIndex {
       }
     }
     this.rev++;
+    // Observer writes are represented by this replacement snapshot too.
+    this.#pending = [];
     this.#emit(this.snapshot());
   }
   protected override published(
@@ -57,10 +69,19 @@ export class IndexStore extends SessionIndex {
     );
   }
   protected override removed(id: string): void {
+    for (const listener of this.#removals) listener(id);
     this.#queue({ op: "remove", id });
   }
   #emit(frame: ServerFrame): void {
     for (const listener of this.#listeners) listener(frame);
+  }
+  #flush(): void {
+    if (!this.#pending.length) return;
+    this.#emit({
+      t: "index.patch",
+      rev: this.rev,
+      ops: this.#pending.splice(0),
+    });
   }
   #queue(op: IndexOp): void {
     this.rev++;
@@ -69,13 +90,7 @@ export class IndexStore extends SessionIndex {
     this.#scheduled = true;
     queueMicrotask(() => {
       this.#scheduled = false;
-      if (this.#pending.length) {
-        this.#emit({
-          t: "index.patch",
-          rev: this.rev,
-          ops: this.#pending.splice(0),
-        });
-      }
+      this.#flush();
     });
   }
 }

@@ -91,6 +91,13 @@ export class DigestScheduler {
         changed: false,
       });}
   }
+  /** Priority-only demand must not widen a queued targeted read to a full scan. */
+  promote(identity: DigestIdentity, priority: DigestPriority): boolean {
+    const pending = this.#pending.get(this.#key(identity));
+    if (!pending) return false;
+    if (rank[priority] < rank[pending.priority]) pending.priority = priority;
+    return true;
+  }
   setScope(
     owner: string,
     scope: { directory?: string; sessions: string[] },

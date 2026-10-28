@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   belongsToSession,
-  type IndexEntry,
   type QuestionRequest,
+  type SessionLookup,
 } from "@otk/protocol";
 import { HarnessError, type QuestionsCapability } from "@otk/harness";
 import type { Client } from "./client.ts";
@@ -12,7 +12,7 @@ import { opencodeV1SessionID as ids } from "./ids.ts";
 export function questions(
   client: Client,
   directory: Directory,
-  entry: (id: string) => IndexEntry | undefined,
+  entry: SessionLookup,
   owners: Map<string, string>,
   observed: (id: string, session: string) => void = (id, session) =>
     owners.set(id, session),

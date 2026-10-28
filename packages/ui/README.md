@@ -92,12 +92,24 @@ available-side viewport bounds, dismissal and keyboard focus return. Hover/focus
 previews have no native title tooltip; their accessible trigger label and linked
 detail description are supplied by that same owner. Click-only controls retain
 their name tooltips. ShellPorts exposes the same framework-free usage owner to
-registered panel adapters. The Sessions adapter binds its load/get ports for the
-selected project's sessions; rows present total.cost as quiet trailing metadata
-using the shared cost formatter, including known zero. Show cost also hides
-these amounts and their accessible labels. Footers, rows and meter never sum
-transcript pages; unavailable metadata stays unknown while content remains
+registered panel adapters. The Sessions adapter reads keyed index digests for
+the selected project's sessions; rows present total.cost as quiet trailing
+metadata using the shared cost formatter, including known zero. Show cost also
+hides these amounts and their accessible labels. Footers, rows and meter never
+sum transcript pages; unavailable metadata stays unknown while content remains
 usable.
+
+`TurnUsage` receives a cheap nullable turn summary and injected
+detail/open/close ports. Only an open preview mounts `UsageDetail` and retains
+its coalesced ledger read; closing the last preview cancels that worker read.
+Unready state is plain Digesting text and unknown categories never become zero.
+
+Deleted rows use shared semantic classes with a struck title, neutral text and
+intact focus/selection paint. `DeletedSession` receives formatted metadata facts
+and callbacks only. The shell mounts it without SessionProvider/content demand,
+retains unsent input through the existing guard, and delegates its Copy title,
+Remove from task and Close session actions to the shared command owners. All
+native target actions recheck the framework-free eligibility projection.
 
 All money uses the public client usageCost formatter: two decimals, `<$0.01` for
 positive sub-cent amounts and `$0.00` only for actual zero. UsageCost is the
@@ -439,6 +451,11 @@ worker, preserving immediate termination without an asynchronous streaming
 validator or persistent cache. Native Deno module workers resolve that same
 public export with `import.meta.resolve`, so direct workers also avoid consumer
 install paths.
+
+Code layout and highlight capture share one normalized snapshot of text,
+language and streaming state. Replacing a message/header with equal code values
+preserves that snapshot and token nodes; unrelated metadata publication or theme
+paint cannot admit a duplicate capture or cache-disposal message.
 
 The dependency-free highlighting policy owns the 32-row source-group contract.
 Source coordinates, raw layout, worker preparation/progress, cached replay and

@@ -31,6 +31,13 @@ interface Shared {
 interface QueuedDirty extends DirtySession {
   reasons: Set<DirtySession["reason"]>;
 }
+interface QueuedDeletion {
+  connection: number;
+  sessionID: string;
+  revision: number;
+  metadata?: SessionMetadata;
+  done: PromiseWithResolvers<void>;
+}
 type Command = ToWorker extends infer T
   ? T extends ToWorker ? Omit<T, "run" | "id"> : never
   : never;
@@ -56,7 +63,20 @@ export class DigestBridge implements DigestPort {
   #retry?: ReturnType<typeof setTimeout>;
   #scopes = new Map<string, { directory?: string; sessions: string[] }>();
   #interactive = new Set<string>();
+  #running = false;
+  #deletions = new Map<string, QueuedDeletion>();
+  #deleting = new Map<string, QueuedDeletion>();
+  #deletionScheduled = false;
+  #intents = new Map<
+    string,
+    { intent: string; connection: number; phase: "begin" | "confirmed" }
+  >();
+  #reconcile = false;
+  #reconcileScheduled = false;
   constructor(readonly options: DigestBridgeOptions) {}
+  get publishrows(): number {
+    return this.options.policy.publishrows;
+  }
   #post(command: Command): number {
     if (!this.#worker) throw new Error("Digest worker is unavailable");
     const id = ++this.#id;
@@ -85,25 +105,18 @@ export class DigestBridge implements DigestPort {
     this.#sequences.clear();
     worker.terminate();
     this.#worker = undefined;
+    this.#running = false;
     this.#start = undefined;
     this.#fail(error);
     this.options.unready?.(identities);
     for (const shared of this.#shared.values()) shared.controller.abort(error);
     this.#shared.clear();
-    if (this.#stop || this.#retry) return;
+    if (this.#stop || this.#retry || this.#worker) return;
     this.#retry = setTimeout(() => {
       this.#retry = undefined;
       if (this.#stop) return;
       const opening = this.#start = this.#open();
-      void opening.then(async () => {
-        for (const [owner, value] of this.#scopes) {
-          this.#post({ t: "scope", owner, ...value });
-        }
-        for (const owner of this.#interactive) {
-          this.#post({ t: "interactive", owner, active: true });
-        }
-        await this.catalog(this.#connection, new AbortController().signal);
-      }).catch((error) => {
+      void opening.catch((error) => {
         const owner = this.#worker;
         if (owner) {
           this.#retire(
@@ -147,9 +160,14 @@ export class DigestBridge implements DigestPort {
             revision: data.revision,
             delta: data.delta,
           });
+          if (data.delta.deleted?.how === "otk") {
+            this.#intents.delete(data.sessionID);
+          }
         }
       } else if (data.t === "error") {
-        const error = new Error(data.message);
+        const error = new Error(data.message, {
+          cause: { scope: data.scope, sessionID: data.sessionID },
+        });
         const pending = this.#pending.get(data.id);
         if (pending) {
           this.#pending.delete(data.id);
@@ -178,12 +196,46 @@ export class DigestBridge implements DigestPort {
       native: this.options.native,
       policy: this.options.policy,
       since: Date.now(),
+      connection: this.#connection,
     });
     this.#pending.set(id, {
       receive: (value) => {
         if (value.t === "accepted") {
           this.#pending.delete(id);
-          gate.resolve();
+          void (async () => {
+            for (const [owner, value] of this.#scopes) {
+              this.#post({ t: "scope", owner, ...value });
+            }
+            for (const owner of this.#interactive) {
+              this.#post({ t: "interactive", owner, active: true });
+            }
+            for (const [sessionID, value] of this.#intents) {
+              if (value.connection !== this.#connection) continue;
+              for (
+                const phase of value.phase === "confirmed"
+                  ? ["begin", "confirmed"] as const
+                  : ["begin"] as const
+              ) {
+                await this.#request(
+                  {
+                    t: "deleteIntent",
+                    sessionID,
+                    intent: value.intent,
+                    phase,
+                    connection: value.connection,
+                  },
+                  new AbortController().signal,
+                  (message) =>
+                    message.t === "accepted" ? { value: undefined } : undefined,
+                );
+              }
+            }
+            this.#running = true;
+            this.#reconcile = this.#connection > 0;
+            gate.resolve();
+            this.#scheduleDeleted();
+            this.#maybeReconcile();
+          })().catch(gate.reject);
         }
       },
       reject: gate.reject,
@@ -271,6 +323,16 @@ export class DigestBridge implements DigestPort {
       this.#fineKeys = 0;
     }
     this.#connection = Math.max(this.#connection, connection);
+    this.#reconcile = false;
+    for (const [id, value] of this.#intents) {
+      if (value.connection !== this.#connection) this.#intents.delete(id);
+    }
+    for (const [id, value] of this.#deletions) {
+      if (value.connection !== this.#connection) {
+        this.#deletions.delete(id);
+        value.done.resolve();
+      }
+    }
     this.#scheduleDirty();
     return await this.#lease(`catalog:${connection}`, signal, (owned) => {
       const entries: SessionMetadata[] = [], hints: string[] = [];
@@ -280,6 +342,7 @@ export class DigestBridge implements DigestPort {
         if (message.connection !== connection || message.part !== part++) {
           throw new Error("Out-of-order digest catalog");
         }
+        this.options.metadata?.(message.entries);
         entries.push(...message.entries);
         if (message.hints) {
           hasHints = true;
@@ -334,11 +397,138 @@ export class DigestBridge implements DigestPort {
       });
     });
   }
+  deleted(
+    connection: number,
+    sessionID: string,
+    revision: number,
+    metadata?: SessionMetadata,
+  ): Promise<void> {
+    if (this.#stop || connection !== this.#connection) return Promise.resolve();
+    if (metadata && metadata.id !== sessionID) {
+      return Promise.reject(new Error("Deletion metadata identity mismatch"));
+    }
+    const retained = metadata && structuredClone(metadata);
+    const queued = this.#deletions.get(sessionID);
+    if (queued) {
+      if (retained && revision >= queued.revision) queued.metadata = retained;
+      queued.revision = Math.max(queued.revision, revision);
+      return queued.done.promise;
+    }
+    const inflight = this.#deleting.get(sessionID);
+    if (
+      inflight && inflight.revision >= revision &&
+      (!retained || inflight.metadata)
+    ) return inflight.done.promise;
+    const value: QueuedDeletion = {
+      connection,
+      sessionID,
+      revision,
+      ...(retained ? { metadata: retained } : {}),
+      done: Promise.withResolvers<void>(),
+    };
+    this.#deletions.set(sessionID, value);
+    this.#scheduleDeleted();
+    return value.done.promise;
+  }
+  #scheduleDeleted(): void {
+    if (
+      !this.#running || this.#stop || this.#deletionScheduled ||
+      this.#deleting.size || !this.#deletions.size
+    ) return;
+    this.#deletionScheduled = true;
+    this.#task(() => {
+      this.#deletionScheduled = false;
+      if (!this.#running || this.#stop || this.#deleting.size) return;
+      const connection = this.#connection;
+      const batch = [...this.#deletions.values()].slice(
+        0,
+        Math.min(this.options.policy.batch, this.options.policy.maxpending),
+      );
+      if (!batch.length) return;
+      for (const value of batch) {
+        this.#deletions.delete(value.sessionID);
+        this.#deleting.set(value.sessionID, value);
+      }
+      const worker = this.#worker;
+      void this.#request(
+        {
+          t: "deleted",
+          connection,
+          sessions: batch.map(({ sessionID, revision, metadata }) => ({
+            sessionID,
+            revision,
+            ...(metadata ? { metadata } : {}),
+          })),
+        },
+        new AbortController().signal,
+        (message) =>
+          message.t === "accepted" ? { value: undefined } : undefined,
+      ).then(() => {
+        for (const value of batch) {
+          this.#deleting.delete(value.sessionID);
+          value.done.resolve();
+        }
+        this.#scheduleDeleted();
+        this.#maybeReconcile();
+      }, (error) => {
+        for (const value of batch) {
+          this.#deleting.delete(value.sessionID);
+          if (this.#stop) value.done.reject(error);
+          else if (connection !== this.#connection) value.done.resolve();
+          else {
+            const next = this.#deletions.get(value.sessionID);
+            if (next) {
+              next.metadata ??= value.metadata;
+              next.revision = Math.max(next.revision, value.revision);
+              void next.done.promise.then(
+                value.done.resolve,
+                value.done.reject,
+              );
+            } else this.#deletions.set(value.sessionID, value);
+          }
+        }
+        if (worker && worker === this.#worker && !this.#stop) {
+          this.#retire(
+            worker,
+            error instanceof Error ? error : new Error(String(error)),
+          );
+        }
+      });
+    });
+  }
+  #maybeReconcile(): void {
+    if (
+      !this.#reconcile || this.#reconcileScheduled || !this.#running ||
+      this.#deletions.size || this.#deleting.size || this.#stop
+    ) return;
+    this.#reconcileScheduled = true;
+    this.#task(() => {
+      this.#reconcileScheduled = false;
+      if (
+        !this.#reconcile || !this.#running || this.#deletions.size ||
+        this.#deleting.size || this.#stop
+      ) return;
+      this.#reconcile = false;
+      const worker = this.#worker;
+      void this.catalog(this.#connection, new AbortController().signal).catch(
+        (error) => {
+          if (worker && worker === this.#worker && !this.#stop) {
+            this.#retire(
+              worker,
+              error instanceof Error ? error : new Error(String(error)),
+            );
+          }
+        },
+      );
+    });
+  }
   observe(connection: number, dirty: readonly DirtySession[]): void {
     if (this.#stop || connection !== this.#connection) return;
     for (const item of dirty) {
       const old = this.#dirty.get(item.sessionID);
-      const messages = old
+      const messages = item.reason === "attention"
+        ? old?.messages
+        : old && ![...old.reasons].every((reason) => reason === "attention")
         ? old.messages && item.messages
           ? [...new Set([...old.messages, ...item.messages])]
           : undefined
@@ -360,6 +550,13 @@ export class DigestBridge implements DigestPort {
       }
     }
     this.#scheduleDirty();
+  }
+  attention(sessionID: string): void {
+    this.observe(this.#connection, [{
+      sessionID,
+      revision: 0,
+      reason: "attention",
+    }]);
   }
   #scheduleDirty(): void {
     if (
@@ -417,6 +614,13 @@ export class DigestBridge implements DigestPort {
     phase: "begin" | "confirmed" | "failed",
     connection: number,
   ): Promise<void> {
+    if (connection !== this.#connection || this.#stop) return;
+    if (phase === "begin") {
+      this.#intents.set(sessionID, { intent, connection, phase });
+    } else if (this.#intents.get(sessionID)?.intent === intent) {
+      if (phase === "failed") this.#intents.delete(sessionID);
+      else this.#intents.set(sessionID, { intent, connection, phase });
+    }
     await this.start();
     await this.#request(
       { t: "deleteIntent", sessionID, intent, phase, connection },
@@ -452,6 +656,14 @@ export class DigestBridge implements DigestPort {
   async #close(): Promise<void> {
     clearTimeout(this.#retry);
     this.#retry = undefined;
+    this.#running = false;
+    const released = new DOMException("Digest bridge stopped", "AbortError");
+    for (
+      const value of [...this.#deletions.values(), ...this.#deleting.values()]
+    ) value.done.reject(released);
+    this.#deletions.clear();
+    this.#deleting.clear();
+    this.#intents.clear();
     if (!this.#worker) return;
     for (const shared of this.#shared.values()) {
       shared.controller.abort(
@@ -491,6 +703,7 @@ export class DigestBridge implements DigestPort {
     } finally {
       clearTimeout(timeout);
       this.#worker = undefined;
+      this.#running = false;
       for (const timer of this.#timers) clearTimeout(timer);
       this.#timers.clear();
       this.#fail(new DOMException("Digest bridge stopped", "AbortError"));

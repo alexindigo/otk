@@ -7,11 +7,14 @@ import {
 } from "./core/mod.ts";
 import { startApplication } from "./application.ts";
 import {
+  harnessDb,
   OpencodeV1Adapter,
   opencodeV1SessionID,
 } from "@otk/harness-opencode-v1";
 import { createSessionReferenceUpgrade } from "./core/features/session-ids.ts";
 import { StreamBuffers } from "@otk/content";
+import { IndexStore } from "./core/index/store.ts";
+import { DigestBridge } from "./core/digest/bridge.ts";
 let memo: ServiceConfig | undefined;
 export function config(): ServiceConfig {
   return memo ??= loadConfig({
@@ -26,11 +29,77 @@ export async function start(cfg: ServiceConfig): Promise<CoreServer> {
       `harness.type (OTK_HARNESS_TYPE): unsupported backend ${cfg.harness.type}`,
     );
   }
+  const index = new IndexStore();
+  const digest = new DigestBridge({
+    statePath: cfg.state.path,
+    provider: "opencode-v1",
+    native: {
+      harness: {
+        url: cfg.harness.url,
+        username: cfg.harness.username,
+        password: cfg.harness.password,
+        db: harnessDb(cfg),
+        heartbeattimeout: cfg.harness.heartbeattimeout,
+        reconnectmax: cfg.harness.reconnectmax,
+      },
+      index: cfg.index,
+    },
+    policy: cfg.digest,
+    metadata: (entries) => {
+      for (const entry of entries) {
+        const current = index.get(entry.id);
+        index.upsertMetadata(
+          current
+            ? {
+              ...entry,
+              status: current.status,
+              retry: current.retry,
+              attention: current.attention,
+            }
+            : entry,
+        );
+      }
+    },
+    publish: ({ sessionID, revision, delta }) => {
+      const wasDeleted = !!index.get(sessionID)?.deleted;
+      if (index.applyDigest({ id: sessionID, revision, ...delta })) {
+        if (delta.deleted) backend.retireSession(sessionID);
+        else if (wasDeleted) backend.restoreSession(sessionID);
+      }
+    },
+    unready: (ids) => {
+      for (const id of ids) {
+        const entry = index.get(id);
+        if (entry) {
+          const { turns: _turns, ...summary } = entry.digest;
+          index.applyDigest({
+            id,
+            revision: entry.digest.revision,
+            summary: { ...summary, state: "digesting" },
+            turns: { upsert: {}, remove: [] },
+            deleted: entry.deleted ?? null,
+          });
+        }
+      }
+    },
+    diagnostic: (error) => console.warn("session digest:", error),
+  });
+  const backend = new OpencodeV1Adapter(
+    cfg,
+    new StreamBuffers(),
+    fetch,
+    digest,
+  );
   return await startApplication(
     cfg,
-    new OpencodeV1Adapter(cfg, new StreamBuffers()),
+    backend,
     fromFileUrl(new URL("./web/dist/", import.meta.url)),
-    { upgrade: createSessionReferenceUpgrade(opencodeV1SessionID.legacy) },
+    {
+      upgrade: createSessionReferenceUpgrade(opencodeV1SessionID.legacy),
+      index,
+      interactive: (owner, active) => digest.interactive(owner, active),
+      attention: (sessionID) => digest.attention(sessionID),
+    },
   );
 }
 if (import.meta.main) {

@@ -33,7 +33,11 @@ export class Rpc {
         pending.cleanup();
         reject(error);
       };
-      const abort = () => fail(new Error("Request cancelled"));
+      const abort = () => {
+        if (!this.#pending.has(id)) return;
+        fail(new DOMException("Request cancelled", "AbortError"));
+        this.send({ t: "rpc.cancel", id });
+      };
       const timer = setTimeout(
         () => fail(new Error(`${method} timed out`)),
         30_000,

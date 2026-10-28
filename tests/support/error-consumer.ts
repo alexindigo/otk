@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import type { ContentSession } from "@otk/protocol";
-import type { ServerFrame } from "@otk/protocol";
+import { waitFor } from "./opencode.ts";
 import type { Cdp } from "./cdp.ts";
 import type { WsClient } from "./ws-client.ts";
 
@@ -35,18 +35,12 @@ export async function assertErrorConsumer(
   assert(content.t === "content" && content.event.op === "session.error");
   assertEquals(content.event.errorState, state);
   assertEquals(content.event.error, snapshot.error);
-  const indexState = (frame: ServerFrame) =>
-    frame.t === "index.patch"
-      ? frame.ops.find((op) =>
-        op.op === "upsert" && op.entry.id === sessionID &&
-        op.entry.attention.errorState?.revision === state.revision
-      )
-      : undefined;
-  const indexFrame = await client.wait((frame) => !!indexState(frame));
-  const index = indexState(indexFrame);
-  assert(index?.op === "upsert");
-  assertEquals(index.entry.attention.errorState, state);
-  assertEquals(index.entry.attention.error, snapshot.error);
+  const index = await waitFor(
+    () => client.entry(sessionID),
+    (value) => value?.attention.errorState?.revision === state.revision,
+  );
+  assertEquals(index!.attention.errorState, state);
+  assertEquals(index!.attention.error, snapshot.error);
   assertEquals(
     await browser.evaluate(
       `document.querySelector('[data-session=${

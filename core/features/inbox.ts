@@ -35,25 +35,46 @@ export class InboxFeature implements FrameSource {
   #discovered: string[] = [];
   #discoveryError = "";
   #scanVersion = 0;
+  #policies: ReturnType<Projects["policies"]> = [];
+  #seen = new Map<string, Map<string, number>>();
+  #finishes: Record<string, number> = {};
   constructor(
     readonly stores: InboxStores,
     readonly index: IndexStore,
     readonly identity: string | (() => string),
     readonly scan: (templates: readonly string[]) => Promise<string[]> =
       scanProjects,
+    readonly promote?: (sessionID: string) => void,
   ) {
+    this.#policies = stores.projects.policies();
+    this.#finishes = stores.finishes.list();
+    for (const { user, session, time } of stores.seen.all()) {
+      const marks = this.#seen.get(user) ?? new Map<string, number>();
+      marks.set(session, time);
+      this.#seen.set(user, marks);
+    }
     this.#stops.push(
       index.observe((entry, previous) => this.#observe(entry, previous)),
-      index.listen((frame) => {
-        if (frame.t !== "index.patch") return;
-        for (const op of frame.ops) {
-          if (op.op !== "remove") continue;
-          for (const task of stores.tasks.list()) {
-            if (task.sessions.includes(op.id)) {
-              stores.tasks.removeSession(task.id, op.id);
-            }
-          }
-        }
+      stores.projects.listen((change) => {
+        if (!("user" in change)) return;
+        const known = this.#policies.find((policy) =>
+          policy.user === change.user &&
+          policy.directory === change.project.directory
+        );
+        if (known) known.inactive = change.project.inactive;
+        else {this.#policies.push({
+            user: change.user,
+            directory: change.project.directory,
+            inactive: change.project.inactive,
+          });}
+      }),
+      stores.finishes.listen(({ session, time }) => {
+        this.#finishes[session] = time;
+      }),
+      stores.seen.listen(({ user, session, time }) => {
+        const marks = this.#seen.get(user) ?? new Map<string, number>();
+        marks.set(session, time);
+        this.#seen.set(user, marks);
       }),
     );
     for (const store of Object.values(stores)) {
@@ -67,8 +88,10 @@ export class InboxFeature implements FrameSource {
   }
   get(): InboxSnapshot {
     const s = this.stores;
+    const projects = s.projects.list(this.user);
+    this.#policies = s.projects.policies();
     return {
-      projects: s.projects.list(this.user),
+      projects,
       tasks: s.tasks.list(),
       seen: s.seen.list(this.user),
       finishes: s.finishes.list(),
@@ -103,17 +126,31 @@ export class InboxFeature implements FrameSource {
     const s = this.stores;
     if (
       previous?.status !== undefined && previous.status !== "idle" &&
-      entry.status === "idle"
+      entry.status === "idle" && !entry.deleted && !previous.deleted
     ) s.finishes.record(entry.id);
     const a = entry.attention;
     const active = entry.status !== "idle" || !!a.error ||
       a.permissions + a.questions + a.childPermissions + a.childQuestions > 0;
-    for (const user of new Set([this.user, ...s.projects.users()])) {
-      const project = s.projects.find(user, entry.directory);
+    const unseen =
+      [...this.#seen.values()].some((marks) =>
+        (this.#finishes[entry.id] ?? 0) > (marks.get(entry.id) ?? 0)
+      ) ||
+      (this.#finishes[entry.id] ?? 0) >
+        (this.#seen.get(this.user)?.get(entry.id) ?? 0);
+    if (
+      !entry.deleted && (active || unseen) &&
+      (!previous || previous.status !== entry.status ||
+        JSON.stringify(previous.attention) !== JSON.stringify(entry.attention))
+    ) this.promote?.(entry.id);
+    for (const project of this.#policies) {
       if (
-        project?.inactive &&
-        (active || s.finishes.time(entry.id) > s.seen.time(user, entry.id))
-      ) s.projects.inactive(user, entry.directory, false);
+        project.directory === entry.directory && project.inactive &&
+        (active ||
+          (this.#finishes[entry.id] ?? 0) >
+            (this.#seen.get(project.user)?.get(entry.id) ?? 0))
+      ) {
+        s.projects.reactivate(project.user, entry.directory);
+      }
     }
   }
   /** Creation and successful action bookkeeping share the persisted project owner. */
@@ -305,8 +342,8 @@ export class InboxFeature implements FrameSource {
     });
     rpc.register("sessions.seen", {
       params: (p) => sessionID(p)!,
-      async handler(ctx, id) {
-        await ctx.sessionDirectory(id);
+      handler: async (ctx, id) => {
+        if (!this.index.get(id)?.deleted) await ctx.sessionDirectory(id);
         return s.seen.mark(user(), id);
       },
     });

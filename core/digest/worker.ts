@@ -80,6 +80,18 @@ async function publish(value: DigestPublication): Promise<void> {
     catalogPublications.add(value.sessionID);
     return;
   }
+  if (value.metadata) {
+    await send({
+      t: "catalog",
+      run: run!,
+      id: 0,
+      connection,
+      entries: [value.metadata],
+      part: 0,
+      last: true,
+      authoritative: false,
+    }, requestSignal ?? lifetime.signal);
+  }
   const turns = Object.entries(value.delta.turns.upsert),
     remove = value.delta.turns.remove;
   const count = Math.max(
@@ -201,6 +213,8 @@ async function start(
     ], { busyms: policy.busyms });
     store = new DigestStore(db);
     sink = selected.create();
+    connection = message.connection ?? 0;
+    sink.connection(connection);
     const selectedSink = sink;
     scheduler = new DigestScheduler(policy, {
       // Reclaimable page cache is capacity, not pressure. Deno's `available`
@@ -406,6 +420,19 @@ function handle(message: ToWorker): void {
     db!.transaction(() => {
       for (const dirty of message.sessions) {
         const row = store!.summary([dirty.sessionID])[0];
+        if (dirty.reason === "attention") {
+          const identity = {
+            provider: sink!.identity,
+            sessionID: dirty.sessionID,
+            directory: row?.directory,
+            updated: row?.time_updated ?? Date.now(),
+          };
+          if (
+            !scheduler!.promote(identity, "attention") && row &&
+            !row.deleted_at && row.state !== "ready"
+          ) scheduler!.enqueue(identity, "attention");
+          continue;
+        }
         if (
           !row || dirty.reason === "presence" || dirty.reason === "metadata"
         ) {
@@ -419,7 +446,7 @@ function handle(message: ToWorker): void {
             directory: row?.directory,
             updated: row?.time_updated ?? Date.now(),
           },
-          dirty.reason === "attention" ? "attention" : "background",
+          "background",
           dirty,
         );
       }
@@ -522,6 +549,18 @@ function handle(message: ToWorker): void {
             part++;
           }
         }
+      } else if (message.t === "deleted") {
+        if (message.connection === connection) {
+          for (const item of message.sessions) {
+            await sink!.deleted(
+              connection,
+              item.sessionID,
+              item.revision,
+              item.metadata,
+            );
+          }
+        }
+        post({ t: "accepted", run: run!, id: message.id });
       } else if (message.t === "detail") {
         const detail = await sink!.detail(message.sessionID, signal);
         const turns = Object.entries(detail.turns);

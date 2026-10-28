@@ -12,9 +12,19 @@ export type ToWorker =
       native: OpencodeV1Config;
       policy: DigestPolicy;
       since: number;
+      connection?: number;
     }
     | { t: "catalog"; connection: number }
     | { t: "dirty"; connection: number; sessions: DirtySession[] }
+    | {
+      t: "deleted";
+      connection: number;
+      sessions: {
+        sessionID: string;
+        revision: number;
+        metadata?: SessionMetadata;
+      }[];
+    }
     | { t: "scope"; owner: string; directory?: string; sessions: string[] }
     | { t: "interactive"; owner: string; active: boolean }
     | { t: "detail"; sessionID: string }

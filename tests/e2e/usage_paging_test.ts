@@ -12,6 +12,7 @@ import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { publishUsage } from "../support/usage-summary.ts";
 
 test("U4 complete102-step turn and session totals survive paging, duplicate live updates, held snapshots and reload", async () => {
   const root = await fixture();
@@ -77,6 +78,7 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     return Promise.resolve(messages.slice(0, before).slice(-opts.limit));
   };
   const b = await Cdp.launch(root);
+  publishUsage(f.app.index, ledger.snapshot());
   const visible =
     "document.querySelector('.otk-turn-usage > button')?.textContent";
   const last =
@@ -108,6 +110,7 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     if (at < 0) messages.push(message);
     else messages[at] = message;
     ledger.upsert(usageHeader(message));
+    publishUsage(f.app.index, ledger.snapshot());
     f.app.connections.content("tstv1-core", { op: "message.upsert", message });
   };
   try {
@@ -123,6 +126,9 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     );
     await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
     await b.poll("!!document.querySelector('.otk-turn-usage :popover-open')");
+    await b.poll(
+      "document.querySelectorAll('.otk-usage-breakdown tbody tr').length===102",
+    );
     assertEquals(
       await b.evaluate(
         "document.querySelectorAll('.otk-usage-breakdown tbody tr').length",
@@ -230,6 +236,14 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     );
     hold = Promise.withResolvers<SessionUsage>();
     await b.reload();
+    await b.poll(`${last}==='1 model call · 5 tokens · $0.05'`);
+    const detailPoint = await b.evaluate<{ x: number; y: number }>(
+      "(()=>{const r=[...document.querySelectorAll('.otk-turn-usage > button')].at(-1).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
+    );
+    await b.send("Input.dispatchMouseEvent", {
+      type: "mouseMoved",
+      ...detailPoint,
+    });
     for (let i = 0; !held && i < 100; i++) {
       await new Promise((r) => setTimeout(r, 10));
     }

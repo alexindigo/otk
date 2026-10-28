@@ -7,6 +7,6 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
   if (!capability) return;
   rpc.register("usage.get", {
     params: (p) => sessionID(p)!,
-    handler: (_ctx, id) => capability.getUsage(id),
+    handler: (ctx, id) => capability.getUsage(id, ctx.execution?.signal),
   });
 }

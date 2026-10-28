@@ -48,7 +48,7 @@ function QuestionTakeover() {
       childTitle={request()?.sessionID !== session.sessionID()
         ? session.entry(request()?.sessionID ?? "")?.title
         : undefined}
-      onDirty={(value) => session.dirty("questions", value)}
+      onDirty={(value, input) => session.dirty("questions", value, input)}
       onReply={(requestID, answers) =>
         commands.run("question.reply", {
           requestID,
@@ -69,7 +69,7 @@ function Request(
     childTitle?: string;
     where?: string;
     onReply(id: string, answers?: string[][]): Promise<void>;
-    onDirty(value: boolean): void;
+    onDirty(value: boolean, input?: string): void;
   },
 ) {
   const form = createQuestionForm(props.request, solidState);
@@ -88,7 +88,7 @@ function Request(
     try {
       await props.onReply(props.request.id, answers);
       forgetQuestionForm(props.request.id);
-      if (alive) props.onDirty(false);
+      props.onDirty(false);
     } catch (failure) {
       if (alive) setError(errorMessage(failure));
     } finally {
@@ -144,7 +144,12 @@ function Request(
     },
   );
   onSettled(() => {
-    const stopDirty = form.subscribe(() => props.onDirty(true));
+    const stopDirty = form.subscribe(() =>
+      props.onDirty(
+        true,
+        form.answers().map((answer) => answer.join(", ")).join("\n"),
+      )
+    );
     const release = ports.keyboard?.layer(
       "question.close",
       () => card.contains(document.activeElement),
@@ -154,7 +159,6 @@ function Request(
       stopDirty();
       release?.();
       alive = false;
-      props.onDirty(false);
     };
   });
   // Keyboard: move DOM focus between the active panel's rows; keys map to intents.
@@ -383,7 +387,7 @@ export default function QuestionDock(
     childTitle?: string;
     where?: string;
     onReply(id: string, answers?: string[][]): Promise<void>;
-    onDirty(value: boolean): void;
+    onDirty(value: boolean, input?: string): void;
   },
 ): import("solid-js").Element {
   return (

@@ -18,6 +18,7 @@ export { default as Prompt } from "./components/Prompt.tsx";
 export { default as SessionView } from "./components/SessionView.tsx";
 export { default as Shell } from "./shell/Shell.tsx";
 export { default as ProjectSessions } from "./components/ProjectSessions.tsx";
+export { default as DeletedSession } from "./components/DeletedSession.tsx";
 export { default as ListRow } from "./components/ListRow.tsx";
 export { default as RightPanel } from "./components/RightPanel.tsx";
 export { registerSessionsPanel } from "./features/sessions.tsx";

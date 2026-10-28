@@ -35,9 +35,9 @@ export interface ApprovalRpcMethods {
 }
 /** Helpers inherit; only a writable root session can own an explicit policy. */
 export function canAutoApprove(
-  session: { parentID?: string } | undefined,
+  session: { parentID?: string; deleted?: unknown } | undefined,
 ): boolean {
-  return !!session && !session.parentID;
+  return !!session && !session.parentID && !session.deleted;
 }
 /** One policy projection shared by the server, browser marks and command owner. */
 export function autoApproveOwner(

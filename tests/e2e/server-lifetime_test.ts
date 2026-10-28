@@ -45,7 +45,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       });
       await browser.goto(`${app.url}/#/remote/${app.session.id}`);
       await browser.poll(
-        "window.heldSessionFrames.length>=3 && window.lifetimeSockets.length===2 && window.lifetimeSockets.every(socket=>socket.readyState===1)",
+        "window.heldSessionFrames.length>=2 && window.lifetimeSockets.length===2 && window.lifetimeSockets.every(socket=>socket.readyState===1) && !document.querySelector('.otk-prompt button[type=submit]:not(:disabled)')",
       );
       await browser.click(".otk-settings-entry");
       await browser.click('[data-settings-sidecar="remote"] > header button');

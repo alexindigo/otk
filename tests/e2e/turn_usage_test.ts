@@ -19,6 +19,7 @@ import { WsClient } from "../support/ws-client.ts";
 import { Cdp } from "../support/cdp.ts";
 import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
+import { publishUsage } from "../support/usage-summary.ts";
 
 const trigger = ".otk-turn-usage > button";
 async function hover(b: Cdp, selector: string) {
@@ -28,6 +29,9 @@ async function hover(b: Cdp, selector: string) {
     }).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
   );
   await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
+  await b.poll(
+    "document.querySelectorAll('.otk-usage-breakdown tbody tr').length>0",
+  );
 }
 const categories = (
   m: Pick<AssistantMessage, "tokens">,
@@ -195,6 +199,9 @@ test("U4 stored multi-step turn usage reaches the footer and hover/focus split; 
     assertEquals(price, { input: 2, output: 4, cache: { read: .5, write: 3 } });
     await hover(b, trigger);
     await b.poll("!!document.querySelector('.otk-turn-usage :popover-open')");
+    await b.poll(
+      "document.querySelectorAll('.otk-usage-breakdown tbody tr').length===3",
+    );
     assertEquals(
       await b.evaluate(
         "[...document.querySelectorAll('.otk-usage-breakdown thead th')].map(cell=>cell.textContent)",
@@ -420,6 +427,11 @@ test("U4 stored multi-step turn usage reaches the footer and hover/focus split; 
     await b.type("textarea[name=prompt]", "Start a separate turn");
     await b.key("Enter");
     await waitForReply(b, session.id, "Another turn has its own usage.");
+    await b.poll(
+      `document.querySelector(${JSON.stringify(trigger)})?.textContent===${
+        JSON.stringify(text)
+      }`,
+    );
     assertEquals(
       await b.evaluate("document.querySelectorAll('.otk-turn-usage').length"),
       2,
@@ -474,6 +486,10 @@ test("U4 unknown model prices show all five charged token categories without inv
       interrupted: false,
       parts: [],
     }]);
+  publishUsage(
+    f.app.index,
+    await f.app.backend.capabilities.usage!.getUsage("tstv1-core"),
+  );
   const b = await Cdp.launch(root);
   try {
     await b.goto(`${f.url}/#/local/tstv1-core`);
@@ -586,6 +602,10 @@ test("U4 queued prompts do not split a turn and category costs use each step's e
       time: { created: 2 },
       parts: [],
     }, step("last-step", "second")]);
+  publishUsage(
+    f.app.index,
+    await f.app.backend.capabilities.usage!.getUsage("tstv1-core"),
+  );
   const b = await Cdp.launch(root);
   try {
     await b.goto(`${f.url}/#/local/tstv1-core`);

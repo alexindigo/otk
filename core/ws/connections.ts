@@ -115,6 +115,17 @@ export class Connections {
       close: () => dispose(),
     };
     this.#connections.add(connection);
+    const controller = new AbortController();
+    const releases = new Set<() => void>();
+    const reads = new Map<string, AbortController>();
+    const request = {
+      id: crypto.randomUUID(),
+      signal: controller.signal,
+      defer(release: () => void) {
+        if (controller.signal.aborted) release();
+        else releases.add(release);
+      },
+    };
     const helloDeadline = setTimeout(() => {
       if (!connection.welcomed) ws.close(1008, "hello required");
     }, 10_000);
@@ -130,6 +141,17 @@ export class Connections {
       clearTimeout(silenceDeadline);
       clearInterval(ping);
       const errors: unknown[] = [];
+      controller.abort();
+      for (const read of reads.values()) read.abort();
+      reads.clear();
+      for (const release of releases) {
+        try {
+          release();
+        } catch (error) {
+          errors.push(error);
+        }
+      }
+      releases.clear();
       for (const sessionID of connection.sessions) {
         try {
           this.#subscribe(connection, sessionID, false);
@@ -163,6 +185,9 @@ export class Connections {
             ws.close(1002, "protocol mismatch");
             return;
           }
+          // Drain publications covered by the initial baseline before this
+          // connection becomes a live recipient of the index stream.
+          const snapshot = this.index.snapshot();
           connection.welcomed = true;
           clearTimeout(helloDeadline);
           clearTimeout(silenceDeadline);
@@ -181,7 +206,7 @@ export class Connections {
             },
           });
           this.#send(connection, { t: "harness", state: this.harnessState });
-          this.#send(connection, this.index.snapshot());
+          this.#send(connection, snapshot);
           this.#send(connection, { t: "prefs", prefs: this.prefs.get() });
           for (const source of this.sources) {
             this.#send(connection, source.snapshot());
@@ -201,12 +226,21 @@ export class Connections {
           );
         } else if (frame.t === "resnapshot") {
           this.#send(connection, this.index.snapshot());
+        } else if (frame.t === "rpc.cancel") {
+          reads.get(text(raw, "id")!)?.abort();
         } else if (frame.t === "rpc") {
           const id = text(raw, "id")!;
+          if (reads.has(id)) {
+            throw new HarnessError("params", "Request ID is already in flight");
+          }
+          const read = new AbortController();
+          reads.set(id, read);
           try {
             const result = await this.rpc.dispatch(
               text(raw, "method")!,
               frame.params,
+              request,
+              { signal: read.signal },
             );
             this.#send(connection, { t: "rpc.result", id, ok: true, result });
           } catch (error) {
@@ -219,6 +253,8 @@ export class Connections {
                 message: errorMessage(error),
               },
             });
+          } finally {
+            if (reads.get(id) === read) reads.delete(id);
           }
         } else throw new HarnessError("frame", "Unknown frame");
         if (this.#connections.has(connection)) {

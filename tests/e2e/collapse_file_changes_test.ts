@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { publishUsage } from "../support/usage-summary.ts";
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import {
@@ -123,6 +124,10 @@ test("U6 file changes start collapsed, disclose real content and follow the pers
     prompt: { prompt: () => Promise.resolve(), abort: () => Promise.resolve() },
   });
   f.app.backend.core.listMessages = () => Promise.resolve(messages);
+  publishUsage(
+    f.app.index,
+    await f.app.backend.capabilities.usage!.getUsage("tstv1-core"),
+  );
   const b = await Cdp.launch(root), c = new WsClient(f.url);
   const shots = Deno.env.get("OTK_COLLAPSE_SHOTS");
   const capture = async (name: string) => {
@@ -274,6 +279,10 @@ test("U6 one-token labels and literal fallback phrases reach plain and picker fo
       ...(picker ? { agents: { listAgents: () => Promise.resolve([]) } } : {}),
     });
     f.app.backend.core.listMessages = () => Promise.resolve([reply]);
+    publishUsage(
+      f.app.index,
+      await f.app.backend.capabilities.usage!.getUsage("tstv1-core"),
+    );
     const b = await Cdp.launch(root), c = new WsClient(f.url);
     try {
       await c.connect();

@@ -51,8 +51,6 @@ export default function Scene() {
             finishes: {},
             pathTemplates: [],
           }}
-          messages={[]}
-          exhausted
           ready
           {...{ reserveTrailing: reserve() }}
           onOpen={() => true}

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { errorMessage } from "@otk/protocol";
 import "./ProjectTabs.css" with { type: "text" };
-import { selection } from "./selection.ts";
+import { selection, sessionState } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { createMemo, createSignal, type Element, For, Show } from "solid-js";
 import { dynamic } from "@solidjs/web";
@@ -9,20 +9,20 @@ import TitleEditor from "./TitleEditor.tsx";
 import type {
   ContentSession,
   InboxSnapshot,
-  Message,
+  IndexEntry,
   ModelCatalog,
   TaskRecord,
-  UsageTotal,
 } from "@otk/protocol";
 import {
   type ClientTabs,
-  contextMeter,
+  digestLabel,
   inboxStatus,
   type InboxTab,
   type MergedEntry,
   projectName,
   type ProjectSelection,
   type SessionRename,
+  summaryMeter,
   type TaskActions,
   taskBreadcrumbs,
 } from "@otk/client";
@@ -52,10 +52,9 @@ export default function ProjectTabs(props: {
   model: ClientTabs;
   entries: MergedEntry[];
   inbox: InboxSnapshot;
-  messages: Message[];
   catalog?: ModelCatalog;
-  usage?: UsageTotal;
-  exhausted: boolean;
+  entry?: IndexEntry;
+  eligible?(target: import("@otk/client").Selection): boolean;
   showCost?: boolean;
   auto?(sessionID: string): boolean;
   session?: ContentSession;
@@ -145,6 +144,7 @@ export default function ProjectTabs(props: {
     },
     enabled: (_ctx, target?: SessionContextTarget & { taskID?: string }) =>
       props.ready &&
+      !!target && (props.eligible?.(target) ?? true) &&
       target?.sidecarId === props.project.sidecarId &&
       target.directory === props.project.directory &&
       tasks().some((task) =>
@@ -205,8 +205,11 @@ export default function ProjectTabs(props: {
       );
     }
   });
-  const meter = createMemo(() => contextMeter(props.messages, props.catalog));
-  const cost = () => props.usage?.cost;
+  const meter = createMemo(() => summaryMeter(props.entry, props.catalog));
+  const cost = () =>
+    props.entry?.digest.state === "ready"
+      ? props.entry.digest.total?.cost ?? undefined
+      : undefined;
   const contextRange = () =>
     countLabel(
       meter().limit!,
@@ -262,7 +265,11 @@ export default function ProjectTabs(props: {
                     type="button"
                     role="tab"
                     {...selection({
-                      class: "otk-tab-open" + (editing() ? " is-editing" : ""),
+                      class: "otk-tab-open " + (
+                        tab().kind === "phantom"
+                          ? sessionState(entry(tab().id))
+                          : ""
+                      ) + (editing() ? " is-editing" : ""),
                       kind: "selected",
                       selected: props.model.state.selected?.id === tab().id,
                     })}
@@ -381,9 +388,9 @@ export default function ProjectTabs(props: {
                       type="button"
                       ref={contextTarget(() => sessionTarget(crumb().id))}
                       {...selection({
-                        class: `otk-session-crumb${
-                          editing() ? " is-editing" : ""
-                        }`,
+                        class: `otk-session-crumb ${
+                          sessionState(entry(crumb().id))
+                        }${editing() ? " is-editing" : ""}`,
                         kind: "current",
                         selected: props.model.state.sessionID === crumb().id,
                       })}
@@ -439,9 +446,7 @@ export default function ProjectTabs(props: {
           aria-label={props.showCost === false
             ? "Session context"
             : "Session context and cost"}
-          title={`${
-            props.exhausted ? "Session context" : "Context from loaded messages"
-          }; latest reported context tokens; ${
+          title={`${"Session context"}; latest reported context tokens; ${
             meter().limit === undefined
               ? "context window unavailable"
               : `${contextRange()} (${
@@ -482,7 +487,7 @@ export default function ProjectTabs(props: {
             when={meter().tokens === undefined &&
               (props.showCost === false || cost() === undefined)}
           >
-            <span>No usage reported</span>
+            <span>{digestLabel(props.entry)}</span>
           </Show>
         </output>
       </div>

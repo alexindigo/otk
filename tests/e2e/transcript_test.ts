@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { publishUsage } from "../support/usage-summary.ts";
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import type { AssistantMessage, Message } from "@otk/protocol";
@@ -174,6 +175,10 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
     },
   });
   registerUsage(f.app.connections.rpc, f.app.backend);
+  publishUsage(
+    f.app.index,
+    await f.app.backend.capabilities.usage!.getUsage("tstv1-otk"),
+  );
   try {
     await b.send("Emulation.setDeviceMetricsOverride", {
       width: 2000,

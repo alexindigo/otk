@@ -6,7 +6,12 @@ import {
   UsageLedger,
   type UsageMessage,
 } from "@otk/protocol";
-import { createSessionUsage } from "../session-usage.ts";
+import {
+  createSessionUsage,
+  type SessionUsageOwner,
+} from "../session-usage.ts";
+import { createState } from "../state.ts";
+import { shellEntry } from "./shell-fixture.ts";
 import type { SidecarConnection } from "../connection.ts";
 const header = (input: number, completed = false): UsageMessage => ({
   id: "step",
@@ -85,6 +90,143 @@ Deno.test("usage resource merges buffered tool labels, header-only updates and r
   owner.stop();
 });
 const target = { sidecarId: "local", sessionID: "s" };
+Deno.test("open detail refreshes only for a newer digest revision, never a status upsert or stale digest", async () => {
+  const entry = shellEntry("s");
+  entry.digest.revision = 7;
+  let reads = 0;
+  const connection = () =>
+    ({
+      supports: () => true,
+      rpc: {
+        call: () => {
+          reads++;
+          return Promise.resolve(
+            new UsageLedger("s", [header(2, true)]).snapshot(),
+          );
+        },
+      },
+    }) as unknown as SidecarConnection;
+  const owner: SessionUsageOwner = Reflect.apply(
+    createSessionUsage,
+    undefined,
+    [connection, createState, () => entry],
+  );
+  const release = owner.retain(target);
+  try {
+    await owner.load(target);
+    owner.receive("local", {
+      t: "index.patch",
+      rev: 1,
+      ops: [{ op: "upsert", entry: { ...entry, status: "busy" } }],
+    });
+    await owner.load(target);
+    assertEquals(reads, 1);
+    const patch = (revision: number, wire: number) =>
+      owner.receive("local", {
+        t: "index.patch",
+        rev: wire,
+        ops: [{
+          op: "digest",
+          id: "s",
+          revision,
+          summary: { state: "ready", revision },
+          turns: { upsert: {}, remove: [] },
+          deleted: null,
+        }],
+      });
+    entry.digest.revision = 8;
+    patch(8, 2);
+    await owner.load(target);
+    assertEquals(reads, 2);
+    patch(8, 3);
+    patch(7, 4);
+    await owner.load(target);
+    assertEquals(reads, 2);
+  } finally {
+    release();
+    owner.stop();
+  }
+});
+Deno.test("index-bound detail cannot replace reported charges with a cooked transcript header or transcript removal", async () => {
+  const entry = shellEntry("s");
+  entry.digest.revision = 7;
+  const connection = () =>
+    ({
+      supports: () => true,
+      rpc: {
+        call: () =>
+          Promise.resolve(new UsageLedger("s", [header(2, true)]).snapshot()),
+      },
+    }) as unknown as SidecarConnection;
+  const owner: SessionUsageOwner = Reflect.apply(
+    createSessionUsage,
+    undefined,
+    [connection, createState, () => entry],
+  );
+  const release = owner.retain(target);
+  try {
+    await owner.load(target);
+    owner.receive("local", {
+      t: "content",
+      sessionID: "s",
+      event: {
+        op: "message.upsert",
+        message: {
+          id: "step",
+          sessionID: "s",
+          role: "assistant",
+          replyTo: "user",
+          agent: "build",
+          model: header(0).model,
+          time: { created: 1, completed: 2 },
+          tokens: header(0).tokens,
+          cost: 0,
+          interrupted: false,
+          parts: [],
+        },
+      },
+    });
+    assertEquals(owner.get(target)?.total.cost, .2);
+    owner.receive("local", {
+      t: "content",
+      sessionID: "s",
+      event: { op: "message.remove", messageID: "step" },
+    });
+    assertEquals(owner.get(target)?.total.cost, .2);
+  } finally {
+    release();
+    owner.stop();
+  }
+});
+Deno.test("a known tombstone cannot acquire or load usage even before the old view unmounts", async () => {
+  const entry = shellEntry("s");
+  entry.deleted = { at: 1, how: "provider" };
+  let reads = 0;
+  const connection = () =>
+    ({
+      supports: () => true,
+      rpc: {
+        call: () => {
+          reads++;
+          return Promise.resolve(new UsageLedger("s").snapshot());
+        },
+      },
+    }) as unknown as SidecarConnection;
+  const owner: SessionUsageOwner = Reflect.apply(
+    createSessionUsage,
+    undefined,
+    [connection, createState, () => entry],
+  );
+  const release = owner.retain(target);
+  try {
+    await owner.load(target);
+    assertEquals(reads, 0);
+    assertEquals(owner.get(target), undefined);
+  } finally {
+    release();
+    owner.stop();
+  }
+});
 Deno.test("full usage resource coalesces reads and replaces buffered/duplicate live headers without counting snapshots twice", async () => {
   const gate = Promise.withResolvers<SessionUsage>();
   let calls = 0;

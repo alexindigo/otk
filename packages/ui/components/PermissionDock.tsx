@@ -79,7 +79,7 @@ function PermissionTakeover() {
           ? session.entry(request()?.sessionID ?? "")?.title ||
             request()?.sessionID
           : undefined}
-        onDirty={(value) => session.dirty("permissions", value)}
+        onDirty={(value, input) => session.dirty("permissions", value, input)}
         onReply={(input) => commands.run("permission.reply", input)}
       />
     </>
@@ -91,7 +91,7 @@ function RequestDock(
     childTitle?: string;
     where?: string;
     onReply(input: PermissionReply): Promise<void>;
-    onDirty(value: boolean): void;
+    onDirty(value: boolean, input?: string): void;
   },
 ) {
   const [mode, setMode] = createSignal<"normal" | "always" | "reject">(
@@ -109,7 +109,6 @@ function RequestDock(
   });
   onSettled(() => () => {
     active = false;
-    props.onDirty(false);
   });
   const answer = async (reply: PermissionReply["reply"]) => {
     if (pending()) return;
@@ -123,7 +122,7 @@ function RequestDock(
     setError("");
     try {
       await props.onReply(input);
-      if (active) props.onDirty(false);
+      props.onDirty(false);
     } catch (error) {
       if (active) setError(errorMessage(error));
     } finally {
@@ -252,7 +251,10 @@ function RequestDock(
                   value={message()}
                   onInput={(event) => {
                     setMessage(event.currentTarget.value);
-                    props.onDirty(!!event.currentTarget.value);
+                    props.onDirty(
+                      !!event.currentTarget.value,
+                      event.currentTarget.value,
+                    );
                   }}
                 />
               </div>
@@ -330,7 +332,7 @@ function RequestDock(
                 onInput={(event) => {
                   const value = event.currentTarget.value;
                   setMessage(value);
-                  props.onDirty(!!value);
+                  props.onDirty(!!value, value);
                 }}
               />
             </label>
@@ -346,7 +348,7 @@ export default function PermissionDock(
     childTitle?: string;
     where?: string;
     onReply(input: PermissionReply): Promise<void>;
-    onDirty(value: boolean): void;
+    onDirty(value: boolean, input?: string): void;
   },
 ): import("solid-js").Element {
   return (
@@ -360,7 +362,7 @@ export default function PermissionDock(
           childTitle={props.childTitle}
           where={props.where}
           onReply={(input) => props.onReply(input)}
-          onDirty={(value) => props.onDirty(value)}
+          onDirty={(value, input) => props.onDirty(value, input)}
         />
       )}
     </For>

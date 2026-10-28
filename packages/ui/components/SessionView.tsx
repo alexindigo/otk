@@ -12,6 +12,7 @@ import {
 } from "solid-js";
 import type {
   ContentSession,
+  IndexEntry,
   Message as OtkMessage,
   ModelCatalog,
   PermissionRequest,
@@ -27,7 +28,12 @@ import RolledBackStrip from "./RolledBackStrip.tsx";
 import ForkNote from "./ForkNote.tsx";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
-import { queuedMessages, replyMessages, turnUsage } from "@otk/client";
+import {
+  queuedMessages,
+  replyMessages,
+  sessionSummary,
+  turnUsage,
+} from "@otk/client";
 import { followViewport } from "./viewport.ts";
 import { highlightingScope } from "../highlight/client.ts";
 import type { Draft, DraftChange } from "./prompt/model.ts";
@@ -46,6 +52,9 @@ export default function SessionView(props: {
   messages: OtkMessage[];
   catalog?: ModelCatalog;
   usage?: SessionUsage;
+  entry?: IndexEntry;
+  openUsage?(): () => void;
+  usageError?(): string | undefined;
   loading: boolean;
   paging: boolean;
   exhausted: boolean;
@@ -227,6 +236,10 @@ export default function SessionView(props: {
                   lastID={message().lastID}
                   pending={message().pending}
                   usage={turnUsage(props.usage, message(), props.catalog)}
+                  summary={sessionSummary(props.entry, message())}
+                  digestState={props.entry?.digest.state}
+                  openUsage={props.openUsage}
+                  usageError={props.usageError}
                   prefs={props.prefs}
                   directory={props.info?.directory}
                   permissions={props.permissions}

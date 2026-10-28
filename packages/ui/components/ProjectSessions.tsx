@@ -24,6 +24,8 @@ import {
   useCommandPorts,
 } from "../keyboard/context.tsx";
 import { contextTarget } from "./context-target.ts";
+import { sessionState } from "./selection.ts";
+import { digestLabel, digestProgress } from "@otk/client";
 
 /** Reusable presentation of the client-owned task/session hierarchy. */
 export default function ProjectSessions(props: {
@@ -31,6 +33,7 @@ export default function ProjectSessions(props: {
   project?: ProjectSelection;
   selected?: Selection;
   rename?: SessionRename;
+  showCost?: boolean;
   cost?(sessionID: string): number | undefined;
   auto?(sessionID: string): boolean;
   connected(id: string): boolean;
@@ -85,12 +88,24 @@ export default function ProjectSessions(props: {
       ? undefined
       : `Exact session cost: ${usageCost(cost, "exact")}`;
   };
+  const progress = createMemo(() =>
+    digestProgress(
+      props.entries.filter((entry) =>
+        entry.sidecarId === props.project?.sidecarId &&
+        entry.directory === props.project.directory
+      ),
+    )
+  );
   return (
     <nav
       class="otk-project-sessions"
       aria-label="Project sessions"
       data-session-project={props.project?.directory}
+      aria-busy={progress().busy ? "true" : "false"}
     >
+      <span class="otk-session-summary-status" role="status" aria-live="polite">
+        {progress().announcement}
+      </span>
       <Show when={error()}>
         <p class="otk-error" role="alert">{error()}</p>
       </Show>
@@ -164,7 +179,9 @@ export default function ProjectSessions(props: {
                                 origin: "row" as const,
                               },
                             }))}
-                            class="otk-session-row"
+                            class={`otk-session-row ${
+                              sessionState(row().session)
+                            }`}
                             selected={props.selected?.sidecarId ===
                                 props.project!.sidecarId &&
                               props.selected.sessionID === row().session.id}
@@ -176,7 +193,9 @@ export default function ProjectSessions(props: {
                               "aria-description": costDescription(
                                 row().session.id,
                               ),
-                              "aria-label": `${row().session.title}${
+                              "aria-label": `${
+                                row().session.deleted ? "Deleted session, " : ""
+                              }${row().session.title}${
                                 row().parentID
                                   ? `, child of ${
                                     merged(row().parentID!).title
@@ -195,8 +214,11 @@ export default function ProjectSessions(props: {
                               }`,
                               onClick: () =>
                                 run(open(merged(row().session.id))),
-                              onDblClick: () =>
-                                run(pin(merged(row().session.id))),
+                              onDblClick: () => {
+                                if (!row().session.deleted) {run(
+                                    pin(merged(row().session.id)),
+                                  );}
+                              },
                             }}
                             leading={
                               <span class="otk-session-leading">
@@ -271,6 +293,17 @@ export default function ProjectSessions(props: {
                                     <UsageCost
                                       value={props.cost!(row().session.id)!}
                                     />
+                                  </span>
+                                </Show>
+                                <Show
+                                  when={row().session.digest.state !==
+                                      "ready" ||
+                                    (props.showCost &&
+                                      costLabel(row().session.id) ===
+                                        undefined)}
+                                >
+                                  <span class="otk-session-digest-state">
+                                    {digestLabel(row().session)}
                                   </span>
                                 </Show>
                               </>

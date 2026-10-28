@@ -38,7 +38,7 @@ export interface SessionPorts {
   permissions(): PermissionRequest[];
   questions(): QuestionRequest[];
   prefs(): Preferences;
-  dirty(owner: string, value: boolean): void;
+  dirty(owner: string, value: boolean, input?: string): void;
   act<T>(action: () => Promise<T>): Promise<T>;
   /** Submission admission: promote to a task, then record a successful action. */
   submit: SessionSubmission;

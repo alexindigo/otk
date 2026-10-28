@@ -29,6 +29,7 @@ export function applicationNotifications(input: {
   viewing(): boolean;
   connection(sidecar: string): SidecarConnection;
   entry(sidecar: string, session: string): IndexEntry | undefined;
+  entries(sidecar: string): readonly IndexEntry[];
   attention(sidecar: string): ReturnType<ApprovalModel["attention"]>;
 }) {
   const context = () => {
@@ -132,6 +133,7 @@ export function applicationNotifications(input: {
     },
     retract,
     (sidecar, entries) => input.attention(sidecar).entries(entries),
+    input.entries,
   );
   const update = () => {
     for (const sidecar of observed) triggers.refresh(sidecar);

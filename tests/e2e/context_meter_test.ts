@@ -2,7 +2,12 @@
 import { test } from "../support/resources.ts";
 import { serve } from "../support/http.ts";
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
-import type { ModelCatalog } from "@otk/protocol";
+import {
+  type AssistantMessage,
+  type ModelCatalog,
+  usageHeader,
+  UsageLedger,
+} from "@otk/protocol";
 import {
   browserFixture,
   openSession,
@@ -12,6 +17,7 @@ import { WsClient } from "../support/ws-client.ts";
 import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
+import { publishUsage } from "../support/usage-summary.ts";
 
 test("U1 composer and meter share exactly one models.list per session open", async () => {
   const root = await fixture(), pending = Promise.withResolvers<ModelCatalog>();
@@ -39,24 +45,29 @@ test("U1 composer and meter share exactly one models.list per session open", asy
       },
     },
   });
-  app.backend.core.listMessages = () =>
-    Promise.resolve([{
-      id: "usage",
-      sessionID: "tstv1-core",
-      role: "assistant",
-      agent: "build",
-      model: catalog.default!,
-      time: { created: 1, completed: 2 },
-      tokens: {
-        input: 2400,
-        output: 100,
-        reasoning: 0,
-        cache: { read: 0, write: 0 },
-      },
-      cost: 0,
-      parts: [],
-      interrupted: false,
-    }]);
+  const message: AssistantMessage = {
+    id: "usage",
+    sessionID: "tstv1-core",
+    role: "assistant",
+    agent: "build",
+    model: catalog.default!,
+    time: { created: 1, completed: 2 },
+    tokens: {
+      input: 2400,
+      output: 100,
+      reasoning: 0,
+      cache: { read: 0, write: 0 },
+    },
+    cost: 0,
+    parts: [],
+    interrupted: false,
+  };
+  app.backend.core.listMessages = () => Promise.resolve([message]);
+  // This external backend owns summaries independently of body/detail reads.
+  publishUsage(
+    app.index,
+    new UsageLedger(message.sessionID, [usageHeader(message)]).snapshot(),
+  );
   const b = await Cdp.launch(root);
   try {
     await b.goto(`${url}/#/local/tstv1-core`);
@@ -262,7 +273,7 @@ test("U1 catalog context limit reaches the meter for OpenCode Beam Free", async 
     await b.type("textarea[name=prompt]", "Use the other catalog window");
     await b.key("Enter");
     await b.poll(
-      "document.querySelector('.otk-context-meter')?.dataset.limit==='20000'",
+      `document.querySelector('.otk-context-meter')?.dataset.limit==='20000' && document.querySelector('.otk-context-meter')?.dataset.tokens==='2500' && document.querySelector('[data-session="${session.id}"]')?.dataset.status==='idle'`,
     );
     assertAlmostEquals(
       await b.evaluate<number>(

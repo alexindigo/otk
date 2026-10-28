@@ -21,6 +21,40 @@ const policy = {
   retryms: 10,
   busyms: 100,
 };
+test("accepted deletion is durable without inventory, idempotent, generation-fenced and resurrectable", async () => {
+  const f = await fixture();
+  try {
+    f.sink.connection(2);
+    await f.sink.catalog(new AbortController().signal);
+    f.seed("a", .25, 10);
+    await f.scan();
+    f.offline();
+    const deleted = Reflect.get(f.sink, "deleted");
+    await Reflect.apply(deleted, f.sink, [1, "opcv1-ses_one", 1]);
+    assertEquals(f.values.get("opcv1-ses_one")!.deleted, null);
+    await Reflect.apply(deleted, f.sink, [2, "opcv1-ses_one", 2]);
+    assertEquals(f.values.get("opcv1-ses_one")!.deleted?.how, "provider");
+    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, .25);
+    const revision = f.values.get("opcv1-ses_one")!.summary.revision;
+    await Reflect.apply(deleted, f.sink, [2, "opcv1-ses_one", 2]);
+    assertEquals(f.values.get("opcv1-ses_one")!.summary.revision, revision);
+    f.online();
+    await f.sink.catalog(new AbortController().signal);
+    assertEquals(f.values.get("opcv1-ses_one")!.deleted, null);
+    await Reflect.apply(deleted, f.sink, [2, "opcv1-ses_one", 2]);
+    assertEquals(f.values.get("opcv1-ses_one")!.deleted, null);
+    await f.sink.deleteIntent("opcv1-ses_one", "owned", "begin", 2);
+    await Reflect.apply(deleted, f.sink, [2, "opcv1-ses_one", 3]);
+    assertEquals(f.values.get("opcv1-ses_one")!.deleted?.how, "otk");
+    await f.sink.deleteIntent("opcv1-ses_one", "owned", "confirmed", 2);
+    f.sink.connection(3);
+    await f.sink.catalog(new AbortController().signal);
+    await Reflect.apply(deleted, f.sink, [3, "opcv1-ses_one", 4]);
+    assertEquals(f.values.get("opcv1-ses_one")!.deleted?.how, "provider");
+  } finally {
+    f.close();
+  }
+});
 async function fixture() {
   const root = await tempDir("native-digest-");
   const path = join(root, "native.db");
@@ -115,7 +149,7 @@ async function fixture() {
       const path = new URL(String(url)).pathname;
       if (path === "/global/health") {
         return Promise.resolve(
-          Response.json({ healthy: true }),
+          Response.json({ healthy: apiCatalog }),
         );
       }
       if (path === "/experimental/session") {
@@ -295,6 +329,25 @@ test("a conflicting native identity cannot supply header metadata or running-dir
   }
 });
 
+test("a catalog row captured before an accepted deletion cannot resurrect that retired native lifetime", async () => {
+  const f = await fixture();
+  try {
+    f.native.prepare(
+      "INSERT INTO session VALUES('ses_two',NULL,'/p','p','Unchanged identity sample',3,3,NULL)",
+    ).run();
+    f.sink.connection(1);
+    await f.sink.catalog(new AbortController().signal);
+    f.duringCatalog(async () => {
+      f.native.prepare("DELETE FROM session WHERE id='ses_one'").run();
+      await f.sink.deleted(1, "opcv1-ses_one", 1);
+    });
+    await f.sink.catalog(new AbortController().signal);
+    assertEquals(f.values.get("opcv1-ses_one")!.deleted?.how, "provider");
+  } finally {
+    f.close();
+  }
+});
+
 test("catalog empty proofs do not overtake a raced message invalidation", async () => {
   const f = await fixture();
   try {
@@ -307,6 +360,49 @@ test("catalog empty proofs do not overtake a raced message invalidation", async 
     await f.scan();
     assertEquals(f.values.get("opcv1-ses_one")!.summary.state, "ready");
     assertEquals(f.values.get("opcv1-ses_one")!.summary.total!.cost, .25);
+  } finally {
+    f.close();
+  }
+});
+
+test("a new sink lifetime cannot reuse an old intent or event revision namespace", async () => {
+  const f = await fixture();
+  try {
+    f.sink.connection(2);
+    await f.sink.catalog(new AbortController().signal);
+    f.sink.invalidate("opcv1-ses_one", 99);
+    await f.sink.deleteIntent("opcv1-ses_one", "old-process", "begin", 2);
+    const restarted = new OpencodeV1DigestSink(
+      f.sink.cfg,
+      policy,
+      f.sink.storage,
+    );
+    try {
+      restarted.connection(2);
+      await restarted.deleted(2, "opcv1-ses_one", 1);
+      assertEquals(f.values.get("opcv1-ses_one")!.deleted?.how, "provider");
+    } finally {
+      restarted.close();
+    }
+  } finally {
+    f.close();
+  }
+});
+test("deleted usage detail rejects before native reads while retaining last reported metadata", async () => {
+  const f = await fixture();
+  try {
+    await f.sink.catalog(new AbortController().signal);
+    f.seed("a", .5, 20);
+    await f.scan();
+    await f.sink.deleted(0, "opcv1-ses_one", 2);
+    const before = f.queries.scans;
+    await assertRejects(
+      () => f.sink.detail("opcv1-ses_one", new AbortController().signal),
+      Error,
+      "deleted",
+    );
+    assertEquals(f.queries.scans, before);
+    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, .5);
   } finally {
     f.close();
   }

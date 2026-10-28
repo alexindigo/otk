@@ -62,6 +62,18 @@ invalidations, visible-scope priority, deletion intents and lifecycle. Libraries
 receive `DigestPolicy`; they do not read application environment variables or
 invent policy defaults. `DigestSink` owns provider work and durable cursors.
 
+Its generation-fenced `deleted(connection,sessionID,revision,metadata?)` input
+expresses accepted provider deletion authority, distinct from a presence
+invalidation that still needs reconciliation. Repeated/stale notifications
+cannot retire another native lifetime. Content bodies never cross this port. The
+optional `publishrows` budget lets adapter catalog reconciliation yield between
+bounded live-metadata publications using the injected worker policy.
+
+An authority fact that may precede cataloging carries its allowlisted last-known
+metadata. A publication can seed that newly retained identity before its first
+digest delta, so accepted deletion remains durable even while provider health is
+unavailable.
+
 `DigestScheduler` registers sinks by declared identity and coalesces queued
 session work. `tick()` executes one slice: interactive reads (`execute`) precede
 attention, visible scope and background. Owner-keyed scopes form a union;

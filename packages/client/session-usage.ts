@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { errorMessage } from "@otk/protocol";
 import {
+  type IndexEntry,
   type ServerFrame,
   type SessionUsage,
   usageHeader,
@@ -12,7 +13,7 @@ import {
 import { createState, type StateFactory } from "./state.ts";
 import type { SidecarConnection } from "./connection.ts";
 import type { Selection } from "./session.ts";
-import { sessionKey } from "./index.ts";
+import { type ClientIndex, createIndex, sessionKey } from "./index.ts";
 
 type Target = Pick<Selection, "sidecarId" | "sessionID">;
 /** One-shot API readers get bounded reuse; mounted consumers retain a lease. */
@@ -43,9 +44,15 @@ export interface SessionUsageOwner {
 export function createSessionUsage(
   connection: (id: string) => SidecarConnection,
   factory: StateFactory = createState,
+  metadata?: (target: Target) => IndexEntry | undefined,
 ): SessionUsageOwner {
   const { state, update, subscribe } = factory<UsageState>({ entries: {} });
   let stopped = false;
+  let index: ClientIndex | undefined;
+  const indexed = (target: Target) =>
+    metadata
+      ? metadata(target)
+      : index?.get(target.sidecarId, target.sessionID);
   const resources = new Map<
     string,
     {
@@ -56,6 +63,7 @@ export function createSessionUsage(
       controller?: AbortController;
       again: boolean;
       leases: number;
+      revision?: number;
     }
   >();
   const publish = (
@@ -76,6 +84,10 @@ export function createSessionUsage(
   const load = (target: Target, refresh = false): Promise<void> => {
     if (stopped) return Promise.resolve();
     const key = sessionKey(target.sidecarId, target.sessionID);
+    if (indexed(target)?.deleted) {
+      if (resources.has(key)) remove(key);
+      return Promise.resolve();
+    }
     let resource = resources.get(key);
     if (!resource) {
       resources.set(
@@ -85,6 +97,7 @@ export function createSessionUsage(
           events: [],
           again: false,
           leases: 0,
+          revision: indexed(target)?.digest.revision,
         },
       );
     }
@@ -156,11 +169,17 @@ export function createSessionUsage(
     }
   };
   const retain = (target: Target): () => void => {
-    if (stopped) return () => {};
+    if (stopped || indexed(target)?.deleted) return () => {};
     const key = sessionKey(target.sidecarId, target.sessionID);
     let resource = resources.get(key);
     if (!resource) {
-      resource = { target: { ...target }, events: [], again: false, leases: 0 };
+      resource = {
+        target: { ...target },
+        events: [],
+        again: false,
+        leases: 0,
+        revision: indexed(target)?.digest.revision,
+      };
       resources.set(key, resource);
     }
     const owner = resource;
@@ -209,15 +228,19 @@ export function createSessionUsage(
       };
     },
     removeServer(sidecar) {
+      index?.remove(sidecar);
       for (const [key, resource] of resources) {
         if (resource.target.sidecarId === sidecar) remove(key);
       }
     },
     get: (target) =>
-      state.entries[sessionKey(target.sidecarId, target.sessionID)]?.value,
+      indexed(target)?.deleted
+        ? undefined
+        : state.entries[sessionKey(target.sidecarId, target.sessionID)]?.value,
     receive(sidecar, frame) {
       if (stopped) return;
       if (frame.t === "welcome" || frame.t === "resync") {
+        if (frame.t === "welcome") index?.remove(sidecar);
         for (const resource of [...resources.values()]) {
           if (resource.target.sidecarId === sidecar) {
             resource.controller?.abort();
@@ -225,21 +248,41 @@ export function createSessionUsage(
             void load(resource.target, true);
           }
         }
-      } else if (frame.t === "index.patch") {
-        for (const op of frame.ops) {
-          const key = sessionKey(
-              sidecar,
-              op.op === "upsert" ? op.entry.id : op.id,
-            ),
-            resource = resources.get(key);
-          if (op.op === "remove") remove(key);
-          else if (resource) void load(resource.target, true);
+      } else if (frame.t === "index.snapshot" || frame.t === "index.patch") {
+        if (!metadata && !(index ??= createIndex()).receive(sidecar, frame)) {
+          return;
+        }
+        for (const [key, resource] of [...resources]) {
+          if (resource.target.sidecarId !== sidecar) continue;
+          const entry = indexed(resource.target);
+          if (!entry || entry.deleted) {
+            remove(key);
+            continue;
+          }
+          const revision = entry.digest.revision;
+          if (resource.revision !== undefined && revision < resource.revision) {
+            continue;
+          }
+          if (resource.revision !== revision) {
+            const initial = resource.revision === undefined;
+            resource.revision = revision;
+            if (!initial || (frame.t === "index.patch" && revision > 0)) {
+              void load(resource.target, true);
+            }
+          }
         }
       } else if (frame.t === "content") {
         const key = sessionKey(sidecar, frame.sessionID),
           resource = resources.get(key);
         if (!resource) return;
         const event = frame.event;
+        // A transcript header's legacy numeric defaults and content removals
+        // are not charged-history authority. Bound details follow digest
+        // revisions and the explicit reader; existing tool labels remain live.
+        if (
+          metadata &&
+          (event.op === "message.upsert" || event.op === "message.remove")
+        ) return;
         const tool = event.op === "part.upsert"
           ? usageTool(event.part)
           : undefined;

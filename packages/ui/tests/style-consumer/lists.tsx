@@ -111,8 +111,6 @@ export default function Scene() {
         model={tabs}
         entries={entries()}
         inbox={inbox()}
-        messages={[]}
-        exhausted
         ready
         session={session()}
         rename={rename}

@@ -102,6 +102,8 @@ export function createShellState(o: { api: URL }): ShellState {
   const guard = createInputGuard({
     drafts,
     key: actions.key,
+    retain: () =>
+      session.state.view === "deleted" || !!actions.selectedEntry()?.deleted,
     confirm: (message) => globalThis.confirm(message),
   });
   const navigation = createShellNavigation({

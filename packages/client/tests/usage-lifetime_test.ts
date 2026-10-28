@@ -3,6 +3,7 @@ import { assert, assertEquals } from "@std/assert";
 import { createSessionUsage } from "../session-usage.ts";
 import { SidecarConnection } from "../connection.ts";
 import { type SessionUsage, UsageLedger } from "@otk/protocol";
+import { shellEntry } from "./shell-fixture.ts";
 Deno.test("usage leases coalesce independent consumers and last release cancels and erases the target", async () => {
   const held = Promise.withResolvers<SessionUsage>();
   let signal: AbortSignal | undefined;
@@ -46,10 +47,15 @@ Deno.test("usage session and server removal invalidate retained ledgers and igno
     sidecarId: "remote",
     sessionID,
   }));
+  owner.receive("remote", {
+    t: "index.snapshot",
+    rev: 1,
+    entries: targets.map((target) => shellEntry(target.sessionID)),
+  });
   for (const target of targets) await owner.load(target);
   owner.receive("remote", {
     t: "index.patch",
-    rev: 1,
+    rev: 2,
     ops: [{ op: "remove", id: "s" }],
   });
   assertEquals(

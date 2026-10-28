@@ -15,7 +15,7 @@ export function sessionPorts(o: {
   resources: ServerResources;
   actions: SessionActions;
   session: ClientSession;
-  guard: { mark(owner: string, dirty: boolean): void };
+  guard: { mark(owner: string, dirty: boolean, input?: string): void };
   prefs(): Preferences;
 }): SessionPorts {
   const target = { ...o.target }, { resources, actions, session } = o;
@@ -38,7 +38,7 @@ export function sessionPorts(o: {
     permissions: () => session.state.content.permissions,
     questions: () => session.state.content.questions,
     prefs: o.prefs,
-    dirty: (owner, dirty) => o.guard.mark(owner, dirty),
+    dirty: (owner, dirty, input) => o.guard.mark(owner, dirty, input),
     act: (action) => actions.act(target, action),
     submit: actions.submission(target),
     history: () => loadHistory(resources.historySources()),

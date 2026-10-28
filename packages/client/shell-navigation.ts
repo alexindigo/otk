@@ -115,10 +115,20 @@ export function createShellNavigation(o: {
       }
     },
   });
-  const project = (value?: ProjectSelection): void =>
+  const project = (value?: ProjectSelection): void => {
+    const selected = session.state.selection;
+    const task = value && selected &&
+      resources.inbox(value.sidecarId).state.inbox.tasks.find((task) =>
+        task.sessions.includes(selected.sessionID)
+      );
+    resources.scope(
+      value,
+      task?.sessions ?? (selected ? [selected.sessionID] : []),
+    );
     store.update((draft) => {
       draft.project = value;
     });
+  };
   const closeSettings = (): void =>
     store.update((draft) => {
       draft.settings = false;
@@ -271,6 +281,9 @@ export function createShellNavigation(o: {
     }
     if (ids.includes(lastLocation(p)?.sessionID ?? "")) remember(p);
     if (intent === revision && shown()) {
+      // This captured release was already accepted, and its metadata mutation
+      // succeeded. Consume only that owner's marks before guarded routing.
+      guard.clear();
       const next = entry.parentID ?? remaining;
       if (next) navigate({ sidecarId: target.sidecarId, sessionID: next });
       else navigation.open(projectHash(p));
@@ -328,6 +341,7 @@ export function createShellNavigation(o: {
       return true;
     },
     async pin(target) {
+      if (!actions.eligibility(target).live) return false;
       if (!navigate(target)) return false;
       const directory = resources.entry(target.sidecarId, target.sessionID)
         ?.directory;

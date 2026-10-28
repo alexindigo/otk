@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+**Feature.** Session and turn usage now comes from a worker-owned, rebuildable
+metadata digest. Session rows, context and reply footers no longer request a
+usage ledger per item; opening a breakdown acquires cancellable detail
+explicitly. Authoritative native deletion retains session details and task
+membership, retires approval policy and preserves unsent browser input. A
+reappearing identity resumes its existing view.
+
 **Compatibility.** The native adapter/package is now `opencode-v1` /
 `@otk/harness-opencode-v1`. The old `harness.type = "opencode1"` spelling still
 loads with a deprecation message; environment precedence is unchanged. Session

@@ -6,6 +6,7 @@ import WorkLog from "./WorkLog.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
 import type { TurnUsage as Usage } from "@otk/client";
+import type { UsageSummary } from "@otk/protocol";
 import { elapsed, messageFrames, partGroups } from "./work-log.ts";
 import MessageActions from "./MessageActions.tsx";
 import { contextTarget } from "./context-target.ts";
@@ -82,6 +83,10 @@ export default function Message(
     pending?: boolean;
     metadata?: import("@otk/protocol").AssistantMessage | null;
     usage?: Usage;
+    summary?: UsageSummary;
+    digestState?: string;
+    openUsage?(): () => void;
+    usageError?(): string | undefined;
     prefs: Preferences;
     directory?: string;
     permissions: PermissionRequest[];
@@ -139,7 +144,7 @@ export default function Message(
   // Select one turn range for both consumers; complete usage metadata wins over
   // the loaded-page reply projection. Unsupported backends share that projection.
   const time = () =>
-    props.usage?.time ?? {
+    props.summary?.time ?? {
       start: props.message.time.created,
       end: props.message.role === "assistant"
         ? props.message.time.completed
@@ -302,14 +307,14 @@ export default function Message(
                       time().end!,
                     )}
                   </span>
-                  <Show when={props.usage}>
-                    {(usage) => (
-                      <TurnUsage
-                        usage={usage()}
-                        showCost={props.prefs.showCost}
-                      />
-                    )}
-                  </Show>
+                  <TurnUsage
+                    summary={props.summary}
+                    state={props.digestState}
+                    detail={() => props.usage}
+                    error={props.usageError}
+                    open={props.openUsage}
+                    showCost={props.prefs.showCost}
+                  />
                   <Show when={message().interrupted}>
                     <span>interrupted</span>
                   </Show>

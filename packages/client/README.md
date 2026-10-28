@@ -30,6 +30,19 @@ Treat state as read-only outside model methods. A UI binding can supply a
 `StateFactory` implementing draft updates and reconciliation. The application's
 thin Solid binding retains granular updates at the UI boundary.
 
+`ClientIndex` owns its keyed entry dictionary synchronously and publishes keyed
+clocks through the binding. `get(sidecarID,sessionID)` is the invocation-current
+read used by `ServerResources.entry`; accepted tombstones govern selection and
+action eligibility before a deferred view paints. There is no second index in
+the UI or action owner.
+
+Only this keyed owner interprets index operations. Its operation dispatch is
+exhaustive: a new wire kind cannot silently become an eviction. Application
+consumers borrow reduced entries through `ServerResources.indexEntries(server)`
+or the keyed metadata lookup after accepted frames have been reduced. Standalone
+consumers use the same `createIndex` owner rather than implement another
+decoder.
+
 Session snapshots publish essential session/message data independently of
 optional attention and sibling reads. Optional failures retain last-good data
 and expose diagnostics. Live attention changes replay over their own resource
@@ -224,22 +237,25 @@ or retain another transcript store.
 `createSession().usage` is the framework-free shared SessionUsageOwner. Its
 target-keyed load/get API supplies full session and user-turn metadata from the
 optional usage capability, independently of transcript pages. Public
-`createSessionUsage(connection, factory?)` supports smaller compositions. Reads
-coalesce; live assistant headers/removals replace keyed baselines through the
-protocol UsageLedger, including events buffered during a snapshot. Duplicate
-headers and snapshots cannot add a step twice; tool-label upserts/removals merge
-through that same ledger and header-only updates preserve them. Completed
-baselines reject stale unfinished headers. Reconnect/resync rejects old reads;
-observed index changes refresh cached targets. stop releases all
-metadata/requests. No content parts are retained, only call clocks and existing
-tool labels; missing capability never causes a partial-page estimate. The ledger
-supplies the complete turn's first start/last end independently of transcript
-pages.
+`createSessionUsage(connection, factory?, metadata?)` supports smaller
+compositions. The selected session binds the authoritative index metadata
+reader, seeding detail revision ownership before any status patch. Cooked
+transcript numeric defaults and transcript removals cannot change that bound
+ledger's charged history; it refreshes through the explicit reader on newer
+digest revisions. Existing tool labels still merge live. Smaller unbound
+compositions retain keyed header/removal replacement through UsageLedger,
+including snapshot replay and completed-header fences. Reconnect/resync rejects
+old reads. stop releases all metadata/requests. No content parts are retained,
+only call clocks and existing tool labels; missing capability never causes a
+partial-page estimate. The ledger supplies the complete turn's first start/last
+end independently of transcript pages.
 
-Mounted usage consumers hold `retain(target)` leases; the returned release is
-idempotent and bound to that exact resource. The selected transcript owns one
-lease; the Sessions panel binds `usage.scope().set(targets)` and disposes its
-scope on unmount. Shared targets coalesce work until the last lease releases,
+Explicitly opened breakdowns hold `retain(target)` leases; the returned release
+is idempotent and bound to that exact resource. Selecting a transcript,
+rendering a footer or mounting Sessions never loads detail. `sessionSummary`,
+`reportedTokens` and `summaryMeter` project nullable session/turn metadata from
+the keyed index. Open details refresh on changed digest revisions, not ordinary
+status upserts. Shared targets coalesce work until the last lease releases,
 which aborts reads and removes both ledger and published snapshot. Explicit
 index removals and `removeServer(id)` invalidate targets, including held reads.
 One-shot load/get consumers retain at most 32 unleased targets in
@@ -300,9 +316,11 @@ navigation clears attention marks only when the session identity changes.
 `release({draft: "kept" | "dropped", keys?})` states whether released stored
 drafts survive. Ordinary navigation defaults to kept. Dropping unsent content
 asks first, including background/family drafts named by keys; consent does not
-consume those drafts before the mutation succeeds. `Drafts.drop(key)` removes
-committed deletions and retires captured writers, so late uploads/sends cannot
-resurrect their deleted draft lifetime.
+consume those drafts before the mutation succeeds. Deleted native lifetimes keep
+unsent attention input in the same guard until normal guarded release; the
+metadata-only details surface can display it without a native send control.
+`Drafts.drop(key)` removes committed deletions and retires captured writers, so
+late uploads/sends cannot resurrect their deleted draft lifetime.
 
 `createShellNavigation({resources, actions, guard, drafts, session, presence,
 environment?, factory?})`
@@ -334,8 +352,8 @@ the ordinary activity projection still retains every mandatory phantom.
 family's drafts will be dropped, then invokes SessionActions.remove. Only a
 successful native deletion drops those drafts and releases the affected view.
 Cancellation or failure preserves the draft; later navigation remains
-authoritative. Native deletion events, rather than a second client task
-mutation, remove membership.
+authoritative. Authoritative deletion retains task membership and a tombstone;
+`removeFromTask` is a separate user-metadata-only action.
 
 `createSessionActions({resources, session, current})` owns session-target
 directory resolution (index, matching selected info, then authoritative lookup),
@@ -617,7 +635,7 @@ are automatic only while both serving transport and native link are live;
 disconnected requests wait again. Index projection subtracts covered subtrees
 without losing manual sibling attention or changing native metadata.
 NotificationTriggers accepts this same projection and `refresh` compares
-policy/link changes against its retained raw index. Shell, rows, tabs, badges,
+policy/link changes against the current shared index. Shell, rows, tabs, badges,
 toasts and takeovers consume that projection.
 
 `NotificationHub(policy, run, error)` is an empty framework-free registry.
@@ -635,12 +653,20 @@ cannot consume a newer note. Invocation never assumes that a resolved command
 actually selected the session. Consumers call `viewed` after real guarded
 selection and focus.
 
-`NotificationTriggers` observes accepted index frames, using the first snapshot
-after each connection's `reset` as a silent baseline. Root attention roll-ups
-already include children; roots produce one keyed done/input/error note per
-sidecar. Error observations remain genuine independent backend observations.
-`notificationPolicy` is separately selected, injecting host preferences, focus,
-visibility and viewed root. General messages use the in-page surface. The hub
-itself knows no concrete channel, application, backend, browser or UI framework.
-The standalone Deno notification consumer routes external job acceptance through
-the public command hub and proves stale-note isolation.
+`NotificationTriggers(emit, retract, project?, read?)` observes accepted index
+frames. The application supplies `read(server)` from its shared keyed owner;
+standalone compositions lazily use that same reduction implementation. Only the
+previous notification projection is retained for edge detection. Digest updates
+preserve live notes and delivery identity; real eviction or tombstones retract
+them. Detail usage likewise compares reduced metadata revisions and deletion
+state rather than decoding wire operations.
+
+NotificationTriggers uses the first snapshot after each connection's `reset` as
+a silent baseline. Root attention roll-ups already include children; roots
+produce one keyed done/input/error note per sidecar. Error observations remain
+genuine independent backend observations. `notificationPolicy` is separately
+selected, injecting host preferences, focus, visibility and viewed root. General
+messages use the in-page surface. The hub itself knows no concrete channel,
+application, backend, browser or UI framework. The standalone Deno notification
+consumer routes external job acceptance through the public command hub and
+proves stale-note isolation.

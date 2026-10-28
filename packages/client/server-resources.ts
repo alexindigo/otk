@@ -10,7 +10,7 @@ import type {
 import { type ApprovalModel, createApprovals } from "./approvals.ts";
 import type { ApprovalAttention } from "./approval-attention.ts";
 import type { SidecarConnection } from "./connection.ts";
-import { type ClientIndex, type MergedEntry, sessionKey } from "./index.ts";
+import type { ClientIndex, MergedEntry } from "./index.ts";
 import {
   createInbox,
   type InboxModel,
@@ -33,6 +33,7 @@ export interface FrameObserver {
   removed?(id: string): void;
 }
 export interface ServerResources {
+  scope(project?: ProjectSelection, sessions?: string[]): void;
   sidecars: ClientSidecars;
   inbox(id: string): InboxModel;
   approvals(id: string): ApprovalModel;
@@ -48,6 +49,8 @@ export interface ServerResources {
   connectionKey(id: string): number | undefined;
   attention(id: string): ApprovalAttention;
   entries(): MergedEntry[];
+  /** Unprojected metadata borrowed from the shared keyed-index owner. */
+  indexEntries(sidecar: string): readonly IndexEntry[];
   projectEntries(project: ProjectSelection): MergedEntry[];
   projects(
     now: number,
@@ -84,11 +87,22 @@ export function createServerResources(o: {
   const tabModels = new Map<string, ClientTabs>();
   const observers = new Set<FrameObserver>();
   let stopped = false;
+  let visible: { project: ProjectSelection; sessions: string[] } | undefined;
+  const sendScope = (
+    id: string,
+    value: { directory?: string; sessions: string[] },
+  ) => {
+    if (advertised(id, "digests")) {
+      void sidecars.connection(id).rpc.call("digests.scope", value).catch(
+        o.error ?? console.warn,
+      );
+    }
+  };
   const live = () => {
     if (stopped) throw new Error("Server resources are stopped");
   };
   const entry = (id: string, sessionID: string): IndexEntry | undefined =>
-    o.index.state.entries[sessionKey(id, sessionID)];
+    o.index.get(id, sessionID);
   const server = (id: string): SidecarState | undefined =>
     sidecars.state.list.find((s) => s.id === id);
   const connected = (id: string): boolean => server(id)?.status === "connected";
@@ -161,11 +175,34 @@ export function createServerResources(o: {
       if (!accepted) sidecars.connection(id).send({ t: "resnapshot" });
     }
     inbox(id).receive(frame);
+    if (frame.t === "welcome" && visible?.project.sidecarId === id) {
+      sendScope(id, {
+        directory: visible.project.directory,
+        sessions: visible.sessions,
+      });
+    }
     for (const observer of observers) observer.frame?.(id, frame, accepted);
   };
   const sidecars = o.sidecars(receive);
   return {
     sidecars,
+    scope(project, sessions = []) {
+      if (
+        visible?.project.sidecarId === project?.sidecarId &&
+        visible?.project.directory === project?.directory &&
+        JSON.stringify(visible?.sessions) === JSON.stringify(sessions)
+      ) return;
+      if (visible && visible.project.sidecarId !== project?.sidecarId) {
+        sendScope(visible.project.sidecarId, { sessions: [] });
+      }
+      visible = project && { project, sessions: [...new Set(sessions)] };
+      if (visible) {
+        sendScope(visible.project.sidecarId, {
+          directory: visible.project.directory,
+          sessions: visible.sessions,
+        });
+      }
+    },
     inbox,
     approvals,
     tabs,
@@ -177,6 +214,10 @@ export function createServerResources(o: {
     advertised,
     attention,
     entries,
+    indexEntries: (id) =>
+      Object.values(o.index.state.entries).filter((entry) =>
+        entry.sidecarId === id
+      ),
     receive,
     taskActions: (p) =>
       createTaskActions(sidecars.connection(p.sidecarId).rpc, p.directory),

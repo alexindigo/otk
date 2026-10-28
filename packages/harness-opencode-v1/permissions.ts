@@ -2,8 +2,8 @@
 import type { PermissionsCapability } from "@otk/harness";
 import {
   belongsToSession,
-  type IndexEntry,
   type PermissionRequest,
+  type SessionLookup,
 } from "@otk/protocol";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
@@ -16,7 +16,7 @@ export interface PendingPermission {
 export function permissions(
   client: Client,
   directory: Directory,
-  entry: (id: string) => IndexEntry | undefined,
+  entry: SessionLookup,
   pending: () => Iterable<PendingPermission>,
 ): PermissionsCapability {
   return {

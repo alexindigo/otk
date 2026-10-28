@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { OtkDb } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
-import { key, MetadataChanges } from "./metadata.ts";
+import { key } from "./metadata.ts";
+import { Changes } from "../changes.ts";
 export const projectsMigrations: FeatureMigrations = {
   feature: "projects",
   migrations: [{
@@ -17,7 +18,10 @@ export interface ProjectRecord {
   lastVisit: number;
   inactiveAt?: number;
 }
-export class Projects extends MetadataChanges {
+export type ProjectChange = { user: string; project: ProjectRecord } | {
+  discovered: true;
+};
+export class Projects extends Changes<ProjectChange> {
   constructor(readonly db: OtkDb, readonly now: () => number = Date.now) {
     super(db);
   }
@@ -35,7 +39,7 @@ export class Projects extends MetadataChanges {
     const result = this.db.connection.prepare(
       "INSERT OR IGNORE INTO project_directories SELECT ?, COALESCE(MAX(position)+1,0), ? FROM project_directories",
     ).run(key(directory), this.now());
-    if (result.changes) this.changed();
+    if (result.changes) this.changed({ discovered: true });
   }
   list(user: string): ProjectRecord[] {
     key(user);
@@ -75,8 +79,9 @@ export class Projects extends MetadataChanges {
     this.db.connection.prepare(
       "INSERT INTO projects(user,directory,position,added,last_visit) SELECT ?,?,COALESCE(MAX(position)+1,0),1,? FROM projects WHERE user=? ON CONFLICT(user,directory) DO UPDATE SET added=1",
     ).run(user, key(directory), this.now(), user);
-    this.changed();
-    return this.get(user, directory);
+    const project = this.get(user, directory);
+    this.changed({ user, project });
+    return project;
   }
   visit(user: string, directory: string): ProjectRecord {
     this.get(user, directory);
@@ -84,8 +89,9 @@ export class Projects extends MetadataChanges {
     this.db.connection.prepare(
       "UPDATE projects SET last_visit=?, inactive_at=CASE WHEN inactive=1 THEN ? ELSE NULL END WHERE user=? AND directory=?",
     ).run(now, now, user, directory);
-    this.changed();
-    return this.get(user, directory);
+    const project = this.get(user, directory);
+    this.changed({ user, project });
+    return project;
   }
   inactive(user: string, directory: string, inactive: boolean): ProjectRecord {
     const previous = this.get(user, directory), now = this.now();
@@ -96,11 +102,29 @@ export class Projects extends MetadataChanges {
     this.db.connection.prepare(
       "UPDATE projects SET inactive=?, inactive_at=?, last_visit=? WHERE user=? AND directory=?",
     ).run(inactive ? 1 : 0, inactive ? now : null, visit, user, directory);
-    this.changed();
-    return this.get(user, directory);
+    const project = this.get(user, directory);
+    this.changed({ user, project });
+    return project;
   }
   users(): string[] {
     return this.db.connection.prepare("SELECT DISTINCT user FROM projects")
       .all().map((r) => String(r.user));
+  }
+  policies(): { user: string; directory: string; inactive: boolean }[] {
+    return this.db.connection.prepare(
+      "SELECT user,directory,inactive FROM projects",
+    ).all().map((r) => ({
+      user: String(r.user),
+      directory: String(r.directory),
+      inactive: !!r.inactive,
+    }));
+  }
+  /** Activity path needs no baseline SELECT; return the committed changed fact. */
+  reactivate(user: string, directory: string): void {
+    const now = this.now();
+    const row = this.db.connection.prepare(
+      "UPDATE projects SET inactive=0,last_visit=last_visit+max(0,?-coalesce(inactive_at,?)),inactive_at=NULL WHERE user=? AND directory=? AND inactive=1 RETURNING *",
+    ).get(now, now, key(user), key(directory));
+    if (row) this.changed({ user, project: this.#record(row) });
   }
 }

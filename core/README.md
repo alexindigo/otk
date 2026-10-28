@@ -60,9 +60,9 @@ provider/config requests and credential filtering belong to the adapter.
 trimmed 1–200-character title, then forwards to that capability. Application
 composition selects this feature alongside the existing session registrations.
 It also contributes validated `session.delete` through `sessionActions.remove`.
-InboxFeature removes explicit deleted IDs from task membership on index `remove`
-operations, including IDs outside the current window. Snapshot/window eviction
-never removes membership; task-store broadcasts publish each committed removal.
+Authoritative deletion publishes a retained tombstone, preserving task
+membership. Explicit index eviction never mutates tasks. Removing a deleted
+member is a separate idempotent user-metadata operation.
 
 `session.fork` validates its optional inclusive `through` message and activates
 the returned session's project through the same creation bookkeeping port as
@@ -112,6 +112,12 @@ and `text` are shared core implementation helpers. `IndexStore` extends the
 harness-neutral `SessionIndex` owner and adds wire revisions/batching. Core
 passes that same owner in the backend sink, so directory, family, attention and
 transport reads share one authoritative metadata index.
+
+Index snapshots establish publication boundaries: already-counted queued writes
+are delivered before a replacement baseline, never replayed after it. Hello
+captures that baseline before admitting the connection to live index delivery. A
+reset snapshot also covers synchronous observer writes, preserving their current
+metadata without a duplicate counted patch afterward.
 
 ## Example
 
@@ -249,6 +255,11 @@ bridge has no SQLite connection. Worker crashes retire that lifetime, mark known
 identities unready through the injected port and reconcile through one retry
 lifetime.
 
+`IndexStore.observeRemoval` publishes explicit eviction from the authoritative
+owner before its wire frame is queued. Approval-policy retirement uses that port
+and ordinary metadata observations; it does not decode index operations from
+transport. Browser consumers likewise use the shared keyed-index reduction.
+
 Cancelling the last read caller sends `{t:'cancel',request}` under its `run`.
 `DigestRequests` aborts that worker-owned read and releases the scheduler slot;
 unknown/finished cancellation is ignored. Releasing one of several coalesced
@@ -256,10 +267,38 @@ callers does not cancel the other callers. Clean shutdown joins requests and the
 scheduler, closes native/derived connections and acknowledges `stopped`; forced
 termination is reserved for failure.
 
+The shipped composition selects this worker and passes its optional port to the
+native adapter. Catalog parts seed metadata before digest deltas; the shared
+index preserves newer live status and attention. An accepted deletion event
+crosses the generation-fenced `DigestPort.deleted` port and commits
+independently of health/inventory. Current OTK intents classify matching
+deletions; stale generations and duplicate notifications do not change the
+retained outcome.
+
+The bridge coalesces accepted deletion identities and admits one bounded batch
+at a time, retaining them across worker retries. It restores current logical
+deletion intents before replaying those facts, then resumes provider catalog
+reconciliation. Provider health is not a prerequisite for committing accepted
+deletions or reading their cached tombstones.
+
+`digests.scope` is feature-owned and replaces one socket's visible priority
+hint. Generic `RequestLifetime` owns socket leases. A separate per-call
+`ctx.execution.signal` reaches usage detail: `rpc.cancel` releases only that
+connection's matching in-flight read, with unknown/completed IDs ignored. The
+registry's injected observation callback uses unique dispatch tokens for
+interactive pressure. Mutation handlers do not consume read cancellation.
+
+Inbox observers use hydrated project policy and seen/finish projections, updated
+by committed store changes. A busy→idle edge records its returned committed
+clock without a follow-up SELECT; digest observations perform no baseline SQL
+reads. Tombstones retire approval policy without creating synthetic finish
+edges.
+
 The layered `[digest]` policy is documented in `defaults/otk.toml`; positive
 integer bounds, the 200-row native ceiling and CPU duty bounds validate with
 node/environment diagnostics. The compile recipe embeds the literal worker and
 both migration trees and grants `systemMemoryInfo`. An independent compiled
 consumer runs off-source with empty runtime caches and observes native totals
-change and survive restart. Shipped application selection and the summary UI are
-the next composition step, rather than a temporary operator mode here.
+change and survive restart. The shipped binary is separately exercised
+off-source with empty caches, SSE summary changes, retained tombstones and a
+restart.

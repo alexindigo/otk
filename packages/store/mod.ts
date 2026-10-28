@@ -14,6 +14,7 @@ export type {
 export { sessionReferenceMigrations } from "./features/session-references.ts";
 export type { FeatureMigrations, Migration } from "./migrations.ts";
 export {
+  type ProjectChange,
   type ProjectRecord,
   Projects,
   projectsMigrations,

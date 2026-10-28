@@ -2,7 +2,9 @@
 // @deno-types="npm:@types/ws@8.18.1"
 import WebSocket from "ws";
 import type { ServerFrame } from "@otk/protocol";
+import type { IndexEntry } from "@otk/protocol";
 import { PROTOCOL_VERSION } from "@otk/protocol";
+import { type ClientIndex, createIndex } from "@otk/client";
 import { waitFor } from "./opencode.ts";
 import { resources } from "./resources.ts";
 export function ownSocket(socket: WebSocket): () => Promise<void> {
@@ -26,6 +28,8 @@ export class WsClient {
   frames: ServerFrame[] = [];
   ws: WebSocket;
   #next = 0;
+  #index?: ClientIndex;
+  #indexed = 0;
   #close: () => Promise<void>;
   constructor(readonly base: string, cookie?: string, origin = base) {
     resources();
@@ -35,6 +39,7 @@ export class WsClient {
     this.ws.on("message", (data) => {
       const frame: ServerFrame = JSON.parse(data.toString());
       this.frames.push(frame);
+      this.#reduceIndex();
       if (frame.t === "ping") this.send({ t: "pong" });
     });
     this.ws.on("error", () => {});
@@ -71,6 +76,22 @@ export class WsClient {
   }
   send(value: unknown): void {
     this.ws.send(JSON.stringify(value));
+  }
+  /** Lazy so raw-wire/timing consumers do not acquire another projection. */
+  entry(sessionID: string): IndexEntry | undefined {
+    this.#index ??= createIndex();
+    this.#reduceIndex();
+    return this.#index.get("test", sessionID);
+  }
+  #reduceIndex(): void {
+    if (!this.#index) return;
+    const frames = this.frames.slice(this.#indexed);
+    this.#indexed = this.frames.length;
+    for (const frame of frames) {
+      if (frame.t === "index.snapshot" || frame.t === "index.patch") {
+        if (!this.#index.receive("test", frame)) this.send({ t: "resnapshot" });
+      }
+    }
   }
   wait(
     predicate: (frame: ServerFrame) => boolean,

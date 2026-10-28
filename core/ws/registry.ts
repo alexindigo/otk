@@ -8,7 +8,15 @@ import { object } from "./params.ts";
 export interface RpcContext {
   harness: Harness;
   store: OtkDb;
+  request?: RequestLifetime;
+  execution?: { signal: AbortSignal };
   sessionDirectory(sessionID: string): Promise<string>;
+}
+/** Socket-owned leases are distinct from a single read's execution signal. */
+export interface RequestLifetime {
+  id: string;
+  signal: AbortSignal;
+  defer(release: () => void): void;
 }
 export interface RpcDefinition<P, R> {
   params(value: Record<string, unknown>): P;
@@ -16,9 +24,16 @@ export interface RpcDefinition<P, R> {
 }
 /** Dispatch has no knowledge of feature implementations or method names. */
 export class RpcRegistry {
-  #handlers = new Map<string, (p: Record<string, unknown>) => unknown>();
+  #handlers = new Map<
+    string,
+    (ctx: RpcContext, p: Record<string, unknown>) => unknown
+  >();
   readonly context: RpcContext;
-  constructor(harness: Harness, store: OtkDb) {
+  constructor(
+    harness: Harness,
+    store: OtkDb,
+    readonly observe?: (owner: string, active: boolean) => void,
+  ) {
     this.context = {
       harness,
       store,
@@ -35,16 +50,27 @@ export class RpcRegistry {
     }
     this.#handlers.set(
       method,
-      (p) => definition.handler(this.context, definition.params(p)),
+      (ctx, p) => definition.handler(ctx, definition.params(p)),
     );
   }
   methods(): string[] {
     return [...this.#handlers.keys()];
   }
-  async dispatch(method: string, value: unknown): Promise<unknown> {
+  async dispatch(
+    method: string,
+    value: unknown,
+    request?: RequestLifetime,
+    execution?: { signal: AbortSignal },
+  ): Promise<unknown> {
     const params = object(value);
     const handler = this.#handlers.get(method);
     if (!handler) throw new HarnessError("method", `Unknown method: ${method}`);
-    return await handler(params);
+    const owner = crypto.randomUUID();
+    this.observe?.(owner, true);
+    try {
+      return await handler({ ...this.context, request, execution }, params);
+    } finally {
+      this.observe?.(owner, false);
+    }
   }
 }

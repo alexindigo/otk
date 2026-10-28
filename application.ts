@@ -49,13 +49,19 @@ import {
 } from "./core/mod.ts";
 import { InboxFeature } from "./core/features/inbox.ts";
 import { PermissionFeature } from "./core/features/approvals.ts";
+import { registerDigests } from "./core/features/digests.ts";
 
 /** Shipped application features, independent of the selected native backend. */
 export function startApplication(
   cfg: ServiceConfig,
   backend: Harness,
   staticRoot: string,
-  options: { upgrade?: (store: OtkDb) => void } = {},
+  options: {
+    upgrade?: (store: OtkDb) => void;
+    index?: IndexStore;
+    interactive?: (owner: string, active: boolean) => void;
+    attention?: (sessionID: string) => void;
+  } = {},
 ): Promise<CoreServer> {
   const store = new OtkDb(cfg.state.path, [
     prefsMigrations,
@@ -72,8 +78,8 @@ export function startApplication(
   try {
     options.upgrade?.(store);
     const prefs = new Prefs(store, prefsOptions);
-    const rpc = new RpcRegistry(backend, store);
-    const index = new IndexStore();
+    const rpc = new RpcRegistry(backend, store, options.interactive);
+    const index = options.index ?? new IndexStore();
     const inbox = new InboxFeature(
       {
         projects: new Projects(store),
@@ -84,6 +90,8 @@ export function startApplication(
       },
       index,
       () => cfg.auth.username.toLowerCase() || "local",
+      undefined,
+      options.attention,
     );
     sources.push(inbox);
     inbox.register(rpc);
@@ -104,6 +112,7 @@ export function startApplication(
     registerAgents(rpc, backend);
     registerModels(rpc, backend);
     registerUsage(rpc, backend);
+    registerDigests(rpc, backend);
     registerResources(rpc, backend);
     const approvals = backend.capabilities.permissions
       ? new PermissionFeature(

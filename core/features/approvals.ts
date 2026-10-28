@@ -33,18 +33,17 @@ export class PermissionFeature implements FrameSource {
     readonly capability: PermissionsCapability,
   ) {
     this.#stops = [
-      index.observe(() => this.#schedule()),
+      index.observe((entry) => {
+        if (entry.deleted) this.store.setAuto(entry.id, false);
+        this.#schedule();
+      }),
       index.listen((frame) => {
         if (frame.t === "index.snapshot") {
           this.#generation++;
           this.#failed.clear();
         }
-        if (frame.t === "index.patch") {
-          for (const op of frame.ops) {
-            if (op.op === "remove") this.store.setAuto(op.id, false);
-          }
-        }
       }),
+      index.observeRemoval((id) => this.store.setAuto(id, false)),
       store.listen((change) => {
         if (change.kind === "policy") this.#revision++;
         const frame: ServerFrame = change.kind === "policy"
@@ -71,6 +70,7 @@ export class PermissionFeature implements FrameSource {
     this.#failed.clear();
   }
   owner(id: string): string | undefined {
+    if (this.index.get(id)?.deleted) return;
     return autoApproveOwner(
       id,
       this.store.enabled(),
@@ -220,6 +220,12 @@ export class PermissionFeature implements FrameSource {
         return { sessionID: sessionID(p)!, enabled: p.enabled };
       },
       handler: async (ctx, input) => {
+        if (input.enabled && this.index.get(input.sessionID)?.deleted) {
+          throw new HarnessError(
+            "permission",
+            "Deleted sessions cannot enable auto-approve",
+          );
+        }
         if (
           input.enabled &&
           !canAutoApprove(await ctx.harness.core.getSession(input.sessionID))

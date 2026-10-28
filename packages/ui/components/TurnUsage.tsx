@@ -1,219 +1,116 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./TurnUsage.css" with { type: "text" };
-import { createSignal, For, Show } from "solid-js";
-import { type TurnUsage as Usage, usageCost, usageTokens } from "@otk/client";
-import Popover from "./surface/Popover.tsx";
-import { countLabel } from "./tools/count.ts";
-import { elapsed } from "./work-log.ts";
-import UsageCost from "./UsageCost.tsx";
+import { createSignal, onCleanup, Show } from "solid-js";
+import {
+  countLabel,
+  reportedTokens,
+  type TurnUsage as Usage,
+  usageCost,
+  usageTokens,
+} from "@otk/client";
+import type { UsageSummary } from "@otk/protocol";
+import Popover, { type PopoverControl } from "./surface/Popover.tsx";
+import UsageDetail from "./UsageDetail.tsx";
 import {
   contentOwner,
   useContentIdentity,
 } from "../features/transcript-context.tsx";
-import type { PopoverControl } from "./surface/Popover.tsx";
-
-/** Presentation only; the usage owner supplies every call, price and clock. */
-export default function TurnUsage(
-  props: { usage: Usage; showCost: boolean },
-): import("solid-js").Element {
+/** Cheap index summary; only opening acquires the injected detail lifetime. */
+export default function TurnUsage(props: {
+  summary?: UsageSummary;
+  state?: string;
+  showCost: boolean;
+  detail(): Usage | undefined;
+  error?(): string | undefined;
+  open?(): () => void;
+}): import("solid-js").Element {
   const [opened, setOpened] = createSignal(false);
-  let popover!: PopoverControl;
+  let release: (() => void) | undefined;
+  const close = () => {
+    setOpened(false);
+    release?.();
+    release = undefined;
+  };
+  onCleanup(close);
   const identity = useContentIdentity();
-  contentOwner(() => identity, { usage: () => popover.open() });
-  const summary = () =>
-    `${countLabel(props.usage.calls.length, "model call")} · ${
-      countLabel(
-        props.usage.tokens,
-        "token",
-        undefined,
-        usageTokens(props.usage.tokens),
-      )
-    }${props.showCost ? ` · ${usageCost(props.usage.cost)}` : ""}`;
-  const duration = (time: Usage["time"]) =>
-    time?.end === undefined ? "—" : elapsed(time.start, time.end);
+  const summary = () => {
+    if (props.state !== "ready" || !props.summary) {
+      return props.state === "unavailable" ? "Usage unavailable" : "Digesting…";
+    }
+    const value = props.summary, tokens = reportedTokens(value.tokens);
+    return `${countLabel(value.calls, "model call")} · ${
+      tokens === undefined
+        ? "Tokens unavailable"
+        : countLabel(tokens, "token", undefined, usageTokens(tokens))
+    }${
+      props.showCost
+        ? ` · ${
+          value.cost === null ? "Cost unavailable" : usageCost(value.cost)
+        }`
+        : ""
+    }`;
+  };
+  const label = () =>
+    `Turn usage: ${summary()}${
+      props.state === "ready" && props.showCost && props.summary?.cost != null
+        ? `; exact cost ${usageCost(props.summary.cost, "exact")}`
+        : ""
+    }`;
   return (
-    <Popover
-      class="otk-turn-usage"
-      triggerClass="otk-turn-usage-trigger"
-      label="Turn usage"
-      triggerLabel={`Turn usage: ${summary()}${
-        props.showCost
-          ? `; exact cost ${usageCost(props.usage.cost, "exact")}`
-          : ""
-      }`}
-      title="Turn usage"
-      size="wide"
-      preview
-      control={(control) => {
-        popover = control;
-      }}
-      trigger={<span>{summary()}</span>}
-      onOpen={() => setOpened(true)}
-      onClose={() => setOpened(false)}
+    <Show
+      when={!!props.open}
+      fallback={
+        <span class="otk-control-label" role="group" aria-label={label()}>
+          {summary()}
+        </span>
+      }
     >
-      <Show when={opened()}>
-        <div class="otk-usage-detail">
-          <dl class="otk-usage-summary">
-            <div data-usage-summary="calls">
-              <dt>Model calls</dt>
-              <dd>{props.usage.calls.length.toLocaleString("en-US")}</dd>
-            </div>
-            <div
-              data-usage-summary="context"
-              role="group"
-              aria-label={`Context peak: ${
-                props.usage.contextPeak.toLocaleString("en-US")
-              } tokens`}
-              title={`${
-                props.usage.contextPeak.toLocaleString("en-US")
-              } tokens`}
-            >
-              <dt>Context peak</dt>
-              <dd>{usageTokens(props.usage.contextPeak)}</dd>
-            </div>
-            <div
-              data-usage-summary="tokens"
-              role="group"
-              aria-label={`Total tokens: ${
-                props.usage.tokens.toLocaleString("en-US")
-              }`}
-              title={`${props.usage.tokens.toLocaleString("en-US")} tokens`}
-            >
-              <dt>Total tokens</dt>
-              <dd>{usageTokens(props.usage.tokens)}</dd>
-            </div>
-            <Show when={props.showCost}>
-              <div data-usage-summary="cost">
-                <dt>Total cost</dt>
-                <dd>
-                  <UsageCost value={props.usage.cost} />
-                </dd>
-              </div>
-            </Show>
-          </dl>
-          <div
-            class="otk-usage-scroll"
-            tabindex={0}
-            role="region"
-            aria-label="Model calls"
+      {(_available) => {
+        let popover!: PopoverControl;
+        contentOwner(() => identity, {
+          get usage() {
+            return props.open ? () => popover.open() : undefined;
+          },
+        });
+        return (
+          <Popover
+            class="otk-turn-usage"
+            triggerClass="otk-turn-usage-trigger"
+            label="Turn usage"
+            triggerLabel={label()}
+            title="Turn usage"
+            size="wide"
+            preview
+            control={(value) => {
+              popover = value;
+            }}
+            trigger={<span>{summary()}</span>}
+            onOpen={() => {
+              setOpened(true);
+              release ??= props.open?.();
+            }}
+            onClose={close}
           >
-            <table class="otk-usage-breakdown">
-              <thead>
-                <tr>
-                  <th scope="col">Call</th>
-                  <th scope="col">Activity</th>
-                  <th scope="col">Context</th>
-                  <For
-                    each={props.usage.categories}
-                    keyed={(category) => category.label}
-                  >
-                    {(category) => <th scope="col">{category().label}</th>}
-                  </For>
-                  <Show when={props.showCost}>
-                    <th scope="col">Cost</th>
-                  </Show>
-                  <th scope="col">Time</th>
-                </tr>
-              </thead>
-              <tbody>
-                <For each={props.usage.calls} keyed={(call) => call.id}>
-                  {(call, index) => (
-                    <tr data-call={call().id}>
-                      <th scope="row">{index() + 1}</th>
-                      <td
-                        class="otk-usage-activity"
-                        aria-label={call().activity}
-                        title={call().activity}
-                      >
-                        <span>{call().activity}</span>
-                      </td>
-                      <td>
-                        <span class="otk-usage-context">
-                          <span>{call().context.toLocaleString("en-US")}</span>
-                          <span
-                            class="otk-usage-context-bar"
-                            aria-hidden="true"
-                          >
-                            <span
-                              style={{
-                                width: `${
-                                  props.usage.contextPeak
-                                    ? call().context / props.usage.contextPeak *
-                                      100
-                                    : 0
-                                }%`,
-                              }}
-                            />
-                          </span>
-                        </span>
-                      </td>
-                      <For
-                        each={call().categories}
-                        keyed={(category) => category.label}
-                      >
-                        {(category) => (
-                          <td>{category().tokens.toLocaleString("en-US")}</td>
-                        )}
-                      </For>
-                      <Show when={props.showCost}>
-                        <td>
-                          <UsageCost value={call().cost} />
-                        </td>
-                      </Show>
-                      <td>{duration(call().time)}</td>
-                    </tr>
+            <Show when={opened()}>
+              <Show
+                when={!props.error?.()}
+                fallback={<p role="status">{props.error?.()}</p>}
+              >
+                <Show
+                  when={props.detail()}
+                  fallback={
+                    <p>{props.error?.() ?? "Loading usage breakdown…"}</p>
+                  }
+                >
+                  {(detail) => (
+                    <UsageDetail usage={detail()} showCost={props.showCost} />
                   )}
-                </For>
-              </tbody>
-              <tfoot>
-                <tr>
-                  <th scope="row" colspan="2">Total</th>
-                  <td>{props.usage.context.toLocaleString("en-US")}</td>
-                  <For
-                    each={props.usage.categories}
-                    keyed={(category) => category.label}
-                  >
-                    {(category) => (
-                      <td>
-                        <span>{category().tokens.toLocaleString("en-US")}</span>
-                        <Show
-                          when={props.showCost && category().cost !== undefined}
-                        >
-                          <small class="otk-usage-category-cost">
-                            <UsageCost value={category().cost!} />
-                          </small>
-                        </Show>
-                      </td>
-                    )}
-                  </For>
-                  <Show when={props.showCost}>
-                    <td>
-                      <UsageCost value={props.usage.cost} />
-                    </td>
-                  </Show>
-                  <td>{duration(props.usage.time)}</td>
-                </tr>
-              </tfoot>
-            </table>
-          </div>
-          <div class="otk-usage-notes">
-            <p class="otk-usage-note otk-usage-context-note">
-              New input + Cache read + Cache write = Context.
-            </p>
-            <Show
-              when={props.showCost &&
-                props.usage.categories.some((category) =>
-                  category.cost !== undefined
-                )}
-            >
-              <p class="otk-usage-note">
-                Category costs use model prices. The total is reported by the
-                backend.
-              </p>
+                </Show>
+              </Show>
             </Show>
-          </div>
-        </div>
-      </Show>
-    </Popover>
+          </Popover>
+        );
+      }}
+    </Show>
   );
 }

@@ -172,6 +172,9 @@ test("message details show configured agent colour, queued-to-answered transitio
       `document.querySelector('[data-session="${s.id}"]').dataset.status==='idle' && document.querySelector('.otk-messages').textContent.includes('Queued prompt answered.') && !document.querySelector('.otk-queued')`,
       60000,
     );
+    await browser.poll(
+      "(()=>{const footers=[...document.querySelectorAll('.otk-message-footer')];return footers.length>0 && footers.every(footer=>footer.textContent.includes('build') && /\\ds/.test(footer.textContent))})()",
+    );
     const footers = await browser.evaluate<string[]>(
       "[...document.querySelectorAll('.otk-message-footer')].map(el=>el.textContent)",
     );

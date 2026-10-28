@@ -33,9 +33,9 @@ heartbeattimeout = 25 # OTK_HARNESS_HEARTBEATTIMEOUT — seconds without SSE byt
 reconnectmax = 30 # OTK_HARNESS_RECONNECTMAX — maximum reconnect backoff seconds
 
 [index]
-days = 30 # OTK_INDEX_DAYS — index sessions updated within this window
+days = 30 # OTK_INDEX_DAYS — recent-background priority horizon in days; older sessions remain indexed
 
-# Worker digest policy (service selection follows in the next composition change).
+# Worker digest scheduling and publication policy.
 [digest]
 batch = 100 # OTK_DIGEST_BATCH — header/identity rows per slice, maximum 200
 slicems = 8 # OTK_DIGEST_SLICEMS — cooperative budget in milliseconds

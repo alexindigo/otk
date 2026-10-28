@@ -137,3 +137,8 @@
 .otk-session-crumb.is-editing .otk-crumb-title {
   overflow: visible;
 }
+.otk-session-crumb.is-deleted .otk-crumb-title,
+.otk-tab-open.is-deleted .otk-control-label {
+  color: var(--deleted-fg);
+  text-decoration: line-through;
+}

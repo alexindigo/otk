@@ -17,6 +17,8 @@ export interface DirtySession {
   messages?: string[];
 }
 export interface DigestPort {
+  /** Optional publication budget for a consumer's live metadata reconciliation. */
+  readonly publishrows?: number;
   start(): Promise<void>;
   catalog(
     connection: number,
@@ -25,6 +27,12 @@ export interface DigestPort {
     { entries: SessionMetadata[]; authoritative: boolean; hints?: string[] }
   >;
   observe(connection: number, dirty: readonly DirtySession[]): void;
+  deleted(
+    connection: number,
+    sessionID: string,
+    revision: number,
+    metadata?: SessionMetadata,
+  ): Promise<void>;
   detail(sessionID: string, signal: AbortSignal): Promise<SessionUsage>;
   deleteIntent(
     sessionID: string,
@@ -76,4 +84,6 @@ export interface DigestPublication {
   sessionID: string;
   revision: number;
   delta: DigestDelta;
+  /** A newly retained identity must be seeded before its first digest delta. */
+  metadata?: SessionMetadata;
 }

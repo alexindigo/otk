@@ -76,6 +76,7 @@ export function registerSessionTargetCommands(commands: CommandHub, actions: {
   open(target: Selection): boolean;
   pin(target: Selection): Promise<boolean>;
   close(target?: Selection): Promise<boolean>;
+  eligible?(target: Selection): { live: boolean; close: boolean };
 }): () => void {
   const shown = (target: Selection) => {
     const current = actions.current();
@@ -91,7 +92,7 @@ export function registerSessionTargetCommands(commands: CommandHub, actions: {
       context: {
         kind: "session",
         items: (target?: Selection) =>
-          !target || shown(target)
+          !target || shown(target) || actions.eligible?.(target).live === false
             ? []
             : [{ key: "open", title: "Open", args: target }],
         order: 0,
@@ -118,7 +119,8 @@ export function registerSessionTargetCommands(commands: CommandHub, actions: {
         order: 10,
       },
       enabled: (_ctx, target?: Selection) =>
-        !!target && actions.exists(target) && actions.connected(target),
+        !!target && actions.exists(target) && actions.connected(target) &&
+        actions.eligible?.(target).live !== false,
       run: (_ctx, target: Selection) => actions.pin(target),
     }),
     commands.register({
@@ -135,7 +137,9 @@ export function registerSessionTargetCommands(commands: CommandHub, actions: {
       },
       enabled: (_ctx, input?: Selection) => {
         const target = input ?? actions.current();
-        return !!target && actions.exists(target) && actions.connected(target);
+        return !!target && actions.exists(target) &&
+          actions.connected(target) &&
+          actions.eligible?.(target).close !== false;
       },
       run: (_ctx, target?: Selection) => actions.close(target),
     }),

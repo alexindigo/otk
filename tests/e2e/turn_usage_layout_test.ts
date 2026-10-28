@@ -7,6 +7,7 @@ import { Cdp } from "../support/cdp.ts";
 import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { publishUsage } from "../support/usage-summary.ts";
 
 const trigger = ".otk-turn-usage > button";
 const panel = ".otk-turn-usage :popover-open";
@@ -89,6 +90,7 @@ async function setup(count: number) {
   f.app.backend.core.listMessages = (_id, opts) =>
     Promise.resolve(messages.slice(-opts.limit));
   const b = await Cdp.launch(root), client = new WsClient(f.url);
+  publishUsage(f.app.index, ledger.snapshot());
   await client.connect();
   await b.goto(`${f.url}/#/local/tstv1-core`);
   await b.poll(
@@ -118,6 +120,9 @@ for (const count of [3, 120]) {
         );
         await hover(b, trigger);
         await b.poll(`!!document.querySelector('${panel}')`);
+        await b.poll(
+          `document.querySelectorAll('.otk-usage-breakdown tbody tr').length===${count}`,
+        );
         // Baseline captures precede the first contract assertion.
         if (shots) {
           await Deno.mkdir(shots, { recursive: true });
@@ -309,6 +314,7 @@ for (const count of [3, 120]) {
         });
         await b.evaluate(`document.querySelector('${trigger}').focus()`);
         await b.poll(`!!document.querySelector('${panel}')`);
+        await b.poll(`!!document.querySelector('${scroll}')`);
         await b.key("Tab");
         await b.poll(
           `document.activeElement===document.querySelector('${scroll}')`,

@@ -2,6 +2,7 @@
 /** OTK application core: backend-neutral services and feature adapters. */
 export { type CoreOptions, type CoreServer, startCore } from "./service.ts";
 export {
+  type RequestLifetime,
   type RpcContext,
   type RpcDefinition,
   RpcRegistry,

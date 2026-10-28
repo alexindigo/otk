@@ -12,6 +12,7 @@ import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { publishUsage } from "../support/usage-summary.ts";
 
 test("U14 r2 one money rule and exact title-free accessibility reach overlay, footer, meter and session rows", async () => {
   const root = await fixture();
@@ -100,6 +101,10 @@ test("U14 r2 one money rule and exact title-free accessibility reach overlay, fo
       ] as const
     ) {
       amount = value;
+      publishUsage(
+        f.app.index,
+        new UsageLedger("tstv1-core", [usageHeader(message())]).snapshot(),
+      );
       await b.reload();
       await b.poll(
         "!!document.querySelector('.otk-context-meter .otk-usage-cost') && !!document.querySelector('.otk-session-cost') && !!document.querySelector('.otk-turn-usage > button')",

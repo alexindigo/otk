@@ -463,6 +463,22 @@ async function capture(b: Cdp, name: string) {
   if (destination) await b.screenshot(join(destination, `${name}.png`));
 }
 
+/** Deletion retires native ownership while preserving the navigable identity. */
+async function retainedDeletedDetails(b: Cdp, id: string, title: string) {
+  const row = `[data-session="${id}"]`;
+  await b.poll(
+    `(()=>{const row=document.querySelector('${row}'),title=row?.querySelector('.otk-row-title'),rect=title?.getBoundingClientRect();return row?.classList.contains('is-deleted') && row.getAttribute('aria-label')?.startsWith('Deleted session, ') && title?.textContent===${
+      JSON.stringify(title)
+    } && rect.width>0 && rect.height>0 && getComputedStyle(title).textDecorationLine.includes('line-through')})()`,
+  );
+  await b.click(row);
+  await b.poll(
+    `(()=>{const details=document.querySelector('.otk-deleted-session'),rect=details?.getBoundingClientRect();return location.hash.endsWith('/${id}') && document.querySelector('${row}')?.getAttribute('aria-current')==='page' && rect?.width>0 && rect.height>0 && details.querySelector('h1')?.textContent===${
+      JSON.stringify(title)
+    } && [...details.querySelectorAll('dd')].some(fact=>fact.textContent==='${id}') && /^Deleted (through OTK|from the agent service) on /.test(details.querySelector('p')?.textContent) && !document.querySelector('.otk-prompt') && !document.querySelector('[data-role=assistant]')})()`,
+  );
+}
+
 test("working family deletion names helpers and aborts before native removal", async () => {
   const f = await browserFixture();
   const mutations: string[] = [];
@@ -526,7 +542,7 @@ test("working family deletion names helpers and aborts before native removal", a
     );
     await b.click(item);
     await b.poll(
-      `!document.querySelector('[data-session="${root.id}"]') && !document.querySelector('[data-session="${child.id}"]') && location.hash.startsWith('#project/')`,
+      `!document.querySelector('[data-tab="${root.id}"]') && !document.querySelector('[data-tab="${child.id}"]') && location.hash.startsWith('#project/')`,
     );
     assertEquals(mutations, [
       `POST /session/${root.nativeID}/abort`,
@@ -537,6 +553,8 @@ test("working family deletion names helpers and aborts before native removal", a
       Error,
       "404",
     );
+    await retainedDeletedDetails(b, root.id, "Working family");
+    await retainedDeletedDetails(b, child.id, "Family helper");
     assertEquals(b.errors, []);
   } finally {
     await client?.close();
@@ -695,13 +713,15 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await b.click(item);
       await b.dialog(() => b.click(item), true);
       await b.poll(
-        `!document.querySelector('[data-session="${session.id}"]') && !document.querySelector('[data-tab="${session.id}"]') && location.hash.startsWith('#project/')`,
+        `!document.querySelector('[data-tab="${session.id}"]') && location.hash.startsWith('#project/')`,
       );
       await assertRejects(
         () => f.oc.request(`/session/${session.id}`),
         Error,
         "404",
       );
+      await retainedDeletedDetails(b, session.id, "Draft to protect");
+      await capture(b, `${theme}-delete-retained-details`);
 
       const empty = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
@@ -747,7 +767,9 @@ for (const theme of ["otk-dark", "otk-light"]) {
         event.method === "Page.javascriptDialogOpening"
       ).length;
       await b.click(item);
-      await b.poll(`!document.querySelector('[data-session="${empty.id}"]')`);
+      await b.poll(
+        `!document.querySelector('[data-tab="${empty.id}"]') && location.hash.startsWith('#project/')`,
+      );
       assertEquals(
         b.events.filter((event) =>
           event.method === "Page.javascriptDialogOpening"
@@ -760,6 +782,8 @@ for (const theme of ["otk-dark", "otk-light"]) {
         Error,
         "404",
       );
+      await retainedDeletedDetails(b, empty.id, "Empty draft");
+      await capture(b, `${theme}-delete-empty-retained-details`);
       assertEquals(b.errors, []);
     } finally {
       await client?.close();

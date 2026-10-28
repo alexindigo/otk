@@ -19,6 +19,7 @@ export function createSession(
     entry,
     solidState,
     catalogConnection,
+    true,
   );
   if (catalogConnection) {
     createEffect(() => {

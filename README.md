@@ -102,7 +102,8 @@ On first run, choose **Password**, enter a username and password, and select
 **None**, which disables OTK login. Password setup saves a PBKDF2 hash and a
 generated signing key in private `auth.toml` in OTK's state directory. Usernames
 are case-insensitive. After login, the project list and Sessions view show your
-opencode sessions; the live index defaults to the last 30 days.
+opencode sessions. The index includes all sessions; the recent-background
+priority horizon defaults to 30 days.
 
 TOTP is configured in the operator file, not the setup form. After password
 setup, add this to `~/.config/otk/otk.toml` and restart OTK:
@@ -156,6 +157,21 @@ transaction. A conflicting task membership stops startup with the database
 unchanged. The upgrade is repeat-safe and preserves unrelated metadata; a
 downgrade to beta.1 after this migration is unsupported. Back up your OTK state
 before upgrading if you need to retain a beta.1 installation.
+
+Session and turn summaries now come from a background worker's independent
+`digest.db` beside `otk.db`. It contains rebuildable metadata, never transcripts
+or tool bodies. Rows, the context meter and reply footers use the complete
+index; only opening a usage breakdown reads the call ledger. Incomplete
+reconciliation shows **Digesting…** and unreported usage stays unavailable
+rather than zero. The `[digest]` defaults document batching, scheduling and
+resource bounds.
+
+Deleting a native session retains its last metadata and task membership as a
+tombstone. Select its struck-through row to see details, copy its title, remove
+it from its task or close its view. An external deletion retains unsent browser
+input; normal navigation still asks before releasing unsaved editor/attention
+input. A reappearing native identity becomes live again under the same session
+ID. Enabled auto-approve policy is retired on deletion and is not restored.
 
 | # | Area              | Behavior                                                                                                                                                                                                                                                                               |
 | - | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -298,7 +314,7 @@ independent image attachments until they are explicitly removed or sent.
 | 8  | Harness Basic auth                    | `OTK_HARNESS_USERNAME`, `OTK_HARNESS_PASSWORD`             | `opencode`, empty password                                                     |
 | 9  | Harness database                      | `OTK_HARNESS_DB`                                           | `$XDG_DATA_HOME/opencode/opencode.db` or `~/.local/share/opencode/opencode.db` |
 | 10 | Heartbeat timeout / reconnect ceiling | `OTK_HARNESS_HEARTBEATTIMEOUT`, `OTK_HARNESS_RECONNECTMAX` | 25 / 30 seconds                                                                |
-| 11 | Index window                          | `OTK_INDEX_DAYS`                                           | 30 days                                                                        |
+| 11 | Recent-background priority horizon    | `OTK_INDEX_DAYS`                                           | 30 days; older sessions remain indexed                                         |
 
 API endpoints live under `/api/`; everything else is static UI. Authentication
 uses server-set HttpOnly cookies. Browser mutations and WebSocket upgrades have

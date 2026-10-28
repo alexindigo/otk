@@ -154,13 +154,21 @@ export default function Code(
     Record<number, { owner: number; tokens: HighlightToken[][] } | undefined>
   >({});
   const [error, setError] = createSignal("");
-  const input = createMemo(() =>
-    Object.freeze({
-      text: props.text,
-      lang: (props.lang || "text").toLowerCase(),
-      streaming: props.streaming ?? false,
-    })
-  );
+  let currentInput:
+    | Readonly<{ text: string; lang: string; streaming: boolean }>
+    | undefined;
+  const input = createMemo(() => {
+    const text = props.text,
+      lang = (props.lang || "text").toLowerCase(),
+      streaming = props.streaming ?? false;
+    // Content/header replacements do not change the code producer's identity.
+    // Both layout and capture borrow the same normalized source snapshot.
+    if (
+      currentInput?.text === text && currentInput.lang === lang &&
+      currentInput.streaming === streaming
+    ) return currentInput;
+    return currentInput = Object.freeze({ text, lang, streaming });
+  });
   const tails = new Map<number, () => boolean>();
   const tailFocus = new Map<
     number,
