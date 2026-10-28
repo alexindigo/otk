@@ -119,6 +119,41 @@ Deno.test("removing a direct-route server detaches even while its project metada
   }
 });
 
+Deno.test("a late catalog establishes the selected project while its transcript is still loading", () => {
+  const f = fixture("#/remote/tstv1-loading");
+  try {
+    const view = {
+      selected: { sidecarId: "remote", sessionID: "tstv1-loading" },
+      directory: undefined,
+      loading: true,
+      settings: false,
+      connected: true,
+      finish: 0,
+    };
+    f.session.state.info = undefined;
+    f.navigation.observeView(view);
+    assertEquals(f.navigation.state.project, undefined);
+    f.entries("remote", [shellEntry("tstv1-loading", "/late")]);
+    f.navigation.observeView(view);
+    assertEquals(f.navigation.state.project, {
+      sidecarId: "remote",
+      directory: "/late",
+    });
+    assertEquals(
+      f.resources.projectEntries(f.navigation.state.project!).length,
+      1,
+    );
+    assertEquals(
+      f.calls,
+      [],
+      "Metadata readiness cannot mark unseen content seen or request bodies",
+    );
+    assertEquals(f.location.hash, "#/remote/tstv1-loading");
+  } finally {
+    f.stop();
+  }
+});
+
 Deno.test("legacy session links show the compatibility notice without requesting native session resources", () => {
   const f = fixture("#/local/ses_legacy");
   try {

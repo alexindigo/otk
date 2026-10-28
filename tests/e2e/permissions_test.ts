@@ -193,7 +193,7 @@ test("E4 real subagent permission appears on parent dock with child title", asyn
       await browser.evaluate(
         `document.querySelector('[data-session="${
           children[0].id
-        }"]')?.closest('li')?.dataset.parent`,
+        }"]')?.closest('[data-parent]')?.dataset.parent`,
       ),
       session.id,
     );

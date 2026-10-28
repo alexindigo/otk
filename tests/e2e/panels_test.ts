@@ -62,6 +62,12 @@ test("registered panel views, width and collapsed state persist in host preferen
         JSON.stringify(f.entries[0].directory)
       }`,
     );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelectorAll('.otk-project-sessions').length",
+      ),
+      0,
+    );
     const separator = '[aria-label="Right panel width"]';
     const point = await b.evaluate<{ x: number; y: number }>(
       `(()=>{const r=document.querySelector(${
@@ -119,6 +125,12 @@ test("registered panel views, width and collapsed state persist in host preferen
     );
     await b.click(".otk-panel-collapse");
     await b.poll("document.querySelector('.otk-right-panel').hidden");
+    assertEquals(
+      await b.evaluate(
+        "document.querySelectorAll('[data-external-view],.otk-project-sessions').length",
+      ),
+      0,
+    );
     await b.poll(
       "!!document.querySelector('.otk-right-rail [data-panel-view=external-view]:not(:disabled)')",
     );
@@ -262,7 +274,7 @@ test("Sessions groups the selected project's parent-child tree by task, filters 
     await b.poll("location.hash==='#/local/tstv1-otk/tstv1-helper'");
     assertEquals(
       await b.evaluate(
-        "[...document.querySelectorAll('.otk-session-group')].map(e=>({title:e.getAttribute('aria-label'),ids:[...e.querySelectorAll('[data-session]')].map(e=>e.dataset.session)}))",
+        "[...document.querySelectorAll('.otk-session-group')].map(e=>({title:e.getAttribute('aria-label'),ids:[...document.querySelectorAll('.otk-project-session-tree [role=group]')].filter(g=>g.getAttribute('aria-label')===e.getAttribute('aria-label')).map(g=>g.querySelector('[data-session]').dataset.session)}))",
       ),
       [
         {
@@ -277,7 +289,7 @@ test("Sessions groups the selected project's parent-child tree by task, filters 
     );
     assertEquals(
       await b.evaluate(
-        "document.querySelector('[data-session=tstv1-nested]').closest('li').dataset.depth",
+        "document.querySelector('[data-session=tstv1-nested]').closest('[data-depth]').dataset.depth",
       ),
       "2",
     );

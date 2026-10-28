@@ -271,7 +271,7 @@ test("control labels stay single-line across transcript, chrome, menus, pickers 
         await b.poll("!document.querySelector('.otk-right-panel').hidden");
         await inspect("sessions-panel");
         const section = await b.evaluate<boolean>(
-          `[...document.querySelectorAll('.otk-session-group h3 .otk-control-label')].some(el=>el.title===${
+          `[...document.querySelectorAll('h3[data-session-group] .otk-control-label')].some(el=>el.title===${
             JSON.stringify(longName)
           }&&el.textContent===el.title&&el.scrollWidth>el.clientWidth&&getComputedStyle(el).textOverflow==='ellipsis'&&el.getBoundingClientRect().right<=el.parentElement.getBoundingClientRect().right+.5)`,
         );

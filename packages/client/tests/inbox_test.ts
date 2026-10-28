@@ -46,6 +46,16 @@ function snapshot(): InboxSnapshot {
     pathTemplates: [],
   };
 }
+Deno.test("inbox distinguishes its initial unknown snapshot from accepted empty metadata", () => {
+  const inbox = createInbox({
+    call: () => Promise.reject(new Error("No request")),
+  });
+  assertEquals(Reflect.get(inbox.state, "ready"), false);
+  inbox.receive({ t: "inbox", inbox: { ...snapshot(), projects: [] } });
+  assertEquals(Reflect.get(inbox.state, "ready"), true);
+  assertEquals(inbox.state.inbox.tasks, []);
+  assertEquals(inbox.state.inbox.projects, []);
+});
 Deno.test("inbox roll-up gives blocked, unseen-finished, working then idle priority without treating idle startup as a finish", () => {
   const inbox = snapshot(),
     idle = entry("idle"),
@@ -407,4 +417,53 @@ Deno.test("helper URLs select their owning task and removed membership preserves
   tabs.update(input);
   tabs.preview("helper");
   assertEquals(tabs.state.selected, { kind: "task", id: "helper-task" });
+});
+
+Deno.test("selected helpers reconcile task ownership and remembered identity when task or ancestry metadata arrives late", () => {
+  for (const late of ["tasks", "ancestry"]) {
+    const inbox = snapshot(),
+      tabs = createTabs(() => {
+        throw new Error("No promotion");
+      });
+    const root = entry("root"),
+      helper = {
+        ...entry("helper"),
+        parentID: late === "ancestry" ? undefined : "root",
+      };
+    const nested = { ...entry("nested"), parentID: "helper" };
+    const task = {
+      id: "root-task",
+      directory: "/p",
+      name: "Root",
+      order: 0,
+      sessions: ["root"],
+    };
+    if (late === "ancestry") inbox.tasks.push(task);
+    const input = { directory: "/p", entries: [root, helper, nested], inbox };
+    tabs.update(input);
+    tabs.preview("nested");
+    assertEquals(tabs.state.selected, { kind: "session", id: "nested" });
+    if (late === "tasks") inbox.tasks.push(task);
+    else helper.parentID = "root";
+    tabs.update(input);
+    assertEquals(tabs.state.selected, { kind: "task", id: "root-task" });
+    assertEquals(tabs.state.sessionID, "nested");
+    assertEquals(tabs.sessionFor("root-task"), "nested");
+    assertEquals(tabs.state.preview, undefined);
+    inbox.tasks.push({
+      ...task,
+      id: "helper-task",
+      sessions: ["helper"],
+      order: 1,
+    });
+    tabs.update(input);
+    assertEquals(tabs.state.selected, { kind: "task", id: "helper-task" });
+    assertEquals(tabs.sessionFor("helper-task"), "nested");
+    inbox.tasks = [task];
+    helper.parentID = undefined;
+    tabs.update(input);
+    assertEquals(tabs.state.selected, { kind: "session", id: "nested" });
+    assertEquals(tabs.state.sessionID, "nested");
+    tabs.stop();
+  }
 });

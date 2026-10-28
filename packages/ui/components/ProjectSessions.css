@@ -52,9 +52,9 @@
   min-height: 0;
   overflow: auto;
 }
-.otk-session-group h3 {
+.otk-session-group-heading {
   height: 32px;
-  margin: 4px 0 0;
+  margin: 0;
   padding: 0 var(--project-inset);
   display: flex;
   align-items: center;

@@ -154,6 +154,8 @@ export interface InboxRpc {
   ): Promise<RpcResult<M>>;
 }
 export interface InboxState {
+  /** The initial snapshot is unknown until its first accepted metadata frame. */
+  ready: boolean;
   inbox: InboxSnapshot;
 }
 export interface InboxModel {
@@ -172,7 +174,8 @@ export function createInbox(
   report: (error: unknown) => void = (error) =>
     console.error("Visit bookkeeping failed after successful action", error),
 ): InboxModel {
-  const store = factory<{ inbox: InboxSnapshot }>({
+  const store = factory<InboxState>({
+    ready: false,
     inbox: {
       projects: [],
       tasks: [],
@@ -194,7 +197,10 @@ export function createInbox(
     },
     receive(frame: ServerFrame): void {
       if (frame.t === "inbox") {
-        store.update((draft) => store.reconcile(draft.inbox, frame.inbox));
+        store.update((draft) => {
+          store.reconcile(draft.inbox, frame.inbox);
+          draft.ready = true;
+        });
       }
     },
     async openProject(directory: string): Promise<void> {

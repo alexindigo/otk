@@ -6,6 +6,7 @@ import {
   createDrafts,
   createForkNotes,
   createInputGuard,
+  createListScopes,
   createServerResources,
   createSessionActions,
   createSessionRename,
@@ -15,6 +16,8 @@ import {
   type Drafts,
   type ForkNotes,
   type InputGuard,
+  type ListInteraction,
+  type ProjectSelection,
   type ServerResources,
   type SessionActions,
   sessionKey,
@@ -28,6 +31,7 @@ import { createSession } from "./session.ts";
 import { createSidecars } from "./sidecars.ts";
 
 export interface ShellState {
+  listInteraction(project: ProjectSelection, task?: string): ListInteraction;
   resources: ServerResources;
   session: ClientSession;
   drafts: Drafts;
@@ -50,6 +54,8 @@ export function createShellState(o: { api: URL }): ShellState {
       createSidecars(receive, { connection: { api: o.api } }),
   });
   const { sidecars, entry } = resources;
+  const listScopes = createListScopes();
+  resources.observe({ removed: (id) => listScopes.remove(id) });
   const session = createSession(
     (id) => sidecars.connection(id),
     entry,
@@ -144,6 +150,7 @@ export function createShellState(o: { api: URL }): ShellState {
     if (value) resources.syncTabs(value.p, value.input, value.selected);
   });
   return {
+    listInteraction: listScopes.get,
     resources,
     session,
     drafts,

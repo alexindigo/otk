@@ -221,7 +221,7 @@ test("C2 session targets: tabs, chips, rows, task actions and project menu have 
     await rightClick(b, '[data-session="tstv1-otk"]');
     await invoke(b, "Add to task: Delivery");
     await b.poll(
-      `!!document.querySelector('[data-session-group="${task.id}"] [data-session="tstv1-otk"]')`,
+      `(()=>{const items=[...document.querySelectorAll('.otk-project-session-tree [data-session-group],.otk-project-session-tree [data-session]')],row=document.querySelector('[data-session="tstv1-otk"]'),position=items.indexOf(row);return position>=0 && items.slice(0,position).findLast(el=>el.hasAttribute('data-session-group'))?.dataset.sessionGroup==='${task.id}'})()`,
     );
     await rightClick(b, '[data-session="tstv1-otk"]');
     assertEquals(await labels(b), [

@@ -9,6 +9,11 @@ explicitly. Authoritative native deletion retains session details and task
 membership, retires approval policy and preserves unsent browser input. A
 reappearing identity resumes its existing view.
 
+**Performance.** Sessions renders a measured window of the active project's
+hierarchy. Search, scroll anchors, focused rows and in-place edits retain their
+identities while panels unmount or lists change. Project and required session
+activity indicators remain visible independently of list rendering.
+
 **Compatibility.** The native adapter/package is now `opencode-v1` /
 `@otk/harness-opencode-v1`. The old `harness.type = "opencode1"` spelling still
 loads with a deprecation message; environment precedence is unchanged. Session

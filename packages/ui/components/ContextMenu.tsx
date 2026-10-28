@@ -18,6 +18,12 @@ export default function ContextMenu(
   const { commands } = useCommandPorts();
   let targets: ContextTarget[] = [];
   let menu!: PopoverControl, returnFocus = () => {};
+  let retained: (() => void)[] = [];
+  const releaseOrigin = () => {
+    for (const release of retained) release();
+    retained = [];
+  };
+  onCleanup(releaseOrigin);
   onCleanup(registerBrowserContextCommands(commands));
   const open = (
     path: EventTarget[],
@@ -29,6 +35,7 @@ export default function ContextMenu(
     height = 0,
   ) => {
     menu.close(() => {});
+    releaseOrigin();
     targets = focused === document.body && reason === "keyboard"
       ? []
       : browserContextTargets(
@@ -42,6 +49,12 @@ export default function ContextMenu(
     const origin =
       path.find((node): node is HTMLElement => node instanceof HTMLElement) ??
         props.root;
+    origin.dispatchEvent(
+      new CustomEvent("otk-context-retain", {
+        bubbles: true,
+        detail: { release: retained },
+      }),
+    );
     menu.open({ x, y, width, height, origin, focus: returnFocus }, reason);
   };
   onSettled(() => {
@@ -149,6 +162,7 @@ export default function ContextMenu(
         menu = control;
       }}
       onClose={() => {
+        releaseOrigin();
         targets = [];
         returnFocus = () => {};
       }}

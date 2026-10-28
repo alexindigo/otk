@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { InboxSnapshot, IndexEntry, TaskRecord } from "@otk/protocol";
-import { belongsToSession } from "@otk/protocol";
 import { type InboxStatus, inboxStatus, rollup } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
+import { familyTask, sessionFamily } from "./session-tree.ts";
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
   id: string;
@@ -114,17 +114,17 @@ export function createTabs(
     }
     return result;
   }
-  const contains = (task: TaskRecord, id: string) =>
-    task.sessions.some((root) =>
-      belongsToSession(
-        id,
-        root,
-        (id) =>
-          input.entries.find((e) =>
-            e.id === id && e.directory === task.directory
-          ),
-      )
+  const taskFor = (id: string) =>
+    familyTask(
+      input.inbox.tasks,
+      sessionFamily(id, (id) =>
+        input.entries.find((e) =>
+          e.id === id && e.directory === input.directory
+        )),
+      input.directory,
     );
+  const contains = (task: TaskRecord, id: string) =>
+    taskFor(id)?.id === task.id;
   function sessionFor(taskID: string): string | undefined {
     const task = input.inbox.tasks.find((t) => t.id === taskID);
     const saved = remembered.get(taskID);
@@ -152,28 +152,29 @@ export function createTabs(
           delete draft.sessionID;
           delete draft.closed;
         }
-        if (draft.selected?.kind === "session") {
-          const task = input.inbox.tasks.find((t) =>
-            t.directory === input.directory &&
-            t.sessions.includes(draft.selected!.id)
-          );
-          if (task) {
-            draft.selected = { kind: "task", id: task.id };
-            delete draft.preview;
-          }
-        }
         if (
           draft.selected?.kind === "task" &&
           !input.inbox.tasks.some((t) =>
             t.id === draft.selected!.id && t.directory === input.directory
           )
         ) delete draft.selected;
-        if (draft.selected?.kind === "task" && draft.sessionID) {
-          const task = input.inbox.tasks.find((t) =>
-            t.id === draft.selected!.id
-          )!;
-          if (!contains(task, draft.sessionID)) {
-            draft.selected = { kind: "session", id: draft.sessionID };
+        // Metadata arrival and user preview use the same current family owner.
+        // Keep the viewed identity when grouping/topology changes underneath it.
+        const id = draft.sessionID;
+        if (
+          id &&
+          input.entries.some((e) =>
+            e.id === id && e.directory === input.directory
+          )
+        ) {
+          const task = taskFor(id);
+          draft.selected = {
+            kind: task ? "task" : "session",
+            id: task?.id ?? id,
+          };
+          if (task) {
+            remembered.set(task.id, id);
+            delete draft.preview;
           }
         }
         if (
@@ -224,12 +225,7 @@ export function createTabs(
           e.id === sessionID && e.directory === input.directory
         )
       ) throw new Error("Unknown project session");
-      const task =
-        input.inbox.tasks.find((t) =>
-          t.directory === input.directory && t.sessions.includes(sessionID)
-        ) ?? input.inbox.tasks.find((t) =>
-          t.directory === input.directory && contains(t, sessionID)
-        );
+      const task = taskFor(sessionID);
       selectionRevision++;
       store.update((draft) => {
         draft.selected = {

@@ -3,6 +3,7 @@ import { createContext, type Element, useContext } from "solid-js";
 import type {
   ApprovalModel,
   InboxModel,
+  ListInteraction,
   MergedEntry,
   ProjectSelection,
   Selection,
@@ -12,7 +13,7 @@ import type {
   SidecarState,
 } from "@otk/client";
 import type { Toggles } from "../components/Toggles.ts";
-import type { Message } from "@otk/protocol";
+import type { IndexEntry, Message } from "@otk/protocol";
 import type { ThemeEngine } from "../theme/engine.ts";
 export type { ProjectSelection } from "@otk/client";
 /** Live shell resources passed to features, never a component's internal state. */
@@ -34,6 +35,9 @@ export interface ShellPorts {
   openProject(project: ProjectSelection): void;
   project(): ProjectSelection | undefined;
   entries(): MergedEntry[];
+  entry(server: string, session: string): IndexEntry | undefined;
+  projectEntries(project: ProjectSelection): MergedEntry[];
+  listInteraction(project: ProjectSelection, task?: string): ListInteraction;
   selection(): Selection | undefined;
 }
 const Context = createContext<ShellPorts>();

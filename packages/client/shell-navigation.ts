@@ -407,6 +407,17 @@ export function createShellNavigation(o: {
         } else viewed = "";
         return;
       }
+      // Scope/row readiness belongs to the accepted metadata index. Transcript
+      // hydration gates seen bookkeeping below, never mounting the project list.
+      const indexed = resources.entry(
+        value.selected.sidecarId,
+        value.selected.sessionID,
+      );
+      const directory = indexed?.directory ??
+        (!value.loading ? value.directory : undefined);
+      if (directory && !value.settings && value.connected) {
+        project({ sidecarId: value.selected.sidecarId, directory });
+      }
       if (
         !value.directory || value.loading ||
         value.settings || !value.connected
@@ -415,7 +426,6 @@ export function createShellNavigation(o: {
       }
       const target = value.selected,
         key = sessionKey(target.sidecarId, target.sessionID);
-      project({ sidecarId: target.sidecarId, directory: value.directory });
       remember(
         { sidecarId: target.sidecarId, directory: value.directory },
         target.sessionID,

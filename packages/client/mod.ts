@@ -82,3 +82,6 @@ export {
   type ForkNotes,
 } from "./fork-notes.ts";
 export * from "./session-summary.ts";
+export * from "./window.ts";
+export * from "./list-scopes.ts";
+export { createSessionTree, type SessionListRow } from "./session-tree.ts";

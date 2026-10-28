@@ -4,6 +4,7 @@ import { useShellPorts } from "../shell/context.tsx";
 import type { PanelDefinition, SurfaceRegistry } from "../registries/shell.ts";
 import ProjectSessions from "../components/ProjectSessions.tsx";
 import { SessionsIcon } from "../components/ChromeIcons.tsx";
+import { Show } from "solid-js";
 
 export function registerSessionsPanel(
   registry: SurfaceRegistry<PanelDefinition>,
@@ -15,41 +16,55 @@ export function registerSessionsPanel(
     component: () => {
       const shell = useShellPorts(), { commands } = useCommandPorts();
       return (
-        <ProjectSessions
-          project={shell.project()}
-          entries={shell.entries()}
-          selected={shell.selection()}
-          rename={shell.rename}
-          showCost={shell.toggles.state.prefs.showCost}
-          auto={(id) =>
-            !!shell.project() &&
-            !!shell.approvals(shell.project()!.sidecarId).owner(id)}
-          cost={(sessionID) => {
-            const project = shell.project();
-            return shell.toggles.state.prefs.showCost && project
-              ? shell.entries().find((entry) =>
-                entry.sidecarId === project.sidecarId &&
-                entry.id === sessionID && entry.digest.state === "ready"
-              )?.digest.total?.cost ?? undefined
-              : undefined;
+        <Show
+          fallback={
+            <p class="otk-muted">Choose a project to browse its sessions.</p>
+          }
+          when={shell.project() &&
+            JSON.stringify([
+              shell.project()!.sidecarId,
+              shell.project()!.directory,
+            ])}
+          keyed
+        >
+          {(identity) => {
+            const [sidecarId, directory] = JSON.parse(identity) as [
+              string,
+              string,
+            ];
+            const project = { sidecarId, directory };
+            return (
+              <Show when={shell.inbox(sidecarId).state.ready}>
+                <ProjectSessions
+                  project={project}
+                  entries={shell.projectEntries(project)}
+                  entry={(id) => shell.entry(project.sidecarId, id)}
+                  interaction={shell.listInteraction(project)}
+                  selected={shell.selection()}
+                  rename={shell.rename}
+                  showCost={shell.toggles.state.prefs.showCost}
+                  auto={(id) => !!shell.approvals(project.sidecarId).owner(id)}
+                  inbox={(id) => shell.inbox(id).state.inbox}
+                  connected={(id) =>
+                    shell.servers().some((s) =>
+                      s.id === id && s.status === "connected"
+                    )}
+                  onOpen={(entry) =>
+                    commands.run("session.preview", {
+                      sidecarId: entry.sidecarId,
+                      sessionID: entry.id,
+                    })}
+                  onPin={(entry) =>
+                    commands.run("session.pin", {
+                      sidecarId: entry.sidecarId,
+                      sessionID: entry.id,
+                    })}
+                  onCreate={(project) => commands.run("session.new", project)}
+                />
+              </Show>
+            );
           }}
-          inbox={(id) => shell.inbox(id).state.inbox}
-          connected={(id) =>
-            shell.servers().some((s) =>
-              s.id === id && s.status === "connected"
-            )}
-          onOpen={(entry) =>
-            commands.run("session.preview", {
-              sidecarId: entry.sidecarId,
-              sessionID: entry.id,
-            })}
-          onPin={(entry) =>
-            commands.run("session.pin", {
-              sidecarId: entry.sidecarId,
-              sessionID: entry.id,
-            })}
-          onCreate={(project) => commands.run("session.new", project)}
-        />
+        </Show>
       );
     },
   });

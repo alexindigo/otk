@@ -118,6 +118,15 @@ Deno.test("session family projections preserve ancestry, task order and optional
     "middle",
   );
   assertEquals(
+    client.familyTask(
+      [task("root-owner", ["root"]), task("near-owner", ["middle"])],
+      client.sessionFamily("leaf", lookup),
+      "/project",
+    )?.id,
+    "near-owner",
+    "Inherited membership follows the nearest grouped ancestor, not task order",
+  );
+  assertEquals(
     client.familySelection({
       sidecarId: "s",
       sessionID: "leaf",
@@ -133,4 +142,62 @@ Deno.test("session family projections preserve ancestry, task order and optional
     }, lookup),
     { sidecarId: "s", sessionID: "missing", rootID: "hint" },
   );
+});
+
+Deno.test("hierarchy traverses deep helper chains iteratively with linear parent reads", () => {
+  let reads = 0;
+  const rows = Array.from({ length: 12000 }, (_, i) => ({
+    ...entry(`node-${i}`),
+    get parentID() {
+      reads++;
+      return i ? `node-${i - 1}` : undefined;
+    },
+  }));
+  const groups = sessionTree(rows, [task("chain", ["node-0"])], "/project");
+  assertEquals(groups[0].rows.length, rows.length);
+  assertEquals(groups[0].rows.at(-1)!.depth, rows.length - 1);
+  assertEquals(reads < rows.length * 12, true, `parent reads: ${reads}`);
+});
+
+Deno.test("index partitions and hierarchy identity survive summary/status changes", async () => {
+  const { createIndex, createSessionTree } = await import("@otk/client");
+  const index = createIndex();
+  index.receive("s", {
+    t: "index.snapshot",
+    rev: 1,
+    entries: [entry("one"), { ...entry("two"), directory: "/other" }],
+  });
+  const keys = index.ids("s", "/project"), other = index.ids("s", "/other");
+  const tree = createSessionTree();
+  const first = tree.rows(index.partition("s", "/project"), [], "/project");
+  index.receive("s", {
+    t: "index.patch",
+    rev: 2,
+    ops: [{ op: "upsert", entry: { ...entry("one"), status: "busy" } }],
+  });
+  assertEquals(index.ids("s", "/project") === keys, true);
+  assertEquals(index.ids("s", "/other") === other, true);
+  assertEquals(
+    tree.rows(index.partition("s", "/project"), [], "/project") === first,
+    true,
+  );
+  index.receive("s", {
+    t: "index.patch",
+    rev: 3,
+    ops: [{ op: "upsert", entry: { ...entry("one"), directory: "/other" } }],
+  });
+  assertEquals(index.ids("s", "/project"), []);
+  assertEquals(index.ids("s", "/other"), ["two", "one"]);
+  assertEquals(index.partition("s").map((e) => e.id), ["one", "two"]);
+  index.receive("s", {
+    t: "index.snapshot",
+    rev: 4,
+    entries: [{ ...entry("one"), directory: "/other" }, {
+      ...entry("two"),
+      directory: "/other",
+    }],
+  });
+  assertEquals(index.ids("s", "/other"), ["one", "two"]);
+  index.remove("s");
+  assertEquals(index.ids("s"), []);
 });

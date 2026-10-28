@@ -52,7 +52,7 @@ test("E1 project inbox and Sessions tree scoped by directory, descendants nested
     );
     assertEquals(
       await browser.evaluate(
-        `document.querySelector('[data-session="${child.id}"]')?.closest('li')?.dataset.parent`,
+        `document.querySelector('[data-session="${child.id}"]')?.closest('[data-parent]')?.dataset.parent`,
       ),
       root.id,
     );
@@ -141,6 +141,11 @@ test("E2 new session, trusted prompt, incremental structured markdown and idle o
     );
     await browser.poll(
       "!!document.querySelector('.otk-new-session:not(:disabled)')",
+    );
+    await browser.click('[aria-label="Open right panel"]');
+    await browser.click('[data-panel-view="sessions"]');
+    await browser.poll(
+      `!!document.querySelector('[data-session="${seed.id}"]')`,
     );
     await browser.click(".otk-new-session");
     await browser.poll(
@@ -478,6 +483,8 @@ test("E9 serving-sidecar wrong password error then correct login", async () => {
       "document.querySelector('.otk-server-status[data-connection=local]').title.includes(': connected;') && document.querySelectorAll('[data-project]').length === 1 && !document.querySelector('.otk-auth-view')",
     );
     await browser.click(".otk-project-open");
+    await browser.click('[aria-label="Open right panel"]');
+    await browser.click('[data-panel-view="sessions"]');
     await browser.poll(
       "document.querySelectorAll('[data-session]').length === 1",
     );
@@ -710,7 +717,10 @@ test("web sidecar restart resubscribes open session and refetches final content 
       event.method === "Page.frameNavigated"
     ).length;
     await server.stop();
-    await f.sidecar({ server: { port: server.port } });
+    await f.sidecar({
+      server: { port: server.port },
+      state: { path: join(f.oc.root, `otk-${server.port}`) },
+    });
     await browser.poll(
       `document.querySelector('.otk-server-status[data-connection=local]').title.includes(': connected;') && document.querySelector('.otk-text pre')?.textContent.includes('const otk = 1;') && document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle'`,
       60_000,

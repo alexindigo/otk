@@ -128,7 +128,7 @@ export default function RightPanel(props: {
           <p role="alert" class="otk-error">{error()}</p>
         </Show>
         <Show
-          when={active()}
+          when={!props.layout.rightCollapsed && active()}
           keyed
           fallback={<p class="otk-muted">No available views.</p>}
         >

@@ -129,11 +129,7 @@ export function createServerResources(o: {
     approvals(id).attention(linked(id));
   const entries = (): MergedEntry[] =>
     sidecars.state.list.flatMap((s) =>
-      attention(s.id).entries(
-        Object.values(o.index.state.entries).filter((e) =>
-          e.sidecarId === s.id
-        ),
-      )
+      attention(s.id).entries(o.index.partition(s.id))
     );
   const inbox = (id: string): InboxModel => {
     live();
@@ -146,7 +142,9 @@ export function createServerResources(o: {
   };
   const tabInput = (p: ProjectSelection): TabInput => ({
     directory: p.directory,
-    entries: entries().filter((e) => e.sidecarId === p.sidecarId),
+    entries: attention(p.sidecarId).entries(
+      o.index.partition(p.sidecarId, p.directory),
+    ),
     inbox: inbox(p.sidecarId).state.inbox,
   });
   const tabs = (p: ProjectSelection): ClientTabs => {
@@ -214,10 +212,7 @@ export function createServerResources(o: {
     advertised,
     attention,
     entries,
-    indexEntries: (id) =>
-      Object.values(o.index.state.entries).filter((entry) =>
-        entry.sidecarId === id
-      ),
+    indexEntries: (id) => o.index.partition(id),
     receive,
     taskActions: (p) =>
       createTaskActions(sidecars.connection(p.sidecarId).rpc, p.directory),
@@ -225,13 +220,13 @@ export function createServerResources(o: {
       sidecars.state.list.some((s) => advertised(s.id, capability)),
     connectionKey: (id) => server(id)?.connectionVersion,
     projectEntries: (p) =>
-      entries().filter((e) =>
-        e.sidecarId === p.sidecarId && e.directory === p.directory
+      attention(p.sidecarId).entries(
+        o.index.partition(p.sidecarId, p.directory),
       ),
     projects: (now, ageing) =>
       sidecars.state.list.flatMap((s) =>
         inboxProjects(
-          entries().filter((e) => e.sidecarId === s.id),
+          attention(s.id).entries(o.index.partition(s.id)),
           inbox(s.id).state.inbox,
           now,
           ageing,

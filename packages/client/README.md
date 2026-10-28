@@ -43,6 +43,13 @@ or the keyed metadata lookup after accepted frames have been reduced. Standalone
 consumers use the same `createIndex` owner rather than implement another
 decoder.
 
+`ids(server, directory?)` borrows a structurally stable partition of identities;
+`partition(server, directory?)` borrows its current keyed entries. Membership is
+maintained at the index owner, with per-partition binding clocks. Status and
+digest changes do not reorder identities or replace unaffected partitions.
+ServerResources projects each server/project from these partitions, including
+the complete activity inputs independently of mounted views.
+
 Session snapshots publish essential session/message data independently of
 optional attention and sibling reads. Optional failures retain last-good data
 and expose diagnostics. Live attention changes replay over their own resource
@@ -328,9 +335,14 @@ owns project/settings/error state, accepted routing, guarded preview/pin/open,
 creation revisions and seen/visit bookkeeping. It wraps the existing
 injected-history navigation owner. Later intents supersede pending creation
 navigation and errors, while captured task actions retain their server and
-project. View observations record first visits after content readiness;
-subsequent finish observations mark seen only while focused and visible. Browser
-confirmation, history and presence remain injectable. `shellTitle` is the pure
+project. `InboxState.ready` distinguishes unknown initial task metadata from an
+accepted empty snapshot; list hierarchies mount after that first snapshot so
+initial grouping cannot restore an anchor from invented ungrouped data. Retained
+metadata stays ready across reconnects. Accepted index metadata establishes the
+active project and list scope even while a direct route's transcript is loading.
+View observations record first visits after content readiness; subsequent finish
+observations mark seen only while focused and visible. Browser confirmation,
+history and presence remain injectable. `shellTitle` is the pure
 session/project/application title projection.
 
 Project switches restore the last accepted session through this same navigation
@@ -415,6 +427,11 @@ The hierarchy owner also exports `sessionFamily`, `familyTask` and
 requested ID and the selected root without filtering directories; its task
 membership predicate uses full ancestry and the indexed directory. These remain
 distinct call shapes of the same pure task projection.
+
+Family membership resolves the nearest grouped identity before task order. Tab
+preview, accepted metadata reconciliation and remembered-session validation
+share that projection, so late task/ancestry data cannot strand a helper in an
+idle phantom or replace the viewed identity with its root.
 
 `createServerResources({sidecars, index, factory?})` constructs its sidecar
 collection through the injected receiver factory and owns lazily cached inbox,
@@ -562,6 +579,27 @@ nearest explicitly grouped ancestor; explicit helper membership takes
 precedence. Title search retains matching ancestor paths, while missing parents
 and malformed cycles cannot hide sessions. Keep each server's entries separate
 at the caller.
+
+Hierarchy construction indexes parents, explicit membership, inherited ownership
+and child adjacency once, then walks iteratively. Deep chains cannot overflow
+the JavaScript stack; cycles and missing parents remain reachable. Task members
+retain explicit order. `createSessionTree().rows(...)` caches flattened keyed
+headings/session descriptors using structural/search inputs only. Live row facts
+continue to come from `ClientIndex.get`, never cached hierarchy entries.
+
+`createWindow()` owns browser-independent measured viewport math. Supply ordered
+keys and role estimates with `update`, apply incremental sizes with `measure`,
+and read `range(scrollTop, height, overscan?, pinned?)`. The result contains the
+exclusive start/end, before/after space and ordered visible keys, including
+disjoint interaction pins. Prefix sums support incremental measurements and
+binary viewport lookup; `offset`, `size`, `total`, `anchor` and `restore` share
+that same geometry. Anchors name identities and an intra-row offset, so changes
+above the viewport do not turn into positional selection or scroll jumps.
+
+`createListScopes()` owns plain query/scroll/anchor interaction values keyed by
+server, directory and optional task. It retains no DOM, content or observers;
+server removal retires only that server's values. Views can unmount and borrow
+the same interaction on return.
 
 ## Commands
 

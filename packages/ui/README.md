@@ -353,6 +353,14 @@ preference. `registerSessionsPanel` contributes the project-local, task-grouped
 searchable parent/child tree. Its feature adapter reads common `ShellPorts`
 resources; the panel knows no views.
 
+Only the selected available panel component mounts while expanded. Switching or
+collapsing releases its component, commands and observers. The Sessions feature
+mounts only its active project, borrowing project entries, keyed current facts
+and framework-free list interaction state from ShellPorts. Search and the
+identity-based scroll anchor survive panel/project replacement without hidden
+view DOM. Project lights and required phantom tabs use the complete index and
+remain independent of these presentation lifetimes.
+
 `registerTimelinePanel` contributes Timeline between Sessions and Activity in
 the application composition. Its adapter projects `ShellPorts.transcript`
 through the client `timelinePrompts` helper and the part registry's source
@@ -374,6 +382,28 @@ one grid area; visibility switches on hover intent, keyboard focus or selection
 while the cell keeps the larger intrinsic width. Action hit targets do not move,
 and the label has no independent inset hover highlight.
 
+ListRow's `--list-row-height` is also its editing control track. Primary
+leading, input and trailing slots share that track while validation prose wraps
+below the input and contributes its real height to measurement. TitleEditor owns
+feedback wrapping independently of the surrounding single-line control label.
+
+`VirtualList` is the reusable viewport over public client `createWindow` math.
+It receives keys, role sample classes, render content, optional pinned keys and
+plain position/control callbacks. It measures those shared CSS roles and mounted
+items with its own ResizeObserver; there are no copied session/header offsets.
+Normal-flow spacers retain geometry for the viewport plus five extra rows per
+side and actual interaction pins. Content is constructed once per keyed
+lifetime, with live data in nested bindings, preserving native focus while the
+range moves. `control.reveal(key)` exposes navigation without consumer DOM
+access.
+
+Focus, editing and shared context-menu origins pin their identities until their
+owners release them, including across search exclusion. The context-menu owner
+announces its origin lifetime through the generic bubbling `otk-context-retain`
+event's release callbacks. No session action or overlay is implemented by the
+viewport. Session rows retain named group context and their position/set-size
+semantics even when adjacent rows or headings are unmounted.
+
 `SidebarRail` is the shared frame for both collapsed sides: one 48px rail, 52px
 corner reservation, leading controls, scrolling body and optional footer. The
 shared `--rail-width`, `--chrome-header-height` and `--control-size` tokens own
@@ -385,8 +415,8 @@ ProjectInbox also uses this frame when expanded. Search stays in its expanded
 vertical slot above the project lights; collapsing never moves their y
 positions. The right rail stacks available registered panel icons with vertical
 selection; activating one atomically selects and opens that panel through
-`onLayout`. Its expanded panel remains mounted while hidden, preserving view
-lifetime.
+`onLayout`. Its selected content unmounts when collapsed; retained interaction
+belongs to the feature's framework-free scope owner.
 
 `Shell({ theme, api })` binds `createShellState({api})` and composes the
 reusable three-region shell with selected UI registrations. The thin Solid

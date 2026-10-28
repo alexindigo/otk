@@ -39,6 +39,8 @@ export interface IndexState {
 export interface ClientIndex {
   state: IndexState;
   get(sidecarId: string, sessionID: string): MergedEntry | undefined;
+  ids(sidecarId: string, directory?: string): readonly string[];
+  partition(sidecarId: string, directory?: string): MergedEntry[];
   subscribe(listener: (state: IndexState) => void): () => void;
   receive(sidecarId: string, frame: IndexFrame): boolean;
   remove(sidecarId: string): void;
@@ -48,13 +50,59 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
   // clocks, so deferred painting can never govern action admission.
   const entries: Record<string, MergedEntry> = {};
   const clock = factory({ revision: 0, keys: {} as Record<string, number> });
+  const partitions = new Map<
+    string,
+    { members: Set<string>; ids?: readonly string[] }
+  >();
+  const partitionClock = factory({ keys: {} as Record<string, number> });
+  const partitionKey = (server: string, directory?: string) =>
+    JSON.stringify([server, directory]);
+  const touched = new Set<string>();
+  const put = (key: string, next?: MergedEntry) => {
+    const previous = entries[key];
+    for (const entry of [previous, next]) {
+      if (entry) {
+        touched.add(partitionKey(entry.sidecarId));
+        touched.add(partitionKey(entry.sidecarId, entry.directory));
+      }
+    }
+    const member = (entry: MergedEntry, add: boolean, directory?: string) => {
+      const p = partitionKey(entry.sidecarId, directory);
+      let partition = partitions.get(p);
+      if (!partition) partitions.set(p, partition = { members: new Set() });
+      if (add) partition.members.add(entry.id);
+      else partition.members.delete(entry.id);
+      partition.ids = undefined;
+    };
+    if (previous && (!next || previous.directory !== next.directory)) {
+      member(previous, false, previous.directory);
+    }
+    if (next && (!previous || previous.directory !== next.directory)) {
+      member(next, true, next.directory);
+    }
+    if (previous && !next) member(previous, false);
+    if (next && !previous) member(next, true);
+    if (next) entries[key] = next;
+    else delete entries[key];
+  };
+  const ids = (server: string, directory?: string) => {
+    const key = partitionKey(server, directory);
+    void partitionClock.state.keys[key];
+    const partition = partitions.get(key);
+    return partition ? partition.ids ??= [...partition.members] : emptyIDs;
+  };
+  const emptyIDs: readonly string[] = [];
   const state: IndexState = {
     get entries() {
       void clock.state.revision;
       return entries;
     },
   };
-  const publish = (changed: Set<string>) =>
+  const publish = (changed: Set<string>) => {
+    partitionClock.update((draft) => {
+      for (const key of touched) draft.keys[key] = (draft.keys[key] ?? 0) + 1;
+    });
+    touched.clear();
     clock.update((draft) => {
       draft.revision++;
       for (const key of changed) {
@@ -62,9 +110,13 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
         else delete draft.keys[key];
       }
     });
+  };
   const revisions = new Map<string, number>();
   return {
     state,
+    ids,
+    partition: (server, directory) =>
+      ids(server, directory).map((id) => entries[sessionKey(server, id)]),
     get(sidecarId, sessionID) {
       const key = sessionKey(sidecarId, sessionID);
       void clock.state.keys[key];
@@ -75,16 +127,38 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
       if (!acceptsPatch(revisions.get(sidecarId), frame)) return false;
       const changed = new Set<string>();
       if (frame.t === "index.snapshot") {
-        for (const [key, entry] of Object.entries(entries)) {
-          if (entry.sidecarId === sidecarId) {
-            delete entries[key];
+        const incoming = new Set(frame.entries.map((e) => e.id));
+        const order = new Map<string, Set<string>>();
+        for (const id of ids(sidecarId)) {
+          if (!incoming.has(id)) {
+            const key = sessionKey(sidecarId, id);
+            put(key);
             changed.add(key);
           }
         }
         for (const entry of frame.entries) {
           const key = sessionKey(sidecarId, entry.id);
-          entries[key] = { ...structuredClone(entry), sidecarId };
+          put(key, { ...structuredClone(entry), sidecarId });
           changed.add(key);
+          for (
+            const p of [
+              partitionKey(sidecarId),
+              partitionKey(sidecarId, entry.directory),
+            ]
+          ) {
+            let members = order.get(p);
+            if (!members) order.set(p, members = new Set());
+            members.add(entry.id);
+          }
+        }
+        // A complete replacement also owns order. Preserve borrowed identities
+        // when the order is unchanged, including ordinary warm resnapshots.
+        for (const [p, members] of order) {
+          const next = [...members], previous = partitions.get(p)!;
+          const old = previous.ids ?? [...previous.members];
+          if (
+            old.length !== next.length || old.some((id, i) => id !== next[i])
+          ) partitions.set(p, { members, ids: next });
         }
       } else {for (const op of frame.ops) {
           const key = sessionKey(
@@ -92,7 +166,7 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
             op.op === "upsert" ? op.entry.id : op.id,
           );
           if (op.op === "upsert") {
-            entries[key] = { ...structuredClone(op.entry), sidecarId };
+            put(key, { ...structuredClone(op.entry), sidecarId });
           } else if (op.op === "digest") {
             const entry = entries[key];
             if (!entry || op.revision < entry.digest.revision) continue;
@@ -101,7 +175,7 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
               ...structuredClone(op.turns.upsert),
             };
             for (const id of op.turns.remove) delete turns[id];
-            const next = entries[key] = {
+            const next = {
               ...entry,
               digest: {
                 ...structuredClone(op.summary),
@@ -111,7 +185,8 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
             };
             if (op.deleted) next.deleted = structuredClone(op.deleted);
             else delete next.deleted;
-          } else if (op.op === "remove") delete entries[key];
+            put(key, next);
+          } else if (op.op === "remove") put(key);
           else {
             const unhandled: never = op;
             throw new Error(
@@ -127,11 +202,10 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
     remove(sidecarId: string): void {
       revisions.delete(sidecarId);
       const changed = new Set<string>();
-      for (const [key, entry] of Object.entries(entries)) {
-        if (entry.sidecarId === sidecarId) {
-          delete entries[key];
-          changed.add(key);
-        }
+      for (const id of ids(sidecarId)) {
+        const key = sessionKey(sidecarId, id);
+        put(key);
+        changed.add(key);
       }
       publish(changed);
     },

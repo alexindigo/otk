@@ -84,7 +84,7 @@ test("command hints follow mounted hidden bindings, saved overrides, unbinding a
     assertEquals(sends[0].parts, [{ kind: "text", text: "First line\n" }]);
     f.app.index.upsert({ ...f.app.index.get(f.session.id)!, status: "busy" });
     await b.poll(
-      `document.querySelector('[data-session="${f.session.id}"]')?.dataset.status==='busy'`,
+      `!!document.querySelector('[data-crumb="${f.session.id}"] .otk-status-light[data-state=working]')`,
     );
     await b.key("q", 2);
     await b.poll(

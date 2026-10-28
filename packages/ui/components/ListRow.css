@@ -1,9 +1,10 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-list-row {
+  --list-row-height: 30px;
   min-width: 0;
   max-width: 100%;
   width: 100%;
-  height: 30px;
+  height: var(--list-row-height);
   padding: 0 var(--chrome-inset);
   text-align: left;
   color: var(--otk-fg-2);
@@ -39,9 +40,16 @@
 }
 .otk-list-row.is-editing {
   height: auto;
-  min-height: 30px;
+  min-height: var(--list-row-height);
   font-weight: 500;
 }
 .otk-list-row.is-editing .otk-list-row-label {
   overflow: visible;
+}
+.otk-list-row.is-editing .otk-list-row-content {
+  align-items: flex-start;
+}
+.otk-list-row.is-editing .otk-list-row-leading,
+.otk-list-row.is-editing .otk-list-row-trailing {
+  min-height: var(--list-row-height);
 }

@@ -14,6 +14,7 @@ import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { publishUsage } from "../support/usage-summary.ts";
 
 const row = (id: string) => `.otk-session-row[data-session="${id}"]`;
 const cost = (id: string) =>
@@ -138,6 +139,9 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     },
   ];
   for (const entry of entries) f.app.index.upsert(entry);
+  for (const ledger of ledgers.values()) {
+    publishUsage(f.app.index, ledger.snapshot());
+  }
   f.app.backend.core.getSession = (id) => {
     const entry = entries.find((e) => e.id === id)!;
     return Promise.resolve<ContentSession>({
@@ -177,10 +181,11 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     await c.rpc("prefs.set", { key: "animationsOff", value: true });
     await b.goto(`${f.url}/#/local/tstv1-core`);
     await b.poll(
-      "document.querySelectorAll('.otk-session-row').length===4 && document.querySelector('.otk-turn-usage > button')?.textContent==='102 model calls · 102 tokens · $1.02'",
+      "document.querySelector('.otk-turn-usage > button')?.textContent==='102 model calls · 102 tokens · $1.02'",
     );
     await b.click('[aria-label="Open right panel"]');
     await b.poll("!document.querySelector('.otk-right-panel').hidden");
+    await b.poll("document.querySelectorAll('.otk-session-row').length===4");
     // Capture visible rows even if their cost assertion fails.
     await capture("rows");
     await b.poll(
@@ -196,8 +201,8 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     );
     assertEquals(
       reads.filter((id) => id === "tstv1-core").length,
-      1,
-      "Panel and transcript join the same usage read",
+      0,
+      "Panel and transcript summaries admit no detail reads",
     );
     assert(
       !reads.includes("tstv1-other"),
@@ -256,6 +261,7 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     );
     const helper = f.app.index.get("tstv1-helper")!;
     f.app.index.upsert({ ...helper, timeUpdated: helper.timeUpdated + 1 });
+    publishUsage(f.app.index, ledgers.get("tstv1-helper")!.snapshot());
     await b.poll(`${cost("tstv1-helper")}==='$0.12'`);
     const live = step("tstv1-core", "live", .03);
     ledgers.get("tstv1-core")!.upsert(usageHeader(live));
@@ -263,6 +269,7 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
       op: "message.upsert",
       message: live,
     });
+    publishUsage(f.app.index, ledgers.get("tstv1-core")!.snapshot());
     f.app.connections.content("tstv1-core", {
       op: "message.upsert",
       message: live,

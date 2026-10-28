@@ -9,6 +9,7 @@
 }
 .otk-title-editor input {
   min-width: 0;
+  height: var(--list-row-height, var(--control-size));
   padding: 0 4px;
   line-height: inherit;
   font: inherit;
@@ -16,4 +17,6 @@
 }
 .otk-title-editor .otk-error {
   font-size: var(--text-meta);
+  white-space: normal;
+  overflow-wrap: anywhere;
 }

@@ -38,11 +38,7 @@ export class NotificationTriggers {
     readonly read?: (sidecar: string) => readonly IndexEntry[],
   ) {}
   #entries(sidecar: string): IndexEntry[] {
-    const entries = this.read?.(sidecar) ??
-      Object.values(this.#index?.state.entries ?? {}).filter((entry) =>
-        entry.sidecarId === sidecar
-      );
-    return [...entries];
+    return [...(this.read?.(sidecar) ?? this.#index?.partition(sidecar) ?? [])];
   }
   reset(sidecar: string): void {
     this.#index?.remove(sidecar);

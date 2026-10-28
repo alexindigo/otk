@@ -1,0 +1,21 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-virtual-list {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  overflow-anchor: none;
+}
+.otk-virtual-item {
+  display: flow-root;
+}
+.otk-virtual-space {
+  flex: none;
+  pointer-events: none;
+}
+.otk-virtual-measure {
+  position: absolute;
+  inset: 0 0 auto;
+  visibility: hidden;
+  pointer-events: none;
+}

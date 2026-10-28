@@ -63,6 +63,7 @@ export default function Shell(
     forkNotes,
     guard,
     navigation,
+    listInteraction,
   } = createShellState({ api: props.api });
   const {
     sidecars,
@@ -430,6 +431,9 @@ export default function Shell(
           openProject,
           project,
           entries,
+          entry,
+          projectEntries: resources.projectEntries,
+          listInteraction,
           selection: () => session.state.selection,
         }}
       >

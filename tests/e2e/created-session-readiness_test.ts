@@ -45,6 +45,12 @@ test("created-session readiness: trusted send reaches the provider and transcrip
     await browser.poll(
       "!!document.querySelector('.otk-new-session:not(:disabled)')",
     );
+    // A held-index row assertion needs the active Sessions viewport mounted.
+    await browser.click('[aria-label="Open right panel"]');
+    await browser.click('[data-panel-view="sessions"]');
+    await browser.poll(
+      `!!document.querySelector('[data-session="${seed.id}"]')`,
+    );
     await browser.evaluate("window.holdIndex = true");
     await browser.click(".otk-new-session");
     await browser.poll(
