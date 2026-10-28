@@ -1,6 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 /** SQLite storage and caller-composed feature migrations, without app policy. */
 export { OtkDb } from "./db.ts";
+export { digestMigrations } from "./features/digest.ts";
+export { DigestDb, DigestStore, digestTurnCursor } from "./digest.ts";
+export type {
+  DigestBookkeepingRecord,
+  DigestCommit,
+  DigestPersistence,
+  DigestSessionRecord,
+  DigestTurnRecord,
+  DigestUsageRecord,
+} from "./digest.ts";
 export { sessionReferenceMigrations } from "./features/session-references.ts";
 export type { FeatureMigrations, Migration } from "./migrations.ts";
 export {

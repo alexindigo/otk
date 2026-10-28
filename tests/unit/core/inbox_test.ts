@@ -38,6 +38,7 @@ test("core records real status edges at the single index owner and clears persis
   const index = new IndexStore(),
     feature = new InboxFeature(stores, index, "alice");
   const idle: IndexEntry = {
+    digest: { state: "digesting", revision: 0, turns: {} },
     id: "s",
     directory: "/p",
     projectID: "p",
@@ -100,6 +101,7 @@ test("core records real status edges at the single index owner and clears persis
 test("synchronous index observers see committed detached metadata on reset and every same-batch transition", () => {
   const index = new IndexStore(), transitions: string[] = [];
   const entry: IndexEntry = {
+    digest: { state: "digesting", revision: 0, turns: {} },
     id: "s",
     directory: "/p",
     projectID: "p",

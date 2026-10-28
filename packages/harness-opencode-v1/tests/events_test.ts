@@ -4,7 +4,7 @@ import { tempDir, test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import type { ContentOp } from "@otk/protocol";
-import type { IndexEntry } from "@otk/protocol";
+import type { SessionMetadata as IndexEntry } from "@otk/protocol";
 import { loadServiceConfig } from "../../../core/config/loader.ts";
 import { OpencodeV1Adapter as Opencode1Adapter } from "../adapter.ts";
 import { StreamBuffers } from "@otk/content";

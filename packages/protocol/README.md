@@ -126,6 +126,16 @@ through `rename(sessionID, title)` / `session.rename` and `remove(sessionID)` /
 welcome. Titles are trimmed and bounded to 1–200 characters by the feature's
 server validator.
 
+`SessionMetadata` is the live metadata write contract. Materialized `IndexEntry`
+adds `SessionDigest` and an optional tombstone. `UsageSummary` categories are
+independently nullable; reported zero is distinct from unknown. Digest patches
+carry session scalars and only changed/removed turn keys. Global index frame
+revisions fence duplicate/gapped frames; ordered accepted frames may carry
+sequential parts under an equal session digest revision. Metadata writes and
+digest writes have separate owners over the same identity. Optional `digests`
+contributes owner-scoped priority hints, never a catalog filter or a legacy
+capability promise.
+
 `sessionActions.fork(sessionID, through?)` / `session.fork` creates a new
 session through the supplied message (inclusive). Without a boundary it copies
 the visible conversation, respecting a pending rollback.

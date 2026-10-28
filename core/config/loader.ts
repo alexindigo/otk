@@ -177,6 +177,28 @@ export function loadServiceConfig(
       envOverridden.push(p);
     }
   }
+  const digest = tree.digest;
+  if (isObject(digest)) {
+    for (const [key, value] of Object.entries(digest)) {
+      if (typeof value !== "number") continue;
+      if (
+        key === "cpu"
+          ? value <= 0 || value > 1
+          : value <= 0 || !Number.isSafeInteger(value) ||
+            (key === "batch" && value > 200)
+      ) {
+        errors.push(
+          `digest.${key} (${envName(`digest.${key}`)}): ${
+            key === "cpu"
+              ? "expected 0 < value <= 1"
+              : key === "batch"
+              ? "expected integer 1..200"
+              : "expected positive integer"
+          }`,
+        );
+      }
+    }
+  }
   if (errors.length) throw new ConfigError(errors);
   return {
     config: tree as unknown as ServiceConfig,

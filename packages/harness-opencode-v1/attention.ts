@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { IndexEntry } from "@otk/protocol";
+import type { SessionMetadata as IndexEntry } from "@otk/protocol";
 
 type Kind = "permissions" | "questions";
 type Counts = Record<Kind, number>;

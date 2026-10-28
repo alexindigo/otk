@@ -72,6 +72,14 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
                 ...op.entry,
                 sidecarId,
               };
+            } else if (op.op === "digest") {
+              const entry = draft.entries[sessionKey(sidecarId, op.id)];
+              if (!entry || op.revision < entry.digest.revision) continue;
+              const turns = { ...entry.digest.turns, ...op.turns.upsert };
+              for (const id of op.turns.remove) delete turns[id];
+              entry.digest = { ...op.summary, revision: op.revision, turns };
+              if (op.deleted) entry.deleted = op.deleted;
+              else delete entry.deleted;
             } else delete draft.entries[sessionKey(sidecarId, op.id)];
           }}
       });

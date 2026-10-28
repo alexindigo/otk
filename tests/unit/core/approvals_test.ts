@@ -56,6 +56,7 @@ const entry = (id: string, parentID?: string): IndexEntry => ({
   timeUpdated: 1,
   archived: false,
   status: "busy",
+  digest: { state: "digesting", revision: 0, turns: {} },
   attention: {
     permissions: parentID ? 1 : 0,
     childPermissions: parentID ? 0 : 1,

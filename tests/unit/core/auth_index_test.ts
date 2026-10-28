@@ -113,6 +113,7 @@ test("index coalesces mutations, revisions and reset invalidates pending patches
     timeUpdated: 2,
     archived: false,
     status: "idle",
+    digest: { state: "digesting", revision: 0, turns: {} },
     attention: {
       permissions: 0,
       questions: 0,

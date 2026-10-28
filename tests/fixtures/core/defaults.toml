@@ -24,3 +24,12 @@ heartbeattimeout = 25
 reconnectmax = 30
 [index]
 days = 30
+[digest]
+batch = 100
+slicems = 8
+cpu = 0.25
+memoryreserve = 134217728
+maxpending = 512
+publishrows = 64
+retryms = 1000
+busyms = 100

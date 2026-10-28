@@ -42,6 +42,7 @@ export default function Scene() {
     timeUpdated: 1,
     archived: false,
     status: "idle" as const,
+    digest: { state: "digesting" as const, revision: 0, turns: {} },
     attention: {
       permissions: 0,
       questions: 0,

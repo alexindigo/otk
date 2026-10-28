@@ -4,7 +4,7 @@ import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import { requireCapability, SessionIndex } from "@otk/harness";
-import type { IndexEntry } from "@otk/protocol";
+import type { SessionMetadata as IndexEntry } from "@otk/protocol";
 import { cfg, fixture } from "../../../tests/support/config.ts";
 import { waitFor } from "../../../tests/support/opencode.ts";
 import { OpencodeV1Adapter as Opencode1Adapter } from "../adapter.ts";

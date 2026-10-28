@@ -5,7 +5,7 @@ import type {
   ContentSession,
   Message,
 } from "@otk/protocol";
-import type { IndexEntry } from "@otk/protocol";
+import type { SessionMetadata } from "@otk/protocol";
 import type { HarnessState } from "@otk/protocol";
 import type { SessionIndex } from "./index.ts";
 export type {
@@ -13,6 +13,7 @@ export type {
   Capabilities,
   CapabilityName,
   CommandsCapability,
+  DigestsCapability,
   FilesCapability,
   HistoryAttachmentRef,
   HistoryCapability,
@@ -29,8 +30,8 @@ export interface HarnessSink {
   /** When provided, index callbacks write this same authoritative owner. */
   readonly index?: SessionIndex;
   connection(state: HarnessState): void;
-  indexReset(entries: IndexEntry[]): void;
-  indexUpsert(entry: IndexEntry): void;
+  indexReset(entries: SessionMetadata[]): void;
+  indexUpsert(entry: SessionMetadata): void;
   indexRemove(sessionID: string): void;
   content(sessionID: string, op: ContentOp): void;
   resync(sessionIDs: "all"): void;

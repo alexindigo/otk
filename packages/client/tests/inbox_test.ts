@@ -22,6 +22,7 @@ function entry(id: string, status: IndexEntry["status"] = "idle"): IndexEntry {
     timeUpdated: 1,
     archived: false,
     status,
+    digest: { state: "digesting", revision: 0, turns: {} },
     attention: {
       permissions: 0,
       questions: 0,

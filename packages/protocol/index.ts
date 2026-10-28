@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { SessionErrorState } from "./errors.ts";
-export interface IndexEntry {
+import type { DigestDelta, SessionDigest, Tombstone } from "./digest.ts";
+export interface SessionMetadata {
   id: string;
   parentID?: string;
   directory: string;
@@ -20,7 +21,15 @@ export interface IndexEntry {
     errorState?: SessionErrorState;
   };
 }
+export interface IndexEntry extends SessionMetadata {
+  digest: SessionDigest;
+  deleted?: Tombstone;
+}
+export interface DigestIndexDelta extends DigestDelta {
+  id: string;
+  revision: number;
+}
 export type IndexOp = { op: "upsert"; entry: IndexEntry } | {
   op: "remove";
   id: string;
-};
+} | ({ op: "digest" } & DigestIndexDelta);

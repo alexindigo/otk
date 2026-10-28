@@ -116,6 +116,28 @@ its SQL migration runner have no native identity knowledge.
 
 Use Deno read/write permissions for the state directory and packaged SQL.
 
+## Derived digest storage
+
+`DigestDb(path, contributions, { busyms })` opens the independent private
+`digest.db` file. Compose `digestMigrations` and any provider's structural
+migration contribution explicitly. The same connection/migration/transaction
+mechanics serve both files; the user-data `OtkDb` constructor remains
+compatible. The timeout is installed before WAL selection. Derived connections
+enable foreign keys and use feature-local migration versions, never a new legacy
+`user_version` mapping.
+
+`DigestStore` exposes scalar `catalog`, `summary`, `turn`, `turns`, `commit`,
+`markDeleted`, `resurrect` and `transaction` operations. `DigestCommit`
+atomically writes session/turn summaries and bookkeeping; a caller's outer
+transaction may also cover provider-private baselines. Fields mirror the SQL
+columns, with `null` for unreported values. Invalid negative/non-finite/unsafe
+counters reject before commit. The API writes only its fixed column allowlists.
+It has no protocol/native dependency and stores no transcript, part JSON or tool
+payload. Applications adapt scalar records to their protocol at composition.
+Start a turn scan with an empty cursor; pass `digestTurnCursor(lastRow)` for the
+next page. The cursor includes both turn and session identity, so equal native
+turn IDs across sessions/providers cannot be skipped or repeated.
+
 `PermissionStore` / `permissionMigrations` independently contribute explicit
 session enablement and the permission reply journal. The application supplies
 request JSON; storage imports no protocol. Intents commit before remote I/O, and

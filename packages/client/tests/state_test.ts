@@ -22,6 +22,7 @@ const entry = (id: string, parentID?: string): IndexEntry => ({
   timeUpdated: 2,
   archived: false,
   status: "idle",
+  digest: { state: "digesting", revision: 0, turns: {} },
   attention: {
     permissions: 0,
     questions: 0,

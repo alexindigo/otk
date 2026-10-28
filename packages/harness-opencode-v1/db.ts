@@ -5,6 +5,7 @@ import type { NativeMessage } from "./messages.ts";
 import type { Info, RawPart } from "./types.ts";
 import type { UsageMessage } from "@otk/protocol";
 import { opencodeV1SessionID as ids } from "./ids.ts";
+import { runningDirectories } from "./db-hints.ts";
 /** Never creates or writes the harness database; schema checks name query columns. */
 export class BootstrapDb {
   #db: DatabaseSync | null = null;
@@ -37,15 +38,7 @@ export class BootstrapDb {
   possiblyRunningDirectories(since: number): string[] | undefined {
     if (!this.#db) return;
     try {
-      const rows = this.#db.prepare(`
-      SELECT DISTINCT s.directory FROM session s
-      JOIN message m ON m.id = (SELECT id FROM message WHERE session_id = s.id ORDER BY id DESC LIMIT 1)
-      WHERE s.time_updated >= ? AND (
-        (json_extract(m.data, '$.role') = 'assistant' AND json_extract(m.data, '$.time.completed') IS NULL)
-        OR json_extract(m.data, '$.role') = 'user'
-      )
-    `).all(since);
-      return rows.map((r) => String(r.directory));
+      return runningDirectories(this.#db, since);
     } catch (error) {
       console.warn(
         `harness db: using API fallback: ${errorMessage(error)}`,

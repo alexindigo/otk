@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { errorMessage, normalizeError } from "@otk/protocol";
 import type { ContentOp, RevertInfo, Todo } from "@otk/protocol";
-import type { IndexEntry } from "@otk/protocol";
+import type { SessionMetadata as IndexEntry } from "@otk/protocol";
 import { harnessDb, type OpencodeV1Config } from "./config.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { parseDiff, StreamBuffers } from "@otk/content";

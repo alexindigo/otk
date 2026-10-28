@@ -17,6 +17,7 @@ const entry = (id = "a", change: Partial<IndexEntry> = {}): IndexEntry => ({
   timeUpdated: 1,
   archived: false,
   status: "idle",
+  digest: { state: "digesting", revision: 0, turns: {} },
   attention: {
     permissions: 0,
     questions: 0,

@@ -34,3 +34,14 @@ reconnectmax = 30 # OTK_HARNESS_RECONNECTMAX — maximum reconnect backoff secon
 
 [index]
 days = 30 # OTK_INDEX_DAYS — index sessions updated within this window
+
+# Worker digest policy (service selection follows in the next composition change).
+[digest]
+batch = 100 # OTK_DIGEST_BATCH — header/identity rows per slice, maximum 200
+slicems = 8 # OTK_DIGEST_SLICEMS — cooperative budget in milliseconds
+cpu = 0.25 # OTK_DIGEST_CPU — maximum observed duty fraction, 0 < value <= 1
+memoryreserve = 134217728 # OTK_DIGEST_MEMORYRESERVE — free system bytes reserved for other work
+maxpending = 512 # OTK_DIGEST_MAXPENDING — fine-grained keys before full-session reconciliation
+publishrows = 64 # OTK_DIGEST_PUBLISHROWS — records per worker publication
+retryms = 1000 # OTK_DIGEST_RETRYMS — pressure/error wake-up in milliseconds, not polling
+busyms = 100 # OTK_DIGEST_BUSYMS — derived SQLite lock wait in milliseconds

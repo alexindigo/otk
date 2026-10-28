@@ -31,6 +31,7 @@ Deno.test("catalog merges tracked, indexed and template directories once, orderi
     title: id,
     archived: false,
     status: "idle",
+    digest: { state: "digesting", revision: 0, turns: {} },
     attention: {
       permissions: 0,
       questions: 0,

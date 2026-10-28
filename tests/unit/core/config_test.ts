@@ -60,6 +60,27 @@ test("config rejects unknown env, section variables and fractional integers", ()
   );
   assertEquals(error.problems.length, 3);
 });
+test("digest policy bounds aggregate actionable node and environment errors", () => {
+  const error = assertThrows(
+    () =>
+      loadServiceConfig({
+        defaultsPath,
+        env: {
+          OTK_DIGEST_BATCH: "201",
+          OTK_DIGEST_CPU: "0",
+          OTK_DIGEST_BUSYMS: "0",
+          OTK_DIGEST_RETRYMS: "-1",
+        },
+      }),
+    ConfigError,
+  );
+  assertEquals(error.problems.length, 4);
+  for (const name of ["BATCH", "CPU", "BUSYMS", "RETRYMS"]) {
+    assert(
+      error.problems.some((problem) => problem.includes(`OTK_DIGEST_${name}`)),
+    );
+  }
+});
 test("config explicit inputs leave process env untouched and retain shipped defaults", () => {
   const before = Deno.env.toObject();
   const overridden =

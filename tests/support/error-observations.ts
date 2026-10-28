@@ -5,7 +5,7 @@ import { loadServiceConfig } from "../../core/mod.ts";
 import { OpencodeV1Adapter as Opencode1Adapter } from "@otk/harness-opencode-v1";
 import { StreamBuffers } from "@otk/content";
 import { requireCapability } from "@otk/harness";
-import type { IndexEntry } from "@otk/protocol";
+import type { SessionMetadata as IndexEntry } from "@otk/protocol";
 import type { ContentOp } from "@otk/protocol";
 import type { Session } from "@otk/harness-opencode-v1";
 import { resources, tempDir, test } from "./resources.ts";

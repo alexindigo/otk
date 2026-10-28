@@ -222,7 +222,7 @@ test("public adapter qualifies every capability boundary, including externally c
     },
   );
   const ready = Promise.withResolvers<void>();
-  let entries: import("@otk/protocol").IndexEntry[] = [];
+  let entries: import("@otk/protocol").SessionMetadata[] = [];
   try {
     await adapter.core.start({
       connection() {},

@@ -246,6 +246,49 @@ entry.
 
 The standalone sessions consumer and stock-server test are in `tests/reuse/` at
 the workspace root. Run `deno task test:reuse` in the dedicated OTK guest.
+
+### Reusable digest sink
+
+`OpencodeV1DigestSink` is independently composable with a `DigestScheduler` and
+an injected `OpencodeV1DigestStorage`. Its private SQLite/query and transaction
+ports are supplied by the consumer; this package imports no OTK store. Compose
+the structural `opencodeV1DigestMigrations` contribution into the derived file.
+The consumer maps neutral `DigestDelta`s to its own persistence/publication
+boundary; publication follows commit. The sink's `catalog`, `step`, `detail`,
+`invalidate`, `connection`, `deleteIntent` and `close` share that lifetime.
+
+`DigestNativeDb` opens only an existing read-only native file. Its characterized
+session/header projections use bounded keysets and `json_each` batches, never
+full message/part JSON. Summary scans do not query parts. Opened usage detail
+batches existing tool labels. Missing/incompatible SQL falls back to the one
+bounded `Messages` reader; unreported usage remains nullable and cannot become a
+fictitious free detailed ledger. Private baselines store allowlisted metadata
+hashes, contribution sums/unknown counts and sweep progress, not message
+content. Provider health and catalog identity samples gate local-file authority;
+failed or partial enumeration does not tombstone anything. Reappearance clears
+the tombstone under the same qualified identity.
+
+Ownership samples use a bounded current identity lookup, independently of the
+older keyset enumeration. A new session behind that cursor cannot falsely turn
+the configured file into a foreign-file fallback. Verified continuity belongs to
+the unchanged file and native connection; missing sample rows are inconclusive,
+while conflicting identities use API authority. Unverified files cannot provide
+header metadata or running-directory hints. Catalog admission also fences later
+per-identity observations, so an older inventory cannot retire a newer presence
+fact or revive a newly retired lifetime.
+
+The OTK application worker composition lives outside this package. Source and
+compiled independent-consumer checks exercise it before selection in the shipped
+application; the existing standalone adapter needs no derived state directory.
+
+The bounded `emptySessions` native projection proves absence of headers without
+reading message or part bodies. The authoritative catalog can commit exact zeros
+for new/already-empty sessions together; existing nonempty baselines still use
+the normal sweep, and a raced dirty marker prevents an empty proof overtaking an
+event. Scan generation/cursor admission commits with its baseline and summary,
+including rollback on a rejected write. `DigestNativeDb` accepts an optional
+read-observation callback for independently composed counting consumers.
+
 Native unit tests live in this package; mixed app-consumer checks retain their
 shared app fixtures. Tool mapping retains native output on the common tool
 contract. `tool-results.ts` decodes characterized stock 1.18.34 read, directory,

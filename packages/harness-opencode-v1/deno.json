@@ -5,7 +5,13 @@
   "exports": "./mod.ts",
   "imports": { "@std/path": "jsr:@std/path@1.1.5" },
   "publish": {
-    "include": ["*.ts", "deno.json", "README.md", "LICENSE"],
+    "include": [
+      "*.ts",
+      "digest-migrations/**",
+      "deno.json",
+      "README.md",
+      "LICENSE"
+    ],
     "exclude": ["tests/"]
   },
   "tasks": {

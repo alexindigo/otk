@@ -237,3 +237,29 @@ transcript, capability-selected RPC forwarding, preference broadcast and
 persisted prefs/frecency after an application restart. The separate minimal-core
 service test preserves alternate selected-registration HTTP/static/SPA/origin
 coverage.
+
+## Worker-backed digest services
+
+`core/digest/worker.ts` is an application composition root over public store,
+harness and native entries. It alone opens `digest.db` and the digest's
+read-only native connection. `DigestBridge` owns the lazy module Worker,
+run/connection fences, bounded publication credits, ordered revision parts,
+coalesced detached catalog/detail reads and an idempotent joined stop. The
+bridge has no SQLite connection. Worker crashes retire that lifetime, mark known
+identities unready through the injected port and reconcile through one retry
+lifetime.
+
+Cancelling the last read caller sends `{t:'cancel',request}` under its `run`.
+`DigestRequests` aborts that worker-owned read and releases the scheduler slot;
+unknown/finished cancellation is ignored. Releasing one of several coalesced
+callers does not cancel the other callers. Clean shutdown joins requests and the
+scheduler, closes native/derived connections and acknowledges `stopped`; forced
+termination is reserved for failure.
+
+The layered `[digest]` policy is documented in `defaults/otk.toml`; positive
+integer bounds, the 200-row native ceiling and CPU duty bounds validate with
+node/environment diagnostics. The compile recipe embeds the literal worker and
+both migration trees and grants `systemMemoryInfo`. An independent compiled
+consumer runs off-source with empty runtime caches and observes native totals
+change and survive restart. Shipped application selection and the summary UI are
+the next composition step, rather than a temporary operator mode here.

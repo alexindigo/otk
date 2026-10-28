@@ -26,6 +26,7 @@ function entry(id = "session", directory = "/p"): IndexEntry {
     archived: false,
     timeCreated: 1,
     timeUpdated: 2,
+    digest: { state: "digesting", revision: 0, turns: {} },
     attention: {
       permissions: 1,
       questions: 0,

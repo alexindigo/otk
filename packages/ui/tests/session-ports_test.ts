@@ -50,6 +50,7 @@ Deno.test("session ports capture target once while capability and resource gette
       archived: false,
       timeCreated: 1,
       timeUpdated: 2,
+      digest: { state: "digesting", revision: 0, turns: {} },
       attention: {
         permissions: 0,
         questions: 0,

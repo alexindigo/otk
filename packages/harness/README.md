@@ -54,3 +54,42 @@ and revision notifications.
 
 License: LGPL-3.0-only. Workspace validation: `deno task test:unit` and
 `deno task test:arch`.
+
+## Digest services
+
+`DigestPort` separates catalog/detail reads and their cancellation from metadata
+invalidations, visible-scope priority, deletion intents and lifecycle. Libraries
+receive `DigestPolicy`; they do not read application environment variables or
+invent policy defaults. `DigestSink` owns provider work and durable cursors.
+
+`DigestScheduler` registers sinks by declared identity and coalesces queued
+session work. `tick()` executes one slice: interactive reads (`execute`) precede
+attention, visible scope and background. Owner-keyed scopes form a union;
+`release` drops an owner's scope and interactive demand. Background pauses under
+memory pressure or interactive demand; essential reads still run. Continuations
+retain cursors, fine-grained keys collapse to retained full-session markers, and
+observed elapsed time controls the duty limiter. `stop` aborts and joins active
+work and closes every selected sink.
+
+Essential reads interrupt the actual duty wait. Its remaining quota still gates
+the next background slice, so yielding cannot turn a slow background read into a
+long admission stall or discard the configured duty limit.
+
+`SessionIndex.upsertMetadata`/`resetMetadata` preserve existing summaries and
+tombstones; `applyDigest` preserves live title/status/attention/topology and
+rejects lower digest revisions. New identities materialize as digesting revision
+0 with empty turns. Catalog reconciliation retains absent identities: only a
+separate authoritative deletion path may tombstone them. The original explicit
+`reset`/`remove` operations remain available for connection/window eviction.
+Publication subclasses override hooks rather than maintaining another entry map.
+
+`snapshotEntries()` borrows stable, deeply frozen entries for serialization.
+Field-owned writes replace those immutable entries, so a captured snapshot stays
+consistent while later metadata/digest changes arrive. `get()` and `values()`
+retain their detached mutable-read contract. Transport can serialize the one
+authoritative index without cloning every retained turn first.
+
+`getMetadata(id)` returns detached live metadata and deletion state without
+traversing the digest or turn history. Native status, error and attention owners
+use this narrower read; topology traversal likewise stays independent of turn
+count. Complete digest consumers keep the existing `get()`/`values()` ports.

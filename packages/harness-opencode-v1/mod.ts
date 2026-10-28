@@ -3,6 +3,15 @@
 export { OpencodeV1Adapter } from "./adapter.ts";
 export { harnessDb, type OpencodeV1Config } from "./config.ts";
 export { opencodeV1SessionID } from "./ids.ts";
+export { opencodeV1DigestMigrations } from "./digest-migrations.ts";
+export { OpencodeV1DigestSink } from "./digest.ts";
+export type {
+  DigestCheckpoint,
+  DigestSnapshot,
+  OpencodeV1DigestStorage,
+} from "./digest.ts";
+export { DigestNativeDb } from "./digest-db.ts";
+export type { DigestHeader } from "./digest-db.ts";
 export { History } from "./history.ts";
 export { BootstrapDb } from "./db.ts";
 export { Client, HttpFailure } from "./client.ts";

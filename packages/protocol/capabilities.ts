@@ -27,6 +27,7 @@ import type { ModelsCapabilities } from "./capabilities/models.ts";
 import type { SessionActionsCapabilities } from "./capabilities/session-actions.ts";
 import type { UsageCapabilities } from "./capabilities/usage.ts";
 import type { RestoreCapabilities } from "./capabilities/restore.ts";
+import type { DigestsCapabilities } from "./capabilities/digests.ts";
 import {
   legacyResourcesCapabilities,
   type ResourcesCapabilities,
@@ -60,7 +61,8 @@ export interface CapabilityContracts
     PermissionsCapabilities,
     QuestionsCapabilities,
     RevertCapabilities,
-    RestoreCapabilities {}
+    RestoreCapabilities,
+    DigestsCapabilities {}
 export type CapabilityName = Extract<keyof CapabilityContracts, string>;
 export type Capabilities = Partial<CapabilityContracts>;
 
@@ -98,6 +100,7 @@ export type {
 export type { FilesCapability } from "./capabilities/files.ts";
 export type { AgentsCapability } from "./capabilities/agents.ts";
 export type { ModelsCapability } from "./capabilities/models.ts";
+export type { DigestsCapability, DigestScope } from "./capabilities/digests.ts";
 export type { UsageCapability } from "./capabilities/usage.ts";
 export type { ResourcesCapability } from "./capabilities/resources.ts";
 export type { PermissionsCapability } from "./capabilities/permissions.ts";

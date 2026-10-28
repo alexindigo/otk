@@ -17,6 +17,7 @@ const entry = (id: string): IndexEntry => ({
   timeUpdated: 1,
   archived: false,
   status: "busy",
+  digest: { state: "digesting", revision: 0, turns: {} },
   attention: {
     permissions: 0,
     questions: 0,

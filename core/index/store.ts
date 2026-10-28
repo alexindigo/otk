@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { IndexEntry, IndexOp } from "@otk/protocol";
+import type { DigestIndexDelta, IndexEntry, IndexOp } from "@otk/protocol";
 import type { ServerFrame } from "@otk/protocol";
 import { SessionIndex } from "@otk/harness";
 export class IndexStore extends SessionIndex {
@@ -23,16 +23,18 @@ export class IndexStore extends SessionIndex {
     return {
       t: "index.snapshot",
       rev: this.rev,
-      entries: [...this.values()],
+      entries: [...this.snapshotEntries()],
     };
   }
-  override reset(entries: IndexEntry[]): void {
+  protected override resetPublished(
+    entries: IndexEntry[],
+    previous: ReadonlyMap<string, IndexEntry>,
+  ): void {
     this.#pending = [];
     const changes = entries.map((entry) => ({
       entry,
-      previous: this.get(entry.id),
+      previous: previous.get(entry.id),
     }));
-    super.reset(entries);
     for (const { entry, previous } of changes) {
       for (const listener of this.#observers) {
         listener(structuredClone(entry), previous && structuredClone(previous));
@@ -41,17 +43,20 @@ export class IndexStore extends SessionIndex {
     this.rev++;
     this.#emit(this.snapshot());
   }
-  override upsert(entry: IndexEntry): void {
+  protected override published(
+    entry: IndexEntry,
+    previous?: IndexEntry,
+    delta?: DigestIndexDelta,
+  ): void {
     const copy = structuredClone(entry);
-    const previous = this.get(copy.id);
-    super.upsert(copy);
     for (const listener of this.#observers) {
       listener(structuredClone(copy), previous && structuredClone(previous));
     }
-    this.#queue({ op: "upsert", entry: copy });
+    this.#queue(
+      delta ? { op: "digest", ...delta } : { op: "upsert", entry: copy },
+    );
   }
-  override remove(id: string): void {
-    super.remove(id);
+  protected override removed(id: string): void {
     this.#queue({ op: "remove", id });
   }
   #emit(frame: ServerFrame): void {

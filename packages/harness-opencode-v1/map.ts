@@ -7,7 +7,7 @@ import type {
   PermissionRequest,
   Tokens,
 } from "@otk/protocol";
-import type { IndexEntry } from "@otk/protocol";
+import type { SessionMetadata } from "@otk/protocol";
 import { markdown, parseDiff } from "@otk/content";
 import { mapTool } from "./map-tools.ts";
 import { preview } from "./previews.ts";
@@ -32,7 +32,7 @@ export function mapSession(session: Session): ContentSession {
     archived: session.time.archived !== undefined,
   };
 }
-export function mapIndex(session: Session): IndexEntry {
+export function mapIndex(session: Session): SessionMetadata {
   return {
     id: ids.encode(session.id),
     parentID: session.parentID == null
