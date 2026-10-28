@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
-import type { Message } from "@otk/protocol";
+import { readRpcMessages } from "../support/message-pages.ts";
 import { browserFixture } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { waitFor } from "../support/opencode.ts";
@@ -23,11 +23,7 @@ test("shell RPC honors configured primary agent and bypasses model bash permissi
       command: "echo otk",
     });
     const messages = await waitFor(
-      () =>
-        client!.rpc<Message[]>("session.messages", {
-          sessionID: session.id,
-          limit: 100,
-        }),
+      () => readRpcMessages(client!, session.id),
       (rows) =>
         rows.some((message) =>
           message.role === "assistant" &&

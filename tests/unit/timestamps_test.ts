@@ -28,7 +28,8 @@ Deno.test("a finished native clock replaces the later live observation and ignor
     from: 0,
     blocks: [],
     lastOutput: 5000,
-    streamVersion: 1,
+    stream: { epoch: "test", generation: 1, version: 1, mode: "appendable" },
+    baseVersion: 0,
   });
   assertEquals(
     JSON.parse(JSON.stringify(state.messages[0])).time.lastOutput,

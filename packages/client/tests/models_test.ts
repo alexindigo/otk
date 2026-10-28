@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  fixtureMessagePolicy,
+  fixturePage,
+} from "../../../tests/support/message-pages.ts";
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import type { ClientFrame, ContentSession, Message } from "@otk/protocol";
 import {
@@ -17,7 +21,7 @@ function fixture() {
   const connection = new SidecarConnection("http://example.test", {
     status() {},
     frame() {},
-  });
+  }, { messages: fixtureMessagePolicy });
   connection.send = (frame) => {
     if (frame.t === "rpc") frames.push(frame);
   };
@@ -68,10 +72,13 @@ Deno.test("plain session replays buffered ops, refetches resync and releases sel
     session.receive("core", {
       t: "content",
       sessionID: "s",
+      clock: { epoch: "fixture", seq: 1 },
       event: { op: "message.upsert", message: message("live") },
     });
-    answer("session.get", info("s"));
-    answer("session.messages", [message("snapshot")]);
+    answer(
+      "session.messages",
+      fixturePage("s", [message("snapshot")], undefined, info("s")),
+    );
     await settle();
     assertEquals(session.state.content.messages.map((m) => m.id), [
       "live",
@@ -80,8 +87,7 @@ Deno.test("plain session replays buffered ops, refetches resync and releases sel
     assertEquals(session.state.loading, false);
     assertEquals(session.state.exhausted, true);
     session.receive("core", { t: "resync", sessionIDs: "all" });
-    answer("session.get", info("s"));
-    answer("session.messages", []);
+    answer("session.messages", fixturePage("s", [], undefined, info("s")));
     await settle();
     assertEquals(session.state.content.messages, []);
     assert(changes >= 4);
@@ -101,19 +107,23 @@ Deno.test("plain session generations cancel superseded loads and paging deduplic
   try {
     session.open({ sidecarId: "core", sessionID: "old" });
     session.open({ sidecarId: "core", sessionID: "s" });
-    answer("session.get", info("old"));
-    answer("session.messages", [message("obsolete")]);
+    answer(
+      "session.messages",
+      fixturePage("old", [message("obsolete")], undefined, info("old")),
+    );
     const page = Array.from({ length: 100 }, (_, n) => message(String(n)));
-    answer("session.get", info("s"));
-    answer("session.messages", page);
+    answer("session.messages", fixturePage("s", page, undefined, info("s")));
     await settle();
     assertEquals(session.state.info?.id, "s");
     assertEquals(session.state.exhausted, false);
     const older = session.older();
     assertEquals(session.state.paging, true);
-    answer("session.messages", [message("older"), message("0")]);
+    answer(
+      "session.messages",
+      fixturePage("s", [message("older"), message("90")], undefined, info("s")),
+    );
     await older;
-    assertEquals(session.state.content.messages.length, 101);
+    assertEquals(session.state.content.messages.length, 11);
     assertEquals(session.state.content.messages[0].id, "older");
     assertEquals(session.state.exhausted, true);
     assertEquals(session.state.paging, false);
@@ -133,10 +143,8 @@ Deno.test("session catalog is optional, nonblocking and generation-bound across 
     session.open({ sidecarId: "core", sessionID: "old" });
     await Promise.resolve();
     session.open({ sidecarId: "core", sessionID: "new" });
-    answer("session.get", info("old"));
-    answer("session.messages", []);
-    answer("session.get", info("new"));
-    answer("session.messages", []);
+    answer("session.messages", fixturePage("old", [], undefined, info("old")));
+    answer("session.messages", fixturePage("new", [], undefined, info("new")));
     await settle();
     assertEquals(
       session.state.loading,
@@ -156,15 +164,16 @@ Deno.test("session catalog is optional, nonblocking and generation-bound across 
       "A refresh retains last good metadata",
     );
     await Promise.resolve();
-    answer("session.get", info("new"));
-    answer("session.messages", []);
+    answer("session.messages", fixturePage("new", [], undefined, info("new")));
     answer("models.list", old);
     await session.models?.ready();
     assertEquals(session.models?.state.value, old);
     session.receive("core", { t: "resync", sessionIDs: "all" });
     await Promise.resolve();
-    answer("session.get", info("new"));
-    answer("session.messages", [message("still available")]);
+    answer(
+      "session.messages",
+      fixturePage("new", [message("still available")], undefined, info("new")),
+    );
     const failed = frames.splice(
       frames.findIndex((f) => f.method === "models.list"),
       1,
@@ -182,8 +191,10 @@ Deno.test("session catalog is optional, nonblocking and generation-bound across 
     assertEquals(session.state.content.messages[0].id, "still available");
     connection.supports = () => false;
     session.open({ sidecarId: "core", sessionID: "unsupported" });
-    answer("session.get", info("unsupported"));
-    answer("session.messages", []);
+    answer(
+      "session.messages",
+      fixturePage("unsupported", [], undefined, info("unsupported")),
+    );
     await settle();
     assertEquals(session.models?.state.value, undefined);
     assertEquals(session.state.loading, false);

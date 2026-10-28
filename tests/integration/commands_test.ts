@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { readRpcMessages } from "../support/message-pages.ts";
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import type { CommandOption } from "@otk/protocol";
-import type { Message } from "@otk/protocol";
 import { waitFor } from "../support/opencode.ts";
 test("custom command RPC returns normalized catalog and records expanded multiline content", async () => {
   const f = await browserFixture(undefined, {
@@ -39,11 +39,7 @@ test("custom command RPC returns normalized catalog and records expanded multili
       arguments: "first\nsecond",
     });
     const messages = await waitFor(
-      () =>
-        client!.rpc<Message[]>("session.messages", {
-          sessionID: session.id,
-          limit: 100,
-        }),
+      () => readRpcMessages(client!, session.id),
       (rows) => JSON.stringify(rows).includes("RPC-COMMAND first"),
     );
     assertEquals(JSON.stringify(messages).includes("RPC-COMMAND first"), true);

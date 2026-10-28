@@ -407,6 +407,30 @@ export class DigestBridge implements DigestPort {
       });
     });
   }
+  async transcriptMetadata(
+    sessionID: string,
+    turns: readonly string[],
+    signal: AbortSignal,
+    cutoff?: string,
+  ): Promise<import("@otk/harness").TranscriptMetadata> {
+    await this.start();
+    return await this.#lease(
+      `transcript:${JSON.stringify([sessionID, turns, cutoff])}`,
+      signal,
+      (owned) =>
+        this.#request(
+          { t: "transcript", sessionID, turns: [...turns], cutoff },
+          owned,
+          (message) => {
+            if (message.t !== "transcript") return;
+            if (message.sessionID !== sessionID) {
+              throw new Error("Transcript metadata identity mismatch");
+            }
+            return { value: message.metadata };
+          },
+        ),
+    );
+  }
   deleted(
     connection: number,
     sessionID: string,

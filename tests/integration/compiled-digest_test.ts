@@ -139,7 +139,6 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     );
     const body = await first.client.rpc("session.messages", {
       sessionID: lostID,
-      limit: 10,
     });
     assertEquals(JSON.stringify(body).includes(marker), true);
     await first.client.rpc("tasks.create", {
@@ -174,7 +173,7 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     assertEquals(second.entry(lostID)!.digest.total!.calls > 0, true);
     assertEquals(JSON.stringify(second.entry(lostID)).includes(marker), false);
     await assertRejects(() =>
-      second.client.rpc("session.messages", { sessionID: lostID, limit: 10 })
+      second.client.rpc("session.messages", { sessionID: lostID })
     );
     for (const name of ["digest.db", "digest.db-wal", "digest.db-shm"]) {
       try {
@@ -196,7 +195,6 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     await assertRejects(() =>
       second.client.rpc("session.messages", {
         sessionID: session.id,
-        limit: 10,
       })
     );
   } finally {

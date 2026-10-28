@@ -15,6 +15,7 @@ const deferred = <T>() => {
   return { promise, resolve };
 };
 const welcome: ServerFrame = {
+  messages: { replayops: 128, replaybytes: 4194304, retryms: 1000 },
   t: "welcome",
   protocol: 13,
   sidecar: {

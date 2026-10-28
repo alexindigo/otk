@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixturePage } from "../../support/message-pages.ts";
 import { assertEquals, assertRejects } from "@std/assert";
 import type { Harness } from "@otk/harness";
 import { OtkDb } from "@otk/store";
@@ -23,7 +24,7 @@ test("visible scopes are validated, optional, connection-owned replacements and 
         Promise.reject(new Error("Scope must not hydrate a session")),
       createSession: () => Promise.reject(new Error("Not used")),
       listChildren: () => Promise.resolve([]),
-      listMessages: () => Promise.resolve([]),
+      listMessages: (id) => Promise.resolve(fixturePage(id)),
     },
     capabilities: {
       digests: {

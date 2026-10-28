@@ -62,7 +62,7 @@ test("neutral backend facts reach reply, agent picker, task and truncation consu
     agents: { listAgents: () => Promise.resolve(options) },
     prompt: { prompt: () => Promise.resolve(), abort: () => Promise.resolve() },
   });
-  f.app.backend.core.listMessages = () => Promise.resolve([reply]);
+  f.app.backend.core.listMessages = () => Promise.resolve(f.page([reply]));
   const b = await Cdp.launch(workspace), client = new WsClient(f.url);
   const failures: unknown[] = [];
   const check = (run: () => void) => {

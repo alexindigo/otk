@@ -66,7 +66,7 @@ test("U14 r2 one money rule and exact title-free accessibility reach overlay, fo
     },
     models: { listModels: () => Promise.resolve(catalog) },
   });
-  f.app.backend.core.listMessages = () => Promise.resolve([message()]);
+  f.app.backend.core.listMessages = () => Promise.resolve(f.page([message()]));
   const b = await Cdp.launch(root), client = new WsClient(f.url);
   const shots = Deno.env.get("OTK_MONEY_SHOTS");
   const capture = async (name: string) => {

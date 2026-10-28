@@ -650,16 +650,20 @@ test("V5 restored missing model remains sendable; catalog loading and errors are
     },
   });
   const list = app.backend.core.listMessages;
-  app.backend.core.listMessages = async (...args) =>
-    (await list(...args)).map((message) =>
-      message.role === "user"
-        ? {
-          ...message,
-          model: { provider: "disconnected", model: "restored-model" },
-          agent: "build",
-        }
-        : message
-    );
+  app.backend.core.listMessages = async (...args) => {
+    const page = await list(...args);
+    const fields = {
+      model: { provider: "disconnected", model: "restored-model" },
+      agent: "build",
+    };
+    return {
+      ...page,
+      prompt: page.prompt && { ...page.prompt, ...fields },
+      items: page.items.map((message) =>
+        message.role === "user" ? { ...message, ...fields } : message
+      ),
+    };
+  };
   const b = await Browser.launch(root);
   try {
     await b.goto(`${url}/#/local/tstv1-core`);
@@ -832,17 +836,21 @@ test("failed unknown catalog preserves the restored variant in the footer and at
     },
   });
   const list = app.backend.core.listMessages;
-  app.backend.core.listMessages = async (...args) =>
-    (await list(...args)).map((message) =>
-      message.role === "user"
-        ? {
-          ...message,
-          agent: "review",
-          model: { provider: "offline", model: "restored" },
-          variant: "high",
-        }
-        : message
-    );
+  app.backend.core.listMessages = async (...args) => {
+    const page = await list(...args);
+    const fields = {
+      agent: "review",
+      model: { provider: "offline", model: "restored" },
+      variant: "high",
+    };
+    return {
+      ...page,
+      prompt: page.prompt && { ...page.prompt, ...fields },
+      items: page.items.map((message) =>
+        message.role === "user" ? { ...message, ...fields } : message
+      ),
+    };
+  };
   const b = await Browser.launch(root);
   try {
     await b.goto(`${url}/#/local/tstv1-core`);
@@ -905,7 +913,7 @@ test("U2 native null selection metadata stays absent while the model catalog is 
   });
   const pending = Promise.withResolvers<ModelCatalog>();
   const sent: PromptInput[] = [];
-  const { app, url } = await coreBackendFixture(root, {
+  const { app, url, page } = await coreBackendFixture(root, {
     agents: native.capabilities.agents,
     models: { listModels: () => pending.promise },
     prompt: {
@@ -917,14 +925,14 @@ test("U2 native null selection metadata stays absent while the model catalog is 
     },
   }, "opcv1-core");
   app.backend.core.listMessages = () =>
-    Promise.resolve([mapMessage(JSON.parse(JSON.stringify({
+    Promise.resolve(page([mapMessage(JSON.parse(JSON.stringify({
       id: "restored",
       sessionID: "core",
       role: "user",
       time: { created: 1 },
       agent: "build",
       model: null,
-    })))]);
+    })))]));
   const b = await Browser.launch(root);
   try {
     await b.goto(`${url}/#/local/opcv1-core`);

@@ -33,3 +33,7 @@ maxpending = 512
 publishrows = 64
 retryms = 1000
 busyms = 100
+[messages]
+replayops = 128
+replaybytes = 4194304
+retryms = 1000

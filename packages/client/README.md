@@ -50,15 +50,22 @@ digest changes do not reorder identities or replace unaffected partitions.
 ServerResources projects each server/project from these partitions, including
 the complete activity inputs independently of mounted views.
 
-Session snapshots publish essential session/message data independently of
-optional attention and sibling reads. Optional failures retain last-good data
-and expose diagnostics. Live attention changes replay over their own resource
-snapshot. Replacement fetches retain the live-operation buffer; failure applies
-it to a last-good transcript, or retains it for retry when no baseline exists.
-`state.continuity` distinguishes `loading`, `ready` and recoverable `missing`
-baselines. Superseding a generation retires its paging flag. Late `agent.colors`
-operations decorate the existing transcript without retaining another
-collection.
+Session pages publish essential session/message data independently of optional
+attention and sibling reads. Optional failures retain last-good data and expose
+diagnostics. Live attention changes replay over their own resource snapshot. The
+selected owner consumes the coordinated `MessagePage` directly; it makes no
+parallel `session.get`. Continuation stays opaque, and exhaustion comes only
+from `older: null`, including exact-multiple and short pages. `latestPrompt()`
+and `state.latestPrompt` supply composer/Undo metadata outside the loaded ten
+messages. `state.clock` identifies accepted page authority. Pending live replay
+is bounded by the connection's injected/welcomed policy. Duplicates are ignored;
+gaps, epoch changes and overflow invalidate the baseline and coalesce a retry.
+Failed snapshots preserve visibly refreshing last-good content until a fresh
+authoritative page covers the final source, without an unbounded events array or
+speculative append seed. `state.continuity` distinguishes `loading`, `ready` and
+recoverable `missing` baselines. Superseding a generation retires its paging
+flag. Late `agent.colors` operations decorate the existing transcript without
+retaining another collection.
 
 `rpc.call(method, params, signal?)` derives its input and result types from
 `@otk/protocol`'s declaration-mergeable `RpcMethods` interface. Callers do not
@@ -102,15 +109,15 @@ next-prompt projection for display and every submission path. Each field reports
 its backend-applied value, source (`explicit`, `restored`, `configured`,
 `default`, `absent`) and `userChosen` ownership (`explicit`/`restored` only);
 model metadata includes display/provider names, advertised variants and an
-unavailable flag without replacing a missing model. Inputs use the last loaded
-user message and primary agents in configured-default order. Context is never
-copied into the draft, so unsent explicit choices win. An absent catalog means
-unknown availability; only a loaded catalog can establish that a model is
-unavailable. Unknown catalog metadata also preserves a restored/explicit
-variant; validation and model-choice clearing require loaded negative
-membership. The projection's `applies` and `input` describe mode applicability
-and exact wire choices: shell omits variant while retaining the draft's
-normal-mode choice.
+unavailable flag without replacing a missing model. Inputs use the latest
+visible prompt's metadata, independently of loaded pages, and primary agents in
+configured-default order. Context is never copied into the draft, so unsent
+explicit choices win. An absent catalog means unknown availability; only a
+loaded catalog can establish that a model is unavailable. Unknown catalog
+metadata also preserves a restored/explicit variant; validation and model-choice
+clearing require loaded negative membership. The projection's `applies` and
+`input` describe mode applicability and exact wire choices: shell omits variant
+while retaining the draft's normal-mode choice.
 
 `chooseAgent`, `chooseModel` and `chooseVariant` return next drafts for the
 existing session-keyed writer. Choosing an agent applies its configured choices;

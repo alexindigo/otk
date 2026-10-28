@@ -2,6 +2,7 @@
 import { type Harness, HarnessError } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID, text } from "../ws/params.ts";
+import { MAX_MESSAGE_CURSOR_LENGTH } from "@otk/protocol";
 
 export function register(
   rpc: RpcRegistry,
@@ -19,22 +20,22 @@ export function register(
   rpc.register("session.messages", {
     params(p) {
       if (
-        !Number.isInteger(p.limit) || Number(p.limit) < 1 ||
-        Number(p.limit) > 200
-      ) {
-        throw new HarnessError("params", "limit must be 1..200");
-      }
+        Object.keys(p).some((key) => key !== "sessionID" && key !== "before")
+      ) throw new HarnessError("params", "Unknown message page parameter");
+      const before = text(p, "before", true);
+      if (
+        before !== undefined &&
+        (!before.length || before.length > MAX_MESSAGE_CURSOR_LENGTH)
+      ) throw new HarnessError("params", "Invalid message cursor length");
       return {
         sessionID: sessionID(p)!,
-        limit: Number(p.limit),
-        before: text(p, "before", true),
+        before,
       };
     },
     handler: (ctx, p) =>
       ctx.harness.core.listMessages(p.sessionID, {
-        limit: p.limit,
         before: p.before,
-      }),
+      }, ctx.execution?.signal),
   });
   rpc.register("session.create", {
     params: (p) => ({

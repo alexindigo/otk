@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { DigestDelta, SessionMetadata, SessionUsage } from "@otk/protocol";
+import type { LatestPrompt, ReplyBoundary } from "@otk/protocol";
+export interface TranscriptMetadata {
+  prompt?: LatestPrompt;
+  boundaries: ReplyBoundary[];
+  cutoffCreated?: number;
+}
 export interface DigestPolicy {
   batch: number;
   slicems: number;
@@ -34,6 +40,12 @@ export interface DigestPort {
     metadata?: SessionMetadata,
   ): Promise<void>;
   detail(sessionID: string, signal: AbortSignal): Promise<SessionUsage>;
+  transcriptMetadata(
+    sessionID: string,
+    turns: readonly string[],
+    signal: AbortSignal,
+    cutoff?: string,
+  ): Promise<TranscriptMetadata>;
   deleteIntent(
     sessionID: string,
     intent: string,

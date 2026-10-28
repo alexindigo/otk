@@ -72,10 +72,7 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
   });
   f.app.backend.core.listMessages = (_id, opts) => {
     calls.push(opts);
-    const before = opts.before
-      ? messages.findIndex((m) => m.id === opts.before)
-      : messages.length;
-    return Promise.resolve(messages.slice(0, before).slice(-opts.limit));
+    return Promise.resolve(f.page(messages, opts.before));
   };
   const b = await Cdp.launch(root);
   publishUsage(f.app.index, ledger.snapshot());
@@ -118,7 +115,7 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     await b.poll(
       `${visible}==='102 model calls · 102 tokens · $1.02' && Math.abs(Number(${cost})-1.02)<.000001`,
     );
-    assertEquals(calls, [{ limit: 100, before: undefined }]);
+    assertEquals(calls, [{ before: undefined }]);
     await b.reload();
     await b.poll(`${visible}==='102 model calls · 102 tokens · $1.02'`);
     const point = await b.evaluate<{ x: number; y: number }>(
@@ -179,7 +176,7 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
       ),
       "$1.02",
     );
-    // The first two calls are outside the loaded100-message page. Their clocks
+    // Most calls are outside the loaded ten-message page. Their clocks
     // must still own the footer's complete first-start/last-end range.
     assertEquals(
       await b.evaluate("document.querySelector('.otk-turn-time').textContent"),
@@ -202,8 +199,7 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
       x: 1,
       y: 1,
     });
-    assertEquals(calls, [{ limit: 100, before: undefined }, {
-      limit: 100,
+    assertEquals(calls, [{ before: undefined }, {
       before: undefined,
     }]);
     const shots = Deno.env.get("OTK_USAGE_OWNER_SHOTS");

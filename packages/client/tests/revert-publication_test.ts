@@ -38,6 +38,8 @@ const info = (revert?: RevertInfo): ContentSession => ({
 function fixture() {
   const session = createState<SessionState>({
     selection: { sidecarId: "local", sessionID: "a" },
+    latestPrompt: { id: "p2" },
+    clock: { epoch: "initial", seq: 0 },
     content: { ...emptyContent(), messages: [message("p1"), message("p2")] },
     siblings: [],
     loading: false,
@@ -85,6 +87,8 @@ Deno.test("undo remains serialized until authoritative rollback publication and 
     assertEquals(f.owner.state.pending, "undo");
     f.session.update((state) => {
       state.content.messages = [message("p1")];
+      state.latestPrompt = { id: "p1" };
+      state.clock = { epoch: "rollback-p2", seq: 0 };
       state.loading = false;
     });
     await first;
@@ -95,6 +99,8 @@ Deno.test("undo remains serialized until authoritative rollback publication and 
     f.session.update((state) => {
       state.content.revert = reverted("p1");
       state.content.messages = [];
+      state.latestPrompt = undefined;
+      state.clock = { epoch: "rollback-p1", seq: 0 };
     });
     await second;
     assertEquals(f.drafts.current("local/a").input, "p1");
@@ -125,10 +131,41 @@ Deno.test("redo waits for restored messages, not just a cleared boundary or comp
     assertEquals(f.owner.state.pending, "redo");
     f.session.update((state) => {
       state.loading = false;
+      state.clock = { epoch: "restored", seq: 0 };
+      state.latestPrompt = { id: "p2" };
     });
     await pending;
     assertEquals(f.owner.state.pending, undefined);
   } finally {
+    f.owner.dispose();
+  }
+});
+
+Deno.test("undo completion follows authoritative page epoch/cutoff rather than native ID ordering or a mounted prompt", async () => {
+  const f = fixture();
+  f.session.update((state) => {
+    state.latestPrompt = { id: "boundary" };
+    state.content.messages = [message("z-older-history")];
+  });
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const operation = f.owner.undo();
+    await turn();
+    assertEquals(f.calls, ["boundary"]);
+    f.session.update((state) => {
+      state.clock = { epoch: "authoritative-rollback", seq: 0 };
+      state.content.revert = reverted("boundary");
+    });
+    const result = await Promise.race([
+      operation.then(() => "complete"),
+      new Promise<string>((resolve) => {
+        timer = setTimeout(() => resolve("still waiting"), 50);
+      }),
+    ]);
+    assertEquals(result, "complete");
+    assertEquals(f.drafts.current("local/a").input, "boundary");
+  } finally {
+    clearTimeout(timer);
     f.owner.dispose();
   }
 });

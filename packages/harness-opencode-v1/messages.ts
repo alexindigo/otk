@@ -11,6 +11,13 @@ export interface NativeMessage {
 
 /** The only collection endpoint owner. Even metadata scans release each page. */
 export class Messages {
+  /** Only this native owner constructs the pinned 1.x creation-clock cursor. */
+  cursor(id: string, time: number): string {
+    return btoa(JSON.stringify({ id, time })).replaceAll("+", "-").replaceAll(
+      "/",
+      "_",
+    ).replace(/=+$/, "");
+  }
   constructor(
     readonly client: Client,
     readonly directory: (id: string) => string | undefined,
@@ -58,12 +65,13 @@ export class Messages {
     id: string,
     message: string,
     signal?: AbortSignal,
+    directory = this.directory(id),
   ): Promise<NativeMessage> {
     return await this.client.json<NativeMessage>(
       `/session/${encodeURIComponent(ids.decode(id))}/message/${
         encodeURIComponent(message)
       }`,
-      { query: { directory: this.directory(id) }, signal },
+      { query: { directory }, signal },
     );
   }
 }

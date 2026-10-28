@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixtureMessagePolicy } from "../support/message-pages.ts";
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import {
   OpencodeV1Adapter as Opencode1Adapter,
-  type OpencodeV1Config as Opencode1Config,
+  type OpencodeV1AdapterConfig as Opencode1Config,
 } from "@otk/harness-opencode-v1";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest } from "../support/opencode.ts";
@@ -22,6 +23,7 @@ test("standalone harness consumer lists stock-server sessions without a sidecar"
       reconnectmax: 30,
     },
     index: { days: 30 },
+    messages: fixtureMessagePolicy,
   };
   const seed = new Opencode1Adapter(config);
   try {

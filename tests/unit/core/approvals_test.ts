@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixturePage } from "../../support/message-pages.ts";
 import { test } from "../../support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { OtkDb, permissionMigrations, PermissionStore } from "@otk/store";
@@ -39,7 +40,7 @@ const backend = (permissions: PermissionsCapability): Harness => ({
         })
         : Promise.reject(new Error("Unknown session")),
     listChildren: () => Promise.resolve([]),
-    listMessages: () => Promise.resolve([]),
+    listMessages: (id) => Promise.resolve(fixturePage(id)),
     createSession: () =>
       Promise.reject(new Error("Not part of the approval fixture")),
   },

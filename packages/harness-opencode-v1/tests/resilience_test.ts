@@ -333,9 +333,10 @@ test("optional agent failure cannot reject an otherwise valid transcript page", 
     }
   });
   try {
-    const messages = await record.adapter.core.listMessages("opcv1-root", {
-      limit: 100,
-    });
+    const { items: messages } = await record.adapter.core.listMessages(
+      "opcv1-root",
+      {},
+    );
     assertEquals(messages.map((message) => message.id), ["msg_live"]);
     assertEquals(messages[0].agentColor, undefined);
   } finally {
@@ -410,7 +411,7 @@ test("held agent decoration never gates live headers and late colors invalidate 
       "#123456",
     );
     assertEquals(
-      (await record.adapter.core.listMessages("opcv1-root", { limit: 100 }))[0]
+      (await record.adapter.core.listMessages("opcv1-root", {})).items[0]
         .agentColor,
       "#123456",
     );
@@ -669,7 +670,7 @@ test("agent colours are shared per directory across sessions, pages, events and 
   try {
     await Promise.all(
       ["root", "other", "third"].map((id) =>
-        record.adapter.core.listMessages(ids.encode(id), { limit: 10 })
+        record.adapter.core.listMessages(ids.encode(id), {})
       ),
     );
     record.adapter.core.subscriptions("opcv1-other", 1);

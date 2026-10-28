@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixturePage } from "../../support/message-pages.ts";
 import { test } from "../../support/resources.ts";
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { type Capabilities, type Harness, HarnessError } from "@otk/harness";
@@ -179,7 +180,7 @@ export function stub(
       },
       listMessages: (id, opts) => {
         calls.push(["messages", id, opts]);
-        return Promise.resolve([]);
+        return Promise.resolve(fixturePage(id, [], undefined, session));
       },
       createSession: (input) => {
         calls.push(["create", input]);
@@ -377,17 +378,17 @@ test("feature validators retain limits, optional strings, model/attachment, ques
       [
         "session.messages",
         { sessionID: "tstv1-s", limit: 0 },
-        "limit must be 1..200",
+        "Unknown message page parameter",
       ],
       [
         "session.messages",
         { sessionID: "tstv1-s", limit: 201 },
-        "limit must be 1..200",
+        "Unknown message page parameter",
       ],
       [
         "session.messages",
         { sessionID: "tstv1-s", limit: 1.5 },
-        "limit must be 1..200",
+        "Unknown message page parameter",
       ],
       ["session.create", { directory: "" }, "Expected directory string"],
       ["session.prompt", { parts: [] }, "parts required"],
@@ -431,8 +432,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
     assertEquals(calls, []);
     await rpc.dispatch("session.messages", {
       sessionID: "tstv1-s",
-      limit: 200,
-      before: "",
+      before: "opaque==",
     });
     await rpc.dispatch("session.create", {
       directory: "/project",
@@ -501,7 +501,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
       null,
     );
     assertEquals(calls, [
-      ["messages", "tstv1-s", { limit: 200, before: "" }],
+      ["messages", "tstv1-s", { before: "opaque==" }],
       ["create", {
         directory: "/project",
         title: "",

@@ -10,6 +10,7 @@ import { object, sessionID, text } from "./params.ts";
 import type { RpcRegistry } from "./registry.ts";
 import type { Prefs } from "@otk/store";
 import type { SectionObserver } from "../diagnostics.ts";
+import type { ContentClock, MessagePolicy } from "@otk/protocol";
 interface Connection {
   ws: WebSocket;
   welcomed: boolean;
@@ -34,6 +35,7 @@ export class Connections {
     readonly url: string,
     readonly prefs: Prefs<Preferences>,
     readonly rpc: RpcRegistry,
+    readonly messages: MessagePolicy,
     readonly sources: readonly FrameSource[] = [],
     readonly diagnostics?: SectionObserver,
   ) {
@@ -82,7 +84,7 @@ export class Connections {
     this.harnessState = state;
     this.broadcast({ t: "harness", state });
   }
-  content(sessionID: string, event: ContentOp): void {
+  content(sessionID: string, event: ContentOp, clock?: ContentClock): void {
     const recipients = isAttentionOp(event)
       ? [sessionID, ...this.index.ancestors(sessionID)]
       : [sessionID];
@@ -91,7 +93,12 @@ export class Connections {
         connection.welcomed &&
         recipients.some((id) => connection.sessions.has(id))
       ) {
-        this.#send(connection, { t: "content", sessionID, event });
+        this.#send(connection, {
+          t: "content",
+          sessionID,
+          event,
+          ...(clock ? { clock } : {}),
+        });
       }
     }
   }
@@ -200,6 +207,7 @@ export class Connections {
           this.#send(connection, {
             t: "welcome",
             protocol: PROTOCOL_VERSION,
+            messages: this.messages,
             sidecar: {
               version: SIDECAR_VERSION,
               harness: {

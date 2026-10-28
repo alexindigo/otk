@@ -112,16 +112,12 @@ export function createSessionRevert(options: {
     const target = options.session.state.selection;
     if (!alive || !target || pending) return;
     if (kind === "undo") {
-      messageID = options.session.state.content.messages.findLast((message) =>
-        message.role === "user"
-      )?.id;
+      messageID = options.session.state.latestPrompt?.id;
     }
     if ((kind === "undo" || kind === "revert") && !messageID) return;
     const captured = { ...target }, current = generation;
     const previousBoundary = options.session.state.content.revert?.messageID;
-    const previousMessages = new Set(
-      options.session.state.content.messages.map((message) => message.id),
-    );
+    const previousEpoch = options.session.state.clock?.epoch;
     const active = () => {
       observe();
       return alive && generation === current;
@@ -159,17 +155,12 @@ export function createSessionRevert(options: {
         () => {
           const state = options.session.state;
           if (
-            state.loading || state.content.revert?.messageID !== boundary
+            state.loading || state.continuity !== "ready" ||
+            state.content.revert?.messageID !== boundary
           ) return false;
-          if (boundary) {
-            return !state.content.messages.some((message) =>
-              message.id === boundary
-            );
-          }
-          return !previousBoundary ||
-            state.content.messages.some((message) =>
-              !previousMessages.has(message.id)
-            );
+          if (boundary === previousBoundary) return true;
+          if (!state.clock || state.clock.epoch === previousEpoch) return false;
+          return true;
         },
         (listener) => options.session.subscribe(listener),
         controller.signal,
@@ -219,10 +210,7 @@ export function createSessionRevert(options: {
     restore: () => run("restore"),
     undo: () => run("undo"),
     redo: () => run("redo"),
-    hasPrompt: () =>
-      options.session.state.content.messages.some((message) =>
-        message.role === "user"
-      ),
+    hasPrompt: () => !!options.session.state.latestPrompt,
     strip(content) {
       const revert = content.revert;
       if (!revert) return;

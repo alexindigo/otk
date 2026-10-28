@@ -25,6 +25,7 @@ const harness: Harness = new OpencodeV1Adapter({
     reconnectmax: 30,
   },
   index: { days: 30 },
+  messages: { replayops: 128, replaybytes: 4194304, retryms: 1000 },
 });
 try {
   await harness.core.start({
@@ -244,6 +245,19 @@ arrive rather than accumulated. Only summary metadata is retained while the
 parent is open. Native directory resolution reads the session record without
 decorating its revert information. The core's authoritative directory lookup can
 still use `getSession`; its revert count follows the same bounded contract.
+
+Public transcript pages use a fixed ten messages, while internal digest/history
+scans retain their own bounded limits. The native transcript owner wraps the
+exact native continuation in a version/session/epoch/cutoff envelope and rejects
+stale or foreign cursors before I/O. Ordinary older pages reuse authoritative
+session/directory/cutoff metadata and make no boundary-message or repeated
+session GET. Initial viewers share a cancellable session read without sharing a
+caller's abort. Rollback, reconnect and body retirement invalidate old page
+authority. Pages checkpoint event-owned buffers before sealing their clock and
+carry full replacement catchup independently of their historical collection
+items. User agent/model/variant metadata is read through the digest worker even
+when the latest prompt lies outside the page. Standalone integrations supply
+replay policy explicitly and use bounded API pages when no worker is composed.
 
 The public entry also exposes native raw types, mapping utilities, `Client`,
 `HttpFailure`, `History`, `BootstrapDb`, SSE/watchdog utilities and

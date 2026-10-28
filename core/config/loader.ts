@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { errorMessage, MIN_MESSAGE_REPLAY_BYTES } from "@otk/protocol";
 // Service-only port of globnotes-layered-config/server/config/loader.ts.
 import { parse } from "@std/toml";
 import { join } from "@std/path";
@@ -194,6 +194,24 @@ export function loadServiceConfig(
               : key === "batch"
               ? "expected integer 1..200"
               : "expected positive integer"
+          }`,
+        );
+      }
+    }
+  }
+  const messages = tree.messages;
+  if (isObject(messages)) {
+    for (const [key, value] of Object.entries(messages)) {
+      if (
+        typeof value === "number" &&
+        (!Number.isSafeInteger(value) || value <= 0 ||
+          (key === "replaybytes" && value < MIN_MESSAGE_REPLAY_BYTES))
+      ) {
+        errors.push(
+          `messages.${key} (${envName(`messages.${key}`)}): ${
+            key === "replaybytes"
+              ? `expected safe integer >= ${MIN_MESSAGE_REPLAY_BYTES} bookkeeping bytes`
+              : "expected positive safe integer"
           }`,
         );
       }

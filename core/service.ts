@@ -41,7 +41,7 @@ function startBackend(
     indexReset: (entries) => index.resetMetadata(entries),
     indexUpsert: (entry) => index.upsertMetadata(entry),
     indexRemove: (id) => index.remove(id),
-    content: (id, event) => connections.content(id, event),
+    content: (id, event, clock) => connections.content(id, event, clock),
     resync: (sessionIDs) => connections.broadcast({ t: "resync", sessionIDs }),
   });
 }
@@ -81,6 +81,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       cfg.harness.url,
       prefs,
       rpc,
+      cfg.messages,
       options.sources,
       options.diagnostics,
     );

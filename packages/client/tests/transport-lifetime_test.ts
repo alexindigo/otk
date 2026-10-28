@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { SidecarConnection } from "../connection.ts";
 import { createSidecars } from "../sidecars.ts";
@@ -27,6 +28,7 @@ class Socket {
       data: JSON.stringify({
         t: "welcome",
         protocol: PROTOCOL_VERSION,
+        messages: fixtureMessagePolicy,
         sidecar: {
           version: "test",
           harness: {

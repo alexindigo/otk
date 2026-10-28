@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assertEquals } from "@std/assert";
 import { createSession } from "../session.ts";
 import type { SidecarConnection } from "../connection.ts";
@@ -10,6 +11,7 @@ Deno.test("deleted selection is metadata-only, aborts live content, and resurrec
   entry.deleted = { at: 1, how: "provider" };
   const calls: unknown[] = [];
   const c = {
+    messages: fixtureMessagePolicy,
     subscribe: (...args: unknown[]) => calls.push(args),
     supports: () => false,
     rpc: {
@@ -68,6 +70,7 @@ Deno.test("deleted attention input survives view release until the normal guard 
 Deno.test("removing a server retires its catalog readiness before a new direct selection", () => {
   const calls: string[] = [];
   const c = {
+    messages: fixtureMessagePolicy,
     subscribe() {},
     supports: () => false,
     rpc: {
@@ -90,13 +93,13 @@ Deno.test("removing a server retires its catalog readiness before a new direct s
     session.open({ sidecarId: "local", sessionID: "tstv1-first" });
     assertEquals(calls, []);
     session.receive("local", { t: "index.snapshot", rev: 0, entries: [] });
-    assertEquals(calls, ["session.get", "session.messages"]);
+    assertEquals(calls, ["session.messages"]);
     session.open();
     Reflect.apply(Reflect.get(session, "removeServer"), session, ["local"]);
     session.open({ sidecarId: "local", sessionID: "tstv1-next" });
-    assertEquals(calls.length, 2);
+    assertEquals(calls.length, 1);
     session.receive("local", { t: "index.snapshot", rev: 0, entries: [] });
-    assertEquals(calls.length, 4);
+    assertEquals(calls.length, 2);
   } finally {
     session.stop();
   }

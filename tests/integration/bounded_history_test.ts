@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixtureMessagePolicy } from "../support/message-pages.ts";
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
@@ -105,6 +106,7 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
             reconnectmax: 30,
           },
           index: { days: 30 },
+          messages: fixtureMessagePolicy,
         },
         undefined,
         (input, options) => {
@@ -171,9 +173,10 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
         },
       );
       const before = reads.length;
-      const messages = await adapter.core.listMessages(carrier.id, {
-        limit: 20,
-      });
+      const { items: messages } = await adapter.core.listMessages(
+        carrier.id,
+        {},
+      );
       const task = messages.flatMap((message) => message.parts).find((part) =>
         part.kind === "tool" && part.call.tool === "task"
       );

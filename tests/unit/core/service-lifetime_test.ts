@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixturePage } from "../../support/message-pages.ts";
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import type { Harness } from "@otk/harness";
 import { OtkDb, Prefs, prefsMigrations } from "@otk/store";
@@ -39,7 +40,7 @@ for (
         subscriptions() {},
         getSession: () => Promise.reject(new Error("unused")),
         listChildren: () => Promise.resolve([]),
-        listMessages: () => Promise.resolve([]),
+        listMessages: (id) => Promise.resolve(fixturePage(id)),
         createSession: () => Promise.reject(new Error("unused")),
       },
     };

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { readRpcMessages } from "../support/message-pages.ts";
 import { assertEquals, assertRejects } from "@std/assert";
 import { test } from "../support/resources.ts";
 import { browserFixture } from "../support/browser-fixture.ts";
@@ -85,10 +86,7 @@ test("restore returns rolled-back prompts to the real native conversation", asyn
     ]);
     assertEquals(reverted.revert?.prompt?.input, "Boundary prompt");
     assertEquals(
-      await client.rpc("session.messages", {
-        sessionID: session.id,
-        limit: 100,
-      }),
+      await readRpcMessages(client, session.id),
       [],
     );
     const restored = await client.rpc<ContentSession>("session.restore", {
@@ -96,10 +94,7 @@ test("restore returns rolled-back prompts to the real native conversation", asyn
     });
     assertEquals(restored.revert, undefined);
     assertEquals(
-      (await client.rpc<unknown[]>("session.messages", {
-        sessionID: session.id,
-        limit: 100,
-      })).length,
+      (await readRpcMessages(client, session.id)).length,
       2,
     );
   } finally {

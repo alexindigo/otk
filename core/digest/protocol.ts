@@ -2,6 +2,7 @@
 import type { DigestPolicy, DirtySession } from "@otk/harness";
 import type { DigestDelta, SessionMetadata, SessionUsage } from "@otk/protocol";
 import type { OpencodeV1Config } from "@otk/harness-opencode-v1";
+import type { TranscriptMetadata } from "@otk/harness";
 export interface DigestPressure {
   queued: number;
   active: number;
@@ -35,6 +36,7 @@ export type ToWorker =
     | { t: "scope"; owner: string; directory?: string; sessions: string[] }
     | { t: "interactive"; owner: string; active: boolean }
     | { t: "detail"; sessionID: string }
+    | { t: "transcript"; sessionID: string; turns: string[]; cutoff?: string }
     | {
       t: "deleteIntent";
       sessionID: string;
@@ -50,6 +52,7 @@ export type FromWorker =
   & { run: string; id: number }
   & (
     | { t: "accepted" }
+    | { t: "transcript"; sessionID: string; metadata: TranscriptMetadata }
     | {
       t: "catalog";
       connection: number;

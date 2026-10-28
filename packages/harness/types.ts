@@ -1,9 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type {
   Capabilities,
+  ContentClock,
   ContentOp,
   ContentSession,
-  Message,
+  MessageCursor,
+  MessagePage,
 } from "@otk/protocol";
 import type { SessionMetadata } from "@otk/protocol";
 import type { HarnessState } from "@otk/protocol";
@@ -33,7 +35,7 @@ export interface HarnessSink {
   indexReset(entries: SessionMetadata[]): void;
   indexUpsert(entry: SessionMetadata): void;
   indexRemove(sessionID: string): void;
-  content(sessionID: string, op: ContentOp): void;
+  content(sessionID: string, op: ContentOp, clock?: ContentClock): void;
   resync(sessionIDs: "all"): void;
 }
 export interface HarnessCore {
@@ -46,8 +48,9 @@ export interface HarnessCore {
   listChildren(id: string): Promise<ContentSession[]>;
   listMessages(
     id: string,
-    opts: { before?: string; limit: number },
-  ): Promise<Message[]>;
+    opts: { before?: MessageCursor },
+    signal?: AbortSignal,
+  ): Promise<MessagePage>;
   createSession(
     input: { directory: string; title?: string; parentID?: string },
   ): Promise<ContentSession>;

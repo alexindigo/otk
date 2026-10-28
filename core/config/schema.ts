@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { DigestPolicy } from "@otk/harness";
+import type { MessagePolicy } from "@otk/protocol";
 export type LeafType = "string" | "int" | "float" | "bool" | "list";
 export type Schema = { [node: string]: LeafType | Schema };
 export const SERVICE_SCHEMA: Schema = {
@@ -25,6 +26,7 @@ export const SERVICE_SCHEMA: Schema = {
     reconnectmax: "int",
   },
   index: { days: "int" },
+  messages: { replayops: "int", replaybytes: "int", retryms: "int" },
   digest: {
     batch: "int",
     slicems: "int",
@@ -60,4 +62,5 @@ export interface ServiceConfig {
   };
   index: { days: number };
   digest: DigestPolicy;
+  messages: MessagePolicy;
 }

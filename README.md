@@ -147,7 +147,7 @@ message asking you to use `opencode-v1`; OTK does not rewrite your operator
 file. Environment overrides retain precedence.
 
 Session IDs are now `opcv1-<native id>` throughout the API and browser, using
-wire protocol 14. An older browser is rejected with a protocol mismatch and must
+wire protocol 15. An older browser is rejected with a protocol mismatch and must
 reload. Old bare-ID bookmarks show a compatibility notice; choose the session
 again from Sessions or its task to obtain the canonical URL.
 
@@ -165,6 +165,14 @@ index; only opening a usage breakdown reads the call ledger. Incomplete
 reconciliation shows **Digesting…** and unreported usage stays unavailable
 rather than zero. The `[digest]` defaults document batching, scheduling and
 resource bounds.
+
+Transcripts open with the newest ten native messages and continue through opaque
+provider cursors, ten at a time. Each page includes session metadata and the
+latest visible prompt's agent/model/variant even when that prompt is outside the
+page, preserving composer context and Undo. Content clocks align page snapshots
+with live changes. Replay is bounded by `[messages]` configuration; a lost or
+overflowed baseline shows “Refreshing messages…” and reacquires a provider page.
+No transcript content is persisted in OTK's databases.
 
 Deleting a native session retains its last metadata and task membership as a
 tombstone. Select its struck-through row to see details, copy its title, remove

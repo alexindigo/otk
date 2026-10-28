@@ -19,7 +19,12 @@ Deno.test("older buffered live frames cannot replace a newer current-text snapsh
     id: "part",
     synthetic: false,
     blocks: markdown("newer snapshot text"),
-    streamVersion: 2,
+    stream: {
+      epoch: "test",
+      generation: 1,
+      version: 2,
+      mode: "appendable" as const,
+    },
   };
   const state = {
     ...emptyContent(),
@@ -31,13 +36,23 @@ Deno.test("older buffered live frames cannot replace a newer current-text snapsh
     partID: "part",
     from: 0,
     blocks: markdown("older frame"),
-    streamVersion: 1,
+    stream: {
+      epoch: "test",
+      generation: 1,
+      version: 1,
+      mode: "appendable" as const,
+    },
+    baseVersion: 0,
   };
   assertEquals(reduce(state, stale).messages[0].parts[0], part);
   const stalePart = {
     op: "part.upsert" as const,
     messageID: "reply",
-    part: { ...part, blocks: markdown("older part"), streamVersion: 1 },
+    part: {
+      ...part,
+      blocks: markdown("older part"),
+      stream: { ...part.stream, version: 1 },
+    },
   };
   assertEquals(reduce(state, stalePart).messages[0].parts[0], part);
 });

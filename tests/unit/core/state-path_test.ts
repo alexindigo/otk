@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixturePage } from "../../support/message-pages.ts";
 import { test } from "../../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
@@ -108,7 +109,7 @@ for (
         getSession: () => Promise.reject(new Error("No sessions")),
         createSession: () => Promise.reject(new Error("No sessions")),
         listChildren: () => Promise.resolve([]),
-        listMessages: () => Promise.resolve([]),
+        listMessages: (id) => Promise.resolve(fixturePage(id)),
       },
       capabilities: {},
     };

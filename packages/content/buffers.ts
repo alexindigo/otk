@@ -11,6 +11,8 @@ interface ActivePart {
   sessionID: string;
   messageID: string;
   version: number;
+  published: number;
+  generation: number;
   lastChunk: number;
   timer?: ReturnType<typeof setTimeout>;
 }
@@ -20,6 +22,27 @@ export class StreamBuffers {
   #parts = new Map<string, ActivePart>();
   #subscriptions = new Map<string, number>();
   #version = 0;
+  #generation = 0;
+  #epochs = new Map<string, string>();
+  epoch(sessionID: string, epoch: string): void {
+    if (this.#epochs.get(sessionID) === epoch) return;
+    this.#epochs.set(sessionID, epoch);
+    for (const part of this.#parts.values()) {
+      if (part.sessionID !== sessionID) continue;
+      part.generation = ++this.#generation;
+      part.published = 0;
+    }
+  }
+  #stamp(active: ActivePart): import("@otk/protocol").StreamStamp {
+    let epoch = this.#epochs.get(active.sessionID);
+    if (!epoch) this.#epochs.set(active.sessionID, epoch = crypto.randomUUID());
+    return {
+      epoch,
+      generation: active.generation,
+      version: active.version,
+      mode: "appendable",
+    };
+  }
   #replies = new Map<
     string,
     { sessionID: string; observed?: number; ends: Map<string, number> }
@@ -97,6 +120,8 @@ export class StreamBuffers {
       active.stream.replace(text);
       active.shell = shell;
       active.version = ++this.#version;
+      active.generation = ++this.#generation;
+      active.published = active.version;
       active.lastChunk = now;
     } else {
       this.#parts.set(part.id, {
@@ -105,6 +130,8 @@ export class StreamBuffers {
         sessionID,
         messageID,
         version: ++this.#version,
+        published: this.#version,
+        generation: ++this.#generation,
         lastChunk: now,
       });
     }
@@ -121,12 +148,15 @@ export class StreamBuffers {
         part.timer = undefined;
         part.lastChunk = Date.now();
         this.observeOutput(part.sessionID, part.messageID, part.lastChunk);
+        const baseVersion = part.published;
+        part.published = part.version;
         emit(part.sessionID, {
           op: "part.blocks",
           messageID: part.messageID,
           partID,
           ...part.stream.flush(),
-          streamVersion: part.version,
+          stream: this.#stamp(part),
+          baseVersion,
           lastOutput: part.lastChunk,
         });
       }, 50);
@@ -156,15 +186,23 @@ export class StreamBuffers {
         part: {
           ...active.shell,
           blocks: markdown(active.stream.text),
-          streamVersion: active.version,
+          stream: this.#stamp(active),
         },
         lastChunk: active.lastChunk,
       }
       : undefined;
   }
   replay(sessionID: string, emit: Emit): void {
+    this.checkpoint(sessionID, emit);
+  }
+  /** One synchronous source/publication checkpoint shared by every viewer. */
+  checkpoint(sessionID: string, emit: Emit): void {
     for (const [id, active] of this.#parts) {
       if (active.sessionID === sessionID) {
+        clearTimeout(active.timer);
+        active.timer = undefined;
+        active.stream.flush();
+        active.published = active.version;
         emit(sessionID, {
           op: "part.upsert",
           messageID: active.messageID,
@@ -214,6 +252,7 @@ export class StreamBuffers {
     this.#parts.delete(partID);
   }
   removeSession(sessionID: string): void {
+    this.#epochs.delete(sessionID);
     for (const [id, reply] of this.#replies) {
       if (reply.sessionID === sessionID) this.#replies.delete(id);
     }
@@ -222,6 +261,7 @@ export class StreamBuffers {
     }
   }
   reset(): void {
+    this.#epochs.clear();
     this.#replies.clear();
     for (const id of this.#parts.keys()) this.remove(id);
   }

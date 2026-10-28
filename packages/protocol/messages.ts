@@ -4,6 +4,7 @@ import type { IndexEntry, IndexOp } from "./index.ts";
 import type { Preferences } from "./prefs.ts";
 import type { InboxSnapshot } from "./inbox.ts";
 import type { ApprovalSnapshot } from "./approvals.ts";
+import type { ContentClock, MessagePolicy } from "./transcript.ts";
 import { type CapabilityName, legacyCapabilities } from "./capabilities.ts";
 export const MAX_CLIENT_FRAME_BYTES: number = 64 * 1024 * 1024;
 export function checkClientFrameSize(serialized: string): void {
@@ -28,6 +29,7 @@ export type ServerFrame =
   | {
     t: "welcome";
     protocol: number;
+    messages: MessagePolicy;
     sidecar: {
       version: string;
       harness: {
@@ -46,7 +48,7 @@ export type ServerFrame =
   | { t: "approval.activity"; sessions: string[] }
   | { t: "index.snapshot"; rev: number; entries: IndexEntry[] }
   | { t: "index.patch"; rev: number; ops: IndexOp[] }
-  | { t: "content"; sessionID: string; event: ContentOp }
+  | { t: "content"; sessionID: string; event: ContentOp; clock?: ContentClock }
   | { t: "resync"; sessionIDs: "all" }
   | { t: "rpc.result"; id: string; ok: true; result: unknown }
   | {

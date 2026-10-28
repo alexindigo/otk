@@ -14,7 +14,7 @@ test("shared type tokens reach rendered chrome prose code and metadata in both t
     prompt: { prompt: () => Promise.resolve(), abort: () => Promise.resolve() },
   });
   f.app.backend.core.listMessages = () =>
-    Promise.resolve([{
+    Promise.resolve(f.page([{
       id: "message",
       sessionID: "tstv1-core",
       role: "user",
@@ -31,7 +31,7 @@ test("shared type tokens reach rendered chrome prose code and metadata in both t
           }],
         }, { b: "code", lang: "text", text: "const role = 'shared';" }],
       }],
-    }]);
+    }]));
   const b = await Cdp.launch(workspace), client = new WsClient(f.url);
   const failures: unknown[] = [];
   try {

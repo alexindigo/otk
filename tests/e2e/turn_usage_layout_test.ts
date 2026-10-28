@@ -88,7 +88,7 @@ async function setup(count: number) {
     },
   });
   f.app.backend.core.listMessages = (_id, opts) =>
-    Promise.resolve(messages.slice(-opts.limit));
+    Promise.resolve(f.page(messages, opts.before));
   const b = await Cdp.launch(root), client = new WsClient(f.url);
   publishUsage(f.app.index, ledger.snapshot());
   await client.connect();

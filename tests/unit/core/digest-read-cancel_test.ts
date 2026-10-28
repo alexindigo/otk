@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixtureMessagePolicy } from "../../support/message-pages.ts";
 import { assertEquals } from "@std/assert";
 import { OtkDb, Prefs, prefsMigrations } from "@otk/store";
 import { createSessionUsage, Rpc } from "@otk/client";
@@ -86,6 +87,7 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
     "",
     new Prefs(db, prefsOptions),
     registry,
+    fixtureMessagePolicy,
   );
   const frames: ServerFrame[] = [];
   const socket = {
@@ -186,6 +188,7 @@ test("RPC read cancellation is connection-scoped and ignores completed, duplicat
     "",
     new Prefs(db, prefsOptions),
     rpc,
+    fixtureMessagePolicy,
   );
   const makeSocket = () => {
     const frames: ServerFrame[] = [];

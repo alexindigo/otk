@@ -84,6 +84,16 @@ tool inputs/output. The public UsageLedger owns aggregation and the complete
 turn range, and idempotent live replacement; transcript pagination never limits
 charged usage totals.
 
+`session.messages` validates qualified identity, an optional nonempty cursor of
+at most 4096 characters and the exact input shape. It forwards per-call read
+cancellation to `HarnessCore.listMessages`; dispatch remains generic. Pages
+include coordinated session metadata, newest visible prompt context, content
+clocks and bounded catchup. Core forwards the producer's content clock
+unchanged. The layered `[messages]` replay policy is injected into the adapter
+and supplied as `welcome.messages`; neither libraries nor browsers invent
+another defaults table. Connections require this policy explicitly in smaller
+compositions too.
+
 The existing `welcome.sidecar.harness` wire shape gains a `capabilities` array
 advertising present backend capabilities. Consumers gate optional features on
 it. Core sessions, prefs and frecency need no optional backend capabilities.

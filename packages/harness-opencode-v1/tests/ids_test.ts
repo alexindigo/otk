@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { OpencodeV1Adapter, opencodeV1SessionID as ids } from "../mod.ts";
 import { isSessionID } from "@otk/protocol";
@@ -137,6 +138,7 @@ test("public adapter qualifies every capability boundary, including externally c
         reconnectmax: 30,
       },
       index: { days: 30 },
+      messages: fixtureMessagePolicy,
     },
     undefined,
     (input, options) => {
@@ -245,7 +247,7 @@ test("public adapter qualifies every capability boundary, including externally c
     assertEquals((await adapter.core.getSession(helper)).id, helper);
     assertEquals((await adapter.core.listChildren(id))[0].parentID, id);
     assertEquals(
-      (await adapter.core.listMessages(helper, { limit: 10 }))[0].sessionID,
+      (await adapter.core.listMessages(helper, {})).items[0].sessionID,
       helper,
     );
     await adapter.core.createSession({ directory: "/project", parentID: id });
@@ -305,7 +307,7 @@ test("public adapter qualifies every capability boundary, including externally c
       const reads = [
         () => adapter.core.getSession(bad),
         () => adapter.core.listChildren(bad),
-        () => adapter.core.listMessages(bad, { limit: 1 }),
+        () => adapter.core.listMessages(bad, {}),
         () => c.agents!.listAgents(bad),
         () => c.models!.listModels(bad),
         () => c.resources!.listResources(bad),

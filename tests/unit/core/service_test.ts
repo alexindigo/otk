@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixturePage } from "../../support/message-pages.ts";
 import { test } from "../../support/resources.ts";
 import { ownSocket } from "../../support/ws-client.ts";
 import { assert, assertEquals } from "@std/assert";
@@ -48,7 +49,7 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
       subscriptions() {},
       getSession: () => Promise.resolve(session),
       listChildren: () => Promise.resolve([]),
-      listMessages: () => Promise.resolve([]),
+      listMessages: (id) => Promise.resolve(fixturePage(id)),
       createSession: () => Promise.resolve(session),
     },
     capabilities: { prompt: undefined },

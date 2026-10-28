@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assertEquals } from "@std/assert";
 import { PROTOCOL_VERSION } from "@otk/protocol";
 import { createSidecars } from "@otk/client";
@@ -91,6 +92,7 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
           data: JSON.stringify({
             t: "welcome",
             protocol: PROTOCOL_VERSION,
+            messages: fixtureMessagePolicy,
             sidecar: {
               version: "legacy",
               harness: {
@@ -149,6 +151,7 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
           data: JSON.stringify({
             t: "welcome",
             protocol: PROTOCOL_VERSION,
+            messages: fixtureMessagePolicy,
             sidecar: {
               version: "reconnected",
               harness: {

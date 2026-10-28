@@ -20,8 +20,8 @@ export function connectionPublication(
     indexRemove: (id) => {
       if (!signal.aborted) sink.indexRemove(id);
     },
-    content: (id, event) => {
-      if (!signal.aborted) sink.content(id, event);
+    content: (id, event, clock) => {
+      if (!signal.aborted) sink.content(id, event, clock);
     },
     resync: (ids) => {
       if (!signal.aborted) sink.resync(ids);

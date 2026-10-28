@@ -142,7 +142,7 @@ test("control labels stay single-line across transcript, chrome, menus, pickers 
         }),
     },
   });
-  f.app.backend.core.listMessages = () => Promise.resolve([reply]);
+  f.app.backend.core.listMessages = () => Promise.resolve(f.page([reply]));
   const b = await Cdp.launch(root), client = new WsClient(f.url);
   const results: unknown[] = [], failures: unknown[] = [];
   const shots = Deno.env.get("OTK_LABEL_SHOTS");

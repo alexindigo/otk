@@ -299,7 +299,7 @@ test("unknown summaries and rejected detail never render a fictitious zero ledge
     },
   });
   f.app.backend.core.listMessages = () =>
-    Promise.resolve([{
+    Promise.resolve(f.page([{
       id: "reply",
       sessionID: f.session.id,
       role: "assistant",
@@ -316,7 +316,7 @@ test("unknown summaries and rejected detail never render a fictitious zero ledge
       cost: 0,
       interrupted: false,
       parts: [],
-    }]);
+    }]));
   const summary = {
     calls: 1,
     cost: null,
@@ -364,7 +364,7 @@ test("summary-only backends show facts without a dead usage control or context a
   const root = await tempDir("sf-");
   const f = await coreBackendFixture(root);
   f.app.backend.core.listMessages = () =>
-    Promise.resolve([{
+    Promise.resolve(f.page([{
       id: "reply",
       sessionID: f.session.id,
       role: "assistant",
@@ -381,7 +381,7 @@ test("summary-only backends show facts without a dead usage control or context a
       cost: .25,
       interrupted: false,
       parts: [],
-    }]);
+    }]));
   const summary = {
     calls: 1,
     cost: .25,

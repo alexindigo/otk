@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { tempDir, test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
@@ -158,13 +159,13 @@ for (const mode of ["SQL", "API"] as const) {
       if (mode === "SQL") {
         assertEquals(
           limit,
-          1,
+          10,
           "SQL metadata must not fetch histories over HTTP",
         );
       }
       if (
         url.pathname === "/session/parent/message" &&
-        !url.searchParams.has("before") && limit === 1
+        !url.searchParams.has("before") && limit === 10
       ) {
         return Promise.resolve(
           Response.json([{
@@ -190,6 +191,7 @@ for (const mode of ["SQL", "API"] as const) {
           reconnectmax: 30,
         },
         index: { days: 30 },
+        messages: fixtureMessagePolicy,
       },
       undefined,
       fetcher,
@@ -209,10 +211,9 @@ for (const mode of ["SQL", "API"] as const) {
         "/agent",
       ]);
       delete session.revert;
-      const result = await adapter.core.listMessages("opcv1-parent", {
-        limit: 1,
-      });
-      const part = result[0].parts[0];
+      await adapter.core.getSession("opcv1-parent");
+      const result = await adapter.core.listMessages("opcv1-parent", {});
+      const part = result.items[0].parts[0];
       assert(part.kind === "tool" && part.call.tool === "task");
       assertEquals(part.call.toolCount, 600);
       assertEquals(part.call.currentTool, "bash Tool 1197");

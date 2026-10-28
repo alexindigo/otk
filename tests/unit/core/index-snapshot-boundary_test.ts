@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  fixtureMessagePolicy,
+  fixturePage,
+} from "../../support/message-pages.ts";
 import { assertEquals } from "@std/assert";
 import { createIndex } from "@otk/client";
 import type { Harness } from "@otk/harness";
@@ -46,7 +50,7 @@ async function connectionFixture() {
       getSession: () => Promise.reject(new Error("Not requested")),
       createSession: () => Promise.reject(new Error("Not requested")),
       listChildren: () => Promise.resolve([]),
-      listMessages: () => Promise.resolve([]),
+      listMessages: (id) => Promise.resolve(fixturePage(id)),
     },
     capabilities: {},
   };
@@ -57,6 +61,7 @@ async function connectionFixture() {
     "test",
     new Prefs(db, prefsOptions),
     new RpcRegistry(backend, db),
+    fixtureMessagePolicy,
   );
   const socket = {
     readyState: WebSocket.OPEN,

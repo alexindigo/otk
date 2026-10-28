@@ -5,3 +5,4 @@ export { DigestScheduler } from "./digest-scheduler.ts";
 export * from "./types.ts";
 export { CapabilityRegistry, requireCapability } from "./registry.ts";
 export { SessionIndex } from "./index.ts";
+export { ContentReplay } from "./content-replay.ts";

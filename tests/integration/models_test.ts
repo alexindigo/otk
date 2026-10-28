@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { readRpcMessages } from "../support/message-pages.ts";
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
-import type { AgentOption, Message, ModelCatalog } from "@otk/protocol";
+import type { AgentOption, ModelCatalog } from "@otk/protocol";
 import { browserFixture } from "../support/browser-fixture.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { waitFor } from "../support/opencode.ts";
@@ -172,11 +173,7 @@ test("V3 models and agents expose connected public metadata over WS and preserve
     );
     assertEquals(request!.reasoning_effort, "high");
     const messages = await waitFor(
-      () =>
-        client!.rpc<Message[]>("session.messages", {
-          sessionID: session.id,
-          limit: 100,
-        }),
+      () => readRpcMessages(client!, session.id),
       (rows) =>
         rows.some((message) =>
           message.role === "assistant" &&

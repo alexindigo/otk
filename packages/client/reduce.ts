@@ -162,11 +162,14 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
         if (op.part.kind === "text" || op.part.kind === "reasoning") {
           const previous = message.parts[index];
           if (
-            op.part.streamVersion !== undefined &&
+            op.part.stream !== undefined &&
             ((message.role === "assistant" &&
               message.time.completed !== undefined) ||
               ((previous?.kind === "text" || previous?.kind === "reasoning") &&
-                (previous.streamVersion || 0) > op.part.streamVersion))
+                previous.stream?.epoch === op.part.stream.epoch &&
+                (previous.stream.generation > op.part.stream.generation ||
+                  (previous.stream.generation === op.part.stream.generation &&
+                    previous.stream.version > op.part.stream.version))))
           ) return message;
         }
         const parts = [...message.parts];
@@ -180,14 +183,26 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
           parts: message.parts.filter((p) => p.id !== op.partID),
         };
       }
+      if (
+        message.role === "assistant" && message.time.completed !== undefined
+      ) return message;
       const target = message.parts.find((part) => part.id === op.partID);
       if (
         (target?.kind === "text" || target?.kind === "reasoning") &&
-        op.streamVersion !== undefined &&
+        op.stream !== undefined &&
         ((message.role === "assistant" &&
           message.time.completed !== undefined) ||
-          (target.streamVersion || 0) > op.streamVersion)
+          (target.stream?.epoch === op.stream.epoch &&
+            target.stream.generation === op.stream.generation &&
+            target.stream.version >= op.stream.version))
       ) return message;
+      if (
+        (target?.kind !== "text" && target?.kind !== "reasoning") ||
+        !target.stream || target.stream.mode !== "appendable" ||
+        target.stream.epoch !== op.stream.epoch ||
+        target.stream.generation !== op.stream.generation ||
+        target.stream.version !== op.baseVersion
+      ) throw new Error("stream-gap");
       return output({
         ...message,
         parts: message.parts.map((part) =>
@@ -196,9 +211,7 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
             ? {
               ...part,
               blocks: [...part.blocks.slice(0, op.from), ...op.blocks],
-              ...(op.streamVersion === undefined
-                ? {}
-                : { streamVersion: op.streamVersion }),
+              stream: op.stream,
             }
             : part
         ),

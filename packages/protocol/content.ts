@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { SessionErrorState } from "./errors.ts";
 import type { HistoryEntry } from "./history.ts";
+import type { StreamStamp } from "./transcript.ts";
 /** A concrete hex colour or a semantic role, resolved by the consumer's theme. */
 export type AgentColor = `#${string}` | "accent" | "secondary";
 export interface ModelRef {
@@ -215,14 +216,14 @@ export interface PartKinds {
     id: string;
     blocks: Block[];
     synthetic: boolean;
-    streamVersion?: number;
+    stream?: StreamStamp;
   };
   reasoning: {
     kind: "reasoning";
     id: string;
     title?: string;
     blocks: Block[];
-    streamVersion?: number;
+    stream?: StreamStamp;
     time: { start: number; end?: number };
   };
   tool: { kind: "tool"; id: string; call: ToolCall };
@@ -350,7 +351,8 @@ export type ContentOp =
     partID: string;
     from: number;
     blocks: Block[];
-    streamVersion?: number;
+    stream: StreamStamp;
+    baseVersion: number;
     lastOutput?: number;
   }
   | { op: "part.remove"; messageID: string; partID: string }

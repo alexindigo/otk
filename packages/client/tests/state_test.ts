@@ -41,6 +41,7 @@ const part: Part = {
   id: "part",
   kind: "text",
   synthetic: false,
+  stream: { epoch: "test", generation: 1, version: 0, mode: "appendable" },
   blocks: [{ b: "paragraph", inline: [{ i: "text", text: "tail" }] }],
 };
 Deno.test("web reducer replays independent headers/parts and replaces streaming tails without mutating history", () => {
@@ -55,6 +56,8 @@ Deno.test("web reducer replays independent headers/parts and replaces streaming 
   assertEquals(state.messages[0].parts, [part]);
   state = reduce(state, {
     op: "part.blocks",
+    stream: { epoch: "test", generation: 1, version: 1, mode: "appendable" },
+    baseVersion: 0,
     messageID: message.id,
     partID: part.id,
     from: 0,

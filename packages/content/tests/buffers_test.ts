@@ -42,7 +42,7 @@ Deno.test("unwatched snapshots and late replay include unflushed text, RAM time 
     const current = buffers.snapshot(part.id)!;
     assert(current.lastChunk >= before);
     assert(
-      (current.part.streamVersion || 0) > (seeded.part.streamVersion || 0),
+      (current.part.stream?.version || 0) > (seeded.part.stream?.version || 0),
     );
     assertEquals(current.part.blocks, markdown("first second"));
     buffers.subscriptions("session", 1);

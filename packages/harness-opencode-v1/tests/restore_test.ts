@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assertEquals } from "@std/assert";
 import { OpencodeV1Adapter as Opencode1Adapter } from "../adapter.ts";
 import { tempDir, test } from "../../../tests/support/resources.ts";
@@ -16,6 +17,7 @@ test("restore resolves its directory and posts unrevert before returning authori
         reconnectmax: 30,
       },
       index: { days: 30 },
+      messages: fixtureMessagePolicy,
     },
     undefined,
     (input, init) => {

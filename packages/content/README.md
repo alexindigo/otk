@@ -26,6 +26,16 @@ ms, retains unobserved source and emits final authoritative content on
 completion. Consumers supply `(sessionID, event)` callbacks; call `stop()` to
 release buffers, clocks, subscriptions and pending timers.
 
+Streaming parts carry a `StreamStamp`; block suffixes name their exact published
+`baseVersion`. Observed source versions and published checkpoints are separate,
+so multiple coalesced native deltas still append to the consumer's actual base.
+`epoch(sessionID, epoch)` binds source authority to its transcript lifetime.
+`checkpoint(sessionID, emit)` synchronously cancels pending flushes, advances
+the parser checkpoint and publishes complete current replacements to all
+existing viewers before a new page seals. A new viewer therefore cannot get
+ahead of the next suffix's base while another viewer remains on an older
+version.
+
 ## Example
 
 Within the OTK workspace, Deno resolves the package by its name:

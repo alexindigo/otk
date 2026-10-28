@@ -589,6 +589,20 @@ function handle(message: ToWorker): void {
           }
         }
         post({ t: "accepted", run: run!, id: message.id });
+      } else if (message.t === "transcript") {
+        const metadata = await sink!.transcriptMetadata(
+          message.sessionID,
+          message.turns,
+          signal,
+          message.cutoff,
+        );
+        post({
+          t: "transcript",
+          run: run!,
+          id: message.id,
+          sessionID: message.sessionID,
+          metadata,
+        });
       } else if (message.t === "detail") {
         const detail = await sink!.detail(message.sessionID, signal);
         const turns = Object.entries(detail.turns);

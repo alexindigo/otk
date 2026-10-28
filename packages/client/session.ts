@@ -1,5 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage, isSessionID } from "@otk/protocol";
+import {
+  type ClockedContent,
+  type ContentClock,
+  errorMessage,
+  isSessionID,
+  type LatestPrompt,
+  type MessageCursor,
+} from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import type { ContentOp, ContentSession, Message, Part } from "@otk/protocol";
 import { isAttentionOp } from "@otk/protocol";
@@ -49,6 +56,8 @@ export interface SessionState {
   deleted?: IndexEntry;
   selection?: Selection;
   info?: ContentSession;
+  clock?: ContentClock;
+  latestPrompt?: LatestPrompt;
   siblings: ContentSession[];
   content: ContentState;
   loading: boolean;
@@ -78,6 +87,7 @@ export interface ClientSession {
   receive(sidecarId: string, frame: ServerFrame): void;
   removeServer(sidecarId: string): void;
   older(): Promise<void>;
+  latestPrompt(): LatestPrompt | undefined;
   stop(): void;
 }
 export function createSession(
@@ -105,10 +115,14 @@ export function createSession(
   );
   const indexed = new Set<string>();
   let subscribed = false;
-  let buffer: ContentOp[] = [], fetching = false;
+  let buffer: ClockedContent[] = [], bufferBytes = 0, fetching = false;
+  let clock: ContentClock | undefined, cursor: MessageCursor | null = null;
+  let missing = false, retry: ReturnType<typeof setTimeout> | undefined;
   let hasBaseline = false;
   let attentionReads: {
-    events: ContentOp[];
+    events: Map<string, ContentOp>;
+    bytes: number;
+    count: number;
     pending: Set<"permission" | "question">;
   } | undefined;
   let controller: AbortController | undefined;
@@ -147,8 +161,43 @@ export function createSession(
   };
   const current = (id: number, request: number) =>
     id === generation && request === load;
+  const schedule = () => {
+    if (retry !== undefined || !selected) return;
+    const policy = connection(selected.sidecarId).messages;
+    if (!policy) return;
+    const id = generation;
+    retry = setTimeout(() => {
+      retry = undefined;
+      if (selected && id === generation) void refetch();
+    }, policy.retryms);
+  };
+  const invalidate = () => {
+    missing = true;
+    buffer = [];
+    bufferBytes = 0;
+    load++;
+    controller?.abort();
+    fetching = false;
+    attentionReads = undefined;
+    setState((draft) => {
+      draft.loading = false;
+      draft.paging = false;
+      draft.continuity = "missing";
+    });
+    schedule();
+  };
+  const accept = (frame: ClockedContent): boolean => {
+    if (!clock || frame.clock.epoch !== clock.epoch) return false;
+    if (frame.clock.seq <= clock.seq) return true;
+    if (frame.clock.seq !== clock.seq + 1) return false;
+    clock = frame.clock;
+    return true;
+  };
   const refetch = async () => {
     if (!selected) return;
+    if (!connection(selected.sidecarId).messages) return;
+    clearTimeout(retry);
+    retry = undefined;
     if (entry(selected.sidecarId, selected.sessionID)?.deleted) {
       return;
     }
@@ -156,18 +205,28 @@ export function createSession(
       waitForIndex && !indexed.has(selected.sidecarId) &&
       !entry(selected.sidecarId, selected.sessionID)
     ) return;
+    const recovering = missing;
     const target = selected, id = generation, request = ++load;
     controller?.abort();
     const abort = controller = new AbortController();
     fetching = true;
+    buffer = [];
+    bufferBytes = 0;
+    missing = false;
     const attention = attentionReads = {
-      events: [] as ContentOp[],
+      events: new Map<string, ContentOp>(),
+      bytes: 0,
+      count: 0,
       pending: new Set<"permission" | "question">(["permission", "question"]),
     };
     setState((draft) => {
       draft.loading = true;
       draft.paging = false;
-      draft.continuity = hasBaseline ? "ready" : "loading";
+      draft.continuity = recovering
+        ? "missing"
+        : hasBaseline
+        ? "ready"
+        : "loading";
       draft.error = undefined;
       draft.exhausted = false;
     });
@@ -192,7 +251,7 @@ export function createSession(
             if (!current(id, request)) return;
             setState((draft) => {
               let content = { ...draft.content, permissions };
-              for (const op of attention.events) {
+              for (const op of attention.events.values()) {
                 if (
                   op.op === "permission.upsert" || op.op === "permission.remove"
                 ) content = reduce(content, op);
@@ -210,7 +269,7 @@ export function createSession(
             if (!current(id, request)) return;
             setState((draft) => {
               let content = { ...draft.content, questions };
-              for (const op of attention.events) {
+              for (const op of attention.events.values()) {
                 if (
                   op.op === "question.upsert" || op.op === "question.remove"
                 ) content = reduce(content, op);
@@ -229,18 +288,30 @@ export function createSession(
       };
       void optional("permission");
       void optional("question");
-      const [info, messages] = await Promise.all([
-        rpc.call(
-          "session.get",
-          { sessionID: target.sessionID },
-          abort.signal,
-        ),
-        rpc.call("session.messages", {
-          sessionID: target.sessionID,
-          limit: 100,
-        }, abort.signal),
-      ]);
+      const page = await rpc.call("session.messages", {
+        sessionID: target.sessionID,
+      }, abort.signal);
+      const info = page.session, messages = page.items;
       if (!current(id, request)) return;
+      if (
+        page.sessionID !== target.sessionID ||
+        page.from.epoch !== page.clock.epoch || page.from.seq > page.clock.seq
+      ) throw new Error("Invalid message baseline");
+      let nextClock = page.clock;
+      const replay: ClockedContent[] = [];
+      for (const frame of buffer) {
+        if (frame.clock.epoch !== page.clock.epoch) {
+          throw new Error("Message epoch changed during baseline");
+        }
+        if (frame.clock.seq <= nextClock.seq) continue;
+        if (frame.clock.seq !== nextClock.seq + 1) {
+          throw new Error("Message baseline has a gap");
+        }
+        nextClock = frame.clock;
+        replay.push(frame);
+      }
+      clock = nextClock;
+      cursor = page.older;
       if (info.parentID) {
         void rpc.call(
           "session.children",
@@ -257,8 +328,8 @@ export function createSession(
           draft.siblings = [];
         });}
       baseline(messages);
-      const replay = buffer;
       buffer = [];
+      bufferBytes = 0;
       fetching = false;
       hasBaseline = true;
       setState((draft) => {
@@ -269,26 +340,40 @@ export function createSession(
           error: info.error,
           errorState: info.errorState,
         };
-        for (const op of replay) content = reduce(content, op);
+        let latestPrompt = page.prompt;
+        for (const { event } of page.catchup) content = reduce(content, event);
+        for (const { event } of replay) {
+          content = reduce(content, event);
+          if (event.op === "message.upsert" && event.message.role === "user") {
+            const message = event.message;
+            latestPrompt = {
+              id: message.id,
+              agent: message.agent,
+              model: message.model,
+              variant: message.variant,
+            };
+          }
+        }
         draft.info = info;
+        draft.clock = clock;
+        draft.latestPrompt = latestPrompt;
         draft.content = content;
         draft.loading = false;
         draft.continuity = "ready";
-        draft.exhausted = messages.length < 100;
+        draft.exhausted = page.older === null;
       });
     } catch (error) {
       if (!current(id, request)) return;
-      const replay = hasBaseline ? buffer : [];
-      if (hasBaseline) {
-        buffer = [];
-        fetching = false;
-      }
+      buffer = [];
+      bufferBytes = 0;
+      fetching = false;
+      missing = true;
       setState((draft) => {
-        for (const op of replay) draft.content = reduce(draft.content, op);
         draft.loading = false;
-        draft.continuity = hasBaseline ? "ready" : "missing";
+        draft.continuity = "missing";
         draft.error = errorMessage(error);
       });
+      schedule();
     }
   };
   const open = (
@@ -300,6 +385,8 @@ export function createSession(
       selection?.sessionID === selected?.sessionID
     ) { if (!force) return; }
     generation++;
+    clearTimeout(retry);
+    retry = undefined;
     load++;
     controller?.abort();
     models?.dispose();
@@ -337,6 +424,10 @@ export function createSession(
     completed.clear();
     liveCompleted.clear();
     buffer = [];
+    bufferBytes = 0;
+    clock = undefined;
+    cursor = null;
+    missing = false;
     fetching = false;
     hasBaseline = false;
     attentionReads = undefined;
@@ -347,6 +438,8 @@ export function createSession(
       draft.view = nextView;
       draft.deleted = deleted?.deleted ? deleted : undefined;
       draft.info = undefined;
+      draft.clock = undefined;
+      draft.latestPrompt = undefined;
       draft.siblings = [];
       draft.content = emptyContent();
       draft.loading = !!selection;
@@ -409,6 +502,7 @@ export function createSession(
     },
     open,
     refetch,
+    latestPrompt: () => state.latestPrompt,
     receive(sidecarId: string, frame: ServerFrame): void {
       usage.receive(sidecarId, frame);
       if (frame.t === "welcome") indexed.delete(sidecarId);
@@ -448,39 +542,127 @@ export function createSession(
       if (frame.event.op === "part.upsert") notePart(frame.event.part, true);
       if (frame.event.op === "message.upsert") baseline([frame.event.message]);
       if (isAttentionOp(frame.event) && attentionReads) {
-        attentionReads.events.push(frame.event);
+        const event = frame.event;
+        const key = event.op === "permission.upsert"
+          ? `permission:${event.request.id}`
+          : event.op === "permission.remove"
+          ? `permission:${event.requestID}`
+          : event.op === "question.upsert"
+          ? `question:${event.request.id}`
+          : event.op === "question.remove"
+          ? `question:${event.requestID}`
+          : undefined;
+        if (
+          key &&
+          attentionReads.pending.has(
+            key.startsWith("permission:") ? "permission" : "question",
+          )
+        ) {
+          const policy = connection(sidecarId).messages!;
+          const bytes =
+            new TextEncoder().encode(JSON.stringify(event)).byteLength;
+          if (
+            ++attentionReads.count > policy.replayops ||
+            attentionReads.bytes + bytes > policy.replaybytes
+          ) invalidate();
+          else {
+            attentionReads.bytes += bytes;
+            attentionReads.events.set(key, event);
+          }
+        }
       }
-      if (fetching) buffer.push(frame.event);
-      else {setState((draft) => {
+      if (isAttentionOp(frame.event)) {
+        setState((draft) => {
           draft.content = reduce(draft.content, frame.event);
-        });}
+        });
+        return;
+      }
+      if (missing) return;
+      if (!frame.clock) {
+        invalidate();
+        return;
+      }
+      if (fetching) {
+        const policy = connection(sidecarId).messages!;
+        const value = { clock: frame.clock, event: frame.event };
+        const bytes =
+          new TextEncoder().encode(JSON.stringify(value)).byteLength;
+        if (
+          buffer.length >= policy.replayops ||
+          bufferBytes + bytes > policy.replaybytes
+        ) {
+          invalidate();
+          return;
+        }
+        buffer.push(value);
+        bufferBytes += bytes;
+      } else {
+        const duplicate = clock?.epoch === frame.clock.epoch &&
+          frame.clock.seq <= clock.seq;
+        if (!accept({ clock: frame.clock, event: frame.event })) {
+          invalidate();
+          return;
+        }
+        if (duplicate) return;
+        try {
+          setState((draft) => {
+            draft.content = reduce(draft.content, frame.event);
+            draft.clock = clock;
+            if (
+              frame.event.op === "message.upsert" &&
+              frame.event.message.role === "user"
+            ) {
+              const message = frame.event.message;
+              draft.latestPrompt = {
+                id: message.id,
+                agent: message.agent,
+                model: message.model,
+                variant: message.variant,
+              };
+            }
+          });
+        } catch {
+          invalidate();
+        }
+      }
     },
     async older(): Promise<void> {
       if (
         !selected || state.loading || state.paging || state.exhausted ||
-        !state.content.messages.length
+        cursor === null
       ) return;
       const target = selected,
         id = generation,
         request = load,
-        first = state.content.messages[0].id;
+        before = cursor;
       setState((draft) => {
         draft.paging = true;
       });
       try {
-        const messages = await connection(target.sidecarId).rpc.call(
+        const page = await connection(target.sidecarId).rpc.call(
           "session.messages",
-          { sessionID: target.sessionID, limit: 100, before: first },
+          { sessionID: target.sessionID, before },
           controller?.signal,
         );
         if (!current(id, request)) return;
+        if (
+          page.sessionID !== target.sessionID ||
+          page.clock.epoch !== clock?.epoch
+        ) {
+          invalidate();
+          return;
+        }
+        let loaded = { ...emptyContent(), messages: page.items };
+        for (const { event } of page.catchup) loaded = reduce(loaded, event);
+        const messages = loaded.messages;
+        cursor = page.older;
         baseline(messages);
         setState((draft) => {
           const existing = new Set(draft.content.messages.map((m) => m.id));
           draft.content.messages.unshift(
             ...messages.filter((m) => !existing.has(m.id)),
           );
-          draft.exhausted = messages.length < 100;
+          draft.exhausted = page.older === null;
           draft.paging = false;
         });
       } catch (error) {

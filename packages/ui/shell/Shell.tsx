@@ -672,6 +672,8 @@ export default function Shell(
                             info={info()}
                             label={selectedSidecar()?.label || "Server"}
                             messages={session.state.content.messages}
+                            latestPrompt={session.state.latestPrompt}
+                            continuity={session.state.continuity}
                             usage={session.state.selection
                               ? session.usage.get(session.state.selection)
                               : undefined}

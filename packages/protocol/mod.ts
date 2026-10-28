@@ -18,3 +18,4 @@ export * from "./rpc.ts";
 export * from "./session-tree.ts";
 export * from "./session-id.ts";
 export * from "./version.ts";
+export * from "./transcript.ts";

@@ -32,7 +32,7 @@ test("equal code input across content replacements preserves tokens and admits n
     }],
   });
   f.app.backend.core.listMessages = () =>
-    Promise.resolve([message("Baseline")]);
+    Promise.resolve(f.page([message("Baseline")]));
   const b = await Cdp.launch(root);
   try {
     await b.send("Page.addScriptToEvaluateOnNewDocument", {

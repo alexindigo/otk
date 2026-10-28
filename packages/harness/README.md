@@ -8,6 +8,21 @@ Session references use the protocol's qualified-ID grammar. An adapter owns its
 native codec and validates its own provider at the boundary; the shared harness
 contracts never infer a provider from a bare native identity.
 
+`HarnessCore.listMessages(id, {before?}, signal?)` returns a clocked ten-message
+`MessagePage`; the optional cursor is opaque outside its adapter. Session
+metadata and latest-prompt context travel with the page. `HarnessSink.content`
+accepts the producer's optional third `ContentClock` argument; paged producers
+must supply aligned clocks, including standalone integrations.
+
+`ContentReplay` owns per-session epochs/sequences and bounded
+capture/seal/release. Its constructor receives operation/UTF-8 byte budgets, a
+nonce source and an emit port. Overflow invalidates a capture and releases its
+payload; seal never returns a partial success. Reset/retirement invalidates
+captures and continuation authority together. It has no native reader, parser,
+database or UI dependency. `DigestPort.transcriptMetadata` is a cancellable
+scalar-only worker read for the latest user header, requested turn boundaries
+and optional rollback creation clock.
+
 ```ts
 import {
   CapabilityRegistry,

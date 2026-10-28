@@ -277,10 +277,15 @@ test("Timeline pages the same transcript and clears on project-only selection", 
     await openSession(b, s.id);
     await b.click("[data-panel-view=timeline]");
     await b.poll(
-      "document.querySelectorAll('[data-timeline-prompt]').length===100 && !!document.querySelector('.otk-timeline-older')",
+      "document.querySelectorAll('[data-timeline-prompt]').length===10 && !!document.querySelector('.otk-timeline-older')",
     );
     const before = sentFrames(b).length;
-    await b.click(".otk-timeline-older");
+    for (const count of [20, 30, 40, 50, 60, 70, 80, 90, 100, 105]) {
+      await b.click(".otk-timeline-older");
+      await b.poll(
+        `document.querySelectorAll('[data-timeline-prompt]').length===${count}`,
+      );
+    }
     await b.poll(
       "document.querySelectorAll('[data-timeline-prompt]').length===105 && document.querySelectorAll('[data-role=user]').length===105 && !document.querySelector('.otk-timeline-older')",
     );

@@ -41,6 +41,8 @@ const history = (input: string): HistoryEntry => ({
 function fixture() {
   const session = createState<SessionState>({
     selection: { sidecarId: "local", sessionID: "a" },
+    latestPrompt: { id: "p2" },
+    clock: { epoch: "initial", seq: 0 },
     content: { ...emptyContent(), messages: [prompt("p1"), prompt("p2")] },
     siblings: [],
     loading: false,
@@ -87,6 +89,10 @@ function fixture() {
   const publish = (id?: string) => {
     if (session.state.selection?.sessionID !== "a") return;
     session.update((state) => {
+      state.clock = { epoch: crypto.randomUUID(), seq: 0 };
+      state.latestPrompt = id === "p1"
+        ? undefined
+        : { id: id === "p2" ? "p1" : "p2" };
       state.content.revert = id
         ? {
           messageID: id,

@@ -2,7 +2,7 @@
 import type { Harness, HarnessSink } from "@otk/harness";
 import {
   OpencodeV1Adapter as Opencode1Adapter,
-  type OpencodeV1Config as Opencode1Config,
+  type OpencodeV1AdapterConfig as Opencode1Config,
 } from "@otk/harness-opencode-v1";
 
 /** Standalone consumer: no sidecar, HTTP routes, store or app configuration. */

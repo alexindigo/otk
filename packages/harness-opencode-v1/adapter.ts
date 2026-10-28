@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage, normalizeError } from "@otk/protocol";
+import { errorMessage, isAttentionOp, normalizeError } from "@otk/protocol";
 import type { ContentOp, RevertInfo, Todo } from "@otk/protocol";
 import type { SessionMetadata as IndexEntry } from "@otk/protocol";
-import { harnessDb, type OpencodeV1Config } from "./config.ts";
+import { harnessDb, type OpencodeV1AdapterConfig } from "./config.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { parseDiff, StreamBuffers } from "@otk/content";
 import {
   type Capabilities,
   CapabilityRegistry,
+  ContentReplay,
   type DigestPort,
   type Harness,
   type HarnessCore,
@@ -21,7 +22,7 @@ import { sessionErrorMessage, type SessionErrorState } from "@otk/protocol";
 import { BootstrapDb } from "./db.ts";
 import { History } from "./history.ts";
 import { consumeEvents } from "./events.ts";
-import { mapDiffs, mapIndex, mapMessage, mapPart } from "./map.ts";
+import { mapDiffs, mapIndex, mapMessage, mapPart, mapSession } from "./map.ts";
 import { mapPermission } from "./map.ts";
 import type {
   Envelope,
@@ -53,6 +54,7 @@ import { Messages } from "./messages.ts";
 import { Attention } from "./attention.ts";
 import { MessageRecovery } from "./recovery.ts";
 import { connectionPublication } from "./publication.ts";
+import { Transcript } from "./transcript.ts";
 const BOOTSTRAP_EVENT_LIMIT = 128;
 const BOOTSTRAP_TEXT_BUDGET = 4 * 1024 * 1024;
 const contentEvents = new Set([
@@ -118,17 +120,24 @@ export class OpencodeV1Adapter implements Harness {
   #tasks: TaskProgress;
   #messages: Messages;
   #colors: AgentColors;
+  #replay: ContentReplay;
+  #transcript: Transcript;
   #recovery: MessageRecovery;
   #reverts = new Map<string, string>();
   #connection = 0;
   #digestRevision = 0;
   #retired = new Set<string>();
   constructor(
-    readonly cfg: OpencodeV1Config,
+    readonly cfg: OpencodeV1AdapterConfig,
     readonly buffers: StreamBuffers = new StreamBuffers(),
     fetcher = fetch,
     readonly digest?: DigestPort,
   ) {
+    this.#replay = new ContentReplay({
+      ...cfg.messages,
+      nonce: () => crypto.randomUUID(),
+      emit: (id, event, clock) => this.#target?.content(id, event, clock),
+    });
     this.client = new Client(cfg.harness, fetcher);
     this.#db = new BootstrapDb(harnessDb(cfg));
     this.#history = new History(harnessDb(cfg));
@@ -214,12 +223,62 @@ export class OpencodeV1Adapter implements Harness {
         ),
     );
     const version = () => this.version;
+    this.#transcript = new Transcript({
+      replay: this.#replay,
+      buffers: this.buffers,
+      reader: this.#messages,
+      raw: (id, signal) =>
+        this.client.json<Session>(
+          `/session/${encodeURIComponent(ids.decode(id))}`,
+          { query: { directory: this.#directory(id) }, signal },
+        ),
+      info: async (raw, signal) => {
+        const revert = await this.#revertInfo(raw, signal),
+          errorState = this.#errors.snapshot(ids.encode(raw.id));
+        return {
+          ...mapSession(raw),
+          revert,
+          error: sessionErrorMessage(errorState),
+          errorState,
+        };
+      },
+      metadata: digest
+        ? (id, turns, signal, cutoff) =>
+          digest.transcriptMetadata(id, turns, signal, cutoff)
+        : undefined,
+      decorate: async (message, raw, directory) => {
+        const colors = this.#colors.peek(
+          directory,
+          this.buffers.subscribed(message.sessionID)
+            ? message.sessionID
+            : undefined,
+        );
+        if (message.agent !== undefined) {
+          message.agentColor = colors?.get(message.agent);
+        }
+        for (const [i, part] of raw.parts.entries()) {
+          if (part.type === "tool" && part.tool === "task") {
+            message.parts[i] = {
+              kind: "tool",
+              id: part.id,
+              call: await this.#tasks.shape(part),
+            };
+          }
+        }
+        return message;
+      },
+      summaries: (id, turns) => {
+        const known = this.#index.get(id)?.digest.turns;
+        return Object.fromEntries(
+          turns.filter((turn) => known?.[turn]).map((
+            turn,
+          ) => [turn, known![turn]]),
+        );
+      },
+    });
     this.core = sessions(
       this.client,
       directory,
-      this.buffers,
-      this.#tasks,
-      this.#messages,
       {
         kind: this.kind,
         get version() {
@@ -229,9 +288,7 @@ export class OpencodeV1Adapter implements Harness {
         stop: () => this.#stop(),
         subscriptions: (id, count) => this.#subscriptions(id, count),
       },
-      (raw) => this.#revertInfo(raw),
-      (id) => this.#errors.snapshot(id),
-      this.#colors,
+      this.#transcript,
     );
     const registry = new CapabilityRegistry();
     const launch: Launch = (...args) => this.#launch(...args);
@@ -375,7 +432,7 @@ export class OpencodeV1Adapter implements Harness {
       controller: new AbortController(),
       task: Promise.resolve(),
     };
-    this.#sink = connectionPublication(this.#target, run.controller.signal);
+    this.#sink = this.#publication(run.controller.signal);
     const opening = this.digest?.start() ?? Promise.resolve();
     run.task = opening.then(async () => {
       if (!run.controller.signal.aborted) {
@@ -395,6 +452,15 @@ export class OpencodeV1Adapter implements Harness {
     });
     return this.#stopping;
   }
+  #publication(signal: AbortSignal): HarnessSink {
+    return connectionPublication({
+      ...this.#target,
+      content: (id, event) => {
+        if (isAttentionOp(event)) this.#target.content(id, event);
+        else this.#replay.publish(id, event);
+      },
+    }, signal);
+  }
   async #shutdown(): Promise<void> {
     this.#abortCommands();
     this.buffers.stop();
@@ -405,6 +471,7 @@ export class OpencodeV1Adapter implements Harness {
     this.#permissions.clear();
     this.#questions.clear();
     this.#reverts.clear();
+    this.#transcript.release();
     this.#retired.clear();
     this.#attention.reset([], [], []);
     const completed = await Promise.allSettled([
@@ -426,6 +493,7 @@ export class OpencodeV1Adapter implements Harness {
   }
   #subscriptions(id: string, count: number): void {
     this.buffers.subscriptions(id, count);
+    if (count) this.buffers.epoch(id, this.#replay.clock(id).epoch);
     if (count && !this.#stopped) {
       this.buffers.replay(
         id,
@@ -437,11 +505,15 @@ export class OpencodeV1Adapter implements Harness {
     if (!count) this.#colors.release(id);
     if (!count) this.#reverts.delete(id);
     if (!count) this.#recovery.release(id);
+    if (!count) this.#transcript.release(id);
   }
   #directory(id: string): string | undefined {
     return this.#index.getMetadata(id)?.directory;
   }
-  async #revertInfo(session: Session): Promise<RevertInfo | undefined> {
+  async #revertInfo(
+    session: Session,
+    signal = this.#controller?.signal,
+  ): Promise<RevertInfo | undefined> {
     const id = ids.encode(session.id);
     if (!session.revert) {
       this.#reverts.delete(id);
@@ -470,7 +542,7 @@ export class OpencodeV1Adapter implements Harness {
       let boundary: import("./messages.ts").NativeMessage | undefined;
       let command: string | undefined;
       for await (
-        const message of this.#messages.scan(id, session.directory)
+        const message of this.#messages.scan(id, session.directory, signal)
       ) {
         if (
           message.info.role === "assistant" &&
@@ -602,10 +674,8 @@ export class OpencodeV1Adapter implements Harness {
     const backoff = new Backoff(this.cfg.harness.reconnectmax);
     while (!signal.aborted) {
       const controller = this.#controller = new AbortController();
-      const sink = this.#sink = connectionPublication(
-        this.#target,
-        controller.signal,
-      );
+      this.#transcript.release();
+      const sink = this.#sink = this.#publication(controller.signal);
       controller.signal.addEventListener("abort", () => {
         this.#recovery.release();
         this.#tasks.release();
@@ -969,6 +1039,7 @@ export class OpencodeV1Adapter implements Harness {
     this.#reverts.delete(id);
     this.#recovery.release(id);
     this.buffers.removeSession(id);
+    this.#transcript.release(id);
   }
   /** Read the shared metadata identity for an accepted native authority fact. */
   #metadata(id: string): IndexEntry | undefined {
@@ -1063,6 +1134,7 @@ export class OpencodeV1Adapter implements Harness {
       }
     }
     if (type === "server.instance.disposed") {
+      this.#transcript.release();
       this.#abortCommands();
       this.#errors.reset();
       this.#colors.clear();
@@ -1093,6 +1165,7 @@ export class OpencodeV1Adapter implements Harness {
       const session = p.info as Session,
         mapped = mapIndex(session),
         old = this.#index.getMetadata(mapped.id);
+      this.#transcript.observe(session);
       this.#errors.register(mapped.id);
       if (old) {
         mapped.status = old.status;
@@ -1291,6 +1364,9 @@ export class OpencodeV1Adapter implements Harness {
       this.buffers.forgetPart(String(p.messageID), String(p.partID));
     }
     if (type === "message.part.updated" && raw) {
+      if (this.buffers.subscribed(sessionID)) {
+        this.buffers.epoch(sessionID, this.#replay.clock(sessionID).epoch);
+      }
       this.#recovery.part(raw.messageID, raw.id);
       if (
         raw.type === "tool" ||

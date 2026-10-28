@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
@@ -86,6 +87,7 @@ for (const sql of [true, false]) {
           reconnectmax: 30,
         },
         index: { days: 30 },
+        messages: fixtureMessagePolicy,
       },
       undefined,
       (input) => {

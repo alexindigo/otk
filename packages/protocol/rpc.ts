@@ -2,7 +2,6 @@
 import type {
   AgentColor,
   ContentSession,
-  Message,
   ModelRef,
   PermissionRequest,
   QuestionRequest,
@@ -128,8 +127,8 @@ export interface RpcMethods
     result: ContentSession[];
   };
   "session.messages": {
-    params: { sessionID: string; limit: number; before?: string };
-    result: Message[];
+    params: import("./transcript.ts").MessagePageInput;
+    result: import("./transcript.ts").MessagePage;
   };
   "session.create": {
     params: { directory: string; title?: string; parentID?: string };

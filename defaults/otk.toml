@@ -45,3 +45,9 @@ maxpending = 512 # OTK_DIGEST_MAXPENDING — fine-grained keys before full-sessi
 publishrows = 64 # OTK_DIGEST_PUBLISHROWS — records per worker publication
 retryms = 1000 # OTK_DIGEST_RETRYMS — pressure/error wake-up in milliseconds, not polling
 busyms = 100 # OTK_DIGEST_BUSYMS — derived SQLite lock wait in milliseconds
+
+# Memory-only transcript snapshot/replay policy (server and browser).
+[messages]
+replayops = 128 # OTK_MESSAGES_REPLAYOPS — retained operations per pending baseline
+replaybytes = 4194304 # OTK_MESSAGES_REPLAYBYTES — retained serialized UTF-8 bytes per baseline; minimum 128 bookkeeping bytes
+retryms = 1000 # OTK_MESSAGES_RETRYMS — minimum failed-baseline retry backoff in milliseconds

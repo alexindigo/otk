@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixturePage } from "../support/message-pages.ts";
 import { test } from "../support/resources.ts";
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import {
@@ -154,12 +155,14 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
       time: { created: 1, updated: 1 },
     });
   };
-  f.app.backend.core.listMessages = (id, opts) => {
+  f.app.backend.core.listMessages = async (id, opts) => {
     contentReads.push(id);
-    assertEquals(opts.limit, 100);
     assertEquals(opts.before, undefined);
-    return Promise.resolve(
-      id === "tstv1-core" ? messages.slice(-opts.limit) : [],
+    return fixturePage(
+      id,
+      id === "tstv1-core" ? messages : [],
+      opts.before,
+      await f.app.backend.core.getSession(id),
     );
   };
   const b = await Cdp.launch(root), c = new WsClient(f.url);

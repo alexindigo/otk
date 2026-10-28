@@ -37,7 +37,7 @@ test("U1 composer and meter share exactly one models.list per session open", asy
     }],
   };
   const calls: string[] = [];
-  const { app, url } = await coreBackendFixture(root, {
+  const { app, url, page } = await coreBackendFixture(root, {
     models: {
       listModels: (id) => {
         calls.push(id);
@@ -62,7 +62,7 @@ test("U1 composer and meter share exactly one models.list per session open", asy
     parts: [],
     interrupted: false,
   };
-  app.backend.core.listMessages = () => Promise.resolve([message]);
+  app.backend.core.listMessages = () => Promise.resolve(page([message]));
   // This external backend owns summaries independently of body/detail reads.
   publishUsage(
     app.index,

@@ -32,16 +32,31 @@ Import only `@otk/protocol`; `mod.ts` is the single public entry point.
 | `PROTOCOL_VERSION`, `SIDECAR_VERSION`                          | Existing wire and sidecar versions      |
 | `MAX_CLIENT_FRAME_BYTES`, `checkClientFrameSize`               | Combined UTF-8 client frame budget      |
 
-The package version is `0.1.0`; the wire protocol version is `14`, including
+The package version is `0.1.0`; the wire protocol version is `15`, including
 host-persisted keymap, Dark/Light/System theme and four notification channel
 preferences. The canonical hello version field remains `protocol`.
 
-Protocol 14 requires provider-qualified session identities, validated by the
+Protocol 15 requires provider-qualified session identities, validated by the
 dependency-free `isSessionID` helper
 (`<three-letter code>v<major>-<native id>`). Both session and root references
 use this grammar; message, part, task, request and model identities remain
 separate. A protocol-13 client must reload rather than send bare session
 identities to a newer server.
+
+`session.messages` accepts `MessagePageInput` (`sessionID`, optional opaque
+`before`) and returns `MessagePage`, not an array. `MESSAGE_PAGE_SIZE` is ten;
+only `older: null` proves exhaustion. Pages carry coordinated session metadata,
+`LatestPrompt`, turn boundaries/readiness and bounded clocked catchup.
+`ContentClock` separates an epoch from its increasing sequence; content frames
+carry that clock unchanged. Attention remains outside transcript sequencing.
+`StreamStamp` identifies source generation/version and append authority;
+`part.blocks.baseVersion` must match the previous published checkpoint exactly.
+
+`MessagePolicy` has no library defaults. The composing application supplies
+`replayops`, `replaybytes`, and `retryms` through `welcome.messages` or an
+explicit standalone connection policy. `messagePolicy` strictly validates
+positive safe integers, rejects unknown keys and requires room for replay
+bookkeeping.
 
 `RpcMethods` is an open interface containing each shipped method's wire `params`
 and `result`. A feature declares additional entries beside its code using
@@ -226,7 +241,7 @@ import {
 const hello: ClientFrame = { t: "hello", protocol: PROTOCOL_VERSION };
 const serialized = JSON.stringify(hello);
 checkClientFrameSize(serialized);
-console.log(serialized); // {"t":"hello","protocol":14}
+console.log(serialized); // {"t":"hello","protocol":15}
 ```
 
 Outside this workspace, map `@otk/protocol` to a local checkout's `mod.ts` in

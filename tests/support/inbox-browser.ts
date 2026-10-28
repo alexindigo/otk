@@ -5,6 +5,7 @@ import type { ContentSession, IndexEntry, Message } from "@otk/protocol";
 import { startApplication } from "../../application.ts";
 import { cfg } from "./config.ts";
 import { resources } from "./resources.ts";
+import { fixturePage } from "./message-pages.ts";
 
 /** Deterministic external backend through the real shipped core and inbox stores. */
 export async function inboxBrowserFixture(
@@ -77,23 +78,31 @@ export async function inboxBrowserFixture(
         Promise.resolve(content(entries.find((e) => e.id === id)!)),
       listChildren: (id) =>
         Promise.resolve(entries.filter((e) => e.parentID === id).map(content)),
-      listMessages: (id) =>
+      listMessages: (id, opts) =>
         Promise.resolve(
-          messages[id] ?? [{
-            id: `${id.slice(6)}-message`,
-            sessionID: id,
-            role: "user",
-            time: { created: 1 },
-            parts: [{
-              id: `${id.slice(6)}-text`,
-              kind: "text",
-              synthetic: false,
-              blocks: [{
-                b: "paragraph",
-                inline: [{ i: "text", text: `Transcript for ${id.slice(6)}` }],
+          fixturePage(
+            id,
+            messages[id] ?? [{
+              id: `${id.slice(6)}-message`,
+              sessionID: id,
+              role: "user",
+              time: { created: 1 },
+              parts: [{
+                id: `${id.slice(6)}-text`,
+                kind: "text",
+                synthetic: false,
+                blocks: [{
+                  b: "paragraph",
+                  inline: [{
+                    i: "text",
+                    text: `Transcript for ${id.slice(6)}`,
+                  }],
+                }],
               }],
             }],
-          }],
+            opts.before,
+            content(entries.find((entry) => entry.id === id)!),
+          ),
         ),
       createSession(input) {
         const entry = {

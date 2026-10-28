@@ -14,8 +14,10 @@ import { FreezeProxy } from "../support/freeze-proxy.ts";
 // @deno-types="npm:@types/ws@8.18.1"
 import WebSocket from "ws";
 import { PROTOCOL_VERSION } from "@otk/protocol";
+import { readRpcMessages } from "../support/message-pages.ts";
+import type { MessagePage } from "@otk/protocol";
 
-test("I11 message paging accepts OTK message IDs without leaking harness cursors", async () => {
+test("I11 message paging retains opaque native continuation and exact-multiple terminal pages", async () => {
   const f = await fixture();
   try {
     const server = await f.sidecar(), client = await f.client(server);
@@ -43,39 +45,41 @@ test("I11 message paging accepts OTK message IDs without leaking harness cursors
       directory: f.oc.directory,
       title: "Paging",
     });
-    for (const text of ["First", "Middle", "Last"]) {
+    for (let i = 0; i < 30; i++) {
       await f.oc.request(`/session/${session.id}/message`, {
         method: "POST",
-        body: { noReply: true, parts: [{ type: "text", text }] },
+        body: { noReply: true, parts: [{ type: "text", text: `Prompt ${i}` }] },
       });
     }
-    const newest = await client.rpc<Message[]>("session.messages", {
+    const newest = await client.rpc<MessagePage>("session.messages", {
       sessionID: session.id,
-      limit: 1,
     });
-    assertEquals(newest.length, 1);
-    const older = await client.rpc<Message[]>("session.messages", {
+    assertEquals(newest.items.length, 10);
+    assert(newest.older && newest.older !== newest.items[0].id);
+    const older = await client.rpc<MessagePage>("session.messages", {
       sessionID: session.id,
-      limit: 1,
-      before: newest[0].id,
+      before: newest.older,
     });
-    assertEquals(older.length, 1);
+    assertEquals(older.items.length, 10);
     assert(
-      older[0].parts.some((part) =>
-        part.kind === "text" && JSON.stringify(part.blocks).includes("Middle")
+      older.items[0].parts.some((part) =>
+        part.kind === "text" &&
+        JSON.stringify(part.blocks).includes("Prompt 10")
       ),
     );
-    const first = await client.rpc<Message[]>("session.messages", {
+    assert(older.older);
+    const first = await client.rpc<MessagePage>("session.messages", {
       sessionID: session.id,
-      limit: 1,
-      before: older[0].id,
+      before: older.older,
     });
-    const empty = await client.rpc<Message[]>("session.messages", {
-      sessionID: session.id,
-      limit: 1,
-      before: first[0].id,
-    });
-    assertEquals(empty, []);
+    assertEquals(first.items.length, 10);
+    assertEquals(first.older, null);
+    assertEquals(
+      new Set(
+        [...first.items, ...older.items, ...newest.items].map((m) => m.id),
+      ).size,
+      30,
+    );
   } finally {
     await f.stop();
   }
@@ -142,8 +146,7 @@ async function completed(client: WsClient, id: string): Promise<Message[]> {
     60_000,
   );
   return waitFor(
-    () =>
-      client.rpc<Message[]>("session.messages", { sessionID: id, limit: 100 }),
+    () => readRpcMessages(client, id),
     (messages) =>
       messages.some((m) =>
         m.role === "assistant" && m.time.completed !== undefined
@@ -395,10 +398,7 @@ test("I6 silent drop recovers idle snapshot, resync and complete reply", async (
       30_000,
     );
     assert(client.frames.slice(baseline).some((frame) => frame.t === "resync"));
-    const history = await client.rpc<Message[]>("session.messages", {
-      sessionID: session.id,
-      limit: 100,
-    });
+    const history = await readRpcMessages(client, session.id);
     assert(
       history.flatMap((m) => m.parts).some((part) =>
         part.kind === "text" &&

@@ -123,7 +123,8 @@ test("U6 file changes start collapsed, disclose real content and follow the pers
     },
     prompt: { prompt: () => Promise.resolve(), abort: () => Promise.resolve() },
   });
-  f.app.backend.core.listMessages = () => Promise.resolve(messages);
+  f.app.backend.core.listMessages = (_id, opts) =>
+    Promise.resolve(f.page(messages, opts.before));
   publishUsage(
     f.app.index,
     await f.app.backend.capabilities.usage!.getUsage("tstv1-core"),
@@ -278,7 +279,7 @@ test("U6 one-token labels and literal fallback phrases reach plain and picker fo
       },
       ...(picker ? { agents: { listAgents: () => Promise.resolve([]) } } : {}),
     });
-    f.app.backend.core.listMessages = () => Promise.resolve([reply]);
+    f.app.backend.core.listMessages = () => Promise.resolve(f.page([reply]));
     publishUsage(
       f.app.index,
       await f.app.backend.capabilities.usage!.getUsage("tstv1-core"),

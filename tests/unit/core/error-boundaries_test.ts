@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { fixturePage } from "../../support/message-pages.ts";
 import { assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { type Capabilities, type Harness, HarnessError } from "@otk/harness";
@@ -27,7 +28,7 @@ function backend(get: (id: string) => never = () => {
       subscriptions() {},
       getSession: get,
       listChildren: () => Promise.resolve([]),
-      listMessages: () => Promise.resolve([]),
+      listMessages: (id) => Promise.resolve(fixturePage(id)),
       createSession: () => Promise.reject(new Error("unused")),
     },
     capabilities,

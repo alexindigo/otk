@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  fixtureMessagePolicy,
+  fixturePage,
+} from "../../../tests/support/message-pages.ts";
 import { assert, assertEquals } from "@std/assert";
 import type {
   AgentOption,
@@ -65,12 +69,17 @@ async function settle() {
 }
 function fixture(loadAgents = () => Promise.resolve(agents)) {
   const frames: Extract<ClientFrame, { t: "rpc" }>[] = [];
+  let sequence = 0;
+  const checkpoints = new Map<string, number>();
   const connection = new SidecarConnection("http://example.test", {
     status() {},
     frame() {},
-  });
+  }, { messages: fixtureMessagePolicy });
   connection.send = (frame) => {
-    if (frame.t === "rpc") frames.push(frame);
+    if (frame.t === "rpc") {
+      frames.push(frame);
+      checkpoints.set(frame.id, sequence);
+    }
   };
   connection.supports = () => false;
   connection.subscribe = () => {};
@@ -82,14 +91,31 @@ function fixture(loadAgents = () => Promise.resolve(agents)) {
     const at = frames.findIndex((frame) => frame.method === method);
     assert(at >= 0, method);
     const frame = frames.splice(at, 1)[0];
-    connection.rpc.receive({ t: "rpc.result", id: frame.id, ok: true, result });
+    connection.rpc.receive({
+      t: "rpc.result",
+      id: frame.id,
+      ok: true,
+      result: method === "session.messages"
+        ? fixturePage("s", result as Message[], undefined, info, {
+          epoch: "fixture",
+          seq: checkpoints.get(frame.id)!,
+        })
+        : result,
+    });
   };
   const receive = (event: ContentOp, sidecarId = "server", sessionID = "s") =>
-    session.receive(sidecarId, { t: "content", sessionID, event });
+    session.receive(sidecarId, {
+      t: "content",
+      sessionID,
+      event,
+      clock: {
+        epoch: "fixture",
+        seq: sidecarId === "server" && sessionID === "s" ? ++sequence : 0,
+      },
+    });
   const part = (part: ToolPart, sidecarId?: string, sessionID?: string) =>
     receive({ op: "part.upsert", messageID: "m", part }, sidecarId, sessionID);
   const snapshot = async (messages = [message()]) => {
-    answer("session.get", info);
     answer("session.messages", messages);
     await settle();
   };
@@ -188,7 +214,7 @@ Deno.test("plan completion IDs cannot replay over a newer manual choice, includi
         (_, i) =>
           message(
             String(i),
-            i ? [] : [tool("once"), tool("reconnect-history")],
+            i === 99 ? [tool("once"), tool("reconnect-history")] : [],
           ),
       ),
     );

@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  fixtureMessagePolicy,
+  fixturePage,
+} from "../../../tests/support/message-pages.ts";
 import { assert, assertEquals } from "@std/assert";
 import type {
   ClientFrame,
@@ -29,7 +33,7 @@ function fixture() {
   const connection = new SidecarConnection("http://example.test", {
     status() {},
     frame() {},
-  });
+  }, { messages: fixtureMessagePolicy });
   connection.send = (frame) => {
     if (frame.t === "rpc") frames.push(frame);
   };
@@ -52,8 +56,14 @@ function fixture() {
         : { t: "rpc.result", id, ok: true, result },
     );
   };
+  let sequence = 0;
   const event = (event: ContentOp) =>
-    owner.receive("server", { t: "content", sessionID: "s", event });
+    owner.receive("server", {
+      t: "content",
+      sessionID: "s",
+      event,
+      clock: { epoch: "fixture", seq: ++sequence },
+    });
   const until = (predicate: () => boolean): Promise<void> =>
     new Promise((resolve, reject) => {
       let release = () => {};
@@ -88,8 +98,7 @@ function fixture() {
 Deno.test("essential transcript publishes independently of failed or held attention and sibling resources", async () => {
   const f = fixture();
   try {
-    f.reply("session.get", info);
-    f.reply("session.messages", [message]);
+    f.reply("session.messages", fixturePage("s", [message], undefined, info));
     f.reply("permission.list", undefined, "permissions offline");
     await f.until(() =>
       !f.owner.state.loading && f.owner.state.content.messages.length === 1
@@ -129,13 +138,32 @@ Deno.test("failed initial snapshots retain live header and part across retry gen
         }],
       },
     });
-    f.reply("session.get", undefined, "initial unavailable");
+    f.reply("session.messages", undefined, "initial unavailable");
     await f.until(() => !f.owner.state.loading && !!f.owner.state.error);
     const retry = f.owner.refetch();
     // Retired RPC requests are aborted; take only the newest still-pending IDs.
-    f.frames.splice(0, f.frames.length - 4);
-    f.reply("session.get", { ...info, parentID: undefined });
-    f.reply("session.messages", []);
+    f.frames.splice(0, f.frames.length - 3);
+    f.reply(
+      "session.messages",
+      fixturePage(
+        "s",
+        [{
+          ...message,
+          parts: [{
+            kind: "text",
+            id: "text",
+            synthetic: false,
+            blocks: [{
+              b: "paragraph",
+              inline: [{ i: "text", text: "Retained live content" }],
+            }],
+          }],
+        }],
+        undefined,
+        { ...info, parentID: undefined },
+        { epoch: "fixture", seq: 2 },
+      ),
+    );
     f.reply("permission.list", []);
     f.reply("question.list", []);
     await retry;
@@ -146,13 +174,17 @@ Deno.test("failed initial snapshots retain live header and part across retry gen
   }
 });
 
-Deno.test("failed replacement snapshots replay into last-good content and retire superseded paging", async () => {
+Deno.test("failed replacements retain last-good content, recover final source and retire superseded paging", async () => {
   const f = fixture();
   try {
-    f.reply("session.get", { ...info, parentID: undefined });
     f.reply(
       "session.messages",
-      Array.from({ length: 100 }, (_, i) => ({ ...message, id: `m${i}` })),
+      fixturePage(
+        "s",
+        Array.from({ length: 100 }, (_, i) => ({ ...message, id: `m${i}` })),
+        undefined,
+        { ...info, parentID: undefined },
+      ),
     );
     f.reply("permission.list", []);
     f.reply("question.list", []);
@@ -161,12 +193,25 @@ Deno.test("failed replacement snapshots replay into last-good content and retire
     assert(f.owner.state.paging);
     const refresh = f.owner.refetch();
     f.event({ op: "message.upsert", message });
-    f.frames.splice(0, f.frames.length - 4);
-    f.reply("session.get", undefined, "replacement unavailable");
+    f.frames.splice(0, f.frames.length - 3);
+    f.reply("session.messages", undefined, "replacement unavailable");
     await refresh;
     await page;
     assertEquals(f.owner.state.paging, false);
-    assertEquals(f.owner.state.content.messages.length, 101);
+    assertEquals(f.owner.state.continuity, "missing");
+    assertEquals(f.owner.state.content.messages.length, 10);
+    const recovery = f.owner.refetch();
+    f.frames.splice(0, f.frames.length - 3);
+    f.reply(
+      "session.messages",
+      fixturePage("s", [message], undefined, { ...info, parentID: undefined }, {
+        epoch: "fixture",
+        seq: 1,
+      }),
+    );
+    f.reply("permission.list", []);
+    f.reply("question.list", []);
+    await recovery;
     assert(f.owner.state.content.messages.some((item) => item.id === "m"));
   } finally {
     f.stop();

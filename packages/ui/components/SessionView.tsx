@@ -50,12 +50,14 @@ export default function SessionView(props: {
   info?: ContentSession;
   label: string;
   messages: OtkMessage[];
+  latestPrompt?: import("@otk/protocol").LatestPrompt;
   catalog?: ModelCatalog;
   usage?: SessionUsage;
   entry?: IndexEntry;
   openUsage?(): () => void;
   usageError?(): string | undefined;
   loading: boolean;
+  continuity?: "loading" | "ready" | "missing";
   paging: boolean;
   exhausted: boolean;
   error?: string;
@@ -186,8 +188,12 @@ export default function SessionView(props: {
             })),
           ]}
         >
-          <Show when={props.loading}>
-            <p class="otk-muted">Loading messages…</p>
+          <Show when={props.loading || props.continuity === "missing"}>
+            <p role="status">
+              {props.messages.length || props.continuity === "missing"
+                ? "Refreshing messages…"
+                : "Loading messages…"}
+            </p>
           </Show>
           <div
             class="otk-message-flow"
@@ -195,14 +201,20 @@ export default function SessionView(props: {
               flow = element;
             }}
           >
-            <Show when={!props.exhausted && props.messages.length}>
+            <Show when={props.paging}>
+              <p role="status">Loading earlier messages…</p>
+            </Show>
+            <Show
+              when={!props.exhausted && props.messages.length &&
+                !props.paging && !props.loading &&
+                props.continuity !== "missing"}
+            >
               <button
                 type="button"
                 class="otk-load-older"
-                disabled={props.paging || props.loading}
                 onClick={() => void older()}
               >
-                {props.paging ? "Loading…" : "Load older messages"}
+                Load older messages
               </button>
             </Show>
             <Show when={props.error}>
@@ -258,7 +270,7 @@ export default function SessionView(props: {
             </For>
             <Show
               when={!props.loading && !props.messages.length && !props.error &&
-                !props.sessionError}
+                !props.sessionError && props.continuity !== "missing"}
             >
               <EmptyState>Start a conversation below.</EmptyState>
             </Show>
@@ -295,9 +307,7 @@ export default function SessionView(props: {
                 >
                   <Prompt
                     suspended={active()}
-                    context={props.messages.findLast((message) =>
-                      message.role === "user"
-                    )}
+                    context={props.latestPrompt}
                     busy={props.busy}
                     value={props.draft}
                     connected={props.connected}

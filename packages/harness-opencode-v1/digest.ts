@@ -195,6 +195,65 @@ export class OpencodeV1DigestSink implements DigestSink {
     this.#connected = true;
     this.#connection = value;
   }
+  async transcriptMetadata(
+    sessionID: string,
+    turns: readonly string[],
+    signal: AbortSignal,
+    cutoff?: string,
+  ): Promise<import("@otk/harness").TranscriptMetadata> {
+    signal.throwIfAborted();
+    if (this.#native && this.#nativeVerified) {
+      return this.#native.transcriptMetadata(sessionID, turns, cutoff);
+    }
+    const boundaries = new Map<string, import("@otk/protocol").ReplyBoundary>();
+    const wanted = new Set(turns);
+    let prompt: import("@otk/protocol").LatestPrompt | undefined,
+      created = -Infinity,
+      cutoffCreated: number | undefined;
+    for await (
+      const { info } of this.#messages.scan(sessionID, undefined, signal)
+    ) {
+      if (info.id === cutoff) cutoffCreated = info.time.created;
+      if (cutoff && info.id >= cutoff) continue;
+      if (
+        info.role === "user" &&
+        (info.time.created > created ||
+          (info.time.created === created && info.id > (prompt?.id ?? "")))
+      ) {
+        created = info.time.created;
+        prompt = {
+          id: info.id,
+          ...(typeof info.agent === "string" ? { agent: info.agent } : {}),
+          ...(info.model
+            ? {
+              model: {
+                provider: info.model.providerID,
+                model: info.model.modelID,
+              },
+              ...(typeof info.model.variant === "string"
+                ? { variant: info.model.variant }
+                : {}),
+            }
+            : {}),
+        };
+      }
+      const turnID = info.parentID ?? info.id;
+      if (info.role !== "assistant" || !wanted.has(turnID)) continue;
+      const previous = boundaries.get(turnID);
+      boundaries.set(turnID, {
+        turnID,
+        firstID: previous?.firstID && previous.firstID < info.id
+          ? previous.firstID
+          : info.id,
+        lastID: previous?.lastID && previous.lastID > info.id
+          ? previous.lastID
+          : info.id,
+        complete: info.time.completed !== undefined &&
+          previous?.complete !== false,
+      });
+    }
+    return { prompt, boundaries: [...boundaries.values()], cutoffCreated };
+  }
   async #apiCatalog(signal: AbortSignal): Promise<SessionMetadata[]> {
     const result: SessionMetadata[] = [];
     const cursors = new Set<string>();

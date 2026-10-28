@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { collectMessages, readRpcMessages } from "../support/message-pages.ts";
 import { test } from "../support/resources.ts";
 import { serve } from "../support/http.ts";
 import { assert, assertAlmostEquals, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type {
   AssistantMessage,
-  Message,
   ModelCatalog,
   Preferences,
 } from "@otk/protocol";
@@ -145,10 +145,7 @@ test("U4 stored multi-step turn usage reaches the footer and hover/focus split; 
     );
     await b.key("Enter");
     await waitForReply(b, session.id, "Turn usage includes both steps.");
-    const stored = await client.rpc<Message[]>("session.messages", {
-      sessionID: session.id,
-      limit: 100,
-    });
+    const stored = await readRpcMessages(client, session.id);
     const steps = stored.filter((m): m is AssistantMessage =>
       m.role === "assistant"
     );
@@ -460,7 +457,7 @@ test("U4 unknown model prices show all five charged token categories without inv
         getUsage: async (id): Promise<SessionUsage> =>
           new UsageLedger(
             id,
-            (await f.app.backend.core.listMessages(id, { limit: 200 })).filter((
+            (await collectMessages(f.app.backend.core, id)).filter((
               m,
             ): m is AssistantMessage => m.role === "assistant").map(
               usageHeader,
@@ -469,7 +466,7 @@ test("U4 unknown model prices show all five charged token categories without inv
       },
     });
   f.app.backend.core.listMessages = () =>
-    Promise.resolve([{
+    Promise.resolve(f.page([{
       id: "usage",
       sessionID: "tstv1-core",
       role: "assistant",
@@ -485,7 +482,7 @@ test("U4 unknown model prices show all five charged token categories without inv
       cost: .43,
       interrupted: false,
       parts: [],
-    }]);
+    }]));
   publishUsage(
     f.app.index,
     await f.app.backend.capabilities.usage!.getUsage("tstv1-core"),
@@ -570,7 +567,7 @@ test("U4 queued prompts do not split a turn and category costs use each step's e
       getUsage: async (id): Promise<SessionUsage> =>
         new UsageLedger(
           id,
-          (await f.app.backend.core.listMessages(id, { limit: 200 })).filter((
+          (await collectMessages(f.app.backend.core, id)).filter((
             m,
           ): m is AssistantMessage => m.role === "assistant").map(usageHeader),
         ).snapshot(),
@@ -595,13 +592,13 @@ test("U4 queued prompts do not split a turn and category costs use each step's e
     parts: [],
   });
   f.app.backend.core.listMessages = () =>
-    Promise.resolve([step("first-step", "first"), {
+    Promise.resolve(f.page([step("first-step", "first"), {
       id: "queued",
       sessionID: "tstv1-core",
       role: "user",
       time: { created: 2 },
       parts: [],
-    }, step("last-step", "second")]);
+    }, step("last-step", "second")]));
   publishUsage(
     f.app.index,
     await f.app.backend.capabilities.usage!.getUsage("tstv1-core"),

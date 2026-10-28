@@ -1,7 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { errorMessage } from "@otk/protocol";
 import type { CapabilityName, ClientFrame, ServerFrame } from "@otk/protocol";
-import { PROTOCOL_VERSION, welcomeCapabilities } from "@otk/protocol";
+import {
+  type MessagePolicy,
+  messagePolicy,
+  PROTOCOL_VERSION,
+  welcomeCapabilities,
+} from "@otk/protocol";
 import { apiBase, type AuthStatus, request } from "./auth.ts";
 import { Rpc } from "./rpc.ts";
 
@@ -18,6 +23,7 @@ export interface ConnectionSink {
 }
 /** Non-browser callers inject their authenticated/Origin-aware transport. */
 export interface ConnectionOptions {
+  messages?: MessagePolicy;
   api?: URL;
   socket?: (url: URL) => WebSocket;
 }
@@ -32,6 +38,10 @@ export class SidecarConnection {
   #welcomed = false;
   #subscriptions = new Set<string>();
   #capabilities = new Set<CapabilityName>();
+  #messages?: MessagePolicy;
+  get messages(): MessagePolicy | undefined {
+    return this.#messages ?? this.options.messages;
+  }
   constructor(
     baseUrl: string,
     readonly sink: ConnectionSink,
@@ -106,6 +116,12 @@ export class SidecarConnection {
         }
         if (frame.t === "welcome") {
           if (frame.protocol !== PROTOCOL_VERSION) {
+            this.#protocolMismatch();
+            return;
+          }
+          try {
+            this.#messages = messagePolicy(frame.messages);
+          } catch {
             this.#protocolMismatch();
             return;
           }

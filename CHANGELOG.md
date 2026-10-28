@@ -9,6 +9,13 @@ explicitly. Authoritative native deletion retains session details and task
 membership, retires approval policy and preserves unsent browser input. A
 reappearing identity resumes its existing view.
 
+Transcripts now use ten-message pages with opaque native continuation and
+event-aligned snapshot clocks. The composer and Undo retain the latest prompt's
+context independently of the loaded page. Bounded replay recovers through a new
+provider snapshot and shows refreshing state instead of applying unaligned
+changes; replay operation/byte budgets and retry backoff use layered
+configuration.
+
 **Performance.** Sessions renders a measured window of the active project's
 hierarchy. Search, scroll anchors, focused rows and in-place edits retain their
 identities while panels unmount or lists change. Project and required session
@@ -17,7 +24,7 @@ activity indicators remain visible independently of list rendering.
 **Compatibility.** The native adapter/package is now `opencode-v1` /
 `@otk/harness-opencode-v1`. The old `harness.type = "opencode1"` spelling still
 loads with a deprecation message; environment precedence is unchanged. Session
-identities are derived `opcv1-<native id>` values throughout protocol 14. Older
+identities are derived `opcv1-<native id>` values throughout protocol 15. Older
 browser clients must reload, and bare-ID bookmarks show a compatibility notice
 instead of reaching the native service. Existing task, seen, finish, approval
 and saved-location references migrate atomically in `otk.db`, preserving

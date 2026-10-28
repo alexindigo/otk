@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { readRpcMessages } from "../support/message-pages.ts";
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
-import type { Message } from "@otk/protocol";
 test("reload, switching and an initially unwatched reply retain all current text and its future suffix", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
@@ -46,11 +46,7 @@ test("reload, switching and an initially unwatched reply retain all current text
     );
     await openSession(browser, b.id);
     const unseen = await waitFor(
-      () =>
-        client!.rpc<Message[]>("session.messages", {
-          sessionID: a.id,
-          limit: 100,
-        }),
+      () => readRpcMessages(client!, a.id),
       (rows) => JSON.stringify(rows).includes("chunk08"),
     );
     assertEquals(JSON.stringify(unseen).includes(prefix), true);
@@ -78,11 +74,7 @@ test("reload, switching and an initially unwatched reply retain all current text
       body: { parts: [{ type: "text", text: "Start without a viewer" }] },
     });
     await waitFor(
-      () =>
-        client!.rpc<Message[]>("session.messages", {
-          sessionID: c.id,
-          limit: 100,
-        }),
+      () => readRpcMessages(client!, c.id),
       (rows) => JSON.stringify(rows).includes("unwatched03"),
     );
     await openSession(browser, c.id);
