@@ -7,6 +7,7 @@ import {
   digestTurnCursor,
 } from "@otk/store";
 import {
+  DigestNativeDb,
   opencodeV1DigestMigrations,
   OpencodeV1DigestSink,
 } from "@otk/harness-opencode-v1";
@@ -163,47 +164,61 @@ async function start(
   if (run) throw new Error("Digest worker already started");
   run = message.run;
   policy = message.policy;
+  const nativeReads: Record<string, number> = {};
   try {
     const contributions = new Map([["opencode-v1", {
       migrations: opencodeV1DigestMigrations,
       create: () =>
-        new OpencodeV1DigestSink(message.native, policy, {
-          sql: db!.connection,
-          transaction: (callback) => db!.transaction(callback),
-          read: (id) => {
-            const row = store!.summary([id])[0];
-            return row && snapshot(row);
+        new OpencodeV1DigestSink(
+          message.native,
+          policy,
+          {
+            sql: db!.connection,
+            transaction: (callback) => db!.transaction(callback),
+            read: (id) => {
+              const row = store!.summary([id])[0];
+              return row && snapshot(row);
+            },
+            turn: (id, turn) => {
+              const row = store!.turn(id, turn);
+              return row && usage(row);
+            },
+            *known() {
+              let after = "";
+              while (true) {
+                const rows = store!.catalog(
+                  message.provider,
+                  after,
+                  policy.batch,
+                );
+                if (!rows.length) return;
+                for (const row of rows) yield snapshot(row);
+                after = rows.at(-1)!.id;
+              }
+            },
+            write: (metadata, delta, checkpoint) =>
+              write(store!, message.provider, metadata, delta, checkpoint),
+            publish,
+            diagnostic: (sessionID, error) =>
+              post({
+                t: "error",
+                run: run!,
+                id: 0,
+                scope: sessionID ? "session" : "worker",
+                sessionID,
+                message: errorMessage(error),
+              }),
           },
-          turn: (id, turn) => {
-            const row = store!.turn(id, turn);
-            return row && usage(row);
-          },
-          *known() {
-            let after = "";
-            while (true) {
-              const rows = store!.catalog(
-                message.provider,
-                after,
-                policy.batch,
-              );
-              if (!rows.length) return;
-              for (const row of rows) yield snapshot(row);
-              after = rows.at(-1)!.id;
-            }
-          },
-          write: (metadata, delta, checkpoint) =>
-            write(store!, message.provider, metadata, delta, checkpoint),
-          publish,
-          diagnostic: (sessionID, error) =>
-            post({
-              t: "error",
-              run: run!,
-              id: 0,
-              scope: sessionID ? "session" : "worker",
-              sessionID,
-              message: errorMessage(error),
-            }),
-        }),
+          fetch,
+          (file) =>
+            new DigestNativeDb(
+              file,
+              message.diagnostics
+                ? (operation) =>
+                  nativeReads[operation] = (nativeReads[operation] ?? 0) + 1
+                : undefined,
+            ),
+        ),
     }]]);
     const selected = contributions.get(message.provider);
     if (!selected) throw new Error("Unknown digest provider");
@@ -244,7 +259,20 @@ async function start(
               }
             }
           }
-          return await sink!.step(job, budget, signal);
+          const start = performance.now();
+          const cursor = await sink!.step(job, budget, signal);
+          if (message.diagnostics) {
+            post({
+              t: "pressure",
+              run: run!,
+              id: 0,
+              queued: scheduler!.queued,
+              active: 1,
+              sliceMs: performance.now() - start,
+              nativeReads: { ...nativeReads },
+            });
+          }
+          return cursor;
         } catch (error) {
           signal.throwIfAborted();
           const row = store!.summary([job.sessionID])[0];

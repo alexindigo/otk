@@ -2,7 +2,11 @@
 import type { DigestIndexDelta, IndexEntry, IndexOp } from "@otk/protocol";
 import type { ServerFrame } from "@otk/protocol";
 import { SessionIndex } from "@otk/harness";
+import type { SectionObserver } from "../diagnostics.ts";
 export class IndexStore extends SessionIndex {
+  constructor(readonly diagnostics?: SectionObserver) {
+    super();
+  }
   #observers = new Set<(entry: IndexEntry, previous?: IndexEntry) => void>();
   #removals = new Set<(id: string) => void>();
   /** Explicit evictions are observed at their owner before wire publication. */
@@ -28,18 +32,22 @@ export class IndexStore extends SessionIndex {
     return () => this.#listeners.delete(listener);
   }
   snapshot(): Extract<ServerFrame, { t: "index.snapshot" }> {
+    const start = performance.now();
     // A replacement baseline must never precede a queued patch it already covers.
     this.#flush();
-    return {
+    const frame: Extract<ServerFrame, { t: "index.snapshot" }> = {
       t: "index.snapshot",
       rev: this.rev,
       entries: [...this.snapshotEntries()],
     };
+    this.diagnostics?.("index:snapshot", performance.now() - start);
+    return frame;
   }
   protected override resetPublished(
     entries: IndexEntry[],
     previous: ReadonlyMap<string, IndexEntry>,
   ): void {
+    const start = performance.now();
     this.#pending = [];
     const changes = entries.map((entry) => ({
       entry,
@@ -54,12 +62,14 @@ export class IndexStore extends SessionIndex {
     // Observer writes are represented by this replacement snapshot too.
     this.#pending = [];
     this.#emit(this.snapshot());
+    this.diagnostics?.("index:reset", performance.now() - start);
   }
   protected override published(
     entry: IndexEntry,
     previous?: IndexEntry,
     delta?: DigestIndexDelta,
   ): void {
+    const start = performance.now();
     const copy = structuredClone(entry);
     for (const listener of this.#observers) {
       listener(structuredClone(copy), previous && structuredClone(previous));
@@ -67,6 +77,7 @@ export class IndexStore extends SessionIndex {
     this.#queue(
       delta ? { op: "digest", ...delta } : { op: "upsert", entry: copy },
     );
+    this.diagnostics?.("index:observers", performance.now() - start);
   }
   protected override removed(id: string): void {
     for (const listener of this.#removals) listener(id);

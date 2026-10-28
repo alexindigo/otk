@@ -9,6 +9,7 @@ import { Connections } from "./ws/connections.ts";
 import type { FrameSource } from "./ws/connections.ts";
 import type { RpcRegistry } from "./ws/registry.ts";
 import { serve } from "./http/server.ts";
+import type { SectionObserver } from "./diagnostics.ts";
 
 export interface CoreOptions {
   cfg: ServiceConfig;
@@ -19,6 +20,7 @@ export interface CoreOptions {
   staticRoot: string;
   index?: IndexStore;
   sources?: readonly FrameSource[];
+  diagnostics?: SectionObserver;
 }
 export interface CoreServer {
   server: Deno.HttpServer<Deno.NetAddr>;
@@ -80,6 +82,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       prefs,
       rpc,
       options.sources,
+      options.diagnostics,
     );
     backendOwned = true;
     await startBackend(backend, index, transport);

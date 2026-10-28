@@ -302,3 +302,9 @@ consumer runs off-source with empty runtime caches and observes native totals
 change and survive restart. The shipped binary is separately exercised
 off-source with empty caches, SSE summary changes, retained tombstones and a
 restart.
+
+Digest admission uses the runtime's available-without-swapping memory estimate,
+including reclaimable cache, against the injected reserve. Catalog invalidations
+commit as one batch before jobs are admitted. Optional injected diagnostics
+observe serving sections and worker pressure/native read counts; they introduce
+no operator flag or public debug RPC.

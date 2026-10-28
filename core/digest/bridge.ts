@@ -7,7 +7,8 @@ import type {
 } from "@otk/harness";
 import type { SessionMetadata, SessionUsage } from "@otk/protocol";
 import type { OpencodeV1Config } from "@otk/harness-opencode-v1";
-import type { FromWorker, ToWorker } from "./protocol.ts";
+import type { DigestPressure, FromWorker, ToWorker } from "./protocol.ts";
+import type { SectionObserver } from "../diagnostics.ts";
 
 export interface DigestBridgeOptions {
   statePath: string;
@@ -18,6 +19,9 @@ export interface DigestBridgeOptions {
   diagnostic?(error: Error): void;
   unready?(sessionIDs: readonly string[]): void;
   metadata?(entries: readonly SessionMetadata[]): void;
+  section?: SectionObserver;
+  pressure?(value: DigestPressure): void;
+  admission?(): void;
 }
 interface Pending {
   receive(value: FromWorker): void;
@@ -136,6 +140,7 @@ export class DigestBridge implements DigestPort {
     return this.#start ??= this.#open();
   }
   #open(): Promise<void> {
+    this.options.admission?.();
     this.#run = crypto.randomUUID();
     const worker = this.#worker = new Worker(
       new URL("./worker.ts", import.meta.url),
@@ -143,6 +148,7 @@ export class DigestBridge implements DigestPort {
     );
     worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
       if (worker !== this.#worker || data.run !== this.#run) return;
+      const start = performance.now();
       if (data.t === "digest") {
         const previous = this.#sequences.get(data.sessionID);
         const valid = !previous || data.revision > previous.revision
@@ -164,6 +170,8 @@ export class DigestBridge implements DigestPort {
             this.#intents.delete(data.sessionID);
           }
         }
+      } else if (data.t === "pressure") {
+        this.options.pressure?.(data);
       } else if (data.t === "error") {
         const error = new Error(data.message, {
           cause: { scope: data.scope, sessionID: data.sessionID },
@@ -183,6 +191,7 @@ export class DigestBridge implements DigestPort {
           }
         });
       }
+      this.options.section?.(`worker:${data.t}`, performance.now() - start);
     };
     worker.onerror = (event) => {
       event.preventDefault();
@@ -197,6 +206,7 @@ export class DigestBridge implements DigestPort {
       policy: this.options.policy,
       since: Date.now(),
       connection: this.#connection,
+      diagnostics: !!this.options.pressure,
     });
     this.#pending.set(id, {
       receive: (value) => {

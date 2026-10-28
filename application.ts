@@ -50,6 +50,7 @@ import {
 import { InboxFeature } from "./core/features/inbox.ts";
 import { PermissionFeature } from "./core/features/approvals.ts";
 import { registerDigests } from "./core/features/digests.ts";
+import type { SectionObserver } from "./core/diagnostics.ts";
 
 /** Shipped application features, independent of the selected native backend. */
 export function startApplication(
@@ -61,6 +62,7 @@ export function startApplication(
     index?: IndexStore;
     interactive?: (owner: string, active: boolean) => void;
     attention?: (sessionID: string) => void;
+    diagnostics?: SectionObserver;
   } = {},
 ): Promise<CoreServer> {
   const store = new OtkDb(cfg.state.path, [
@@ -139,6 +141,7 @@ export function startApplication(
       staticRoot,
       index,
       sources,
+      diagnostics: options.diagnostics,
     });
   } catch (error) {
     const failures: unknown[] = [error];

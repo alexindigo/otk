@@ -337,6 +337,10 @@ Development verification runs inside virtual machine
 through the strict `otk-vm` / `otk-m1` access profile and milestone plans. The
 test provider is scripted and uses no real model credentials.
 
+The [session digest qualification](./docs/session-digest-verification.md)
+documents the real-version scale generator, serving-isolate and browser budgets,
+and its isolated guest execution route.
+
 License: LGPL-3.0-only.
 
 ## Workspace packages

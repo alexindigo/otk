@@ -15,6 +15,7 @@ import { createSessionReferenceUpgrade } from "./core/features/session-ids.ts";
 import { StreamBuffers } from "@otk/content";
 import { IndexStore } from "./core/index/store.ts";
 import { DigestBridge } from "./core/digest/bridge.ts";
+import type { ServingDiagnostics } from "./core/diagnostics.ts";
 let memo: ServiceConfig | undefined;
 export function config(): ServiceConfig {
   return memo ??= loadConfig({
@@ -23,13 +24,16 @@ export function config(): ServiceConfig {
     env: Deno.env.toObject(),
   });
 }
-export async function start(cfg: ServiceConfig): Promise<CoreServer> {
+export async function start(
+  cfg: ServiceConfig,
+  diagnostics?: ServingDiagnostics,
+): Promise<CoreServer> {
   if (cfg.harness.type !== "opencode-v1") {
     throw new Error(
       `harness.type (OTK_HARNESS_TYPE): unsupported backend ${cfg.harness.type}`,
     );
   }
-  const index = new IndexStore();
+  const index = new IndexStore(diagnostics?.section);
   const digest = new DigestBridge({
     statePath: cfg.state.path,
     provider: "opencode-v1",
@@ -45,6 +49,9 @@ export async function start(cfg: ServiceConfig): Promise<CoreServer> {
       index: cfg.index,
     },
     policy: cfg.digest,
+    section: diagnostics?.section,
+    pressure: diagnostics?.pressure,
+    admission: diagnostics?.admission,
     metadata: (entries) => {
       for (const entry of entries) {
         const current = index.get(entry.id);
@@ -99,6 +106,7 @@ export async function start(cfg: ServiceConfig): Promise<CoreServer> {
       index,
       interactive: (owner, active) => digest.interactive(owner, active),
       attention: (sessionID) => digest.attention(sessionID),
+      diagnostics: diagnostics?.section,
     },
   );
 }

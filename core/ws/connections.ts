@@ -9,6 +9,7 @@ import type { IndexStore } from "../index/store.ts";
 import { object, sessionID, text } from "./params.ts";
 import type { RpcRegistry } from "./registry.ts";
 import type { Prefs } from "@otk/store";
+import type { SectionObserver } from "../diagnostics.ts";
 interface Connection {
   ws: WebSocket;
   welcomed: boolean;
@@ -34,6 +35,7 @@ export class Connections {
     readonly prefs: Prefs<Preferences>,
     readonly rpc: RpcRegistry,
     readonly sources: readonly FrameSource[] = [],
+    readonly diagnostics?: SectionObserver,
   ) {
     try {
       this.#stops.push(index.listen((frame) => this.broadcast(frame)));
@@ -65,7 +67,10 @@ export class Connections {
       this.#connections.has(connection) &&
       connection.ws.readyState === WebSocket.OPEN
     ) {
-      connection.ws.send(JSON.stringify(frame));
+      const start = performance.now();
+      const serialized = JSON.stringify(frame);
+      this.diagnostics?.(`serialize:${frame.t}`, performance.now() - start);
+      connection.ws.send(serialized);
     }
   }
   broadcast(frame: ServerFrame): void {
