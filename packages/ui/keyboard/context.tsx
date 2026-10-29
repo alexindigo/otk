@@ -17,7 +17,15 @@ const Context = createContext<CommandPorts | null>(null);
 export function CommandProvider(
   props: CommandPorts & { children: Element },
 ): Element {
-  return <Context value={props}>{props.children}</Context>;
+  const ports: CommandPorts = {
+    get commands() {
+      return props.commands;
+    },
+    get keyboard() {
+      return props.keyboard;
+    },
+  };
+  return <Context value={ports}>{props.children}</Context>;
 }
 export function useCommandPorts(): CommandPorts {
   return useContext(Context) ?? { commands: new CommandHub() };

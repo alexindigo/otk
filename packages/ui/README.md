@@ -650,6 +650,13 @@ level. Builds/tests run inside the project's assigned VM. License: LGPL-3.0-only
 mount and releases on unmount, so speculative replacement does not overlap a
 previous session's actions. Consumers continue to supply data and callbacks.
 
+Providers expose explicit port values, never their composition props object.
+`CommandProvider` preserves live `commands` and `keyboard` access without
+exposing `children` or unrelated props. Consumers may copy those ports without
+evaluating render factories or constructing another component lifetime. The
+architecture gate rejects provider props passthrough, including aliases and
+implicit copies.
+
 `makeKeymap` ports kosmozoo's data bindings, canonical modifiers, bare-letter
 matching, overrides, conflicts and resets. Bindings contain a command ID, never
 an execution callback. `bind(descriptor, when?)` returns an unregister function.
