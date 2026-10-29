@@ -143,7 +143,8 @@ test("bootstrap permission reply retains its listing instance even when session 
       indexUpsert() {},
       indexRemove() {},
       content() {},
-      resync() {},
+      bootstrapComplete() {},
+      invalidate() {},
     });
     await waitFor(() => connected, Boolean);
     const port = requireCapability(adapter.capabilities, "permissions");

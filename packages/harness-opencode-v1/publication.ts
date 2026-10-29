@@ -23,8 +23,11 @@ export function connectionPublication(
     content: (id, event, clock) => {
       if (!signal.aborted) sink.content(id, event, clock);
     },
-    resync: (ids) => {
-      if (!signal.aborted) sink.resync(ids);
+    bootstrapComplete: () => {
+      if (!signal.aborted) sink.bootstrapComplete();
+    },
+    invalidate: (value) => {
+      if (!signal.aborted) sink.invalidate(value);
     },
   };
 }

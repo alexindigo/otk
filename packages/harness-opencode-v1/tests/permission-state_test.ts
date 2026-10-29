@@ -98,7 +98,8 @@ test("native pending permission events own normalized family reads and removal w
       indexUpsert() {},
       indexRemove() {},
       content: (_id, op) => ops.push(op),
-      resync() {},
+      bootstrapComplete() {},
+      invalidate() {},
     });
     await waitFor(() => connected, Boolean);
     emit("permission.asked", {

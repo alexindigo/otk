@@ -305,9 +305,9 @@ export function createSession(
         frame.t === "index.snapshot" || frame.t === "index.patch" ||
         frame.t === "welcome"
       ) bind();
-      if (frame.t === "welcome" || frame.t === "resync") {
+      if (frame.t === "welcome" || frame.t === "bootstrap.complete") {
         models?.connect();
-        if (frame.t === "resync") void models?.refresh();
+        if (frame.t === "bootstrap.complete") void models?.refresh();
       }
     },
     removeServer(server) {

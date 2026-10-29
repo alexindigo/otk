@@ -58,7 +58,7 @@ for (
       };
     };
     const source = {
-      snapshot: () => ({ t: "resync", sessionIDs: "all" } as const),
+      snapshot: () => ({ t: "bootstrap.complete" } as const),
       listen: () => () => {
         stops.push("listener");
       },

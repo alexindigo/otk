@@ -9,6 +9,7 @@ import type {
   ContentOp,
   ContentSession,
   Message,
+  ServerFrame,
 } from "@otk/protocol";
 import { createSession, SidecarConnection } from "../mod.ts";
 
@@ -94,6 +95,199 @@ function fixture() {
     },
   };
 }
+
+Deno.test("bootstrap completion and covered invalidations preserve acquired transcript authority", async () => {
+  const f = fixture();
+  const version = { generation: 2, revision: 3 };
+  try {
+    f.reply("session.messages", {
+      ...fixturePage("s", [message], undefined, info),
+      version,
+    });
+    await f.until(() => !f.owner.state.loading);
+    const original = f.owner.state.content.messages[0];
+    for (
+      const frame of [
+        { t: "bootstrap.complete" },
+        { t: "transcript.invalidated", version, sessionID: "s" },
+        {
+          t: "transcript.invalidated",
+          version: { generation: 1, revision: 99 },
+        },
+        {
+          t: "transcript.invalidated",
+          version: { generation: 2, revision: 2 },
+          sessionID: "s",
+        },
+      ]
+    ) f.owner.receive("server", frame as ServerFrame);
+    assertEquals(
+      f.frames.filter((frame) => frame.method === "session.messages").length,
+      0,
+    );
+    assertEquals(f.owner.state.content.messages[0], original);
+    assertEquals(f.owner.state.continuity, "ready");
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("newer invalidation refreshes stale authority once and never refetches another session", async () => {
+  const f = fixture();
+  try {
+    f.reply("session.messages", {
+      ...fixturePage("s", [message], undefined, info),
+      version: { generation: 2, revision: 3 },
+    });
+    await f.until(() => !f.owner.state.loading);
+    f.owner.receive(
+      "server",
+      {
+        t: "transcript.invalidated",
+        sessionID: "other",
+        version: { generation: 2, revision: 4 },
+      } as ServerFrame,
+    );
+    assertEquals(
+      f.frames.filter((frame) => frame.method === "session.messages").length,
+      0,
+    );
+    const changed = {
+      t: "transcript.invalidated",
+      sessionID: "s",
+      version: { generation: 2, revision: 4 },
+    } as ServerFrame;
+    f.owner.receive("server", changed);
+    f.owner.receive("server", changed);
+    assertEquals(
+      f.frames.filter((frame) => frame.method === "session.messages").length,
+      1,
+    );
+    f.reply("session.messages", {
+      ...fixturePage("s", [{ ...message, id: "new" }], undefined, info),
+      version: { generation: 2, revision: 4 },
+    });
+    await f.until(() => !f.owner.state.loading);
+    assertEquals(f.owner.state.content.messages.map((m) => m.id), ["new"]);
+    f.owner.receive("server", changed);
+    assertEquals(
+      f.frames.filter((frame) => frame.method === "session.messages").length,
+      0,
+    );
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("invalidation fences a held old baseline but accepts a held page already at its version", async () => {
+  for (const current of [false, true]) {
+    const f = fixture();
+    try {
+      f.owner.receive(
+        "server",
+        {
+          t: "transcript.invalidated",
+          version: { generation: 3, revision: 0 },
+        } as ServerFrame,
+      );
+      f.reply("session.messages", {
+        ...fixturePage(
+          "s",
+          [{ ...message, id: current ? "current" : "retired" }],
+          undefined,
+          info,
+        ),
+        version: { generation: current ? 3 : 2, revision: 0 },
+      });
+      for (let i = 0; i < 30; i++) await Promise.resolve();
+      if (!current) {
+        assertEquals(
+          f.owner.state.content.messages.some((m) => m.id === "retired"),
+          false,
+        );
+        assertEquals(
+          f.frames.filter((frame) => frame.method === "session.messages")
+            .length,
+          1,
+        );
+        f.reply("session.messages", {
+          ...fixturePage("s", [{ ...message, id: "current" }], undefined, info),
+          version: { generation: 3, revision: 0 },
+        });
+      }
+      await f.until(() => !f.owner.state.loading);
+      assertEquals(f.owner.state.content.messages.map((m) => m.id), [
+        "current",
+      ]);
+      assertEquals(
+        f.frames.filter((frame) => frame.method === "session.messages").length,
+        0,
+      );
+    } finally {
+      f.stop();
+    }
+  }
+});
+
+Deno.test("bootstrap resync coalesces with the initial authoritative page instead of starting a duplicate baseline", async () => {
+  const f = fixture();
+  try {
+    f.owner.receive("server", { t: "bootstrap.complete" });
+    assertEquals(
+      f.frames.filter((frame) => frame.method === "session.messages").length,
+      1,
+    );
+    f.reply("session.messages", fixturePage("s", [message], undefined, info));
+    await f.until(() => !f.owner.state.loading);
+    assertEquals(f.owner.state.content.messages.map((message) => message.id), [
+      "m",
+    ]);
+    assertEquals(f.owner.state.continuity, "ready");
+    assertEquals(
+      f.frames.filter((frame) => frame.method === "session.messages").length,
+      0,
+    );
+  } finally {
+    f.owner.stop();
+  }
+});
+
+Deno.test("a resync-covered initial failure retries the new epoch immediately without concurrent baselines", async () => {
+  const f = fixture();
+  try {
+    f.owner.receive("server", {
+      t: "transcript.invalidated",
+      version: { generation: 0, revision: 0 },
+    });
+    assertEquals(
+      f.frames.filter((frame) => frame.method === "session.messages").length,
+      1,
+    );
+    f.reply("session.messages", undefined, "retired provider epoch");
+    for (let i = 0; i < 15; i++) await Promise.resolve();
+    assertEquals(
+      f.frames.filter((frame) => frame.method === "session.messages").length,
+      1,
+      "The resync edge is a new checkpoint, not a timer-based retry",
+    );
+    f.reply(
+      "session.messages",
+      fixturePage("s", [message], undefined, info, {
+        epoch: "current",
+        seq: 0,
+      }),
+    );
+    await f.until(() =>
+      !f.owner.state.loading && f.owner.state.continuity === "ready"
+    );
+    assertEquals(f.owner.state.clock?.epoch, "current");
+    assertEquals(f.owner.state.content.messages.map((message) => message.id), [
+      "m",
+    ]);
+  } finally {
+    f.owner.stop();
+  }
+});
 
 Deno.test("essential transcript publishes independently of failed or held attention and sibling resources", async () => {
   const f = fixture();

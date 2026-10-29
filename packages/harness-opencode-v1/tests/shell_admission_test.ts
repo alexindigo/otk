@@ -92,7 +92,8 @@ for (const method of ["shell", "command"] as const) {
         indexUpsert: () => {},
         indexRemove: () => {},
         content: () => {},
-        resync: () => {},
+        bootstrapComplete: () => {},
+        invalidate() {},
       });
       const deadline = Date.now() + 2000;
       while (!ready) {
@@ -214,7 +215,8 @@ for (const method of ["shell", "command"] as const) {
           indexUpsert: () => {},
           indexRemove: () => {},
           content: (_id, op) => ops.push(op),
-          resync: () => {},
+          bootstrapComplete: () => {},
+          invalidate() {},
         });
         await wait(() => ready);
         const capability = method === "shell"

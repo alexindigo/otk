@@ -93,8 +93,14 @@ Deno.test("plain session replays buffered ops, refetches resync and releases sel
     ]);
     assertEquals(session.state.loading, false);
     assertEquals(session.state.exhausted, true);
-    session.receive("core", { t: "resync", sessionIDs: "all" });
-    answer("session.messages", fixturePage("s", [], undefined, info("s")));
+    session.receive("core", {
+      t: "transcript.invalidated",
+      version: { generation: 1, revision: 0 },
+    });
+    answer("session.messages", {
+      ...fixturePage("s", [], undefined, info("s")),
+      version: { generation: 1, revision: 0 },
+    });
     await settle();
     assertEquals(session.state.content.messages, []);
     assert(changes >= 4);
@@ -226,23 +232,42 @@ Deno.test("session catalog is optional, nonblocking and generation-bound across 
     answer("models.list", fresh);
     await session.models?.ready();
     assertEquals(session.models?.state.value, fresh);
-    session.receive("core", { t: "resync", sessionIDs: "all" });
+    session.receive("core", {
+      t: "transcript.invalidated",
+      version: { generation: 1, revision: 0 },
+    });
+    session.receive("core", { t: "bootstrap.complete" });
     assertEquals(
       session.models?.state.value,
       fresh,
       "A refresh retains last good metadata",
     );
     await Promise.resolve();
-    answer("session.messages", fixturePage("new", [], undefined, info("new")));
+    answer("session.messages", {
+      ...fixturePage("new", [], undefined, info("new")),
+      version: { generation: 1, revision: 0 },
+    });
     await settle();
     answer("models.list", old);
     await session.models?.ready();
     assertEquals(session.models?.state.value, old);
-    session.receive("core", { t: "resync", sessionIDs: "all" });
+    session.receive("core", {
+      t: "transcript.invalidated",
+      version: { generation: 2, revision: 0 },
+    });
+    session.receive("core", { t: "bootstrap.complete" });
     await Promise.resolve();
     answer(
       "session.messages",
-      fixturePage("new", [message("still available")], undefined, info("new")),
+      {
+        ...fixturePage(
+          "new",
+          [message("still available")],
+          undefined,
+          info("new"),
+        ),
+        version: { generation: 2, revision: 0 },
+      },
     );
     await settle();
     const failed = frames.splice(

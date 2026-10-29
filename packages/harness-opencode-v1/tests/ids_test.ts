@@ -235,7 +235,8 @@ test("public adapter qualifies every capability boundary, including externally c
       indexUpsert() {},
       indexRemove() {},
       content() {},
-      resync() {},
+      bootstrapComplete() {},
+      invalidate() {},
     });
     await ready.promise;
     assertEquals(entries.map((entry) => [entry.id, entry.parentID]), [[

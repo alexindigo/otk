@@ -83,7 +83,8 @@ test("explicit session deletion releases pending input and its attention without
       },
       indexRemove: (id) => index.remove(id),
       content() {},
-      resync: () => ready.resolve(),
+      bootstrapComplete: () => ready.resolve(),
+      invalidate() {},
     });
     await ready.promise;
     send("permission.asked", {

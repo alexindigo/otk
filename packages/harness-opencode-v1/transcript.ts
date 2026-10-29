@@ -12,6 +12,7 @@ import {
   type Message,
   MESSAGE_PAGE_SIZE,
   type MessagePage,
+  type TranscriptInvalidation,
   withHelperProgress,
 } from "@otk/protocol";
 import type { StreamBuffers } from "@otk/content";
@@ -87,6 +88,7 @@ export class Transcript {
   constructor(
     readonly options: {
       replay: ContentReplay;
+      invalidated?(value: TranscriptInvalidation): void;
       retire?(id?: string): void;
       recovering?(id: string): MessagePage["recovering"];
       scopedRecovery?(id: string): boolean;
@@ -115,10 +117,10 @@ export class Transcript {
   observe(raw: Session): void {
     const id = ids.encode(raw.id), previous = this.#baselines.get(id);
     if (!previous && !this.#opening.has(id)) return;
-    if (
-      (!previous && this.#opening.has(id)) ||
-      (previous && previous.raw.revert?.messageID !== raw.revert?.messageID)
-    ) {
+    if (previous && previous.raw.revert?.messageID !== raw.revert?.messageID) {
+      this.invalidate(id);
+      this.options.buffers.removeSession(id);
+    } else if (!previous && this.#opening.has(id)) {
       this.release(id);
       this.options.buffers.removeSession(id);
     }
@@ -135,6 +137,15 @@ export class Transcript {
     }
   }
   release(id?: string): void {
+    this.#retire(id);
+    this.options.replay.reset(id);
+  }
+  invalidate(id?: string): void {
+    this.#retire(id);
+    const value = this.options.replay.invalidate(id);
+    this.options.invalidated?.(value);
+  }
+  #retire(id?: string): void {
     this.options.retire?.(id);
     for (const [key, opening] of this.#opening) {
       if (id !== undefined && key !== id) continue;
@@ -148,7 +159,6 @@ export class Transcript {
     }
     if (id === undefined) this.#baselines.clear();
     else this.#baselines.delete(id);
-    this.options.replay.reset(id);
   }
   async #read(id: string, signal: AbortSignal): Promise<Baseline> {
     signal.throwIfAborted();
@@ -450,6 +460,7 @@ export class Transcript {
       const summaries = this.options.summaries(id, turns);
       return {
         sessionID: id,
+        version: replay.version(id),
         from: capture.from,
         clock: sealed.clock,
         session,

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { AssistantMessage, ModelRef, Part } from "./content.ts";
 import type { ReportedTokens, UsageSummary } from "./digest.ts";
-import type { ContentClock } from "./transcript.ts";
+import type { ContentClock, TranscriptVersion } from "./transcript.ts";
 
 /** Existing tool labels only, never inputs, output or transcript parts. */
 export interface UsageTool {
@@ -58,6 +58,7 @@ export interface TurnUsageSnapshot {
 }
 export interface TurnUsageDetail extends TurnUsageSnapshot {
   clock: ContentClock;
+  version: TranscriptVersion;
 }
 export interface UsageChange {
   calls: { upsert: UsageCallDetail[]; remove: string[] };

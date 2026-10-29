@@ -82,6 +82,7 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
           signal ?? new AbortController().signal,
         ),
         clock: { epoch: "fixture", seq: 0 },
+        version: { generation: 0, revision: 0 },
       }),
     },
   });
@@ -176,6 +177,7 @@ test("RPC read cancellation is connection-scoped and ignores completed, duplicat
           sessionID: "tstv1-one",
           turnID,
           clock: { epoch: "fixture", seq: 0 },
+          version: { generation: 0, revision: 0 },
           revision: 0,
           calls: [],
           summary: {

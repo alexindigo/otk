@@ -24,7 +24,8 @@ export async function listSessions(
           indexUpsert: () => {},
           indexRemove: () => {},
           content: () => {},
-          resync: () => {},
+          bootstrapComplete: () => {},
+          invalidate: () => {},
         }).catch(reject);
       },
     );

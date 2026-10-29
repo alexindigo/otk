@@ -123,7 +123,8 @@ test("native errors outside the index window remain queryable and subscribed cle
           last = event.errorState;
         }
       },
-      resync: () => ready.resolve(),
+      bootstrapComplete: () => ready.resolve(),
+      invalidate() {},
     });
     await ready.promise;
     send("session.error", {

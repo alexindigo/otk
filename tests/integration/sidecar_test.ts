@@ -390,14 +390,18 @@ test("I6 silent drop recovers idle snapshot, resync and complete reply", async (
           frame.t === "harness" && frame.state === "connected"
         ),
         resync: client.frames.slice(baseline).some((frame) =>
-          frame.t === "resync"
+          frame.t === "bootstrap.complete"
         ),
       }),
       (value) =>
         value.entry?.status === "idle" && value.connected && value.resync,
       30_000,
     );
-    assert(client.frames.slice(baseline).some((frame) => frame.t === "resync"));
+    assert(
+      client.frames.slice(baseline).some((frame) =>
+        frame.t === "bootstrap.complete"
+      ),
+    );
     const history = await readRpcMessages(client, session.id);
     assert(
       history.flatMap((m) => m.parts).some((part) =>
@@ -434,7 +438,7 @@ test("I7 opencode restart reconnects and reconciles existing indexed sessions", 
           frame.t === "harness" && frame.state === "connected"
         ),
         resync: client.frames.slice(baseline).some((frame) =>
-          frame.t === "resync"
+          frame.t === "bootstrap.complete"
         ),
       }),
       (value) =>

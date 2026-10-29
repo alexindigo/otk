@@ -42,7 +42,9 @@ function startBackend(
     indexUpsert: (entry) => index.upsertMetadata(entry),
     indexRemove: (id) => index.remove(id),
     content: (id, event, clock) => connections.content(id, event, clock),
-    resync: (sessionIDs) => connections.broadcast({ t: "resync", sessionIDs }),
+    bootstrapComplete: () => connections.broadcast({ t: "bootstrap.complete" }),
+    invalidate: (value) =>
+      connections.broadcast({ t: "transcript.invalidated", ...value }),
   });
 }
 /** Application composition supplies a backend, registrations, store and assets. */

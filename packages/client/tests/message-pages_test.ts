@@ -16,6 +16,7 @@ const policy = {
 const clock = { epoch: "test", seq: 0 };
 const page = (older: string | null = null): MessagePage => ({
   sessionID: "opcv1-s",
+  version: { generation: 0, revision: 0 },
   clock,
   from: clock,
   older,

@@ -119,7 +119,8 @@ test("selected digest bootstrap prepares attention and publishes metadata within
       },
       indexRemove() {},
       content() {},
-      resync: () => ready.resolve(),
+      bootstrapComplete: () => ready.resolve(),
+      invalidate() {},
     });
     await bounded("budgeted native metadata bootstrap", ready.promise);
     assertEquals([...index.values()].length, 8);

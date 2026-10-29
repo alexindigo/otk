@@ -109,7 +109,8 @@ test("idle project bootstrap leaves native instances and project visit clocks un
       indexUpsert: (entry) => index.upsert(entry),
       indexRemove: (id) => index.remove(id),
       content() {},
-      resync() {},
+      bootstrapComplete() {},
+      invalidate() {},
     });
     await waitFor(() => ready, Boolean);
     await new Promise((resolve) => setTimeout(resolve, 1000));
@@ -190,7 +191,8 @@ test("deleted project metadata does not prevent healthy sessions connecting and 
       indexUpsert: (entry) => index.upsert(entry),
       indexRemove: (id) => index.remove(id),
       content() {},
-      resync() {},
+      bootstrapComplete() {},
+      invalidate() {},
     });
     await waitFor(() => states.includes("connected"), Boolean, 5000);
     assertEquals(index.get(healthy.id)?.status, "idle");

@@ -28,6 +28,7 @@ Deno.test("usage leases coalesce independent consumers and last release cancels 
   assert(signal?.aborted);
   held.resolve({
     ...new UsageLedger("s").detail("user"),
+    version: { generation: 0, revision: 0 },
     clock: { epoch: "test", seq: 0 },
   });
   await work;

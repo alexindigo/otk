@@ -120,8 +120,9 @@ async function recording(
     indexUpsert: (entry) => index.upsert(entry),
     indexRemove: (id) => index.remove(id),
     content: (id, op) => ops.push({ id, op }),
-    resync: (id) => {
-      resyncs.push(id);
+    invalidate() {},
+    bootstrapComplete: () => {
+      resyncs.push("all");
     },
   });
   await wait(() => !!controller);

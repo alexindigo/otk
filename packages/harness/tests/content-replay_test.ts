@@ -50,3 +50,37 @@ Deno.test("one oversized UTF-8 operation invalidates and releases its capture pa
   replay.reset("s");
   assertThrows(() => reset.seal(), Error, "capture-stale");
 });
+
+Deno.test("producer versions outlive demand epochs and invalidate only their actual authority scope", () => {
+  let nonce = 0;
+  const replay = new ContentReplay({
+    replayops: 128,
+    replaybytes: 4096,
+    nonce: () => String(++nonce),
+    emit() {},
+  });
+  const original = replay.version("a"), epoch = replay.clock("a");
+  const a = replay.capture("a"), b = replay.capture("b");
+  const changed = replay.invalidate("a");
+  assertEquals(changed, {
+    sessionID: "a",
+    version: { generation: 0, revision: 1 },
+  });
+  assertThrows(() => a.seal(), Error, "capture-stale");
+  assertEquals(b.seal().events, []);
+  assertEquals(replay.version("b"), original);
+  assertEquals(replay.clock("a").epoch === epoch.epoch, false);
+  replay.release("a");
+  replay.reset("b");
+  replay.reset();
+  assertEquals(replay.version("a"), changed.version);
+  assertEquals(replay.version("b"), original);
+  const held = replay.capture("b");
+  const next = replay.invalidate();
+  assertEquals(next, { version: { generation: 1, revision: 0 } });
+  assertThrows(() => held.seal(), Error, "capture-stale");
+  assertEquals(replay.version("a"), next.version);
+  assertEquals(replay.version("b"), next.version);
+  assertEquals(original, { generation: 0, revision: 0 });
+  assertEquals(changed.version, { generation: 0, revision: 1 });
+});

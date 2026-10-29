@@ -97,6 +97,7 @@ Deno.test("held detail replay projects headers and tool labels without reading o
     assertEquals(sourceReads, 0);
     held.resolve({
       ...new UsageLedger("tstv1-s", [call("a", 0)]).detail("turn"),
+      version: { generation: 0, revision: 0 },
       clock: { epoch: "test", seq: 0 },
     });
     await pending;
@@ -262,6 +263,7 @@ Deno.test("an overflowed held turn baseline is replaced once instead of replayin
   const held = Promise.withResolvers<TurnUsageDetail>();
   const snapshot = (input: number): TurnUsageDetail => ({
     ...new UsageLedger("tstv1-s", [call("a", input)]).detail("turn"),
+    version: { generation: 0, revision: 0 },
     clock: { epoch: "test", seq: 0 },
   });
   let requests = 0;

@@ -5,6 +5,8 @@ import {
   type ContentOp,
   isAttentionOp,
   type MessagePolicy,
+  type TranscriptInvalidation,
+  type TranscriptVersion,
 } from "@otk/protocol";
 interface Capture {
   events: ClockedContent[];
@@ -18,6 +20,8 @@ interface Session {
 /** Bounded event-aligned capture only: no native reader, bodies cache or timers. */
 export class ContentReplay {
   #sessions = new Map<string, Session>();
+  #generation = 0;
+  #revisions = new Map<string, number>();
   constructor(
     readonly options: Pick<MessagePolicy, "replayops" | "replaybytes"> & {
       nonce(): string;
@@ -37,6 +41,26 @@ export class ContentReplay {
   }
   clock(id: string): ContentClock {
     return { ...this.#session(id).clock };
+  }
+  version(id: string): TranscriptVersion {
+    return {
+      generation: this.#generation,
+      revision: this.#revisions.get(id) ?? 0,
+    };
+  }
+  invalidate(sessionID?: string): TranscriptInvalidation {
+    if (sessionID === undefined) {
+      this.#generation++;
+      this.#revisions.clear();
+    } else {this.#revisions.set(
+        sessionID,
+        (this.#revisions.get(sessionID) ?? 0) + 1,
+      );}
+    this.reset(sessionID);
+    return {
+      version: this.version(sessionID ?? ""),
+      ...(sessionID === undefined ? {} : { sessionID }),
+    };
   }
   publish(id: string, event: ContentOp): ContentClock {
     if (isAttentionOp(event)) {

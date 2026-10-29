@@ -149,7 +149,8 @@ async function recording(stage?: Stage, watchdog = false, failStatus = false) {
       published.push(`remove:${id}`);
     },
     content: (_id, op) => published.push(`content:${op.op}`),
-    resync: () => published.push("resync"),
+    bootstrapComplete: () => published.push("resync"),
+    invalidate() {},
   };
   const send = (type: string, properties: Record<string, unknown> = {}) => {
     streams.at(-1)!.enqueue(new TextEncoder().encode(

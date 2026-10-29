@@ -69,7 +69,7 @@ async function settle() {
 }
 function fixture(loadAgents = () => Promise.resolve(agents)) {
   const frames: Extract<ClientFrame, { t: "rpc" }>[] = [];
-  let sequence = 0;
+  let sequence = 0, producerGeneration = 0;
   const checkpoints = new Map<string, number>();
   const connection = new SidecarConnection("http://example.test", {
     status() {},
@@ -100,10 +100,13 @@ function fixture(loadAgents = () => Promise.resolve(agents)) {
       id: frame.id,
       ok: true,
       result: method === "session.messages"
-        ? fixturePage("s", result as Message[], undefined, info, {
-          epoch: "fixture",
-          seq: checkpoints.get(frame.id)!,
-        })
+        ? {
+          ...fixturePage("s", result as Message[], undefined, info, {
+            epoch: "fixture",
+            seq: checkpoints.get(frame.id)!,
+          }),
+          version: { generation: producerGeneration, revision: 0 },
+        }
         : result,
     });
   };
@@ -153,6 +156,12 @@ function fixture(loadAgents = () => Promise.resolve(agents)) {
     change,
     answer,
     snapshot,
+    invalidate() {
+      session.receive("server", {
+        t: "transcript.invalidated",
+        version: { generation: ++producerGeneration, revision: 0 },
+      });
+    },
     part,
     receive,
     composer,
@@ -211,7 +220,7 @@ Deno.test("plan completion IDs cannot replay over a newer manual choice, includi
     f.part(tool("once"));
     f.part(tool("once", "plan_exit", "running"));
     f.part(tool("once"));
-    f.session.receive("server", { t: "resync", sessionIDs: "all" });
+    f.invalidate();
     await f.snapshot(
       Array.from(
         { length: 100 },

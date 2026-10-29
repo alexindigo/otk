@@ -6,6 +6,7 @@ import type {
   ContentSession,
   MessageCursor,
   MessagePage,
+  TranscriptInvalidation,
 } from "@otk/protocol";
 import type { SessionMetadata } from "@otk/protocol";
 import type { HarnessState } from "@otk/protocol";
@@ -36,7 +37,8 @@ export interface HarnessSink {
   indexUpsert(entry: SessionMetadata): void;
   indexRemove(sessionID: string): void;
   content(sessionID: string, op: ContentOp, clock?: ContentClock): void;
-  resync(sessionIDs: "all"): void;
+  bootstrapComplete(): void;
+  invalidate(value: TranscriptInvalidation): void;
 }
 export interface HarnessCore {
   readonly kind: string;

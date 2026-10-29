@@ -242,6 +242,7 @@ export class OpencodeV1Adapter implements Harness {
     const version = () => this.version;
     this.#transcript = new Transcript({
       replay: this.#replay,
+      invalidated: (value) => this.#sink.invalidate(value),
       retire: (id) => {
         this.#tasks.release(id);
         this.#recovery.release(id);
@@ -335,17 +336,19 @@ export class OpencodeV1Adapter implements Harness {
         ? {
           getUsage: async (id, turnID, signal) => {
             const clock = this.#replay.clock(id);
+            const version = this.#replay.version(id);
             const detail = await digest.detail(
               id,
               turnID,
               signal ?? new AbortController().signal,
             );
-            return { ...detail, clock };
+            return { ...detail, clock, version };
           },
         }
         : {
           getUsage: async (id, turnID, signal) => {
             const clock = this.#replay.clock(id);
+            const version = this.#replay.version(id);
             return {
               ...await usage(this.#db, this.#messages, directory).getUsage(
                 id,
@@ -353,6 +356,7 @@ export class OpencodeV1Adapter implements Harness {
                 signal,
               ),
               clock,
+              version,
             };
           },
         },
@@ -724,8 +728,8 @@ export class OpencodeV1Adapter implements Harness {
     const backoff = new Backoff(this.cfg.harness.reconnectmax);
     while (!signal.aborted) {
       const controller = this.#controller = new AbortController();
-      this.#transcript.release();
       const sink = this.#sink = this.#publication(controller.signal);
+      this.#transcript.invalidate();
       controller.signal.addEventListener("abort", () => {
         this.#recovery.release();
         this.#tasks.release();
@@ -768,7 +772,7 @@ export class OpencodeV1Adapter implements Harness {
                 ready = true;
                 sink.connection("connected");
                 if (!this.#current(controller)) return;
-                sink.resync("all");
+                sink.bootstrapComplete();
                 bufferedBytes = 0;
                 for (const pending of buffered.splice(0)) {
                   if (!this.#current(controller)) break;
@@ -1205,7 +1209,7 @@ export class OpencodeV1Adapter implements Harness {
       }
     }
     if (type === "server.instance.disposed") {
-      this.#transcript.release();
+      this.#transcript.invalidate();
       this.#abortCommands();
       this.#errors.reset();
       this.#colors.clear();
@@ -1216,7 +1220,7 @@ export class OpencodeV1Adapter implements Harness {
         controller.abort();
         throw error;
       }
-      if (this.#current(controller)) sink.resync("all");
+      if (this.#current(controller)) sink.bootstrapComplete();
       return;
     }
     const info = p.info as Info | undefined;
@@ -1259,7 +1263,6 @@ export class OpencodeV1Adapter implements Harness {
           prompts: revert?.prompts,
           prompt: revert?.prompt,
         });
-        sink.resync("all");
       }
       return;
     }

@@ -12,6 +12,22 @@ export const MAX_MESSAGE_CURSOR_LENGTH = 4096;
 /** Space for an empty replay checkpoint and its identity bookkeeping. */
 export const MIN_MESSAGE_REPLAY_BYTES = 128;
 export type MessageCursor = string;
+/** Ordered within one producer lifetime; welcome retires a previous lifetime. */
+export interface TranscriptVersion {
+  generation: number;
+  revision: number;
+}
+export interface TranscriptInvalidation {
+  version: TranscriptVersion;
+  /** Absent means a new producer generation, affecting every session. */
+  sessionID?: string;
+}
+export function compareTranscriptVersion(
+  a: TranscriptVersion,
+  b: TranscriptVersion,
+): number {
+  return a.generation - b.generation || a.revision - b.revision;
+}
 export interface ContentClock {
   epoch: string;
   seq: number;
@@ -47,6 +63,7 @@ export interface ClockedContent {
 }
 export interface MessagePage {
   sessionID: string;
+  version: TranscriptVersion;
   clock: ContentClock;
   from: ContentClock;
   session: ContentSession;

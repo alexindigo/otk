@@ -183,7 +183,8 @@ test("adapter maps legacy event chain while ignoring its captured durable sync c
         removed = true;
       },
       content: (_id, op) => ops.push(op),
-      resync() {},
+      bootstrapComplete() {},
+      invalidate() {},
     });
     const deadline = Date.now() + 2000;
     while (!removed && Date.now() < deadline) {
@@ -337,7 +338,8 @@ test("adapter replays bootstrap events and invalidates streaming ownership on in
       indexUpsert: (entry) => updates.push(structuredClone(entry)),
       indexRemove: () => {},
       content: () => {},
-      resync: () => {
+      invalidate() {},
+      bootstrapComplete: () => {
         resyncs++;
       },
     });

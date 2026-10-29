@@ -68,6 +68,7 @@ export function fixturePage(
   );
   return {
     sessionID: id,
+    version: { generation: 0, revision: 0 },
     from: clock,
     clock,
     session: session ??

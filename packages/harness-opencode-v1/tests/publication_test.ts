@@ -11,7 +11,8 @@ Deno.test("connection publication ports permanently drop every publication after
     indexUpsert: () => calls.push("upsert"),
     indexRemove: () => calls.push("remove"),
     content: () => calls.push("content"),
-    resync: () => calls.push("resync"),
+    bootstrapComplete: () => calls.push("bootstrap"),
+    invalidate: () => calls.push("invalidated"),
   };
   const old = connectionPublication(target, controller.signal);
   const publish = (sink: HarnessSink) => {
@@ -35,19 +36,20 @@ Deno.test("connection publication ports permanently drop every publication after
       },
     });
     sink.content("s", { op: "todo.set", items: [] });
-    sink.resync("all");
+    sink.bootstrapComplete();
+    sink.invalidate({ version: { generation: 1, revision: 0 } });
   };
   publish(old);
-  assertEquals(calls.length, 6);
+  assertEquals(calls.length, 7);
   controller.abort();
   const replacement = connectionPublication(
     target,
     new AbortController().signal,
   );
   publish(old);
-  assertEquals(calls.length, 6);
+  assertEquals(calls.length, 7);
   publish(replacement);
-  assertEquals(calls.length, 12);
+  assertEquals(calls.length, 14);
   publish(old);
-  assertEquals(calls.length, 12);
+  assertEquals(calls.length, 14);
 });

@@ -10,6 +10,7 @@ export function turnDetail(
 ): TurnUsageDetail {
   return {
     ...new UsageLedger(value.sessionID, value.messages).detail(turnID),
+    version: { generation: 0, revision: 0 },
     clock,
   };
 }

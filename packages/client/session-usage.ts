@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  compareTranscriptVersion,
   type ContentClock,
   type ContentOp,
   errorMessage,
   type IndexEntry,
   type ModelCatalog,
   type ServerFrame,
+  type TranscriptVersion,
   type TurnUsageDetail,
   usageHeader,
   UsageLedger,
@@ -84,6 +86,8 @@ export function createSessionUsage(
     pending?: Promise<void>;
     controller?: AbortController;
     clock?: ContentClock;
+    minimum?: TranscriptVersion;
+    retriedVersion?: TranscriptVersion;
     events: { event: DetailOp; seq?: number; epoch?: string }[];
     bytes: number;
     overflow: boolean;
@@ -218,6 +222,7 @@ export function createSessionUsage(
     resource.events = [];
     resource.bytes = 0;
     resource.overflow = false;
+    const admitted = resource.minimum;
     const work = Promise.resolve().then(async () => {
       try {
         const value = await connection(target.sidecarId).rpc.call("usage.get", {
@@ -225,6 +230,23 @@ export function createSessionUsage(
           turnID: target.turnID,
         }, abort.signal);
         if (resources.get(key) !== resource || abort.signal.aborted) return;
+        if (
+          resource.minimum &&
+          compareTranscriptVersion(value.version, resource.minimum) < 0
+        ) {
+          if (
+            !resource.retriedVersion ||
+            compareTranscriptVersion(
+                resource.retriedVersion,
+                resource.minimum,
+              ) < 0
+          ) {
+            resource.retriedVersion = resource.minimum;
+            resource.again = true;
+            return;
+          }
+          throw new Error("Refreshing usage breakdown…");
+        }
         if (
           value.sessionID !== target.sessionID ||
           value.turnID !== target.turnID || value.calls.some((call) =>
@@ -258,9 +280,14 @@ export function createSessionUsage(
         resource.value = candidate.value;
         resource.positions = candidate.positions;
         resource.clock = candidate.clock;
+        resource.minimum = value.version;
         publish(key, resource);
       } catch (error) {
         if (resources.get(key) === resource && !abort.signal.aborted) {
+          if (admitted !== resource.minimum) {
+            resource.again = true;
+            return;
+          }
           publish(key, resource, false, errorMessage(error));
           schedule(resource);
         }
@@ -345,7 +372,24 @@ export function createSessionUsage(
               void load(resource.target, true);
             }
           }
-        } else if (frame.t === "welcome" || frame.t === "resync") {
+        } else if (frame.t === "transcript.invalidated") {
+          if (
+            frame.sessionID !== undefined &&
+            frame.sessionID !== resource.target.sessionID
+          ) continue;
+          if (
+            resource.minimum &&
+            compareTranscriptVersion(frame.version, resource.minimum) <= 0
+          ) continue;
+          resource.minimum = frame.version;
+          if (
+            resource.value &&
+            compareTranscriptVersion(resource.value.version, frame.version) >= 0
+          ) continue;
+          resource.clock = undefined;
+          if (!resource.pending) void load(resource.target, true);
+        } else if (frame.t === "welcome") {
+          resource.minimum = undefined;
           resource.controller?.abort();
           resource.pending = undefined;
           resource.clock = undefined;

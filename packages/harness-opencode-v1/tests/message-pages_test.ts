@@ -294,3 +294,62 @@ Deno.test("an independent session lookup joins newer rollback authority instead 
   held.resolve(raw);
   assertEquals((await reading).revert?.messageID, "cutoff");
 });
+
+Deno.test("native transcript authority versions change for rollback/restore and producer resets, never ordinary metadata or demand release", async () => {
+  const settings = cfg();
+  const replay = new ContentReplay({
+    ...settings.messages,
+    nonce: () => crypto.randomUUID(),
+    emit() {},
+  });
+  const raw: Session = {
+    id: "s",
+    directory: "/p",
+    projectID: "p",
+    title: "S",
+    time: { created: 1, updated: 1 },
+  };
+  const invalidations: unknown[] = [];
+  const transcript = new Transcript({
+    replay,
+    buffers: new StreamBuffers(),
+    reader: new Messages(
+      new Client(settings.harness, () => Promise.resolve(Response.json([]))),
+      () => "/p",
+    ),
+    raw: () => Promise.resolve(raw),
+    info: (value) => Promise.resolve(mapSession(value)),
+    decorate: (message) => message,
+    summaries: () => ({}),
+    invalidated: (value) => invalidations.push(value),
+  });
+  const first = await transcript.page("opcv1-s");
+  transcript.observe({
+    ...raw,
+    title: "Renamed",
+    time: { created: 1, updated: 2 },
+  });
+  assertEquals(invalidations, []);
+  assertEquals(replay.version("opcv1-s"), first.version);
+  const reverted = { ...raw, revert: { messageID: "cutoff" } };
+  transcript.observe(reverted);
+  transcript.observe(reverted);
+  assertEquals(invalidations, [{
+    sessionID: "opcv1-s",
+    version: { generation: 0, revision: 1 },
+  }]);
+  assertEquals(replay.version("opcv1-other"), first.version);
+  transcript.observe(raw);
+  assertEquals(invalidations.at(-1), {
+    sessionID: "opcv1-s",
+    version: { generation: 0, revision: 2 },
+  });
+  transcript.release("opcv1-s");
+  assertEquals(invalidations.length, 2);
+  assertEquals(replay.version("opcv1-s"), { generation: 0, revision: 2 });
+  transcript.invalidate();
+  assertEquals(invalidations.at(-1), {
+    version: { generation: 1, revision: 0 },
+  });
+  assertEquals(replay.version("opcv1-other"), { generation: 1, revision: 0 });
+});

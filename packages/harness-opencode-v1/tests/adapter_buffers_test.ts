@@ -116,7 +116,8 @@ for (
         },
         indexRemove: () => {},
         content: (_id, op) => ops.push(op),
-        resync: () => {},
+        bootstrapComplete: () => {},
+        invalidate() {},
       });
       await waitFor(() => !!controller);
       send({

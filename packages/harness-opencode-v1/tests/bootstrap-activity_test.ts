@@ -144,7 +144,8 @@ for (
         indexUpsert: (entry) => index.upsert(entry),
         indexRemove: (id) => index.remove(id),
         content() {},
-        resync() {},
+        bootstrapComplete() {},
+        invalidate() {},
       });
       await waitFor(() => ready, (count) => count === 1);
       const check = async () => {
@@ -306,7 +307,8 @@ for (const failed of ["/session/status", "/permission", "/question"]) {
         indexUpsert: (entry) => index.upsert(entry),
         indexRemove: (id) => index.remove(id),
         content() {},
-        resync() {},
+        bootstrapComplete() {},
+        invalidate() {},
       });
       await waitFor(() => started.size, (count) => count >= 4);
       assertEquals(

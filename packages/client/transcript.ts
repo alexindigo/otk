@@ -1,11 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   type ClockedContent,
+  compareTranscriptVersion,
   type ContentClock,
   errorMessage,
   type LatestPrompt,
   type MessageCursor,
   type MessagePolicy,
+  type TranscriptVersion,
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
 import type { ContentOp, ContentSession, Message, Part } from "@otk/protocol";
@@ -76,6 +78,7 @@ export interface TranscriptState {
   selection?: Selection;
   info?: ContentSession;
   clock?: ContentClock;
+  version?: TranscriptVersion;
   latestPrompt?: LatestPrompt;
   siblings: ContentSession[];
   content: ContentState;
@@ -223,6 +226,10 @@ export function createTranscript(
   let clock: ContentClock | undefined, cursor: MessageCursor | null = null;
   let missing = false, retry: ReturnType<typeof setTimeout> | undefined;
   let hasBaseline = false;
+  let initialResync = false;
+  let authority: TranscriptVersion | undefined,
+    minimum: TranscriptVersion | undefined;
+  let retriedVersion: TranscriptVersion | undefined;
   let attentionReads: {
     events: Map<string, ContentOp>;
     bytes: number;
@@ -411,6 +418,7 @@ export function createTranscript(
       return;
     }
     const recovering = missing;
+    initialResync = false;
     const target = selected, id = generation, request = ++load;
     controller?.abort();
     const abort = controller = new AbortController();
@@ -446,6 +454,12 @@ export function createTranscript(
         }, abort.signal), abort.signal);
       const info = page.session, messages = page.items;
       if (!current(id, request)) return;
+      if (minimum && compareTranscriptVersion(page.version, minimum) < 0) {
+        initialResync = retriedVersion === undefined ||
+          compareTranscriptVersion(retriedVersion, minimum) < 0;
+        retriedVersion = minimum;
+        throw new Error("Message authority was invalidated during baseline");
+      }
       if (
         page.sessionID !== target.sessionID ||
         page.from.epoch !== page.clock.epoch || page.from.seq > page.clock.seq
@@ -464,6 +478,7 @@ export function createTranscript(
         replay.push(frame);
       }
       clock = nextClock;
+      authority = minimum = page.version;
       cursor = page.older;
       tailDirty = false;
       pages.length = 0;
@@ -492,6 +507,7 @@ export function createTranscript(
       bufferBytes = 0;
       fetching = false;
       hasBaseline = true;
+      initialResync = false;
       setState((draft) => {
         projection.replace(messages);
         projection.helpers(helper);
@@ -528,6 +544,7 @@ export function createTranscript(
         }
         draft.info = info;
         draft.clock = clock;
+        draft.version = authority;
         draft.latestPrompt = latestPrompt;
         draft.content = content;
         draft.loading = false;
@@ -541,13 +558,20 @@ export function createTranscript(
       bufferBytes = 0;
       fetching = false;
       missing = true;
+      const resynced = initialResync;
+      initialResync = false;
       setState((draft) => {
         draft.loading = false;
         draft.continuity = "missing";
         draft.error = errorMessage(error);
         draft.pageError = draft.error;
       });
-      schedule();
+      if (resynced) {
+        retriedVersion = minimum;
+        queueMicrotask(() => {
+          if (selected && current(id, request) && !fetching) void refetch();
+        });
+      } else schedule();
     }
   };
   const open = (
@@ -579,10 +603,13 @@ export function createTranscript(
     buffer = [];
     bufferBytes = 0;
     clock = undefined;
+    authority = minimum = undefined;
+    retriedVersion = undefined;
     cursor = null;
     missing = false;
     fetching = false;
     hasBaseline = false;
+    initialResync = false;
     attentionReads = undefined;
     setState((draft) => {
       draft.selection = selection;
@@ -591,6 +618,7 @@ export function createTranscript(
       draft.deleted = deleted?.deleted ? deleted : undefined;
       draft.info = undefined;
       draft.clock = undefined;
+      draft.version = undefined;
       draft.latestPrompt = undefined;
       draft.siblings = [];
       draft.content = emptyContent();
@@ -835,7 +863,33 @@ export function createTranscript(
         return;
       }
       if (view === "deleted") return;
-      if (frame.t === "welcome" || frame.t === "resync") {
+      if (frame.t === "bootstrap.complete") {
+        refreshAttention(false);
+        return;
+      }
+      if (frame.t === "transcript.invalidated") {
+        if (
+          frame.sessionID !== undefined &&
+          frame.sessionID !== selected.sessionID
+        ) return;
+        if (minimum && compareTranscriptVersion(frame.version, minimum) <= 0) {
+          return;
+        }
+        minimum = frame.version;
+        if (authority && compareTranscriptVersion(authority, minimum) >= 0) {
+          return;
+        }
+        if (fetching && !hasBaseline) {
+          initialResync = true;
+          return;
+        }
+        clock = undefined;
+        missing = true;
+        void refetch();
+        return;
+      }
+      if (frame.t === "welcome") {
+        authority = minimum = undefined;
         void refetch();
         return;
       }

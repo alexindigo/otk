@@ -65,7 +65,8 @@ test("healthy SSE heartbeats remain observable while bootstrap reads are held", 
       indexUpsert() {},
       indexRemove() {},
       content() {},
-      resync: () => ready.resolve(),
+      bootstrapComplete: () => ready.resolve(),
+      invalidate() {},
     });
     await produced.promise;
     assertEquals(
@@ -161,7 +162,8 @@ for (
         },
         indexRemove() {},
         content() {},
-        resync() {},
+        bootstrapComplete() {},
+        invalidate() {},
       });
       await entered.promise;
       // All producer pulls are synchronous. A turn acknowledges drainage of

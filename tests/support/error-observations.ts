@@ -165,7 +165,8 @@ export async function observationFixture() {
     indexRemove: (id) => entries.delete(id),
     content: (sessionID, event) =>
       ops.push({ sessionID, event: structuredClone(event) }),
-    resync: () => {},
+    bootstrapComplete: () => {},
+    invalidate: () => {},
   });
   await wait(() => resets > 0);
   adapter.core.subscriptions("opcv1-case-a", 1);

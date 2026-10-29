@@ -15,6 +15,7 @@ import { shellEntry } from "./shell-fixture.ts";
 import type { SidecarConnection } from "../connection.ts";
 const snapshot = (ledger: UsageLedger): TurnUsageDetail => ({
   ...ledger.detail("user"),
+  version: { generation: 0, revision: 0 },
   clock: { epoch: "test", seq: 0 },
 });
 const policy = {
@@ -344,13 +345,20 @@ Deno.test("usage reconnect rejects old generations, isolates targets and exposes
   );
   const old = owner.load(target);
   await Promise.resolve();
-  owner.receive("local", { t: "resync", sessionIDs: "all" });
+  owner.receive("local", {
+    t: "transcript.invalidated",
+    version: { generation: 1, revision: 0 },
+  });
   const current = owner.load(target);
   await Promise.resolve();
   first.resolve(snapshot(new UsageLedger("s", [header(1)])));
   await old;
-  second.resolve(snapshot(new UsageLedger("s", [header(7, true)])));
+  second.resolve({
+    ...snapshot(new UsageLedger("s", [header(7, true)])),
+    version: { generation: 1, revision: 0 },
+  });
   await current;
+  await owner.load(target);
   assertEquals(owner.get(target)?.summary.tokens.input, 7);
   assertEquals(
     owner.get({ sidecarId: "elsewhere", sessionID: "s", turnID: "user" }),
