@@ -61,7 +61,6 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
       agent: string(input.subagent_type) || undefined,
       description: string(input.description) || "",
       childSessionID: childSession(metadata.sessionId),
-      toolCount: 0,
       duration: state.time?.end !== undefined && state.time.start !== undefined
         ? state.time.end - state.time.start
         : undefined,

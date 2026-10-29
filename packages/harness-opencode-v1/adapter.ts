@@ -118,6 +118,7 @@ export class OpencodeV1Adapter implements Harness {
   #db: BootstrapDb;
   #history: History;
   #tasks: TaskProgress;
+  #helperObservation?: () => void;
   #messages: Messages;
   #colors: AgentColors;
   #replay: ContentReplay;
@@ -186,35 +187,28 @@ export class OpencodeV1Adapter implements Harness {
       },
       (error) => console.warn("message recovery:", error),
     );
-    this.#tasks = new TaskProgress(
-      async (id, message, signal) => {
-        if (message) {
-          return [await this.#messages.get(id, message, signal)];
+    this.#tasks = new TaskProgress({
+      peek: (id) => this.#index.helper(id),
+      ...(digest
+        ? {
+          request: (id: string) =>
+            digest.observe(this.#connection, [{
+              sessionID: id,
+              revision: ++this.#digestRevision,
+              reason: "helper-hint",
+            }]),
         }
-        return this.#db.taskMessages(id) ??
-          this.#messages.scan(id, undefined, signal);
-      },
-      (id) => this.buffers.subscribed(id),
-      (parent, messageID, part) => {
+        : {}),
+      subscribed: (id) => this.buffers.subscribed(id),
+      emit: (parent, event) => {
         const cutoff = this.#reverts.get(parent);
-        if (!this.#stopped && (!cutoff || messageID < cutoff)) {
-          const lastOutput = this.buffers.observeOutput(
-            parent,
-            messageID,
-            Date.now(),
-            part.kind === "tool" ? part.call.time.end : undefined,
-            part.id,
-          );
-          this.#sink.content(parent, {
-            op: "part.upsert",
-            messageID,
-            part,
-            ...(lastOutput === undefined ? {} : { lastOutput }),
-          });
-        }
+        if (
+          !this.#stopped &&
+          (!cutoff || !("messageID" in event) || !event.messageID ||
+            event.messageID < cutoff)
+        ) this.#sink.content(parent, event);
       },
-      (parent, error) => console.warn(`task summary for ${parent}:`, error),
-    );
+    });
     const directory = sessionDirectory(
       (id) => this.#directory(id),
       (id) =>
@@ -225,6 +219,7 @@ export class OpencodeV1Adapter implements Harness {
     const version = () => this.version;
     this.#transcript = new Transcript({
       replay: this.#replay,
+      retire: (id) => this.#tasks.release(id),
       buffers: this.buffers,
       reader: this.#messages,
       raw: (id, signal) =>
@@ -246,7 +241,7 @@ export class OpencodeV1Adapter implements Harness {
         ? (id, turns, signal, cutoff) =>
           digest.transcriptMetadata(id, turns, signal, cutoff)
         : undefined,
-      decorate: async (message, raw, directory) => {
+      decorate: (message, raw, directory) => {
         const colors = this.#colors.peek(
           directory,
           this.buffers.subscribed(message.sessionID)
@@ -261,7 +256,7 @@ export class OpencodeV1Adapter implements Harness {
             message.parts[i] = {
               kind: "tool",
               id: part.id,
-              call: await this.#tasks.shape(part),
+              call: this.#tasks.shape(part),
             };
           }
         }
@@ -430,6 +425,10 @@ export class OpencodeV1Adapter implements Harness {
       );
     }
     this.#index = sink.index ?? new SessionIndex();
+    this.#helperObservation = this.#index.observeDigest((id) => {
+      const summary = this.#index.helper(id);
+      if (summary) this.#tasks.update(id, summary);
+    });
     // Standalone consumers need no index implementation. In core, callbacks
     // already mutate the injected owner; never maintain a mirrored map.
     this.#target = sink.index ? sink : {
@@ -481,6 +480,8 @@ export class OpencodeV1Adapter implements Harness {
     }, signal);
   }
   async #shutdown(): Promise<void> {
+    this.#helperObservation?.();
+    this.#helperObservation = undefined;
     this.#abortCommands();
     this.buffers.stop();
     this.#errors.reset();
@@ -540,6 +541,7 @@ export class OpencodeV1Adapter implements Harness {
     }
     if (this.buffers.subscribed(id)) {
       this.#reverts.set(id, session.revert.messageID);
+      this.#tasks.cutoff(id, session.revert.messageID);
     }
     let messageCount = this.#db.revertedUserCount(
       id,
@@ -1151,6 +1153,27 @@ export class OpencodeV1Adapter implements Harness {
             : {}),
         }]);
       }
+      if (
+        [
+          "message.updated",
+          "message.removed",
+          "message.part.updated",
+          "message.part.removed",
+        ].includes(type) &&
+        (this.#index.getMetadata(id)?.parentID || this.#index.helper(id))
+      ) {
+        this.digest.observe(this.#connection, [{
+          sessionID: id,
+          revision,
+          reason: "helper",
+          messages: [
+            String(
+              p.messageID ?? (p.info as Info)?.id ??
+                (p.part as RawPart)?.messageID ?? "",
+            ),
+          ],
+        }]);
+      }
     }
     if (type === "server.instance.disposed") {
       this.#transcript.release();
@@ -1382,6 +1405,9 @@ export class OpencodeV1Adapter implements Harness {
       this.#recovery.part(String(p.messageID), String(p.partID));
       this.buffers.forgetPart(String(p.messageID), String(p.partID));
     }
+    if (type === "message.part.updated" && raw && raw.tool !== "task") {
+      this.#tasks.remove(sessionID, raw.messageID, raw.id);
+    }
     if (type === "message.part.updated" && raw) {
       if (this.buffers.subscribed(sessionID)) {
         this.buffers.epoch(sessionID, this.#replay.clock(sessionID).epoch);
@@ -1420,8 +1446,11 @@ export class OpencodeV1Adapter implements Harness {
         },
       )
     ) return;
-    if (type === "message.updated" || type === "message.part.updated") {
-      this.#tasks.observe(sessionID, info, raw);
+    if (type === "message.removed") {
+      this.#tasks.remove(sessionID, String(p.messageID));
+    }
+    if (type === "message.part.removed") {
+      this.#tasks.remove(sessionID, String(p.messageID), String(p.partID));
     }
     if (!this.buffers.subscribed(sessionID)) return;
     const cutoff = this.#reverts.get(sessionID),
@@ -1459,7 +1488,7 @@ export class OpencodeV1Adapter implements Harness {
         const part = this.buffers.snapshot(raw.id)?.part ||
           mapPart(raw, waiting);
         if (part.kind === "tool" && raw.tool === "task") {
-          part.call = await this.#tasks.shape(raw);
+          part.call = this.#tasks.shape(raw);
           if (!this.#current(controller)) return;
         }
         const lastOutput = this.buffers.outputTime(raw.messageID);

@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { sessionErrorMessage, type SessionErrorState } from "@otk/protocol";
+import {
+  sessionErrorMessage,
+  type SessionErrorState,
+  withHelperProgress,
+} from "@otk/protocol";
 import type {
   ContentOp,
   FileDiff,
@@ -83,6 +87,17 @@ export function reduceMessage(
     return message;
   }
   if (!previous) return;
+  if (op.op === "task.progress") {
+    const index = slot ??
+      previous.parts.findIndex((part) => part.id === op.partID);
+    const part = previous.parts[index];
+    if (!part) return previous;
+    const next = withHelperProgress(part, op.childSessionID, op.summary);
+    if (next === part) return previous;
+    const parts = [...previous.parts];
+    parts[index] = next;
+    return { ...previous, parts };
+  }
   if (
     op.op !== "part.upsert" && op.op !== "part.remove" &&
     op.op !== "part.blocks"

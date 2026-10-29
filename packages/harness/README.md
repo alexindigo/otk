@@ -124,3 +124,12 @@ authoritative index without cloning every retained turn first.
 traversing the digest or turn history. Native status, error and attention owners
 use this narrower read; topology traversal likewise stays independent of turn
 count. Complete digest consumers keep the existing `get()`/`values()` ports.
+
+Helper work is a separately keyed `DigestIdentity.projection: 'helper'`, using
+the same scheduler. Background slices yield on essential-read admission without
+losing their queued cursor. `helper` invalidations express changed scalar
+identities; `helper-hint` only requests missing progress.
+`SessionIndex.helper(id)` borrows a detached scalar summary and
+`observeDigest(listener)` reports accepted keyed digest changes, without another
+metadata index. Helper-only deltas preserve unchanged turn branches and live
+status/attention; `helper: null` explicitly removes the derived summary.

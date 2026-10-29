@@ -34,6 +34,7 @@ export class DigestScheduler {
   #requests = new Set<{ run(): Promise<void>; cancel(): void }>();
   #dutyUntil = 0;
   #dutyWait?: AbortController;
+  #slice?: AbortController;
   constructor(
     readonly policy: DigestPolicy,
     readonly resources: {
@@ -49,7 +50,7 @@ export class DigestScheduler {
     this.#sinks.set(sink.identity, sink);
   }
   #key(job: DigestIdentity): string {
-    return JSON.stringify([job.provider, job.sessionID]);
+    return JSON.stringify([job.provider, job.sessionID, job.projection]);
   }
   enqueue(
     identity: DigestIdentity,
@@ -158,6 +159,9 @@ export class DigestScheduler {
     const cancel = request.cancel;
     combined.addEventListener("abort", cancel, { once: true });
     this.#requests.add(request);
+    this.#slice?.abort(
+      new DOMException("Interactive digest demand", "AbortError"),
+    );
     this.#dutyWait?.abort(
       new DOMException("Interactive digest demand", "AbortError"),
     );
@@ -233,11 +237,24 @@ export class DigestScheduler {
           this.resources.freeMemory() < this.policy.memoryreserve))
     ) return false;
     next.changed = false;
-    const cursor = await this.#sinks.get(next.job.provider)!.step(
-      structuredClone(next.job),
-      { rows: this.policy.batch, until: start + this.policy.slicems },
-      signal,
-    );
+    const slice = next.job.interruptible !== false
+      ? new AbortController()
+      : undefined;
+    this.#slice = slice;
+    let cursor: string | undefined;
+    try {
+      cursor = await this.#sinks.get(next.job.provider)!.step(
+        structuredClone(next.job),
+        { rows: this.policy.batch, until: start + this.policy.slicems },
+        slice ? AbortSignal.any([signal, slice.signal]) : signal,
+      );
+    } catch (error) {
+      signal.throwIfAborted();
+      if (slice?.signal.aborted) return true;
+      throw error;
+    } finally {
+      this.#slice = undefined;
+    }
     if (next.changed) {
       // A raced invalidation must be reconciled after the current committed slice.
       if (cursor) next.job.cursor = cursor;

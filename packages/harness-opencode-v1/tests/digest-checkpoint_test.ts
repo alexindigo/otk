@@ -15,9 +15,9 @@ test("a rejected first digest commit leaves scan generation and baseline togethe
   native.exec(
     "CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,directory TEXT,project_id TEXT,title TEXT,time_created INTEGER,time_updated INTEGER,time_archived INTEGER); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,message_id TEXT,session_id TEXT,data TEXT)",
   );
-  derived.exec(
-    Deno.readTextFileSync(opencodeV1DigestMigrations.migrations[0].sql),
-  );
+  for (const migration of opencodeV1DigestMigrations.migrations) {
+    derived.exec(Deno.readTextFileSync(migration.sql));
+  }
   native.exec(
     "INSERT INTO session VALUES('ses_one',NULL,'/p','p','One',1,2,NULL)",
   );

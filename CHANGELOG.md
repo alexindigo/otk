@@ -28,6 +28,11 @@ calls incrementally; unreported categories remain unknown through live
 replacements. Copy reply lazily acquires missing steps before copying its
 complete source.
 
+Helper progress now comes from the shared metadata digest instead of blocking
+parent pages on child scans. Progress patches address existing parent links
+without parent message reads or polling. Unready and unavailable progress remain
+explicit, and helper metadata upgrades only the derived database.
+
 **Performance.** Sessions renders a measured window of the active project's
 hierarchy. Search, scroll anchors, focused rows and in-place edits retain their
 identities while panels unmount or lists change. Project and required session

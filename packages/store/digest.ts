@@ -65,6 +65,7 @@ export interface DigestBookkeepingRecord {
   dirty: number;
 }
 export interface DigestCommit {
+  helpers?: { upsert: DigestHelperRecord[]; remove: string[] };
   sessions: DigestSessionRecord[];
   turns: {
     upsert: DigestTurnRecord[];
@@ -73,6 +74,7 @@ export interface DigestCommit {
   bookkeeping: DigestBookkeepingRecord[];
 }
 export interface DigestPersistence {
+  helpers(ids: readonly string[]): DigestHelperRecord[];
   catalog(
     provider: string,
     after: string,
@@ -129,6 +131,28 @@ const sessionColumns = [
   "deleted_at",
   "deleted_how",
 ] as const;
+export interface DigestHelperRecord {
+  session_id: string;
+  state: "digesting" | "ready" | "unavailable";
+  revision: number;
+  tool_count: number | null;
+  current_name: string | null;
+  current_title: string | null;
+  current_start: number | null;
+  time_start: number | null;
+  time_end: number | null;
+}
+const helperColumns = [
+  "session_id",
+  "state",
+  "revision",
+  "tool_count",
+  "current_name",
+  "current_title",
+  "current_start",
+  "time_start",
+  "time_end",
+] as const;
 const turnColumns = [
   "session_id",
   "turn_id",
@@ -178,6 +202,11 @@ export function digestTurnCursor(
 /** Scalar records only; table/column allowlists are owned here, never supplied by a sink. */
 export class DigestStore implements DigestPersistence {
   constructor(readonly db: DigestDb) {}
+  helpers(ids: readonly string[]): DigestHelperRecord[] {
+    return this.db.connection.prepare(
+      "SELECT * FROM digest_helpers WHERE session_id IN (SELECT value FROM json_each(?)) ORDER BY session_id",
+    ).all(JSON.stringify(ids)) as unknown as DigestHelperRecord[];
+  }
   catalog(
     provider: string,
     after: string,
@@ -241,6 +270,19 @@ export class DigestStore implements DigestPersistence {
         }
       };
       upsert("digest_sessions", sessionColumns, ["id"], batch.sessions);
+      if (batch.helpers) {
+        for (const id of batch.helpers.remove) {
+          this.db.connection.prepare(
+            "DELETE FROM digest_helpers WHERE session_id=?",
+          ).run(id);
+        }
+        upsert(
+          "digest_helpers",
+          helperColumns,
+          ["session_id"],
+          batch.helpers.upsert,
+        );
+      }
       for (const row of batch.turns.remove) {
         this.db.connection.prepare(
           "DELETE FROM digest_turns WHERE session_id=? AND turn_id=?",

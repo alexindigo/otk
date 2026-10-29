@@ -146,6 +146,13 @@ Start a turn scan with an empty cursor; pass `digestTurnCursor(lastRow)` for the
 next page. The cursor includes both turn and session identity, so equal native
 turn IDs across sessions/providers cannot be skipped or repeated.
 
+Digest feature v2 adds `digest_helpers`. `helpers(ids)` returns allowlisted
+scalar readiness, revision, count, label and clocks; optional
+`DigestCommit.helpers` upsert/removal joins the same transaction as session,
+turn and provider-private changes. Fresh installs and v1 upgrades use the same
+feature runner. Migration or write failure rolls back instead of deleting either
+database. No message bodies, tool arguments or output are stored.
+
 `PermissionStore` / `permissionMigrations` independently contribute explicit
 session enablement and the permission reply journal. The application supplies
 request JSON; storage imports no protocol. Intents commit before remote I/O, and

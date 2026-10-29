@@ -170,19 +170,25 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
           } else if (op.op === "digest") {
             const entry = entries[key];
             if (!entry || op.revision < entry.digest.revision) continue;
-            const turns = {
-              ...entry.digest.turns,
-              ...structuredClone(op.turns.upsert),
-            };
+            const turns =
+              !Object.keys(op.turns.upsert).length && !op.turns.remove.length
+                ? entry.digest.turns
+                : {
+                  ...entry.digest.turns,
+                  ...structuredClone(op.turns.upsert),
+                };
             for (const id of op.turns.remove) delete turns[id];
             const next = {
               ...entry,
               digest: {
+                ...entry.digest,
                 ...structuredClone(op.summary),
                 revision: op.revision,
                 turns,
               },
             };
+            if (op.helper === null) delete next.digest.helper;
+            else if (op.helper) next.digest.helper = structuredClone(op.helper);
             if (op.deleted) next.deleted = structuredClone(op.deleted);
             else delete next.deleted;
             put(key, next);

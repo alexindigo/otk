@@ -196,6 +196,12 @@ for (const mode of ["SQL", "API"] as const) {
       undefined,
       fetcher,
     );
+    const taskMessages = BootstrapDb.prototype.taskMessages;
+    let helperScans = 0;
+    BootstrapDb.prototype.taskMessages = function (id) {
+      helperScans++;
+      return taskMessages.call(this, id);
+    };
     try {
       assertEquals(
         (await adapter.core.getSession("opcv1-parent")).revert?.messageCount,
@@ -213,17 +219,30 @@ for (const mode of ["SQL", "API"] as const) {
       delete session.revert;
       await adapter.core.getSession("opcv1-parent");
       const result = await adapter.core.listMessages("opcv1-parent", {});
+      assertEquals(
+        helperScans,
+        0,
+        "Parent pages must never scan helper SQL metadata",
+      );
+      assertEquals(
+        reads.filter((url) => url.pathname === "/session/child/message").length,
+        0,
+        "Parent pages must never scan helpers",
+      );
       const part = result.items[0].parts[0];
       assert(part.kind === "tool" && part.call.tool === "task");
-      assertEquals(part.call.toolCount, 600);
-      assertEquals(part.call.currentTool, "bash Tool 1197");
-      assertEquals(part.call.duration, 1200);
+      assertEquals(part.call.progress, {
+        state: "unavailable",
+        revision: 0,
+        toolCount: null,
+      });
       assert(!JSON.stringify(result).includes("Large child output"));
       assertEquals(
         reads.filter((url) => url.pathname === "/session/child/message").length,
-        mode === "SQL" ? 0 : 13,
+        0,
       );
     } finally {
+      BootstrapDb.prototype.taskMessages = taskMessages;
       await adapter.core.stop();
     }
     if (beforeDb) assertEquals(await Deno.readFile(db), beforeDb);

@@ -19,6 +19,23 @@ function immutable<T extends object>(value: T): T {
 
 /** One authoritative metadata index, shared by the harness and its consumer. */
 export class SessionIndex {
+  #digestListeners = new Set<(id: string) => void>();
+  observeDigest(listener: (id: string) => void): () => void {
+    this.#digestListeners.add(listener);
+    return () => {
+      this.#digestListeners.delete(listener);
+    };
+  }
+  helper(id: string): import("@otk/protocol").HelperSummary | undefined {
+    const entry = this.#entries.get(id);
+    return entry?.deleted
+      ? {
+        state: "unavailable",
+        revision: entry.digest.revision,
+        toolCount: null,
+      }
+      : entry?.digest.helper && structuredClone(entry.digest.helper);
+  }
   #entries = new Map<string, IndexEntry>();
   #children = new Map<string, Set<string>>();
   get(id: string): IndexEntry | undefined {
@@ -113,23 +130,30 @@ export class SessionIndex {
     const entry = this.#entries.get(delta.id);
     if (!entry || delta.revision < entry.digest.revision) return false;
     const previous = this.get(delta.id);
-    const turns = {
-      ...entry.digest.turns,
-      ...structuredClone(delta.turns.upsert),
-    };
+    const turns =
+      !Object.keys(delta.turns.upsert).length && !delta.turns.remove.length
+        ? entry.digest.turns
+        : {
+          ...entry.digest.turns,
+          ...structuredClone(delta.turns.upsert),
+        };
     for (const id of delta.turns.remove) delete turns[id];
     const next: IndexEntry = {
       ...entry,
       digest: {
+        ...entry.digest,
         ...structuredClone(delta.summary),
         revision: delta.revision,
         turns,
       },
     };
+    if (delta.helper === null) delete next.digest.helper;
+    else if (delta.helper) next.digest.helper = structuredClone(delta.helper);
     if (delta.deleted) next.deleted = structuredClone(delta.deleted);
     else delete next.deleted;
     this.#entries.set(delta.id, immutable(next));
     this.published(this.get(delta.id)!, previous, structuredClone(delta));
+    for (const listener of this.#digestListeners) listener(delta.id);
     return true;
   }
   remove(id: string): void {

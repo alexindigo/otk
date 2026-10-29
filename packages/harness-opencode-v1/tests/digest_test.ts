@@ -66,9 +66,9 @@ async function fixture() {
   native.prepare("INSERT INTO session VALUES(?,NULL,'/p','p','One',1,2,NULL)")
     .run("ses_one");
   const derived = new DatabaseSync(":memory:");
-  derived.exec(
-    Deno.readTextFileSync(opencodeV1DigestMigrations.migrations[0].sql),
-  );
+  for (const migration of opencodeV1DigestMigrations.migrations) {
+    derived.exec(Deno.readTextFileSync(migration.sql));
+  }
   const values = new Map<
     string,
     DigestSnapshot & { turns: DigestDelta["turns"]["upsert"] }

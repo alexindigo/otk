@@ -47,7 +47,9 @@ Deno.test("digest SQL allowlists scalar metadata and batches tool detail", () =>
   for (
     const path of [
       "../../packages/harness-opencode-v1/digest-migrations/001.sql",
+      "../../packages/harness-opencode-v1/digest-migrations/002.sql",
       "../../packages/store/features/migrations/digest/001.sql",
+      "../../packages/store/features/migrations/digest/002.sql",
     ]
   ) {
     const schema = Deno.readTextFileSync(new URL(path, import.meta.url));
@@ -57,6 +59,17 @@ Deno.test("digest SQL allowlists scalar metadata and batches tool detail", () =>
       false,
     );
   }
+});
+Deno.test("provider-private helper checkpoints stay behind the native sink", () => {
+  const privateSQL = (source: string) => /\bopcv1_[a-z_]+\b/.test(source);
+  const worker = Deno.readTextFileSync(
+    new URL("../../core/digest/worker.ts", import.meta.url),
+  );
+  assertEquals(privateSQL(worker), false);
+  assertEquals(
+    privateSQL("sql.prepare('SELECT dirty FROM opcv1_helper_scan')"),
+    true,
+  );
 });
 Deno.test("digest SQLite connections belong to the worker, not its serving bridge", () => {
   const bridge = Deno.readTextFileSync(

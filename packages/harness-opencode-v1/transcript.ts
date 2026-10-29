@@ -12,6 +12,7 @@ import {
   type Message,
   MESSAGE_PAGE_SIZE,
   type MessagePage,
+  withHelperProgress,
 } from "@otk/protocol";
 import type { StreamBuffers } from "@otk/content";
 import type { Messages, NativeMessage } from "./messages.ts";
@@ -86,6 +87,7 @@ export class Transcript {
   constructor(
     readonly options: {
       replay: ContentReplay;
+      retire?(id?: string): void;
       buffers: StreamBuffers;
       reader: Messages;
       raw(id: string, signal?: AbortSignal): Promise<Session>;
@@ -130,6 +132,7 @@ export class Transcript {
     }
   }
   release(id?: string): void {
+    this.options.retire?.(id);
     for (const [key, opening] of this.#opening) {
       if (id !== undefined && key !== id) continue;
       this.#opening.delete(key);
@@ -403,11 +406,14 @@ export class Transcript {
       for (const m of items) {
         for (const part of m.parts) {
           if (part.kind === "tool" && part.call.childSessionID) {
-            helpers[part.call.childSessionID] = {
-              state: "digesting",
-              revision: 0,
-              toolCount: null,
-            };
+            helpers[part.call.childSessionID] =
+              part.call.tool === "task" && part.call.progress
+                ? part.call.progress
+                : {
+                  state: "digesting",
+                  revision: 0,
+                  toolCount: null,
+                };
           }
         }
       }
@@ -466,6 +472,18 @@ function overlay(items: Message[], event: ContentOp): Message[] {
     };
     return [...items.filter((m) => m.id !== value.id), value].sort((a, b) =>
       a.time.created - b.time.created || a.id.localeCompare(b.id)
+    );
+  }
+  if (event.op === "task.progress") {
+    return items.map((message) =>
+      message.id !== event.messageID ? message : {
+        ...message,
+        parts: message.parts.map((part) =>
+          part.id === event.partID
+            ? withHelperProgress(part, event.childSessionID, event.summary)
+            : part
+        ),
+      }
     );
   }
   if (event.op !== "part.upsert" && event.op !== "part.remove") return items;

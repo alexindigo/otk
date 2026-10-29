@@ -183,9 +183,9 @@ bootstrap and ordered replay finish; the byte watchdog pauses only while that
 owned backpressure prevents observing bytes. Finite bootstrap request deadlines
 and cancellation still apply. No event is dropped to meet the staging budget.
 Transport closure can cancel held bootstrap reads without consuming more events.
-Task summaries share one initial child scan and one in-flight refresh with a
-trailing dirty flag. Parent release aborts scan/read lifetimes and stop joins
-their actual completion; one failed link cannot affect independent parents.
+Task links retain only parent/message/part/child identities and revisions.
+Parent release, cutoff, epoch retirement and deletion release those links; there
+is no child scan or parent point-read lifetime in the serving link owner.
 Explicit session deletion releases pending input and direct attention, task and
 revert ownership, optional colours, recovery, commands and buffers together.
 Error observations are admitted independently of the index window. Empty-state
@@ -241,13 +241,11 @@ timers/readers and suppress stale output.
 
 Message collections have one bounded reader (1–200 messages per page); zero or
 missing limits cannot invoke stock's whole-history mode. Revert counts use a
-read-only SQL scalar. Task cards stream read-only SQL projections in pages of
-100, containing only message times/roles and tool IDs/titles/status/start times.
-Missing or incompatible databases use stock API pages of 100, reduced as they
-arrive rather than accumulated. Only summary metadata is retained while the
-parent is open. Native directory resolution reads the session record without
-decorating its revert information. The core's authoritative directory lookup can
-still use `getSession`; its revert count follows the same bounded contract.
+read-only SQL scalar. Helper progress uses the worker-owned digest described
+below, independently of parent pages. Native directory resolution reads the
+session record without decorating its revert information. The core's
+authoritative directory lookup can still use `getSession`; its revert count
+follows the same bounded contract.
 
 Public transcript pages use a fixed ten messages, while internal digest/history
 scans retain their own bounded limits. The native transcript owner wraps the
@@ -266,6 +264,26 @@ The public entry also exposes native raw types, mapping utilities, `Client`,
 `HttpFailure`, `History`, `BootstrapDb`, SSE/watchdog utilities and
 `TaskProgress` for native integrations. Cross-package imports always use this
 entry.
+
+`TaskProgress` is a synchronous link/decorate owner with injected summary peek,
+priority-hint, subscription and narrow content-publication ports. It accepts no
+native reader and has no polling timer. Shipped progress comes from the existing
+worker's native digest feature v2: bounded set-oriented helper-tool projections,
+scalar private baselines/generations, authoritative stale-row sweep and atomic
+neutral helper publication. API fallback extracts the same scalar fields one
+bounded page at a time. Ordinary usage/header jobs still read zero parts.
+Helpers discovered outside OTK and explicit task references follow the same
+path. Without an injected digest, standalone adapters publish unavailable
+progress immediately rather than privately scan child history. `TaskCall`
+exposes `progress` instead of `currentTool`/`toolCount`; helper-derived time
+never rewrites its native completion clock. `requestHelper(id, changed)` owns
+provider-private hint admission and `invalidateHelper(id)` marks an
+authoritative sweep dirty. The worker composition does not inspect the sink's
+private checkpoint tables. After backfill, SQL helper jobs reconcile only the
+changed message identities, including authoritative tool removals; priority-only
+hints preserve those keys. Lost fine-grained keys fall back to a complete
+bounded generation, and API fallback continues through bounded native collection
+pages.
 
 The standalone sessions consumer and stock-server test are in `tests/reuse/` at
 the workspace root. Run `deno task test:reuse` in the dedicated OTK guest.

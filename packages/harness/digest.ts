@@ -23,7 +23,13 @@ export interface DigestPolicy {
 export interface DirtySession {
   sessionID: string;
   revision: number;
-  reason: "metadata" | "messages" | "presence" | "attention";
+  reason:
+    | "metadata"
+    | "messages"
+    | "presence"
+    | "attention"
+    | "helper"
+    | "helper-hint";
   messages?: string[];
 }
 export interface DigestPort {
@@ -70,6 +76,8 @@ export type DigestPriority =
   | "visible"
   | "background";
 export interface DigestIdentity {
+  projection?: "helper";
+  interruptible?: boolean;
   provider: string;
   sessionID: string;
   updated: number;

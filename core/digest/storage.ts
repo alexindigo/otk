@@ -1,7 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { DigestDelta, SessionMetadata, UsageSummary } from "@otk/protocol";
+import type {
+  DigestDelta,
+  HelperSummary,
+  SessionMetadata,
+  UsageSummary,
+} from "@otk/protocol";
 import {
   type DigestBookkeepingRecord,
+  type DigestHelperRecord,
   type DigestSessionRecord,
   DigestStore,
   type DigestTurnRecord,
@@ -11,6 +17,26 @@ import type {
   DigestCheckpoint,
   DigestSnapshot,
 } from "@otk/harness-opencode-v1";
+export function helper(row: DigestHelperRecord): HelperSummary {
+  return {
+    state: row.state,
+    revision: row.revision,
+    toolCount: row.tool_count,
+    ...(row.current_name === null ? {} : {
+      current: {
+        name: row.current_name,
+        ...(row.current_title === null ? {} : { title: row.current_title }),
+        ...(row.current_start === null ? {} : { startedAt: row.current_start }),
+      },
+    }),
+    ...(row.time_start === null ? {} : {
+      time: {
+        start: row.time_start,
+        ...(row.time_end === null ? {} : { end: row.time_end }),
+      },
+    }),
+  };
+}
 
 export function usage(row: DigestUsageRecord): UsageSummary {
   return {
@@ -157,6 +183,22 @@ export function write(
     }]
     : [];
   store.commit({
+    ...(delta.helper === undefined ? {} : {
+      helpers: {
+        remove: delta.helper === null ? [metadata.id] : [],
+        upsert: delta.helper === null ? [] : [{
+          session_id: metadata.id,
+          state: delta.helper.state,
+          revision: delta.helper.revision,
+          tool_count: delta.helper.toolCount,
+          current_name: delta.helper.current?.name ?? null,
+          current_title: delta.helper.current?.title ?? null,
+          current_start: delta.helper.current?.startedAt ?? null,
+          time_start: delta.helper.time?.start ?? null,
+          time_end: delta.helper.time?.end ?? null,
+        }],
+      },
+    }),
     sessions: [session],
     turns: {
       upsert: turns,

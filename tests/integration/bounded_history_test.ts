@@ -181,14 +181,16 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
         part.kind === "tool" && part.call.tool === "task"
       );
       assert(task?.kind === "tool" && task.call.tool === "task");
-      assertEquals(task.call.toolCount, tools.length);
-      assert(task.call.currentTool?.startsWith("bash"));
-      assert((task.call.duration ?? -1) >= 0);
+      assertEquals(task.call.progress, {
+        state: "unavailable",
+        revision: 0,
+        toolCount: null,
+      });
       assertEquals(
         reads.slice(before).filter((url) =>
           url.pathname === `/session/${child.nativeID}/message`
         ).length,
-        mode === "SQL" ? 0 : 1,
+        0,
       );
     }
     console.info("Stock metadata evidence:", oc.root);

@@ -25,27 +25,39 @@ export default function TaskTool(
   const open = ownedAction("task.open", () => {
     if (props.call.childSessionID) props.onOpen(props.call.childSessionID);
   });
+  const progress = () => {
+    const value = props.call.progress;
+    if (!value || value.state === "unavailable") return "Progress unavailable";
+    if (value.state === "digesting") return "Preparing progress…";
+    if (props.call.status === "running" && value.current) {
+      return `↳ ${value.current.name} ${value.current.title ?? ""}`.trim();
+    }
+    const time = value.time;
+    return `${countLabel(value.toolCount!, "tool call")}${
+      time?.end !== undefined
+        ? ` · ${(Math.max(0, time.end - time.start) / 1000).toFixed(1)}s`
+        : ""
+    }`;
+  };
   return (
     <>
-      <button
-        type="button"
-        class="otk-task-card"
-        disabled={!props.call.childSessionID}
-        onClick={() => void open()}
+      <Show
+        when={props.call.childSessionID}
+        fallback={
+          <div class="otk-task-card">
+            <span>{progress()}</span>
+          </div>
+        }
       >
-        <strong>Open task</strong>
-        <Show when={props.call.status === "running" && props.call.currentTool}>
-          <span>↳ {props.call.currentTool}</span>
-        </Show>
-        <Show when={props.call.status === "completed"}>
-          <span>
-            {countLabel(props.call.toolCount, "tool call")}
-            {props.call.duration !== undefined
-              ? ` · ${(props.call.duration / 1000).toFixed(1)}s`
-              : ""}
-          </span>
-        </Show>
-      </button>
+        <button
+          type="button"
+          class="otk-task-card"
+          onClick={() => void open()}
+        >
+          <strong>Open task</strong>
+          <span>{progress()}</span>
+        </button>
+      </Show>
       <ToolOutput
         text={props.call.output ?? ""}
         result={props.call.outputContent}

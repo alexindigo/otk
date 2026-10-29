@@ -39,7 +39,7 @@ test("neutral backend facts reach reply, agent picker, task and truncation consu
         awaitingPermission: false,
         time: { start: 2000, end: 3000 },
         description: "Inspect the result",
-        toolCount: 0,
+        progress: { state: "unavailable", revision: 0, toolCount: null },
         childSessionID: "tstv1-child",
       },
     }, {

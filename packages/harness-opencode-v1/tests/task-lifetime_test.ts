@@ -1,165 +1,61 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assertEquals } from "@std/assert";
 import { TaskProgress } from "../tasks.ts";
-import type { NativeMessage } from "../messages.ts";
-import type { RawPart } from "../types.ts";
-
-const raw: RawPart = {
-  id: "part",
-  sessionID: "parent",
-  messageID: "message",
-  type: "tool",
-  tool: "task",
-  callID: "call",
-  state: {
-    status: "running",
-    input: {},
-    metadata: { sessionId: "child" },
-    time: { start: 1 },
-  },
-};
-Deno.test("task scans coalesce and release aborts and joins their actual completion", async () => {
-  const held = Promise.withResolvers<NativeMessage[]>(),
-    signals: (AbortSignal | undefined)[] = [];
-  const tracker = new TaskProgress(
-    (_id, _message, signal) => {
-      signals.push(signal);
-      return held.promise;
-    },
-    () => true,
-    () => {},
-    () => {},
-  );
-  const first = tracker.shape(raw), second = tracker.shape(raw);
-  let stopped = false;
-  let stop: Promise<void> | undefined;
-  try {
-    assertEquals(signals.length, 1, "Initial child scans overlap");
-    stop = tracker.stop().then(() => {
-      stopped = true;
-    });
-    assert(signals[0]?.aborted, "Release did not cancel the scan");
-    assertEquals(stopped, false);
-  } finally {
-    held.resolve([]);
-    await Promise.allSettled([first, second, stop]);
-  }
-  assertEquals(stopped, true);
+import type { ContentOp } from "@otk/protocol";
+import { ready, task } from "./task-fixture.ts";
+Deno.test("task link upserts coalesce and stop leaves no late publication", async () => {
+  const events: ContentOp[] = [];
+  const tracker = new TaskProgress({
+    peek: () => undefined,
+    request: () => {},
+    subscribed: () => true,
+    emit: (_id, op) => events.push(op),
+  });
+  tracker.shape(task);
+  tracker.shape(task);
+  tracker.update("opcv1-child", ready);
+  assertEquals(events.length, 1);
+  await tracker.stop();
+  tracker.update("opcv1-child", { ...ready, revision: 3 });
+  assertEquals(events.length, 1);
 });
-Deno.test("task refresh coalesces events while a parent read is held", async () => {
-  const entered = Promise.withResolvers<void>(),
-    held = Promise.withResolvers<NativeMessage[]>();
-  let reads = 0, signal: AbortSignal | undefined;
-  const tracker = new TaskProgress(
-    (_id, message, abort) => {
-      if (!message) return Promise.resolve([]);
-      reads++;
-      signal = abort;
-      entered.resolve();
-      return held.promise;
-    },
-    () => true,
-    () => {},
-    () => {},
-  );
-  try {
-    await tracker.shape(raw);
-    tracker.observe("opcv1-child");
-    await entered.promise;
-    tracker.observe("opcv1-child");
-    tracker.release("opcv1-parent");
-    assert(signal?.aborted, "Retired parent read was not aborted");
-    held.resolve([]);
-    await tracker.stop();
-    assertEquals(reads, 1, "Retired child scheduled more work");
-  } finally {
-    held.resolve([]);
-    tracker.release();
+Deno.test("helper patches never rearm work or keep a retired parent alive", () => {
+  const events: ContentOp[] = [];
+  const tracker = new TaskProgress({
+    peek: () => undefined,
+    request: () => {},
+    subscribed: () => true,
+    emit: (_id, op) => events.push(op),
+  });
+  tracker.shape(task);
+  tracker.release("opcv1-parent");
+  for (let revision = 1; revision < 100; revision++) {
+    tracker.update("opcv1-child", { ...ready, revision });
   }
+  assertEquals(events, []);
 });
-Deno.test("task refresh has one in-flight read and exactly one trailing dirty refresh", async () => {
-  const jobs = new Map<number, () => void>();
-  let next = 0, reads = 0;
-  const entered = Promise.withResolvers<void>(),
-    held = Promise.withResolvers<NativeMessage[]>(),
-    trailing = Promise.withResolvers<void>(),
-    delivered = Promise.withResolvers<void>();
-  const tracker = new TaskProgress(
-    (_id, message) => {
-      if (!message) return Promise.resolve([]);
-      if (++reads === 1) {
-        entered.resolve();
-        return held.promise;
-      }
-      return Promise.resolve([{
-        info: {
-          id: "message",
-          sessionID: "parent",
-          role: "user",
-          time: { created: 1 },
-        },
-        parts: [raw],
-      }]);
-    },
-    () => true,
-    () => delivered.resolve(),
-    () => {},
-    {
-      schedule(run, milliseconds) {
-        assertEquals(milliseconds, 50);
-        const id = ++next;
-        jobs.set(id, run);
-        if (next === 2) trailing.resolve();
-        return () => {
-          jobs.delete(id);
-        };
-      },
-    },
-  );
-  const fire = () => {
-    const [id, run] = jobs.entries().next().value!;
-    jobs.delete(id);
-    run();
-  };
-  try {
-    await tracker.shape(raw);
-    tracker.observe("opcv1-child");
-    fire();
-    await entered.promise;
-    for (let n = 0; n < 100; n++) tracker.observe("opcv1-child");
-    assertEquals(jobs.size, 0, "Events scheduled overlapping reads");
-    held.resolve([]);
-    await trailing.promise;
-    assertEquals(jobs.size, 1);
-    fire();
-    await delivered.promise;
-    await tracker.stop();
-    assertEquals(reads, 2);
-    assertEquals(jobs.size, 0);
-  } finally {
-    held.resolve([]);
-    await tracker.stop();
-  }
+Deno.test("duplicate progress has one publication and a later revision one replacement", () => {
+  const events: ContentOp[] = [];
+  const tracker = new TaskProgress({
+    peek: () => undefined,
+    subscribed: () => true,
+    emit: (_id, op) => events.push(op),
+  });
+  tracker.shape(task);
+  for (let n = 0; n < 100; n++) tracker.update("opcv1-child", ready);
+  tracker.update("opcv1-child", { ...ready, revision: 3 });
+  assertEquals(events.length, 2);
 });
-Deno.test("deleting a task child aborts its scan even while the parent remains subscribed", async () => {
-  const held = Promise.withResolvers<NativeMessage[]>();
-  let signal: AbortSignal | undefined;
-  const tracker = new TaskProgress(
-    (_id, _message, abort) => {
-      signal = abort;
-      return held.promise;
-    },
-    () => true,
-    () => {},
-    () => {},
-  );
-  const shape = tracker.shape(raw);
-  try {
-    tracker.dispose("opcv1-child");
-    assert(signal?.aborted);
-  } finally {
-    held.resolve([]);
-    await shape;
-    await tracker.stop();
-  }
+Deno.test("deleting a child retires every parent link", () => {
+  const events: ContentOp[] = [];
+  const tracker = new TaskProgress({
+    peek: () => undefined,
+    subscribed: () => true,
+    emit: (_id, op) => events.push(op),
+  });
+  tracker.shape(task);
+  tracker.shape({ ...task, sessionID: "other" });
+  tracker.dispose("opcv1-child");
+  tracker.update("opcv1-child", ready);
+  assertEquals(events, []);
 });

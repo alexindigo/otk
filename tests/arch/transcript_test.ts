@@ -5,8 +5,16 @@ import { productionSources, Source } from "./analysis.ts";
 function violations(path: string, text: string): string[] {
   const source = new Source(text, path), result: string[] = [];
   for (const node of source.all) {
+    if (
+      path === "packages/harness-opencode-v1/tasks.ts" &&
+      node.type === "AwaitExpression"
+    ) result.push("awaited helper shaping");
     if (node.type !== "CallExpression") continue;
     const callee = source.name(node.callee) ?? "";
+    if (
+      path === "packages/harness-opencode-v1/tasks.ts" &&
+      /(?:\.(?:read|scan|page|taskMessages|schedule)|^setTimeout)$/.test(callee)
+    ) result.push("helper link owns I/O or polling");
     if (
       /\.call$/.test(callee) && node.arguments[0]?.type === "StringLiteral" &&
       node.arguments[0].value === "session.messages" &&
@@ -35,7 +43,7 @@ Deno.test("browser message acquisition has one canonical resource owner", async 
   const failures: string[] = [];
   for (const [path, text] of await productionSources()) {
     if (
-      !/^packages\/(client|ui)\/.*\.tsx?$/.test(path) ||
+      !/^packages\/(client|ui|harness-opencode-v1)\/.*\.tsx?$/.test(path) ||
       path.endsWith("example.ts")
     ) continue;
     failures.push(
@@ -43,6 +51,20 @@ Deno.test("browser message acquisition has one canonical resource owner", async 
     );
   }
   assertEquals(failures, []);
+});
+Deno.test("helper link negatives reject awaited child scans and parent polling", () => {
+  assertEquals(
+    violations(
+      "packages/harness-opencode-v1/tasks.ts",
+      "async function shape() { await reader.scan(child); clock.schedule(refresh, 50); reader.read(parent, message); }",
+    ),
+    [
+      "awaited helper shaping",
+      "helper link owns I/O or polling",
+      "helper link owns I/O or polling",
+      "helper link owns I/O or polling",
+    ],
+  );
 });
 Deno.test("transcript hot-path negatives reject UI regrouping, per-row detail reads and detached live ledgers", () => {
   assertEquals(

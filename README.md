@@ -190,6 +190,12 @@ retains unreported categories as unknown, and releases its call/pricing state on
 close. Copy reply acquires missing steps through the same cursor owner before
 writing complete source to the clipboard.
 
+Helper cards borrow background-digested progress. Parent pages never wait for a
+child history scan, and child activity never rereads parent messages. Progress
+shows “Preparing progress…” or “Progress unavailable” until authoritative counts
+are available; a ready empty helper reports zero. These rebuildable scalar
+summaries upgrade only `digest.db`, preserving user data in `otk.db`.
+
 Deleting a native session retains its last metadata and task membership as a
 tombstone. Select its struck-through row to see details, copy its title, remove
 it from its task or close its view. An external deletion retains unsent browser

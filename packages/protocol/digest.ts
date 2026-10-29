@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ModelRef } from "./content.ts";
+import type { HelperSummary } from "./transcript.ts";
 export interface ReportedTokens {
   input: number | null;
   output: number | null;
@@ -22,13 +23,15 @@ export interface SessionDigest {
   total?: UsageSummary;
   turns: Record<string, UsageSummary>;
   last?: { agent?: string; model?: ModelRef; context?: ReportedTokens };
+  helper?: HelperSummary;
 }
 export interface Tombstone {
   at: number;
   how: "otk" | "provider";
 }
 export interface DigestDelta {
-  summary: Omit<SessionDigest, "turns">;
+  summary: Omit<SessionDigest, "turns" | "helper">;
+  helper?: HelperSummary | null;
   turns: { upsert: Record<string, UsageSummary>; remove: string[] };
   deleted: Tombstone | null;
 }

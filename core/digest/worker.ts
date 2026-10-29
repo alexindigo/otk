@@ -13,7 +13,7 @@ import {
 } from "@otk/harness-opencode-v1";
 import { type DigestDelta, errorMessage } from "@otk/protocol";
 import type { FromWorker, ToWorker } from "./protocol.ts";
-import { snapshot, usage, write } from "./storage.ts";
+import { helper, snapshot, usage, write } from "./storage.ts";
 import { DigestRequests } from "./requests.ts";
 
 let run: string | undefined,
@@ -177,7 +177,12 @@ async function start(
             transaction: (callback) => db!.transaction(callback),
             read: (id) => {
               const row = store!.summary([id])[0];
-              return row && snapshot(row);
+              const progress = store!.helpers([id])[0];
+              return row &&
+                {
+                  ...snapshot(row),
+                  ...(progress ? { helper: helper(progress) } : {}),
+                };
             },
             turn: (id, turn) => {
               const row = store!.turn(id, turn);
@@ -342,6 +347,9 @@ async function start(
             part,
             last: turns.length < policy.publishrows,
             delta: {
+              helper: store.helpers([row.id])[0]
+                ? helper(store.helpers([row.id])[0])
+                : null,
               summary: {
                 ...saved.summary,
                 state: saved.deleted ? saved.summary.state : "digesting",
@@ -448,6 +456,30 @@ function handle(message: ToWorker): void {
     db!.transaction(() => {
       for (const dirty of message.sessions) {
         const row = store!.summary([dirty.sessionID])[0];
+        if (dirty.reason === "helper" || dirty.reason === "helper-hint") {
+          if (sink!.requestHelper(dirty.sessionID, dirty.reason === "helper")) {
+            const identity = {
+              provider: sink!.identity,
+              sessionID: dirty.sessionID,
+              directory: row?.directory,
+              updated: row?.time_updated ?? Date.now(),
+              projection: "helper" as const,
+              interruptible: true,
+            };
+            if (
+              dirty.reason !== "helper-hint" ||
+              !scheduler!.promote(identity, "visible")
+            ) {
+              scheduler!.enqueue(
+                identity,
+                "visible",
+                dirty.reason === "helper" ? dirty : undefined,
+              );
+            }
+          }
+          if (!row) inventoryDirty = true;
+          continue;
+        }
         if (dirty.reason === "attention") {
           const identity = {
             provider: sink!.identity,
@@ -545,6 +577,19 @@ function handle(message: ToWorker): void {
             updated: entry.timeUpdated,
           }, entry.status === "idle" ? "background" : "attention");
         }
+        for (const entry of result.entries) {
+          if (entry.parentID && !store!.summary([entry.id])[0]?.deleted_at) {
+            sink!.invalidateHelper(entry.id);
+            scheduler!.enqueue({
+              provider: sink!.identity,
+              sessionID: entry.id,
+              directory: entry.directory,
+              updated: entry.timeUpdated,
+              projection: "helper",
+              interruptible: true,
+            }, "background");
+          }
+        }
         for (const sessionID of changed) {
           let after = "", part = 0;
           const saved = snapshot(store!.summary([sessionID])[0]);
@@ -559,6 +604,9 @@ function handle(message: ToWorker): void {
               part,
               last: turns.length < policy.publishrows,
               delta: {
+                helper: store!.helpers([sessionID])[0]
+                  ? helper(store!.helpers([sessionID])[0])
+                  : null,
                 summary: {
                   ...saved.summary,
                   state: saved.summary.state,

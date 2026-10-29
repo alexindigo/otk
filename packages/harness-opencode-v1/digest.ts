@@ -2,6 +2,7 @@
 import type { DatabaseSync } from "node:sqlite";
 import {
   type DigestDelta,
+  type HelperSummary,
   type SessionMetadata,
   type TurnUsageSnapshot,
   UsageLedger,
@@ -22,10 +23,12 @@ import { Messages } from "./messages.ts";
 import { mapIndex } from "./map.ts";
 import type { Info, Session } from "./types.ts";
 import { type DigestHeader, DigestNativeDb } from "./digest-db.ts";
+import type { HelperToolRow } from "./digest-db.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { reportedNumber } from "./usage-values.ts";
 
 export interface DigestSnapshot {
+  helper?: HelperSummary;
   metadata: SessionMetadata;
   summary: DigestDelta["summary"];
   deleted: DigestDelta["deleted"];
@@ -115,6 +118,7 @@ function fromInfo(info: Info): DigestHeader {
     time_created: info.time.created,
     time_completed: info.time.completed ?? null,
     agent: info.agent ?? null,
+    variant: info.model?.variant ?? null,
     provider_id: info.providerID ?? null,
     model_id: info.modelID ?? null,
     cost: info.cost ?? null,
@@ -161,6 +165,7 @@ export class OpencodeV1DigestSink implements DigestSink {
   #observation = 0;
   #observed = new Map<string, number>();
   #deletions = new Map<string, number>();
+  #helperObserved = new Map<string, number>();
   constructor(
     readonly cfg: OpencodeV1Config,
     readonly policy: DigestPolicy,
@@ -692,13 +697,16 @@ export class OpencodeV1DigestSink implements DigestSink {
         "agent",
         "provider_id",
         "model_id",
+        "variant",
         ...categories,
       ] as const;
       this.storage.sql.prepare(
         `INSERT INTO opcv1_messages(${columns.join(",")}) VALUES(${
           columns.map(() => "?").join(",")
         })`,
-      ).run(...columns.map((key) => key === "session_id" ? id : value[key]));
+      ).run(
+        ...columns.map((key) => key === "session_id" ? id : value[key] ?? null),
+      );
       for (const key of this.#adjust(id, value, 1)) turns.add(key);
     }
   }
@@ -782,6 +790,9 @@ export class OpencodeV1DigestSink implements DigestSink {
     budget: DigestBudget,
     signal: AbortSignal,
   ): Promise<string | undefined> {
+    if (job.projection === "helper") {
+      return await this.#helperStep(job, budget, signal);
+    }
     const id = job.sessionID;
     ids.decode(id);
     signal.throwIfAborted();
@@ -1037,6 +1048,232 @@ export class OpencodeV1DigestSink implements DigestSink {
       delta,
     });
     return next;
+  }
+  /** Helper invalidations retain only identity. A full generation removes stale tools at its authoritative end. */
+  invalidateHelper(id: string): void {
+    ids.decode(id);
+    this.#helperObserved.set(id, (this.#helperObserved.get(id) ?? 0) + 1);
+    this.storage.sql.prepare(
+      "INSERT INTO opcv1_helper_scan VALUES(?,NULL,0,1) ON CONFLICT(session_id) DO UPDATE SET dirty=1",
+    ).run(id);
+  }
+  /** Provider-private admission. Repeated hints never restart an active sweep. */
+  requestHelper(id: string, changed: boolean): boolean {
+    const scan = this.storage.sql.prepare(
+      "SELECT dirty FROM opcv1_helper_scan WHERE session_id=?",
+    ).get(id);
+    if (!scan || changed) this.invalidateHelper(id);
+    return !scan || !!scan.dirty || changed || !this.storage.read(id)?.helper;
+  }
+  async #helperStep(
+    job: DigestJob,
+    budget: DigestBudget,
+    signal: AbortSignal,
+  ): Promise<string | undefined> {
+    const id = job.sessionID, snapshot = this.storage.read(id);
+    if (!snapshot || snapshot.deleted) return;
+    const observation = this.#helperObserved.get(id) ?? 0;
+    // Header metadata and helper labels share the worker connection and scheduler,
+    // but ordinary summary jobs never acquire parts.
+    const headers = this.storage.sql.prepare(
+      "SELECT dirty,complete_revision FROM opcv1_scan WHERE session_id=?",
+    ).get(id);
+    if (
+      !headers || headers.dirty || headers.complete_revision === null ||
+      job.cursor?.startsWith("headers:")
+    ) {
+      const cursor = await this.step(
+        {
+          ...job,
+          projection: undefined,
+          cursor: job.cursor?.startsWith("headers:")
+            ? job.cursor.slice(8) || undefined
+            : undefined,
+        },
+        budget,
+        signal,
+      );
+      return cursor ? `headers:${cursor}` : "tools";
+    }
+    let scan = this.storage.sql.prepare(
+      "SELECT * FROM opcv1_helper_scan WHERE session_id=?",
+    ).get(id);
+    const restart = !scan?.after_part || !job.cursor ||
+      job.cursor === "tools" || job.cursor === "reconcile";
+    const generation = Number(scan?.scan_generation ?? 0) + (restart ? 1 : 0);
+    const after = restart ? undefined : scan?.after_part as string | undefined;
+    const native = this.#nativeVerified ? this.#native : undefined;
+    const targeted = !!native && !!job.messages?.length &&
+      (job.cursor?.startsWith("target-tools:") ||
+        ((!job.cursor || job.cursor === "tools") &&
+          snapshot.helper?.state === "ready"));
+    let rows: HelperToolRow[] = [], next: string | undefined;
+    try {
+      if (after !== "~sweep") {
+        if (native) {
+          rows = native.helperTools(
+            [id],
+            ids.decode(id),
+            after ?? "",
+            budget.rows,
+            targeted ? job.messages : undefined,
+          );
+          next = rows.length === budget.rows ? rows.at(-1)!.part_id : undefined;
+        } else {
+          const page = await this.#messages.page(
+            id,
+            Math.min(200, budget.rows),
+            after,
+            snapshot.metadata.directory,
+            signal,
+          );
+          rows = page.items.flatMap(({ info, parts }) =>
+            parts.filter((part) => part.type === "tool").map((part) => ({
+              session_id: info.sessionID,
+              message_id: info.id,
+              part_id: part.id,
+              name: part.tool!,
+              title: part.state?.title ?? null,
+              status: part.state?.status ?? "",
+              time_start: part.state?.time?.start ?? null,
+              message_created: info.time.created,
+            }))
+          );
+          next = page.next;
+        }
+      }
+      for (const row of rows) {
+        if (
+          typeof row.name !== "string" ||
+          !["pending", "running", "completed", "error"].includes(row.status) ||
+          (row.title !== null && typeof row.title !== "string")
+        ) throw new TypeError("Invalid helper tool metadata/JSON");
+        counter(row.time_start, "helper start");
+        counter(row.message_created, "helper message clock", false);
+      }
+    } catch (error) {
+      signal.throwIfAborted();
+      this.storage.diagnostic(id, error);
+      const saved = this.storage.read(id)!;
+      const revision = saved.summary.revision + 1;
+      const delta: DigestDelta = {
+        summary: { ...saved.summary, revision },
+        turns: { upsert: {}, remove: [] },
+        deleted: saved.deleted,
+        helper: { state: "unavailable", revision, toolCount: null },
+      };
+      this.storage.transaction(() => this.storage.write(saved.metadata, delta));
+      await this.storage.publish({ sessionID: id, revision, delta });
+      return;
+    }
+    signal.throwIfAborted();
+    let delta!: DigestDelta;
+    this.storage.transaction(() => {
+      if (restart) {
+        this.storage.sql.prepare(
+          "INSERT INTO opcv1_helper_scan VALUES(?,NULL,?,?) ON CONFLICT(session_id) DO UPDATE SET after_part=NULL,scan_generation=excluded.scan_generation,dirty=excluded.dirty",
+        ).run(
+          id,
+          generation,
+          (this.#helperObserved.get(id) ?? 0) === observation ? 0 : 1,
+        );
+      }
+      const put = this.storage.sql.prepare(
+        "INSERT INTO opcv1_helper_tools VALUES(?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id,part_id) DO UPDATE SET message_id=excluded.message_id,name=excluded.name,title=excluded.title,status=excluded.status,time_start=excluded.time_start,message_created=excluded.message_created,scan_generation=excluded.scan_generation",
+      );
+      for (const row of rows) {
+        put.run(
+          id,
+          row.message_id,
+          row.part_id,
+          row.name,
+          row.title,
+          row.status,
+          row.time_start,
+          row.message_created,
+          generation,
+        );
+      }
+      if (!next) {
+        const stale = this.storage.sql.prepare(
+          "SELECT part_id FROM opcv1_helper_tools WHERE session_id=? AND scan_generation<>? AND (? IS NULL OR message_id IN (SELECT value FROM json_each(?))) LIMIT ?",
+        ).all(
+          id,
+          generation,
+          targeted ? JSON.stringify(job.messages) : null,
+          targeted ? JSON.stringify(job.messages) : null,
+          budget.rows,
+        );
+        for (const row of stale) {
+          this.storage.sql.prepare(
+            "DELETE FROM opcv1_helper_tools WHERE session_id=? AND part_id=?",
+          ).run(id, row.part_id);
+        }
+        if (stale.length === budget.rows) next = "~sweep";
+      }
+      scan = this.storage.sql.prepare(
+        "SELECT * FROM opcv1_helper_scan WHERE session_id=?",
+      ).get(id)!;
+      const ready = !next && !scan.dirty;
+      if (!next && !ready) next = "reconcile";
+      this.storage.sql.prepare(
+        "UPDATE opcv1_helper_scan SET after_part=? WHERE session_id=?",
+      ).run(next === "reconcile" ? null : next ?? null, id);
+      const saved = this.storage.read(id)!;
+      const revision = saved.summary.revision + 1;
+      const count = Number(
+        this.storage.sql.prepare(
+          "SELECT count(*) AS n FROM opcv1_helper_tools WHERE session_id=?",
+        ).get(id)!.n,
+      );
+      const current = this.storage.sql.prepare(
+        "SELECT name,title,time_start FROM opcv1_helper_tools WHERE session_id=? AND status<>'pending' ORDER BY coalesce(time_start,0) DESC,message_created DESC,message_id DESC,part_id DESC LIMIT 1",
+      ).get(id);
+      const time = this.storage.sql.prepare(
+        "SELECT min(CASE WHEN role='user' THEN time_created END) AS start,max(time_completed) AS end,sum(role='assistant' AND time_completed IS NULL) AS unfinished FROM opcv1_messages WHERE session_id=?",
+      ).get(id)!;
+      const helper: HelperSummary = {
+        state: ready ? "ready" : "digesting",
+        revision,
+        toolCount: ready ? count : null,
+        ...(ready && current
+          ? {
+            current: {
+              name: String(current.name),
+              ...(current.title === null
+                ? {}
+                : { title: String(current.title) }),
+              ...(current.time_start === null
+                ? {}
+                : { startedAt: Number(current.time_start) }),
+            },
+          }
+          : {}),
+        ...(time.start === null ? {} : {
+          time: {
+            start: Number(time.start),
+            ...(time.end === null || time.unfinished
+              ? {}
+              : { end: Number(time.end) }),
+          },
+        }),
+      };
+      delta = {
+        summary: { ...saved.summary, revision },
+        turns: { upsert: {}, remove: [] },
+        deleted: saved.deleted,
+        helper,
+      };
+      this.storage.write(saved.metadata, delta);
+    });
+    await this.storage.publish({
+      sessionID: id,
+      revision: delta.summary.revision,
+      delta,
+    });
+    return targeted && next && next !== "reconcile"
+      ? `target-tools:${next}`
+      : next;
   }
   async detail(
     id: string,

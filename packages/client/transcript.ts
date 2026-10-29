@@ -119,6 +119,18 @@ export function createTranscript(
     connection(target.sidecarId).messages,
 ): TranscriptOwner {
   const projection = createTranscriptProjection();
+  const helper = (
+    id: string,
+  ): import("@otk/protocol").HelperSummary | undefined => {
+    const known = entry(target.sidecarId, id);
+    return known?.deleted
+      ? {
+        state: "unavailable",
+        revision: known.digest.revision,
+        toolCount: null,
+      }
+      : known?.digest.helper;
+  };
   const attach = (content: Omit<ContentState, "messages">): ContentState => {
     Object.defineProperty(content, "messages", {
       configurable: true,
@@ -456,6 +468,7 @@ export function createTranscript(
       hasBaseline = true;
       setState((draft) => {
         projection.replace(messages);
+        projection.helpers(helper);
         projection.boundaries(
           Object.values(page.turns).map((turn) => turn.boundary),
         );
@@ -773,6 +786,11 @@ export function createTranscript(
     receive(sidecarId: string, frame: ServerFrame): void {
       if (!selected || selected.sidecarId !== sidecarId) return;
       if (frame.t === "index.snapshot" || frame.t === "index.patch") {
+        if (projection.helpers(helper)) {
+          setState((draft) => {
+            draft.content = attach(contentMetadata(draft.content));
+          });
+        }
         const known = entry(sidecarId, selected.sessionID);
         projection.busy(known?.status !== undefined && known.status !== "idle");
         if (
@@ -972,6 +990,7 @@ export function createTranscript(
             const added = messages.filter((m) => !state.messagesByID[m.id]);
             setState((draft) => {
               projection.merge(added);
+              projection.helpers(helper);
               projection.boundaries(
                 Object.values(page.turns).map((turn) => turn.boundary),
               );

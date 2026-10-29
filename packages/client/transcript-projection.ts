@@ -53,6 +53,9 @@ export interface TranscriptProjection {
   boundary(turnID: string): ReplyBoundary | undefined;
   busy(value: boolean): void;
   apply(op: ContentOp): boolean;
+  helpers(
+    read: (id: string) => import("@otk/protocol").HelperSummary | undefined,
+  ): boolean;
 }
 export function createTranscriptProjection(): TranscriptProjection {
   const state: TranscriptProjectionState = {
@@ -63,6 +66,17 @@ export function createTranscriptProjection(): TranscriptProjection {
     queuedIDs: new Set(),
   };
   const parts = new Map<string, Map<string, number>>();
+  const helperLinks = new Map<string, Map<string, string>>();
+  const helperPart = (message: string, part: string, value?: Part) => {
+    const links = helperLinks.get(message) ?? new Map<string, string>();
+    if (
+      value?.kind === "tool" && value.call.tool === "task" &&
+      value.call.childSessionID
+    ) links.set(part, value.call.childSessionID);
+    else links.delete(part);
+    if (links.size) helperLinks.set(message, links);
+    else helperLinks.delete(message);
+  };
   const boundaries = new Map<string, ReplyBoundary>();
   const lastHeaders = new Map<string, Message>();
   const segmentByID = new Map<string, TranscriptReply["segments"][number]>();
@@ -287,6 +301,8 @@ export function createTranscriptProjection(): TranscriptProjection {
     header(previous, message);
     state.messagesByID[message.id] = message;
     if (!preservePartIndex && previous?.parts !== message.parts) {
+      helperLinks.delete(message.id);
+      for (const part of message.parts) helperPart(message.id, part.id, part);
       parts.set(
         message.id,
         new Map(message.parts.map((part, i) => [part.id, i])),
@@ -331,6 +347,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     const key = replyKey(previous);
     delete state.messagesByID[id];
     parts.delete(id);
+    helperLinks.delete(id);
     segmentByID.delete(id);
     locations.delete(id);
     state.messageIDs = state.messageIDs.filter((key) => key !== id);
@@ -348,6 +365,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       state.repliesByID = dictionary<TranscriptReply>();
       state.queuedIDs = new Set();
       parts.clear();
+      helperLinks.clear();
       boundaries.clear();
       lastHeaders.clear();
       segmentByID.clear();
@@ -428,7 +446,8 @@ export function createTranscriptProjection(): TranscriptProjection {
       }
       if (
         op.op !== "message.upsert" && op.op !== "part.upsert" &&
-        op.op !== "part.remove" && op.op !== "part.blocks"
+        op.op !== "part.remove" && op.op !== "part.blocks" &&
+        op.op !== "task.progress"
       ) return false;
       const id = op.op === "message.upsert" ? op.message.id : op.messageID;
       const previous = read(id);
@@ -437,14 +456,39 @@ export function createTranscriptProjection(): TranscriptProjection {
       ) ?? -1;
       const next = reduceMessage(previous, op, slot);
       if (next && next !== previous) {
+        if (op.op === "part.upsert") helperPart(id, op.part.id, op.part);
         put(
           next,
-          op.op === "part.blocks" ||
+          op.op === "part.blocks" || op.op === "task.progress" ||
             (op.op === "part.upsert" && slot !== undefined && slot >= 0),
         );
         if (op.op === "message.upsert") queues();
       }
       return true;
+    },
+    helpers(
+      read: (id: string) => import("@otk/protocol").HelperSummary | undefined,
+    ): boolean {
+      let changed = false;
+      for (const [messageID, links] of helperLinks) {
+        for (const [partID, childSessionID] of links) {
+          const summary = read(childSessionID);
+          if (!summary) continue;
+          const previous = state.messagesByID[messageID];
+          const next = reduceMessage(previous, {
+            op: "task.progress",
+            messageID,
+            partID,
+            childSessionID,
+            summary,
+          }, parts.get(messageID)?.get(partID));
+          if (next && next !== previous) {
+            put(next, true);
+            changed = true;
+          }
+        }
+      }
+      return changed;
     },
   };
   return owner;

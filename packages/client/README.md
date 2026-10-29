@@ -67,6 +67,13 @@ recoverable `missing` baselines. Superseding a generation retires its paging
 flag. Late `agent.colors` operations decorate the existing transcript without
 retaining another collection.
 
+Canonical transcripts bind task-part identities to the shared reduced child
+index's `digest.helper`. Borrowed digest and standalone `task.progress` delivery
+use the same identity/revision reducer, so equal progress cannot apply twice.
+Helper updates preserve parent source/native completion clocks and unrelated
+reply identities; removal, cooling and replacement release the source-free link
+index. No helper RPC, child transcript cache or timer belongs to the view.
+
 `createTranscripts({connection, entry, factory?, clock?})` owns one canonical
 `createTranscript` per `sessionKey(server, session)`. `setDemand` replaces
 active scope/screen demand, `interact` refreshes that scope's clock, and

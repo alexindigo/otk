@@ -6,6 +6,7 @@ export { DigestDb, DigestStore, digestTurnCursor } from "./digest.ts";
 export type {
   DigestBookkeepingRecord,
   DigestCommit,
+  DigestHelperRecord,
   DigestPersistence,
   DigestSessionRecord,
   DigestTurnRecord,

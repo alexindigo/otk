@@ -5,5 +5,8 @@ export const digestMigrations: FeatureMigrations = {
   migrations: [{
     version: 1,
     sql: new URL("./migrations/digest/001.sql", import.meta.url),
+  }, {
+    version: 2,
+    sql: new URL("./migrations/digest/002.sql", import.meta.url),
   }],
 };

@@ -110,7 +110,8 @@ test("R5 task progress, real child navigation, parent/history and sibling cycle 
       `location.hash==='#/local/${root.id}' && !!document.querySelector('.otk-prompt')`,
     );
     await browser.poll(
-      "document.querySelector('[data-tool=task][data-tool-status=completed] .otk-task-card')?.textContent.includes('1 tool call')",
+      "(()=>{const text=document.querySelector('[data-tool=task][data-tool-status=completed] .otk-task-card')?.textContent ?? ''; return text.includes('1 tool call') && /\\ds/.test(text)})()",
+      60000,
     );
     const parent = await f.oc.request<{ info: Info; parts: RawPart[] }[]>(
         `/session/${root.id}/message`,

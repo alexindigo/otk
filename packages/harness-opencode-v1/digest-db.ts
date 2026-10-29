@@ -6,6 +6,7 @@ import { runningDirectories } from "./db-hints.ts";
 
 /** Allowlisted message header projection. Native identities stay native here. */
 export interface DigestHeader {
+  variant?: string | null;
   session_id: string;
   message_id: string;
   role: "user" | "assistant";
@@ -28,6 +29,7 @@ const projection = [
   ["time.created", "time_created"],
   ["time.completed", "time_completed"],
   ["agent", "agent"],
+  ["model.variant", "variant"],
   ["providerID", "provider_id"],
   ["modelID", "model_id"],
   ["cost", "cost"],
@@ -191,6 +193,32 @@ export class DigestNativeDb {
       summary: string | null;
     }[];
   }
+  helperTools(
+    sessions: readonly string[],
+    afterSession: string,
+    afterPart: string,
+    limit: number,
+    messages?: readonly string[],
+  ): HelperToolRow[] {
+    this.observe?.("helpers");
+    return this.db.prepare(`SELECT p.session_id,p.message_id,p.id AS part_id,
+      CASE WHEN json_valid(p.data) THEN json_extract(p.data,'$.tool') END AS name,
+      CASE WHEN json_valid(p.data) THEN json_extract(p.data,'$.state.title') END AS title,
+      CASE WHEN json_valid(p.data) THEN json_extract(p.data,'$.state.status') END AS status,
+      CASE WHEN json_valid(p.data) THEN json_extract(p.data,'$.state.time.start') END AS time_start,
+      CASE WHEN json_valid(m.data) THEN json_extract(m.data,'$.time.created') END AS message_created
+      FROM part p JOIN message m ON m.id=p.message_id AND m.session_id=p.session_id
+      JOIN json_each(?) wanted ON wanted.value=p.session_id
+      WHERE (p.session_id,p.id)>(?,?) AND (? IS NULL OR p.message_id IN (SELECT value FROM json_each(?))) AND (NOT json_valid(p.data) OR NOT json_valid(m.data) OR CASE WHEN json_valid(p.data) THEN json_extract(p.data,'$.type')='tool' ELSE 0 END)
+      ORDER BY p.session_id,p.id LIMIT ?`).all(
+      JSON.stringify(sessions.map(ids.decode)),
+      afterSession,
+      afterPart,
+      messages === undefined ? null : JSON.stringify(messages),
+      messages === undefined ? null : JSON.stringify(messages),
+      limit,
+    ) as unknown as HelperToolRow[];
+  }
   close(): void {
     this.db.close();
   }
@@ -245,4 +273,14 @@ export class DigestNativeDb {
         : {}),
     };
   }
+}
+export interface HelperToolRow {
+  session_id: string;
+  message_id: string;
+  part_id: string;
+  name: string;
+  title: string | null;
+  status: string;
+  time_start: number | null;
+  message_created: number;
 }

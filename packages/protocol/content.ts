@@ -204,8 +204,7 @@ export interface TaskCall extends ToolBase {
   tool: "task";
   agent?: string;
   description: string;
-  currentTool?: string;
-  toolCount: number;
+  progress?: import("./transcript.ts").HelperSummary;
   duration?: number;
 }
 /** Features can contribute typed parts without changing a central union. */
@@ -330,6 +329,13 @@ export interface Todo {
   priority: string;
 }
 export type ContentOp =
+  | {
+    op: "task.progress";
+    messageID: string;
+    partID: string;
+    childSessionID: string;
+    summary: import("./transcript.ts").HelperSummary;
+  }
   | { op: "agent.colors"; colors: Record<string, AgentColor> }
   | { op: "session.error"; error?: string; errorState?: SessionErrorState }
   | { op: "question.upsert"; request: QuestionRequest }
@@ -360,6 +366,19 @@ export type ContentOp =
   | { op: "permission.remove"; requestID: string; sessionID: string }
   | { op: "todo.set"; items: Todo[] }
   | { op: "diff.set"; files: FileDiff[] };
+/** Identity/revision contract shared by sealed pages, indexed clients and standalone reducers. */
+export function withHelperProgress(
+  part: Part,
+  child: string,
+  summary: import("./transcript.ts").HelperSummary,
+): Part {
+  if (
+    part.kind !== "tool" || part.call.tool !== "task" ||
+    part.call.childSessionID !== child ||
+    (part.call.progress?.revision ?? -1) >= summary.revision
+  ) return part;
+  return { ...part, call: { ...part.call, progress: summary } };
+}
 export type PermissionOp = Extract<
   ContentOp,
   { op: "permission.upsert" | "permission.remove" }
