@@ -69,6 +69,8 @@ export interface MessagePolicy {
   concurrency: number;
   replayops: number;
   replaybytes: number;
+  recoveryconcurrency: number;
+  recoverypending: number;
   retryms: number;
 }
 export function messagePolicy(value: unknown): MessagePolicy {
@@ -82,6 +84,8 @@ export function messagePolicy(value: unknown): MessagePolicy {
     "concurrency",
     "replayops",
     "replaybytes",
+    "recoveryconcurrency",
+    "recoverypending",
     "retryms",
   ] as const;
   if (
@@ -107,6 +111,8 @@ export function messagePolicy(value: unknown): MessagePolicy {
     concurrency: Number(object.concurrency),
     replayops: Number(object.replayops),
     replaybytes: Number(object.replaybytes),
+    recoveryconcurrency: Number(object.recoveryconcurrency),
+    recoverypending: Number(object.recoverypending),
     retryms: Number(object.retryms),
   };
 }

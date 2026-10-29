@@ -81,6 +81,12 @@ have none. OS reduced motion and the persisted Animations off preference replace
 the shimmer with quiet “response in progress” text between flowing rules. The
 same named status remains available to assistive technology in either mode.
 
+Missing-seed recovery is separate plain in-flow text beside the logical reply:
+“Refreshing response…” while source is unaligned, or an unavailable message and
+available Retry response callback after a checkpoint failure. The canonical
+client resource owns this state. It does not alter supervision lights, disable
+controls or add a loading overlay.
+
 Reply footers show model-call count, charged turn tokens and backend-reported
 cost after elapsed time. Work-log headers and footers bind one complete
 usage-owner turn range, with the grouped reply projection shared when usage is

@@ -196,6 +196,13 @@ shows “Preparing progress…” or “Progress unavailable” until authoritat
 are available; a ready empty helper reports zero. These rebuildable scalar
 summaries upgrade only `digest.db`, preserving user data in `otk.db`.
 
+Lost stream seeds now take one bounded HTTP checkpoint, not repeated reads per
+delta. An HTTP body remains replacement-only and may be stale; “Refreshing
+response…” stays beside its reply until a full native event or terminal
+checkpoint supplies final authority. Failed checkpoints offer Retry response.
+The `[messages]` recovery admission leaves bound concurrent reads and pending
+identities without changing native request deadlines.
+
 Deleting a native session retains its last metadata and task membership as a
 tombstone. Select its struck-through row to see details, copy its title, remove
 it from its task or close its view. An external deletion retains unsent browser

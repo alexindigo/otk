@@ -32,6 +32,8 @@ export const SERVICE_SCHEMA: Schema = {
     concurrency: "int",
     replayops: "int",
     replaybytes: "int",
+    recoveryconcurrency: "int",
+    recoverypending: "int",
     retryms: "int",
   },
   digest: {

@@ -329,6 +329,14 @@ export interface Todo {
   priority: string;
 }
 export type ContentOp =
+  | { op: "stream.reconcile" }
+  | {
+    op: "stream.recovery";
+    messageID: string;
+    partID: string;
+    generation: number;
+    state: "recovering" | "ready" | "unavailable";
+  }
   | {
     op: "task.progress";
     messageID: string;

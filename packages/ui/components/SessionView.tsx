@@ -267,6 +267,15 @@ export default function SessionView(props: {
                     message={message()}
                     lastID={reply().lastID}
                     pending={reply().pending}
+                    recovery={props.transcript?.state.content.recovering?.find((
+                      p,
+                    ) => reply().messageIDs.includes(p.messageID))?.state ??
+                      (props.transcript?.state.recovering.some((p) =>
+                          reply().messageIDs.includes(p.messageID)
+                        )
+                        ? "recovering"
+                        : undefined)}
+                    onRetryRecovery={() => void retry()}
                     usage={props.usageOwner?.priced(target(), props.catalog)}
                     summary={sessionSummary(props.entry, message())}
                     digestState={props.entry?.digest.state}

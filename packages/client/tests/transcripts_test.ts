@@ -110,6 +110,8 @@ function fixture(policy?: MessagePolicy) {
 const policy = {
   ...fixtureMessagePolicy,
   coolms: 100,
+  recoveryconcurrency: 2,
+  recoverypending: 128,
   preloadms: 30,
   concurrency: 4,
 };

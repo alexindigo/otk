@@ -36,6 +36,11 @@ existing viewers before a new page seals. A new viewer therefore cannot get
 ahead of the next suffix's base while another viewer remains on an older
 version.
 
+`replacement(sessionID)` allocates replacement-only HTTP stamps from the same
+generation clock without installing source in a stream buffer. A subsequent full
+event seed therefore outranks the HTTP observation; only that event seed permits
+future suffix appends. Recovery receipt never advances the output clock.
+
 ## Example
 
 Within the OTK workspace, Deno resolves the package by its name:

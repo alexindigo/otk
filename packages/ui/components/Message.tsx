@@ -82,6 +82,8 @@ export default function Message(
     message: OtkMessage;
     lastID?: string;
     pending?: boolean;
+    recovery?: "recovering" | "unavailable";
+    onRetryRecovery?(): void;
     metadata?: import("@otk/protocol").AssistantMessage | null;
     usage?: Usage;
     summary?: UsageSummary;
@@ -255,6 +257,20 @@ export default function Message(
             </div>
           )}
         </For>
+        <Show when={props.recovery}>
+          <p role="status" class="otk-response-recovery">
+            {props.recovery === "unavailable"
+              ? "Response refresh unavailable."
+              : "Refreshing response…"}
+            <Show
+              when={props.recovery === "unavailable" && props.onRetryRecovery}
+            >
+              <button type="button" onClick={() => props.onRetryRecovery?.()}>
+                Retry response
+              </button>
+            </Show>
+          </p>
+        </Show>
         <Show when={prompt()}>
           <footer
             class={["otk-user-meta", {

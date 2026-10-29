@@ -100,6 +100,10 @@ The same `[messages]` owner supplies browser scope cooling (`coolms`), temporary
 attention leases (`preloadms`) and per-server page admission (`concurrency`).
 Partial operator files merge leaf-wise before environment overrides. These
 positive safe-integer thresholds do not change the fixed ten-message page size.
+The same policy also supplies adapter-wide missing-seed read admission
+(`recoveryconcurrency`) and fine identity capacity (`recoverypending`), through
+the existing layered config and welcome decoder. No recovery-specific defaults
+or timeout table lives in a library.
 
 The existing `welcome.sidecar.harness` wire shape gains a `capabilities` array
 advertising present backend capabilities. Consumers gate optional features on

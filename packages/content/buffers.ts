@@ -24,6 +24,17 @@ export class StreamBuffers {
   #version = 0;
   #generation = 0;
   #epochs = new Map<string, string>();
+  /** Replacement-only HTTP authority shares the event owner's generation clock. */
+  replacement(sessionID: string): import("@otk/protocol").StreamStamp {
+    let epoch = this.#epochs.get(sessionID);
+    if (!epoch) this.#epochs.set(sessionID, epoch = crypto.randomUUID());
+    return {
+      epoch,
+      generation: ++this.#generation,
+      version: ++this.#version,
+      mode: "replace",
+    };
+  }
   epoch(sessionID: string, epoch: string): void {
     if (this.#epochs.get(sessionID) === epoch) return;
     this.#epochs.set(sessionID, epoch);

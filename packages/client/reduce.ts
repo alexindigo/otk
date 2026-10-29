@@ -22,6 +22,12 @@ export interface ContentState {
   revert: RevertInfo | null;
   error?: string;
   errorState?: SessionErrorState;
+  recovering?: {
+    messageID: string;
+    partID: string;
+    generation: number;
+    state?: "recovering" | "unavailable";
+  }[];
 }
 export function emptyContent(): ContentState {
   return {
@@ -152,7 +158,53 @@ export function reduceMessage(
   };
   return output({ ...previous, parts }, op.lastOutput);
 }
+export function reduceRecovery<T extends Omit<ContentState, "messages">>(
+  state: T,
+  op: ContentOp,
+  sourceAccepted = false,
+): T {
+  if (op.op === "stream.reconcile") return state;
+  if (op.op === "stream.recovery") {
+    const previous = state.recovering?.find((p) =>
+      p.messageID === op.messageID && p.partID === op.partID
+    );
+    if (previous && previous.generation > op.generation) return state;
+    const recovering = (state.recovering ?? []).filter((p) =>
+      p.messageID !== op.messageID || p.partID !== op.partID
+    );
+    if (op.state !== "ready") {
+      recovering.push({
+        messageID: op.messageID,
+        partID: op.partID,
+        generation: op.generation,
+        state: op.state,
+      });
+    }
+    return { ...state, recovering };
+  }
+  if (state.recovering?.length) {
+    const recovering = state.recovering.filter((p) => {
+      if (op.op === "message.remove") return p.messageID !== op.messageID;
+      if (op.op === "part.remove") {
+        return p.messageID !== op.messageID || p.partID !== op.partID;
+      }
+      if (
+        op.op !== "part.upsert" || !sourceAccepted ||
+        p.messageID !== op.messageID ||
+        p.partID !== op.part.id
+      ) return true;
+      return (op.part.kind === "text" || op.part.kind === "reasoning") &&
+        op.part.stream?.mode === "replace";
+    });
+    if (recovering.length !== state.recovering.length) {
+      return { ...state, recovering };
+    }
+  }
+  return state;
+}
 export function reduce(state: ContentState, op: ContentOp): ContentState {
+  state = reduceRecovery(state, op);
+  if (op.op === "stream.reconcile" || op.op === "stream.recovery") return state;
   if (op.op === "agent.colors") {
     return {
       ...state,
@@ -227,6 +279,7 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
   if (op.op === "message.remove") {
     return {
       ...state,
+      recovering: state.recovering?.filter((p) => p.messageID !== op.messageID),
       messages: state.messages.filter((m) => m.id !== op.messageID),
     };
   }
@@ -243,10 +296,15 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
         ),
     };
   }
+  const messages = state.messages.map((message) =>
+    message.id === op.messageID ? reduceMessage(message, op)! : message
+  );
   return {
-    ...state,
-    messages: state.messages.map((message) =>
-      message.id === op.messageID ? reduceMessage(message, op)! : message
+    ...reduceRecovery(
+      state,
+      op,
+      messages.some((message, index) => message !== state.messages[index]),
     ),
+    messages,
   };
 }

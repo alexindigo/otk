@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertThrows } from "@std/assert";
 import type { ContentOp, Message } from "@otk/protocol";
 import { emptyContent, reduce } from "@otk/client";
 import { markdown, StreamBuffers } from "../mod.ts";
@@ -51,4 +51,70 @@ Deno.test("a mid-coalescing checkpoint aligns both existing and new viewers with
   } finally {
     buffers.stop();
   }
+});
+
+Deno.test("HTTP replacements cannot seed suffixes, event authority outranks them and completed headers reject late streams", () => {
+  const buffers = new StreamBuffers();
+  buffers.epoch("s", "epoch");
+  const part = {
+    kind: "text" as const,
+    id: "p",
+    synthetic: false,
+    blocks: markdown("HTTP source"),
+    stream: buffers.replacement("s"),
+  };
+  const message: Message = {
+    id: "m",
+    sessionID: "s",
+    role: "assistant",
+    agent: "build",
+    model: { provider: "p", model: "m" },
+    cost: null,
+    tokens: {
+      input: null,
+      output: null,
+      reasoning: null,
+      cache: { read: null, write: null },
+    },
+    interrupted: false,
+    time: { created: 1 },
+    parts: [part],
+  };
+  let state: ReturnType<typeof emptyContent> = {
+    ...emptyContent(),
+    messages: [message],
+  };
+  assertThrows(
+    () =>
+      reduce(state, {
+        op: "part.blocks",
+        messageID: "m",
+        partID: "p",
+        from: 0,
+        blocks: markdown("Speculative suffix"),
+        stream: { ...part.stream, version: part.stream.version + 1 },
+        baseVersion: part.stream.version,
+      }),
+    Error,
+    "stream-gap",
+  );
+  buffers.upsert("s", "m", part, "Event source");
+  const seed = buffers.snapshot("p")!.part;
+  assert(seed.stream!.generation > part.stream.generation);
+  state = reduce(state, { op: "part.upsert", messageID: "m", part: seed });
+  state = reduce(state, { op: "part.upsert", messageID: "m", part });
+  assertEquals(state.messages[0].parts[0], seed);
+  state = reduce(state, {
+    op: "message.upsert",
+    message: { ...message, time: { created: 1, completed: 5 }, parts: [] },
+  });
+  const terminal = state.messages[0];
+  buffers.upsert("s", "m", part, "Late source");
+  state = reduce(state, {
+    op: "part.upsert",
+    messageID: "m",
+    part: buffers.snapshot("p")!.part,
+  });
+  assertEquals(state.messages[0], terminal);
+  buffers.stop();
 });

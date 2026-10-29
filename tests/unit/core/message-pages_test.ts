@@ -17,6 +17,8 @@ Deno.test("message replay policy is layered and rejects unsafe budgets with prec
   }).config;
   assertEquals(value.messages, {
     coolms: 300000,
+    recoveryconcurrency: 2,
+    recoverypending: 128,
     preloadms: 30000,
     concurrency: 4,
     replayops: 7,

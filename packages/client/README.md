@@ -67,6 +67,15 @@ recoverable `missing` baselines. Superseding a generation retires its paging
 flag. Late `agent.colors` operations decorate the existing transcript without
 retaining another collection.
 
+Missing native seeds are distinct from a missing browser page baseline.
+`stream.recovery` carries keyed generation/state metadata beside the canonical
+bodies; pages retain that metadata through installation and older acquisition.
+Full event source retires the matching refreshing state, stale generations
+cannot clear newer recovery, and cooling releases it. `stream.reconcile` is a
+scoped, clocked invalidation when the producer loses bounded fine recovery keys;
+the same resource coalesces a replacement page. Neither operation creates
+another body cache or an append seed from HTTP.
+
 Canonical transcripts bind task-part identities to the shared reduced child
 index's `digest.helper`. Borrowed digest and standalone `task.progress` delivery
 use the same identity/revision reducer, so equal progress cannot apply twice.

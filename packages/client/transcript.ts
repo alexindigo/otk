@@ -19,6 +19,7 @@ import {
   type ContentState,
   emptyContent,
   reduce,
+  reduceRecovery,
 } from "./reduce.ts";
 import type { Selection } from "./session.ts";
 import type {
@@ -139,10 +140,21 @@ export function createTranscript(
     });
     return content as ContentState;
   };
-  const apply = (content: ContentState, op: ContentOp): ContentState =>
-    projection.apply(op)
-      ? attach(contentMetadata(content))
+  const apply = (content: ContentState, op: ContentOp): ContentState => {
+    const previous = op.op === "part.upsert"
+      ? projection.state.messagesByID[op.messageID]
+      : undefined;
+    return projection.apply(op)
+      ? attach(
+        reduceRecovery(
+          contentMetadata(content),
+          op,
+          op.op === "part.upsert" &&
+            previous !== projection.state.messagesByID[op.messageID],
+        ),
+      )
       : attach(reduce({ ...contentMetadata(content), messages: [] }, op));
+  };
   // Authority is owner-current, even with a deferred framework StateFactory.
   const currentStore = createState<TranscriptState>({
     temperature: "cold",
@@ -182,6 +194,7 @@ export function createTranscript(
     state.replyIDs = projection.state.replyIDs;
     state.repliesByID = projection.state.repliesByID;
     state.queuedIDs = projection.state.queuedIDs;
+    state.recovering = state.content.recovering ?? [];
     state.olderCursor = cursor;
     state.pageLoading = state.paging || state.loading;
     state.session = state.info;
@@ -477,6 +490,7 @@ export function createTranscript(
           revert: info.revert || null,
           error: info.error,
           errorState: info.errorState,
+          recovering: page.recovering,
         });
         let latestPrompt = page.prompt;
         for (const { event } of page.catchup) {
@@ -502,7 +516,6 @@ export function createTranscript(
         draft.info = info;
         draft.clock = clock;
         draft.latestPrompt = latestPrompt;
-        draft.recovering = page.recovering;
         draft.content = content;
         draft.loading = false;
         draft.continuity = "ready";
@@ -857,6 +870,10 @@ export function createTranscript(
         });
         return;
       }
+      if (frame.event.op === "stream.reconcile") {
+        invalidate();
+        return;
+      }
       if (missing) return;
       if (!frame.clock) {
         invalidate();
@@ -994,7 +1011,19 @@ export function createTranscript(
               projection.boundaries(
                 Object.values(page.turns).map((turn) => turn.boundary),
               );
-              draft.content = attach(contentMetadata(draft.content));
+              let metadata = contentMetadata(draft.content);
+              for (const recovering of page.recovering) {
+                if (
+                  added.some((message) => message.id === recovering.messageID)
+                ) {
+                  metadata = reduceRecovery(metadata, {
+                    op: "stream.recovery",
+                    ...recovering,
+                    state: "recovering",
+                  });
+                }
+              }
+              draft.content = attach(metadata);
               draft.exhausted = page.older === null;
               draft.paging = !added.length && page.older !== null;
             });

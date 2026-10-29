@@ -5,6 +5,8 @@ import type { ContentClock, ContentOp, MessagePage } from "@otk/protocol";
 
 const policy = {
   coolms: 300000,
+  recoveryconcurrency: 2,
+  recoverypending: 128,
   preloadms: 30000,
   concurrency: 4,
   replayops: 2,

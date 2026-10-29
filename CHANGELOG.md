@@ -51,6 +51,12 @@ membership. Downgrading to beta.1 after this migration is unsupported.
 **Fix.** SQLite startup installs its busy timeout before selecting WAL mode, so
 concurrent openers can wait before the session-reference upgrade begins.
 
+Missing stream seeds now use bounded, generation-fenced replacement checkpoints
+instead of polling per delta. HTTP snapshots never seed appends or invent output
+clocks; replies remain visibly refreshing until a full event or terminal source
+checkpoint restores authority. Recovery admission shares layered message policy,
+and teardown cancels queued and active checkpoint work.
+
 ## [0.1.0-beta.1] — 2026-10-26
 
 **Highlights.** Sessions gain in-place rename, confirmed deletion, inclusive

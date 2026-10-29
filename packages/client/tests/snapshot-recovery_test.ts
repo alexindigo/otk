@@ -121,6 +121,90 @@ Deno.test("essential transcript publishes independently of failed or held attent
   }
 });
 
+Deno.test("recovery state survives page installation, rejects stale generations and releases with authoritative source or cooling", async () => {
+  const f = fixture();
+  try {
+    f.event({
+      op: "stream.recovery",
+      messageID: "m",
+      partID: "p",
+      generation: 2,
+      state: "recovering",
+    });
+    f.reply("session.messages", fixturePage("s", [message], undefined, info));
+    await f.until(() => !f.owner.state.loading);
+    assertEquals(f.owner.transcript?.state.recovering.map((p) => p.partID), [
+      "p",
+    ]);
+    f.event({
+      op: "stream.recovery",
+      messageID: "m",
+      partID: "p",
+      generation: 1,
+      state: "ready",
+    });
+    assertEquals(f.owner.transcript?.state.recovering.length, 1);
+    f.event({
+      op: "stream.recovery",
+      messageID: "m",
+      partID: "p",
+      generation: 2,
+      state: "unavailable",
+    });
+    assertEquals(f.owner.state.content.recovering?.[0].state, "unavailable");
+    f.event({
+      op: "part.upsert",
+      messageID: "m",
+      part: {
+        kind: "text",
+        id: "p",
+        synthetic: false,
+        blocks: [],
+        stream: {
+          epoch: "fixture",
+          generation: 4,
+          version: 1,
+          mode: "appendable",
+        },
+      },
+    });
+    assertEquals(f.owner.transcript?.state.recovering, []);
+    f.event({
+      op: "stream.recovery",
+      messageID: "m",
+      partID: "p",
+      generation: 5,
+      state: "recovering",
+    });
+    f.event({
+      op: "part.upsert",
+      messageID: "m",
+      part: {
+        kind: "text",
+        id: "p",
+        synthetic: false,
+        blocks: [],
+        stream: {
+          epoch: "fixture",
+          generation: 3,
+          version: 1,
+          mode: "appendable",
+        },
+      },
+    });
+    assertEquals(
+      f.owner.transcript?.state.recovering.length,
+      1,
+      "a rejected old source cannot clear current recovery",
+    );
+    f.owner.transcript!.temperature("cold");
+    assertEquals(f.owner.transcript?.state.recovering, []);
+    assertEquals(f.owner.state.content.messages.length, 0);
+  } finally {
+    f.stop();
+  }
+});
+
 Deno.test("failed initial snapshots retain live header and part across retry generations", async () => {
   const f = fixture();
   try {

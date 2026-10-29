@@ -88,6 +88,9 @@ export class Transcript {
     readonly options: {
       replay: ContentReplay;
       retire?(id?: string): void;
+      recovering?(id: string): MessagePage["recovering"];
+      scopedRecovery?(id: string): boolean;
+      retryRecovery?(id: string): void;
       buffers: StreamBuffers;
       reader: Messages;
       raw(id: string, signal?: AbortSignal): Promise<Session>;
@@ -266,6 +269,7 @@ export class Transcript {
     }
     const capture = replay.capture(id);
     try {
+      if (!token) this.options.retryRecovery?.(id);
       baseline ??= await this.#read(id, signal);
       const owner = baseline;
       signal = AbortSignal.any([signal, owner.controller.signal]);
@@ -362,7 +366,33 @@ export class Transcript {
           replacements.set(`${event.messageID}/${event.partID}`, i);
         }
       });
-      const recovering: MessagePage["recovering"] = [];
+      const recovering: MessagePage["recovering"] =
+        this.options.recovering?.(id) ?? [];
+      // Fine keys lost to overflow are replaced by one scoped intent. A page
+      // reconciles visible HTTP bodies, without claiming they seed native deltas.
+      if (this.options.scopedRecovery?.(id)) {
+        items = items.map((message) => {
+          if (
+            message.role !== "assistant" || message.time.completed !== undefined
+          ) return message;
+          return {
+            ...message,
+            parts: message.parts.map((part) => {
+              if (
+                (part.kind !== "text" && part.kind !== "reasoning") ||
+                buffers.snapshot(part.id)
+              ) return part;
+              const stream = buffers.replacement(id);
+              recovering.push({
+                messageID: message.id,
+                partID: part.id,
+                generation: stream.generation,
+              });
+              return { ...part, stream };
+            }),
+          };
+        });
+      }
       const catchup = sealed.events.filter(({ event }, i) => {
         if (event.op !== "part.blocks") return true;
         if (

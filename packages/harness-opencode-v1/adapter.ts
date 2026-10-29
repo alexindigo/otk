@@ -127,6 +127,7 @@ export class OpencodeV1Adapter implements Harness {
   #reverts = new Map<string, string>();
   #connection = 0;
   #digestRevision = 0;
+  #recoveryRevision = 0;
   #retired = new Set<string>();
   constructor(
     readonly cfg: OpencodeV1AdapterConfig,
@@ -155,38 +156,60 @@ export class OpencodeV1Adapter implements Harness {
         }
       }
     }, () => this.#controller);
-    this.#recovery = new MessageRecovery(
-      (session, message, signal) =>
+    this.#recovery = new MessageRecovery({
+      concurrency: cfg.messages.recoveryconcurrency,
+      pending: cfg.messages.recoverypending,
+      read: (session, message, signal) =>
         this.#messages.get(session, message, signal),
-      (session, snapshot, parts) => {
+      emit: (session, snapshot, parts, _generation, terminal) => {
         if (this.#stopped || !this.buffers.subscribed(session)) return;
         const cutoff = this.#reverts.get(session);
         if (cutoff && snapshot.info.id >= cutoff) return;
+        if (ids.encode(snapshot.info.sessionID) !== session) {
+          throw new Error("Recovery session identity mismatch");
+        }
+        // A point read may discover the header for the first time. Publish it
+        // before its parts; HTTP observations never advance native output clocks.
+        const message = mapMessage(snapshot.info, snapshot.parts);
+        this.#sink.content(session, {
+          op: "message.upsert",
+          message: { ...message, parts: [] },
+        });
+        this.buffers.epoch(session, this.#replay.clock(session).epoch);
         for (const raw of snapshot.parts) {
           if (!parts.has(raw.id)) continue;
+          const part = mapPart(raw);
           if (
-            snapshot.info.role === "assistant" &&
+            (part.kind === "text" || part.kind === "reasoning") && !terminal &&
             snapshot.info.time.completed === undefined
           ) {
-            this.buffers.beginReply(session, snapshot.info.id);
+            part.stream = this.buffers.replacement(session);
           }
-          const lastOutput = this.buffers.observeOutput(
-            session,
-            snapshot.info.id,
-            Date.now(),
-            raw.time?.end,
-            raw.id,
-          );
           this.#sink.content(session, {
             op: "part.upsert",
             messageID: snapshot.info.id,
-            part: mapPart(raw),
-            ...(lastOutput === undefined ? {} : { lastOutput }),
+            part,
           });
         }
       },
-      (error) => console.warn("message recovery:", error),
-    );
+      state: (session, messageID, partID, generation, state) => {
+        if (!this.#stopped && this.buffers.subscribed(session)) {
+          this.#sink.content(session, {
+            op: "stream.recovery",
+            messageID,
+            partID,
+            generation,
+            state,
+          });
+        }
+      },
+      reconcile: (session) => {
+        if (!this.#stopped && this.buffers.subscribed(session)) {
+          this.#sink.content(session, { op: "stream.reconcile" });
+        }
+      },
+      failed: (error) => console.warn("message recovery:", error),
+    });
     this.#tasks = new TaskProgress({
       peek: (id) => this.#index.helper(id),
       ...(digest
@@ -219,7 +242,13 @@ export class OpencodeV1Adapter implements Harness {
     const version = () => this.version;
     this.#transcript = new Transcript({
       replay: this.#replay,
-      retire: (id) => this.#tasks.release(id),
+      retire: (id) => {
+        this.#tasks.release(id);
+        this.#recovery.release(id);
+      },
+      recovering: (id) => this.#recovery.snapshot(id),
+      scopedRecovery: (id) => this.#recovery.scoped(id),
+      retryRecovery: (id) => this.#recovery.retry(id),
       buffers: this.buffers,
       reader: this.#messages,
       raw: (id, signal) =>
@@ -1272,6 +1301,7 @@ export class OpencodeV1Adapter implements Harness {
       // publishes its independent clear observation against that same record.
       if (entry) sink.indexUpsert(entry);
       if (status.type === "busy") this.#errors.clear(sessionID);
+      if (status.type === "idle") this.#recovery.terminal(sessionID);
       return;
     }
     if (type === "session.error") {
@@ -1362,12 +1392,25 @@ export class OpencodeV1Adapter implements Harness {
       });
     }
     if (type === "message.updated" && info?.time.completed !== undefined) {
-      this.#recovery.message(info.id);
+      this.#recovery.checkpoint(
+        sessionID,
+        info.id,
+        String(++this.#recoveryRevision),
+      );
+      this.#recovery.terminal(sessionID, info.id);
+    } else if (type === "message.updated" && info) {
+      this.#recovery.checkpoint(
+        sessionID,
+        info.id,
+        String(++this.#recoveryRevision),
+      );
     }
     if (
       type === "message.updated" && info?.role === "assistant" &&
       info.time.completed !== undefined && completedOutput === undefined &&
-      this.buffers.subscribed(sessionID)
+      this.buffers.subscribed(sessionID) &&
+      !this.#recovery.scoped(sessionID) &&
+      !this.#recovery.snapshot(sessionID).some((p) => p.messageID === info.id)
     ) {
       const finished = await this.client.json<{ info: Info; parts: RawPart[] }>(
         `/session/${encodeURIComponent(ids.decode(sessionID))}/message/${
@@ -1398,11 +1441,11 @@ export class OpencodeV1Adapter implements Harness {
       }
     }
     if (type === "message.removed") {
-      this.#recovery.message(String(p.messageID));
+      this.#recovery.message(String(p.messageID), sessionID);
       this.buffers.removeMessage(String(p.messageID));
     }
     if (type === "message.part.removed") {
-      this.#recovery.part(String(p.messageID), String(p.partID));
+      this.#recovery.part(String(p.messageID), String(p.partID), sessionID);
       this.buffers.forgetPart(String(p.messageID), String(p.partID));
     }
     if (type === "message.part.updated" && raw && raw.tool !== "task") {
@@ -1412,7 +1455,7 @@ export class OpencodeV1Adapter implements Harness {
       if (this.buffers.subscribed(sessionID)) {
         this.buffers.epoch(sessionID, this.#replay.clock(sessionID).epoch);
       }
-      this.#recovery.part(raw.messageID, raw.id);
+      this.#recovery.part(raw.messageID, raw.id, sessionID);
       if (
         raw.type === "tool" ||
         ((raw.type === "text" || raw.type === "reasoning") &&

@@ -12,6 +12,12 @@ function violations(path: string, text: string): string[] {
     if (node.type !== "CallExpression") continue;
     const callee = source.name(node.callee) ?? "";
     if (
+      path === "packages/harness-opencode-v1/recovery.ts" &&
+      /^(?:setTimeout|setInterval|AbortSignal.timeout)$/.test(callee)
+    ) {
+      result.push("seed recovery owns polling or duplicate timeout");
+    }
+    if (
       path === "packages/harness-opencode-v1/tasks.ts" &&
       /(?:\.(?:read|scan|page|taskMessages|schedule)|^setTimeout)$/.test(callee)
     ) result.push("helper link owns I/O or polling");
@@ -63,6 +69,19 @@ Deno.test("helper link negatives reject awaited child scans and parent polling",
       "helper link owns I/O or polling",
       "helper link owns I/O or polling",
       "helper link owns I/O or polling",
+    ],
+  );
+});
+Deno.test("seed recovery negatives reject per-delta polling and an independent request deadline", () => {
+  assertEquals(
+    violations(
+      "packages/harness-opencode-v1/recovery.ts",
+      "setTimeout(read, 50); setInterval(read, 50); AbortSignal.timeout(15000);",
+    ),
+    [
+      "seed recovery owns polling or duplicate timeout",
+      "seed recovery owns polling or duplicate timeout",
+      "seed recovery owns polling or duplicate timeout",
     ],
   );
 });

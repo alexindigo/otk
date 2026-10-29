@@ -53,4 +53,6 @@ preloadms = 30000 # OTK_MESSAGES_PRELOADMS — attention-edge warm lease in mill
 concurrency = 4 # OTK_MESSAGES_CONCURRENCY — simultaneous body-page reads per connected server in one browser
 replayops = 128 # OTK_MESSAGES_REPLAYOPS — retained operations per pending baseline
 replaybytes = 4194304 # OTK_MESSAGES_REPLAYBYTES — retained serialized UTF-8 bytes per baseline; minimum 128 bookkeeping bytes
+recoveryconcurrency = 2 # OTK_MESSAGES_RECOVERYCONCURRENCY — aggregate simultaneous native missing-seed checkpoint reads per adapter
+recoverypending = 128 # OTK_MESSAGES_RECOVERYPENDING — missing message/part identity keys before source-free scoped reconciliation
 retryms = 1000 # OTK_MESSAGES_RETRYMS — minimum failed-baseline retry backoff in milliseconds

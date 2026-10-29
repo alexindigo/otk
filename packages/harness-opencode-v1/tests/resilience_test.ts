@@ -15,7 +15,7 @@ import { consumeEvents } from "../events.ts";
 import { AgentColors } from "../agents.ts";
 import { Client } from "../client.ts";
 import { MessageRecovery } from "../recovery.ts";
-import { mapIndex, mapMessage } from "../map.ts";
+import { mapIndex } from "../map.ts";
 import type { Info, Session } from "../types.ts";
 
 const wait = async (predicate: () => boolean) => {
@@ -52,8 +52,12 @@ async function recording(
     () => undefined,
   seeds = [session("root"), session("other")],
   delayed = false,
+  recoverypending?: number,
 ) {
   const settings = cfg();
+  if (recoverypending !== undefined) {
+    settings.messages.recoverypending = recoverypending;
+  }
   settings.harness.db = join(await fixture(), "missing.db");
   let controller!: ReadableStreamDefaultController<Uint8Array>;
   let release!: () => void;
@@ -425,17 +429,21 @@ test("recovery coalesces parts within one message and cancels scheduled reads be
   let reads = 0, release!: () => void;
   const held = new Promise<void>((resolve) => release = resolve);
   const received: string[][] = [];
-  const recovery = new MessageRecovery(
-    async () => {
+  const recovery = new MessageRecovery({
+    concurrency: 2,
+    pending: 128,
+    read: async () => {
       reads++;
       await held;
       return { info: info(), parts: [] };
     },
-    (_id, _snapshot, parts) => received.push([...parts]),
-    (error) => {
+    emit: (_id, _snapshot, parts) => received.push([...parts]),
+    state: () => {},
+    reconcile: () => {},
+    failed: (error) => {
       throw error;
     },
-  );
+  });
   try {
     recovery.touch("root", "cancelled", "first");
     recovery.release("root");
@@ -444,7 +452,7 @@ test("recovery coalesces parts within one message and cancels scheduled reads be
     recovery.touch("root", "msg_live", "first");
     recovery.touch("root", "msg_live", "second");
     await wait(() => reads === 1);
-    recovery.part("msg_live", "first");
+    recovery.part("msg_live", "first", "root");
     release();
     await wait(() => received.length === 1);
     assertEquals(received, [["second"]]);
@@ -533,7 +541,7 @@ test("attention request replay is idempotent and moving owners updates only thei
   }
 });
 
-test("reconnect coalesces unseeded deltas with one trailing snapshot and authoritative updates end recovery", async () => {
+test("reconnect takes one replacement checkpoint despite more deltas and authoritative updates end recovery", async () => {
   let reads = 0, collections = 0, inFlight = 0, maximum = 0;
   let release!: () => void;
   const held = new Promise<void>((resolve) => release = resolve);
@@ -586,8 +594,13 @@ test("reconnect coalesces unseeded deltas with one trailing snapshot and authori
     assertEquals(reads, 1);
     release();
     await wait(() =>
-      reads === 2 &&
-      record.ops.filter(({ op }) => op.op === "part.upsert").length === 2
+      record.ops.filter(({ op }) => op.op === "part.upsert").length >= 1
+    );
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    assertEquals(
+      reads,
+      1,
+      "deltas must not rearm an unaligned HTTP checkpoint",
     );
     assertEquals(maximum, 1);
     assertEquals(collections, 0);
@@ -599,13 +612,21 @@ test("reconnect coalesces unseeded deltas with one trailing snapshot and authori
     const rendered = () =>
       record.ops.filter(({ id }) => id === "opcv1-root").reduce(
         (state, { op }) => reduce(state, op),
-        { ...emptyContent(), messages: [mapMessage(info())] },
+        emptyContent(),
       ).messages[0].parts[0];
     const recovered = rendered();
     assert(recovered.kind === "text");
+    assertEquals(recovered.stream?.mode, "replace");
+    assertEquals(
+      record.ops.filter(({ op }) => op.op === "part.upsert").every(({ op }) =>
+        !("lastOutput" in op)
+      ),
+      true,
+      "HTTP receipt must not invent a native output observation",
+    );
     assertEquals(recovered.blocks, [{
       b: "paragraph",
-      inline: [{ i: "text", text }],
+      inline: [{ i: "text", text: "Before reconnect" }],
     }]);
     record.send("message.part.updated", {
       part: {
@@ -621,17 +642,67 @@ test("reconnect coalesces unseeded deltas with one trailing snapshot and authori
     for (let i = 0; i < 50; i++) delta();
     await record.drain();
     await new Promise((resolve) => setTimeout(resolve, 120));
-    assertEquals(reads, 2);
+    assertEquals(reads, 1);
     const last = record.ops.findLast(({ op }) => op.op === "part.blocks")!;
     assert(JSON.stringify(last).includes(text + "!".repeat(50)));
     const streamed = rendered();
     assert(streamed.kind === "text");
+    assert(streamed.stream!.generation > recovered.stream!.generation);
     assertEquals(streamed.blocks, [{
       b: "paragraph",
       inline: [{ i: "text", text: text + "!".repeat(50) }],
     }]);
   } finally {
     release();
+    await record.adapter.core.stop();
+  }
+});
+
+test("collapsed recovery keys reconcile terminal bodies without bypassing shared checkpoint admission", async () => {
+  let reads = 0;
+  const record = await recording(
+    (url) => {
+      if (url.pathname.includes("/message/")) {
+        reads++;
+        return Promise.resolve(
+          Response.json({
+            info: info(url.pathname.split("/").at(-1)),
+            parts: [],
+          }),
+        );
+      }
+    },
+    undefined,
+    false,
+    1,
+  );
+  try {
+    for (const messageID of ["msg_live", "msg_other"]) {
+      record.send("message.part.delta", {
+        sessionID: "root",
+        messageID,
+        partID: messageID + "-part",
+        field: "text",
+        delta: "!",
+      });
+      await record.drain();
+    }
+    assert(record.ops.some(({ op }) => op.op === "stream.reconcile"));
+    const before = reads;
+    record.send("message.updated", {
+      info: { ...info(), time: { created: 2, completed: 5 } },
+    });
+    await record.drain();
+    assertEquals(
+      reads,
+      before,
+      "scoped recovery must use the page owner, not an unbounded completion point read",
+    );
+    assertEquals(
+      record.ops.filter(({ op }) => op.op === "stream.reconcile").length,
+      2,
+    );
+  } finally {
     await record.adapter.core.stop();
   }
 });

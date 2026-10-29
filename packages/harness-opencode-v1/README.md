@@ -25,7 +25,16 @@ const harness: Harness = new OpencodeV1Adapter({
     reconnectmax: 30,
   },
   index: { days: 30 },
-  messages: { replayops: 128, replaybytes: 4194304, retryms: 1000 },
+  messages: {
+    coolms: 300000,
+    preloadms: 30000,
+    concurrency: 4,
+    replayops: 128,
+    replaybytes: 4194304,
+    retryms: 1000,
+    recoveryconcurrency: 2,
+    recoverypending: 128,
+  },
 });
 try {
   await harness.core.start({
@@ -231,13 +240,23 @@ identifiers and empty strings retain their spelling. Consumers never inherit a
 native null sentinel. Missing task agent metadata likewise stays absent rather
 than implying a built-in agent.
 
-When reconnect loses a streaming seed, point-message recovery coalesces deltas
-per subscribed message at a 50 ms cadence, with one in-flight read and a
-trailing refresh only when more deltas arrive. Snapshots render only the
-requested parts; they never seed appends because the native API has no shared
-snapshot/event offset. A native part update restores event-owned streaming.
-Unsubscribe, removal, disposal, disconnect and stop cancel the recovery's
-timers/readers and suppress stale output.
+When reconnect loses a streaming seed, one generation per subscribed message
+queues one replacement-only point checkpoint. Further deltas retain only missing
+part identities and never rearm HTTP reads. Adapter-wide `recoveryconcurrency`
+bounds reads; `recoverypending` bounds fine keys, including terminal barriers,
+before replacing them with a source-free scoped reconciliation marker. The next
+page and terminal checkpoint reconcile that scope through the same transcript
+owner. Finite deadlines belong to Client, with no recovery polling timer or
+second timeout.
+
+HTTP results publish a header before requested parts, share the stream owner's
+generation clock, and never seed appends or fabricate output receipt clocks. The
+browser shows “Refreshing response…” until a full native part event or a
+terminal checkpoint supplies authority. Failed checkpoints expose unavailable
+state and explicit Retry response; a distinct authoritative header can retry,
+but deltas cannot. Unsubscribe, cutoff, epoch retirement, removal, disposal,
+disconnect and stop cancel readers and fence late results. A full part event
+restores event-owned streaming with a strictly newer generation.
 
 Message collections have one bounded reader (1–200 messages per page); zero or
 missing limits cannot invoke stock's whole-history mode. Revert counts use a
