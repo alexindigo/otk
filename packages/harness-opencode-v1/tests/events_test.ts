@@ -205,28 +205,32 @@ test("adapter maps legacy event chain while ignoring its captured durable sync c
         entry.status === "retry" && entry.retry?.attempt === 2
       ),
     );
-    assertEquals(ops.map((op) => op.op), [
-      "session.error",
-      "session.error",
-      "permission.upsert",
-      "permission.remove",
-      "question.upsert",
-      "question.remove",
-      "question.upsert",
-      "question.remove",
-      "message.upsert",
-      "agent.colors",
-      "part.upsert",
-      "part.remove",
-      "diff.set",
-      "todo.set",
-      "message.remove",
-      "session.error",
-    ]);
+    // Optional decoration is independent of the ordered native content chain.
+    assertEquals(
+      ops.filter((op) => op.op !== "agent.colors").map((op) => op.op),
+      [
+        "session.error",
+        "session.error",
+        "permission.upsert",
+        "permission.remove",
+        "question.upsert",
+        "question.remove",
+        "question.upsert",
+        "question.remove",
+        "message.upsert",
+        "part.upsert",
+        "part.remove",
+        "diff.set",
+        "todo.set",
+        "message.remove",
+        "session.error",
+      ],
+    );
     assertEquals(ops.find((op) => op.op === "agent.colors"), {
       op: "agent.colors",
       colors: {},
     });
+    assertEquals(ops.filter((op) => op.op === "agent.colors").length, 1);
     assertEquals(ops.slice(0, 2), [
       {
         op: "session.error",

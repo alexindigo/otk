@@ -149,42 +149,56 @@ export class DigestBridge implements DigestPort {
     worker.onmessage = ({ data }: MessageEvent<FromWorker>) => {
       if (worker !== this.#worker || data.run !== this.#run) return;
       const start = performance.now();
-      if (data.t === "digest") {
-        const previous = this.#sequences.get(data.sessionID);
-        const valid = !previous || data.revision > previous.revision
-          ? data.part === 0
-          : data.revision === previous.revision && !previous.last &&
-            data.part === previous.part + 1;
-        if (valid) {
-          this.#sequences.set(data.sessionID, {
-            revision: data.revision,
-            part: data.part,
-            last: data.last,
-          });
-          this.options.publish({
-            sessionID: data.sessionID,
-            revision: data.revision,
-            delta: data.delta,
-          });
-          if (data.delta.deleted?.how === "otk") {
-            this.#intents.delete(data.sessionID);
+      const values: FromWorker[] = data.t === "digests"
+        ? data.values.map((value) => ({
+          ...value,
+          t: "digest",
+          run: data.run,
+          id: 0,
+        }))
+        : [data];
+      for (const value of values) {
+        const data = value;
+        if (data.t === "digest") {
+          const previous = this.#sequences.get(data.sessionID);
+          const valid = !previous || data.revision > previous.revision
+            ? data.part === 0
+            : data.revision === previous.revision && !previous.last &&
+              data.part === previous.part + 1;
+          if (valid) {
+            this.#sequences.set(data.sessionID, {
+              revision: data.revision,
+              part: data.part,
+              last: data.last,
+            });
+            this.options.publish({
+              sessionID: data.sessionID,
+              revision: data.revision,
+              delta: data.delta,
+            });
+            if (data.delta.deleted?.how === "otk") {
+              this.#intents.delete(data.sessionID);
+            }
           }
-        }
-      } else if (data.t === "pressure") {
-        this.options.pressure?.(data);
-      } else if (data.t === "error") {
-        const error = new Error(data.message, {
-          cause: { scope: data.scope, sessionID: data.sessionID },
-        });
-        const pending = this.#pending.get(data.id);
-        if (pending) {
-          this.#pending.delete(data.id);
-          pending.reject(error);
-        } else this.options.diagnostic?.(error);
-      } else if (data.t === "catalog" && data.id === 0) {
-        this.options.metadata?.(data.entries);
-      } else this.#pending.get(data.id)?.receive(data);
-      if (data.t === "digest" || data.t === "catalog" || data.t === "detail") {
+        } else if (data.t === "pressure") {
+          this.options.pressure?.(data);
+        } else if (data.t === "error") {
+          const error = new Error(data.message, {
+            cause: { scope: data.scope, sessionID: data.sessionID },
+          });
+          const pending = this.#pending.get(data.id);
+          if (pending) {
+            this.#pending.delete(data.id);
+            pending.reject(error);
+          } else this.options.diagnostic?.(error);
+        } else if (data.t === "catalog" && data.id === 0) {
+          this.options.metadata?.(data.entries);
+        } else this.#pending.get(data.id)?.receive(data);
+      }
+      if (
+        data.t === "digest" || data.t === "digests" || data.t === "catalog" ||
+        data.t === "detail"
+      ) {
         this.#task(() => {
           if (worker === this.#worker) {
             this.#post({ t: "credit", publications: 1 });
@@ -709,6 +723,10 @@ export class DigestBridge implements DigestPort {
     this.#retry = undefined;
     this.#running = false;
     const released = new DOMException("Digest bridge stopped", "AbortError");
+    // Retire caller authority immediately; joining worker cleanup must not leave
+    // startup or other read gates able to resolve from a late accepted frame.
+    for (const pending of this.#pending.values()) pending.reject(released);
+    this.#pending.clear();
     for (
       const value of [...this.#deletions.values(), ...this.#deleting.values()]
     ) value.done.reject(released);

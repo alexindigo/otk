@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { type DigestPublication, DigestScheduler } from "@otk/harness";
+import {
+  type DigestExecution,
+  type DigestPublication,
+  DigestScheduler,
+} from "@otk/harness";
+import { AsyncLocalStorage } from "node:async_hooks";
 import {
   DigestDb,
   digestMigrations,
@@ -11,10 +16,21 @@ import {
   opencodeV1DigestMigrations,
   OpencodeV1DigestSink,
 } from "@otk/harness-opencode-v1";
-import { type DigestDelta, errorMessage } from "@otk/protocol";
+import {
+  type DigestDelta,
+  errorMessage,
+  type SessionMetadata,
+} from "@otk/protocol";
 import type { FromWorker, ToWorker } from "./protocol.ts";
 import { helper, snapshot, usage, write } from "./storage.ts";
 import { DigestRequests } from "./requests.ts";
+import { sqliteBusy, sqliteRetry } from "./sqlite-lock.ts";
+import { DigestReadGate } from "./read-gate.ts";
+import {
+  DigestPublicationOrder,
+  type DigestPublicationReservation,
+} from "./publication-order.ts";
+import { DigestBatch } from "./batch.ts";
 
 let run: string | undefined,
   db: DigestDb | undefined,
@@ -29,10 +45,35 @@ let credits = 1,
   loop: Promise<void> | undefined,
   connection = 0;
 const waitingCredit = new Set<() => void>();
-let requestSignal: AbortSignal | undefined;
-let catalogPublications: Set<string> | undefined;
+const execution = new AsyncLocalStorage<{
+  signal: AbortSignal;
+  turn: DigestExecution;
+  catalogPublications?: Map<string, DigestPublicationReservation>;
+}>();
+function wait<T>(readiness: Promise<T>): Promise<T> {
+  return execution.getStore()?.turn.wait(readiness) ?? readiness;
+}
+function yieldChunk(
+  signal = execution.getStore()?.signal ?? lifetime.signal,
+): Promise<void> {
+  return wait(sleep(0, signal));
+}
+const publicationOrder = new DigestPublicationOrder(wait);
+const publishedRevisions = new Map<string, number>();
+const nativeReadsGate = new DigestReadGate(() => scheduler?.interruptIO());
+function nativeWait<T>(readiness: Promise<T>, join = false): Promise<T> {
+  const turn = execution.getStore()?.turn;
+  return turn
+    ? (join ? turn.join(readiness) : turn.wait(readiness, "io"))
+    : readiness;
+}
 let inventoryDirty = false;
 let starting: Promise<void> | undefined;
+let batches: DigestBatch | undefined;
+let cachedReplay:
+  | { controller: AbortController; task: Promise<void> }
+  | undefined;
+let wakeGeneration = 0;
 function post(value: FromWorker): void {
   globalThis.postMessage(value);
 }
@@ -55,96 +96,256 @@ function sleep(ms: number, signal: AbortSignal): Promise<void> {
 }
 async function send(
   value: FromWorker,
-  signal = lifetime.signal,
+  signal = execution.getStore()?.signal ?? lifetime.signal,
+): Promise<void> {
+  if (value.t === "digest") {
+    if (!batches) throw new Error("Digest publication queue is unavailable");
+    await batches.append({
+      sessionID: value.sessionID,
+      revision: value.revision,
+      part: value.part,
+      last: value.last,
+      delta: value.delta,
+    }, signal);
+    return;
+  }
+  await sendRaw(value, signal);
+}
+async function sendRaw(
+  value: FromWorker,
+  signal = execution.getStore()?.signal ?? lifetime.signal,
 ): Promise<void> {
   while (credits < 1) {
     signal.throwIfAborted();
-    await new Promise<void>((resolve, reject) => {
-      const abort = () => {
-        waitingCredit.delete(ready);
-        reject(signal.reason);
-      };
-      const ready = () => {
-        signal.removeEventListener("abort", abort);
-        resolve();
-      };
-      waitingCredit.add(ready);
-      signal.addEventListener("abort", abort, { once: true });
-    });
+    await wait(
+      new Promise<void>((resolve, reject) => {
+        const abort = () => {
+          waitingCredit.delete(ready);
+          reject(signal.reason);
+        };
+        const ready = () => {
+          signal.removeEventListener("abort", abort);
+          resolve();
+        };
+        waitingCredit.add(ready);
+        signal.addEventListener("abort", abort, { once: true });
+      }),
+    );
   }
   signal.throwIfAborted();
   credits--;
   post(value);
+  // A completed publication is one bounded chunk, even when more credit is ready.
+  await yieldChunk(signal);
 }
 async function publish(value: DigestPublication): Promise<void> {
-  if (catalogPublications) {
-    catalogPublications.add(value.sessionID);
+  const context = execution.getStore();
+  if (context?.catalogPublications) {
+    if (!context.catalogPublications.has(value.sessionID)) {
+      context.catalogPublications.set(
+        value.sessionID,
+        publicationOrder.reserve(value.sessionID),
+      );
+    }
     return;
   }
-  if (value.metadata) {
-    await send({
-      t: "catalog",
-      run: run!,
-      id: 0,
-      connection,
-      entries: [value.metadata],
-      part: 0,
-      last: true,
-      authoritative: false,
-    }, requestSignal ?? lifetime.signal);
-  }
-  const turns = Object.entries(value.delta.turns.upsert),
-    remove = value.delta.turns.remove;
-  const count = Math.max(
-    1,
-    Math.ceil((turns.length + remove.length) / policy.publishrows),
-  );
-  for (let part = 0; part < count; part++) {
-    const from = part * policy.publishrows, to = from + policy.publishrows;
-    const delta: DigestDelta = {
-      ...value.delta,
-      summary: {
-        ...value.delta.summary,
-        state: part === count - 1 ? value.delta.summary.state : "digesting",
-      },
-      turns: {
-        upsert: Object.fromEntries(turns.slice(from, to)),
-        remove: remove.slice(
-          Math.max(0, from - turns.length),
-          Math.max(0, to - turns.length),
-        ),
-      },
-    };
-    await send({
-      t: "digest",
-      run: run!,
-      id: 0,
-      sessionID: value.sessionID,
-      revision: value.revision,
-      part,
-      last: part === count - 1,
-      delta,
-    }, requestSignal ?? lifetime.signal);
-  }
+  const signal = context?.signal ?? lifetime.signal;
+  await publicationOrder.reserve(value.sessionID).run(signal, async () => {
+    if (value.revision < (publishedRevisions.get(value.sessionID) ?? -1)) {
+      return;
+    }
+    if (value.metadata) {
+      await send({
+        t: "catalog",
+        run: run!,
+        id: 0,
+        connection,
+        entries: [value.metadata],
+        part: 0,
+        last: true,
+        authoritative: false,
+      }, context?.signal ?? lifetime.signal);
+    }
+    const turns = Object.entries(value.delta.turns.upsert),
+      remove = value.delta.turns.remove;
+    const count = Math.max(
+      1,
+      Math.ceil((turns.length + remove.length) / policy.publishrows),
+    );
+    for (let part = 0; part < count; part++) {
+      const from = part * policy.publishrows, to = from + policy.publishrows;
+      const delta: DigestDelta = {
+        ...value.delta,
+        summary: {
+          ...value.delta.summary,
+          state: part === count - 1 ? value.delta.summary.state : "digesting",
+        },
+        turns: {
+          upsert: Object.fromEntries(turns.slice(from, to)),
+          remove: remove.slice(
+            Math.max(0, from - turns.length),
+            Math.max(0, to - turns.length),
+          ),
+        },
+      };
+      await send({
+        t: "digest",
+        run: run!,
+        id: 0,
+        sessionID: value.sessionID,
+        revision: value.revision,
+        part,
+        last: part === count - 1,
+        delta,
+      }, context?.signal ?? lifetime.signal);
+    }
+    publishedRevisions.set(value.sessionID, value.revision);
+  });
+}
+/** A temporary scalar snapshot, captured in bounded reads before credit waits.
+ * Interleaved writes invalidate capture, never splice two revisions together. */
+async function publishStored(
+  sessionID: string,
+  cached = false,
+  reserved = publicationOrder.reserve(sessionID),
+): Promise<void> {
+  const signal = execution.getStore()?.signal ?? lifetime.signal;
+  await reserved.run(signal, async () => {
+    for (;;) {
+      signal.throwIfAborted();
+      const row = store!.summary([sessionID])[0];
+      if (!row) return;
+      const saved = snapshot(row), revision = saved.summary.revision;
+      const progress = store!.helpers([sessionID])[0];
+      const parts: FromWorker[] = [];
+      let after = "", part = 0, changed = false;
+      for (;;) {
+        const turns = store!.turns([sessionID], after, policy.publishrows);
+        parts.push({
+          t: "digest",
+          run: run!,
+          id: 0,
+          sessionID,
+          revision,
+          part,
+          last: turns.length < policy.publishrows,
+          delta: {
+            helper: progress ? helper(progress) : null,
+            summary: {
+              ...saved.summary,
+              state: cached && !saved.deleted
+                ? "digesting"
+                : saved.summary.state,
+            },
+            turns: {
+              upsert: Object.fromEntries(
+                turns.map((turn) => [turn.turn_id, usage(turn)]),
+              ),
+              remove: [],
+            },
+            deleted: saved.deleted,
+          },
+        });
+        if (turns.length < policy.publishrows) break;
+        after = digestTurnCursor(turns.at(-1)!);
+        part++;
+        await yieldChunk(signal);
+        if (store!.summary([sessionID])[0]?.revision !== revision) {
+          changed = true;
+          break;
+        }
+      }
+      if (changed) continue;
+      if (revision < (publishedRevisions.get(sessionID) ?? -1)) return;
+      for (const value of parts) await send(value, signal);
+      publishedRevisions.set(sessionID, revision);
+      return;
+    }
+  });
 }
 function kick(): void {
+  wakeGeneration++;
   wake?.();
   wake = undefined;
 }
+/** Catalog/dirty-inventory admission shares bounded reads and real task yields. */
+async function admitCatalog(
+  entries: readonly SessionMetadata[],
+  signal: AbortSignal,
+  options: { invalidate: boolean; helpers: boolean },
+): Promise<void> {
+  const admitted = connection;
+  for (let offset = 0; offset < entries.length; offset += policy.batch) {
+    signal.throwIfAborted();
+    if (connection !== admitted) {
+      throw new Error("Digest catalog generation was replaced");
+    }
+    const chunk = entries.slice(offset, offset + policy.batch);
+    const saved = new Map(
+      store!.summary(chunk.map((entry) => entry.id)).map((
+        row,
+      ) => [row.id, row]),
+    );
+    const pending = chunk.filter((entry) => {
+      const row = saved.get(entry.id);
+      return row && !row.deleted_at && row.state !== "ready";
+    });
+    if (options.invalidate) {
+      db!.transaction(() => {
+        for (const entry of pending) sink!.invalidate(entry.id, 0);
+      });
+    }
+    for (const entry of pending) {
+      scheduler!.enqueue({
+        provider: sink!.identity,
+        sessionID: entry.id,
+        directory: entry.directory,
+        updated: entry.timeUpdated,
+      }, entry.status === "idle" ? "background" : "attention");
+    }
+    if (options.helpers) {
+      for (const entry of chunk) {
+        if (entry.parentID && !saved.get(entry.id)?.deleted_at) {
+          sink!.invalidateHelper(entry.id);
+          scheduler!.enqueue({
+            provider: sink!.identity,
+            sessionID: entry.id,
+            directory: entry.directory,
+            updated: entry.timeUpdated,
+            projection: "helper",
+            interruptible: true,
+          }, "background");
+        }
+      }
+    }
+    await yieldChunk(signal);
+  }
+}
+async function idle(generation: number): Promise<void> {
+  if (generation !== wakeGeneration || lifetime.signal.aborted) return;
+  await new Promise<void>((resolve) => {
+    const timer = setTimeout(() => {
+      wake = undefined;
+      resolve();
+    }, policy.retryms);
+    wake = () => {
+      clearTimeout(timer);
+      resolve();
+    };
+  });
+}
 async function pump(): Promise<void> {
   while (!lifetime.signal.aborted) {
+    const generation = wakeGeneration;
     try {
-      if (await scheduler!.tick()) continue;
-      await new Promise<void>((resolve) => {
-        const timer = setTimeout(() => {
-          wake = undefined;
-          resolve();
-        }, policy.retryms);
-        wake = () => {
-          clearTimeout(timer);
-          resolve();
-        };
-      });
+      if (await scheduler!.tick()) {
+        // The turn is released. Let incoming worker messages enter the priority
+        // queue before selecting the next ready continuation.
+        await sleep(0, lifetime.signal);
+        continue;
+      }
+      if (batches?.flush()) continue;
+      await idle(generation);
     } catch (error) {
       if (lifetime.signal.aborted) break;
       post({
@@ -154,7 +355,6 @@ async function pump(): Promise<void> {
         scope: "worker",
         message: errorMessage(error),
       });
-      await sleep(policy.retryms, lifetime.signal).catch(() => {});
     }
   }
 }
@@ -223,14 +423,31 @@ async function start(
                   nativeReads[operation] = (nativeReads[operation] ?? 0) + 1
                 : undefined,
             ),
+          {
+            wait,
+            ioWait: nativeWait,
+            retryable: sqliteBusy,
+            admission: (signal) =>
+              nativeReadsGate.acquire(
+                signal,
+                execution.getStore()?.turn.priority === "interactive",
+              ),
+            work: (ms) => execution.getStore()?.turn.charge(ms),
+          },
         ),
     }]]);
     const selected = contributions.get(message.provider);
     if (!selected) throw new Error("Unknown digest provider");
-    db = new DigestDb(message.statePath, [
-      digestMigrations,
-      selected.migrations,
-    ], { busyms: policy.busyms });
+    db = await sqliteRetry(
+      () =>
+        new DigestDb(message.statePath, [
+          digestMigrations,
+          selected.migrations,
+        ], { busyms: 0 }),
+      lifetime.signal,
+      policy,
+      wait,
+    );
     store = new DigestStore(db);
     sink = selected.create();
     connection = message.connection ?? 0;
@@ -241,137 +458,145 @@ async function start(
       // estimates admission without swapping; `free` counts unused pages only.
       freeMemory: () => Deno.systemMemoryInfo().available,
       sleep,
+      wake: kick,
+    });
+    batches = new DigestBatch({
+      rows: policy.publishrows,
+      signal: lifetime.signal,
+      wait,
+      schedule: (write) =>
+        scheduler!.execute(
+          (signal, turn) => execution.run({ signal, turn }, write),
+          lifetime.signal,
+        ),
+      send: (values) => sendRaw({ t: "digests", run: run!, id: 0, values }),
     });
     scheduler.register({
       identity: sink.identity,
       catalog: (signal) => selectedSink.catalog(signal),
       detail: (id, turnID, signal) => selectedSink.detail(id, turnID, signal),
       close: () => selectedSink.close(),
-      step: async (job, budget, signal) => {
-        try {
-          if (inventoryDirty) {
-            inventoryDirty = false;
-            const catalog = await sink!.catalog(signal, false);
-            for (const entry of catalog.entries) {
-              const saved = store!.summary([entry.id])[0];
-              if (saved.state !== "ready") {
-                scheduler!.enqueue({
-                  provider: sink!.identity,
-                  sessionID: entry.id,
-                  directory: entry.directory,
-                  updated: entry.timeUpdated,
-                }, "background");
+      step: (job, budget, signal, turn) =>
+        execution.run({ signal, turn }, () =>
+          sqliteRetry(
+            async () => {
+              try {
+                if (inventoryDirty) {
+                  inventoryDirty = false;
+                  const catalog = await sink!.catalog(signal, false);
+                  await admitCatalog(catalog.entries, signal, {
+                    invalidate: false,
+                    helpers: false,
+                  });
+                }
+                const start = performance.now();
+                const cursor = await sink!.step(job, budget, signal);
+                if (message.diagnostics) {
+                  post({
+                    t: "pressure",
+                    run: run!,
+                    id: 0,
+                    queued: scheduler!.queued,
+                    active: 1,
+                    sliceMs: performance.now() - start,
+                    nativeReads: { ...nativeReads },
+                  });
+                }
+                return cursor;
+              } catch (error) {
+                signal.throwIfAborted();
+                if (sqliteBusy(error)) throw error;
+                const row = store!.summary([job.sessionID])[0];
+                if (row) {
+                  const saved = snapshot(row);
+                  const delta: DigestDelta = {
+                    summary: {
+                      ...saved.summary,
+                      state: "unavailable",
+                      revision: saved.summary.revision + 1,
+                    },
+                    turns: { upsert: {}, remove: [] },
+                    deleted: saved.deleted,
+                  };
+                  db!.transaction(() =>
+                    write(store!, selectedSink.identity, saved.metadata, delta)
+                  );
+                  await publish({
+                    sessionID: job.sessionID,
+                    revision: delta.summary.revision,
+                    delta,
+                  });
+                }
+                post({
+                  t: "error",
+                  run: run!,
+                  id: 0,
+                  scope: "session",
+                  sessionID: job.sessionID,
+                  message: errorMessage(error),
+                });
+                return;
               }
-            }
-          }
-          const start = performance.now();
-          const cursor = await sink!.step(job, budget, signal);
-          if (message.diagnostics) {
-            post({
-              t: "pressure",
-              run: run!,
-              id: 0,
-              queued: scheduler!.queued,
-              active: 1,
-              sliceMs: performance.now() - start,
-              nativeReads: { ...nativeReads },
-            });
-          }
-          return cursor;
-        } catch (error) {
-          signal.throwIfAborted();
-          const row = store!.summary([job.sessionID])[0];
-          if (row) {
-            const saved = snapshot(row);
-            const delta: DigestDelta = {
-              summary: {
-                ...saved.summary,
-                state: "unavailable",
-                revision: saved.summary.revision + 1,
-              },
-              turns: { upsert: {}, remove: [] },
-              deleted: saved.deleted,
-            };
-            db!.transaction(() =>
-              write(store!, selectedSink.identity, saved.metadata, delta)
-            );
-            await publish({
-              sessionID: job.sessionID,
-              revision: delta.summary.revision,
-              delta,
-            });
-          }
-          post({
-            t: "error",
-            run: run!,
-            id: 0,
-            scope: "session",
-            sessionID: job.sessionID,
-            message: errorMessage(error),
-          });
-          return;
-        }
-      },
+            },
+            signal,
+            policy,
+            wait,
+          )),
     });
     requests = new DigestRequests(run, scheduler);
-    // Cached rows are usable before the provider's health/catalog round-trip.
-    let cachedAfter = "";
-    while (true) {
-      const rows = store.catalog(
-        message.provider,
-        cachedAfter,
-        policy.publishrows,
-      );
-      if (!rows.length) break;
-      await send({
-        t: "catalog",
-        run,
-        id: 0,
-        connection: 0,
-        entries: rows.map((row) => snapshot(row).metadata),
-        part: 0,
-        last: true,
-        authoritative: false,
-      });
-      for (const row of rows) {
-        const saved = snapshot(row);
-        let after = "", part = 0;
-        while (true) {
-          const turns = store.turns([row.id], after, policy.publishrows);
-          await send({
-            t: "digest",
-            run,
-            id: 0,
-            sessionID: row.id,
-            revision: saved.summary.revision,
-            part,
-            last: turns.length < policy.publishrows,
-            delta: {
-              helper: store.helpers([row.id])[0]
-                ? helper(store.helpers([row.id])[0])
-                : null,
-              summary: {
-                ...saved.summary,
-                state: saved.deleted ? saved.summary.state : "digesting",
-              },
-              turns: {
-                upsert: Object.fromEntries(
-                  turns.map((turn) => [turn.turn_id, usage(turn)]),
-                ),
-                remove: [],
-              },
-              deleted: saved.deleted,
-            },
-          });
-          if (turns.length < policy.publishrows) break;
-          after = digestTurnCursor(turns.at(-1)!);
-          part++;
-        }
-      }
-      cachedAfter = rows.at(-1)!.id;
-    }
-    post({ t: "accepted", run, id: message.id });
     loop = pump();
+    // Cached rows are usable before the provider's health/catalog round-trip.
+    // Startup publishes its first seed before acknowledgement; remaining cached
+    // chunks are ordinary cooperative work, not a barrier to essential reads.
+    const seeded = Promise.withResolvers<void>();
+    const controller = new AbortController();
+    const cachedStore = store;
+    const task = scheduler.execute(
+      (signal, turn) =>
+        execution.run({ signal, turn }, async () => {
+          let cachedAfter = "";
+          while (true) {
+            const rows = cachedStore.catalog(
+              message.provider,
+              cachedAfter,
+              policy.publishrows,
+            );
+            if (!rows.length) break;
+            await send({
+              t: "catalog",
+              run: message.run,
+              id: 0,
+              connection: 0,
+              entries: rows.map((row) => snapshot(row).metadata),
+              part: 0,
+              last: true,
+              authoritative: false,
+            });
+            seeded.resolve();
+            for (const row of rows) {
+              await publishStored(row.id, true);
+            }
+            cachedAfter = rows.at(-1)!.id;
+          }
+          seeded.resolve();
+        }),
+      AbortSignal.any([controller.signal, lifetime.signal]),
+    );
+    cachedReplay = { controller, task };
+    void task.catch((error) => {
+      seeded.reject(error);
+      if (!controller.signal.aborted && !lifetime.signal.aborted) {
+        post({
+          t: "error",
+          run: run!,
+          id: 0,
+          scope: "worker",
+          message: errorMessage(error),
+        });
+      }
+    });
+    await seeded.promise;
+    post({ t: "accepted", run, id: message.id });
   } catch (error) {
     await scheduler?.stop();
     sink?.close();
@@ -386,9 +611,11 @@ async function stop(message: ToWorker): Promise<void> {
   kick();
   for (const ready of waitingCredit) ready();
   waitingCredit.clear();
+  const closing = scheduler?.stop();
   await starting?.catch(() => {});
+  await closing;
   await requests?.stop();
-  await scheduler?.stop();
+  await batches?.close();
   await loop;
   db?.close();
   db = undefined;
@@ -449,250 +676,265 @@ function handle(message: ToWorker): void {
     return;
   }
   if (message.t === "dirty") {
-    if (message.connection !== connection) {
-      post({ t: "accepted", run: run!, id: message.id });
-      return;
-    }
-    db!.transaction(() => {
-      for (const dirty of message.sessions) {
-        const row = store!.summary([dirty.sessionID])[0];
-        if (dirty.reason === "helper" || dirty.reason === "helper-hint") {
-          if (sink!.requestHelper(dirty.sessionID, dirty.reason === "helper")) {
-            const identity = {
-              provider: sink!.identity,
-              sessionID: dirty.sessionID,
-              directory: row?.directory,
-              updated: row?.time_updated ?? Date.now(),
-              projection: "helper" as const,
-              interruptible: true,
-            };
-            if (
-              dirty.reason !== "helper-hint" ||
-              !scheduler!.promote(identity, "visible")
-            ) {
-              scheduler!.enqueue(
-                identity,
-                "visible",
-                dirty.reason === "helper" ? dirty : undefined,
-              );
-            }
-          }
-          if (!row) inventoryDirty = true;
-          continue;
-        }
-        if (dirty.reason === "attention") {
-          const identity = {
-            provider: sink!.identity,
-            sessionID: dirty.sessionID,
-            directory: row?.directory,
-            updated: row?.time_updated ?? Date.now(),
-          };
-          if (
-            !scheduler!.promote(identity, "attention") && row &&
-            !row.deleted_at && row.state !== "ready"
-          ) scheduler!.enqueue(identity, "attention");
-          continue;
-        }
-        if (
-          !row || dirty.reason === "presence" || dirty.reason === "metadata"
-        ) {
-          inventoryDirty = true;
-        }
-        sink!.invalidate(dirty.sessionID, dirty.revision);
-        scheduler!.enqueue(
-          {
-            provider: sink!.identity,
-            sessionID: dirty.sessionID,
-            directory: row?.directory,
-            updated: row?.time_updated ?? Date.now(),
-          },
-          "background",
-          dirty,
-        );
-      }
-    });
-    post({ t: "accepted", run: run!, id: message.id });
+    const task = requests.run(
+      run!,
+      message.id,
+      (signal, turn) =>
+        execution.run({ signal, turn }, () =>
+          sqliteRetry(
+            () => {
+              signal.throwIfAborted();
+              if (message.connection !== connection) {
+                post({ t: "accepted", run: run!, id: message.id });
+                return;
+              }
+              db!.transaction(() => {
+                for (const dirty of message.sessions) {
+                  const row = store!.summary([dirty.sessionID])[0];
+                  if (
+                    dirty.reason === "helper" || dirty.reason === "helper-hint"
+                  ) {
+                    if (
+                      sink!.requestHelper(
+                        dirty.sessionID,
+                        dirty.reason === "helper",
+                      )
+                    ) {
+                      const identity = {
+                        provider: sink!.identity,
+                        sessionID: dirty.sessionID,
+                        directory: row?.directory,
+                        updated: row?.time_updated ?? Date.now(),
+                        projection: "helper" as const,
+                        interruptible: true,
+                      };
+                      if (
+                        dirty.reason !== "helper-hint" ||
+                        !scheduler!.promote(identity, "visible")
+                      ) {
+                        scheduler!.enqueue(
+                          identity,
+                          "visible",
+                          dirty.reason === "helper" ? dirty : undefined,
+                        );
+                      }
+                    }
+                    if (!row) inventoryDirty = true;
+                    continue;
+                  }
+                  if (dirty.reason === "attention") {
+                    const identity = {
+                      provider: sink!.identity,
+                      sessionID: dirty.sessionID,
+                      directory: row?.directory,
+                      updated: row?.time_updated ?? Date.now(),
+                    };
+                    if (
+                      !scheduler!.promote(identity, "attention") && row &&
+                      !row.deleted_at && row.state !== "ready"
+                    ) scheduler!.enqueue(identity, "attention");
+                    continue;
+                  }
+                  if (
+                    !row || dirty.reason === "presence" ||
+                    dirty.reason === "metadata"
+                  ) {
+                    inventoryDirty = true;
+                  }
+                  sink!.invalidate(dirty.sessionID, dirty.revision);
+                  scheduler!.enqueue(
+                    {
+                      provider: sink!.identity,
+                      sessionID: dirty.sessionID,
+                      directory: row?.directory,
+                      updated: row?.time_updated ?? Date.now(),
+                    },
+                    "background",
+                    dirty,
+                  );
+                }
+              });
+              post({ t: "accepted", run: run!, id: message.id });
+            },
+            signal,
+            policy,
+            wait,
+          )),
+    );
+    observeTask(task, message);
     kick();
     return;
   }
-  const task = requests.run(run!, message.id, async (signal) => {
-    requestSignal = signal;
-    try {
-      if (message.t === "catalog") {
-        if (message.connection < connection) {
-          throw new Error("Stale native connection");
-        }
-        connection = message.connection;
-        sink!.connection(connection);
-        const changed = catalogPublications = new Set<string>();
-        let result: Awaited<ReturnType<OpencodeV1DigestSink["catalog"]>>;
-        try {
-          result = await sink!.catalog(signal);
-        } finally {
-          catalogPublications = undefined;
-        }
-        const entries = [];
-        let catalogAfter = "";
-        while (true) {
-          const rows = store!.catalog(
-            sink!.identity,
-            catalogAfter,
-            policy.batch,
-          );
-          if (!rows.length) break;
-          entries.push(...rows.map((row) => snapshot(row).metadata));
-          catalogAfter = rows.at(-1)!.id;
-          signal.throwIfAborted();
-        }
-        for (
-          let offset = 0, part = 0;
-          offset < entries.length || part === 0;
-          offset += policy.publishrows, part++
-        ) {
-          await send({
-            t: "catalog",
-            run: run!,
-            id: message.id,
-            connection,
-            entries: entries.slice(offset, offset + policy.publishrows),
-            part,
-            last: offset + policy.publishrows >= entries.length,
-            authoritative: result.authoritative,
-            ...(offset === 0 ? { hints: result.hints } : {}),
-          }, signal);
-        }
-        const pending = result.entries.filter((entry) =>
-          store!.summary([entry.id])[0]?.state !== "ready"
-        );
-        db!.transaction(() => {
-          for (const entry of pending) {
-            sink!.invalidate(entry.id, 0);
-          }
-        });
-        for (const entry of pending) {
-          scheduler!.enqueue({
-            provider: sink!.identity,
-            sessionID: entry.id,
-            directory: entry.directory,
-            updated: entry.timeUpdated,
-          }, entry.status === "idle" ? "background" : "attention");
-        }
-        for (const entry of result.entries) {
-          if (entry.parentID && !store!.summary([entry.id])[0]?.deleted_at) {
-            sink!.invalidateHelper(entry.id);
-            scheduler!.enqueue({
-              provider: sink!.identity,
-              sessionID: entry.id,
-              directory: entry.directory,
-              updated: entry.timeUpdated,
-              projection: "helper",
-              interruptible: true,
-            }, "background");
-          }
-        }
-        for (const sessionID of changed) {
-          let after = "", part = 0;
-          const saved = snapshot(store!.summary([sessionID])[0]);
-          while (true) {
-            const turns = store!.turns([sessionID], after, policy.publishrows);
-            await send({
-              t: "digest",
-              run: run!,
-              id: 0,
-              sessionID,
-              revision: saved.summary.revision,
-              part,
-              last: turns.length < policy.publishrows,
-              delta: {
-                helper: store!.helpers([sessionID])[0]
-                  ? helper(store!.helpers([sessionID])[0])
-                  : null,
-                summary: {
-                  ...saved.summary,
-                  state: saved.summary.state,
-                },
-                turns: {
-                  upsert: Object.fromEntries(
-                    turns.map((turn) => [turn.turn_id, usage(turn)]),
+  const task = requests.run(
+    run!,
+    message.id,
+    (signal, turn) =>
+      execution.run({ signal, turn }, () =>
+        sqliteRetry(
+          async () => {
+            if (message.t === "catalog") {
+              if (message.connection < connection) {
+                throw new Error("Stale native connection");
+              }
+              if (cachedReplay) {
+                const cached = cachedReplay;
+                cachedReplay = undefined;
+                cached.controller.abort(
+                  new DOMException(
+                    "Fresh catalog supersedes cached publication",
+                    "AbortError",
                   ),
-                  remove: [],
-                },
-                deleted: saved.deleted,
-              },
-            }, signal);
-            if (turns.length < policy.publishrows) break;
-            after = digestTurnCursor(turns.at(-1)!);
-            part++;
-          }
-        }
-      } else if (message.t === "deleted") {
-        if (message.connection === connection) {
-          for (const item of message.sessions) {
-            await sink!.deleted(
-              connection,
-              item.sessionID,
-              item.revision,
-              item.metadata,
-            );
-          }
-        }
-        post({ t: "accepted", run: run!, id: message.id });
-      } else if (message.t === "transcript") {
-        const metadata = await sink!.transcriptMetadata(
-          message.sessionID,
-          message.turns,
+                );
+                await wait(cached.task.catch((error) => {
+                  if (
+                    !(error instanceof DOMException &&
+                      error.name === "AbortError")
+                  ) throw error;
+                }));
+              }
+              connection = message.connection;
+              sink!.connection(connection);
+              const current = () => {
+                signal.throwIfAborted();
+                if (connection !== message.connection) {
+                  throw new Error("Digest catalog generation was replaced");
+                }
+              };
+              const context = execution.getStore()!;
+              const changed = context.catalogPublications = new Map<
+                string,
+                DigestPublicationReservation
+              >();
+              try {
+                let result: Awaited<
+                  ReturnType<OpencodeV1DigestSink["catalog"]>
+                >;
+                try {
+                  result = await sink!.catalog(signal);
+                } finally {
+                  context.catalogPublications = undefined;
+                }
+                const entries = [];
+                let catalogAfter = "";
+                while (true) {
+                  current();
+                  const rows = store!.catalog(
+                    sink!.identity,
+                    catalogAfter,
+                    policy.batch,
+                  );
+                  if (!rows.length) break;
+                  entries.push(...rows.map((row) => snapshot(row).metadata));
+                  catalogAfter = rows.at(-1)!.id;
+                  await yieldChunk(signal);
+                }
+                for (
+                  let offset = 0, part = 0;
+                  offset < entries.length || part === 0;
+                  offset += policy.publishrows, part++
+                ) {
+                  current();
+                  await send({
+                    t: "catalog",
+                    run: run!,
+                    id: message.id,
+                    connection,
+                    entries: entries.slice(offset, offset + policy.publishrows),
+                    part,
+                    last: offset + policy.publishrows >= entries.length,
+                    authoritative: result.authoritative,
+                    ...(offset === 0 ? { hints: result.hints } : {}),
+                  }, signal);
+                }
+                current();
+                await admitCatalog(result.entries, signal, {
+                  invalidate: true,
+                  helpers: true,
+                });
+                for (
+                  const [sessionID, reserved] of changed
+                ) {
+                  current();
+                  await publishStored(sessionID, false, reserved);
+                }
+              } finally {
+                for (const reserved of changed.values()) reserved.release();
+              }
+            } else if (message.t === "deleted") {
+              if (message.connection === connection) {
+                for (const item of message.sessions) {
+                  await sink!.deleted(
+                    connection,
+                    item.sessionID,
+                    item.revision,
+                    item.metadata,
+                  );
+                }
+                await batches!.settle(signal);
+              }
+              post({ t: "accepted", run: run!, id: message.id });
+            } else if (message.t === "transcript") {
+              const metadata = await sink!.transcriptMetadata(
+                message.sessionID,
+                message.turns,
+                signal,
+                message.cutoff,
+              );
+              post({
+                t: "transcript",
+                run: run!,
+                id: message.id,
+                sessionID: message.sessionID,
+                metadata,
+              });
+            } else if (message.t === "detail") {
+              const detail = await sink!.detail(
+                message.sessionID,
+                message.turnID,
+                signal,
+              );
+              const count = Math.max(
+                1,
+                Math.ceil(
+                  detail.calls.length / policy.publishrows,
+                ),
+              );
+              for (let part = 0; part < count; part++) {
+                await send({
+                  t: "detail",
+                  run: run!,
+                  id: message.id,
+                  sessionID: message.sessionID,
+                  part,
+                  last: part === count - 1,
+                  turnID: detail.turnID,
+                  revision: detail.revision,
+                  ...(part === 0 ? { summary: detail.summary } : {}),
+                  calls: detail.calls.slice(
+                    part * policy.publishrows,
+                    (part + 1) * policy.publishrows,
+                  ),
+                }, signal);
+              }
+            } else if (message.t === "deleteIntent") {
+              await sink!.deleteIntent(
+                message.sessionID,
+                message.intent,
+                message.phase,
+                message.connection,
+              );
+              post({ t: "accepted", run: run!, id: message.id });
+            }
+          },
           signal,
-          message.cutoff,
-        );
-        post({
-          t: "transcript",
-          run: run!,
-          id: message.id,
-          sessionID: message.sessionID,
-          metadata,
-        });
-      } else if (message.t === "detail") {
-        const detail = await sink!.detail(
-          message.sessionID,
-          message.turnID,
-          signal,
-        );
-        const count = Math.max(
-          1,
-          Math.ceil(
-            detail.calls.length / policy.publishrows,
-          ),
-        );
-        for (let part = 0; part < count; part++) {
-          await send({
-            t: "detail",
-            run: run!,
-            id: message.id,
-            sessionID: message.sessionID,
-            part,
-            last: part === count - 1,
-            turnID: detail.turnID,
-            revision: detail.revision,
-            ...(part === 0 ? { summary: detail.summary } : {}),
-            calls: detail.calls.slice(
-              part * policy.publishrows,
-              (part + 1) * policy.publishrows,
-            ),
-          }, signal);
-        }
-      } else if (message.t === "deleteIntent") {
-        await sink!.deleteIntent(
-          message.sessionID,
-          message.intent,
-          message.phase,
-          message.connection,
-        );
-        post({ t: "accepted", run: run!, id: message.id });
-      }
-    } finally {
-      requestSignal = undefined;
-    }
-  });
+          policy,
+          wait,
+        )),
+  );
+  observeTask(task, message);
+  kick();
+}
+function observeTask(task: Promise<unknown>, message: ToWorker): void {
   void task.catch((error) => {
     if (!(error instanceof DOMException && error.name === "AbortError")) {
       post({
@@ -704,6 +946,5 @@ function handle(message: ToWorker): void {
       });
     }
   });
-  kick();
 }
 globalThis.onmessage = ({ data }: MessageEvent<ToWorker>) => handle(data);

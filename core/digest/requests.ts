@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { DigestScheduler } from "@otk/harness";
+import type {
+  DigestExecution,
+  DigestPriority,
+  DigestScheduler,
+} from "@otk/harness";
 /** Worker-local request lifetimes. Finished/unknown cancellation is a no-op. */
 export class DigestRequests {
   #active = new Map<
@@ -15,7 +19,8 @@ export class DigestRequests {
   run<T>(
     generation: string,
     id: number,
-    read: (signal: AbortSignal) => Promise<T>,
+    read: (signal: AbortSignal, execution: DigestExecution) => Promise<T>,
+    priority: DigestPriority = "interactive",
   ): Promise<T> {
     if (
       this.#closed || generation !== this.generation ||
@@ -23,9 +28,10 @@ export class DigestRequests {
     ) return Promise.reject(new Error("Invalid digest request lifetime"));
     this.#last = id;
     const controller = new AbortController();
-    const task = this.scheduler.execute(read, controller.signal).finally(() => {
-      this.#active.delete(id);
-    });
+    const task = this.scheduler.execute(read, controller.signal, priority)
+      .finally(() => {
+        this.#active.delete(id);
+      });
     this.#active.set(id, { controller, task });
     return task;
   }

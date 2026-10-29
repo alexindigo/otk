@@ -21,6 +21,37 @@ const policy = {
   retryms: 10,
   busyms: 100,
 };
+test("catalog reconciliation yields committed bounded chunks before admitting the remaining identities", async () => {
+  let previous = 0, maximum = 0, interleaved = 0;
+  const f: Awaited<ReturnType<typeof fixture>> = await fixture(
+    async (readiness) => {
+      const value = await readiness;
+      const count = f.values.size;
+      maximum = Math.max(maximum, count - previous);
+      if (count > 0 && count < 11) interleaved++;
+      previous = count;
+      return value;
+    },
+  );
+  try {
+    for (let i = 0; i < 10; i++) {
+      f.native.prepare(
+        "INSERT INTO session VALUES(?,NULL,'/p','p','More',1,2,NULL)",
+      ).run(`ses_more${i}`);
+    }
+    await f.sink.catalog(new AbortController().signal);
+    maximum = Math.max(maximum, f.values.size - previous);
+    assertEquals(f.values.size, 11);
+    assertEquals(
+      maximum <= policy.batch,
+      true,
+      `unbounded catalog commit: ${maximum}`,
+    );
+    assertEquals(interleaved > 0, true);
+  } finally {
+    f.close();
+  }
+});
 test("accepted deletion is durable without inventory, idempotent, generation-fenced and resurrectable", async () => {
   const f = await fixture();
   try {
@@ -55,7 +86,10 @@ test("accepted deletion is durable without inventory, idempotent, generation-fen
     f.close();
   }
 });
-async function fixture() {
+async function fixture(
+  wait?: <T>(readiness: Promise<T>) => Promise<T>,
+  admission?: (signal: AbortSignal) => Promise<() => void>,
+) {
   const root = await tempDir("native-digest-");
   const path = join(root, "native.db");
   const native = new DatabaseSync(path);
@@ -179,6 +213,7 @@ async function fixture() {
       throw new Error(`Unexpected native request ${path}`);
     }) as typeof fetch,
     (path) => new CountedDb(path),
+    { wait, admission },
   );
   const seed = (
     id: string,
@@ -250,6 +285,176 @@ async function fixture() {
       derived.close();
     },
   };
+}
+
+test("yielded native hashing retains bounded resource admission instead of starting every queued batch", async () => {
+  let busy = false, admissions = 0, active = 0, maximum = 0;
+  const permission: (() => void)[] = [];
+  const f = await fixture(undefined, async () => {
+    admissions++;
+    if (busy) await new Promise<void>((resolve) => permission.push(resolve));
+    busy = true;
+    return () => {
+      busy = false;
+      permission.shift()?.();
+    };
+  });
+  f.native.exec(
+    "INSERT INTO session VALUES('ses_two',NULL,'/p','p','Two',3,3,NULL)",
+  );
+  f.seed("a", .25, 10);
+  f.seed("b", .25, 10);
+  f.seed("c", .25, 10);
+  f.seed("d", .25, 10);
+  f.native.exec(
+    "UPDATE message SET session_id='ses_two' WHERE id IN ('c','d')",
+  );
+  const signal = new AbortController().signal;
+  await f.sink.catalog(signal);
+  admissions = 0;
+  const entered = Promise.withResolvers<void>(),
+    release = Promise.withResolvers<void>();
+  const original = crypto.subtle.digest;
+  crypto.subtle.digest = async (
+    ...args: Parameters<SubtleCrypto["digest"]>
+  ) => {
+    active++;
+    maximum = Math.max(maximum, active);
+    entered.resolve();
+    try {
+      await release.promise;
+      return await original.apply(crypto.subtle, args);
+    } finally {
+      active--;
+    }
+  };
+  const work = ["opcv1-ses_one", "opcv1-ses_two"].map((sessionID) =>
+    f.sink.step(
+      { provider: f.sink.identity, sessionID, updated: 2, revision: 1 },
+      { rows: 2, until: performance.now() + 8 },
+      signal,
+    )
+  );
+  const outcome = Promise.allSettled(work);
+  try {
+    await entered.promise;
+    assertEquals(
+      admissions >= 1,
+      true,
+      "Native CPU work bypassed resource permission",
+    );
+    assertEquals(
+      maximum <= 2,
+      true,
+      "More than one bounded native hash batch started",
+    );
+  } finally {
+    release.resolve();
+    await outcome;
+    crypto.subtle.digest = original;
+    f.close();
+  }
+});
+
+test("essential scalar metadata proves native identity without waiting for the complete inventory", async () => {
+  const entered = Promise.withResolvers<void>(),
+    release = Promise.withResolvers<void>();
+  let hold = true;
+  const f = await fixture(async <T>(readiness: Promise<T>) => {
+    const value = await readiness;
+    if (hold && value === undefined) {
+      hold = false;
+      entered.resolve();
+      await release.promise;
+    }
+    return value;
+  });
+  f.native.exec(
+    "INSERT INTO session VALUES('ses_two',NULL,'/p','p','Two',3,3,NULL); INSERT INTO session VALUES('ses_three',NULL,'/p','p','Three',4,4,NULL)",
+  );
+  f.seed("a", .25, 10);
+  const signal = new AbortController().signal;
+  const catalog = f.sink.catalog(signal);
+  try {
+    await entered.promise;
+    const metadata = await f.sink.transcriptMetadata(
+      "opcv1-ses_one",
+      ["user"],
+      signal,
+    );
+    assertEquals(metadata.boundaries, [{
+      turnID: "user",
+      firstID: "a",
+      lastID: "a",
+      complete: true,
+    }]);
+  } finally {
+    release.resolve();
+    await catalog;
+    f.close();
+  }
+});
+
+for (
+  const change of [
+    "deletion",
+    "newer scalar baseline",
+    "newer scalar baseline after failed hash",
+  ] as const
+) {
+  test(`a yielded header hash cannot overwrite ${change} committed by an essential continuation`, async () => {
+    const entered = Promise.withResolvers<void>(),
+      release = Promise.withResolvers<void>();
+    let hold = false;
+    const f = await fixture(async <T>(readiness: Promise<T>) => {
+      const value = await readiness;
+      if (hold) {
+        hold = false;
+        entered.resolve();
+        await release.promise;
+        if (change === "newer scalar baseline after failed hash") {
+          throw new Error("superseded hash failure");
+        }
+      }
+      return value;
+    });
+    let work: Promise<string | undefined> | undefined;
+    try {
+      f.seed("a", .25, 10);
+      const signal = new AbortController().signal;
+      await f.sink.catalog(signal);
+      hold = true;
+      work = f.sink.step(
+        {
+          provider: f.sink.identity,
+          sessionID: "opcv1-ses_one",
+          updated: 2,
+          revision: 1,
+        },
+        { rows: 2, until: performance.now() + 8 },
+        signal,
+      );
+      await entered.promise;
+      if (change === "deletion") {
+        await f.sink.deleted(0, "opcv1-ses_one", 2);
+      } else {
+        f.seed("a", .75, 20);
+        await f.scan();
+      }
+      release.resolve();
+      await work;
+      if (change === "deletion") {
+        assertEquals(f.values.get("opcv1-ses_one")!.deleted?.how, "provider");
+      } else {
+        assertEquals(f.values.get("opcv1-ses_one")!.summary.total!.cost, .75);
+        assertEquals(f.values.get("opcv1-ses_one")!.summary.state, "ready");
+      }
+    } finally {
+      release.resolve();
+      await work;
+      f.close();
+    }
+  });
 }
 
 test("a newly created API identity does not turn a matching paged native inventory into foreign-file fallback", async () => {

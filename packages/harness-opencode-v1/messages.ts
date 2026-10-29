@@ -40,7 +40,7 @@ export class Messages {
       `/session/${encodeURIComponent(ids.decode(id))}/message`,
       { query: { directory, limit, before }, signal },
     );
-    const items: NativeMessage[] = await response.json();
+    const items: NativeMessage[] = await this.client.wait(response.json());
     const next = response.headers.get("x-next-cursor") ?? undefined;
     if (next && (next === before || !items.length)) {
       throw new Error("Harness message pagination did not advance");

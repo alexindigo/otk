@@ -44,7 +44,7 @@ memoryreserve = 134217728 # OTK_DIGEST_MEMORYRESERVE — free system bytes reser
 maxpending = 512 # OTK_DIGEST_MAXPENDING — fine-grained keys before full-session reconciliation
 publishrows = 64 # OTK_DIGEST_PUBLISHROWS — records per worker publication
 retryms = 1000 # OTK_DIGEST_RETRYMS — pressure/error wake-up in milliseconds, not polling
-busyms = 100 # OTK_DIGEST_BUSYMS — derived SQLite lock wait in milliseconds
+busyms = 100 # OTK_DIGEST_BUSYMS — cooperative derived SQLite lock-readiness wait budget in milliseconds
 
 # Memory-only transcript snapshot/replay policy (server and browser).
 [messages]

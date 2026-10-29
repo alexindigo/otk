@@ -87,6 +87,7 @@ test("interactive reads preempt the actual duty wait while background retains it
     clock = 40;
     sleeps[1].release();
     await next;
+    await scheduler.tick();
     assertEquals(seen, ["tstv1-first", "interactive", "tstv1-next"]);
   } finally {
     await scheduler.stop();

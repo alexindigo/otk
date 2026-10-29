@@ -12,6 +12,7 @@ export { OpencodeV1DigestSink } from "./digest.ts";
 export type {
   DigestCheckpoint,
   DigestSnapshot,
+  OpencodeV1DigestReadiness,
   OpencodeV1DigestStorage,
 } from "./digest.ts";
 export { DigestNativeDb } from "./digest-db.ts";

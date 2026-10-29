@@ -5,6 +5,7 @@ import { bounded, test } from "../../../tests/support/resources.ts";
 for (const interruptible of [true, undefined]) {
   test(`held background ${interruptible ? "helper" : "header"} reads yield their scheduler slot to essential parent metadata`, async () => {
     const entered = Promise.withResolvers<void>();
+    const ready = Promise.withResolvers<string | undefined>();
     let attempts = 0;
     const scheduler = new DigestScheduler({
       batch: 2,
@@ -21,14 +22,16 @@ for (const interruptible of [true, undefined]) {
       catalog: () => Promise.resolve({ entries: [], authoritative: true }),
       detail: () => Promise.reject(),
       close() {},
-      step(_job, _budget, signal) {
+      step(_job, _budget, signal, execution) {
         attempts++;
         entered.resolve();
-        if (attempts > 1) return Promise.resolve(undefined);
-        return new Promise((_resolve, reject) =>
-          signal.addEventListener("abort", () => reject(signal.reason), {
-            once: true,
-          })
+        const abort = () => ready.reject(signal.reason);
+        signal.addEventListener("abort", abort, { once: true });
+        return execution.wait(
+          ready.promise.finally(() =>
+            signal.removeEventListener("abort", abort)
+          ),
+          "io",
         );
       },
     });
@@ -46,17 +49,45 @@ for (const interruptible of [true, undefined]) {
         () => Promise.resolve("parent metadata"),
         new AbortController().signal,
       );
-      const outcome = read.then((value) => ({ value }), (error) => ({ error }));
+      let delivered = false;
+      const outcome = read.then((value) => ({ value }), (error) => ({ error }))
+        .finally(() => {
+          delivered = true;
+        });
       await bounded("helper yields", work, 1000);
-      await scheduler.tick();
+      await bounded(
+        "parent metadata admitted",
+        (async () => {
+          while (!delivered) {
+            await scheduler.tick();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
+        })(),
+        1000,
+      );
       assertEquals(await outcome, { value: "parent metadata" });
       assertEquals(
         scheduler.queued,
         1,
-        "Cancelled helper must retain its reconciliation intent",
+        "Waiting helper must retain its reconciliation intent",
       );
-      await scheduler.tick();
-      assertEquals(attempts, 2);
+      assertEquals(
+        attempts,
+        1,
+        "A CPU-only read needs no native I/O preemption",
+      );
+      ready.resolve(undefined);
+      await bounded(
+        "helper resumes without losing progress",
+        (async () => {
+          while (scheduler.queued) {
+            await scheduler.tick();
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
+        })(),
+        1000,
+      );
+      assertEquals(attempts, 1);
       assertEquals(scheduler.queued, 0);
     } finally {
       await scheduler.stop();

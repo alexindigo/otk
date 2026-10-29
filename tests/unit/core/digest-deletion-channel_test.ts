@@ -118,6 +118,7 @@ test("accepted deletions survive a worker restart, coalesce in bounded batches a
     const restarted = new DigestBridge(options);
     try {
       await restarted.start();
+      await waitFor(() => deleted.size, (n) => n === 3);
       assertEquals(deleted.size, 3);
     } finally {
       await restarted.stop();

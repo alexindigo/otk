@@ -13,6 +13,13 @@ export interface DigestPressure {
   sliceMs: number;
   nativeReads?: Record<string, number>;
 }
+export interface DigestWorkerValue {
+  sessionID: string;
+  revision: number;
+  part: number;
+  last: boolean;
+  delta: DigestDelta;
+}
 export type ToWorker =
   & { run: string; id: number }
   & (
@@ -66,14 +73,8 @@ export type FromWorker =
       authoritative: boolean;
       hints?: string[];
     }
-    | {
-      t: "digest";
-      sessionID: string;
-      revision: number;
-      part: number;
-      last: boolean;
-      delta: DigestDelta;
-    }
+    | ({ t: "digest" } & DigestWorkerValue)
+    | { t: "digests"; values: DigestWorkerValue[] }
     | {
       t: "detail";
       sessionID: string;

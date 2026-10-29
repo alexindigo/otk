@@ -26,6 +26,7 @@ import { type DigestHeader, DigestNativeDb } from "./digest-db.ts";
 import type { HelperToolRow } from "./digest-db.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { reportedNumber } from "./usage-values.ts";
+import { NativeReadiness } from "./readiness.ts";
 
 export interface DigestSnapshot {
   helper?: HelperSummary;
@@ -53,6 +54,13 @@ export interface OpencodeV1DigestStorage {
   ): void;
   publish(value: DigestPublication): void | Promise<void>;
   diagnostic(id: string | undefined, error: unknown): void;
+}
+export interface OpencodeV1DigestReadiness {
+  wait?<T>(readiness: Promise<T>, join?: boolean): Promise<T>;
+  ioWait?<T>(readiness: Promise<T>, join?: boolean): Promise<T>;
+  retryable?(error: unknown): boolean;
+  admission?(signal: AbortSignal): Promise<() => void>;
+  work?(elapsedMs: number): void;
 }
 const categories = [
   "cost",
@@ -129,17 +137,14 @@ function fromInfo(info: Info): DigestHeader {
     cache_write: info.tokens?.cache?.write ?? null,
   });
 }
-async function baseline(
-  raw: DigestHeader,
+function baseline(
+  value: DigestHeader,
   generation: number,
-): Promise<Baseline> {
-  const value = header(raw);
+  digest: ArrayBuffer,
+): Baseline {
   const hash = [
     ...new Uint8Array(
-      await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(JSON.stringify(value)),
-      ),
+      digest,
     ),
   ].map((n) => n.toString(16).padStart(2, "0")).join("");
   return { ...value, hash, scan_generation: generation };
@@ -157,6 +162,8 @@ export class OpencodeV1DigestSink implements DigestSink {
   readonly identity = "opencode-v1";
   #client: Client;
   #messages: Messages;
+  #compute: NativeReadiness;
+  #work?: (elapsedMs: number) => void;
   #native?: DigestNativeDb;
   #closed = false;
   #connection = 0;
@@ -166,6 +173,16 @@ export class OpencodeV1DigestSink implements DigestSink {
   #observed = new Map<string, number>();
   #deletions = new Map<string, number>();
   #helperObserved = new Map<string, number>();
+  #catalogWork?: {
+    connection: number;
+    signal: AbortSignal;
+    reconcile: boolean;
+    task: Promise<
+      { entries: SessionMetadata[]; authoritative: boolean; hints?: string[] }
+    >;
+  };
+  readonly wait: <T>(readiness: Promise<T>, join?: boolean) => Promise<T>;
+  readonly retryable: (error: unknown) => boolean;
   constructor(
     readonly cfg: OpencodeV1Config,
     readonly policy: DigestPolicy,
@@ -173,8 +190,21 @@ export class OpencodeV1DigestSink implements DigestSink {
     fetcher = fetch,
     readonly openNative: (file: string) => DigestNativeDb = (file) =>
       new DigestNativeDb(file),
+    readiness: OpencodeV1DigestReadiness = {},
   ) {
-    this.#client = new Client(cfg.harness, fetcher);
+    this.wait = readiness.wait ?? ((value) => value);
+    this.retryable = readiness.retryable ?? (() => false);
+    this.#client = new Client(
+      cfg.harness,
+      fetcher,
+      readiness.ioWait ?? this.wait,
+      readiness.admission,
+    );
+    this.#compute = new NativeReadiness(
+      readiness.ioWait ?? this.wait,
+      readiness.admission,
+    );
+    this.#work = readiness.work;
     this.#messages = new Messages(
       this.#client,
       (id) => storage.read(id)?.metadata.directory,
@@ -210,8 +240,9 @@ export class OpencodeV1DigestSink implements DigestSink {
     cutoff?: string,
   ): Promise<import("@otk/harness").TranscriptMetadata> {
     signal.throwIfAborted();
-    if (this.#native && this.#nativeVerified) {
-      return this.#native.transcriptMetadata(sessionID, turns, cutoff);
+    const native = await this.#metadataSource(signal);
+    if (native) {
+      return native.transcriptMetadata(sessionID, turns, cutoff);
     }
     const boundaries = new Map<string, import("@otk/protocol").ReplyBoundary>();
     const wanted = new Set(turns);
@@ -262,6 +293,37 @@ export class OpencodeV1DigestSink implements DigestSink {
     }
     return { prompt, boundaries: [...boundaries.values()], cutoffCreated };
   }
+  /** Scalar demand can prove this file with one bounded identity sample; it
+   * neither waits for inventory exhaustion nor changes the scan cursor domain. */
+  async #metadataSource(
+    signal: AbortSignal,
+  ): Promise<DigestNativeDb | undefined> {
+    const native = this.#native;
+    if (!native) return;
+    if (this.#nativeVerified) return native;
+    const connection = this.#connection;
+    const response = await this.#client.request("/experimental/session", {
+      query: { limit: 1 },
+      signal,
+    });
+    const sample: Session[] = await this.wait(response.json());
+    signal.throwIfAborted();
+    if (
+      this.#native !== native || this.#connection !== connection ||
+      native.fileIdentity() !== native.identity
+    ) return;
+    const proof = native.lookup(sample.map((row) => ids.encode(row.id)));
+    const matches = sample.length
+      ? sample.every((row) =>
+        proof.some((value) =>
+          value.id === ids.encode(row.id) && value.directory === row.directory
+        )
+      )
+      : native.catalog("", 1).length === 0;
+    // Only the catalog owns #nativeVerified and SQL/API scan transitions. This
+    // read borrows a current proof without changing a background scan's mode.
+    return matches ? native : undefined;
+  }
   async #apiCatalog(signal: AbortSignal): Promise<SessionMetadata[]> {
     const result: SessionMetadata[] = [];
     const cursors = new Set<string>();
@@ -272,7 +334,7 @@ export class OpencodeV1DigestSink implements DigestSink {
         query: { limit: 200, cursor },
         signal,
       });
-      const rows: Session[] = await response.json();
+      const rows: Session[] = await this.wait(response.json());
       result.push(...rows.map((row) => mapIndex(row)));
       cursor = response.headers.get("x-next-cursor") ?? undefined;
       if (cursor && (!rows.length || cursors.has(cursor))) {
@@ -288,11 +350,60 @@ export class OpencodeV1DigestSink implements DigestSink {
   ): Promise<
     { entries: SessionMetadata[]; authoritative: boolean; hints?: string[] }
   > {
+    const connection = this.#connection;
+    for (;;) {
+      signal.throwIfAborted();
+      if (connection !== this.#connection) {
+        throw new Error("Native catalog generation was replaced");
+      }
+      const active = this.#catalogWork;
+      if (active) {
+        try {
+          const result = await this.wait(active.task);
+          signal.throwIfAborted();
+          if (
+            active.connection === connection && (active.reconcile || !reconcile)
+          ) return result;
+        } catch (error) {
+          signal.throwIfAborted();
+          if (!active.signal.aborted && active.connection === connection) {
+            throw error;
+          }
+        }
+        continue;
+      }
+      const task = this.#catalog(signal, reconcile);
+      const work = {
+        connection,
+        signal,
+        reconcile,
+        task: task.finally(() => {
+          if (this.#catalogWork === work) this.#catalogWork = undefined;
+        }),
+      };
+      this.#catalogWork = work;
+      return await work.task;
+    }
+  }
+  async #catalog(
+    signal: AbortSignal,
+    reconcile: boolean,
+  ): Promise<
+    { entries: SessionMetadata[]; authoritative: boolean; hints?: string[] }
+  > {
     if (this.#closed) throw new Error("Digest sink is closed");
+    const connection = this.#connection;
+    const current = () => {
+      signal.throwIfAborted();
+      if (connection !== this.#connection) {
+        throw new Error("Native catalog generation was replaced");
+      }
+    };
     const health = await this.#client.json<{ healthy: boolean }>(
       "/global/health",
       { signal },
     );
+    current();
     if (!health.healthy) throw new Error("Native provider is unavailable");
     const admitted = this.#observation;
     let entries: SessionMetadata[] | undefined;
@@ -308,7 +419,7 @@ export class OpencodeV1DigestSink implements DigestSink {
         const rows: SessionMetadata[] = [];
         let after = "";
         while (true) {
-          signal.throwIfAborted();
+          current();
           const page = db.catalog(after, this.policy.batch);
           if (!page.length) break;
           rows.push(...page);
@@ -316,14 +427,15 @@ export class OpencodeV1DigestSink implements DigestSink {
             empty.add(id);
           }
           after = ids.decode(page.at(-1)!.id);
-          await new Promise((resolve) => setTimeout(resolve, 0));
+          await this.wait(new Promise((resolve) => setTimeout(resolve, 0)));
         }
         // Health plus an API identity sample binds this configured file to the service.
         const response = await this.#client.request("/experimental/session", {
           query: { limit: 1 },
           signal,
         });
-        const sample: Session[] = await response.json();
+        const sample: Session[] = await this.wait(response.json());
+        current();
         const proof = db.lookup(sample.map((raw) => ids.encode(raw.id)));
         const sampleMatches = sample.length
           ? sample.every((raw) =>
@@ -361,7 +473,8 @@ export class OpencodeV1DigestSink implements DigestSink {
           empty.clear();
         }
       } catch (error) {
-        signal.throwIfAborted();
+        current();
+        if (this.retryable(error)) throw error;
         this.storage.diagnostic(undefined, error);
         this.#native?.close();
         this.#native = undefined;
@@ -370,121 +483,154 @@ export class OpencodeV1DigestSink implements DigestSink {
       }
     }
     entries ??= await this.#apiCatalog(signal);
-    signal.throwIfAborted();
+    current();
     const publications: DigestPublication[] = [];
-    this.storage.transaction(() => {
-      const old = this.storage.sql.prepare(
-        "SELECT generation FROM opcv1_inventory WHERE singleton=1",
-      ).get();
-      const generation = Number(old?.generation ?? 0) + 1;
+    const old = this.storage.sql.prepare(
+      "SELECT generation FROM opcv1_inventory WHERE singleton=1",
+    ).get();
+    const generation = Number(old?.generation ?? 0) + 1;
+    const present = this.storage.sql.prepare(
+      "INSERT INTO opcv1_presence VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET inventory_generation=excluded.inventory_generation",
+    );
+    const dirtyScan = this.storage.sql.prepare(
+      "SELECT dirty FROM opcv1_scan WHERE session_id=?",
+    );
+    const found = new Set(entries.map((entry) => entry.id));
+    const yieldChunk = async () => {
+      await this.wait(new Promise<void>((resolve) => setTimeout(resolve, 0)));
+      current();
+    };
+    for (let offset = 0; offset < entries.length; offset += this.policy.batch) {
+      current();
+      this.storage.transaction(() => {
+        for (
+          const metadata of entries!.slice(offset, offset + this.policy.batch)
+        ) {
+          present.run(metadata.id, generation);
+          const previous = this.storage.read(metadata.id);
+          // A pre-observation catalog row cannot revive an accepted retirement.
+          if (
+            previous?.deleted &&
+            (this.#observed.get(metadata.id) ?? 0) > admitted
+          ) continue;
+          const changed = previous &&
+            [
+              "title",
+              "parentID",
+              "directory",
+              "projectID",
+              "timeUpdated",
+              "archived",
+            ].some((key) =>
+              Reflect.get(metadata, key) !== Reflect.get(previous.metadata, key)
+            );
+          if (previous && !previous.deleted && !reconcile && !changed) continue;
+          const needsScan = reconcile || previous?.deleted ||
+            previous?.metadata.timeUpdated !== metadata.timeUpdated;
+          const delta = previous
+            ? {
+              summary: {
+                ...previous.summary,
+                state: needsScan
+                  ? "digesting" as const
+                  : previous.summary.state,
+                revision: previous.summary.revision + 1,
+              },
+              turns: { upsert: {}, remove: [] },
+              deleted: null,
+            }
+            : emptyDelta();
+          // This is an authoritative empty scan, not an unknown total guessed as
+          // zero. Existing nonempty baselines still take the normal sweep path.
+          const dirty = dirtyScan.get(metadata.id)?.dirty;
+          if (
+            empty.has(metadata.id) && !dirty &&
+            (!previous || previous.summary.messageCount === 0)
+          ) {
+            delta.summary = {
+              state: "ready",
+              revision: delta.summary.revision,
+              digestedAt: Date.now(),
+              nativeUpdatedAt: metadata.timeUpdated,
+              messageCount: 0,
+              total: {
+                calls: 0,
+                cost: 0,
+                tokens: {
+                  input: 0,
+                  output: 0,
+                  reasoning: 0,
+                  cache: { read: 0, write: 0 },
+                },
+                contextPeak: 0,
+              },
+            };
+          }
+          this.storage.write(metadata, delta);
+          publications.push({
+            sessionID: metadata.id,
+            revision: delta.summary.revision,
+            delta,
+          });
+        }
+      });
+      await yieldChunk();
+    }
+    const retire = (batch: DigestSnapshot[]) =>
+      this.storage.transaction(() => {
+        for (const record of batch) {
+          const previous = this.storage.read(record.metadata.id);
+          if (!previous) continue;
+          if (
+            !found.has(previous.metadata.id) && !previous.deleted &&
+            (this.#observed.get(previous.metadata.id) ?? 0) <= admitted
+          ) {
+            const intent = this.storage.sql.prepare(
+              "SELECT confirmed FROM opcv1_delete_intents WHERE session_id=? AND connection_generation=?",
+            ).get(previous.metadata.id, this.#connection);
+            const delta: DigestDelta = {
+              summary: {
+                ...previous.summary,
+                revision: previous.summary.revision + 1,
+              },
+              turns: { upsert: {}, remove: [] },
+              deleted: {
+                at: Date.now(),
+                how: intent?.confirmed === 1 ? "otk" : "provider",
+              },
+            };
+            this.storage.write(previous.metadata, delta);
+            publications.push({
+              sessionID: previous.metadata.id,
+              revision: delta.summary.revision,
+              delta,
+            });
+          }
+        }
+      });
+    let missing: DigestSnapshot[] = [];
+    for (const previous of this.storage.known()) {
+      current();
+      missing.push(previous);
+      if (missing.length === this.policy.batch) {
+        retire(missing);
+        missing = [];
+        await yieldChunk();
+      }
+    }
+    if (missing.length) retire(missing);
+    current();
+    this.storage.transaction(() =>
       this.storage.sql.prepare(
         "INSERT INTO opcv1_inventory VALUES(1,?,?,?) ON CONFLICT(singleton) DO UPDATE SET generation=excluded.generation,completed_at=excluded.completed_at,database_identity=excluded.database_identity",
       ).run(
         generation,
         Date.now(),
         this.#nativeVerified ? this.#native?.identity ?? null : null,
-      );
-      const present = this.storage.sql.prepare(
-        "INSERT INTO opcv1_presence VALUES(?,?) ON CONFLICT(session_id) DO UPDATE SET inventory_generation=excluded.inventory_generation",
-      );
-      const found = new Set(entries!.map((entry) => entry.id));
-      for (const metadata of entries!) {
-        present.run(metadata.id, generation);
-        const previous = this.storage.read(metadata.id);
-        // A pre-observation catalog row cannot revive an accepted retirement.
-        if (
-          previous?.deleted && (this.#observed.get(metadata.id) ?? 0) > admitted
-        ) continue;
-        const changed = previous &&
-          [
-            "title",
-            "parentID",
-            "directory",
-            "projectID",
-            "timeUpdated",
-            "archived",
-          ].some((key) =>
-            Reflect.get(metadata, key) !== Reflect.get(previous.metadata, key)
-          );
-        if (previous && !previous.deleted && !reconcile && !changed) continue;
-        const needsScan = reconcile || previous?.deleted ||
-          previous?.metadata.timeUpdated !== metadata.timeUpdated;
-        const delta = previous
-          ? {
-            summary: {
-              ...previous.summary,
-              state: needsScan ? "digesting" as const : previous.summary.state,
-              revision: previous.summary.revision + 1,
-            },
-            turns: { upsert: {}, remove: [] },
-            deleted: null,
-          }
-          : emptyDelta();
-        // This is an authoritative empty scan, not an unknown total guessed as
-        // zero. Existing nonempty baselines still take the normal sweep path.
-        const dirty = this.storage.sql.prepare(
-          "SELECT dirty FROM opcv1_scan WHERE session_id=?",
-        ).get(metadata.id)?.dirty;
-        if (
-          empty.has(metadata.id) && !dirty &&
-          (!previous || previous.summary.messageCount === 0)
-        ) {
-          delta.summary = {
-            state: "ready",
-            revision: delta.summary.revision,
-            digestedAt: Date.now(),
-            nativeUpdatedAt: metadata.timeUpdated,
-            messageCount: 0,
-            total: {
-              calls: 0,
-              cost: 0,
-              tokens: {
-                input: 0,
-                output: 0,
-                reasoning: 0,
-                cache: { read: 0, write: 0 },
-              },
-              contextPeak: 0,
-            },
-          };
-        }
-        this.storage.write(metadata, delta);
-        publications.push({
-          sessionID: metadata.id,
-          revision: delta.summary.revision,
-          delta,
-        });
-      }
-      for (const previous of this.storage.known()) {
-        if (
-          !found.has(previous.metadata.id) && !previous.deleted &&
-          (this.#observed.get(previous.metadata.id) ?? 0) <= admitted
-        ) {
-          const intent = this.storage.sql.prepare(
-            "SELECT confirmed FROM opcv1_delete_intents WHERE session_id=? AND connection_generation=?",
-          ).get(previous.metadata.id, this.#connection);
-          const delta: DigestDelta = {
-            summary: {
-              ...previous.summary,
-              revision: previous.summary.revision + 1,
-            },
-            turns: { upsert: {}, remove: [] },
-            deleted: {
-              at: Date.now(),
-              how: intent?.confirmed === 1 ? "otk" : "provider",
-            },
-          };
-          this.storage.write(previous.metadata, delta);
-          publications.push({
-            sessionID: previous.metadata.id,
-            revision: delta.summary.revision,
-            delta,
-          });
-        }
-      }
-    });
+      )
+    );
     for (const publication of publications) {
-      signal.throwIfAborted();
+      current();
       await this.storage.publish(publication);
     }
     let hints: string[] | undefined;
@@ -798,9 +944,15 @@ export class OpencodeV1DigestSink implements DigestSink {
     signal.throwIfAborted();
     const snapshot = this.storage.read(id);
     if (!snapshot || snapshot.deleted) return;
+    const admittedConnection = this.#connection;
     let scan = this.storage.sql.prepare(
       "SELECT * FROM opcv1_scan WHERE session_id=?",
     ).get(id) as unknown as Scan | undefined;
+    const predecessor = {
+      generation: scan?.scan_generation ?? 0,
+      after: scan?.after_message ?? null,
+      complete: scan?.complete_revision ?? null,
+    };
     const initialize = !scan;
     scan ??= {
       after_message: null,
@@ -819,6 +971,29 @@ export class OpencodeV1DigestSink implements DigestSink {
     const targets = targeted
       ? job.messages!.slice(targetOffset, targetOffset + budget.rows)
       : [];
+    const authority = () => {
+      const saved = this.storage.read(id);
+      if (!saved || saved.deleted || this.#connection !== admittedConnection) {
+        return;
+      }
+      const checkpoint = this.storage.sql.prepare(
+        "SELECT * FROM opcv1_scan WHERE session_id=?",
+      ).get(id) as unknown as Scan | undefined;
+      const changed =
+        saved.metadata.directory !== snapshot.metadata.directory ||
+        (native && native !== this.#native) ||
+        (checkpoint?.scan_generation ?? 0) !== predecessor.generation ||
+        (checkpoint?.after_message ?? null) !== predecessor.after ||
+        (checkpoint?.complete_revision ?? null) !== predecessor.complete;
+      return {
+        saved,
+        changed,
+        cursor:
+          checkpoint?.complete_revision !== null && checkpoint?.dirty === 0
+            ? undefined
+            : "reconcile",
+      };
+    };
     const restart = (!job.cursor || job.cursor === "reconcile") && !targeted &&
       (!scan.after_message || scan.complete_revision !== null);
     if (restart) {
@@ -864,6 +1039,10 @@ export class OpencodeV1DigestSink implements DigestSink {
       }
     } catch (error) {
       signal.throwIfAborted();
+      if (this.retryable(error)) throw error;
+      const current = authority();
+      if (!current) return;
+      if (current.changed) return current.cursor;
       if (native) {
         this.storage.diagnostic(id, error);
         native.close();
@@ -881,15 +1060,15 @@ export class OpencodeV1DigestSink implements DigestSink {
       }
       const delta: DigestDelta = {
         summary: {
-          ...snapshot.summary,
+          ...current.saved.summary,
           state: "unavailable",
-          revision: snapshot.summary.revision + 1,
+          revision: current.saved.summary.revision + 1,
         },
         turns: { upsert: {}, remove: [] },
         deleted: null,
       };
       this.storage.transaction(() =>
-        this.storage.write(snapshot.metadata, delta)
+        this.storage.write(current.saved.metadata, delta)
       );
       this.storage.diagnostic(id, error);
       await this.storage.publish({
@@ -901,19 +1080,39 @@ export class OpencodeV1DigestSink implements DigestSink {
     }
     let rows: Baseline[];
     try {
-      rows = await Promise.all(raw.map((row) => baseline(row, generation)));
+      const values = raw.map(header);
+      const hashes = await this.#compute.run(signal, () => {
+        const started = performance.now();
+        return Promise.all(
+          values.map((value) =>
+            crypto.subtle.digest(
+              "SHA-256",
+              new TextEncoder().encode(JSON.stringify(value)),
+            )
+          ),
+        ).then((hashes) => {
+          this.#work?.(performance.now() - started);
+          return hashes;
+        });
+      });
+      rows = values.map((value, i) => baseline(value, generation, hashes[i]));
     } catch (error) {
+      signal.throwIfAborted();
+      if (this.retryable(error)) throw error;
+      const current = authority();
+      if (!current) return;
+      if (current.changed) return current.cursor;
       const delta: DigestDelta = {
         summary: {
-          ...snapshot.summary,
+          ...current.saved.summary,
           state: "unavailable",
-          revision: snapshot.summary.revision + 1,
+          revision: current.saved.summary.revision + 1,
         },
         turns: { upsert: {}, remove: [] },
         deleted: null,
       };
       this.storage.transaction(() =>
-        this.storage.write(snapshot.metadata, delta)
+        this.storage.write(current.saved.metadata, delta)
       );
       this.storage.diagnostic(id, error);
       await this.storage.publish({
@@ -924,6 +1123,10 @@ export class OpencodeV1DigestSink implements DigestSink {
       return;
     }
     signal.throwIfAborted();
+    const current = authority();
+    if (!current) return;
+    if (current.changed) return current.cursor;
+    const currentSaved = current.saved;
     let delta!: DigestDelta;
     this.storage.transaction(() => {
       // Scan admission and its first baseline/checkpoint share the commit. A
@@ -974,7 +1177,7 @@ export class OpencodeV1DigestSink implements DigestSink {
       const ready = !next && current.dirty === 0 &&
         Number(current.observed_revision) === observed;
       if (!next && !ready) next = "reconcile";
-      const revision = snapshot.summary.revision + 1;
+      const revision = currentSaved.summary.revision + 1;
       const upsert: Record<string, UsageSummary> = {}, remove: string[] = [];
       for (const turn of affected) {
         if (turn) {
@@ -1035,7 +1238,7 @@ export class OpencodeV1DigestSink implements DigestSink {
         ready ? 0 : Number(current.dirty),
         id,
       );
-      this.storage.write(snapshot.metadata, delta, {
+      this.storage.write(currentSaved.metadata, delta, {
         lastMessage: rows.at(-1)?.message_id ?? null,
         lastHash: rows.at(-1)?.hash ?? null,
         generation,
@@ -1072,6 +1275,7 @@ export class OpencodeV1DigestSink implements DigestSink {
   ): Promise<string | undefined> {
     const id = job.sessionID, snapshot = this.storage.read(id);
     if (!snapshot || snapshot.deleted) return;
+    const admittedConnection = this.#connection;
     const observation = this.#helperObserved.get(id) ?? 0;
     // Header metadata and helper labels share the worker connection and scheduler,
     // but ordinary summary jobs never acquire parts.
@@ -1098,6 +1302,10 @@ export class OpencodeV1DigestSink implements DigestSink {
     let scan = this.storage.sql.prepare(
       "SELECT * FROM opcv1_helper_scan WHERE session_id=?",
     ).get(id);
+    const predecessor = {
+      generation: Number(scan?.scan_generation ?? 0),
+      after: scan?.after_part ?? null,
+    };
     const restart = !scan?.after_part || !job.cursor ||
       job.cursor === "tools" || job.cursor === "reconcile";
     const generation = Number(scan?.scan_generation ?? 0) + (restart ? 1 : 0);
@@ -1153,6 +1361,11 @@ export class OpencodeV1DigestSink implements DigestSink {
       }
     } catch (error) {
       signal.throwIfAborted();
+      if (this.retryable(error)) throw error;
+      if (
+        this.#connection !== admittedConnection ||
+        this.storage.read(id)?.deleted
+      ) return;
       this.storage.diagnostic(id, error);
       const saved = this.storage.read(id)!;
       const revision = saved.summary.revision + 1;
@@ -1167,6 +1380,16 @@ export class OpencodeV1DigestSink implements DigestSink {
       return;
     }
     signal.throwIfAborted();
+    if (
+      this.#connection !== admittedConnection || this.storage.read(id)?.deleted
+    ) return;
+    const checkpoint = this.storage.sql.prepare(
+      "SELECT scan_generation,after_part FROM opcv1_helper_scan WHERE session_id=?",
+    ).get(id);
+    if (
+      Number(checkpoint?.scan_generation ?? 0) !== predecessor.generation ||
+      (checkpoint?.after_part ?? null) !== predecessor.after
+    ) return "reconcile";
     let delta!: DigestDelta;
     this.storage.transaction(() => {
       if (restart) {
@@ -1311,7 +1534,9 @@ export class OpencodeV1DigestSink implements DigestSink {
           until: performance.now() + this.policy.slicems,
         }, signal);
         saved = this.storage.read(id)!;
-        if (cursor) await new Promise((resolve) => setTimeout(resolve, 0));
+        if (cursor) {
+          await this.wait(new Promise((resolve) => setTimeout(resolve, 0)));
+        }
       } while (cursor);
       if (saved.summary.state !== "ready") {
         throw new Error("Usage metadata is unavailable");
@@ -1379,11 +1604,11 @@ export class OpencodeV1DigestSink implements DigestSink {
             });
           }
           part = tools.at(-1)!.id;
-          await new Promise((resolve) => setTimeout(resolve, 0));
+          await this.wait(new Promise((resolve) => setTimeout(resolve, 0)));
           signal.throwIfAborted();
         }
         after = rows.at(-1)!.message_id;
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        await this.wait(new Promise((resolve) => setTimeout(resolve, 0)));
       }
     } else {for await (
         const message of this.#messages.scan(id, metadata.directory, signal)

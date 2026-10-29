@@ -93,6 +93,16 @@ export interface DigestBudget {
   rows: number;
   until: number;
 }
+/** A bounded executing turn. Readiness waits release it and re-admit at priority. */
+export interface DigestExecution {
+  readonly priority: DigestPriority;
+  readonly workms: number;
+  wait<T>(readiness: PromiseLike<T>, kind?: "readiness" | "io"): Promise<T>;
+  /** Cleanup joins real I/O settlement before releasing an acquired permission. */
+  join<T>(readiness: PromiseLike<T>): Promise<T>;
+  /** Account bounded CPU work performed off-thread, excluding readiness waits. */
+  charge(elapsedMs: number): void;
+}
 export interface DigestSink {
   identity: string;
   catalog(
@@ -104,6 +114,7 @@ export interface DigestSink {
     job: DigestJob,
     budget: DigestBudget,
     signal: AbortSignal,
+    execution: DigestExecution,
   ): Promise<string | undefined>;
   detail(
     id: string,

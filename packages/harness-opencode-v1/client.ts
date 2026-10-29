@@ -2,6 +2,8 @@
 import type { OpencodeV1Config } from "./config.ts";
 import { HarnessError } from "@otk/harness";
 import { errorMessage } from "@otk/protocol";
+import { finiteResponse } from "./finite-response.ts";
+import { NativeReadiness } from "./readiness.ts";
 // Native diagnostics name opaque resources; display copy never interpolates them.
 const nativeMessages = new Map<string, string>([
   ["SessionBusyError", "The session is working. Try again when it finishes."],
@@ -63,10 +65,17 @@ export class HttpFailure extends HarnessError {
   }
 }
 export class Client {
+  readonly readiness: NativeReadiness;
   constructor(
     readonly cfg: OpencodeV1Config["harness"],
     readonly fetcher: typeof fetch = fetch,
-  ) {}
+    readonly wait: <T>(readiness: Promise<T>, join?: boolean) => Promise<T> = (
+      readiness,
+    ) => readiness,
+    readonly admission?: (signal: AbortSignal) => Promise<() => void>,
+  ) {
+    this.readiness = new NativeReadiness(wait, admission);
+  }
   url(
     path: string,
     query: Record<string, string | number | undefined> = {},
@@ -98,21 +107,33 @@ export class Client {
     if (options.body !== undefined) {
       headers.set("Content-Type", "application/json");
     }
-    let signal = options.signal;
-    if (!options.stream && options.timeout !== null) {
-      const deadline = AbortSignal.timeout(options.timeout ?? 15_000);
-      signal = signal ? AbortSignal.any([signal, deadline]) : deadline;
-    }
-    const response = await this.fetcher(this.url(path, options.query), {
-      method: options.method || "GET",
-      headers,
-      body: options.body === undefined
-        ? undefined
-        : JSON.stringify(options.body),
-      signal,
-    });
+    const read = () => {
+      // A native deadline begins at I/O admission, not while waiting for permission.
+      let signal = options.signal;
+      if (!options.stream && options.timeout !== null) {
+        const deadline = AbortSignal.timeout(options.timeout ?? 15_000);
+        signal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+      }
+      signal?.throwIfAborted();
+      return this.fetcher(this.url(path, options.query), {
+        method: options.method || "GET",
+        headers,
+        body: options.body === undefined
+          ? undefined
+          : JSON.stringify(options.body),
+        signal,
+      }).then((value) =>
+        this.admission && !options.stream ? finiteResponse(value) : value
+      );
+    };
+    const response = options.stream
+      ? await this.wait(read())
+      : await this.readiness.run(
+        options.signal ?? new AbortController().signal,
+        read,
+      );
     if (!response.ok) {
-      const text = await response.text();
+      const text = await this.wait(response.text());
       const fallback = `Request failed (HTTP ${response.status}).`;
       let message = text.trim() || fallback;
       let kind: string | undefined, ref: string | undefined;
@@ -170,6 +191,8 @@ export class Client {
     options: Parameters<Client["request"]>[1] = {},
   ): Promise<T> {
     const response = await this.request(path, options);
-    return response.status === 204 ? undefined as T : await response.json();
+    return response.status === 204
+      ? undefined as T
+      : await this.wait(response.json());
   }
 }

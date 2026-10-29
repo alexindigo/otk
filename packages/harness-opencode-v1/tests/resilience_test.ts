@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { opencodeV1SessionID as ids } from "../ids.ts";
 import { test } from "../../../tests/support/resources.ts";
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import { requireCapability, SessionIndex } from "@otk/harness";
 import type { ContentOp } from "@otk/protocol";
@@ -372,9 +372,10 @@ test("optional color retries retain independent subscribers and cleared generati
   colors.clear();
   const retired = colors.get("/project");
   colors.peek("/project", "retired");
+  const cancelled = assertRejects(() => retired, DOMException, "aborted");
   colors.clear();
   held[2].resolve(Response.json([{ name: "build", color: "#abcdef" }]));
-  await retired;
+  await cancelled;
   assertEquals(deliveries, [["first", "second"]]);
 });
 

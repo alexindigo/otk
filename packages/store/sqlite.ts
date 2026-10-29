@@ -9,6 +9,7 @@ import {
 } from "./migrations.ts";
 
 export interface SqliteOptions {
+  /** Zero is fail-fast: an external cooperative owner waits/retries lock readiness. */
   busyms: number;
   observerError?: (error: unknown) => void;
 }
@@ -26,7 +27,7 @@ export class SqliteDb {
     if (!/^[a-zA-Z0-9_-]+\.db$/.test(filename)) {
       throw new TypeError("Invalid database filename");
     }
-    if (!Number.isSafeInteger(options.busyms) || options.busyms < 1) {
+    if (!Number.isSafeInteger(options.busyms) || options.busyms < 0) {
       throw new TypeError("Invalid SQLite busy timeout");
     }
     validateMigrations(migrations);
