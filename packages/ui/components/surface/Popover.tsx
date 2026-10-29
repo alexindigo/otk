@@ -69,6 +69,7 @@ export default function Popover(props: {
   let hover: ReturnType<typeof hoverIntent> | undefined;
   let releaseHoverPanel: (() => void) | undefined;
   let stopWatching: (() => void) | undefined;
+  let releaseOrigin: (() => void)[] = [];
   const ports = useCommandPorts(), closeId = `${anchor}.close`;
   const release = () => {
     invocation++;
@@ -83,6 +84,12 @@ export default function Popover(props: {
     setPoint(undefined);
     setRequest(undefined);
     previewFocus = undefined;
+    const retained = releaseOrigin;
+    releaseOrigin = [];
+    // Dismissal's synchronous focus return owns the row before its surface pin ends.
+    queueMicrotask(() => {
+      for (const release of retained) release();
+    });
     if (notify) props.onClose?.();
   };
   onCleanup(release);
@@ -115,6 +122,14 @@ export default function Popover(props: {
     hover?.cancel();
     openedBy = reason;
     const origin = at?.origin ?? trigger;
+    for (const release of releaseOrigin) release();
+    releaseOrigin = [];
+    origin?.dispatchEvent(
+      new CustomEvent("otk-context-retain", {
+        bubbles: true,
+        detail: { release: releaseOrigin },
+      }),
+    );
     setPoint(at);
     const next = {
       host: origin?.closest<HTMLDialogElement>("dialog:modal") ?? root()!,

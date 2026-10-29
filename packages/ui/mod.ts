@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+export {
+  createHighlightLease,
+  type HighlightLease,
+} from "./highlight/client.ts";
+export { HighlightProvider } from "./highlight/context.tsx";
 /** Reusable Solid 2 UI, client bindings and consumer-owned feature registries. */
 export { default as Blocks } from "./components/Blocks.tsx";
 export { default as Code } from "./components/Code.tsx";

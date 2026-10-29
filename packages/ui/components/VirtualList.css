@@ -19,3 +19,24 @@
   visibility: hidden;
   pointer-events: none;
 }
+.otk-window-content-estimate {
+  height: calc(2 * var(--line-prose));
+}
+.otk-window-segment-estimate {
+  height: calc(3 * var(--line-prose));
+}
+.otk-window-reply-estimate {
+  height: calc(5 * var(--line-prose));
+}
+.otk-window-line-estimate,
+.otk-window-metadata-estimate {
+  height: var(--line-ui);
+}
+.otk-virtual-borrowed {
+  flex: none;
+  overflow: visible;
+}
+.otk-virtual-space,
+.otk-virtual-measure {
+  user-select: none;
+}

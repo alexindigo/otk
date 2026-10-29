@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Reasoning.css" with { type: "text" };
-import { createSignal, Show } from "solid-js";
+import { Show } from "solid-js";
+import { retainedDisclosure } from "../features/transcript-context.tsx";
 import type { Part } from "@otk/protocol";
 import Blocks from "./Blocks.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
@@ -13,10 +14,10 @@ export default function Reasoning(
     conceal?: boolean;
   },
 ) {
-  const [expanded, setExpanded] = createSignal(false);
+  const [expanded, setExpanded] = retainedDisclosure("reasoning");
   const toggle = ownedAction(
     "reasoning.toggle",
-    () => setExpanded((value) => !value),
+    () => setExpanded(!open()),
   );
   const open = () => props.mode === "show" || expanded();
   const heading = () => {
@@ -29,15 +30,9 @@ export default function Reasoning(
       : undefined;
   };
   const title = () => props.part.title || heading();
-  return (
-    <section class="otk-reasoning">
-      <button
-        type="button"
-        aria-expanded={open() ? "true" : "false"}
-        disabled={props.mode === "show"}
-        onClick={() => void toggle()}
-      >
-        <ChevronIcon class="otk-reasoning-chevron" />
+  function Heading() {
+    return (
+      <>
         <Show when={props.part.time.end === undefined}>
           <ActivityIndicator small />
         </Show>
@@ -48,7 +43,28 @@ export default function Reasoning(
               .toFixed(1)
           }s`
           : ""}
-      </button>
+      </>
+    );
+  }
+  return (
+    <section class={["otk-reasoning", { "is-open": open() }]}>
+      <Show
+        when={props.mode !== "show"}
+        fallback={
+          <div class="otk-reasoning-heading" role="heading" aria-level="3">
+            <Heading />
+          </div>
+        }
+      >
+        <button
+          type="button"
+          aria-expanded={open() ? "true" : "false"}
+          onClick={() => void toggle()}
+        >
+          <ChevronIcon class="otk-reasoning-chevron" />
+          <Heading />
+        </button>
+      </Show>
       <Show when={open()}>
         <div class="otk-reasoning-body">
           <Show when={title()}>

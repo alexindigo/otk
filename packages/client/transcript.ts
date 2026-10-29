@@ -29,6 +29,10 @@ import type {
 } from "./transcripts.ts";
 import { MESSAGE_ADMISSION_WATERMARK } from "./message-policy.ts";
 import {
+  createTranscriptInteraction,
+  type TranscriptInteraction,
+} from "./transcript-interaction.ts";
+import {
   createTranscriptProjection,
   type TranscriptProjection,
   type TranscriptReply,
@@ -89,6 +93,7 @@ export type ToolCompletionSource = (
 export interface TranscriptOwner {
   state: TranscriptState;
   readonly projection: TranscriptProjection;
+  readonly interaction: TranscriptInteraction;
   source(
     messageID: string,
     text: (part: Part) => string | undefined,
@@ -102,7 +107,7 @@ export interface TranscriptOwner {
   temperature(value: Temperature): void;
   selected(value: boolean): void;
   viewport(value: TranscriptRange | undefined): void;
-  ensure(messageID: string): Promise<void>;
+  ensure(messageID: string, signal?: AbortSignal): Promise<void>;
   pin(keys: readonly string[]): () => void;
   refetch(): Promise<void>;
   receive(sidecarId: string, frame: ServerFrame): void;
@@ -120,6 +125,7 @@ export function createTranscript(
     connection(target.sidecarId).messages,
 ): TranscriptOwner {
   const projection = createTranscriptProjection();
+  const interaction = createTranscriptInteraction();
   const helper = (
     id: string,
   ): import("@otk/protocol").HelperSummary | undefined => {
@@ -141,6 +147,13 @@ export function createTranscript(
     return content as ContentState;
   };
   const apply = (content: ContentState, op: ContentOp): ContentState => {
+    if (op.op === "part.remove") interaction.retireIdentity(op.partID);
+    if (op.op === "message.remove") {
+      interaction.retireIdentity(op.messageID);
+      for (
+        const part of projection.state.messagesByID[op.messageID]?.parts ?? []
+      ) interaction.retireIdentity(part.id);
+    }
     const previous = op.op === "part.upsert"
       ? projection.state.messagesByID[op.messageID]
       : undefined;
@@ -649,6 +662,7 @@ export function createTranscript(
   };
   const owner: TranscriptOwner = {
     projection,
+    interaction,
     async source(messageID, text) {
       const id = generation;
       await owner.ensure(messageID);
@@ -743,7 +757,7 @@ export function createTranscript(
     viewport(value) {
       range = value;
       if (value) {
-        const ids = state.content.messages.map((m) => m.id);
+        const ids = state.messageIDs;
         const first = ids.indexOf(value.first), last = ids.indexOf(value.last);
         if (first >= 0 && last >= first) {
           const visible = new Set(ids.slice(first, last + 1));
@@ -758,10 +772,11 @@ export function createTranscript(
       }
       reserve();
     },
-    async ensure(messageID) {
+    async ensure(messageID, signal) {
       while (
         selected && !state.content.messages.some((m) => m.id === messageID)
       ) {
+        signal?.throwIfAborted();
         if (state.loading) {
           await new Promise<void>((resolve) => {
             const release = subscribe(() => {
@@ -779,6 +794,7 @@ export function createTranscript(
       if (!selected) {
         throw new DOMException("Transcript demand ended", "AbortError");
       }
+      signal?.throwIfAborted();
     },
     pin(keys) {
       for (const key of keys) pins.set(key, (pins.get(key) ?? 0) + 1);
@@ -805,6 +821,7 @@ export function createTranscript(
           });
         }
         const known = entry(sidecarId, selected.sessionID);
+        if (known?.deleted) interaction.clear();
         projection.busy(known?.status !== undefined && known.status !== "idle");
         if (
           !!known?.deleted !== (view === "deleted") ||
@@ -1047,6 +1064,7 @@ export function createTranscript(
       return work;
     },
     stop(): void {
+      interaction.clear();
       owner.temperature("cold");
     },
   };

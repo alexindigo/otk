@@ -5,6 +5,7 @@ import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { Cdp } from "../support/cdp.ts";
 import { waitFor } from "../support/opencode.ts";
+import { wheelViewport } from "../support/message-viewport.ts";
 
 const source = Array.from(
   { length: 2000 },
@@ -102,10 +103,18 @@ test("programmatic reveal keeps a transcript action in place for its real click"
     const first = children.find((child) =>
       child.title.includes("First reveal")
     )!;
+    await browser.click("[data-panel-view=timeline]");
+    await browser.click('.otk-timeline-reveal[title="First reveal"]');
+    await browser.poll(
+      "document.activeElement?.classList.contains('otk-user-bubble')",
+    );
+    await browser.poll(
+      "[...document.querySelectorAll('[data-tool=task]')].some(e=>e.querySelector('.otk-tool-brief')?.textContent==='First reveal' && e.querySelector('.otk-task-card'))",
+    );
     const point = await browser.evaluate<
       { x: number; y: number; before: number; after: number; inView: boolean }
     >(`(async()=>{
-      const action=document.querySelector('.otk-task-card'),pane=document.querySelector('.otk-messages');
+      const action=[...document.querySelectorAll('[data-tool=task]')].find(e=>e.querySelector('.otk-tool-brief')?.textContent==='First reveal').querySelector('.otk-task-card'),pane=document.querySelector('.otk-messages');
       action.scrollIntoView({block:'center',inline:'nearest'});
       const before=pane.scrollTop;
       await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
@@ -409,6 +418,9 @@ test("completed worker batches preserve multiline grammar and recalled unfinishe
         JSON.stringify(first)
       } && [...document.querySelectorAll('.otk-token')].some(el=>el.textContent==='recalled')`,
     );
+    await browser.evaluate(
+      "globalThis.measuredCode=document.querySelector('.otk-code')",
+    );
     const before = await browser.evaluate<string>(
       "getComputedStyle([...document.querySelectorAll('.otk-token')].find(el=>el.textContent==='recalled')).color",
     );
@@ -437,6 +449,13 @@ test("completed worker batches preserve multiline grammar and recalled unfinishe
       `document.querySelector('.otk-code code')?.textContent===${
         JSON.stringify(final)
       } && [...document.querySelectorAll('.otk-token')].some(el=>el.textContent==='recalledName')`,
+    );
+    assertEquals(
+      await browser.evaluate(
+        "globalThis.measuredCode.isConnected && globalThis.measuredCode===document.querySelector('.otk-code')",
+      ),
+      true,
+      "measuring and extending visible source must not recycle its Code owner",
     );
     assertEquals(
       await browser.evaluate(
@@ -503,11 +522,11 @@ test("real downward wheel retains follow intent when transcript growth precedes 
             : "true"
         } && (()=>{const p=document.querySelector('.otk-messages');return p.scrollHeight-p.clientHeight-p.scrollTop<2})()`,
       );
+      await wheelViewport(browser, ".otk-messages", -8);
       const point = await browser.evaluate<{ x: number; y: number }>(
         `(async()=>{
           const pane=document.querySelector('.otk-messages');
           await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-          await new Promise(resolve=>{pane.addEventListener('scrollend',resolve,{once:true});pane.scrollTop=pane.scrollHeight-pane.clientHeight-8});
           if(Math.abs(pane.scrollHeight-pane.clientHeight-pane.scrollTop-8)>.5)throw new Error('Wheel setup did not retain its reader position');
           globalThis.wheelLayoutEvidence=null;
           let armed=false;
@@ -550,13 +569,15 @@ test("real downward wheel retains follow intent when transcript growth precedes 
         `(()=>{const pane=document.querySelector('.otk-messages');pane.tabIndex=0;pane.focus();
           pane.addEventListener('keydown',()=>{
             globalThis.keyScrollEnded=false;
-            const scroll=()=>keyScrollEnded=false,end=()=>keyScrollEnded=true;
-            pane.addEventListener('scroll',scroll);pane.addEventListener('scrollend',end);
-            globalThis.releaseKeyScroll=()=>{pane.removeEventListener('scroll',scroll);pane.removeEventListener('scrollend',end)};
+            const end=()=>{if(pane.scrollHeight-pane.clientHeight-pane.scrollTop>100)keyScrollEnded=true};
+            pane.addEventListener('scrollend',end);
+            globalThis.releaseKeyScroll=()=>pane.removeEventListener('scrollend',end);
           },{once:true});})()`,
       );
       // Space's native page-scroll default needs its character event as well
       // as keydown; observe actual scrollend rather than an animation frame.
+      // Chromium can deliver its final scroll after scrollend without another
+      // position write; that notification does not begin a new key gesture.
       for (const type of ["keyDown", "keyUp"]) {
         await browser.send("Input.dispatchKeyEvent", {
           type,

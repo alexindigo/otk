@@ -643,6 +643,17 @@ disjoint interaction pins. Prefix sums support incremental measurements and
 binary viewport lookup; `offset`, `size`, `total`, `anchor` and `restore` share
 that same geometry. Anchors name identities and an intra-row offset, so changes
 above the viewport do not turn into positional selection or scroll jumps.
+Explicit pins remain materialized even when a borrowed window has zero visible
+height. An optional source-free measurement map preserves sizes across a
+window's virtual unmount without retaining its content.
+
+Each transcript exposes `interaction`, the framework-free source-free owner of
+explicit disclosure choices, generation fences, numeric window measurements and
+the native/row identity anchor. Cooling keeps these small values; `stop()`
+clears them. Removed identities advance their disclosure generation, so an old
+handle cannot change a replacement. `ensure(id, signal?)` supports a view's
+reveal lifetime without creating another body owner or cancelling other
+consumers.
 
 `createListScopes()` owns plain query/scroll/anchor interaction values keyed by
 server, directory and optional task. It retains no DOM, content or observers;

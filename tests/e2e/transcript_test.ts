@@ -15,6 +15,7 @@ import {
 } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { wheelViewport } from "../support/message-viewport.ts";
 
 const prose =
   "A readable reply stays in a centred lane with source and diffs aligned to its shared edges. "
@@ -231,7 +232,7 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
     assert(geometry.font.includes("IBM Plex Sans"));
     assertEquals([geometry.size, geometry.line], ["14px", "24px"]);
     await b.poll(
-      "document.querySelector('[data-tool=bash] .otk-tool-toggle').getAttribute('aria-expanded')==='false' && document.querySelector('[data-tool=bash] .otk-tool-body').hidden",
+      "document.querySelector('[data-tool=bash] .otk-tool-toggle').getAttribute('aria-expanded')==='false' && !document.querySelector('[data-tool=bash] .otk-tool-body')",
     );
     await b.click("[data-tool=bash] .otk-tool-toggle");
     await b.poll(
@@ -239,7 +240,7 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
     );
     await b.click("[data-tool=read] .otk-tool-toggle");
     await b.poll(
-      "document.querySelector('[data-tool=edit] .otk-tool-body').hidden",
+      "!document.querySelector('[data-tool=edit] .otk-tool-body')",
     );
     await b.click("[data-tool=edit] .otk-tool-toggle");
     await b.poll(
@@ -405,9 +406,13 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
       ),
       false,
     );
+    const foldDelta = await b.evaluate<number>(
+      "(()=>{const r=document.querySelector('.otk-work-fold').getBoundingClientRect(),v=document.querySelector('.otk-messages').getBoundingClientRect();return r.top+r.height/2-v.top-v.height/2})()",
+    );
+    await wheelViewport(b, ".otk-messages", foldDelta);
     await b.click(".otk-work-fold");
     await b.poll(
-      "document.querySelector('.otk-work-body').hidden && document.querySelector('.otk-work-fold').getAttribute('aria-expanded')==='false'",
+      "!document.querySelector('.otk-work-body') && document.querySelector('.otk-work-fold').getAttribute('aria-expanded')==='false'",
     );
     await b.click(".otk-work-fold");
     await b.poll(

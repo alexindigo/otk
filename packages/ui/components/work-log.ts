@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Message, Part } from "@otk/protocol";
+export { createMessageLayout } from "./message-layout.ts";
 
 import type { PartPresentation } from "../registries/renderers.ts";
 export type { WorkTime } from "../registries/renderers.ts";

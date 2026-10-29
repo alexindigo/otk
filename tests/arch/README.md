@@ -322,3 +322,16 @@ reject page reads in the selected facade or a UI cache. Scope/attention/cooling
 tests exercise reduced metadata, bounded queue admission, body release and
 framework publication; real-native browser cases observe warm reuse, draft
 survival, cold unsubscribe and hydration before navigation.
+
+Transcript negatives also reject eager ToolFrame/WorkLog children and duplicated
+viewport math. The shared measured window is the only UI consumer of
+`createWindow`; folded bodies enter through lazy factories. Browser checks use
+actual native clipboard contents, offscreen Timeline focus, disclosure teardown,
+large diff row bounds and viewport-relative anchor geometry.
+
+`viewport-position_test.ts` requires exactly one UI `scrollTop` application
+site, inside the root position owner. Negative fixtures reject direct/computed
+writes, reflective/object-assignment writes, and implicit scrolling in
+transcript/window consumers. Native and browser geometry cases separately prove
+bottom source plus footer visibility, one-pixel anchored prepends and measured
+Timeline focus.

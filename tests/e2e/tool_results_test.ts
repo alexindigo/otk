@@ -5,6 +5,7 @@ import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { runTool } from "../support/rendering.ts";
 import { highlightedRange } from "../support/highlight.ts";
+import { revealViewportElement } from "../support/message-viewport.ts";
 
 test("typed results show highlighted native file ranges, paths and grep matches without model envelopes or repeated headers, including reload", async () => {
   const source =
@@ -43,14 +44,15 @@ test("typed results show highlighted native file ranges, paths and grep matches 
       {
         name: "read",
         input: { filePath: join(f.oc.directory, "src"), limit: 1 },
-        selector: "[data-tool=search]:has([data-search-mode=list])",
+        selector: '[data-tool=search]:has(.otk-tool-verb[title="List"])',
         content: ".otk-tool-output",
         expected: "src/probe.ts",
       },
       {
         name: "glob",
         input: { pattern: "*.ts", path: join(f.oc.directory, "src") },
-        selector: "[data-tool=search]:has([data-search-mode=glob])",
+        selector:
+          '[data-tool=search]:has(.otk-tool-brief[title="*.ts · 1 match"])',
         content: ".otk-tool-output",
         expected: "src/probe.ts",
       },
@@ -60,7 +62,8 @@ test("typed results show highlighted native file ranges, paths and grep matches 
           pattern: "otk_result_marker",
           path: join(f.oc.directory, "src"),
         },
-        selector: "[data-tool=search]:has([data-search-mode=grep])",
+        selector:
+          '[data-tool=search]:has(.otk-tool-brief[title="otk_result_marker · 1 match"])',
         content: ".otk-tool-output",
         expected: "src/probe.ts:2: export const otk_result_marker = 1;",
       },
@@ -80,6 +83,11 @@ test("typed results show highlighted native file ranges, paths and grep matches 
           ),
         );
       }
+      await revealViewportElement(
+        browser,
+        ".otk-messages",
+        `${item.selector} .otk-tool-toggle`,
+      );
       await browser.click(`${item.selector} .otk-tool-toggle`);
       await browser.poll(
         `!document.querySelector(${
@@ -112,6 +120,11 @@ test("typed results show highlighted native file ranges, paths and grep matches 
         null,
       );
     }
+    await revealViewportElement(
+      browser,
+      ".otk-messages",
+      "[data-tool=read] .otk-code",
+    );
     await highlightedRange(
       browser,
       "[data-tool=read] .otk-code[data-language=ts] code",
@@ -129,6 +142,11 @@ test("typed results show highlighted native file ranges, paths and grep matches 
       ),
       "2–3 of 4 lines · More available",
     );
+    await revealViewportElement(
+      browser,
+      ".otk-messages",
+      "[data-search-mode=list]",
+    );
     assertEquals(
       await browser.evaluate(
         "document.querySelector('[data-search-mode=list] [data-tool-result-meta]').textContent",
@@ -141,6 +159,11 @@ test("typed results show highlighted native file ranges, paths and grep matches 
         "1 match",
       ]]
     ) {
+      await revealViewportElement(
+        browser,
+        ".otk-messages",
+        `[data-search-mode=${mode}]`,
+      );
       assertEquals(
         await browser.evaluate(
           `document.querySelector('[data-search-mode=${mode}]').closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes(${
@@ -151,9 +174,20 @@ test("typed results show highlighted native file ranges, paths and grep matches 
       );
     }
     await browser.screenshot(join(f.oc.root, "toolrows-r2-results.png"));
+    const history = await f.oc.request<unknown[]>(
+      `/session/${session.id}/message`,
+    );
     await browser.reload();
     await openSession(browser, session.id);
+    await browser.poll(
+      `Number(document.querySelector('.otk-message-flow')?.dataset.messageCount)===${history.length}`,
+    );
     for (const item of cases) {
+      await revealViewportElement(
+        browser,
+        ".otk-messages",
+        `${item.selector} .otk-tool-toggle`,
+      );
       await browser.click(`${item.selector} .otk-tool-toggle`);
       await browser.poll(
         `!document.querySelector(${
@@ -170,6 +204,11 @@ test("typed results show highlighted native file ranges, paths and grep matches 
         );
       }
     }
+    await revealViewportElement(
+      browser,
+      ".otk-messages",
+      "[data-tool=read] .otk-code",
+    );
     await highlightedRange(
       browser,
       "[data-tool=read] .otk-code[data-language=ts] code",

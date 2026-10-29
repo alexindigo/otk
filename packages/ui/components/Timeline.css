@@ -1,7 +1,10 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-timeline {
   min-height: 0;
-  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  overflow: hidden;
   padding: 0 8px 8px;
 }
 .otk-timeline-list {

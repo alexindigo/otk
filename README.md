@@ -190,6 +190,17 @@ retains unreported categories as unknown, and releases its call/pricing state on
 close. Copy reply acquires missing steps through the same cursor owner before
 writing complete source to the clipboard.
 
+Transcripts and Timeline render measured windows of acquired content, including
+segments inside long replies and lines inside large diffs. The ten-message
+reserve is fetched data, not hidden transcript DOM. Focus, selections and open
+surfaces pin their source identities; Select all in a focused transcript first
+materializes its acquired range. Timeline reveals acquire missing pages through
+the same resource before positioning and focusing the prompt. Collapsing a work
+log, reasoning or tool destroys its expensive body while retaining the explicit
+disclosure choice. Source-bearing highlight caches follow the transcript's warm
+lifetime and are released on cooling, even while another session uses the
+worker.
+
 Helper cards borrow background-digested progress. Parent pages never wait for a
 child history scan, and child activity never rereads parent messages. Progress
 shows “Preparing progress…” or “Progress unavailable” until authoritative counts
@@ -329,9 +340,10 @@ start expanded. Typed tool cards show bash output, read/search/fetch/skill
 operations, file diffs and diagnostics, todos, read-only questions and subagent
 progress. Click a task to open its child; the subagent bar returns to the parent
 or cycles siblings. Child sessions are read-only. Code highlighting runs in a
-shared Shiki worker with on-demand grammars; session changes release it. The
-Display menu persists preferences in the serving sidecar's `otk.db` and updates
-other connected tabs. Reverted turns appear in the joined composer strip.
+shared Shiki worker with on-demand grammars; cooling releases each session's
+source while other live content can retain the worker. The Display menu persists
+preferences in the serving sidecar's `otk.db` and updates other connected tabs.
+Reverted turns appear in the joined composer strip.
 
 Pasted or dropped images appear once as thumbnail attachment chips, separate
 from prompt text. Image-only prompts can be sent directly. Sent images render as

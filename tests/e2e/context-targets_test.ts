@@ -18,6 +18,8 @@ import {
 } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { menuReady } from "../support/menu.ts";
+import { waitFor } from "../support/opencode.ts";
+import { revealViewportElement } from "../support/message-viewport.ts";
 
 const menu = ':popover-open [role="menu"][aria-label="Context menu"]';
 const panelArea = ["New session", "Find a session", "Collapse right panel"];
@@ -27,12 +29,29 @@ const captureOrigins = new WeakMap<
   { selector: string; theme: string; before: string }
 >();
 async function rightClick(b: Cdp, selector: string) {
-  const point = await b.evaluate<{ x: number; y: number }>(`(async()=>{
+  if (
+    await b.evaluate(
+      `!!document.querySelector(${
+        JSON.stringify(selector)
+      })?.closest('.otk-messages')`,
+    )
+  ) {
+    await revealViewportElement(b, ".otk-messages", selector);
+  }
+  const point = await waitFor(
+    () =>
+      b.evaluate<false | { x: number; y: number }>(`(async()=>{
     const el=document.querySelector(${JSON.stringify(selector)});
-    el.scrollIntoView({block:'center',behavior:'instant'});
-    await new Promise(requestAnimationFrame);
-    const r=el.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};
-  })()`);
+    if(!el)return false;
+    if(!el.closest('.otk-messages'))el.scrollIntoView({block:'center',behavior:'instant'});
+    let r=el.getBoundingClientRect();
+    for(let i=0;i<2;i++){await new Promise(requestAnimationFrame);const next=el.getBoundingClientRect();if(r.x!==next.x||r.y!==next.y||r.width!==next.width||r.height!==next.height)return false;r=next;}
+    const point={x:r.x+r.width/2,y:r.y+r.height/2};
+    return el.isConnected&&r.width&&r.height&&el.contains(document.elementFromPoint(point.x,point.y))?point:false;
+  })()`),
+    (value) => !!value,
+  );
+  if (!point) throw new Error(`Context target is not ready: ${selector}`);
   if (Deno.env.get("OTK_CONTEXT_SCREENSHOTS")) {
     const before = await b.send("Page.captureScreenshot", { format: "png" });
     captureOrigins.set(b, {

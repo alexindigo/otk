@@ -539,9 +539,8 @@ globalThis.onmessage = (
     receive(request);
   }
 };
-// The first ordinary acquisition supplies its genuine bounded source context.
-// Preparation can start during bootstrap; only a matching ordinary capture may
-// publish it after the incoming coalescer. There is no independent worker user.
+// Worker identity carries grammar only. Genuine bounded source preparation uses
+// the ordinary block-owned message path, so dispose can release every source.
 const declaration: unknown = Reflect.get(globalThis, "name");
 if (
   typeof declaration === "string" && declaration.startsWith("otk-highlight:")
@@ -551,10 +550,7 @@ if (
     if (typeof context.lang !== "string") {
       throw new Error("Invalid highlight declaration");
     }
-    const loading = typeof context.block === "number" &&
-        typeof context.text === "string"
-      ? prepareSource(context.block, context.lang, context.text).ready
-      : prepare(context.lang);
+    const loading = prepare(context.lang);
     void loading.catch((error) =>
       console.error("Highlight preparation:", error)
     );

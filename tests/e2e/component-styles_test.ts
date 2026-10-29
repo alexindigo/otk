@@ -255,7 +255,7 @@ test("WorkLog Settings RolledBackStrip and empty Sidebar own their styles withou
       deletions: true,
     });
     await browser.click(".otk-work-fold");
-    await browser.poll("document.querySelector('.otk-work-body').hidden");
+    await browser.poll("!document.querySelector('.otk-work-body')");
     await browser.click(".otk-work-fold");
     await browser.poll("!document.querySelector('.otk-work-body').hidden");
     await browser.click(".otk-rollback-disclosure");

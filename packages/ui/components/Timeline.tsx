@@ -1,12 +1,19 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Timeline.css" with { type: "text" };
-import { createEffect, createSignal, For, Show } from "solid-js";
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  onCleanup,
+  Show,
+} from "solid-js";
 import type { Selection, TimelinePrompt } from "@otk/client";
 import { errorMessage } from "@otk/protocol";
 import { contextTarget } from "./context-target.ts";
 import MessageActions from "./MessageActions.tsx";
 import ListRow from "./ListRow.tsx";
 import { EmptyState } from "./View.tsx";
+import VirtualList from "./VirtualList.tsx";
 
 function PromptRow(props: {
   prompt: TimelinePrompt;
@@ -72,21 +79,36 @@ export default function Timeline(props: {
 }): import("solid-js").Element {
   const [selected, setSelected] = createSignal("");
   const [error, setError] = createSignal("");
+  let operation = 0;
+  onCleanup(() => {
+    operation++;
+  });
+  const prompts = createMemo(() =>
+    new Map(props.prompts.map((prompt) => [prompt.id, prompt]))
+  );
   createEffect(() => props.session, () => {
+    operation++;
     setSelected("");
     setError("");
   });
   const perform = async (action: () => Promise<void>) => {
+    const request = ++operation;
     const session = props.session;
     setError("");
     try {
       await action();
     } catch (error) {
-      if (session === props.session) setError(errorMessage(error));
+      if (session === props.session && request === operation) {
+        setError(errorMessage(error));
+      }
     }
   };
   return (
-    <section class="otk-timeline" aria-label="Timeline prompts">
+    <section
+      class="otk-timeline"
+      aria-label="Timeline prompts"
+      data-prompt-count={props.prompts.length}
+    >
       <Show
         when={props.session}
         fallback={<EmptyState>Open a session to see its prompts.</EmptyState>}
@@ -108,28 +130,39 @@ export default function Timeline(props: {
         <Show when={!props.prompts.length && !props.paging}>
           <EmptyState>No prompts yet.</EmptyState>
         </Show>
-        <ol class="otk-timeline-list">
-          <For each={props.prompts} keyed={(prompt) => prompt.id}>
-            {(prompt) => (
-              <PromptRow
-                prompt={prompt()}
-                target={{
-                  ...props.session,
-                  messageID: prompt().id,
-                  directory: props.directory,
-                  text: props.preview(prompt()),
-                  queued: prompt().queued,
-                }}
-                selected={selected() === prompt().id}
-                onReveal={() =>
-                  void perform(async () => {
-                    await props.onReveal(prompt().id);
-                    setSelected(prompt().id);
-                  })}
-              />
-            )}
-          </For>
-        </ol>
+        <VirtualList
+          keys={props.prompts.map((prompt) => prompt.id)}
+          class="otk-timeline-list"
+          label="Acquired prompts"
+          samples={[{ role: "prompt", class: "otk-list-row" }]}
+          role={() => "prompt"}
+          overscan={0}
+          retainExcluded={false}
+          render={(key) => (
+            <Show when={prompts().get(key)}>
+              {(prompt) => {
+                return (
+                  <PromptRow
+                    prompt={prompt()}
+                    target={{
+                      ...props.session,
+                      messageID: prompt().id,
+                      directory: props.directory,
+                      text: props.preview(prompt()),
+                      queued: prompt().queued,
+                    }}
+                    selected={selected() === prompt().id}
+                    onReveal={() =>
+                      void perform(async () => {
+                        await props.onReveal(prompt().id);
+                        setSelected(prompt().id);
+                      })}
+                  />
+                );
+              }}
+            </Show>
+          )}
+        />
       </Show>
       <Show when={error()}>
         <p class="otk-error" role="alert">{error()}</p>

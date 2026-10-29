@@ -6,11 +6,31 @@ function violations(path: string, text: string): string[] {
   const source = new Source(text, path), result: string[] = [];
   for (const node of source.all) {
     if (
+      node.type === "JSXElement" &&
+      node.openingElement.name.type === "JSXIdentifier" &&
+      ["ToolFrame", "WorkLog"].includes(node.openingElement.name.name) &&
+      !node.openingElement.attributes.some((attribute) =>
+        attribute.type === "JSXAttribute" && attribute.name.name === "body" &&
+        attribute.value?.type === "JSXExpressionContainer" &&
+        ["ArrowFunctionExpression", "FunctionExpression"].includes(
+          attribute.value.expression.type,
+        )
+      )
+    ) {
+      result.push("eager folded body");
+    }
+    if (
       path === "packages/harness-opencode-v1/tasks.ts" &&
       node.type === "AwaitExpression"
     ) result.push("awaited helper shaping");
     if (node.type !== "CallExpression") continue;
     const callee = source.name(node.callee) ?? "";
+    if (
+      path.startsWith("packages/ui/") && callee === "createWindow" &&
+      path !== "packages/ui/components/VirtualList.tsx"
+    ) {
+      result.push("duplicate viewport math");
+    }
     if (
       path === "packages/harness-opencode-v1/recovery.ts" &&
       /^(?:setTimeout|setInterval|AbortSignal.timeout)$/.test(callee)
@@ -57,6 +77,22 @@ Deno.test("browser message acquisition has one canonical resource owner", async 
     );
   }
   assertEquals(failures, []);
+});
+Deno.test("transcript window negatives reject eager folded renderers and duplicate viewport owners", () => {
+  assertEquals(
+    violations(
+      "packages/ui/components/Message.tsx",
+      "const view = <WorkLog><Code /></WorkLog>; createWindow();",
+    ),
+    ["eager folded body", "duplicate viewport math"],
+  );
+  assertEquals(
+    violations(
+      "packages/ui/components/ToolLine.tsx",
+      "const view = <ToolFrame body={() => <Code />} />;",
+    ),
+    [],
+  );
 });
 Deno.test("helper link negatives reject awaited child scans and parent polling", () => {
   assertEquals(

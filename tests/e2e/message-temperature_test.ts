@@ -58,7 +58,18 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await client.connect();
       await client.rpc("prefs.set", { key: "theme", value: theme });
       await client.rpc("prefs.set", { key: "animationsOff", value: true });
-      const browser = await f.browser(server.url);
+      const browser = await f.browser("about:blank");
+      await browser.send("Page.addScriptToEvaluateOnNewDocument", {
+        source: `(()=>{
+        const target=${JSON.stringify(a.id)}, Native=WebSocket;
+        globalThis.temperaturePages={hold:false,pending:[],requests:new Set(),release(){this.hold=false;for(const [socket,data]of this.pending.splice(0))socket.dispatchEvent(new MessageEvent('message',{data}))}};
+        globalThis.WebSocket=class extends Native {
+          constructor(...args){super(...args);this.addEventListener('message',event=>{const frame=JSON.parse(event.data);if(temperaturePages.hold&&frame.t==='rpc.result'&&temperaturePages.requests.has(frame.id)){temperaturePages.pending.push([this,event.data]);event.stopImmediatePropagation()}})}
+          send(data){const frame=JSON.parse(data);if(frame.t==='rpc'&&frame.method==='session.messages'&&frame.params.sessionID===target)temperaturePages.requests.add(frame.id);return super.send(data)}
+        };
+      })()`,
+      });
+      await browser.goto(server.url);
       await browser.send("Emulation.setDeviceMetricsOverride", {
         width: 1280,
         height: 900,
@@ -84,17 +95,27 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await openSession(browser, a.id);
       await waitFor(() => settledPages(a.id).length, (n) => n >= 2);
       await browser.fill("textarea[name=prompt]", "Unsent temperature draft");
-      const reads = pages(a.id).length;
+      const borrowed = await browser.evaluate<string>(
+        "(()=>{const v=document.querySelector('.otk-messages').getBoundingClientRect();return [...document.querySelectorAll('.otk-message-flow p')].find(e=>{const r=e.getBoundingClientRect();return r.bottom>v.top && r.top<v.bottom && e.textContent.startsWith('Alpha prompt')})?.textContent})()",
+      );
+      assert(
+        borrowed,
+        "the warm-return baseline is actual visible native source",
+      );
       await openSession(browser, bSession.id);
+      await browser.evaluate("temperaturePages.hold=true");
       await openSession(browser, a.id);
       await browser.poll(
-        "document.querySelector('textarea[name=prompt]')?.value==='Unsent temperature draft'",
+        `document.querySelector('textarea[name=prompt]')?.value==='Unsent temperature draft' && document.querySelector('.otk-message-flow')?.textContent.includes(${
+          JSON.stringify(borrowed)
+        })`,
       );
       assertEquals(
-        pages(a.id).length,
-        reads,
-        "warm return borrows the canonical body without another baseline",
+        await browser.evaluate("temperaturePages.hold"),
+        true,
+        "warm source paints while every new page result (including cursor repair) is held",
       );
+      await browser.evaluate("temperaturePages.release()");
       await openSession(browser, bSession.id);
       await waitFor(
         () => sentFrames(browser),
@@ -117,6 +138,11 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await waitFor(() => settledPages(a.id).length, (n) => n >= before + 2);
       const readyBeforeClick = performance.now();
       const preloaded = pages(a.id).length;
+      const initialReads = () =>
+        pages(a.id).filter(({ frame }) =>
+          !(frame.params as { before?: string }).before
+        ).length;
+      const initialBeforeClick = initialReads();
       assert(preloaded >= before + 2);
       assert(
         !await browser.evaluate(`location.hash.endsWith('/${a.id}')`),
@@ -141,8 +167,8 @@ for (const theme of ["otk-dark", "otk-light"]) {
         "document.querySelector('textarea[name=prompt]')?.value==='Unsent temperature draft' && document.querySelector('.otk-message-flow')?.textContent.includes('Wake the cold project')",
       );
       assertEquals(
-        pages(a.id).length,
-        preloaded,
+        initialReads(),
+        initialBeforeClick,
         "attention hydration is ready before click and not repeated",
       );
       assert(performance.now() >= readyBeforeClick);

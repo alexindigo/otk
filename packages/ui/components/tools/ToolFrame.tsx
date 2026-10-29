@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ToolFrame.css" with { type: "text" };
-import { createSignal, type Element, Show } from "solid-js";
+import { type Element, Show } from "solid-js";
 import type { ToolCall } from "@otk/protocol";
 import ActivityIndicator from "../ActivityIndicator.tsx";
 import { ownedAction } from "../../keyboard/context.tsx";
@@ -10,21 +10,25 @@ import { contextTarget } from "../context-target.ts";
 import {
   ContentIdentityProvider,
   contentOwner,
+  retainedDisclosure,
   useContentIdentity,
 } from "../../features/transcript-context.tsx";
 export default function ToolFrame(
   props: {
     call: ToolCall;
     waiting: boolean;
-    children: Element;
+    body(): Element;
     presentation?: ToolPresentation;
   },
 ): Element {
-  const [errorOpen, setErrorOpen] = createSignal(false);
-  const [expanded, setExpanded] = createSignal<boolean>();
-  const open = () => expanded() ?? props.presentation?.expanded ?? false;
   const parent = useContentIdentity();
   const identity = () => ({ ...parent, callID: props.call.callID });
+  const [errorOpen, setErrorOpen] = retainedDisclosure(
+    "tool-error",
+    identity(),
+  );
+  const [expanded, setExpanded] = retainedDisclosure("tool", identity());
+  const open = () => expanded() ?? props.presentation?.expanded ?? false;
   const expand = ownedAction("tool.toggle", () => setExpanded(!open()));
   contentOwner(identity, {
     expanded: open,
@@ -32,7 +36,7 @@ export default function ToolFrame(
   });
   const toggle = ownedAction(
     "tool.error.toggle",
-    () => setErrorOpen((value) => !value),
+    () => setErrorOpen(!errorOpen()),
   );
   return (
     <ContentIdentityProvider value={identity()}>
@@ -126,7 +130,9 @@ export default function ToolFrame(
             </button>
           </Show>
         </header>
-        <div class="otk-tool-body" hidden={!open()}>{props.children}</div>
+        <Show when={open()}>
+          <div class="otk-tool-body">{props.body()}</div>
+        </Show>
         <Show when={props.call.status === "error" && errorOpen()}>
           <pre class="otk-tool-error" role="alert">{props.call.error}</pre>
         </Show>

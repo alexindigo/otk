@@ -11,7 +11,7 @@ export interface WindowRange {
   visibleKeys: string[];
 }
 /** Prefix sums with O(log n) measurement and offset lookup. No browser state. */
-export function createWindow(): {
+export function createWindow(measured: Map<string, number> = new Map()): {
   update(keys: readonly string[], estimate: (key: string) => number): void;
   measure(key: string, size: number): boolean;
   offset(key: string): number | undefined;
@@ -30,7 +30,6 @@ export function createWindow(): {
     positions = new Map<string, number>(),
     sums: number[] = [0],
     sizes: number[] = [];
-  const measured = new Map<string, number>();
   const add = (i: number, delta: number) => {
     for (i++; i < sums.length; i += i & -i) sums[i] += delta;
   };
@@ -93,7 +92,7 @@ export function createWindow(): {
       return top === undefined ? undefined : top + anchor!.offset;
     },
     range(top, height, overscan = 0, pinned = []) {
-      if (!keys.length || height <= 0) {
+      if (!keys.length) {
         return {
           start: 0,
           end: 0,
@@ -102,10 +101,12 @@ export function createWindow(): {
           visibleKeys: [],
         };
       }
-      const start = Math.max(0, at(Math.max(0, top)) - overscan);
+      const start = height > 0
+        ? Math.max(0, at(Math.max(0, top)) - overscan)
+        : 0;
       const edge = Math.max(0, top) + height;
       const last = at(Math.max(0, edge - .001));
-      const end = Math.min(keys.length, last + 1 + overscan);
+      const end = height > 0 ? Math.min(keys.length, last + 1 + overscan) : 0;
       const indices = new Set(
         Array.from({ length: end - start }, (_, i) => start + i),
       );

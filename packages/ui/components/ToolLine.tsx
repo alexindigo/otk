@@ -15,13 +15,14 @@ export default function ToolLine(props: ToolProps): import("solid-js").Element {
         directory: props.directory,
         prefs: props.prefs,
       })}
-    >
-      <Show when={tools.resolve(props.call)} keyed>
-        {(renderer) => {
-          const Component = renderer;
-          return <Component {...props} />;
-        }}
-      </Show>
-    </ToolFrame>
+      body={() => (
+        <Show when={tools.resolve(props.call)} keyed>
+          {(renderer) => {
+            const Component = renderer;
+            return <Component {...props} />;
+          }}
+        </Show>
+      )}
+    />
   );
 }

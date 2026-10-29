@@ -3,11 +3,12 @@ import "./Message.css" with { type: "text" };
 import { agentColor } from "../theme/agent-color.ts";
 import { createMemo, createSignal, For, onSettled, Show } from "solid-js";
 import WorkLog from "./WorkLog.tsx";
+import { ContentWindow, type VirtualListControl } from "./VirtualList.tsx";
 import ResponseProgress from "./ResponseProgress.tsx";
 import TurnUsage from "./TurnUsage.tsx";
 import type { TurnUsage as Usage } from "@otk/client";
 import type { UsageSummary } from "@otk/protocol";
-import { elapsed, messageFrames, partGroups } from "./work-log.ts";
+import { createMessageLayout, elapsed } from "./work-log.ts";
 import MessageActions from "./MessageActions.tsx";
 import { contextTarget } from "./context-target.ts";
 import type {
@@ -19,7 +20,10 @@ import { useUiRegistries } from "../registries/context.tsx";
 import type { Preferences } from "@otk/protocol";
 import type { PartProps } from "../registries/renderers.ts";
 import {
+  contentGeneration,
   ContentIdentityProvider,
+  contentOwner,
+  sourceRegion,
   useContentIdentity,
 } from "../features/transcript-context.tsx";
 function PartView(
@@ -33,6 +37,7 @@ function PartView(
     onOpenChild(id: string): void;
     user: boolean;
     pending?: boolean;
+    sourceID?: string;
   },
 ) {
   const { parts } = useUiRegistries();
@@ -45,7 +50,11 @@ function PartView(
           <ContentIdentityProvider
             value={{ ...identity, partID: props.part.id }}
           >
-            <Component {...props} />
+            <div
+              ref={sourceRegion(() => props.sourceID ?? identity.messageID!)}
+            >
+              <Component {...props} />
+            </div>
           </ContentIdentityProvider>
         );
       }}
@@ -53,10 +62,19 @@ function PartView(
   );
 }
 /** A stable keyed component boundary preserves source nodes during part updates. */
-function PartsView(props: Omit<PartProps, "part"> & { parts: Part[] }) {
+function PartsView(
+  props: Omit<PartProps, "part"> & {
+    parts: Part[];
+    sourceID?(part: Part): string;
+  },
+) {
+  const generation = contentGeneration();
   return (
-    <For each={props.parts} keyed={(part) => part.id}>
-      {(part) => (
+    <ContentWindow
+      items={props.parts}
+      key={(part) => generation(part.id)}
+      label="Reply parts"
+      render={(part) => (
         <PartView
           part={part()}
           prefs={props.prefs}
@@ -67,9 +85,10 @@ function PartsView(props: Omit<PartProps, "part"> & { parts: Part[] }) {
           user={props.user}
           streaming={props.streaming}
           pending={props.pending}
+          sourceID={props.sourceID?.(part())}
         />
       )}
-    </For>
+    />
   );
 }
 export interface MessageControl {
@@ -80,6 +99,7 @@ export default function Message(
     sidecarId?: string;
     ownerID?: string;
     message: OtkMessage;
+    segments?: import("@otk/client").TranscriptReply["segments"];
     lastID?: string;
     pending?: boolean;
     recovery?: "recovering" | "unavailable";
@@ -105,9 +125,15 @@ export default function Message(
   },
 ): import("solid-js").Element {
   const { parts } = useUiRegistries();
+  const layout = createMessageLayout();
+  const sourceID = (part: Part) => layout.source(part.id) ?? props.message.id;
   const framing = createMemo(() =>
-    messageFrames(
-      props.message,
+    layout.update(
+      props.ownerID ?? props.message.id,
+      props.message.role,
+      props.segments ??
+        [{ messageID: props.message.id, parts: props.message.parts }],
+      JSON.stringify(props.prefs),
       (part) => parts.presentation(part, props.prefs),
     )
   );
@@ -120,6 +146,18 @@ export default function Message(
     messageID: props.message.id,
     directory: props.directory,
   });
+  let footerControl: VirtualListControl | undefined;
+  let usageControl: { open(): void } | undefined;
+  contentOwner(identity, {
+    get usage() {
+      return props.openUsage
+        ? async () => {
+          await footerControl?.reveal("footer", { align: "nearest" });
+          usageControl?.open();
+        }
+        : undefined;
+    },
+  });
   const text = () =>
     (assistant()?.parts ?? props.message.parts).map((part) =>
       parts.presentation(part, props.prefs).text
@@ -130,7 +168,6 @@ export default function Message(
     props.control?.({
       reveal() {
         if (!bubble) return;
-        bubble.scrollIntoView({ block: "center", inline: "nearest" });
         bubble.focus({ preventScroll: true });
       },
     })
@@ -211,14 +248,13 @@ export default function Message(
                 ? "content"
                 : undefined}
             >
-              <For
-                each={partGroups(frame().parts, (part) =>
-                  props.message.role === "assistant"
-                    ? parts.presentation(part, props.prefs)
-                    : {})}
-                keyed={(group) => group.id}
-              >
-                {(group) => (
+              <ContentWindow
+                items={frame().groups}
+                scope={frame().id}
+                key={(group) => group.id}
+                label="Reply segments"
+                role="segment"
+                render={(group) => (
                   <Show
                     when={group().work}
                     fallback={
@@ -232,25 +268,31 @@ export default function Message(
                         user={props.message.role === "user"}
                         streaming={streaming()}
                         pending={props.pending}
+                        sourceID={sourceID}
                       />
                     }
                   >
-                    <WorkLog time={time()}>
-                      <PartsView
-                        parts={group().parts}
-                        prefs={props.prefs}
-                        directory={props.directory}
-                        permissions={props.permissions}
-                        paneWidth={props.paneWidth}
-                        onOpenChild={props.onOpenChild}
-                        user={props.message.role === "user"}
-                        streaming={streaming()}
-                        pending={props.pending}
-                      />
-                    </WorkLog>
+                    <WorkLog
+                      time={time()}
+                      identity={group().id}
+                      body={() => (
+                        <PartsView
+                          parts={group().parts}
+                          prefs={props.prefs}
+                          directory={props.directory}
+                          permissions={props.permissions}
+                          paneWidth={props.paneWidth}
+                          onOpenChild={props.onOpenChild}
+                          user={props.message.role === "user"}
+                          streaming={streaming()}
+                          pending={props.pending}
+                          sourceID={sourceID}
+                        />
+                      )}
+                    />
                   </Show>
                 )}
-              </For>
+              />
               <Show when={streaming() && frame().id === frames().at(-1)?.id}>
                 <ResponseProgress />
               </Show>
@@ -300,85 +342,101 @@ export default function Message(
         <Show when={assistant()}>
           {(message) => (
             <>
-              <footer
-                class={["otk-message-footer", {
-                  "otk-time-always": props.prefs.timestamps,
-                }]}
-              >
-                <span class="otk-message-details">
-                  <span
-                    class="otk-message-agent otk-created-trigger"
-                    tabindex="0"
-                    data-otk-focus="content"
-                    style={{
-                      "--message-agent-color":
-                        agentColor(message().agentColor) ||
-                        "var(--otk-fg-3)",
-                    }}
+              <ContentWindow
+                items={["footer"]}
+                key={(key) => key}
+                label="Reply metadata"
+                role="metadata"
+                control={(control) => {
+                  footerControl = control;
+                }}
+                render={() => (
+                  <footer
+                    ref={sourceRegion(() => props.lastID ?? props.message.id)}
+                    class={["otk-message-footer", {
+                      "otk-time-always": props.prefs.timestamps,
+                    }]}
                   >
-                    {message().agent}
-                  </span>
-                  <time
-                    class="otk-created-time"
-                    datetime={new Date(message().time.created).toISOString()}
-                  >
-                    {new Date(message().time.created).toLocaleString()}
-                  </time>
-                  <span class="otk-last-output-date" aria-hidden="true">
-                    {new Date(
-                      message().time.lastOutput ?? message().time.created,
-                    ).toLocaleDateString()}
-                  </span>
-                  <span>
-                    {message().model.provider}/{message().model.model}
-                  </span>
-                  <span class="otk-turn-time">
-                    {time().end === undefined ? "streaming" : elapsed(
-                      time().start,
-                      time().end!,
-                    )}
-                  </span>
-                  <TurnUsage
-                    summary={props.summary}
-                    state={props.digestState}
-                    detail={() => props.usage}
-                    error={props.usageError}
-                    open={props.openUsage}
-                    showCost={props.prefs.showCost}
-                  />
-                  <Show when={message().interrupted}>
-                    <span>interrupted</span>
-                  </Show>
-                </span>
-                <MessageActions
-                  kind="reply"
-                  revealed={revealed()}
-                  target={target()}
-                  region={() => article}
-                  onReveal={setRevealed}
-                />
-                <span class="otk-output-time-group">
-                  <time
-                    class="otk-last-output-time"
-                    tabindex="0"
-                    data-otk-focus="content"
-                    aria-label="Last output time"
-                    datetime={new Date(
-                      message().time.lastOutput ?? message().time.created,
-                    ).toISOString()}
-                    title={`Last output: ${
-                      new Date(
-                        message().time.lastOutput ?? message().time.created,
-                      ).toLocaleString()
-                    }`}
-                  >
-                    {new Date(
-                      message().time.lastOutput ?? message().time.created,
-                    )
-                      .toLocaleTimeString()}
-                  </time>
-                </span>
-              </footer>
+                    <span class="otk-message-details">
+                      <span
+                        class="otk-message-agent otk-created-trigger"
+                        tabindex="0"
+                        data-otk-focus="content"
+                        style={{
+                          "--message-agent-color":
+                            agentColor(message().agentColor) ||
+                            "var(--otk-fg-3)",
+                        }}
+                      >
+                        {message().agent}
+                      </span>
+                      <time
+                        class="otk-created-time"
+                        datetime={new Date(message().time.created)
+                          .toISOString()}
+                      >
+                        {new Date(message().time.created).toLocaleString()}
+                      </time>
+                      <span class="otk-last-output-date" aria-hidden="true">
+                        {new Date(
+                          message().time.lastOutput ?? message().time.created,
+                        ).toLocaleDateString()}
+                      </span>
+                      <span>
+                        {message().model.provider}/{message().model.model}
+                      </span>
+                      <span class="otk-turn-time">
+                        {time().end === undefined ? "streaming" : elapsed(
+                          time().start,
+                          time().end!,
+                        )}
+                      </span>
+                      <TurnUsage
+                        summary={props.summary}
+                        state={props.digestState}
+                        detail={() => props.usage}
+                        error={props.usageError}
+                        open={props.openUsage}
+                        control={(control) => {
+                          usageControl = control;
+                        }}
+                        showCost={props.prefs.showCost}
+                      />
+                      <Show when={message().interrupted}>
+                        <span>interrupted</span>
+                      </Show>
+                    </span>
+                    <MessageActions
+                      kind="reply"
+                      revealed={revealed()}
+                      target={target()}
+                      region={() => article}
+                      onReveal={setRevealed}
+                    />
+                    <span class="otk-output-time-group">
+                      <time
+                        class="otk-last-output-time"
+                        tabindex="0"
+                        data-otk-focus="content"
+                        aria-label="Last output time"
+                        datetime={new Date(
+                          message().time.lastOutput ?? message().time.created,
+                        ).toISOString()}
+                        title={`Last output: ${
+                          new Date(
+                            message().time.lastOutput ?? message().time.created,
+                          ).toLocaleString()
+                        }`}
+                      >
+                        {new Date(
+                          message().time.lastOutput ?? message().time.created,
+                        )
+                          .toLocaleTimeString()}
+                      </time>
+                    </span>
+                  </footer>
+                )}
+              />
             </>
           )}
         </Show>

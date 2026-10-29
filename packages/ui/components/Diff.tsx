@@ -8,6 +8,7 @@ import ToolPath from "./tools/ToolPath.tsx";
 import { relativeTarget } from "./tools/paths.ts";
 import { contextTarget } from "./context-target.ts";
 import { useContentIdentity } from "../features/transcript-context.tsx";
+import { ContentWindow } from "./VirtualList.tsx";
 type Line = Hunk["lines"][number];
 export function splitRows(lines: Line[]): { left?: Line; right?: Line }[] {
   const rows: { left?: Line; right?: Line }[] = [];
@@ -134,37 +135,56 @@ export default function Diff(
             <Show
               when={style() === "split"}
               fallback={
-                <For each={hunk().lines} keyed={false}>
-                  {(line) => (
-                    <div
-                      class="otk-diff-unified"
-                      data-line-kind={line().kind}
-                      data-old-line={line().oldNo}
-                      data-new-line={line().newNo}
-                    >
-                      <span class="otk-diff-number">{line().oldNo}</span>
-                      <span class="otk-diff-number">{line().newNo}</span>
-                      <span class="otk-diff-sign">
-                        {line().kind === "add"
-                          ? "+"
-                          : line().kind === "del"
-                          ? "−"
-                          : " "}
-                      </span>
-                      <span class="otk-diff-text">{line().text}</span>
-                    </div>
-                  )}
-                </For>
+                <ContentWindow
+                  items={hunk().lines.map((line, index) => ({ line, index }))}
+                  key={(row) => String(row.index)}
+                  label="Diff lines"
+                  scope={`${props.file.path}:${hunk().oldStart}:${hunk().newStart}:unified`}
+                  role="line"
+                  render={(row) => {
+                    const line = () => row().line;
+                    return (
+                      <div
+                        class="otk-diff-unified"
+                        data-line-kind={line().kind}
+                        data-old-line={line().oldNo}
+                        data-new-line={line().newNo}
+                      >
+                        <span class="otk-diff-number">{line().oldNo}</span>
+                        <span class="otk-diff-number">{line().newNo}</span>
+                        <span class="otk-diff-sign">
+                          {line().kind === "add"
+                            ? "+"
+                            : line().kind === "del"
+                            ? "−"
+                            : " "}
+                        </span>
+                        <span class="otk-diff-text">{line().text}</span>
+                      </div>
+                    );
+                  }}
+                />
               }
             >
-              <For each={splitRows(hunk().lines)} keyed={false}>
-                {(row) => (
-                  <div class="otk-diff-split-row">
-                    <Cell line={row().left} side="old" />
-                    <Cell line={row().right} side="new" />
-                  </div>
-                )}
-              </For>
+              <ContentWindow
+                items={splitRows(hunk().lines).map((row, index) => ({
+                  row,
+                  index,
+                }))}
+                key={(value) => String(value.index)}
+                label="Diff lines"
+                scope={`${props.file.path}:${hunk().oldStart}:${hunk().newStart}:split`}
+                role="line"
+                render={(value) => {
+                  const row = () => value().row;
+                  return (
+                    <div class="otk-diff-split-row">
+                      <Cell line={row().left} side="old" />
+                      <Cell line={row().right} side="new" />
+                    </div>
+                  );
+                }}
+              />
             </Show>
           </div>
         )}

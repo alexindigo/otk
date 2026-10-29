@@ -1,12 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   createContext,
+  createEffect,
   createSignal,
   type Element,
+  onCleanup,
   onSettled,
   useContext,
 } from "solid-js";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
+import {
+  createTranscriptInteraction,
+  type TranscriptInteraction,
+} from "@otk/client";
 
 /** Both visible reply actions and context commands copy the captured source. */
 export function copyContent(value: string): Promise<void> {
@@ -38,13 +44,54 @@ export interface ContentTarget extends ContentIdentity {
 interface ContentOwner {
   expanded?(): boolean;
   toggle?(): void;
-  usage?(): void;
+  usage?(): void | Promise<void>;
 }
 interface ContentActions {
   bind(identity: ContentIdentity, owner: ContentOwner): () => void;
 }
 const Identity = createContext<ContentIdentity>({});
 const Actions = createContext<ContentActions | null>(null);
+const Interaction = createContext<TranscriptInteraction | null>(null);
+export function contentGeneration() {
+  const interaction = useContext(Interaction);
+  return (id: string) => interaction?.generation(id) ?? id;
+}
+const Visibility = createContext<
+  ((element: HTMLElement, messageID: string) => (() => void) | undefined) | null
+>(null);
+export function sourceRegion(messageID: () => string) {
+  const attach = useContext(Visibility);
+  const [element, setElement] = createSignal<HTMLElement>();
+  let release: (() => void) | undefined;
+  createEffect(
+    () => ({ element: element(), id: messageID() }),
+    ({ element, id }) => {
+      release?.();
+      release = element && id ? attach?.(element, id) : undefined;
+    },
+  );
+  onCleanup(() => release?.());
+  return (element: HTMLElement) => {
+    setElement(element);
+  };
+}
+/** A disclosure owns only its explicit choice; expensive content is a factory. */
+export function retainedDisclosure(
+  kind: string,
+  identity = useContentIdentity(),
+) {
+  const interaction = useContext(Interaction);
+  const id = identity.partID ?? identity.ownerID ?? identity.messageID ?? kind;
+  const choice = interaction?.disclosure(
+    key(identity) + ":" + kind,
+    interaction.generation(id),
+  );
+  const [value, setValue] = createSignal<boolean | undefined>(choice?.value());
+  return [value, (open: boolean) => {
+    choice?.set(open);
+    setValue(open);
+  }] as const;
+}
 const key = (identity: ContentIdentity) =>
   JSON.stringify([
     identity.sidecarId,
@@ -70,8 +117,18 @@ export function contentOwner(
   onSettled(() => actions?.bind(identity(), owner));
 }
 /** One feature owner per transcript, independent of message/part population. */
-export function TranscriptContext(props: { children: Element }): Element {
+export function TranscriptContext(
+  props: {
+    children: Element;
+    interaction?: TranscriptInteraction;
+    visibility?(
+      element: HTMLElement,
+      messageID: string,
+    ): (() => void) | undefined;
+  },
+): Element {
   const ports = useCommandPorts();
+  const interaction = props.interaction ?? createTranscriptInteraction();
   const owners = new Map<string, ContentOwner>();
   const [revision, setRevision] = createSignal(0);
   const owner = (target?: ContentIdentity) => {
@@ -140,26 +197,30 @@ export function TranscriptContext(props: { children: Element }): Element {
     run: (_ctx, target: ContentTarget) => owner(target)?.usage?.(),
   });
   return (
-    <Actions
-      value={{
-        bind: (identity, value) => {
-          const id = key(identity);
-          if (owners.has(id)) {
-            throw new Error(
-              "Duplicate transcript action owner",
-            );
-          }
-          owners.set(id, value);
-          setRevision((value) => value + 1);
-          return () => {
-            if (owners.get(id) !== value) return;
-            owners.delete(id);
-            setRevision((value) => value + 1);
-          };
-        },
-      }}
-    >
-      {props.children}
-    </Actions>
+    <Visibility value={props.visibility ?? null}>
+      <Interaction value={interaction}>
+        <Actions
+          value={{
+            bind: (identity, value) => {
+              const id = key(identity);
+              if (owners.has(id)) {
+                throw new Error(
+                  "Duplicate transcript action owner",
+                );
+              }
+              owners.set(id, value);
+              setRevision((value) => value + 1);
+              return () => {
+                if (owners.get(id) !== value) return;
+                owners.delete(id);
+                setRevision((value) => value + 1);
+              };
+            },
+          }}
+        >
+          {props.children}
+        </Actions>
+      </Interaction>
+    </Visibility>
   );
 }

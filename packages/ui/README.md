@@ -403,11 +403,52 @@ feedback wrapping independently of the surrounding single-line control label.
 It receives keys, role sample classes, render content, optional pinned keys and
 plain position/control callbacks. It measures those shared CSS roles and mounted
 items with its own ResizeObserver; there are no copied session/header offsets.
-Normal-flow spacers retain geometry for the viewport plus five extra rows per
-side and actual interaction pins. Content is constructed once per keyed
-lifetime, with live data in nested bindings, preserving native focus while the
-range moves. `control.reveal(key)` exposes navigation without consumer DOM
-access.
+Normal-flow spacers retain geometry, with five extra rows per side for Sessions
+and zero overscan for transcripts. A window can borrow its enclosing viewport;
+reply segments, part/block collections and diff lines use that same geometry
+without nested scroll boxes. Shared CSS roles estimate unmeasured rows; retained
+numeric measurements and identity anchors correct them. Initial nested mounts
+measure without moving their parent. Content is constructed once per keyed
+lifetime, with live data in nested bindings. `control.reveal(key, options)`
+waits for mounted, stable measured geometry and invokes its injected focus
+callback before releasing its measurement pin. `anchor()` / `restore(anchor)`
+expose source-free navigation without consumer DOM access.
+
+One root-shared position owner in `viewport.ts` alone writes the viewport's
+scroll position. Every borrowed window registers identity geometry from
+`createWindow` and requests layout/reveal/restoration intents; it never restores
+the root independently. `followViewport` is an intent facade over that same
+owner. The owner retains anchored identity through measurement transactions,
+distinguishes native clamping from newer input, and follows the physical bottom
+only while follow intent is active. Frame/hunk scopes distinguish sibling
+collections without duplicating geometry math. Message's exposed reveal control
+focuses its visible bubble after owner-controlled positioning.
+
+New or changed visible rows hold temporary measurement leases through their
+ancestor windows. The lease ends only after actual DOM size has been recorded,
+so a large code/diff body cannot be recycled using its earlier estimate while
+tail follow is positioning the root. Mounted row bounds supply geometry; absent
+rows use `createWindow`'s retained measurements/role estimates. A reveal settles
+on measured viewport-relative bounds even while preceding content grows, then
+retains that requested identity as its anchor.
+
+Native selections pin the complete intersecting logical range before recycling,
+including interior child windows and reverse selections. Select all in a focused
+transcript materializes the acquired range before establishing its native Range.
+Focus and shared Popover/ContextMenu origins use counted lifetime pins through
+dismissal and focus return. Transcript source visibility reports native message
+identities to the canonical resource's reserve port, never grouped-reply counts
+or top-edge pixel thresholds. Timeline borrows that same resource and windows
+its acquired prompt rows; reveal ensures the source before mounting/focusing it.
+
+ToolFrame and WorkLog accept lazy `body()` factories, shared by typed, external
+and fallback renderers. Closing destroys source rendering, observers, timers and
+highlight requests; the transcript's framework-free interaction owner retains
+only explicit choices and identity generations. Reasoning uses the same choice
+boundary and forced-visible reasoning has a heading, not an inert disclosure.
+Code consumes an injected content lease (or its own standalone lease). Shared
+highlight cache entries track their live leases and evict token source when the
+last lease cools; worker names and shared grammar preparation carry no source.
 
 Focus, editing and shared context-menu origins pin their identities until their
 owners release them, including across search exclusion. The context-menu owner

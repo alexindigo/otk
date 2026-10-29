@@ -11,10 +11,6 @@ import {
 import type { UsageSummary } from "@otk/protocol";
 import Popover, { type PopoverControl } from "./surface/Popover.tsx";
 import UsageDetail from "./UsageDetail.tsx";
-import {
-  contentOwner,
-  useContentIdentity,
-} from "../features/transcript-context.tsx";
 /** Cheap index summary; only opening acquires the injected detail lifetime. */
 export default function TurnUsage(props: {
   summary?: UsageSummary;
@@ -23,6 +19,7 @@ export default function TurnUsage(props: {
   detail(): Usage | undefined;
   error?(): string | undefined;
   open?(): () => void;
+  control?(control: { open(): void }): void;
 }): import("solid-js").Element {
   const [opened, setOpened] = createSignal(false);
   let release: (() => void) | undefined;
@@ -32,7 +29,6 @@ export default function TurnUsage(props: {
     release = undefined;
   };
   onCleanup(close);
-  const identity = useContentIdentity();
   const summary = () => {
     if (props.state !== "ready" || !props.summary) {
       return props.state === "unavailable" ? "Usage unavailable" : "Digesting…";
@@ -67,11 +63,6 @@ export default function TurnUsage(props: {
     >
       {(_available) => {
         let popover!: PopoverControl;
-        contentOwner(() => identity, {
-          get usage() {
-            return props.open ? () => popover.open() : undefined;
-          },
-        });
         return (
           <Popover
             class="otk-turn-usage"
@@ -83,6 +74,7 @@ export default function TurnUsage(props: {
             preview
             control={(value) => {
               popover = value;
+              props.control?.({ open: () => popover.open() });
             }}
             trigger={<span>{summary()}</span>}
             onOpen={() => {

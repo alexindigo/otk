@@ -4,6 +4,7 @@ import { For, Match, Show, Switch } from "solid-js";
 import { dynamic } from "@solidjs/web";
 import type { Block, Inline } from "@otk/protocol";
 import HighlightedCode from "./Code.tsx";
+import { ContentWindow } from "./VirtualList.tsx";
 const blockOf = <K extends Block["b"]>(block: Block, kind: K) =>
   block.b === kind ? block as Block & { b: K } : undefined;
 const inlineOf = <K extends Inline["i"]>(inline: Inline, kind: K) =>
@@ -282,10 +283,18 @@ export default function Blocks(props: {
         "otk-prose-compact": props.compact,
       }]}
     >
-      <BlockList
-        blocks={props.blocks}
-        streaming={props.streaming}
-        conceal={props.conceal}
+      <ContentWindow
+        items={props.blocks.map((block, index) => ({ block, index }))}
+        key={(row) => String(row.index)}
+        label="Source blocks"
+        render={(row) => (
+          <BlockView
+            block={row().block}
+            streaming={props.streaming &&
+              row().index === props.blocks.length - 1}
+            conceal={props.conceal}
+          />
+        )}
       />
     </div>
   );

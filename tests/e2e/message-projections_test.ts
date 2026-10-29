@@ -71,6 +71,11 @@ for (const theme of ["otk-dark", "otk-light"]) {
         permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"],
       });
       await openSession(b, session.id);
+      await b.poll(
+        `(()=>{const pane=document.querySelector('.otk-messages'),v=pane.getBoundingClientRect(),source=[...pane.querySelectorAll('.otk-text')].find(e=>e.textContent===${
+          JSON.stringify(markers[101])
+        }),footer=pane.querySelector('.otk-message-footer');if(!source||!footer)return false;const a=source.getBoundingClientRect(),z=footer.getBoundingClientRect();return a.bottom>v.top && a.top<v.bottom && z.top>=v.top && z.bottom<=v.bottom+1 && pane.scrollHeight-pane.clientHeight-pane.scrollTop<=1})()`,
+      );
       await waitForReply(b, session.id, markers[101]);
       await b.poll(
         "document.querySelector('.otk-turn-usage > button')?.textContent.includes('102 model calls')",
@@ -82,7 +87,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
         "closed breakdown does no detail work",
       );
       const point = await b.evaluate<{ x: number; y: number }>(
-        "(()=>{const e=document.querySelector('.otk-turn-usage > button');e.scrollIntoView({block:'center'});const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
+        "(async()=>{await document.fonts.ready;const e=document.querySelector('.otk-turn-usage > button');let previous='',stable=0;while(stable<2){await new Promise(requestAnimationFrame);const r=e.getBoundingClientRect(),next=JSON.stringify([r.x,r.y,r.width,r.height]);stable=next===previous?stable+1:0;previous=next;}const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
       );
       await b.send("Input.dispatchMouseEvent", {
         type: "mouseMoved",
@@ -120,10 +125,18 @@ for (const theme of ["otk-dark", "otk-light"]) {
         ),
         1,
       );
-      // Each intervening prose segment ends a work fold; pages must not add headings.
+      // 102 prose segments and 101 work groups remain logical rows; only the
+      // visible groups mount, independently of how many source pages copy acquired.
       assertEquals(
-        await b.evaluate("document.querySelectorAll('.otk-work-log').length"),
-        101,
+        await b.evaluate(
+          "Number(document.querySelector('[aria-label=\"Reply segments\"]').dataset.acquiredCount)",
+        ),
+        203,
+      );
+      assert(
+        (await b.evaluate<number>(
+          "document.querySelectorAll('.otk-work-log').length",
+        )) < 101,
       );
       assert(
         sentFrames(b).filter(({ frame }) => frame.method === "session.messages")

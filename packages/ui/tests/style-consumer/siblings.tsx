@@ -8,9 +8,10 @@ export default function Scene() {
     <div class="style-columns">
       <section class="style-panel" id="work">
         <h2>Independent work log</h2>
-        <WorkLog time={{ start: 0, end: 4200 }}>
-          <p>Owned work content</p>
-        </WorkLog>
+        <WorkLog
+          time={{ start: 0, end: 4200 }}
+          body={() => <p>Owned work content</p>}
+        />
         <RolledBackStrip
           state={{}}
           strip={{

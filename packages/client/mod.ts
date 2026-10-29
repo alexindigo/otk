@@ -18,6 +18,7 @@ export {
 } from "./transcript.ts";
 export * from "./transcripts.ts";
 export * from "./transcript-projection.ts";
+export * from "./transcript-interaction.ts";
 export * from "./message-policy.ts";
 export * from "./transcript-scopes.ts";
 export * from "./sidecars.ts";

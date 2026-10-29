@@ -7,6 +7,17 @@ test("independent public UI consumer renders external tools twice, updates live,
   const f = await uiConsumer(), { browser, root } = f;
   try {
     await browser.poll(
+      "document.querySelectorAll('#registered .otk-tool-toggle').length === 2",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelectorAll('#registered [data-external-tool]').length",
+      ),
+      0,
+    );
+    await browser.click("#registered > .otk-tool-line .otk-tool-toggle");
+    await browser.click("#registered .otk-message .otk-tool-toggle");
+    await browser.poll(
       "document.querySelectorAll('#registered [data-external-tool]').length === 2",
     );
     await browser.poll(
@@ -69,7 +80,6 @@ test("independent public UI consumer renders external tools twice, updates live,
     await browser.poll(
       "document.querySelector('#registered .otk-tool-toggle').textContent.includes('Inspect') && document.querySelector('#registered .otk-tool-toggle').textContent.includes('external target')",
     );
-    await browser.click("#registered .otk-tool-toggle");
     await browser.poll(
       "!document.querySelector('#registered .otk-tool-body').hidden",
     );

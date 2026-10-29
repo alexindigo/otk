@@ -148,11 +148,11 @@ test("U6 file changes start collapsed, disclose real content and follow the pers
   };
   const state = async (open: boolean) => {
     await b.poll(
-      `[...document.querySelectorAll('[data-tool=edit], [data-tool=write], [data-tool=patch]')].length===3 && [...document.querySelectorAll('[data-tool=edit], [data-tool=write], [data-tool=patch]')].every(row=>row.querySelector('.otk-tool-toggle').getAttribute('aria-expanded')==='${open}' && row.querySelector('.otk-tool-body').hidden===${!open} && (row.querySelector('.otk-tool-body').getBoundingClientRect().height>0)===${open})`,
+      `[...document.querySelectorAll('[data-tool=edit], [data-tool=write], [data-tool=patch]')].length===3 && [...document.querySelectorAll('[data-tool=edit], [data-tool=write], [data-tool=patch]')].every(row=>row.querySelector('.otk-tool-toggle').getAttribute('aria-expanded')==='${open}' && !!row.querySelector('.otk-tool-body')===${open} && ((row.querySelector('.otk-tool-body')?.getBoundingClientRect().height??0)>0)===${open})`,
     );
     assertEquals(
       await b.evaluate(
-        "document.querySelector('[data-tool=read] .otk-tool-body').hidden",
+        "!document.querySelector('[data-tool=read] .otk-tool-body')",
       ),
       true,
     );
@@ -227,7 +227,7 @@ test("U6 file changes start collapsed, disclose real content and follow the pers
     await state(false);
     await c.rpc("prefs.set", { key: "collapseFileChanges", value: false });
     await b.poll(
-      "document.querySelector('[data-tool=edit] .otk-tool-body').hidden && !document.querySelector('[data-tool=write] .otk-tool-body').hidden && !document.querySelector('[data-tool=patch] .otk-tool-body').hidden",
+      "!document.querySelector('[data-tool=edit] .otk-tool-body') && !!document.querySelector('[data-tool=write] .otk-tool-body') && !!document.querySelector('[data-tool=patch] .otk-tool-body')",
     );
     await b.reload();
     await state(true);

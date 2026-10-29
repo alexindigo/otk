@@ -21,8 +21,64 @@ const pending = new Map<
     reject(error: Error): void;
   }
 >();
-const cache = new Map<string, HighlightToken[]>();
-const pendingKeys = new Map<string, Map<string, Promise<string>>>();
+const cache = new Map<
+  string,
+  { tokens: HighlightToken[]; leases: Set<HighlightLease> }
+>();
+const pendingKeys = new Map<
+  string,
+  Map<string, { promise: Promise<string>; leases: Set<HighlightLease> }>
+>();
+export interface HighlightLease {
+  readonly live: boolean;
+  activate(): void;
+  onRelease(release: () => void): () => void;
+  dispose(): void;
+}
+/** Cache payloads belong to content lifetimes, independently of the shared worker. */
+export function createHighlightLease(): HighlightLease {
+  let live = true;
+  const releases = new Set<() => void>();
+  const reset = () => {};
+  const lease: HighlightLease = {
+    get live() {
+      return live;
+    },
+    activate() {
+      if (live) users.add(reset);
+    },
+    onRelease(release) {
+      if (!live) {
+        release();
+        return () => {};
+      }
+      releases.add(release);
+      return () => {
+        releases.delete(release);
+      };
+    },
+    dispose() {
+      if (!live) return;
+      live = false;
+      for (const release of releases) release();
+      releases.clear();
+      for (const [hash, value] of cache) {
+        value.leases.delete(lease);
+        if (!value.leases.size) cache.delete(hash);
+      }
+      for (const [lang, keys] of pendingKeys) {
+        for (const [source, value] of keys) {
+          value.leases.delete(lease);
+          if (!value.leases.size) keys.delete(source);
+        }
+        if (!keys.size) pendingKeys.delete(lang);
+      }
+      users.delete(reset);
+      releaseWorker();
+    },
+  };
+  return lease;
+}
 let outgoing: { owner: Worker; requests: HighlightRequest[] } | undefined;
 function post(owner: Worker, request: HighlightRequest) {
   if (outgoing?.owner === owner) {
@@ -65,11 +121,7 @@ function connect(lang?: string, source?: string, block?: number): Worker {
   if (worker) return worker;
   worker = new Worker(new URL("./worker.ts", import.meta.url), {
     type: "module",
-    name: "otk-highlight:" + JSON.stringify({
-      lang: lang || "text",
-      block,
-      text: source === undefined ? undefined : prefixSource(source),
-    }),
+    name: "otk-highlight:" + JSON.stringify({ lang: lang || "text" }),
   });
   worker.onmessage = ({ data }: MessageEvent<HighlightResult>) => {
     const request = pending.get(data.id);
@@ -86,13 +138,29 @@ function connect(lang?: string, source?: string, block?: number): Worker {
     for (const reset of users) reset();
     for (const request of failed) request.reject(error);
   };
+  if (block !== undefined && source !== undefined) {
+    post(worker, {
+      type: "prepare",
+      id: 0,
+      block,
+      lang: lang || "text",
+      text: prefixSource(source),
+    });
+  }
   return worker;
 }
-function key(lang: string, text: string): Promise<string> {
-  const keys = pendingKeys.get(lang) || new Map<string, Promise<string>>();
+function key(
+  lang: string,
+  text: string,
+  lease: HighlightLease,
+): Promise<string> {
+  const keys = pendingKeys.get(lang) ?? new Map();
   const current = keys.get(text);
-  if (current) return current;
-  const pending: Promise<string> = crypto.subtle.digest(
+  if (current) {
+    current.leases.add(lease);
+    return current.promise;
+  }
+  const promise = crypto.subtle.digest(
     "SHA-256",
     new TextEncoder().encode(text),
   ).then((digest) =>
@@ -100,12 +168,12 @@ function key(lang: string, text: string): Promise<string> {
     Array.from(new Uint8Array(digest), (n) => n.toString(16).padStart(2, "0"))
       .join("")
   ).finally(() => {
-    if (keys.get(text) === pending) keys.delete(text);
+    if (keys.get(text)?.promise === promise) keys.delete(text);
     if (!keys.size && pendingKeys.get(lang) === keys) pendingKeys.delete(lang);
   });
-  keys.set(text, pending);
+  keys.set(text, { promise, leases: new Set([lease]) });
   pendingKeys.set(lang, keys);
-  return pending;
+  return promise;
 }
 const task = () =>
   new Promise<void>((resolve) => {
@@ -138,7 +206,13 @@ function prefixSource(source: string): string {
   }
   return source.slice(0, end);
 }
-export function highlightBlock(lang?: string, source?: string) {
+export function highlightBlock(
+  lang?: string,
+  source?: string,
+  suppliedLease?: HighlightLease,
+) {
+  const lease = suppliedLease ?? createHighlightLease();
+  lease.activate();
   const block = ++nextBlock;
   let disposed = false,
     active: Capture | undefined,
@@ -236,12 +310,16 @@ export function highlightBlock(lang?: string, source?: string) {
       const { input } = capture;
       const hash = input.streaming
         ? undefined
-        : await key(input.lang, input.text);
-      if (disposed || active !== capture || capture.cancelled) return;
+        : await key(input.lang, input.text, lease);
+      if (disposed || !lease.live || active !== capture || capture.cancelled) {
+        return;
+      }
       if (hash && cache.has(hash)) {
-        const cached = cache.get(hash)!;
+        const entry = cache.get(hash)!;
+        entry.leases.add(lease);
+        const cached = entry.tokens;
         cache.delete(hash);
-        cache.set(hash, cached);
+        cache.set(hash, entry);
         release();
         send({ type: "dispose", block });
         let from = 0, lines = 0, batch: HighlightToken[] = [];
@@ -285,8 +363,11 @@ export function highlightBlock(lang?: string, source?: string) {
             if (value.type === "done" && value.plain) tokens = [];
             else apply(capture, value);
             if (value.type === "done") {
-              if (hash && !value.plain) {
-                cache.set(hash, tokens.slice());
+              if (hash && !value.plain && lease.live) {
+                const leases = cache.get(hash)?.leases ??
+                  new Set<HighlightLease>();
+                leases.add(lease);
+                cache.set(hash, { tokens: tokens.slice(), leases });
                 if (cache.size > 500) cache.delete(cache.keys().next().value!);
               }
               finish(capture, { plain: value.plain });
@@ -309,7 +390,8 @@ export function highlightBlock(lang?: string, source?: string) {
       finish(capture, undefined, normalizeError(error))
     );
   };
-  return {
+  let unlease = () => {};
+  const owner = {
     prepare,
     focus(ranges: HighlightRange[]) {
       if (
@@ -389,7 +471,11 @@ export function highlightBlock(lang?: string, source?: string) {
       if (worker) post(worker, { type: "dispose", block });
       users.delete(reset);
       tokens = [];
+      unlease();
+      if (!suppliedLease) lease.dispose();
       releaseWorker();
     },
   };
+  unlease = lease.onRelease(() => owner.dispose());
+  return owner;
 }

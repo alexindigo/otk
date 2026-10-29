@@ -38,6 +38,13 @@ hierarchy. Search, scroll anchors, focused rows and in-place edits retain their
 identities while panels unmount or lists change. Project and required session
 activity indicators remain visible independently of list rendering.
 
+Transcripts, long reply segments, source blocks, diff lines and Timeline now use
+the same measured window owner. Native selection, acquired-range Select all,
+focus and surface origins retain their identities across recycling; Timeline
+reveals mount and measure before focusing the prompt. Folded tools and work logs
+construct bodies only while open, retain source-free disclosure choices, and
+release source-bearing highlighting caches when their transcript cools.
+
 **Compatibility.** The native adapter/package is now `opencode-v1` /
 `@otk/harness-opencode-v1`. The old `harness.type = "opencode1"` spelling still
 loads with a deprecation message; environment precedence is unchanged. Session

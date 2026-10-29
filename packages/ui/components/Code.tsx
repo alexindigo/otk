@@ -11,6 +11,7 @@ import {
   untrack,
 } from "solid-js";
 import { highlightBlock } from "../highlight/client.ts";
+import { useHighlightLease } from "../highlight/context.tsx";
 import {
   CodeProjection,
   type SourceGroup,
@@ -147,6 +148,7 @@ export default function Code(
   const block = highlightBlock(
     untrack(() => (props.lang || "text").toLowerCase()),
     untrack(() => props.text),
+    useHighlightLease(),
   );
   const [rawTick, setRawTick] = createSignal(0);
   const [selectionTick, setSelectionTick] = createSignal(0);

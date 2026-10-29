@@ -16,6 +16,7 @@ import { menuReady } from "../support/menu.ts";
 import type { TaskRecord } from "@otk/protocol";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { waitFor } from "../support/opencode.ts";
+import { wheelViewport } from "../support/message-viewport.ts";
 
 const viewport = ".otk-project-session-tree";
 const search = '[aria-label="Search sessions by title"]';
@@ -45,10 +46,10 @@ async function context(b: Cdp, selector: string) {
   await menuReady(b, menu);
 }
 async function scroll(b: Cdp, top: string) {
-  await b.evaluate(
-    `(()=>{const e=document.querySelector('${viewport}');e.scrollTop=${top};e.dispatchEvent(new Event('scroll'))})()`,
+  const delta = await b.evaluate<number>(
+    `(()=>{const e=document.querySelector('${viewport}');return (${top})-e.scrollTop})()`,
   );
-  await b.evaluate("new Promise(requestAnimationFrame)");
+  await wheelViewport(b, viewport, delta);
 }
 const anchorProbe =
   `(()=>{const v=document.querySelector('${viewport}'),r=v.getBoundingClientRect();const row=[...v.querySelectorAll('[data-virtual-key]')].find(e=>e.getBoundingClientRect().bottom>r.top+.5);return row&&{key:row.dataset.virtualKey,offset:row.getBoundingClientRect().top-r.top,top:v.scrollTop}})()`;
@@ -132,6 +133,12 @@ test("active Sessions windows its DOM and releases it on collapse", async () => 
         title: `Window session ${i}`,
       });
     }
+    // Isolate list demand from M2's intentional project-wide body warming.
+    await c.rpc("tasks.create", {
+      directory: f.entries[0].directory,
+      name: "Selected transcript scope",
+      sessions: ["tstv1-otk"],
+    });
     await b.goto(f.url);
     await openSession(b, "tstv1-otk");
     await b.poll("!!document.querySelector('.otk-session-row')");
@@ -344,7 +351,9 @@ for (const theme of ["otk-dark", "otk-light"]) {
         `!document.querySelector('[data-session="${before.key}"]').classList.contains('is-deleted')`,
       );
       await b.click(".otk-panel-collapse");
-      await b.poll("!document.querySelector('.otk-virtual-list')");
+      await b.poll(
+        "!document.querySelector('.otk-project-sessions .otk-virtual-list')",
+      );
       await b.click(".otk-right-rail [data-panel-view=sessions]");
       await b.poll(`document.querySelector('${viewport}').scrollTop>2900`);
       const restored = await b.evaluate<typeof before>(anchorProbe);

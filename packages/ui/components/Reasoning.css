@@ -11,9 +11,6 @@
   padding: 0;
   color: var(--otk-fg-3);
 }
-.otk-reasoning > button:disabled {
-  opacity: 1;
-}
 .otk-reasoning-body {
   padding: 8px 12px;
   border-left: 1px solid var(--muted);
@@ -22,6 +19,13 @@
   width: 13px;
   height: 13px;
 }
-.otk-reasoning > button[aria-expanded=true] .otk-reasoning-chevron {
+.otk-reasoning.is-open > button .otk-reasoning-chevron {
   rotate: 90deg;
+}
+.otk-reasoning-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--otk-fg-3);
+  font: 400 var(--text-ui)/var(--line-ui) var(--font-ui);
 }

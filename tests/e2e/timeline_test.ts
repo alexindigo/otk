@@ -9,6 +9,7 @@ import {
 } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { sentFrames } from "../support/browser-fixture.ts";
+import { wheelViewport } from "../support/message-viewport.ts";
 
 for (const theme of ["otk-dark", "otk-light"]) {
   test(`Timeline reveals and focuses prompts, shares hover/context actions and follows rollback (${theme})`, async () => {
@@ -58,14 +59,11 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await b.poll(
         "document.querySelectorAll('[data-timeline-prompt]').length>0",
       );
-      assertEquals(
+      assert(
         await b.evaluate(
-          "[...document.querySelectorAll('[data-timeline-prompt]')].map(row=>row.dataset.timelinePrompt)",
+          "(()=>{const ids=new Set([...document.querySelectorAll('[data-timeline-prompt]')].map(row=>row.dataset.timelinePrompt));return [...document.querySelectorAll('[data-role=user]')].filter(message=>message.querySelector('.otk-user-bubble')).every(message=>ids.has(message.dataset.message))})()",
         ),
-        await b.evaluate(
-          "[...document.querySelectorAll('[data-role=user]')].filter(message=>message.querySelector('.otk-user-bubble')).map(message=>message.dataset.message)",
-        ),
-        "Timeline rows are exactly the visible prompt bubbles, never marker-only messages",
+        "Mounted prompt bubbles belong to the acquired Timeline; every Timeline identity is revealed below",
       );
       await b.poll(
         "document.querySelectorAll('[data-timeline-prompt]').length===3",
@@ -277,23 +275,39 @@ test("Timeline pages the same transcript and clears on project-only selection", 
     await openSession(b, s.id);
     await b.click("[data-panel-view=timeline]");
     await b.poll(
-      "document.querySelectorAll('[data-timeline-prompt]').length===20 && !!document.querySelector('.otk-timeline-older')",
+      "Number(document.querySelector('.otk-timeline')?.dataset.promptCount)>=20 && !!document.querySelector('.otk-timeline-older')",
     );
     const before = sentFrames(b).length;
-    for (const count of [30, 40, 50, 60, 70, 80, 90, 100, 105]) {
+    while (
+      await b.evaluate<number>(
+        "Number(document.querySelector('.otk-timeline')?.dataset.promptCount)",
+      ) < 105
+    ) {
+      const count = await b.evaluate<number>(
+        "Number(document.querySelector('.otk-timeline')?.dataset.promptCount)",
+      );
       await b.click(".otk-timeline-older");
       await b.poll(
-        `document.querySelectorAll('[data-timeline-prompt]').length===${count}`,
+        `Number(document.querySelector('.otk-timeline')?.dataset.promptCount)>${count}`,
       );
     }
     await b.poll(
-      "document.querySelectorAll('[data-timeline-prompt]').length===105 && document.querySelectorAll('[data-role=user]').length===105 && !document.querySelector('.otk-timeline-older')",
+      "Number(document.querySelector('.otk-timeline')?.dataset.promptCount)===105 && Number(document.querySelector('.otk-message-flow')?.dataset.messageCount)===105 && !document.querySelector('.otk-timeline-older')",
     );
     assert(
       sentFrames(b).slice(before).some(({ frame }) =>
         frame.method === "session.messages" &&
         !!(frame.params as { before?: string }).before
       ),
+    );
+    assert(
+      await b.evaluate(
+        "document.querySelectorAll('[data-role=user]').length<105 && document.querySelectorAll('[data-timeline-prompt]').length<105",
+      ),
+    );
+    await wheelViewport(b, ".otk-timeline-list", -100000);
+    await b.poll(
+      "document.querySelector('.otk-timeline-preview')?.textContent==='Historical prompt 0'",
     );
     assertEquals(
       await b.evaluate(

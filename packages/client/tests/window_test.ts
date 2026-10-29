@@ -2,6 +2,16 @@
 import { assert, assertEquals } from "@std/assert";
 import { createWindow } from "@otk/client";
 
+Deno.test("explicit interaction pins materialize nested rows outside viewport geometry", () => {
+  const window = createWindow();
+  window.update(["first", "middle", "last"], () => 30);
+  assertEquals(window.range(900, 0, 0, ["first", "last"]).visibleKeys, [
+    "first",
+    "last",
+  ]);
+  assertEquals(window.range(900, 0).visibleKeys, []);
+});
+
 Deno.test("measured windows bound rows, retain disjoint pins and preserve identity anchors", () => {
   const keys = Array.from({ length: 10000 }, (_, i) => `row-${i}`);
   const window = createWindow();
