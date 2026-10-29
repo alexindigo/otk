@@ -38,9 +38,8 @@ export function createTranscriptScopes(
     }
   >();
   const membership = (server: string, directory: string, id?: string) => {
-    const entries = resources.indexEntries(server).filter((e) =>
-      e.directory === directory && !e.deleted
-    );
+    const entries = resources.projectEntries({ sidecarId: server, directory })
+      .filter((e) => !e.deleted);
     const tasks = resources.inbox(server).state.inbox.tasks;
     const task = id
       ? familyTask(
@@ -81,15 +80,17 @@ export function createTranscriptScopes(
       );
     }
   };
-  const attention = (server: string) => {
+  const attention = (server: string, changed?: readonly string[]) => {
     if (!resources.inbox(server).state.ready) return;
     const inbox = resources.inbox(server).state.inbox;
     const present = new Set<string>();
-    for (
-      const entry of resources.attention(server).entries(
-        resources.indexEntries(server),
-      )
-    ) {
+    const entries = changed
+      ? changed.flatMap((id) => {
+        const entry = resources.entry(server, id);
+        return entry ? [entry] : [];
+      })
+      : resources.indexEntries(server);
+    for (const entry of resources.attention(server).entries(entries)) {
       const id = sessionKey(server, entry.id);
       present.add(id);
       const kind = entry.deleted ? "idle" : inboxStatus(entry, inbox);
@@ -117,9 +118,15 @@ export function createTranscriptScopes(
         value.sessions,
       );
     }
-    for (const id of edges.keys()) {
-      if (id.startsWith(server + "/") && !present.has(id)) edges.delete(id);
-    }
+    if (changed) {
+      for (const id of changed) {
+        if (!resources.entry(server, id)) {
+          edges.delete(sessionKey(server, id));
+        }
+      }
+    } else {for (const id of edges.keys()) {
+        if (id.startsWith(server + "/") && !present.has(id)) edges.delete(id);
+      }}
   };
   const release = resources.observe({
     frame(server, frame, accepted) {
@@ -128,8 +135,19 @@ export function createTranscriptScopes(
         frame.t === "index.snapshot" || frame.t === "index.patch" ||
         frame.t === "inbox" || frame.t === "approvals"
       ) {
-        attention(server);
-        if (project?.sidecarId === server) update();
+        const indexed = frame.t === "index.snapshot" ||
+          frame.t === "index.patch";
+        const reduced = indexed ? resources.indexChanges(server) : undefined;
+        const changes = indexed && reduced?.revision === frame.rev
+          ? reduced
+          : undefined;
+        attention(
+          server,
+          changes && !changes.structural ? changes.ids : undefined,
+        );
+        if (project?.sidecarId === server && (!changes || changes.structural)) {
+          update();
+        }
       }
     },
     removed(server) {

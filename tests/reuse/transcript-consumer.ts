@@ -1,0 +1,43 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+import {
+  createIndex,
+  createTranscripts,
+  SidecarConnection,
+  type TranscriptClock,
+} from "@otk/client";
+
+/** Independent public-entry consumer: no UI, native or application imports. */
+export async function transcriptConsumer(base: string, clock: TranscriptClock) {
+  const index = createIndex();
+  const owner = createTranscripts({
+    connection: () => connection,
+    entry: (server, id) => index.get(server, id),
+    clock,
+  });
+  const connection = new SidecarConnection(base, {
+    status() {},
+    frame(frame) {
+      let accepted = true;
+      if (frame.t === "index.snapshot" || frame.t === "index.patch") {
+        accepted = index.receive("consumer", frame);
+        if (!accepted) connection.send({ t: "resnapshot" });
+      }
+      owner.receive("consumer", frame, accepted);
+    },
+  }, {
+    socket: (url) =>
+      Reflect.construct(WebSocket, [url, {
+        headers: { Origin: new URL(base).origin },
+      }]) as WebSocket,
+  });
+  await connection.connect();
+  return {
+    owner,
+    index,
+    connection,
+    stop() {
+      owner.stop();
+      connection.stop();
+    },
+  };
+}

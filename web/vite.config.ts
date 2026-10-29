@@ -16,7 +16,9 @@ export default defineConfig({
       "@otk/ui": new URL("../packages/ui/mod.ts", import.meta.url).pathname,
     },
   },
-  plugins: [solid({ compiler: "native", hot: false })],
+  plugins: [
+    solid({ compiler: "native", hot: false, solid: { delegateEvents: false } }),
+  ],
   worker: { format: "es" },
   build: { outDir: "dist" },
 });

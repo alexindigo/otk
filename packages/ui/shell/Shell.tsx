@@ -111,6 +111,7 @@ export default function Shell(
     entry,
     attention,
     entries: resources.indexEntries,
+    changes: resources.indexChanges,
   });
   onCleanup(resources.observe({
     frame: (id, frame, accepted) => {
@@ -490,7 +491,7 @@ export default function Shell(
           </button>
           <ProjectInbox
             projects={projects()}
-            entries={entries()}
+            entries={resources.metadataEntries()}
             servers={sidecars.state.list}
             selected={project()}
             prefs={toggles.state.prefs}

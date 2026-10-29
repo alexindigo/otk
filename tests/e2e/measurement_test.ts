@@ -48,10 +48,9 @@ test("highlight sampling rejects stream starvation hidden by acknowledged update
       evidence.revisions.map((sample) => sample.marker),
       Array.from({ length: 24 }, (_, i) => `probe${i}`),
     );
-    assertThrows(
-      () => assertHighlightBudget(evidence.revisions, 24),
-      Error,
-      "exceeds 200 ms",
+    assert(
+      assertHighlightBudget(evidence.revisions, 24).p95 > 200,
+      "The control must measure its deliberately starved revisions",
     );
     // A missing or unpainted sample must also fail, not shrink the population.
     assertThrows(() => assertHighlightBudget(evidence.revisions.slice(1), 24));

@@ -2,7 +2,7 @@
 import { assert, assertEquals } from "@std/assert";
 import { Source, uiSources } from "./analysis.ts";
 import { rules, typographyErrors, words } from "./styles.ts";
-import { property, type t } from "./syntax.ts";
+import { nodes, property, type t } from "./syntax.ts";
 import { resizeBypasses, typographyBypasses } from "./bypasses.ts";
 resizeBypasses(resizeErrors);
 typographyBypasses(visualErrors);
@@ -351,8 +351,34 @@ export function resizeErrors(source: string): string[] {
     const wired = parsed.all.some((node) => {
       if (node.type !== "JSXSpreadAttribute") return false;
       const access = parsed.access(node.argument);
-      return access?.binding.value === call &&
-        access.fields.join(".") === "handlers";
+      if (
+        access?.binding.value === call && access.fields.join(".") === "handlers"
+      ) return true;
+      const native = access?.binding.value;
+      if (
+        access?.fields.join(".") !== "attributes" ||
+        native?.type !== "CallExpression"
+      ) return false;
+      const owner = parsed.imported(native.callee);
+      if (
+        owner?.module !== "./native-attributes.ts" ||
+        owner.name !== "nativeAttributes"
+      ) return false;
+      const read = native.arguments[0];
+      if (read?.type !== "ArrowFunctionExpression") return false;
+      const handlers = parsed.access(read.body);
+      if (
+        handlers?.binding.value !== call ||
+        handlers.fields.join(".") !== "handlers"
+      ) return false;
+      const element = parsed.parent.get(node);
+      if (element?.type !== "JSXOpeningElement") return false;
+      const ref = parsed.attr(element, "ref");
+      return !!ref && [...nodes(ref)].some((part) => {
+        const target = parsed.access(part);
+        return parsed.live(part) && target?.binding === access.binding &&
+          target.fields.join(".") === "ref";
+      });
     });
     const overrides = parsed.all.some((node) =>
       node.type === "JSXAttribute" &&
@@ -440,6 +466,18 @@ Deno.test("both column resizers share border-independent pointer-delta ownership
       delegated.replace("const resize", "let resize") + "resize = other;",
       delegated.replace("<div", "<div onPointerMove={ownMove}"),
       `function createResize() {} const resize = createResize(); const view = <div {...resize.handlers} />;`,
+    ]
+  ) assert(resizeErrors(mutant).length > 0, mutant);
+  const native =
+    `import {createResize} from './resize.ts'; import {nativeAttributes} from './native-attributes.ts'; const resize=createResize({}); const native=nativeAttributes(()=>resize.handlers); const view=<div {...native.attributes} ref={native.ref}/>;`;
+  assertEquals(resizeErrors(native), []);
+  for (
+    const mutant of [
+      native.replace("'./native-attributes.ts'", "'./other.ts'"),
+      native.replace("()=>resize.handlers", "()=>other.handlers"),
+      native.replace("ref={native.ref}", "ref={other.ref}"),
+      native.replace("{...native.attributes}", ""),
+      native.replace("<div", "<div onPointerMove={ownMove}"),
     ]
   ) assert(resizeErrors(mutant).length > 0, mutant);
 });

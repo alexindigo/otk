@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   autoApproveOwner,
-  type IndexEntry,
+  type IndexMetadata,
   type PermissionRequest,
   sessionAncestors,
   type SessionLookup,
@@ -12,7 +12,7 @@ import {
 export interface ApprovalAttention {
   waiting(sessionID: string): boolean;
   permissions(requests: readonly PermissionRequest[]): PermissionRequest[];
-  entries<T extends IndexEntry>(entries: readonly T[]): T[];
+  entries<T extends IndexMetadata>(entries: readonly T[]): T[];
 }
 export function approvalAttention(
   enabled: readonly string[],
@@ -25,7 +25,7 @@ export function approvalAttention(
     waiting,
     permissions: (requests: readonly PermissionRequest[]) =>
       requests.filter((r) => waiting(r.sessionID)),
-    entries<T extends IndexEntry>(entries: readonly T[]): T[] {
+    entries<T extends IndexMetadata>(entries: readonly T[]): T[] {
       if (!linked || !enabled.length) return [...entries];
       // Subtract each covered subtree once, even when an uncovered ancestor has
       // both manual and automatic helper branches. Native roll-ups may include

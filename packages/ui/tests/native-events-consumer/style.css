@@ -1,0 +1,10 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+#app {
+  display: grid;
+  gap: 0.5rem;
+  justify-items: start;
+}
+#event-editor {
+  inline-size: min(32rem, 100%);
+  max-block-size: 12rem;
+}

@@ -94,6 +94,48 @@ Deno.test("wheel-away at the top keeps an anchor without waiting for an impossib
   });
 });
 
+for (const movedBeforeLayout of [true, false]) {
+  Deno.test(`active wheel preserves identity and input displacement across prepend (input first: ${movedBeforeLayout})`, () => {
+    viewportFixture(({ pane, height, flush }) => {
+      const lease = acquireViewport(pane);
+      let prefix = 300;
+      const release = lease.owner.register({
+        id: "rows",
+        depth: 1,
+        anchor: () => ({ key: "row", offset: pane.scrollTop - prefix }),
+        resolve: (anchor) => prefix + anchor.offset,
+      });
+      try {
+        pane.scrollTop = 600;
+        pane.dispatchEvent(new Event("scroll"));
+        lease.owner.keepAnchor();
+        for (let i = 0; i < 4; i++) flush();
+        const wheel = new Event("wheel");
+        Object.defineProperty(wheel, "deltaY", { value: -20 });
+        pane.dispatchEvent(wheel);
+        if (movedBeforeLayout) {
+          pane.scrollTop = 580;
+          pane.dispatchEvent(new Event("scroll"));
+        }
+        prefix += 1000;
+        height(2400);
+        lease.owner.layout();
+        if (!movedBeforeLayout) pane.scrollTop = 580;
+        // The native event can be delivered after the model/DOM prefix changes.
+        pane.dispatchEvent(new Event("scroll"));
+        for (let i = 0; i < 4; i++) flush();
+        assertEquals(pane.scrollTop, 1580);
+        pane.dispatchEvent(new Event("scrollend"));
+        for (let i = 0; i < 4; i++) flush();
+        assertEquals(pane.scrollTop, 1580);
+      } finally {
+        release();
+        lease.release();
+      }
+    });
+  });
+}
+
 /** Controlled native event/frame order; assertions observe viewport position. */
 function viewportFixture(
   run: (f: {

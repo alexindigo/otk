@@ -41,6 +41,7 @@ import { countLabel } from "./tools/count.ts";
 import { contextTarget } from "./context-target.ts";
 import type { SessionContextTarget } from "../features/session-context.ts";
 import { breadcrumbRows } from "./list-presentation.ts";
+import { nativeAttributes } from "./native-attributes.ts";
 interface TaskContextTarget extends ProjectSelection {
   taskID: string;
 }
@@ -246,6 +247,11 @@ export default function ProjectTabs(props: {
                   sessionID: tab().id,
                 }, "tab");
               const Control = dynamic(() => editing() ? "div" : "button");
+              const native = nativeAttributes(() => ({
+                onClick: () => run(select(tab())),
+                onDblClick: () =>
+                  tab().kind === "phantom" && run(pin(tab().id)),
+              }));
               return (
                 <div
                   class="otk-tab"
@@ -262,6 +268,7 @@ export default function ProjectTabs(props: {
                   data-preview={String(tab().preview)}
                 >
                   <Control
+                    ref={native.ref}
                     type="button"
                     role="tab"
                     {...selection({
@@ -285,9 +292,7 @@ export default function ProjectTabs(props: {
                     data-tab={tab().id}
                     data-status={entry(props.model.state.sessionID ?? "")
                       ?.status}
-                    onClick={() => run(select(tab()))}
-                    onDblClick={() =>
-                      tab().kind === "phantom" && run(pin(tab().id))}
+                    {...native.attributes}
                   >
                     <SelectionContent>
                       <StatusLight small state={tab().status} />
@@ -378,56 +383,70 @@ export default function ProjectTabs(props: {
                     </Show>
                   }
                 >
-                  <span class="otk-crumb-link">
-                    <Show when={!crumb().first}>
-                      <span class="otk-crumb-separator">
-                        <ChevronIcon class="otk-crumb-chevron" />
-                      </span>
-                    </Show>
-                    <Control
-                      type="button"
-                      ref={contextTarget(() => sessionTarget(crumb().id))}
-                      {...selection({
-                        class: `otk-session-crumb ${
-                          sessionState(entry(crumb().id))
-                        }${editing() ? " is-editing" : ""}`,
-                        kind: "current",
-                        selected: props.model.state.sessionID === crumb().id,
-                      })}
-                      data-otk-selection="horizontal"
-                      title={props.project.directory}
-                      data-helper={String(crumb().helper)}
-                      data-depth={crumb().depth}
-                      data-crumb={crumb().id}
-                      aria-label={`${
-                        props.session?.id === crumb().id
-                          ? props.session.title
-                          : entry(crumb().id)?.title ?? "Session unavailable"
-                      }${props.auto?.(crumb().id) ? ", Auto-approve on" : ""}`}
-                      onClick={() => run(openCrumb(crumb().id))}
-                    >
-                      <SelectionContent>
-                        <StatusLight
-                          small
-                          state={entry(crumb().id)
-                            ? inboxStatus(entry(crumb().id)!, props.inbox)
-                            : "idle"}
-                        />
-                        <span class="otk-crumb-title">
-                          <Show
-                            when={editing()}
-                            fallback={props.session?.id === crumb().id
+                  {(_visible) => {
+                    const native = nativeAttributes(() => ({
+                      onClick: () => run(openCrumb(crumb().id)),
+                    }));
+                    return (
+                      <span class="otk-crumb-link">
+                        <Show when={!crumb().first}>
+                          <span class="otk-crumb-separator">
+                            <ChevronIcon class="otk-crumb-chevron" />
+                          </span>
+                        </Show>
+                        <Control
+                          type="button"
+                          ref={[
+                            contextTarget(() => sessionTarget(crumb().id)),
+                            native.ref,
+                          ]}
+                          {...selection({
+                            class: `otk-session-crumb ${
+                              sessionState(entry(crumb().id))
+                            }${editing() ? " is-editing" : ""}`,
+                            kind: "current",
+                            selected:
+                              props.model.state.sessionID === crumb().id,
+                          })}
+                          data-otk-selection="horizontal"
+                          title={props.project.directory}
+                          data-helper={String(crumb().helper)}
+                          data-depth={crumb().depth}
+                          data-crumb={crumb().id}
+                          aria-label={`${
+                            props.session?.id === crumb().id
                               ? props.session.title
                               : entry(crumb().id)?.title ??
-                                "Session unavailable"}
-                          >
-                            <TitleEditor owner={props.rename!} />
-                          </Show>
-                        </span>
-                        <AutoMark active={!!props.auto?.(crumb().id)} />
-                      </SelectionContent>
-                    </Control>
-                  </span>
+                                "Session unavailable"
+                          }${
+                            props.auto?.(crumb().id) ? ", Auto-approve on" : ""
+                          }`}
+                          {...native.attributes}
+                        >
+                          <SelectionContent>
+                            <StatusLight
+                              small
+                              state={entry(crumb().id)
+                                ? inboxStatus(entry(crumb().id)!, props.inbox)
+                                : "idle"}
+                            />
+                            <span class="otk-crumb-title">
+                              <Show
+                                when={editing()}
+                                fallback={props.session?.id === crumb().id
+                                  ? props.session.title
+                                  : entry(crumb().id)?.title ??
+                                    "Session unavailable"}
+                              >
+                                <TitleEditor owner={props.rename!} />
+                              </Show>
+                            </span>
+                            <AutoMark active={!!props.auto?.(crumb().id)} />
+                          </SelectionContent>
+                        </Control>
+                      </span>
+                    );
+                  }}
                 </Show>
               );
             }}

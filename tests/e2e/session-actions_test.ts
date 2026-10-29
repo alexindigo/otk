@@ -12,6 +12,15 @@ import { menuReady } from "../support/menu.ts";
 import { WsClient } from "../support/ws-client.ts";
 
 const menu = ':popover-open [role="menu"][aria-label="Context menu"]';
+interface ActionHistoryMessage {
+  info: {
+    id: string;
+    role: string;
+    parentID?: string;
+    time: { completed?: number };
+  };
+  parts: { type: string; text?: string }[];
+}
 
 test("compact uses the next-prompt model, survives a 20-second summary and queues behind current work", async () => {
   const f = await browserFixture();
@@ -99,13 +108,31 @@ test("compact uses the next-prompt model, survives a 20-second summary and queue
     await sessionContext(b, `[data-session="${session.id}"]`);
     await b.click(`${menu} [data-context-command="session.compact"]`);
     await b.poll(
-      "document.querySelectorAll('.otk-compaction-divider').length===2",
+      "(()=>{const pane=document.querySelector('.otk-messages'),v=pane.getBoundingClientRect();return [...pane.querySelectorAll('.otk-compaction-divider')].some(marker=>{const r=marker.getBoundingClientRect();return marker.textContent==='Compacting…' && r.top<v.bottom && r.bottom>v.top})})()",
+    );
+    const queuedHistory = await f.oc.request<ActionHistoryMessage[]>(
+      `/session/${session.id}/message`,
+    );
+    const compactions = queuedHistory.filter((message) =>
+      message.parts.some((part) => part.type === "compaction")
+    );
+    assertEquals(
+      compactions.map((operation) =>
+        queuedHistory.some((reply) =>
+            reply.info.role === "assistant" &&
+            reply.info.parentID === operation.info.id &&
+            reply.info.time.completed !== undefined
+          )
+          ? "Session compacted"
+          : "Compacting…"
+      ),
+      ["Session compacted", "Compacting…"],
     );
     assertEquals(
       await b.evaluate(
-        "[...document.querySelectorAll('.otk-compaction-divider')].map(marker=>marker.textContent)",
+        "Number(document.querySelector('.otk-message-flow').dataset.messageCount)",
       ),
-      ["Session compacted", "Compacting…"],
+      queuedHistory.length,
     );
     assertEquals(f.fake.requests.length, requests);
     first.release();
@@ -116,7 +143,7 @@ test("compact uses the next-prompt model, survives a 20-second summary and queue
     summary.release();
     await waitForReply(b, session.id, "Queued compaction summary.");
     await b.poll(
-      "[...document.querySelectorAll('.otk-compaction-divider')].every(marker=>marker.textContent==='Session compacted' && !marker.closest('.otk-user-bubble'))",
+      "(()=>{const markers=[...document.querySelectorAll('.otk-compaction-divider')];return markers.length>0 && markers.every(marker=>marker.textContent==='Session compacted' && !marker.closest('.otk-user-bubble'))})()",
     );
     assertEquals(
       await b.evaluate("!!document.querySelector('.otk-session-error')"),
@@ -406,8 +433,20 @@ for (const theme of ["otk-dark", "otk-light"]) {
         "shared\n",
       );
       await openSession(b, original.id);
+      const originalHistory = await f.oc.request<ActionHistoryMessage[]>(
+        `/session/${original.id}/message`,
+      );
+      assertEquals(
+        originalHistory.filter((message) => message.info.role === "user")
+          .flatMap((message) =>
+            message.parts.filter((part) => part.type === "text").map((part) =>
+              part.text
+            )
+          ),
+        ["First prompt", "Second prompt"],
+      );
       await b.poll(
-        `document.querySelectorAll('[data-role="user"]').length===2`,
+        `Number(document.querySelector('.otk-message-flow')?.dataset.messageCount)===${originalHistory.length} && !!document.querySelector('.otk-message-flow .otk-text')`,
       );
       await b.fill('textarea[name="prompt"]', "Keep original draft");
       await sessionContext(b, `[data-session="${original.id}"]`);
@@ -415,8 +454,24 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await b.poll(
         `!location.hash.endsWith('/${original.id}') && !!document.querySelector('.otk-fork-note')`,
       );
+      const fullForkID = await b.evaluate<string>(
+        "location.hash.split('/').at(-1)",
+      );
+      const forkHistory = await f.oc.request<ActionHistoryMessage[]>(
+        `/session/${fullForkID}/message`,
+      );
+      assertEquals(
+        forkHistory.filter((message) => message.info.role === "user").flatMap((
+          message,
+        ) =>
+          message.parts.filter((part) => part.type === "text").map((part) =>
+            part.text
+          )
+        ),
+        ["First prompt", "Second prompt"],
+      );
       await b.poll(
-        `document.querySelectorAll('[data-role="user"]').length===2`,
+        `Number(document.querySelector('.otk-message-flow')?.dataset.messageCount)===${forkHistory.length} && !!document.querySelector('.otk-message-flow .otk-text')`,
       );
       assertEquals(
         await b.evaluate(

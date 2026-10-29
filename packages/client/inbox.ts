@@ -2,7 +2,7 @@
 import { DEFAULT_PROJECT_AGEING } from "@otk/protocol";
 import type {
   InboxSnapshot,
-  IndexEntry,
+  IndexMetadata,
   ProjectRecord,
   RpcMethod,
   RpcParams,
@@ -31,7 +31,7 @@ export function unread(
   return (inbox.finishes[sessionID] ?? 0) > (inbox.seen[sessionID] ?? 0);
 }
 export function inboxStatus(
-  entry: IndexEntry,
+  entry: IndexMetadata,
   inbox: Pick<InboxSnapshot, "seen" | "finishes">,
 ): InboxStatus {
   const a = entry.attention;
@@ -43,7 +43,7 @@ export function inboxStatus(
   return unread(entry.id, inbox) ? "finished" : "idle";
 }
 export function rollup(
-  entries: readonly IndexEntry[],
+  entries: readonly IndexMetadata[],
   inbox: Pick<InboxSnapshot, "seen" | "finishes">,
 ): InboxStatus {
   const states = entries.map((entry) => inboxStatus(entry, inbox));
@@ -76,7 +76,7 @@ export interface InboxProject extends ProjectRecord {
 }
 /** One projection shared by the column, collapsed rail and tab badges. */
 export function inboxProjects(
-  entries: readonly IndexEntry[],
+  entries: readonly IndexMetadata[],
   inbox: InboxSnapshot,
   now: number,
   thresholds?: readonly number[],
@@ -101,8 +101,8 @@ export function inboxProjects(
     },
   );
   const known = new Set(tracked.map((p) => p.directory));
-  const indexed = new Map<string, IndexEntry[]>();
-  const latest = (sessions: readonly IndexEntry[]) =>
+  const indexed = new Map<string, IndexMetadata[]>();
+  const latest = (sessions: readonly IndexMetadata[]) =>
     sessions.reduce((time, entry) => Math.max(time, entry.timeUpdated), 0);
   const byName = (a: string, b: string) =>
     projectName(a).localeCompare(projectName(b)) || a.localeCompare(b);

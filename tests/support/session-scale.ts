@@ -15,6 +15,11 @@ import { ownedProcess } from "./process.ts";
 import { resources, withResources } from "./resources.ts";
 import { seedProviderPackages } from "./provider-cache.ts";
 import { FakeLlm } from "./fake-llm.ts";
+import {
+  type MessageScaleOptions,
+  scaleParts,
+  scaleRole,
+} from "./message-scale-cases.ts";
 
 export const SCALE = {
   sessions: 4615,
@@ -34,6 +39,7 @@ export interface ExpectedUsage {
   >;
 }
 export interface ScaleManifest {
+  messageCases?: MessageScaleOptions;
   version: string;
   schema: unknown[];
   migrations: unknown[];
@@ -79,6 +85,7 @@ export class SessionScale {
     root: string,
     fixtureRoot: string,
     fake: FakeLlm,
+    options: MessageScaleOptions = {},
   ): Promise<SessionScale> {
     const parent = await Deno.realPath(fixtureRoot);
     root = resolve(root);
@@ -146,7 +153,7 @@ export class SessionScale {
     });
     await f.stop();
     console.info("Scale bootstrap stopped; seeding characterized tables");
-    f.#seed(sample.id);
+    f.#seed(sample.id, options);
     await Deno.writeTextFile(
       join(root, "manifest.json"),
       JSON.stringify(f.manifest, null, 2),
@@ -170,7 +177,7 @@ export class SessionScale {
     ) throw new Error("Stock message page refused generated records");
     return f;
   }
-  #seed(sampleID: string) {
+  #seed(sampleID: string, options: MessageScaleOptions) {
     if (this.#process) throw new Error("Never seed a running native database");
     const db = new DatabaseSync(this.db);
     try {
@@ -192,6 +199,9 @@ export class SessionScale {
         "INSERT INTO part(id,message_id,session_id,time_created,time_updated,data) VALUES(?,?,?,?,?,?)",
       );
       this.manifest = {
+        ...(options.messages || options.payload
+          ? { messageCases: options }
+          : {}),
         version: nativeVersion,
         schema,
         migrations,
@@ -235,7 +245,7 @@ export class SessionScale {
           : 0;
         const expected: ExpectedUsage = {
           messages: n,
-          calls: Math.floor(n / 2),
+          calls: 0,
           cost: 0,
           tokens: [0, 0, 0, 0, 0],
           turns: {},
@@ -264,7 +274,7 @@ export class SessionScale {
           const id = `msg_scale${String(globalMessage++).padStart(9, "0")}`;
           const time = clock + m * 10;
           let data: Record<string, unknown>;
-          if (m % 2 === 0) {
+          if (scaleRole(i, m, options.messages) === "user") {
             turn = id;
             data = {
               role: "user",
@@ -273,6 +283,7 @@ export class SessionScale {
               model: { providerID: "fake", modelID: "scripted" },
             };
           } else {
+            expected.calls++;
             const values = i === 2 ? [0, 0, 0, 0, 0] : [100 + m, 20, 3, 40, 5];
             const cost = i === 2 ? 0 : i === 3 ? .000001 : .001;
             const unknown = i === 1;
@@ -300,13 +311,20 @@ export class SessionScale {
               if (unknown && k === 0) expected.tokens[k] = null;
               else if (expected.tokens[k] !== null) expected.tokens[k]! += v;
             });
-            expected.turns[turn] = {
-              calls: 1,
-              cost: unknown ? null : cost,
-              tokens: values.map((value, k) =>
-                unknown && k === 0 ? null : value
-              ),
+            const total = expected.turns[turn] ??= {
+              calls: 0,
+              cost: 0,
+              tokens: [0, 0, 0, 0, 0],
             };
+            total.calls++;
+            total.cost = unknown || total.cost === null
+              ? null
+              : total.cost + cost;
+            values.forEach((value, k) => {
+              total.tokens[k] = (unknown && k === 0) || total.tokens[k] === null
+                ? null
+                : total.tokens[k]! + value;
+            });
           }
           message.run(id, nativeID, time, time, JSON.stringify(data));
           const parts = i === 0 ? 3 + (m < 1097 ? 1 : 0) : 1;
@@ -317,10 +335,7 @@ export class SessionScale {
               nativeID,
               time,
               time,
-              JSON.stringify({
-                type: "text",
-                text: `Scale fixture ${i}/${m}/${p}`,
-              }),
+              JSON.stringify(scaleParts(i, m, p, directory, options)),
             );
           }
         }

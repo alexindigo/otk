@@ -96,6 +96,13 @@ and supplied as `welcome.messages`; neither libraries nor browsers invent
 another defaults table. Connections require this policy explicitly in smaller
 compositions too.
 
+Core forwards `bootstrap.complete` independently of `transcript.invalidated`.
+The latter carries an ordered producer-generation/session-boundary version;
+pages and turn detail carry the same authority marker. Metadata bootstrap cannot
+discard an already-current transcript, and duplicate or delayed notices cannot
+re-read newer authority. Native reconnect, instance disposal and revert-boundary
+changes publish their invalidation at the actual boundary.
+
 The same `[messages]` owner supplies browser scope cooling (`coolms`), temporary
 attention leases (`preloadms`) and per-server page admission (`concurrency`).
 Partial operator files merge leaf-wise before environment overrides. These
@@ -288,6 +295,19 @@ callers does not cancel the other callers. Clean shutdown joins requests and the
 scheduler, closes native/derived connections and acknowledges `stopped`; forced
 termination is reserved for failure.
 
+Waiting is not work: credit, native I/O admission/body settlement and lock
+readiness release the executing turn. Ready continuations re-enter the same
+scheduler at their priority, with essential reads between bounded publications
+and SQL chunks. Native I/O retains a separate serial permission; its deadline
+starts only after admission, and cancellation joins actual settlement before
+reuse. Derived SQLite uses fail-fast lock admission and cooperatively retries
+within `digest.busyms`. Async request state is lifetime-local. Per-identity
+publication reservations and revision-consistent temporary scalar snapshots keep
+interleaved chunks coherent; neither contains message bodies. Startup seeds its
+first cached metadata before acknowledgement and schedules the remaining replay.
+Stop retires caller gates immediately and joins queued/waiting cleanup before
+closing the worker's single SQLite owner.
+
 The shipped composition selects this worker and passes its optional port to the
 native adapter. Catalog parts seed metadata before digest deltas; the shared
 index preserves newer live status and attention. An accepted deletion event
@@ -326,9 +346,10 @@ restart.
 
 Digest admission uses the runtime's available-without-swapping memory estimate,
 including reclaimable cache, against the injected reserve. Catalog invalidations
-commit as one batch before jobs are admitted. Optional injected diagnostics
-observe serving sections and worker pressure/native read counts; they introduce
-no operator flag or public debug RPC.
+commit in bounded row batches before their jobs are admitted, with batched
+summary lookups and real event-loop yields between chunks. Optional injected
+diagnostics observe serving sections and worker pressure/native read counts;
+they introduce no operator flag or public debug RPC.
 
 The worker composes neutral/native digest feature v2 for helper progress. Helper
 jobs share scheduling, connection ownership, row budgets and publication credits

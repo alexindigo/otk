@@ -1,9 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { createIndex } from "@otk/client";
-import type { IndexEntry } from "@otk/protocol";
+import type { IndexEntry, MessagePage, TurnUsageDetail } from "@otk/protocol";
 import { FakeLlm } from "../support/fake-llm.ts";
+import { helperParent } from "../support/helper-parent.ts";
 import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
 import { ownedProcess } from "../support/process.ts";
 import { tempDir, test } from "../support/resources.ts";
@@ -26,7 +27,8 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     );
     assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
   }
-  const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
+  const fake = new FakeLlm(),
+    oc = await OpencodeTest.start(fake, { bash: "allow" });
   const session = await oc.session<{ id: string }>("/session", {
     method: "POST",
     body: { title: "Compiled supervision" },
@@ -103,6 +105,11 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
   let lostID = "";
   const first = await run();
   try {
+    const welcome = first.client.frames.find((frame) => frame.t === "welcome");
+    assert(welcome?.messages);
+    assertEquals(welcome.messages.concurrency, 4);
+    assertEquals(welcome.messages.coolms, 300000);
+    assertEquals(welcome.messages.recoveryconcurrency, 2);
     await waitFor(first.entry, (entry) => entry?.digest.state === "ready");
     assertEquals(first.entry()?.digest.messageCount, 0);
     fake.queue({ chunks: ["Shipped compiled reply"] });
@@ -119,6 +126,84 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
         entry?.digest.state === "ready" && (entry.digest.total?.calls ?? 0) > 0,
     );
     assertEquals(Object.keys(first.entry()!.digest.turns).length > 0, true);
+    const firstTurn = Object.keys(first.entry()!.digest.turns)[0];
+    const initialDetail = await first.client.rpc<TurnUsageDetail>("usage.get", {
+      sessionID: session.id,
+      turnID: firstTurn,
+    });
+    assertEquals(initialDetail.calls.length, 1);
+    assertEquals(initialDetail.turnID, firstTurn);
+    const initialCalls = first.entry()!.digest.total!.calls;
+    for (let rank = 0; rank < 15; rank++) {
+      await oc.request(`/session/${session.id}/message`, {
+        method: "POST",
+        body: {
+          noReply: true,
+          parts: [{ type: "text", text: `Compiled cursor prompt ${rank}` }],
+        },
+      });
+    }
+    fake.queue({ chunks: ["Compiled second charged turn"] });
+    await oc.request(`/session/${session.id}/message`, {
+      method: "POST",
+      body: {
+        model: { providerID: "fake", modelID: "scripted" },
+        parts: [{ type: "text", text: "Charge the second compiled turn" }],
+      },
+    });
+    await waitFor(
+      first.entry,
+      (entry) =>
+        entry?.digest.state === "ready" &&
+        entry.digest.total?.calls === initialCalls + 1,
+    );
+    const native = await oc.request<{ info: { id: string } }[]>(
+      `/session/${session.id}/message`,
+    );
+    const newest = await first.client.rpc<MessagePage>("session.messages", {
+      sessionID: session.id,
+    });
+    assertEquals(
+      newest.items.map((message) => message.id),
+      native.slice(-10).map((message) => message.info.id),
+    );
+    assertEquals(newest.items.length, 10);
+    assert(newest.older);
+    const older = await first.client.rpc<MessagePage>("session.messages", {
+      sessionID: session.id,
+      before: newest.older,
+    });
+    assertEquals(
+      [...older.items, ...newest.items].map((message) => message.id),
+      native.map((message) => message.info.id),
+    );
+    assertEquals(older.older, null);
+    assertEquals(newest.prompt?.id, native.at(-2)!.info.id);
+    const secondTurn = native.at(-2)!.info.id;
+    const changedDetail = await first.client.rpc<TurnUsageDetail>("usage.get", {
+      sessionID: session.id,
+      turnID: secondTurn,
+    });
+    assertEquals(changedDetail.calls.length, 1);
+    assertEquals(changedDetail.turnID, secondTurn);
+    assertEquals(
+      (await first.client.rpc<TurnUsageDetail>("usage.get", {
+        sessionID: session.id,
+        turnID: firstTurn,
+      })).calls,
+      initialDetail.calls,
+    );
+    const helper = await helperParent(oc);
+    await waitFor(
+      () => first.entry(helper.child.id),
+      (entry) => entry?.digest.helper?.state === "ready",
+    );
+    assertEquals(first.entry(helper.child.id)!.digest.helper!.toolCount, 1);
+    const helperPage = await first.client.rpc<MessagePage>("session.messages", {
+      sessionID: helper.parent.id,
+    });
+    assertEquals(helperPage.items.length, 10);
+    assertEquals(helperPage.helpers[helper.child.id].toolCount, 1);
     const lost = await oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Provider loss metadata" },

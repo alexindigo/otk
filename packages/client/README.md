@@ -50,6 +50,16 @@ digest changes do not reorder identities or replace unaffected partitions.
 ServerResources projects each server/project from these partitions, including
 the complete activity inputs independently of mounted views.
 
+`catalog(server, directory?)` and `getMetadata(server, id)` borrow stable
+`MergedMetadata` projections without digest/turn history. Membership, metadata
+and complete-entry reads use separate dependency clocks in that same keyed
+owner. Digest-only changes therefore do not rebuild project/activity inputs or
+identity lists. `changes(server)` reports accepted identities, structural
+changes and the narrower `metadata` identities; rejected frames cannot replace
+that authority. `ServerResources.metadataEntries()` supplies metadata-only UI
+consumers, while the existing full-entry ports remain available for digest
+consumers.
+
 Session pages publish essential session/message data independently of optional
 attention and sibling reads. Optional failures retain last-good data and expose
 diagnostics. Live attention changes replay over their own resource snapshot. The
@@ -66,6 +76,15 @@ speculative append seed. `state.continuity` distinguishes `loading`, `ready` and
 recoverable `missing` baselines. Superseding a generation retires its paging
 flag. Late `agent.colors` operations decorate the existing transcript without
 retaining another collection.
+
+`MessagePage.version` and `transcript.state.version` identify the producer
+generation/session-boundary revision, separately from demand-epoch sequencing.
+`bootstrap.complete` refreshes bootstrap-owned metadata/attention, never bodies.
+`transcript.invalidated` affects its session or all sessions for a new
+generation; equal, older and unrelated notices do not reacquire current data. A
+held baseline already covering the notice is accepted, while a stale response
+cannot install. Replacement reads coalesce; persistent stale authority backs off
+instead of spinning. Opened turn-detail resources apply the same version fence.
 
 Missing native seeds are distinct from a missing browser page baseline.
 `stream.recovery` carries keyed generation/state metadata beside the canonical
@@ -750,13 +769,16 @@ cannot consume a newer note. Invocation never assumes that a resolved command
 actually selected the session. Consumers call `viewed` after real guarded
 selection and focus.
 
-`NotificationTriggers(emit, retract, project?, read?)` observes accepted index
-frames. The application supplies `read(server)` from its shared keyed owner;
-standalone compositions lazily use that same reduction implementation. Only the
-previous notification projection is retained for edge detection. Digest updates
-preserve live notes and delivery identity; real eviction or tombstones retract
-them. Detail usage likewise compares reduced metadata revisions and deletion
-state rather than decoding wire operations.
+`NotificationTriggers(emit, retract, project?, read?, changes?)` observes
+accepted index frames. The application supplies `read(server)` from its shared
+keyed owner; standalone compositions lazily use that same reduction
+implementation. Only the previous notification projection is retained for edge
+detection. Digest updates preserve live notes and delivery identity; real
+eviction or tombstones retract them. Detail usage likewise compares reduced
+metadata revisions and deletion state rather than decoding wire operations. The
+optional `changes(server)` port borrows the canonical reducer's change set;
+digest-only receipt advances transport revision without rebuilding activity
+projections or replaying notification decisions.
 
 NotificationTriggers uses the first snapshot after each connection's `reset` as
 a silent baseline. Root attention roll-ups already include children; roots

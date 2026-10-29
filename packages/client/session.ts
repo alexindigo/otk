@@ -6,6 +6,7 @@ import {
   type ServerFrame,
 } from "@otk/protocol";
 import type { SidecarConnection } from "./connection.ts";
+import type { IndexChanges } from "./index.ts";
 import { createState, type StateFactory } from "./state.ts";
 import { emptyContent } from "./reduce.ts";
 import {
@@ -98,6 +99,7 @@ export function createSession(
   factory: StateFactory = createState,
   catalogConnection?: (selection: Selection) => ModelCatalogConnection,
   waitForIndex = false,
+  metadataChanges?: (server: string) => IndexChanges | undefined,
 ): ClientSession {
   const store = factory<SessionState>({
     content: emptyContent(),
@@ -113,7 +115,12 @@ export function createSession(
     factory,
     (t) => entry(t.sidecarId, t.sessionID),
   );
-  const transcripts = createTranscripts({ connection, entry, factory });
+  const transcripts = createTranscripts({
+    connection,
+    entry,
+    factory,
+    changes: metadataChanges,
+  });
   let selected: Selection | undefined, resource: TranscriptOwner | undefined;
   let release: (() => void) | undefined, models: ModelCatalogOwner | undefined;
   let external: TranscriptDemand | undefined, version = 0, stopped = false;
@@ -301,10 +308,16 @@ export function createSession(
       }
       if (frame.t === "index.snapshot") indexed.add(server);
       transcripts.receive(server, frame, true);
-      if (
-        frame.t === "index.snapshot" || frame.t === "index.patch" ||
-        frame.t === "welcome"
-      ) bind();
+      if (frame.t === "welcome") bind();
+      if (frame.t === "index.snapshot" || frame.t === "index.patch") {
+        const reduced = metadataChanges?.(server);
+        const changes = reduced?.revision === frame.rev ? reduced : undefined;
+        if (!changes || changes.structural) bind();
+        else if (
+          selected?.sidecarId === server &&
+          changes.ids.includes(selected.sessionID)
+        ) sync();
+      }
       if (frame.t === "welcome" || frame.t === "bootstrap.complete") {
         models?.connect();
         if (frame.t === "bootstrap.complete") void models?.refresh();

@@ -8,6 +8,7 @@ import {
 } from "@otk/protocol";
 import type { SidecarConnection } from "./connection.ts";
 import { sessionKey } from "./index.ts";
+import type { IndexChanges } from "./index.ts";
 import { createTranscript, type TranscriptOwner } from "./transcript.ts";
 import { createState, type StateFactory } from "./state.ts";
 
@@ -65,6 +66,7 @@ interface Scope {
   trigger?: string;
 }
 interface Job {
+  id: string;
   target: BodyTarget;
   run(): Promise<unknown>;
   resolve(value: unknown): void;
@@ -80,6 +82,7 @@ export function createTranscripts(o: {
   entry(sidecar: string, session: string): IndexEntry | undefined;
   factory?: StateFactory;
   clock?: TranscriptClock;
+  changes?(server: string): IndexChanges | undefined;
 }): TranscriptsOwner {
   const clock = o.clock ?? systemClock;
   const resources = new Map<
@@ -89,29 +92,31 @@ export function createTranscripts(o: {
   const scopes = new Map<string, Scope>(),
     policies = new Map<string, MessagePolicy>();
   const queue: Job[] = [], active = new Map<string, number>();
+  const queued = new Map<string, number>(),
+    priorities = new Map<string, number>();
   let demand: TranscriptDemand = { sessions: [] },
     timer: unknown,
     stopped = false,
     serial = 0;
   const policy = (server: string) =>
     policies.get(server) ?? o.connection(server).messages;
-  const rank = (target: BodyTarget) => {
-    const id = key(target);
-    if (demand.selected && key(demand.selected) === id) return -Infinity;
-    let rank = Infinity;
-    for (const scope of scopes.values()) {
-      if (scope.trigger === id && scope.preload !== undefined) {
-        return -Number.MAX_VALUE;
-      }
-      if (scope.targets.some((t) => key(t) === id)) {
-        rank = Math.min(rank, -(scope.interaction ?? 0));
-      }
-    }
-    return rank;
+  const rank = (id: string) => priorities.get(id) ?? Infinity;
+  const dequeue = (server: string) => {
+    const count = queued.get(server)! - 1;
+    if (count) queued.set(server, count);
+    else queued.delete(server);
   };
   const pump = () => {
     if (stopped) return;
-    queue.sort((a, b) => rank(a.target) - rank(b.target) || a.order - b.order);
+    // Queue growth cannot admit work while every server is at capacity. In
+    // particular, warming a large scope must not repeatedly sort its blocked queue.
+    if (
+      ![...queued.keys()].some((server) => {
+        const limit = policy(server)?.concurrency;
+        return limit !== undefined && (active.get(server) ?? 0) < limit;
+      })
+    ) return;
+    queue.sort((a, b) => rank(a.id) - rank(b.id) || a.order - b.order);
     for (let i = 0; i < queue.length;) {
       const job = queue[i],
         server = job.target.sidecarId,
@@ -121,6 +126,7 @@ export function createTranscripts(o: {
         continue;
       }
       queue.splice(i, 1);
+      dequeue(server);
       job.signal.removeEventListener("abort", job.abort);
       if (job.signal.aborted) {
         job.reject(job.signal.reason);
@@ -144,6 +150,7 @@ export function createTranscripts(o: {
         return;
       }
       const job: Job = {
+        id: key(target),
         target,
         run,
         signal,
@@ -152,13 +159,17 @@ export function createTranscripts(o: {
         reject,
         abort: () => {
           const at = queue.indexOf(job);
-          if (at >= 0) queue.splice(at, 1);
+          if (at >= 0) {
+            queue.splice(at, 1);
+            dequeue(target.sidecarId);
+          }
           signal.removeEventListener("abort", job.abort);
           reject(signal.reason);
         },
       };
       signal.addEventListener("abort", job.abort, { once: true });
       queue.push(job);
+      queued.set(target.sidecarId, (queued.get(target.sidecarId) ?? 0) + 1);
       pump();
     });
   const resource = (target: BodyTarget) => {
@@ -184,6 +195,7 @@ export function createTranscripts(o: {
     if (timer !== undefined) clock.clear(timer);
     timer = undefined;
     const now = clock.now(), warm = new Map<string, BodyTarget>();
+    priorities.clear();
     let deadline = Infinity;
     for (const [id, scope] of scopes) {
       const settings = policy(scope.ref.sidecarId);
@@ -199,6 +211,13 @@ export function createTranscripts(o: {
         scope.preload = undefined;
         scope.trigger = undefined;
       }
+      for (const target of scope.targets) {
+        const id = key(target);
+        priorities.set(id, Math.min(rank(id), -(scope.interaction ?? 0)));
+      }
+      if (scope.trigger && scope.preload !== undefined) {
+        priorities.set(scope.trigger, -Number.MAX_VALUE);
+      }
       if (activeScope || cool > now || preload > now) {
         for (const target of scope.targets) warm.set(key(target), target);
         if (!activeScope) {
@@ -206,17 +225,19 @@ export function createTranscripts(o: {
         }
       }
     }
-    if (demand.selected) warm.set(key(demand.selected), demand.selected);
-    const ordered = [...warm.values()].sort((a, b) => rank(a) - rank(b));
-    for (const target of ordered) {
+    const selectedID = demand.selected && key(demand.selected);
+    if (demand.selected && selectedID) {
+      warm.set(selectedID, demand.selected);
+      priorities.set(selectedID, -Infinity);
+    }
+    const ordered = [...warm].sort(([a], [b]) => rank(a) - rank(b));
+    for (const [id, target] of ordered) {
       if (
         !policy(target.sidecarId) ||
         o.entry(target.sidecarId, target.sessionID)?.deleted
       ) continue;
       resource(target).temperature(
-        demand.selected && key(target) === key(demand.selected)
-          ? "screen"
-          : "warm",
+        id === selectedID ? "screen" : "warm",
       );
     }
     for (const [id, value] of resources) {
@@ -274,6 +295,12 @@ export function createTranscripts(o: {
     get: (target) => resources.get(key(target))?.owner,
     receive(server, frame, accepted) {
       if (stopped || !accepted) return;
+      const indexed = frame.t === "index.snapshot" || frame.t === "index.patch";
+      const reduced = indexed ? o.changes?.(server) : undefined;
+      const changes = indexed && reduced?.revision === frame.rev
+        ? reduced
+        : undefined;
+      const ids = changes && new Set(changes.ids);
       if (frame.t === "welcome") {
         policies.set(server, messagePolicy(frame.messages));
       }
@@ -283,19 +310,21 @@ export function createTranscripts(o: {
           frame,
         );
       } else {for (
-          const value of [...resources.values()].sort((a, b) =>
-            rank(a.target) - rank(b.target)
-          )
+          const value of indexed
+            ? resources.values()
+            : [...resources].sort(([a], [b]) => rank(a) - rank(b)).map((
+              [, value],
+            ) => value)
         ) {
           if (
             value.target.sidecarId === server &&
+            (!ids || value.owner.usesMetadata(ids)) &&
             (frame.t !== "content" ||
               value.owner.state.temperature === "screen")
           ) value.owner.receive(server, frame);
         }}
       if (
-        frame.t === "welcome" || frame.t === "index.snapshot" ||
-        frame.t === "index.patch"
+        frame.t === "welcome" || (indexed && (!changes || changes.structural))
       ) reconcile();
     },
     removeServer(server) {
@@ -323,6 +352,8 @@ export function createTranscripts(o: {
       resources.clear();
       scopes.clear();
       policies.clear();
+      priorities.clear();
+      queued.clear();
     },
   };
 }

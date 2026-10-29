@@ -25,6 +25,8 @@ export interface IndexEntry extends SessionMetadata {
   digest: SessionDigest;
   deleted?: Tombstone;
 }
+/** Activity/topology metadata, without a digest or retained turn history. */
+export type IndexMetadata = Omit<IndexEntry, "digest">;
 export interface DigestIndexDelta extends DigestDelta {
   id: string;
   revision: number;

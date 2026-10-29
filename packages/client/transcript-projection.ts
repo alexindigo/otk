@@ -56,6 +56,7 @@ export interface TranscriptProjection {
   helpers(
     read: (id: string) => import("@otk/protocol").HelperSummary | undefined,
   ): boolean;
+  usesMetadata(ids: ReadonlySet<string>): boolean;
 }
 export function createTranscriptProjection(): TranscriptProjection {
   const state: TranscriptProjectionState = {
@@ -67,8 +68,21 @@ export function createTranscriptProjection(): TranscriptProjection {
   };
   const parts = new Map<string, Map<string, number>>();
   const helperLinks = new Map<string, Map<string, string>>();
+  const helperChildren = new Map<string, number>();
   const helperPart = (message: string, part: string, value?: Part) => {
     const links = helperLinks.get(message) ?? new Map<string, string>();
+    const previous = links.get(part);
+    const next = value?.kind === "tool" && value.call.tool === "task"
+      ? value.call.childSessionID
+      : undefined;
+    if (previous !== next) {
+      if (previous) {
+        const count = helperChildren.get(previous)! - 1;
+        if (count) helperChildren.set(previous, count);
+        else helperChildren.delete(previous);
+      }
+      if (next) helperChildren.set(next, (helperChildren.get(next) ?? 0) + 1);
+    }
     if (
       value?.kind === "tool" && value.call.tool === "task" &&
       value.call.childSessionID
@@ -76,6 +90,11 @@ export function createTranscriptProjection(): TranscriptProjection {
     else links.delete(part);
     if (links.size) helperLinks.set(message, links);
     else helperLinks.delete(message);
+  };
+  const clearHelper = (message: string) => {
+    for (const part of helperLinks.get(message)?.keys() ?? []) {
+      helperPart(message, part);
+    }
   };
   const boundaries = new Map<string, ReplyBoundary>();
   const lastHeaders = new Map<string, Message>();
@@ -301,7 +320,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     header(previous, message);
     state.messagesByID[message.id] = message;
     if (!preservePartIndex && previous?.parts !== message.parts) {
-      helperLinks.delete(message.id);
+      clearHelper(message.id);
       for (const part of message.parts) helperPart(message.id, part.id, part);
       parts.set(
         message.id,
@@ -347,7 +366,7 @@ export function createTranscriptProjection(): TranscriptProjection {
     const key = replyKey(previous);
     delete state.messagesByID[id];
     parts.delete(id);
-    helperLinks.delete(id);
+    clearHelper(id);
     segmentByID.delete(id);
     locations.delete(id);
     state.messageIDs = state.messageIDs.filter((key) => key !== id);
@@ -358,6 +377,10 @@ export function createTranscriptProjection(): TranscriptProjection {
     state,
     boundary: (turnID: string) => boundaries.get(turnID),
     messages: (): Message[] => detached ??= state.messageIDs.map(read),
+    usesMetadata: (ids: ReadonlySet<string>) => {
+      for (const id of ids) if (helperChildren.has(id)) return true;
+      return false;
+    },
     clear() {
       state.messageIDs = [];
       state.messagesByID = dictionary<Message>();
@@ -366,6 +389,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       state.queuedIDs = new Set();
       parts.clear();
       helperLinks.clear();
+      helperChildren.clear();
       boundaries.clear();
       lastHeaders.clear();
       segmentByID.clear();

@@ -2,7 +2,52 @@
 import { assert, assertEquals } from "@std/assert";
 import { Source, uiSources } from "./analysis.ts";
 import { contextBypasses } from "./bypasses.ts";
+import type { t } from "./syntax.ts";
 contextBypasses((source) => errors("components/New.tsx", source));
+
+/** A generic native binder may handle dynamic names only when that exact,
+ * immutable loop name has already rejected the reserved contextmenu event. */
+function excludesContextMenu(
+  parsed: Source,
+  call: t.CallExpression | t.OptionalCallExpression,
+) {
+  const name = parsed.access(call.arguments[0]);
+  if (!name || name.fields.length) return false;
+  let current: t.Node | undefined = call;
+  while (current && current.type !== "ForOfStatement") {
+    if (current.type === "TryStatement") return false;
+    current = parsed.parent.get(current);
+  }
+  if (
+    current?.type !== "ForOfStatement" ||
+    current.body.type !== "BlockStatement" || name.binding.scope !== current
+  ) return false;
+  const body = current.body;
+  let statement: t.Node = call;
+  while (
+    parsed.parent.get(statement) && parsed.parent.get(statement) !== body
+  ) statement = parsed.parent.get(statement)!;
+  const position = body.body.indexOf(statement as t.Statement);
+  return position >= 0 && body.body.slice(0, position).some((statement) => {
+    if (
+      statement.type !== "IfStatement" ||
+      statement.test.type !== "BinaryExpression" ||
+      statement.test.operator !== "==="
+    ) return false;
+    const { left, right } = statement.test;
+    const variable = parsed.string(left) === "contextmenu"
+      ? right
+      : parsed.string(right) === "contextmenu"
+      ? left
+      : undefined;
+    const tested = parsed.access(variable);
+    if (tested?.binding !== name.binding || tested.fields.length) return false;
+    const branch = statement.consequent;
+    return branch.type === "ThrowStatement" ||
+      branch.type === "BlockStatement" && branch.body.length === 1 &&
+        branch.body[0].type === "ThrowStatement";
+  });
+}
 
 export function errors(name: string, source: string): string[] {
   const errors: string[] = [];
@@ -23,7 +68,11 @@ export function errors(name: string, source: string): string[] {
       )
     ) {
       const event = parsed.string(node.arguments[0]);
-      if (!owner && (event === "contextmenu" || event === undefined)) {
+      if (
+        !owner &&
+        (event === "contextmenu" ||
+          event === undefined && !excludesContextMenu(parsed, node))
+      ) {
         errors.push("contextmenu listener belongs to ContextMenu");
       }
     }
@@ -93,6 +142,27 @@ Deno.test("context menus have one shell-root listener owner and declarative targ
   ) {
     assert(errors("components/Other.tsx", source).length, source);
     assert(errors("web/src/ui/Other.tsx", source).length, source);
+  }
+});
+
+Deno.test("generic native listeners must reject contextmenu before binding the same immutable name", () => {
+  const guarded =
+    `for (const name of names) { if (name === 'contextmenu') throw new TypeError(); el.addEventListener(name, handler); cleanup.push(()=>el.removeEventListener(name,handler)); }`;
+  assertEquals(errors("components/native-attributes.ts", guarded), []);
+  for (
+    const mutant of [
+      guarded.replace("name === 'contextmenu'", "other === 'contextmenu'"),
+      guarded.replace("throw new TypeError()", "ignore()"),
+      guarded.replace("if (name === 'contextmenu') throw new TypeError();", ""),
+      `for (let name of names) { if(name==='contextmenu')throw new Error(); name=other; el.addEventListener(name,handler); }`,
+      `for (const name of names) { el.addEventListener(name,handler); if(name==='contextmenu')throw new Error(); }`,
+      `for (const name of names) { try { if(name==='contextmenu')throw new Error(); } catch {} el.addEventListener(name,handler); }`,
+    ]
+  ) {
+    assert(
+      errors("components/native-attributes.ts", mutant).length > 0,
+      mutant,
+    );
   }
 });
 

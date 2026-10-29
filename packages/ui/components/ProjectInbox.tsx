@@ -7,7 +7,7 @@ import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, For, Show } from "solid-js";
 import {
   type InboxProject,
-  type MergedEntry,
+  type MergedMetadata,
   projectName,
   type ProjectSelection,
   type SidecarState,
@@ -21,6 +21,7 @@ import StatusLight from "./StatusLight.tsx";
 import ConnectionLight from "./ConnectionLight.tsx";
 import { connectionLabel } from "./connection-light.ts";
 import { createResize } from "./resize.ts";
+import { nativeAttributes } from "./native-attributes.ts";
 import {
   ChevronIcon,
   KeyboardIcon,
@@ -43,7 +44,7 @@ export interface ProjectRow extends InboxProject {
 }
 export default function ProjectInbox(props: {
   projects: ProjectRow[];
-  entries: MergedEntry[];
+  entries: MergedMetadata[];
   servers: SidecarState[];
   selected?: ProjectSelection;
   prefs: Preferences;
@@ -311,17 +312,23 @@ export default function ProjectInbox(props: {
       }
       resizer={
         <Show when={!collapsed()}>
-          <div
-            class="otk-inbox-resizer"
-            role="separator"
-            aria-label="Project column width"
-            aria-orientation="vertical"
-            tabindex={props.ready ? 0 : -1}
-            aria-valuemin={bounds.min}
-            aria-valuemax={bounds.max}
-            aria-valuenow={width()}
-            {...resize.handlers}
-          />
+          {(_expanded) => {
+            const native = nativeAttributes(() => resize.handlers);
+            return (
+              <div
+                ref={native.ref}
+                class="otk-inbox-resizer"
+                role="separator"
+                aria-label="Project column width"
+                aria-orientation="vertical"
+                tabindex={props.ready ? 0 : -1}
+                aria-valuemin={bounds.min}
+                aria-valuemax={bounds.max}
+                aria-valuenow={width()}
+                {...native.attributes}
+              />
+            );
+          }}
         </Show>
       }
     >

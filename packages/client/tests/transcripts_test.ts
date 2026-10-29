@@ -276,6 +276,49 @@ Deno.test("native-message viewport reserve refills at twenty and reverse motion 
   }
 });
 
+Deno.test("warm return preserves current tail authority when only unused historical reserve was evicted", async () => {
+  const f = fixture(policy);
+  try {
+    const demand = {
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    };
+    f.owner.setDemand(demand);
+    await f.reply();
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    a.viewport({ first: "a-070", last: "a-079" });
+    await f.reply();
+    await f.reply();
+    assertEquals(a.state.messageIDs.length, 40);
+    const tail = a.state.messagesByID["a-070"];
+    a.viewport(undefined);
+    f.owner.setDemand({ scope: scope("/b"), sessions: [] });
+    assertEquals(a.state.messageIDs.length, 20);
+    f.owner.setDemand(demand);
+    assertEquals(
+      f.requests,
+      [],
+      "An intact warm tail needs no newest-page repair",
+    );
+    assertEquals(a.state.messagesByID["a-070"], tail);
+    assert(a.state.messagesByID["a-070"] === tail);
+    const older = a.ensure("a-055");
+    assertEquals(f.requests.length, 1);
+    assertEquals(
+      (f.requests[0].params as { before?: string }).before,
+      "fixture:60",
+    );
+    await f.reply();
+    await older;
+    assert(a.state.messagesByID["a-070"] === tail);
+    assert(a.state.messagesByID["a-055"]);
+  } finally {
+    f.stop();
+  }
+});
+
 Deno.test("warm live tails stay bounded, visited pages survive until cooling and cold content cannot resurrect", async () => {
   const f = fixture(policy);
   try {

@@ -11,6 +11,7 @@ import {
 } from "@otk/protocol";
 import { useUiRegistries } from "../registries/context.tsx";
 import { createResize } from "./resize.ts";
+import { nativeAttributes } from "./native-attributes.ts";
 import SidebarRail from "./SidebarRail.tsx";
 import { contextTarget } from "./context-target.ts";
 
@@ -41,6 +42,7 @@ export default function RightPanel(props: {
     fail: (error) => setError(errorMessage(error)),
   });
   const width = resize.width;
+  const native = nativeAttributes(() => resize.handlers);
   const save = async (patch: Partial<Preferences["shellLayout"]>) => {
     try {
       await props.onLayout(patch);
@@ -146,6 +148,7 @@ export default function RightPanel(props: {
         </Show>
         <div
           class="otk-panel-resizer"
+          ref={native.ref}
           role="separator"
           aria-label="Right panel width"
           aria-orientation="vertical"
@@ -153,7 +156,7 @@ export default function RightPanel(props: {
           aria-valuemin={bounds.min}
           aria-valuemax={bounds.max}
           aria-valuenow={width()}
-          {...resize.handlers}
+          {...native.attributes}
         />
       </aside>
     </>

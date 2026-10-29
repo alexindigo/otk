@@ -4,6 +4,7 @@ import {
   acceptsPatch,
   type ClientIndex,
   createIndex,
+  type IndexChanges,
   sessionKey,
 } from "./index.ts";
 import type { Note } from "./notifications.ts";
@@ -36,6 +37,7 @@ export class NotificationTriggers {
       (_sidecar, entries) => entries,
     /** Application callers borrow their already-reduced authoritative index. */
     readonly read?: (sidecar: string) => readonly IndexEntry[],
+    readonly changes?: (sidecar: string) => IndexChanges | undefined,
   ) {}
   #entries(sidecar: string): IndexEntry[] {
     return [...(this.read?.(sidecar) ?? this.#index?.partition(sidecar) ?? [])];
@@ -60,6 +62,16 @@ export class NotificationTriggers {
       if (!acceptsPatch(previous?.rev, frame)) return false;
     } else if (!(this.#index ??= createIndex()).receive(sidecar, frame)) {
       return false;
+    }
+    const reduced = this.read
+      ? this.changes?.(sidecar)
+      : this.#index?.changes(sidecar);
+    if (
+      previous && reduced?.revision === frame.rev &&
+      reduced.metadata.length === 0
+    ) {
+      previous.rev = frame.rev;
+      return true;
     }
     return this.#update(sidecar, frame.rev);
   }

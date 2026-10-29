@@ -4,6 +4,7 @@ import type { Element } from "solid-js";
 import { dynamic } from "@solidjs/web";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
+import { nativeAttributes } from "./native-attributes.ts";
 
 /** One list-row frame; consumers inject content and actions. */
 export default function ListRow(props: {
@@ -23,11 +24,14 @@ export default function ListRow(props: {
 }): Element {
   const Control = dynamic(() => props.editing ? "div" : props.as ?? "button");
   const Label = dynamic(() => props.activate ? "button" : "span");
+  const control = nativeAttributes(() => props.attributes ?? {});
+  const label = nativeAttributes(() => ({ onClick: props.activate }));
   return (
     <Control
-      {...props.attributes}
+      {...control.attributes}
       type={props.editing || props.as === "div" ? undefined : "button"}
       ref={(element: HTMLElement) => {
+        control.ref(element);
         const refs = props.ref
           ? Array.isArray(props.ref) ? props.ref : [props.ref]
           : [];
@@ -45,6 +49,7 @@ export default function ListRow(props: {
       <SelectionContent class="otk-list-row-content">
         <span class="otk-list-row-leading">{props.leading}</span>
         <Label
+          ref={label.ref}
           type={props.activate ? "button" : undefined}
           class={`otk-list-row-label otk-control-label otk-control-grow ${
             props.labelClass ?? ""
@@ -54,7 +59,7 @@ export default function ListRow(props: {
               : ""
           }`}
           title={props.labelTitle}
-          onClick={props.activate}
+          {...label.attributes}
         >
           {props.children}
         </Label>

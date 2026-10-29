@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { InboxSnapshot, IndexEntry, TaskRecord } from "@otk/protocol";
+import type {
+  InboxSnapshot,
+  IndexEntry,
+  IndexMetadata,
+  TaskRecord,
+} from "@otk/protocol";
 import { type InboxStatus, inboxStatus, rollup } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
 import { familyTask, sessionFamily } from "./session-tree.ts";
@@ -17,7 +22,7 @@ export interface InboxTab {
 }
 export interface TabInput {
   directory: string;
-  entries: readonly IndexEntry[];
+  entries: readonly IndexMetadata[];
   inbox: InboxSnapshot;
 }
 /** Promotion needs identity and naming metadata, not a replicated status row. */

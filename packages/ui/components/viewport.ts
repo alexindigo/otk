@@ -188,6 +188,19 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     const top = viewport.scrollTop, expected = clamp(position);
     if (Math.abs(top - expected) <= 1) return false;
     position = top;
+    if ((gesture || dragging) && mode === "anchored") {
+      if (geometryPending) {
+        // Reader motion is a displacement of the saved identities, even when
+        // their DOM offsets have already changed in this layout transaction.
+        const delta = top - expected;
+        anchors = anchors.map(({ id, anchor }) => ({
+          id,
+          anchor: { key: anchor.key, offset: anchor.offset + delta },
+        }));
+        schedule();
+      } else capture();
+      return false;
+    }
     // Only an accepted input/intent supersedes navigation. Native clamping of
     // the old range can arrive after a reveal was requested, before it applies.
     if (
@@ -257,7 +270,6 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       }
       return;
     }
-    if (dragging || (gesture && mode === "anchored")) return;
     if (mode === "follow") applyPosition(viewport.scrollHeight);
     else {
       for (const saved of anchors) {
@@ -290,15 +302,17 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       else if (gesture === "toward" && (mode === "follow" || bottom())) {
         mode = "follow";
       }
-      capture();
+      if (!geometryPending) capture();
+      else schedule();
       if (mode === "follow") schedule();
     } else if (changed && !navigation && !geometryPending) capture();
     notify();
   };
   const away = () => {
     cancelNavigation();
+    const captureNow = mode !== "anchored" || !geometryPending;
     mode = "anchored";
-    capture();
+    if (captureNow) capture();
   };
   const wheel = (event: WheelEvent) => {
     gesture = event.deltaY < 0 ? "away" : "toward";
@@ -351,14 +365,14 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     if (dragging) {
       dragging = false;
       mode = bottom() ? "follow" : "anchored";
-      capture();
+      if (!geometryPending) capture();
       schedule();
     }
   };
   const end = () => {
     const userGesture = !!gesture || dragging;
     gesture = undefined;
-    if (userGesture) capture();
+    if (userGesture && !geometryPending) capture();
     if (geometryPending) schedule();
   };
   const key = (event: KeyboardEvent) => {

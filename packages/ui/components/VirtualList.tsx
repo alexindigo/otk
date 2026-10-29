@@ -2,6 +2,7 @@
 import "./VirtualList.css" with { type: "text" };
 import { createWindow, type WindowAnchor } from "@otk/client";
 import { acquireViewport, type ViewportPosition } from "./viewport.ts";
+import { nativeAttributes } from "./native-attributes.ts";
 import {
   createContext,
   createEffect,
@@ -263,15 +264,19 @@ export default function VirtualList(props: {
       ),
     );
   };
-  const pins = () => [
-    ...props.pinned ?? [],
-    ...contexts(),
-    ...selected(),
-    ...reveals(),
-    ...measuring.keys(),
-    ...focus() ? [focus()!] : [],
-    ...all() ?? (parent?.materialized() ? props.keys : []),
-  ];
+  const pins = () => {
+    // Range and consumer retention observe the same measurement-lease revision.
+    void version();
+    return [
+      ...props.pinned ?? [],
+      ...contexts(),
+      ...selected(),
+      ...reveals(),
+      ...measuring.keys(),
+      ...focus() ? [focus()!] : [],
+      ...all() ?? (parent?.materialized() ? props.keys : []),
+    ];
+  };
   let releasePins: (() => void) | undefined;
   let retainedPins: string[] = [];
   createEffect(() => [...new Set(pins())], (keys) => {
@@ -568,6 +573,9 @@ export default function VirtualList(props: {
   });
   function Item(input: { key: string }) {
     let element!: HTMLDivElement;
+    const native = nativeAttributes(() =>
+      props.itemAttributes?.(input.key) ?? {}
+    );
     const releaseMeasurement = holdMeasurement(input.key);
     onCleanup(() => {
       releaseMeasurement();
@@ -588,11 +596,13 @@ export default function VirtualList(props: {
     });
     return (
       <div
-        ref={element}
+        ref={[(value) => {
+          element = value;
+        }, native.ref]}
         data-virtual-key={input.key}
         class="otk-virtual-item"
         role="listitem"
-        {...props.itemAttributes?.(input.key)}
+        {...native.attributes}
       >
         <Viewport
           value={{

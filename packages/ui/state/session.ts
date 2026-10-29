@@ -2,6 +2,7 @@
 import {
   type ClientSession,
   createSession as clientSession,
+  type IndexChanges,
   type ModelCatalogConnection,
   type Selection,
   type SidecarConnection,
@@ -13,6 +14,7 @@ export function createSession(
   connection: (id: string) => SidecarConnection,
   entry: (sidecarId: string, id: string) => IndexEntry | undefined,
   catalogConnection?: (selection: Selection) => ModelCatalogConnection,
+  changes?: (server: string) => IndexChanges | undefined,
 ): ClientSession {
   const session = clientSession(
     connection,
@@ -20,6 +22,7 @@ export function createSession(
     solidState,
     catalogConnection,
     true,
+    changes,
   );
   if (catalogConnection) {
     createEffect(() => {

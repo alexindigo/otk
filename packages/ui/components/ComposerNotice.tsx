@@ -2,6 +2,7 @@
 import "./ComposerNotice.css" with { type: "text" };
 import type { Element } from "solid-js";
 import { dynamic } from "@solidjs/web";
+import { nativeAttributes } from "./native-attributes.ts";
 /** Shared joined notice frame; content and actions belong to its consumer. */
 export default function ComposerNotice(props: { children: Element }): Element {
   return <div class="otk-composer-notice">{props.children}</div>;
@@ -18,8 +19,10 @@ export function ComposerNoticeRow(props: {
   onClick?(): void;
 }): Element {
   const Control = dynamic(() => props.onClick ? "button" : "div");
+  const native = nativeAttributes(() => ({ onClick: props.onClick }));
   return (
     <Control
+      ref={native.ref}
       class={`otk-composer-notice-row ${props.class ?? ""}`}
       type={props.onClick ? "button" : undefined}
       role={props.role}
@@ -28,7 +31,7 @@ export function ComposerNoticeRow(props: {
         : props.expanded
         ? "true"
         : "false"}
-      onClick={props.onClick}
+      {...native.attributes}
     >
       {props.icon}
       <span class="otk-composer-notice-content">{props.children}</span>

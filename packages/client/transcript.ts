@@ -116,6 +116,7 @@ export interface TranscriptOwner {
   receive(sidecarId: string, frame: ServerFrame): void;
   older(): Promise<void>;
   latestPrompt(): LatestPrompt | undefined;
+  usesMetadata(ids: ReadonlySet<string>): boolean;
   stop(): void;
 }
 export function createTranscript(
@@ -240,12 +241,12 @@ export function createTranscript(
   let attentionController: AbortController | undefined;
   let range: TranscriptRange | undefined;
   const visited = new Set<string>(), pins = new Map<string, number>();
-  const pages: {
+  const pages = new Map<string | undefined, {
     requestCursor?: string;
     ids: string[];
     older: string | null;
     clock: ContentClock;
-  }[] = [];
+  }>();
   let inFlight: Promise<void> | undefined;
   let automatic = false;
   let tailDirty = false;
@@ -481,8 +482,8 @@ export function createTranscript(
       authority = minimum = page.version;
       cursor = page.older;
       tailDirty = false;
-      pages.length = 0;
-      pages.push({
+      pages.clear();
+      pages.set(undefined, {
         ids: messages.map((m) => m.id),
         older: page.older,
         clock: page.clock,
@@ -660,7 +661,36 @@ export function createTranscript(
         tail.has(m.id) || visited.has(m.id) || pins.has(m.id)
       );
       if (messages.length !== draft.content.messages.length) {
-        tailDirty = true;
+        const retained = new Set(messages.map((message) => message.id));
+        const removed = new Set(
+          draft.content.messages.filter((message) => !retained.has(message.id))
+            .map((message) => message.id),
+        );
+        const covered = new Set(
+          [...pages.values()].flatMap((page) => page.ids),
+        );
+        if (
+          [...removed].some((id) => !covered.has(id)) ||
+          pages.get(undefined)?.ids.some((id) => removed.has(id))
+        ) {
+          // Losing live-tail topology requires a new native tail cursor. Merely
+          // evicting historical reserve does not invalidate that current tail.
+          tailDirty = true;
+        } else if (!tailDirty) {
+          const seen = new Set<string | undefined>();
+          let before: string | undefined;
+          while (!seen.has(before)) {
+            seen.add(before);
+            const page = pages.get(before);
+            if (!page) break;
+            if (page.ids.some((id) => removed.has(id))) {
+              cursor = page.requestCursor!;
+              break;
+            }
+            if (page.older === null) break;
+            before = page.older;
+          }
+        }
         draft.exhausted = false;
       }
       draft.content = {
@@ -760,7 +790,7 @@ export function createTranscript(
         });
         range = undefined;
         tailDirty = false;
-        pages.length = 0;
+        pages.clear();
         visited.clear();
         pins.clear();
         toolListeners.clear();
@@ -789,7 +819,7 @@ export function createTranscript(
         const first = ids.indexOf(value.first), last = ids.indexOf(value.last);
         if (first >= 0 && last >= first) {
           const visible = new Set(ids.slice(first, last + 1));
-          for (const page of pages) {
+          for (const page of pages.values()) {
             if (page.ids.some((id) => visible.has(id))) {
               for (const id of page.ids) {
                 visited.add(id);
@@ -840,6 +870,8 @@ export function createTranscript(
     },
     refetch,
     latestPrompt: () => state.latestPrompt,
+    usesMetadata: (ids) =>
+      ids.has(target.sessionID) || projection.usesMetadata(ids),
     receive(sidecarId: string, frame: ServerFrame): void {
       if (!selected || selected.sidecarId !== sidecarId) return;
       if (frame.t === "index.snapshot" || frame.t === "index.patch") {
@@ -975,7 +1007,7 @@ export function createTranscript(
         if (
           state.temperature === "warm" && frame.event.op === "message.upsert" &&
           !state.messagesByID[frame.event.message.id] &&
-          (pages.some((page) =>
+          ([...pages.values()].some((page) =>
             page.ids.includes(
               frame.event.op === "message.upsert" ? frame.event.message.id : "",
             )
@@ -1068,7 +1100,7 @@ export function createTranscript(
             }
             cursor = page.older;
             tailDirty = false;
-            pages.push({
+            pages.set(before, {
               requestCursor: before,
               ids: messages.map((m) => m.id),
               older: page.older,

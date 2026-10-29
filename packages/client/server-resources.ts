@@ -10,7 +10,12 @@ import type {
 import { type ApprovalModel, createApprovals } from "./approvals.ts";
 import type { ApprovalAttention } from "./approval-attention.ts";
 import type { SidecarConnection } from "./connection.ts";
-import type { ClientIndex, MergedEntry } from "./index.ts";
+import type {
+  ClientIndex,
+  IndexChanges,
+  MergedEntry,
+  MergedMetadata,
+} from "./index.ts";
 import {
   createInbox,
   type InboxModel,
@@ -49,8 +54,10 @@ export interface ServerResources {
   connectionKey(id: string): number | undefined;
   attention(id: string): ApprovalAttention;
   entries(): MergedEntry[];
+  metadataEntries(): MergedMetadata[];
   /** Unprojected metadata borrowed from the shared keyed-index owner. */
   indexEntries(sidecar: string): readonly IndexEntry[];
+  indexChanges(sidecar: string): IndexChanges | undefined;
   projectEntries(project: ProjectSelection): MergedEntry[];
   projects(
     now: number,
@@ -143,7 +150,7 @@ export function createServerResources(o: {
   const tabInput = (p: ProjectSelection): TabInput => ({
     directory: p.directory,
     entries: attention(p.sidecarId).entries(
-      o.index.partition(p.sidecarId, p.directory),
+      o.index.catalog(p.sidecarId, p.directory),
     ),
     inbox: inbox(p.sidecarId).state.inbox,
   });
@@ -212,7 +219,12 @@ export function createServerResources(o: {
     advertised,
     attention,
     entries,
+    metadataEntries: () =>
+      sidecars.state.list.flatMap((s) =>
+        attention(s.id).entries(o.index.catalog(s.id))
+      ),
     indexEntries: (id) => o.index.partition(id),
+    indexChanges: (id) => o.index.changes(id),
     receive,
     taskActions: (p) =>
       createTaskActions(sidecars.connection(p.sidecarId).rpc, p.directory),
@@ -226,7 +238,7 @@ export function createServerResources(o: {
     projects: (now, ageing) =>
       sidecars.state.list.flatMap((s) =>
         inboxProjects(
-          attention(s.id).entries(o.index.partition(s.id)),
+          attention(s.id).entries(o.index.catalog(s.id)),
           inbox(s.id).state.inbox,
           now,
           ageing,

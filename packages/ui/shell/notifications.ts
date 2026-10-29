@@ -2,6 +2,7 @@
 import {
   type ApprovalModel,
   type CommandHub,
+  type IndexChanges,
   type Note,
   NotificationHub,
   notificationPolicy,
@@ -30,6 +31,7 @@ export function applicationNotifications(input: {
   connection(sidecar: string): SidecarConnection;
   entry(sidecar: string, session: string): IndexEntry | undefined;
   entries(sidecar: string): readonly IndexEntry[];
+  changes?(sidecar: string): IndexChanges | undefined;
   attention(sidecar: string): ReturnType<ApprovalModel["attention"]>;
 }) {
   const context = () => {
@@ -134,6 +136,7 @@ export function applicationNotifications(input: {
     retract,
     (sidecar, entries) => input.attention(sidecar).entries(entries),
     input.entries,
+    input.changes,
   );
   const update = () => {
     for (const sidecar of observed) triggers.refresh(sidecar);

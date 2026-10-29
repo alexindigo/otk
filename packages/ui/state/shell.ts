@@ -66,6 +66,7 @@ export function createShellState(o: { api: URL }): ShellState {
       connected: resources.connected(target.sidecarId),
       available: resources.declares(target.sidecarId, "models"),
     }),
+    (id) => resources.indexChanges(id),
   );
   const drafts = createDrafts(solidState);
   const current = createCurrentClient(

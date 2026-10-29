@@ -1,5 +1,12 @@
 # @otk/harness-opencode-v1
 
+Worker composition injects cooperative readiness and native I/O-admission ports
+into the digest sink. HTTP permission, response settlement, hashing and bounded
+scan yields release the scheduler turn; standalone sinks without a scheduler
+await readiness directly. A yielded scan checks connection, deletion and private
+checkpoint authority before committing either data or an error. It cannot
+overwrite a newer essential read's committed baseline or revive a deleted row.
+
 Stock opencode 1.x implementation of `@otk/harness`, verified against 1.18.34.
 All neutral session references are derived `opcv1-<native>` identities. The
 public `opencodeV1SessionID` codec is the only native boundary owner: native
@@ -43,7 +50,8 @@ try {
     indexUpsert: (session) => console.log(session),
     indexRemove: (id) => console.log("removed", id),
     content: () => {},
-    resync: () => {},
+    bootstrapComplete: () => {},
+    invalidate: () => {},
   });
   // Keep the consumer alive while observing the index stream.
   await new Promise((resolve) => setTimeout(resolve, 5000));
@@ -284,6 +292,14 @@ items. User agent/model/variant metadata is read through the digest worker even
 when the latest prompt lies outside the page. Standalone integrations supply
 replay policy explicitly and use bounded API pages when no worker is composed.
 
+Pages and turn detail also carry an ordered `{generation, revision}` version.
+Actual reconnect/disposal and revert-boundary changes retire producer authority
+and emit `transcript.invalidated` at that boundary. Metadata bootstrap
+completion has its own `bootstrap.complete` event and does not retire pages
+acquired during bootstrap. Demand release still renews the opaque content epoch;
+it does not pretend that the provider changed. Already-current consumers can
+ignore a delayed or duplicate invalidation at the same version.
+
 The public entry also exposes native raw types, mapping utilities, `Client`,
 `HttpFailure`, `History`, `BootstrapDb`, SSE/watchdog utilities and
 `TaskProgress` for native integrations. Cross-package imports always use this
@@ -341,6 +357,14 @@ while conflicting identities use API authority. Unverified files cannot provide
 header metadata or running-directory hints. Catalog admission also fences later
 per-identity observations, so an older inventory cannot retire a newer presence
 fact or revive a newly retired lifetime.
+
+Catalog reconciliation commits bounded identity batches and yields between them,
+rechecking its connection fence on continuation. Per-identity neutral/private
+writes stay transactional, and inventory completion is recorded after the full
+reconciliation. Concurrent callers share the owning catalog lifetime rather than
+interleave sweeps. Worker admission batches summary lookups and yields through
+the same priority executor instead of scanning the complete catalog
+synchronously.
 
 The OTK application worker composition lives outside this package. Source and
 compiled independent-consumer checks exercise it before selection in the shipped

@@ -657,6 +657,13 @@ evaluating render factories or constructing another component lifetime. The
 architecture gate rejects provider props passthrough, including aliases and
 implicit copies.
 
+Native event bindings follow their component's DOM lifetime. The shared native
+compiler configuration disables delegated dispatch getters; forwarded attributes
+and dynamic native controls use one native-attribute binding for live
+attributes, handler replacement and listener teardown. Native `currentTarget`,
+callback receivers, tuple handlers and listener options retain their DOM
+semantics without keeping a retired input's event path and source alive.
+
 `makeKeymap` ports kosmozoo's data bindings, canonical modifiers, bare-letter
 matching, overrides, conflicts and resets. Bindings contain a command ID, never
 an execution callback. `bind(descriptor, when?)` returns an unregister function.

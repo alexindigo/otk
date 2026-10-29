@@ -9,6 +9,69 @@ import {
 } from "../mod.ts";
 import { shellEntry, shellFixture, shellTask } from "./shell-fixture.ts";
 
+Deno.test("ordinary digest metadata does not rebuild active body demand or scan the full catalog", () => {
+  const f = shellFixture(), demands: TranscriptDemand[] = [];
+  const session = {
+    demand: (value: TranscriptDemand) => demands.push(value),
+    transcripts: { preload() {} },
+  } as unknown as ClientSession;
+  const owner = createTranscriptScopes({ resources: f.resources, session });
+  try {
+    f.resources.receive("local", {
+      t: "index.snapshot",
+      rev: 0,
+      entries: [shellEntry("a"), shellEntry("other", "/q")],
+    });
+    f.resources.receive("local", {
+      t: "inbox",
+      inbox: {
+        projects: [],
+        tasks: [],
+        seen: {},
+        finishes: {},
+        pathTemplates: [],
+      },
+    });
+    owner.update({
+      project: { sidecarId: "local", directory: "/p" },
+      selected: { sidecarId: "local", sessionID: "a" },
+      screen: true,
+    });
+    const before = demands.length;
+    let catalogs = 0;
+    const entries = f.resources.indexEntries.bind(f.resources);
+    f.resources.indexEntries = (id) => {
+      catalogs++;
+      return entries(id);
+    };
+    f.resources.receive("local", {
+      t: "index.patch",
+      rev: 1,
+      ops: [{
+        op: "digest",
+        id: "other",
+        revision: 1,
+        summary: { state: "ready", revision: 1 },
+        turns: { upsert: {}, remove: [] },
+        deleted: null,
+      }],
+    });
+    assertEquals(
+      demands.length,
+      before,
+      "Unchanged membership cannot re-admit the scope",
+    );
+    assertEquals(
+      catalogs,
+      0,
+      "The metadata owner already knows which identity changed",
+    );
+  } finally {
+    owner.stop();
+    f.resources.stop();
+  }
+});
+
 Deno.test("body scope uses nearest task ancestry, preserves member order, and visibility releases screen only", () => {
   const f = shellFixture();
   const demands: TranscriptDemand[] = [];

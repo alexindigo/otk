@@ -23,6 +23,20 @@ database or UI dependency. `DigestPort.transcriptMetadata` is a cancellable
 scalar-only worker read for the latest user header, requested turn boundaries
 and optional rollback creation clock.
 
+`ContentReplay.version(id)` supplies the producer generation and
+session-boundary revision on every page. `invalidate(id?)` advances that ordered
+version, retires captures and returns the notice for `HarnessSink.invalidate`.
+Reconnect and instance disposal advance the generation; a changed revert
+boundary advances only its session revision. `reset`/`release` retire demand
+epochs without inventing a provider invalidation. Versions are scoped to one
+producer lifetime; a new welcome establishes a new transport/baseline lifetime.
+
+`HarnessSink.bootstrapComplete()` announces completed metadata bootstrap. It is
+independent of `invalidate({version, sessionID?})`, forwarded as
+`bootstrap.complete` and `transcript.invalidated` respectively. Bootstrap
+completion cannot invalidate a current transcript. A consumer already at the
+notice's version (or newer) does not reacquire that page or opened turn detail.
+
 ```ts
 import {
   CapabilityRegistry,
@@ -60,12 +74,12 @@ advertisement and client/UI availability then share the same typed name.
 
 The core owns lifecycle; call `stop()` to release its streams and outstanding
 operations. A sink receives connection state, index snapshots/updates/removals,
-content operations and resync notifications. Capabilities do not own the sink.
-`SessionIndex` owns session metadata. A consumer can supply that owner as
-`HarnessSink.index`, with index callbacks writing it; the native connector reads
-the same owner instead of retaining a second copy. Omitting it preserves the
-standalone sink API. The application index extends this owner with wire batching
-and revision notifications.
+content operations, bootstrap completion and versioned transcript invalidation.
+Capabilities do not own the sink. `SessionIndex` owns session metadata. A
+consumer can supply that owner as `HarnessSink.index`, with index callbacks
+writing it; the native connector reads the same owner instead of retaining a
+second copy. Omitting it preserves the standalone sink API. The application
+index extends this owner with wire batching and revision notifications.
 
 License: LGPL-3.0-only. Workspace validation: `deno task test:unit` and
 `deno task test:arch`.
@@ -94,17 +108,34 @@ digest delta, so accepted deletion remains durable even while provider health is
 unavailable.
 
 `DigestScheduler` registers sinks by declared identity and coalesces queued
-session work. `tick()` executes one slice: interactive reads (`execute`) precede
-attention, visible scope and background. Owner-keyed scopes form a union;
-`release` drops an owner's scope and interactive demand. Background pauses under
-memory pressure or interactive demand; essential reads still run. Continuations
-retain cursors, fine-grained keys collapse to retained full-session markers, and
-observed elapsed time controls the duty limiter. `stop` aborts and joins active
-work and closes every selected sink.
+session work. `tick()` executes one runnable turn: interactive reads (`execute`)
+precede attention, visible scope and background. Owner-keyed scopes form a
+union; `release` drops an owner's scope and interactive demand. Background
+pauses under memory pressure or interactive demand; essential reads still run.
+Continuations retain cursors, fine-grained keys collapse to retained
+full-session markers, and observed active work controls the duty limiter. `stop`
+aborts and joins active work and closes every selected sink.
 
 Essential reads interrupt the actual duty wait. Its remaining quota still gates
 the next background slice, so yielding cannot turn a slow background read into a
 long admission stall or discard the configured duty limit.
+
+Waiting is not work. `execute((signal, execution) => ..., signal, priority?)`
+and the sink's fourth `step` argument supply one `DigestExecution` per lifetime.
+`execution.wait(readiness)` releases its turn, then queues the ready
+continuation at that job's priority; publication credit, locks and other
+readiness cannot hold execution. `wait(readiness, 'io')` also identifies
+interruptible native reads. Essential reads can retire an unfinished background
+I/O slice while retaining its durable reconciliation cursor. Cleanup uses
+`execution.join(readiness)` to join actual I/O settlement before releasing
+permission. No SQLite transaction crosses a wait. Duty accounting excludes
+waiting time; its timer is outside the executing slot. Producers must use these
+ports for asynchronous readiness.
+
+Worker compositions also yield the actual event loop between bounded turns so
+incoming cross-isolate messages can enter the priority queue. Catalog writes and
+admission use row-budgeted committed batches; no SQLite transaction crosses a
+yield and no inventory-sized synchronous pass stands ahead of essential reads.
 
 `SessionIndex.upsertMetadata`/`resetMetadata` preserve existing summaries and
 tombstones; `applyDigest` preserves live title/status/attention/topology and

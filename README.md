@@ -174,6 +174,12 @@ with live changes. Replay is bounded by `[messages]` configuration; a lost or
 overflowed baseline shows “Refreshing messages…” and reacquires a provider page.
 No transcript content is persisted in OTK's databases.
 
+Metadata bootstrap completion does not restart an already-current transcript.
+Real native reconnect, instance disposal and revert-boundary changes carry an
+ordered invalidation version, so duplicate or delayed notices cannot discard a
+newer page or turn breakdown. Digest work yields execution while waiting for
+credit, I/O admission or locks and between bounded catalog chunks.
+
 Message bodies are shared by server/session identity across selection, scope and
 attention demand. The active task (including its helpers), or the ungrouped
 project, warms each session's newest ten plus the next ten through a four-read
@@ -382,9 +388,10 @@ incoming response or other valid client frame. This is an application-level
 heartbeat, not a WebSocket control-frame ping.
 
 Development verification runs inside virtual machine
-`arch-niri-otk-devbase-otk-m1` on `ark.home`, as `tester` in `/home/tester/otk`,
-through the strict `otk-vm` / `otk-m1` access profile and milestone plans. The
-test provider is scripted and uses no real model credentials.
+`arch-niri-otk-devbase-otk-m5a` on `ark.home`, as `tester` in
+`/home/tester/otk`, through the strict `otk-vm` / `otk-m5a` access profile and
+milestone plans. The test provider is scripted and uses no real model
+credentials.
 
 The [session digest qualification](./docs/session-digest-verification.md)
 documents the real-version scale generator, serving-isolate and browser budgets,

@@ -1,0 +1,28 @@
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+#app {
+  display: flex;
+  flex-direction: column;
+}
+.heap-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.5rem;
+}
+.heap-controls button {
+  white-space: nowrap;
+}
+.heap-preview {
+  flex: 0 0 6rem;
+  overflow: hidden;
+}
+.heap-view {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}

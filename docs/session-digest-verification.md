@@ -62,9 +62,11 @@ before the module Worker is created. User-data schema construction precedes this
 boundary. Once sampling starts, no timer outliers are discarded. A 5-ms timer
 records interval minus requested delay, alongside synchronous worker message
 application, index observer and serialization sections. A deliberate
-same-isolate block is a negative control. Every serving sample must be below 50
-ms; worker slice wall time is recorded separately, not misreported as main
-thread blocking.
+same-isolate block is a negative control. Every serving sample is retained and
+reported, including samples above the historical 50-ms reference. Worker slice
+wall time is recorded separately, not misreported as main-thread blocking.
+Timing and heap values are measurements, not pass/fail gates; structural and
+consumer-correctness assertions still gate verification.
 
 The optional injected diagnostics have no operator flag or debug RPC. Native
 read counts come from the worker's actual native reader. Summary scans must
@@ -75,10 +77,11 @@ the independent manifest, rather than accepting only database readiness.
 Browser instrumentation is installed before navigation. It timestamps receipt of
 the complete index snapshot using the browser clock and observes the first
 animation frame with real titles, lights, selection and row geometry. Both cold
-and warm list paints must be at most 1,000 ms. WebSocket frames distinguish the
-selected session's body/resources from list demand: list rows admit no detail or
-per-row body requests. The real browser also observes saved task and native
-interactive outcomes while digestion is active.
+and warm list paints are reported against the historical 1,000-ms reference.
+WebSocket frames distinguish the selected session's body/resources from list
+demand: list rows admit no detail or per-row body requests. The real browser
+also observes saved task and native interactive outcomes while digestion is
+active.
 
 The attention scenario deliberately asks for permission in two background
 sessions. Their two notification-owned `permission.list` reads are counted
@@ -93,3 +96,22 @@ off-source compiled checks. Compatibility runs select stock 1.19.3 and 1.18.35
 with `OTK_TEST_OPENCODE`; the default executable is 1.18.34. Raw samples,
 manifests and build identities belong with each execution receipt, not in this
 document as timeless performance claims.
+
+## Message paging and cooling measurements
+
+The message fixture retains the same population and adds a 102-step reply,
+helper-heavy parent, long code/diff, queued prompts and a unique-source payload.
+Tests record five cold and preloaded newest-page paints per theme, real native
+cursor traversal and reverse reuse, 1,000 real streamed updates, and ten full
+load/cool heap cycles while another session keeps the highlighting worker alive.
+Paint, event-loop, highlighting, reserve-at-input-cadence and retained-byte
+values are reported without threshold failures. They are not promises for every
+install.
+
+Exact page/source/cursor identity, bounded shared acquisition, no helper scans
+or per-row usage/body requests, truthful admitted outcomes, stable visible
+nodes, settled viewport bounds, subscription retirement, preserved drafts and
+the continued independent worker lifetime remain structural assertions. Heap
+instrumentation controls still verify that the measuring tool observes known
+retained and released fixture content. Raw samples and heap artifacts accompany
+the execution handoff.

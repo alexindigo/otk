@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createState, type StateFactory } from "./state.ts";
-import type { IndexEntry } from "@otk/protocol";
+import type { IndexEntry, IndexMetadata } from "@otk/protocol";
 import type { ContentSession } from "@otk/protocol";
 import type { ServerFrame } from "@otk/protocol";
 
 export interface MergedEntry extends IndexEntry {
+  sidecarId: string;
+}
+export interface MergedMetadata extends IndexMetadata {
   sidecarId: string;
 }
 export function sessionKey(sidecarId: string, sessionID: string): string {
@@ -36,11 +39,21 @@ export function acceptsPatch(
 export interface IndexState {
   entries: Record<string, MergedEntry>;
 }
+/** Accepted reduced identities, not wire operations or another metadata cache. */
+export interface IndexChanges {
+  revision: number;
+  ids: readonly string[];
+  structural: boolean;
+  metadata: readonly string[];
+}
 export interface ClientIndex {
   state: IndexState;
   get(sidecarId: string, sessionID: string): MergedEntry | undefined;
   ids(sidecarId: string, directory?: string): readonly string[];
   partition(sidecarId: string, directory?: string): MergedEntry[];
+  catalog(sidecarId: string, directory?: string): readonly MergedMetadata[];
+  getMetadata(sidecarId: string, sessionID: string): MergedMetadata | undefined;
+  changes(sidecarId: string): IndexChanges | undefined;
   subscribe(listener: (state: IndexState) => void): () => void;
   receive(sidecarId: string, frame: IndexFrame): boolean;
   remove(sidecarId: string): void;
@@ -52,18 +65,59 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
   const clock = factory({ revision: 0, keys: {} as Record<string, number> });
   const partitions = new Map<
     string,
-    { members: Set<string>; ids?: readonly string[] }
+    {
+      members: Set<string>;
+      ids?: readonly string[];
+      catalog?: readonly MergedMetadata[];
+    }
   >();
   const partitionClock = factory({ keys: {} as Record<string, number> });
+  const membershipClock = factory({ keys: {} as Record<string, number> });
+  const metadataClock = factory({ keys: {} as Record<string, number> });
+  const metadataValues = new WeakMap<MergedEntry, MergedMetadata>();
+  const metadataValue = (entry: MergedEntry): MergedMetadata => {
+    let value = metadataValues.get(entry);
+    if (!value) {
+      const { digest: _, ...metadata } = entry;
+      metadataValues.set(entry, value = metadata);
+    }
+    return value;
+  };
   const partitionKey = (server: string, directory?: string) =>
     JSON.stringify([server, directory]);
   const touched = new Set<string>();
+  const membershipTouched = new Set<string>(),
+    metadataTouched = new Set<string>();
+  const metadataChanged = new Set<string>();
+  let structural = false;
+  const changes = new Map<string, IndexChanges>();
   const put = (key: string, next?: MergedEntry) => {
     const previous = entries[key];
+    const changedMetadata = !previous || !next ||
+      Object.keys({ ...previous, ...next }).some((field) =>
+        field !== "digest" &&
+        Reflect.get(previous, field) !== Reflect.get(next, field)
+      );
+    if (changedMetadata) metadataChanged.add(key);
+    else if (next && previous) {
+      metadataValues.set(next, metadataValue(previous));
+    }
+    if (
+      !previous || !next || previous.parentID !== next.parentID ||
+      previous.directory !== next.directory ||
+      previous.projectID !== next.projectID ||
+      previous.timeCreated !== next.timeCreated ||
+      previous.archived !== next.archived ||
+      !!previous.deleted !== !!next.deleted
+    ) structural = true;
     for (const entry of [previous, next]) {
       if (entry) {
         touched.add(partitionKey(entry.sidecarId));
         touched.add(partitionKey(entry.sidecarId, entry.directory));
+        if (changedMetadata) {
+          metadataTouched.add(partitionKey(entry.sidecarId));
+          metadataTouched.add(partitionKey(entry.sidecarId, entry.directory));
+        }
       }
     }
     const member = (entry: MergedEntry, add: boolean, directory?: string) => {
@@ -73,6 +127,8 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
       if (add) partition.members.add(entry.id);
       else partition.members.delete(entry.id);
       partition.ids = undefined;
+      partition.catalog = undefined;
+      membershipTouched.add(p);
     };
     if (previous && (!next || previous.directory !== next.directory)) {
       member(previous, false, previous.directory);
@@ -85,11 +141,14 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
     if (next) entries[key] = next;
     else delete entries[key];
   };
-  const ids = (server: string, directory?: string) => {
+  const members = (server: string, directory?: string) => {
     const key = partitionKey(server, directory);
-    void partitionClock.state.keys[key];
     const partition = partitions.get(key);
     return partition ? partition.ids ??= [...partition.members] : emptyIDs;
+  };
+  const ids = (server: string, directory?: string) => {
+    void membershipClock.state.keys[partitionKey(server, directory)];
+    return members(server, directory);
   };
   const emptyIDs: readonly string[] = [];
   const state: IndexState = {
@@ -103,6 +162,25 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
       for (const key of touched) draft.keys[key] = (draft.keys[key] ?? 0) + 1;
     });
     touched.clear();
+    membershipClock.update((draft) => {
+      for (const key of membershipTouched) {
+        draft.keys[key] = (draft.keys[key] ?? 0) + 1;
+      }
+    });
+    membershipTouched.clear();
+    metadataClock.update((draft) => {
+      for (const key of metadataTouched) {
+        const partition = partitions.get(key);
+        if (partition) partition.catalog = undefined;
+        draft.keys[key] = (draft.keys[key] ?? 0) + 1;
+      }
+      for (const key of metadataChanged) {
+        if (entries[key]) draft.keys[key] = (draft.keys[key] ?? 0) + 1;
+        else delete draft.keys[key];
+      }
+    });
+    metadataTouched.clear();
+    metadataChanged.clear();
     clock.update((draft) => {
       draft.revision++;
       for (const key of changed) {
@@ -115,8 +193,28 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
   return {
     state,
     ids,
-    partition: (server, directory) =>
-      ids(server, directory).map((id) => entries[sessionKey(server, id)]),
+    changes: (server) => changes.get(server),
+    partition: (server, directory) => {
+      void partitionClock.state.keys[partitionKey(server, directory)];
+      return members(server, directory).map((id) =>
+        entries[sessionKey(server, id)]
+      );
+    },
+    catalog: (server, directory) => {
+      const key = partitionKey(server, directory);
+      void metadataClock.state.keys[key];
+      const partition = partitions.get(key);
+      return partition
+        ? partition.catalog ??= members(server, directory).map((id) =>
+          metadataValue(entries[sessionKey(server, id)])
+        )
+        : [];
+    },
+    getMetadata(server, id) {
+      const key = sessionKey(server, id);
+      void metadataClock.state.keys[key];
+      return entries[key] && metadataValue(entries[key]);
+    },
     get(sidecarId, sessionID) {
       const key = sessionKey(sidecarId, sessionID);
       void clock.state.keys[key];
@@ -125,6 +223,7 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
     subscribe: (listener) => clock.subscribe(() => listener(state)),
     receive(sidecarId: string, frame: IndexFrame): boolean {
       if (!acceptsPatch(revisions.get(sidecarId), frame)) return false;
+      structural = false;
       const changed = new Set<string>();
       if (frame.t === "index.snapshot") {
         const incoming = new Set(frame.entries.map((e) => e.id));
@@ -158,7 +257,11 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
           const old = previous.ids ?? [...previous.members];
           if (
             old.length !== next.length || old.some((id, i) => id !== next[i])
-          ) partitions.set(p, { members, ids: next });
+          ) {
+            partitions.set(p, { members, ids: next });
+            membershipTouched.add(p);
+            structural = true;
+          }
         }
       } else {for (const op of frame.ops) {
           const key = sessionKey(
@@ -202,11 +305,20 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
           changed.add(key);
         }}
       revisions.set(sidecarId, frame.rev);
+      changes.set(sidecarId, {
+        revision: frame.rev,
+        ids: [...changed].map((key) => key.slice(sidecarId.length + 1)),
+        structural,
+        metadata: [...metadataChanged].map((key) =>
+          key.slice(sidecarId.length + 1)
+        ),
+      });
       publish(changed);
       return true;
     },
     remove(sidecarId: string): void {
       revisions.delete(sidecarId);
+      changes.delete(sidecarId);
       const changed = new Set<string>();
       for (const id of ids(sidecarId)) {
         const key = sessionKey(sidecarId, id);

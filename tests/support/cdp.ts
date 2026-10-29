@@ -16,7 +16,7 @@ export class Cdp {
     reject: (error: Error) => void;
     timer: ReturnType<typeof setTimeout>;
   }>();
-  events: { method: string; params: Json }[] = [];
+  events: { method: string; params: Json; sessionId?: string }[] = [];
   errors: unknown[] = [];
 
   static async launch(root: string): Promise<Cdp> {
@@ -96,7 +96,7 @@ export class Cdp {
     }
     this.#pending.clear();
   }
-  send(method: string, params: Json = {}): Promise<Json> {
+  send(method: string, params: Json = {}, sessionId?: string): Promise<Json> {
     return new Promise((resolve, reject) => {
       const id = ++this.#next;
       const timer = setTimeout(() => {
@@ -105,7 +105,14 @@ export class Cdp {
       }, 30_000);
       this.#pending.set(id, { resolve, reject, timer });
       try {
-        this.#socket.send(JSON.stringify({ id, method, params }));
+        this.#socket.send(
+          JSON.stringify({
+            id,
+            method,
+            params,
+            ...(sessionId ? { sessionId } : {}),
+          }),
+        );
       } catch (error) {
         clearTimeout(timer);
         this.#pending.delete(id);

@@ -64,6 +64,14 @@ clocks; replies remain visibly refreshing until a full event or terminal source
 checkpoint restores authority. Recovery admission shares layered message policy,
 and teardown cancels queued and active checkpoint work.
 
+Digest readiness and publication-credit waits now release execution and resume
+at their priority. Catalog reconciliation/admission uses bounded committed
+batches and real worker yields, while metadata-only project/activity views no
+longer rebuild for digest-only revisions. Bootstrap completion is separate from
+versioned transcript invalidation: already-current pages and turn detail survive
+duplicate or delayed notices, while actual reconnect/disposal/revert boundaries
+still retire stale authority.
+
 ## [0.1.0-beta.1] — 2026-10-26
 
 **Highlights.** Sessions gain in-place rename, confirmed deletion, inclusive
