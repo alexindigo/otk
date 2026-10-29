@@ -75,6 +75,19 @@ test("V3 models and agents expose connected public metadata over WS and preserve
         >;
       }[];
     }>("/provider");
+    // This is the explicit all-provider parity control, not UI discovery.
+    // Native fixtures select each supported binary through OTK_TEST_OPENCODE.
+    const connected = await f.oc.request<{ providers: typeof native.all }>(
+      "/config/providers",
+    );
+    const byID = (a: { id: string }, b: { id: string }) =>
+      a.id.localeCompare(b.id);
+    assertEquals(
+      [...connected.providers].sort(byID),
+      native.all.filter((provider) => native.connected.includes(provider.id))
+        .sort(byID),
+      "Connected endpoint preserves complete native provider/model metadata",
+    );
     assertEquals(
       catalog.providers.map((provider) => provider.id).sort(),
       [...native.connected].sort(),

@@ -17,6 +17,7 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
         primary: p.primary as boolean | undefined,
       };
     },
-    handler: (_ctx, input) => capability.listAgents(input.id, input.primary),
+    handler: (ctx, input) =>
+      capability.listAgents(input.id, input.primary, ctx.execution?.signal),
   });
 }

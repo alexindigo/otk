@@ -212,12 +212,41 @@ export function createSession(
               connected: sidecar.supports("models"),
               available: sidecar.supports("models"),
             },
-        load: (signal) =>
-          sidecar.rpc.call(
+        load: async (signal) => {
+          // Speculative catalogs cannot occupy native I/O ahead of the captured
+          // selection's essential first attempt. A failed attempt also releases it.
+          signal.throwIfAborted();
+          const initial = transcripts.get(target);
+          if (initial?.state.loading) {
+            await new Promise<void>((resolve, reject) => {
+              let release = () => {};
+              const cleanup = () => {
+                release();
+                signal.removeEventListener("abort", abort);
+              };
+              const abort = () => {
+                cleanup();
+                reject(signal.reason);
+              };
+              const check = () => {
+                if (!initial.state.loading) {
+                  cleanup();
+                  resolve();
+                }
+              };
+              release = initial.subscribe(check);
+              signal.addEventListener("abort", abort, { once: true });
+              if (signal.aborted) abort();
+              else check();
+            });
+          }
+          signal.throwIfAborted();
+          return await sidecar.rpc.call(
             "models.list",
             { sessionID: target.sessionID },
             signal,
-          ),
+          );
+        },
         factory,
       });
       models.connect();

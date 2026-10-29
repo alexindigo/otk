@@ -190,9 +190,9 @@ test("public adapter qualifies every capability boundary, including externally c
       if (path === "/question") {
         return Promise.resolve(Response.json([question]));
       }
-      if (path === "/provider") {
+      if (path === "/config/providers") {
         return Promise.resolve(
-          Response.json({ connected: [], all: [] }),
+          Response.json({ providers: [] }),
         );
       }
       if (path === "/config") return Promise.resolve(Response.json({}));

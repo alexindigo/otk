@@ -205,18 +205,23 @@ HTTP tokens remain invalid after that barrier. Reconciliation releases unowned
 observations rather than retaining busy/cleared keys and old-generation deletion
 metadata forever.
 
-`capabilities.models.listModels(sessionID)` reads native `GET /provider` and
-`GET /config` in that session's directory. It allowlists connected provider and
-model display metadata, including finite positive native `limit.context` as
-`contextLimit`, and all four finite nonnegative native cost rates as `cost` (USD
-per million tokens), never credentials/options/headers/environment fields.
-Missing/incomplete/invalid prices stay absent; known zero rates remain zero.
-Variant names come from the model's variant keys; `free` means the `opencode`
-provider with zero input cost. Configured `model` becomes the catalog default
-only if present among the connected models. `agents.list` uses the same neutral
-colour normalization as transcripts and includes configured model/variant
-metadata. Native user `info.model.variant` maps to OTK `UserMessage.variant`
-(stock 1.18.34).
+`capabilities.models.listModels(sessionID, signal?)` reads native
+`GET /config/providers` and `GET /config` in that session's directory,
+forwarding the request cancellation signal to both reads. It allowlists
+connected provider and model display metadata, including finite positive native
+`limit.context` as `contextLimit`, and all four finite nonnegative native cost
+rates as `cost` (USD per million tokens), never
+credentials/options/headers/environment fields. Missing/incomplete/invalid
+prices stay absent; known zero rates remain zero. Variant names come from the
+model's variant keys; `free` means the `opencode` provider with zero input cost.
+Configured `model` becomes the catalog default only if present among the
+connected models. `agents.list` uses the same neutral colour normalization as
+transcripts and includes configured model/variant metadata; its optional read
+signal also reaches native `/agent` acquisition. Native user
+`info.model.variant` maps to OTK `UserMessage.variant` (stock 1.18.34).
+Session/composer discovery fetches only connected metadata. A future Connect
+provider flow must acquire the all-provider `/provider` inventory on demand,
+rather than prefetch it during ordinary session navigation.
 
 `usage.getUsage(sessionID,turnID,signal?)` reads only that turn's assistant
 usage headers and existing tool labels. The shipped worker queries indexed

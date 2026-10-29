@@ -14,9 +14,13 @@ interface Agent {
 }
 export function agents(client: Client, directory: Directory): AgentsCapability {
   return {
-    async listAgents(sessionID, primary = false) {
+    async listAgents(sessionID, primary = false, signal) {
+      signal?.throwIfAborted();
+      const query = { directory: await directory.resolve(sessionID) };
+      signal?.throwIfAborted();
       const agents = await client.json<Agent[]>("/agent", {
-        query: { directory: await directory.resolve(sessionID) },
+        query,
+        signal,
       });
       return agents.filter((agent) =>
         !agent.hidden &&

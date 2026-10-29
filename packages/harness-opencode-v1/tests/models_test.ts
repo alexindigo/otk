@@ -33,9 +33,8 @@ function model(id: string, status = "active", input = 0) {
   };
 }
 const native = {
-  connected: ["opencode", "fake", "no-catalog-entry"],
   default: { opencode: "paid" },
-  all: [
+  providers: [
     {
       id: "opencode",
       name: "OpenCode",
@@ -61,7 +60,6 @@ const native = {
         },
       },
     },
-    { id: "disconnected", name: "Hidden", models: { hidden: model("hidden") } },
   ],
 };
 
@@ -72,11 +70,11 @@ Deno.test("catalog allowlists connected metadata, variants, statuses and opencod
     assertEquals(url.searchParams.get("directory"), "/project");
     calls.push(url.pathname);
     return Promise.resolve(
-      Response.json(url.pathname === "/provider" ? native : {}),
+      Response.json(url.pathname === "/config/providers" ? native : {}),
     );
   });
   const catalog = await models(client, directory).listModels("opcv1-session");
-  assertEquals(calls.sort(), ["/config", "/provider"]);
+  assertEquals(calls.sort(), ["/config", "/config/providers"]);
   assertEquals(catalog, {
     providers: [
       {
@@ -130,7 +128,7 @@ Deno.test("catalog default comes only from config.model present in the connected
       settings,
       (input) =>
         Promise.resolve(Response.json(
-          new URL(String(input)).pathname === "/provider"
+          new URL(String(input)).pathname === "/config/providers"
             ? native
             : { model: configured },
         )),
@@ -158,10 +156,9 @@ Deno.test("catalog prices allowlist all four finite nonnegative rates, preservin
       (input) =>
         Promise.resolve(
           Response.json(
-            new URL(String(input)).pathname === "/provider"
+            new URL(String(input)).pathname === "/config/providers"
               ? {
-                connected: ["opencode"],
-                all: [{
+                providers: [{
                   id: "opencode",
                   name: "OpenCode",
                   models: { priced: { ...model("priced"), cost } },
@@ -194,10 +191,9 @@ Deno.test("catalog keeps only finite positive native context windows", async () 
       settings,
       (input) =>
         Promise.resolve(Response.json(
-          new URL(String(input)).pathname === "/provider"
+          new URL(String(input)).pathname === "/config/providers"
             ? {
-              connected: ["opencode"],
-              all: [{
+              providers: [{
                 id: "opencode",
                 name: "OpenCode",
                 models: {
@@ -232,7 +228,7 @@ Deno.test("catalog resolves each session directory and propagates native errors"
     return Promise.resolve(
       url.searchParams.get("directory") === "/projects/opcv1-error"
         ? new Response("catalog unavailable", { status: 503 })
-        : Response.json(url.pathname === "/provider" ? native : {}),
+        : Response.json(url.pathname === "/config/providers" ? native : {}),
     );
   });
   const capability = models(client, resolver);
@@ -245,7 +241,7 @@ Deno.test("catalog resolves each session directory and propagates native errors"
   );
   assertEquals(resolved, ["opcv1-first", "opcv1-second", "opcv1-error"]);
   for (const id of resolved) {
-    assert(calls.includes(`/provider:/projects/${id}`));
+    assert(calls.includes(`/config/providers:/projects/${id}`));
     assert(calls.includes(`/config:/projects/${id}`));
   }
 });

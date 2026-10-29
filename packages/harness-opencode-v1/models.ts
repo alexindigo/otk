@@ -4,9 +4,9 @@ import type { ModelCatalog } from "@otk/protocol";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
 
-/** Minimal native GET /provider projection, confirmed against stock 1.18.34. */
+/** Connected metadata from GET /config/providers on supported stock 1.x natives. */
 interface Providers {
-  all: {
+  providers: {
     id: string;
     name: string;
     models: Record<string, {
@@ -23,57 +23,54 @@ interface Providers {
       release_date?: string;
     }>;
   }[];
-  connected: string[];
 }
 
 export function models(client: Client, directory: Directory): ModelsCapability {
   return {
-    async listModels(sessionID) {
+    async listModels(sessionID, signal) {
+      signal?.throwIfAborted();
       const query = { directory: await directory.resolve(sessionID) };
+      signal?.throwIfAborted();
       const [native, config] = await Promise.all([
-        client.json<Providers>("/provider", { query }),
-        client.json<{ model?: string }>("/config", { query }),
+        client.json<Providers>("/config/providers", { query, signal }),
+        client.json<{ model?: string }>("/config", { query, signal }),
       ]);
-      const connected = new Set(native.connected);
       const catalog: ModelCatalog = {
-        providers: native.all.filter((provider) => connected.has(provider.id))
-          .map((provider) => ({
-            id: provider.id,
-            name: provider.name,
-            models: Object.values(provider.models).map((model) => ({
-              id: model.id,
-              name: model.name,
-              variants: Object.keys(model.variants ?? {}),
-              status: model.status,
-              free: provider.id === "opencode" && model.cost?.input === 0,
-              ...([
-                  model.cost?.input,
-                  model.cost?.output,
-                  model.cost?.cache?.read,
-                  model.cost?.cache?.write,
-                ].every((rate) =>
-                  typeof rate === "number" && Number.isFinite(rate) && rate >= 0
-                )
-                ? {
-                  cost: {
-                    input: model.cost!.input,
-                    output: model.cost!.output!,
-                    cache: {
-                      read: model.cost!.cache!.read,
-                      write: model.cost!.cache!.write,
-                    },
+        providers: native.providers.map((provider) => ({
+          id: provider.id,
+          name: provider.name,
+          models: Object.values(provider.models).map((model) => ({
+            id: model.id,
+            name: model.name,
+            variants: Object.keys(model.variants ?? {}),
+            status: model.status,
+            free: provider.id === "opencode" && model.cost?.input === 0,
+            ...([
+                model.cost?.input,
+                model.cost?.output,
+                model.cost?.cache?.read,
+                model.cost?.cache?.write,
+              ].every((rate) =>
+                typeof rate === "number" && Number.isFinite(rate) && rate >= 0
+              )
+              ? {
+                cost: {
+                  input: model.cost!.input,
+                  output: model.cost!.output!,
+                  cache: {
+                    read: model.cost!.cache!.read,
+                    write: model.cost!.cache!.write,
                   },
-                }
-                : {}),
-              ...(Number.isFinite(model.limit?.context) &&
-                  model.limit!.context > 0
-                ? { contextLimit: model.limit!.context }
-                : {}),
-              ...(model.release_date
-                ? { releaseDate: model.release_date }
-                : {}),
-            })),
+                },
+              }
+              : {}),
+            ...(Number.isFinite(model.limit?.context) &&
+                model.limit!.context > 0
+              ? { contextLimit: model.limit!.context }
+              : {}),
+            ...(model.release_date ? { releaseDate: model.release_date } : {}),
           })),
+        })),
       };
       const separator = config.model?.indexOf("/") ?? -1;
       if (separator > 0) {

@@ -151,6 +151,58 @@ Deno.test("plain session generations isolate warm loads and paging deduplicates 
   }
 });
 
+Deno.test("selected catalog discovery yields to the first body attempt and never outlives a retired waiting selection", async () => {
+  const { connection, session, answer, frames } = fixture();
+  connection.supports = (name) => name === "models";
+  try {
+    session.open({ sidecarId: "core", sessionID: "old" });
+    await settle();
+    assertEquals(frames.filter((frame) => frame.method === "models.list"), []);
+    session.open({ sidecarId: "core", sessionID: "new" });
+    answer("session.messages", fixturePage("old", [], undefined, info("old")));
+    await settle();
+    assertEquals(frames.filter((frame) => frame.method === "models.list"), []);
+    answer("session.messages", fixturePage("new", [], undefined, info("new")));
+    await settle();
+    const catalogs = frames.filter((frame) => frame.method === "models.list");
+    assertEquals(catalogs.length, 1);
+    assertEquals(Reflect.get(catalogs[0].params as object, "sessionID"), "new");
+    answer("models.list", { providers: [] });
+    await session.models?.ready();
+  } finally {
+    session.stop();
+    connection.stop();
+  }
+});
+
+Deno.test("catalog discovery remains available after a failed initial body attempt", async () => {
+  const { connection, session, answer, frames } = fixture();
+  connection.supports = (name) => name === "models";
+  try {
+    session.open({ sidecarId: "core", sessionID: "s" });
+    await settle();
+    const request = frames.splice(
+      frames.findIndex((frame) => frame.method === "session.messages"),
+      1,
+    )[0];
+    connection.rpc.receive({
+      t: "rpc.result",
+      id: request.id,
+      ok: false,
+      error: { code: "fixture", message: "Body unavailable" },
+    });
+    await settle();
+    assertEquals(session.state.loading, false);
+    assert(frames.some((frame) => frame.method === "models.list"));
+    answer("models.list", { providers: [] });
+    await session.models?.ready();
+    assertEquals(session.models?.state.value, { providers: [] });
+  } finally {
+    session.stop();
+    connection.stop();
+  }
+});
+
 Deno.test("session catalog is optional, nonblocking and generation-bound across selection and reconnect", async () => {
   const { connection, session, answer, frames } = fixture();
   const old = { providers: [], default: { provider: "old", model: "old" } };
@@ -158,9 +210,9 @@ Deno.test("session catalog is optional, nonblocking and generation-bound across 
   connection.supports = (name) => name === "models";
   try {
     session.open({ sidecarId: "core", sessionID: "old" });
-    await Promise.resolve();
-    session.open({ sidecarId: "core", sessionID: "new" });
     answer("session.messages", fixturePage("old", [], undefined, info("old")));
+    await settle();
+    session.open({ sidecarId: "core", sessionID: "new" });
     answer("session.messages", fixturePage("new", [], undefined, info("new")));
     await settle();
     assertEquals(
@@ -182,6 +234,7 @@ Deno.test("session catalog is optional, nonblocking and generation-bound across 
     );
     await Promise.resolve();
     answer("session.messages", fixturePage("new", [], undefined, info("new")));
+    await settle();
     answer("models.list", old);
     await session.models?.ready();
     assertEquals(session.models?.state.value, old);
@@ -191,6 +244,7 @@ Deno.test("session catalog is optional, nonblocking and generation-bound across 
       "session.messages",
       fixturePage("new", [message("still available")], undefined, info("new")),
     );
+    await settle();
     const failed = frames.splice(
       frames.findIndex((f) => f.method === "models.list"),
       1,

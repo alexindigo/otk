@@ -8,6 +8,6 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
   if (!capability) return;
   rpc.register("models.list", {
     params: (p) => sessionID(p)!,
-    handler: (_ctx, id) => capability.listModels(id),
+    handler: (ctx, id) => capability.listModels(id, ctx.execution?.signal),
   });
 }

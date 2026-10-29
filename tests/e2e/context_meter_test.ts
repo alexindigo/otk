@@ -18,6 +18,7 @@ import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { publishUsage } from "../support/usage-summary.ts";
+import { waitFor } from "../support/opencode.ts";
 
 test("U1 composer and meter share exactly one models.list per session open", async () => {
   const root = await fixture(), pending = Promise.withResolvers<ModelCatalog>();
@@ -74,6 +75,9 @@ test("U1 composer and meter share exactly one models.list per session open", asy
     await b.poll(
       "!!document.querySelector('.otk-model-picker > button') && document.querySelector('.otk-context-meter')?.dataset.tokens==='2500'",
     );
+    // Essential content may paint before deferred catalog discovery is admitted.
+    // Hold that one shared catalog read and assert neither consumer duplicates it.
+    await waitFor(() => calls.length, (count) => count > 0);
     assertEquals(
       calls,
       ["tstv1-core"],
