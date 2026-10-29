@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertStrictEquals } from "@std/assert";
 import * as client from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import {
@@ -800,6 +800,54 @@ for (const status of ["working", "blocked", "finished"] as const) {
     }
   });
 }
+
+Deno.test("repeated view observations preserve canonical project identity without republishing the same selection", () => {
+  const f = fixture();
+  let writes = 0;
+  const original = f.navigation.state.project;
+  const release = f.navigation.subscribe(() => {
+    writes++;
+  });
+  try {
+    assert(original);
+    for (let i = 0; i < 10; i++) {
+      f.navigation.observeView({
+        selected: { sidecarId: "local", sessionID: "tstv1-selected" },
+        directory: "/p",
+        loading: false,
+        settings: false,
+        connected: true,
+        finish: 0,
+      });
+    }
+    assertStrictEquals(f.navigation.state.project, original);
+    assertEquals(writes, 0);
+  } finally {
+    release();
+    f.stop();
+  }
+});
+
+Deno.test("navigation observes project selection without replacing the canonical transcript scope hint", () => {
+  const f = fixture();
+  let hints = 0;
+  f.resources.scope = () => {
+    hints++;
+  };
+  try {
+    f.navigation.observeView({
+      selected: { sidecarId: "local", sessionID: "tstv1-selected" },
+      directory: "/p",
+      loading: false,
+      settings: false,
+      connected: true,
+      finish: 0,
+    });
+    assertEquals(hints, 0);
+  } finally {
+    f.stop();
+  }
+});
 
 Deno.test("close cancellation, failed membership and a later route preserve the current view and dirty input", async () => {
   const f = fixture();

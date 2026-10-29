@@ -116,15 +116,13 @@ export function createShellNavigation(o: {
     },
   });
   const project = (value?: ProjectSelection): void => {
-    const selected = session.state.selection;
-    const task = value && selected &&
-      resources.inbox(value.sidecarId).state.inbox.tasks.find((task) =>
-        task.sessions.includes(selected.sessionID)
-      );
-    resources.scope(
-      value,
-      task?.sessions ?? (selected ? [selected.sessionID] : []),
-    );
+    // Observing a view is not a new navigation intent. TranscriptScopes owns
+    // membership/demand; navigation publishes only a changed project identity.
+    const current = store.state.project;
+    if (
+      current?.sidecarId === value?.sidecarId &&
+      current?.directory === value?.directory
+    ) return;
     store.update((draft) => {
       draft.project = value;
     });
