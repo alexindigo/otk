@@ -397,7 +397,8 @@ test("deleted usage detail rejects before native reads while retaining last repo
     await f.sink.deleted(0, "opcv1-ses_one", 2);
     const before = f.queries.scans;
     await assertRejects(
-      () => f.sink.detail("opcv1-ses_one", new AbortController().signal),
+      () =>
+        f.sink.detail("opcv1-ses_one", "user", new AbortController().signal),
       Error,
       "deleted",
     );
@@ -421,11 +422,14 @@ test("native scalar digest replacement, unknown accounting, sweep removal and ho
     assertEquals(value.summary.total?.tokens.input, null);
     assertEquals(value.summary.total?.tokens.output, 4);
     assertEquals(value.summary.total?.time?.end, undefined);
-    await assertRejects(
-      () => f.sink.detail(value.metadata.id, new AbortController().signal),
-      Error,
-      "unreported",
+    const unknown = await f.sink.detail(
+      value.metadata.id,
+      "user",
+      new AbortController().signal,
     );
+    assertEquals(unknown.summary.cost, null);
+    assertEquals(unknown.summary.tokens.input, null);
+    assertEquals(unknown.calls.length, 2);
     f.seed("a", 0.1, 10);
     f.seed("b", 0.2, 20);
     const before = queriesCopy(f.queries);
@@ -444,10 +448,63 @@ test("native scalar digest replacement, unknown accounting, sweep removal and ho
     assertEquals(value.summary.messageCount, 1);
     assertAlmostEquals(value.summary.total!.cost!, 0.2, 1e-12);
     assertEquals(
-      (await f.sink.detail(value.metadata.id, new AbortController().signal))
-        .messages.length,
+      (await f.sink.detail(
+        value.metadata.id,
+        "user",
+        new AbortController().signal,
+      ))
+        .calls.length,
       1,
     );
+  } finally {
+    f.close();
+  }
+});
+
+test("an explicit unready turn detail digests its scalar baseline and reads no unrelated call or label", async () => {
+  const f = await fixture();
+  try {
+    f.seed("a", null, null);
+    f.seed("b", 2, 20);
+    f.native.prepare(
+      "UPDATE message SET data=json_set(data,'$.parentID','other') WHERE id='b'",
+    ).run();
+    await f.sink.catalog(new AbortController().signal);
+    assertEquals(f.values.get("opcv1-ses_one")?.summary.state, "digesting");
+    const detail = await f.sink.detail(
+      "opcv1-ses_one",
+      "user",
+      new AbortController().signal,
+    );
+    assertEquals(detail.calls.map((call) => call.id), ["a"]);
+    assertEquals(detail.summary.cost, null);
+    assertEquals(detail.summary.tokens.input, null);
+    assertEquals(f.values.get("opcv1-ses_one")?.summary.state, "ready");
+    assertEquals(
+      detail.revision,
+      f.values.get("opcv1-ses_one")?.summary.revision,
+    );
+  } finally {
+    f.close();
+  }
+});
+
+test("detail reconciles a dirty scalar baseline even while its last published digest is ready", async () => {
+  const f = await fixture();
+  try {
+    f.seed("a", 1, 1);
+    await f.sink.catalog(new AbortController().signal);
+    await f.scan();
+    f.seed("a", 7, 7);
+    f.sink.invalidate("opcv1-ses_one", 2);
+    assertEquals(f.values.get("opcv1-ses_one")?.summary.state, "ready");
+    const value = await f.sink.detail(
+      "opcv1-ses_one",
+      "user",
+      new AbortController().signal,
+    );
+    assertEquals(value.summary.tokens.input, 7);
+    assertEquals(value.calls[0].cost, 7);
   } finally {
     f.close();
   }

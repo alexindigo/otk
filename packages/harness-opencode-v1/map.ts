@@ -53,6 +53,7 @@ export function mapIndex(session: Session): SessionMetadata {
     },
   };
 }
+import { reportedNumber, reportedTokens } from "./usage-values.ts";
 const tokens = (value?: Tokens): Tokens =>
   value
     ? {
@@ -107,8 +108,8 @@ export function mapMessage(
         : observed ?? recorded ?? info.time.created,
     },
     model: { provider: info.providerID!, model: info.modelID! },
-    tokens: tokens(info.tokens),
-    cost: info.cost ?? 0,
+    tokens: reportedTokens(info.tokens),
+    cost: reportedNumber(info.cost, false),
     interrupted: info.error?.name === "MessageAbortedError",
     error: info.error
       ? {

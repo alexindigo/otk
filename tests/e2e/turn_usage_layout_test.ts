@@ -7,7 +7,7 @@ import { Cdp } from "../support/cdp.ts";
 import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { WsClient } from "../support/ws-client.ts";
-import { publishUsage } from "../support/usage-summary.ts";
+import { publishUsage, turnDetail } from "../support/usage-summary.ts";
 
 const trigger = ".otk-turn-usage > button";
 const panel = ".otk-turn-usage :popover-open";
@@ -68,7 +68,10 @@ async function setup(count: number) {
     })),
   );
   const f = await coreBackendFixture(root, {
-    usage: { getUsage: () => Promise.resolve(ledger.snapshot()) },
+    usage: {
+      getUsage: (_id, turnID) =>
+        Promise.resolve(turnDetail(ledger.snapshot(), turnID)),
+    },
     models: {
       listModels: () =>
         Promise.resolve({

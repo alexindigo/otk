@@ -16,6 +16,11 @@ export function registerTextPart(parts: PartRegistry): void {
         />
       </Show>
     ),
-    (part) => ({ text: part.synthetic ? undefined : blocksText(part.blocks) }),
+    (part) => ({
+      copyable: !part.synthetic && part.blocks.length > 0,
+      get text() {
+        return part.synthetic ? undefined : blocksText(part.blocks);
+      },
+    }),
   );
 }

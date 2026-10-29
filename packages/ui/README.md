@@ -42,23 +42,29 @@ other's shape. `parts.register(name, Component)` receives an external part;
 `parts.registerTyped(kind, Component)` derives its shape from the open
 `PartKinds` map. The same namespace separation applies to parts;
 `registerUnknownPart` supplies unsupported-part fallback. Part registrations can
-contribute `{work?, text?, hidden?, frame?}` presentation data: the message
-groups adjacent contributed work clocks into expandable folds and copies
+contribute `{work?, text?, copyable?, hidden?, frame?}` presentation data: the
+message groups adjacent contributed work clocks into expandable folds and copies
 contributed source text without dispatching concrete part kinds or reading child
-DOM. Read, search, fetch, web search, skill and task bodies render their
-inherited native result through the same `ToolOutput` owner as bash. The
-adapter's decoded results contain user content and metadata, not model-facing
-envelopes. Unrecognized formats retain verbatim fallback. Headers alone
-summarize operations; bodies contain results, metadata, diagnostics and
-navigation/progress actions. All UI noun-count labels use the shared count-label
-helper, including tokens, reverted messages, pastes and favicon attention.
-Optional display text preserves compact/locale formatting while the numeric
-value owns inflection. Structural edit, write, patch, todo and question bodies
-keep their typed result presentation; generic output retains its display
-preference and provenance-neutral truncation notice. Unknown task agents have an
-identity-free “Unknown agent” label. Invisible bookkeeping owners declare
-themselves hidden so wire steps cannot split a visible work fold. Reply metadata
-combines contiguous source parts for one whole-reply copy.
+DOM. `copyable` is cheap availability; source-bearing features can expose `text`
+as a lazy getter. Framing and live action targets do not stringify reply source.
+Copy invokes the canonical transcript source port, paging missing steps before
+the part presenters resolve the complete reply. Action ports use optional
+`ContentIdentity.ownerID` for their stable presentation lifetime; native message
+and last-step IDs remain separate action boundaries. Prepending a page cannot
+retire an existing reply's usage or disclosure port. Read, search, fetch, web
+search, skill and task bodies render their inherited native result through the
+same `ToolOutput` owner as bash. The adapter's decoded results contain user
+content and metadata, not model-facing envelopes. Unrecognized formats retain
+verbatim fallback. Headers alone summarize operations; bodies contain results,
+metadata, diagnostics and navigation/progress actions. All UI noun-count labels
+use the shared count-label helper, including tokens, reverted messages, pastes
+and favicon attention. Optional display text preserves compact/locale formatting
+while the numeric value owns inflection. Structural edit, write, patch, todo and
+question bodies keep their typed result presentation; generic output retains its
+display preference and provenance-neutral truncation notice. Unknown task agents
+have an identity-free “Unknown agent” label. Invisible bookkeeping owners
+declare themselves hidden so wire steps cannot split a visible work fold. Reply
+metadata combines contiguous source parts for one whole-reply copy.
 
 `frame: "transcript"` places a contributed part outside the ordinary message
 bubble, preserving adjacent normal content in its own frame even in mixed

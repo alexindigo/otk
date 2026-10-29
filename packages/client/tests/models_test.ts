@@ -127,7 +127,12 @@ Deno.test("plain session generations isolate warm loads and paging deduplicates 
     assertEquals(session.state.paging, true);
     answer(
       "session.messages",
-      fixturePage("s", [message("older"), message("90")], undefined, info("s")),
+      fixturePage(
+        "s",
+        [{ ...message("older"), time: { created: 0 } }, message("90")],
+        undefined,
+        info("s"),
+      ),
     );
     await older;
     assertEquals(session.state.content.messages.length, 11);

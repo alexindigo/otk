@@ -51,7 +51,11 @@ function TranscriptProbe() {
     title: "Inspect reply identity",
     category: "Probe",
     context: { kind: "reply", order: 30 },
-    run: (_ctx, target: ContentTarget) => setResult(JSON.stringify(target)),
+    run: async (_ctx, target: ContentTarget) =>
+      setResult(JSON.stringify({
+        ...target,
+        text: target.source ? await target.source() : target.text,
+      })),
   });
   return (
     <TranscriptContext>

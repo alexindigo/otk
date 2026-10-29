@@ -7,6 +7,8 @@ export interface WorkTime {
 export interface PartPresentation {
   work?: WorkTime;
   text?: string;
+  /** Cheap availability; text may be a lazy getter evaluated only for copy/preview. */
+  copyable?: boolean;
   hidden?: boolean;
   /** Flow directly in the transcript rather than inside a message bubble. */
   frame?: "transcript";

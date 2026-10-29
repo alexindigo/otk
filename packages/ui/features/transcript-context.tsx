@@ -15,6 +15,8 @@ export function copyContent(value: string): Promise<void> {
 
 /** Shared target data is extensible without importing a message or tool view. */
 export interface ContentIdentity {
+  /** Stable presentation lifetime, separate from native action boundaries. */
+  ownerID?: string;
   sidecarId?: string;
   sessionID?: string;
   messageID?: string;
@@ -27,6 +29,7 @@ export interface ContentTarget extends ContentIdentity {
   completed?: boolean;
   queued?: boolean;
   text?: string;
+  source?(): string | Promise<string>;
   command?: string;
   path?: string;
   paths?: string;
@@ -46,7 +49,7 @@ const key = (identity: ContentIdentity) =>
   JSON.stringify([
     identity.sidecarId,
     identity.sessionID,
-    identity.messageID,
+    identity.ownerID ?? identity.messageID,
     identity.partID,
     identity.callID,
   ]);
@@ -89,8 +92,10 @@ export function TranscriptContext(props: { children: Element }): Element {
       category: "Transcript",
       hidden: true,
       context: { kind },
-      enabled: (_ctx, target?: ContentTarget) => !!target?.text,
-      run: (_ctx, target: ContentTarget) => copyContent(target.text!),
+      enabled: (_ctx, target?: ContentTarget) =>
+        !!target?.source || !!target?.text,
+      run: async (_ctx, target: ContentTarget) =>
+        copyContent(target.source ? await target.source() : target.text!),
     });
   }
   for (

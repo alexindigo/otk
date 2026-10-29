@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Message, ModelCatalog } from "@otk/protocol";
+import { reportedTokens } from "./session-summary.ts";
 
 /** Latest reported context footprint, not the sum of repeated prompt inputs.
  * Charged session/turn totals belong to the usage owner. The
@@ -14,12 +15,9 @@ export function contextMeter(
 } {
   const replies = messages.filter((m) => m.role === "assistant");
   const latest = replies.findLast((m) =>
-    m.tokens.input + m.tokens.output + m.tokens.reasoning +
-        m.tokens.cache.read + m.tokens.cache.write > 0
+    reportedTokens(m.tokens) !== undefined
   );
-  const tokens = latest && latest.tokens.input + latest.tokens.output +
-      latest.tokens.reasoning + latest.tokens.cache.read +
-      latest.tokens.cache.write;
+  const tokens = latest && reportedTokens(latest.tokens);
   const limit = latest &&
     catalog?.providers.find((p) => p.id === latest.model.provider)
       ?.models.find((m) => m.id === latest.model.model)?.contextLimit;

@@ -2,7 +2,7 @@
 import { assertEquals } from "@std/assert";
 import {
   type Part,
-  type SessionUsage,
+  type TurnUsageDetail,
   UsageLedger,
   type UsageMessage,
 } from "@otk/protocol";
@@ -13,6 +13,18 @@ import {
 import { createState } from "../state.ts";
 import { shellEntry } from "./shell-fixture.ts";
 import type { SidecarConnection } from "../connection.ts";
+const snapshot = (ledger: UsageLedger): TurnUsageDetail => ({
+  ...ledger.detail("user"),
+  clock: { epoch: "test", seq: 0 },
+});
+const policy = {
+  coolms: 300000,
+  preloadms: 30000,
+  concurrency: 4,
+  replayops: 128,
+  replaybytes: 4194304,
+  retryms: 1000,
+};
 const header = (input: number, completed = false): UsageMessage => ({
   id: "step",
   turnID: "user",
@@ -22,10 +34,11 @@ const header = (input: number, completed = false): UsageMessage => ({
   completed,
 });
 Deno.test("usage resource merges buffered tool labels, header-only updates and removals through the same ledger", async () => {
-  const gate = Promise.withResolvers<SessionUsage>();
+  const gate = Promise.withResolvers<TurnUsageDetail>();
   const owner = createSessionUsage(() =>
     ({
       supports: () => true,
+      messages: policy,
       rpc: { call: () => gate.promise },
     }) as unknown as SidecarConnection
   );
@@ -52,9 +65,9 @@ Deno.test("usage resource merges buffered tool labels, header-only updates and r
     sessionID: "s",
     event: { op: "part.upsert", messageID: "step", part },
   });
-  gate.resolve(new UsageLedger("s", [header(3)]).snapshot());
+  gate.resolve(snapshot(new UsageLedger("s", [header(3)])));
   await pending;
-  assertEquals(owner.get(target)?.messages[0].tools, [{
+  assertEquals(owner.get(target)?.calls[0].tools, [{
     id: "tool",
     name: "glob",
     summary: "Find files",
@@ -79,17 +92,17 @@ Deno.test("usage resource merges buffered tool labels, header-only updates and r
       },
     },
   });
-  assertEquals(owner.get(target)?.messages[0].tools?.length, 1);
-  assertEquals(owner.get(target)?.turns.user.time, { start: 1, end: 10 });
+  assertEquals(owner.get(target)?.calls[0].tools?.length, 1);
+  assertEquals(owner.get(target)?.summary.time, { start: 1, end: 10 });
   owner.receive("local", {
     t: "content",
     sessionID: "s",
     event: { op: "part.remove", messageID: "step", partID: "tool" },
   });
-  assertEquals(owner.get(target)?.messages[0].tools, []);
+  assertEquals(owner.get(target)?.calls[0].tools, []);
   owner.stop();
 });
-const target = { sidecarId: "local", sessionID: "s" };
+const target = { sidecarId: "local", sessionID: "s", turnID: "user" };
 Deno.test("open detail refreshes only for a newer digest revision, never a status upsert or stale digest", async () => {
   const entry = shellEntry("s");
   entry.digest.revision = 7;
@@ -101,7 +114,7 @@ Deno.test("open detail refreshes only for a newer digest revision, never a statu
         call: () => {
           reads++;
           return Promise.resolve(
-            new UsageLedger("s", [header(2, true)]).snapshot(),
+            snapshot(new UsageLedger("s", [header(2, true)])),
           );
         },
       },
@@ -135,6 +148,9 @@ Deno.test("open detail refreshes only for a newer digest revision, never a statu
         }],
       });
     entry.digest.revision = 8;
+    entry.digest.turns.user = new UsageLedger("s", [header(3, true)]).summary(
+      "user",
+    )!;
     patch(8, 2);
     await owner.load(target);
     assertEquals(reads, 2);
@@ -147,7 +163,7 @@ Deno.test("open detail refreshes only for a newer digest revision, never a statu
     owner.stop();
   }
 });
-Deno.test("index-bound detail cannot replace reported charges with a cooked transcript header or transcript removal", async () => {
+Deno.test("index-bound turn detail accepts honest reported zero and keyed removal without page-based estimates", async () => {
   const entry = shellEntry("s");
   entry.digest.revision = 7;
   const connection = () =>
@@ -155,7 +171,7 @@ Deno.test("index-bound detail cannot replace reported charges with a cooked tran
       supports: () => true,
       rpc: {
         call: () =>
-          Promise.resolve(new UsageLedger("s", [header(2, true)]).snapshot()),
+          Promise.resolve(snapshot(new UsageLedger("s", [header(2, true)]))),
       },
     }) as unknown as SidecarConnection;
   const owner: SessionUsageOwner = Reflect.apply(
@@ -186,13 +202,13 @@ Deno.test("index-bound detail cannot replace reported charges with a cooked tran
         },
       },
     });
-    assertEquals(owner.get(target)?.total.cost, .2);
+    assertEquals(owner.get(target)?.summary.cost, 0);
     owner.receive("local", {
       t: "content",
       sessionID: "s",
       event: { op: "message.remove", messageID: "step" },
     });
-    assertEquals(owner.get(target)?.total.cost, .2);
+    assertEquals(owner.get(target)?.summary.cost, 0);
   } finally {
     release();
     owner.stop();
@@ -208,7 +224,7 @@ Deno.test("a known tombstone cannot acquire or load usage even before the old vi
       rpc: {
         call: () => {
           reads++;
-          return Promise.resolve(new UsageLedger("s").snapshot());
+          return Promise.resolve(snapshot(new UsageLedger("s")));
         },
       },
     }) as unknown as SidecarConnection;
@@ -228,11 +244,12 @@ Deno.test("a known tombstone cannot acquire or load usage even before the old vi
   }
 });
 Deno.test("full usage resource coalesces reads and replaces buffered/duplicate live headers without counting snapshots twice", async () => {
-  const gate = Promise.withResolvers<SessionUsage>();
+  const gate = Promise.withResolvers<TurnUsageDetail>();
   let calls = 0;
   const owner = createSessionUsage(() =>
     ({
       supports: () => true,
+      messages: policy,
       rpc: {
         call: () => {
           calls++;
@@ -243,7 +260,9 @@ Deno.test("full usage resource coalesces reads and replaces buffered/duplicate l
   );
   let joined: Promise<void> | undefined;
   const release = owner.subscribe(() => {
-    if (owner.state.entries["local/s"]?.loading) joined = owner.load(target);
+    if (Object.values(owner.state.entries).some((entry) => entry.loading)) {
+      joined = owner.load(target);
+    }
   });
   const pending = owner.load(target);
   await Promise.resolve();
@@ -265,11 +284,11 @@ Deno.test("full usage resource coalesces reads and replaces buffered/duplicate l
     sessionID: "s",
     event: { op: "message.upsert", message },
   });
-  gate.resolve(new UsageLedger("s", [header(3)]).snapshot());
+  gate.resolve(snapshot(new UsageLedger("s", [header(3)])));
   await pending;
   await joined;
   assertEquals(calls, 1);
-  assertEquals(owner.get(target)?.total.tokens.input, 3);
+  assertEquals(owner.get(target)?.summary.tokens.input, 3);
   for (let i = 0; i < 2; i++) {
     owner.receive("local", {
       t: "content",
@@ -290,21 +309,21 @@ Deno.test("full usage resource coalesces reads and replaces buffered/duplicate l
     sessionID: "s",
     event: { op: "message.upsert", message },
   });
-  assertEquals(owner.get(target)?.turns.user.tokens.input, 4);
-  assertEquals(owner.get(target)?.total.cost, .4);
+  assertEquals(owner.get(target)?.summary.tokens.input, 4);
+  assertEquals(owner.get(target)?.summary.cost, .4);
   owner.receive("local", {
     t: "content",
     sessionID: "s",
     event: { op: "message.remove", messageID: "step" },
   });
-  assertEquals(owner.get(target)?.total.tokens.input, 0);
+  assertEquals(owner.get(target)?.summary.tokens.input, 0);
   release();
   owner.stop();
   assertEquals(owner.state.entries, {});
 });
 Deno.test("usage reconnect rejects old generations, isolates targets and exposes whole-session totals for other consumers", async () => {
-  const first = Promise.withResolvers<SessionUsage>(),
-    second = Promise.withResolvers<SessionUsage>();
+  const first = Promise.withResolvers<TurnUsageDetail>(),
+    second = Promise.withResolvers<TurnUsageDetail>();
   let calls = 0;
   const owner = createSessionUsage(() =>
     ({
@@ -316,7 +335,7 @@ Deno.test("usage reconnect rejects old generations, isolates targets and exposes
             : calls === 2
             ? second.promise
             : Promise.resolve(
-              new UsageLedger("another", [header(2, true)]).snapshot(),
+              snapshot(new UsageLedger("another", [header(2, true)])),
             ),
       },
     }) as unknown as SidecarConnection
@@ -326,20 +345,25 @@ Deno.test("usage reconnect rejects old generations, isolates targets and exposes
   owner.receive("local", { t: "resync", sessionIDs: "all" });
   const current = owner.load(target);
   await Promise.resolve();
-  first.resolve(new UsageLedger("s", [header(1)]).snapshot());
+  first.resolve(snapshot(new UsageLedger("s", [header(1)])));
   await old;
-  second.resolve(new UsageLedger("s", [header(7, true)]).snapshot());
+  second.resolve(snapshot(new UsageLedger("s", [header(7, true)])));
   await current;
-  assertEquals(owner.get(target)?.total.tokens.input, 7);
+  assertEquals(owner.get(target)?.summary.tokens.input, 7);
   assertEquals(
-    owner.get({ sidecarId: "elsewhere", sessionID: "s" }),
+    owner.get({ sidecarId: "elsewhere", sessionID: "s", turnID: "user" }),
     undefined,
   );
-  await owner.load({ sidecarId: "local", sessionID: "another" });
+  await owner.load({
+    sidecarId: "local",
+    sessionID: "another",
+    turnID: "user",
+  });
   assertEquals(
-    owner.get({ sidecarId: "local", sessionID: "another" })?.total.tokens.input,
+    owner.get({ sidecarId: "local", sessionID: "another", turnID: "user" })
+      ?.summary.tokens.input,
     2,
   );
-  assertEquals(owner.get(target)?.total.tokens.input, 7);
+  assertEquals(owner.get(target)?.summary.tokens.input, 7);
   owner.stop();
 });

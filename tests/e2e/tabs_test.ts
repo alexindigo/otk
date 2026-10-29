@@ -9,7 +9,7 @@ import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
-import { publishUsage } from "../support/usage-summary.ts";
+import { publishUsage, turnDetail } from "../support/usage-summary.ts";
 import {
   openSession,
   waitForCollapsedPanels,
@@ -83,21 +83,29 @@ test("task tabs create rename reorder and close without deleting sessions; order
     c = new WsClient(f.url);
   Object.assign(f.app.backend.capabilities, {
     usage: {
-      getUsage: (id: string) =>
+      getUsage: (id: string, turnID: string) =>
         Promise.resolve(
-          new UsageLedger(
-            id,
-            (messages[id] ?? []).filter((m): m is AssistantMessage =>
-              m.role === "assistant"
-            ).map(usageHeader),
-          ).snapshot(),
+          turnDetail(
+            new UsageLedger(
+              id,
+              (messages[id] ?? []).filter((m): m is AssistantMessage =>
+                m.role === "assistant"
+              ).map(usageHeader),
+            ).snapshot(),
+            turnID,
+          ),
         ),
     },
   });
   registerUsage(f.app.connections.rpc, f.app.backend);
   publishUsage(
     f.app.index,
-    await f.app.backend.capabilities.usage!.getUsage("tstv1-otk"),
+    new UsageLedger(
+      "tstv1-otk",
+      (messages["tstv1-otk"] ?? []).filter((m): m is AssistantMessage =>
+        m.role === "assistant"
+      ).map(usageHeader),
+    ).snapshot(),
   );
   try {
     await c.connect();

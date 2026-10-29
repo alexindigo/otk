@@ -15,6 +15,19 @@ function violations(path: string, text: string): string[] {
     if (
       callee === "createTranscript" && path !== "packages/client/transcripts.ts"
     ) result.push("body construction outside collection");
+    if (
+      path === "packages/ui/components/SessionView.tsx" &&
+      ["replyMessages", "queuedMessages", "replyMetadata", "turnUsage"]
+        .includes(callee)
+    ) result.push("whole-history projection in transcript view");
+    if (
+      path === "packages/client/session-usage.ts" && /\.snapshot$/.test(callee)
+    ) result.push("detached ledger snapshot on live detail path");
+    if (
+      path.startsWith("packages/ui/") && /\.call$/.test(callee) &&
+      node.arguments[0]?.type === "StringLiteral" &&
+      node.arguments[0].value === "usage.get"
+    ) result.push("detail acquisition in view");
   }
   return result;
 }
@@ -30,6 +43,29 @@ Deno.test("browser message acquisition has one canonical resource owner", async 
     );
   }
   assertEquals(failures, []);
+});
+Deno.test("transcript hot-path negatives reject UI regrouping, per-row detail reads and detached live ledgers", () => {
+  assertEquals(
+    violations(
+      "packages/ui/components/SessionView.tsx",
+      "replyMessages(messages); queuedMessages(messages);",
+    ),
+    [
+      "whole-history projection in transcript view",
+      "whole-history projection in transcript view",
+    ],
+  );
+  assertEquals(
+    violations("packages/client/session-usage.ts", "ledger.snapshot();"),
+    ["detached ledger snapshot on live detail path"],
+  );
+  assertEquals(
+    violations(
+      "packages/ui/components/Message.tsx",
+      'rpc.call("usage.get", {sessionID,turnID});',
+    ),
+    ["detail acquisition in view"],
+  );
 });
 Deno.test("body acquisition negatives reject selected-facade and UI page caches", () => {
   assertEquals(

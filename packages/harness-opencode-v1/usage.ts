@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { type UsageCapability, usageHeader, UsageLedger } from "@otk/protocol";
+import {
+  type TurnUsageSnapshot,
+  usageHeader,
+  UsageLedger,
+} from "@otk/protocol";
 import type { BootstrapDb } from "./db.ts";
 import type { Messages } from "./messages.ts";
 import type { Directory } from "./directory.ts";
@@ -8,15 +12,25 @@ export function usage(
   db: BootstrapDb,
   messages: Messages,
   directory: Directory,
-): UsageCapability {
+): {
+  getUsage(
+    id: string,
+    turnID: string,
+    signal?: AbortSignal,
+  ): Promise<TurnUsageSnapshot>;
+} {
   return {
-    async getUsage(id) {
-      const ledger = new UsageLedger(id), rows = db.usageMessages(id);
+    async getUsage(id, turnID, signal) {
+      const ledger = new UsageLedger(id),
+        rows = db.usageMessages(id, turnID, signal);
       if (rows) { for (const row of rows) ledger.upsert(row); }
       else {for await (
-          const row of messages.scan(id, await directory.resolve(id))
+          const row of messages.scan(id, await directory.resolve(id), signal)
         ) {
-          if (row.info.role !== "assistant") continue;
+          if (
+            row.info.role !== "assistant" ||
+            (row.info.parentID ?? row.info.id) !== turnID
+          ) continue;
           const message = mapMessage(row.info);
           if (message.role === "assistant") {
             ledger.upsert({
@@ -33,7 +47,7 @@ export function usage(
             });
           }
         }}
-      return ledger.snapshot();
+      return ledger.detail(turnID);
     },
   };
 }

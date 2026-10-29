@@ -17,7 +17,6 @@ import type {
   ModelCatalog,
   PermissionRequest,
   RevertInfo,
-  SessionUsage,
 } from "@otk/protocol";
 import Message, { type MessageControl } from "./Message.tsx";
 import Prompt from "./Prompt.tsx";
@@ -29,10 +28,10 @@ import ForkNote from "./ForkNote.tsx";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
 import {
-  queuedMessages,
-  replyMessages,
+  createTranscriptProjection,
   sessionSummary,
-  turnUsage,
+  type SessionUsageOwner,
+  type TranscriptOwner,
 } from "@otk/client";
 import { followViewport } from "./viewport.ts";
 import { highlightingScope } from "../highlight/client.ts";
@@ -49,13 +48,14 @@ export default function SessionView(props: {
   sidecarId?: string;
   info?: ContentSession;
   label: string;
-  messages: OtkMessage[];
+  messages?: OtkMessage[];
+  transcript?: TranscriptOwner;
   latestPrompt?: import("@otk/protocol").LatestPrompt;
   catalog?: ModelCatalog;
-  usage?: SessionUsage;
+  usageOwner?: SessionUsageOwner;
   entry?: IndexEntry;
-  openUsage?(): () => void;
-  usageError?(): string | undefined;
+  openUsage?(turnID: string): () => void;
+  usageError?(turnID: string): string | undefined;
   loading: boolean;
   continuity?: "loading" | "ready" | "missing";
   paging: boolean;
@@ -85,12 +85,19 @@ export default function SessionView(props: {
   onAbort(): Promise<void>;
 }): Element {
   const writeDraft = props.onDraft;
-  const queued = () => queuedMessages(props.messages, props.busy);
+  const fallback = createMemo(() => {
+    if (props.transcript) return;
+    const projection = createTranscriptProjection();
+    projection.replace(props.messages ?? []);
+    projection.busy(props.busy);
+    return projection.state;
+  });
+  const projection = () => props.transcript?.state ?? fallback()!;
+  const count = () => projection().messageIDs.length;
   const rollbackNotice = () =>
     !!props.strip || !!props.rollback?.state.pending ||
     !!props.rollback?.state.error;
   const noticed = () => rollbackNotice() || !!props.forkNote;
-  const messages = createMemo(() => replyMessages(props.messages, props.busy));
   const [now, setNow] = createSignal(Date.now());
   const older = ownedAction("session.page", () => props.onOlder());
   const retry = ownedAction("session.refetch", () => props.onRetry());
@@ -190,7 +197,7 @@ export default function SessionView(props: {
         >
           <Show when={props.loading || props.continuity === "missing"}>
             <p role="status">
-              {props.messages.length || props.continuity === "missing"
+              {count() || props.continuity === "missing"
                 ? "Refreshing messages…"
                 : "Loading messages…"}
             </p>
@@ -205,7 +212,7 @@ export default function SessionView(props: {
               <p role="status">Loading earlier messages…</p>
             </Show>
             <Show
-              when={!props.exhausted && props.messages.length &&
+              when={!props.exhausted && count() &&
                 !props.paging && !props.loading &&
                 props.continuity !== "missing"}
             >
@@ -237,39 +244,64 @@ export default function SessionView(props: {
               )}
             </Show>
             <For
-              each={messages()}
-              keyed={(message) =>
-                `${props.sidecarId}/${message.sessionID}/${message.id}`}
+              each={projection().replyIDs}
+              keyed={(id) => id}
             >
-              {(message) => (
-                <Message
-                  sidecarId={props.sidecarId}
-                  message={message()}
-                  lastID={message().lastID}
-                  pending={message().pending}
-                  usage={turnUsage(props.usage, message(), props.catalog)}
-                  summary={sessionSummary(props.entry, message())}
-                  digestState={props.entry?.digest.state}
-                  openUsage={props.openUsage}
-                  usageError={props.usageError}
-                  prefs={props.prefs}
-                  directory={props.info?.directory}
-                  permissions={props.permissions}
-                  paneWidth={paneWidth()}
-                  onOpenChild={props.onOpenChild}
-                  queued={queued().has(message().id)}
-                  control={(control) => {
-                    const id = message().id;
-                    controls.set(id, control);
-                    return () => {
-                      if (controls.get(id) === control) controls.delete(id);
-                    };
-                  }}
-                />
-              )}
+              {(key) => {
+                const reply = () => projection().repliesByID[key()]!;
+                const message = () => reply().message;
+                const turnID = () =>
+                  message().role === "assistant"
+                    ? (message() as import("@otk/protocol").AssistantMessage)
+                      .replyTo ?? message().id
+                    : message().id;
+                const target = () => ({
+                  sidecarId: props.sidecarId!,
+                  sessionID: message().sessionID,
+                  turnID: turnID(),
+                });
+                return (
+                  <Message
+                    sidecarId={props.sidecarId}
+                    ownerID={reply().key}
+                    message={message()}
+                    lastID={reply().lastID}
+                    pending={reply().pending}
+                    usage={props.usageOwner?.priced(target(), props.catalog)}
+                    summary={sessionSummary(props.entry, message())}
+                    digestState={props.entry?.digest.state}
+                    openUsage={props.openUsage
+                      ? () => props.openUsage!(turnID())
+                      : undefined}
+                    usageError={() => props.usageError?.(turnID())}
+                    copySource={props.transcript
+                      ? (id, text) => props.transcript!.source(id, text)
+                      : undefined}
+                    copyIncomplete={message().role === "assistant" &&
+                      !!props.transcript &&
+                      (!props.exhausted &&
+                        (!props.transcript.projection.boundary(turnID())
+                          ?.firstID ||
+                          !projection().messagesByID[reply().firstID]))}
+                    prefs={props.prefs}
+                    directory={props.info?.directory}
+                    permissions={props.permissions}
+                    paneWidth={paneWidth()}
+                    onOpenChild={props.onOpenChild}
+                    queued={projection().queuedIDs.has(message().id)}
+                    control={(control) => {
+                      const id = message().id;
+                      controls.set(id, control);
+                      return () => {
+                        if (controls.get(id) === control) controls.delete(id);
+                      };
+                    }}
+                  />
+                );
+              }}
             </For>
             <Show
-              when={!props.loading && !props.messages.length && !props.error &&
+              when={!props.loading && !count() && !props.error &&
                 !props.sessionError && props.continuity !== "missing"}
             >
               <EmptyState>Start a conversation below.</EmptyState>

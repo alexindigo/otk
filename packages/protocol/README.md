@@ -194,19 +194,20 @@ preference command metadata. Cost visibility does not alter stored usage or
 token counts. File-change disclosure is presentation-only and does not change
 tool results.
 
-`usage` is an optional capability, advertised only when implemented. Its
-`usage.get {sessionID}` RPC returns a SessionUsage snapshot: full session and
-user-message-keyed turn totals, per-model token categories/reported costs, and
-minimal keyed UsageMessage baselines for exact live replacement, ordered call
-clocks and existing tool-name/title metadata. ToolBase.sourceName preserves an
-original operation label when the adapter normalizes it to a shared tool kind.
-UsageLedger is the dependency-free aggregation owner shared by producers and
-consumers; it stores no transcript parts, tool inputs or outputs. Each total's
-optional time is the first call's start to the last call's end; an unfinished
-call leaves the end absent. Keyed part updates preserve labels across
-header-only replacements; published baselines are detached. Unknown capability
-means unknown usage, never a loaded-page estimate. These additive contracts use
-the existing open registries.
+`usage` is an optional capability, advertised only when implemented.
+`usage.get {sessionID,turnID}` / `getUsage(sessionID,turnID,signal?)` returns
+`TurnUsageDetail`: identity, digest revision, content checkpoint, nullable
+`UsageSummary` and every charged call for that turn, independently of body pages
+or rollback visibility. `AssistantMessage`, `UsageMessage`, `ModelUsage` and
+`UsageTotal` retain nullable reported categories/costs; zero is never
+substituted for unreported data. `UsageLedger` maintains subtract-old/add-new
+turn/model aggregates and counted scalar extrema. `call(id)`, `turn(id)` and
+mutation `{calls:{upsert,remove},turns}` change sets support keyed consumers
+without snapshotting history. Its detached `snapshot()` remains an explicit
+compatibility operation. No content parts, inputs or output enter the ledger.
+Tool labels survive header-only replacement, and completed calls reject stale
+unfinished headers. Missing capability never becomes a loaded-page usage
+estimate.
 
 File parts optionally carry their original `url` display source. Image renderers
 can use that source for both a thumbnail and the original image; unavailable

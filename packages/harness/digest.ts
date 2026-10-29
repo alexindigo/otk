@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { DigestDelta, SessionMetadata, SessionUsage } from "@otk/protocol";
+import type {
+  DigestDelta,
+  SessionMetadata,
+  TurnUsageSnapshot,
+} from "@otk/protocol";
 import type { LatestPrompt, ReplyBoundary } from "@otk/protocol";
 export interface TranscriptMetadata {
   prompt?: LatestPrompt;
@@ -39,7 +43,11 @@ export interface DigestPort {
     revision: number,
     metadata?: SessionMetadata,
   ): Promise<void>;
-  detail(sessionID: string, signal: AbortSignal): Promise<SessionUsage>;
+  detail(
+    sessionID: string,
+    turnID: string,
+    signal: AbortSignal,
+  ): Promise<TurnUsageSnapshot>;
   transcriptMetadata(
     sessionID: string,
     turns: readonly string[],
@@ -89,7 +97,11 @@ export interface DigestSink {
     budget: DigestBudget,
     signal: AbortSignal,
   ): Promise<string | undefined>;
-  detail(id: string, signal: AbortSignal): Promise<SessionUsage>;
+  detail(
+    id: string,
+    turnID: string,
+    signal: AbortSignal,
+  ): Promise<TurnUsageSnapshot>;
   close(): void | Promise<void>;
 }
 export interface DigestPublication {

@@ -14,7 +14,12 @@ import { belongsToSession } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
 import type { ServerFrame } from "@otk/protocol";
 import type { SidecarConnection } from "./connection.ts";
-import { type ContentState, emptyContent, reduce } from "./reduce.ts";
+import {
+  contentMetadata,
+  type ContentState,
+  emptyContent,
+  reduce,
+} from "./reduce.ts";
 import type { Selection } from "./session.ts";
 import type {
   BodyTarget,
@@ -22,6 +27,11 @@ import type {
   TranscriptRange,
 } from "./transcripts.ts";
 import { MESSAGE_ADMISSION_WATERMARK } from "./message-policy.ts";
+import {
+  createTranscriptProjection,
+  type TranscriptProjection,
+  type TranscriptReply,
+} from "./transcript-projection.ts";
 
 function promptAfter(
   previous: LatestPrompt | undefined,
@@ -47,6 +57,9 @@ export interface TranscriptState {
   revision: number;
   messageIDs: string[];
   messagesByID: Record<string, Message>;
+  replyIDs: string[];
+  repliesByID: Record<string, TranscriptReply>;
+  queuedIDs: Set<string>;
   olderCursor: MessageCursor | null;
   pageLoading: boolean;
   pageError?: string;
@@ -74,6 +87,11 @@ export type ToolCompletionSource = (
 ) => () => void;
 export interface TranscriptOwner {
   state: TranscriptState;
+  readonly projection: TranscriptProjection;
+  source(
+    messageID: string,
+    text: (part: Part) => string | undefined,
+  ): Promise<string>;
   subscribe(listener: (state: TranscriptState) => void): () => void;
   /** Live completions in this open lifetime; snapshots/paging are silent. */
   onToolCompleted(
@@ -100,12 +118,28 @@ export function createTranscript(
   policy: () => MessagePolicy | undefined = () =>
     connection(target.sidecarId).messages,
 ): TranscriptOwner {
+  const projection = createTranscriptProjection();
+  const attach = (content: Omit<ContentState, "messages">): ContentState => {
+    Object.defineProperty(content, "messages", {
+      configurable: true,
+      enumerable: true,
+      get: projection.messages,
+    });
+    return content as ContentState;
+  };
+  const apply = (content: ContentState, op: ContentOp): ContentState =>
+    projection.apply(op)
+      ? attach(contentMetadata(content))
+      : attach(reduce({ ...contentMetadata(content), messages: [] }, op));
   // Authority is owner-current, even with a deferred framework StateFactory.
   const currentStore = createState<TranscriptState>({
     temperature: "cold",
     revision: 0,
     messageIDs: [],
     messagesByID: {},
+    replyIDs: [],
+    repliesByID: {},
+    queuedIDs: new Set(),
     olderCursor: null,
     pageLoading: false,
     recovering: [],
@@ -123,10 +157,19 @@ export function createTranscript(
     binding.subscribe(() => listener(state));
   const setState = (change: (draft: TranscriptState) => void) => {
     currentStore.update(change);
-    state.messageIDs = state.content.messages.map((m) => m.id);
-    state.messagesByID = Object.fromEntries(
-      state.content.messages.map((m) => [m.id, m]),
+    const descriptor = Object.getOwnPropertyDescriptor(
+      state.content,
+      "messages",
     );
+    if (descriptor && "value" in descriptor) {
+      projection.replace(descriptor.value);
+      attach(state.content);
+    } else if (!descriptor) attach(state.content);
+    state.messageIDs = projection.state.messageIDs;
+    state.messagesByID = projection.state.messagesByID;
+    state.replyIDs = projection.state.replyIDs;
+    state.repliesByID = projection.state.repliesByID;
+    state.queuedIDs = projection.state.queuedIDs;
     state.olderCursor = cursor;
     state.pageLoading = state.paging || state.loading;
     state.session = state.info;
@@ -257,11 +300,14 @@ export function createTranscript(
             : [];
           if (!valid()) return;
           setState((draft) => {
-            let content = { ...draft.content, permissions };
+            let content = attach({
+              ...contentMetadata(draft.content),
+              permissions,
+            });
             for (const op of attention.events.values()) {
               if (
                 op.op === "permission.upsert" || op.op === "permission.remove"
-              ) content = reduce(content, op);
+              ) content = apply(content, op);
             }
             draft.content = content;
           });
@@ -273,10 +319,13 @@ export function createTranscript(
             : [];
           if (!valid()) return;
           setState((draft) => {
-            let content = { ...draft.content, questions };
+            let content = attach({
+              ...contentMetadata(draft.content),
+              questions,
+            });
             for (const op of attention.events.values()) {
               if (op.op === "question.upsert" || op.op === "question.remove") {
-                content = reduce(content, op);
+                content = apply(content, op);
               }
             }
             draft.content = content;
@@ -406,31 +455,34 @@ export function createTranscript(
       fetching = false;
       hasBaseline = true;
       setState((draft) => {
-        let content: ContentState = {
-          ...draft.content,
-          messages,
+        projection.replace(messages);
+        projection.boundaries(
+          Object.values(page.turns).map((turn) => turn.boundary),
+        );
+        let content: ContentState = attach({
+          ...contentMetadata(draft.content),
           revert: info.revert || null,
           error: info.error,
           errorState: info.errorState,
-        };
+        });
         let latestPrompt = page.prompt;
         for (const { event } of page.catchup) {
-          content = reduce(content, event);
+          content = apply(content, event);
           if (event.op === "message.upsert") {
             latestPrompt = promptAfter(
               latestPrompt,
               event.message,
-              (id) => content.messages.find((m) => m.id === id),
+              (id) => projection.state.messagesByID[id],
             );
           }
         }
         for (const { event } of replay) {
-          content = reduce(content, event);
+          content = apply(content, event);
           if (event.op === "message.upsert" && event.message.role === "user") {
             latestPrompt = promptAfter(
               latestPrompt,
               event.message,
-              (id) => content.messages.find((m) => m.id === id),
+              (id) => projection.state.messagesByID[id],
             );
           }
         }
@@ -481,6 +533,7 @@ export function createTranscript(
     const deleted = selection &&
       entry(selection.sidecarId, selection.sessionID);
     const nextView = deleted?.deleted ? "deleted" : "content";
+    projection.busy(!!deleted && deleted.status !== "idle");
     view = nextView;
     completed.clear();
     liveCompleted.clear();
@@ -544,7 +597,7 @@ export function createTranscript(
         draft.exhausted = false;
       }
       draft.content = {
-        ...draft.content,
+        ...contentMetadata(draft.content),
         messages,
       };
     });
@@ -569,6 +622,34 @@ export function createTranscript(
     }
   };
   const owner: TranscriptOwner = {
+    projection,
+    async source(messageID, text) {
+      const id = generation;
+      await owner.ensure(messageID);
+      const message = state.messagesByID[messageID];
+      if (!message) throw new Error("Message is no longer available");
+      if (message.role === "assistant") {
+        const turnID = message.replyTo ?? message.id, key = `reply:${turnID}`;
+        // The authoritative first boundary proves completeness; otherwise walk to the prompt/end.
+        while (selected && id === generation) {
+          const reply = state.repliesByID[key];
+          if (!reply) throw new Error("Reply is no longer available");
+          const boundary = projection.boundary(turnID);
+          if (boundary?.firstID && state.messagesByID[boundary.firstID]) break;
+          if (message.replyTo && state.messagesByID[message.replyTo]) break;
+          if (state.exhausted) break;
+          await owner.older();
+          if (state.pageError) throw new Error(state.pageError);
+        }
+        if (id !== generation || !selected) {
+          throw new Error("Reply changed while loading source");
+        }
+        return state.repliesByID[key].segments.flatMap((segment) =>
+          segment.parts.map(text)
+        ).filter(Boolean).join("\n\n");
+      }
+      return message.parts.map(text).filter(Boolean).join("\n\n");
+    },
     get state() {
       void binding.state.revision;
       return state;
@@ -693,6 +774,7 @@ export function createTranscript(
       if (!selected || selected.sidecarId !== sidecarId) return;
       if (frame.t === "index.snapshot" || frame.t === "index.patch") {
         const known = entry(sidecarId, selected.sessionID);
+        projection.busy(known?.status !== undefined && known.status !== "idle");
         if (
           !!known?.deleted !== (view === "deleted") ||
           (!subscribed && view !== "deleted")
@@ -753,7 +835,7 @@ export function createTranscript(
       }
       if (isAttentionOp(frame.event)) {
         setState((draft) => {
-          draft.content = reduce(draft.content, frame.event);
+          draft.content = apply(draft.content, frame.event);
         });
         return;
       }
@@ -804,7 +886,7 @@ export function createTranscript(
         }
         try {
           setState((draft) => {
-            draft.content = reduce(draft.content, frame.event);
+            draft.content = apply(draft.content, frame.event);
             draft.clock = clock;
             if (
               frame.event.op === "message.upsert" &&
@@ -817,7 +899,10 @@ export function createTranscript(
               );
             }
           });
-          trim();
+          if (
+            frame.event.op === "message.upsert" ||
+            frame.event.op === "message.remove"
+          ) trim();
         } catch {
           invalidate();
         }
@@ -884,15 +969,13 @@ export function createTranscript(
               clock: page.clock,
             });
             baseline(messages);
-            const existing = new Set(state.content.messages.map((m) => m.id));
-            const added = messages.filter((m) => !existing.has(m.id));
+            const added = messages.filter((m) => !state.messagesByID[m.id]);
             setState((draft) => {
-              draft.content = {
-                ...draft.content,
-                messages: [...added, ...draft.content.messages].sort((a, b) =>
-                  a.time.created - b.time.created
-                ),
-              };
+              projection.merge(added);
+              projection.boundaries(
+                Object.values(page.turns).map((turn) => turn.boundary),
+              );
+              draft.content = attach(contentMetadata(draft.content));
               draft.exhausted = page.older === null;
               draft.paging = !added.length && page.older !== null;
             });

@@ -5,7 +5,7 @@ import type {
   DigestPublication,
   DirtySession,
 } from "@otk/harness";
-import type { SessionMetadata, SessionUsage } from "@otk/protocol";
+import type { SessionMetadata, TurnUsageSnapshot } from "@otk/protocol";
 import type { OpencodeV1Config } from "@otk/harness-opencode-v1";
 import type { DigestPressure, FromWorker, ToWorker } from "./protocol.ts";
 import type { SectionObserver } from "../diagnostics.ts";
@@ -370,42 +370,59 @@ export class DigestBridge implements DigestPort {
       });
     });
   }
-  async detail(sessionID: string, signal: AbortSignal): Promise<SessionUsage> {
+  async detail(
+    sessionID: string,
+    turnID: string,
+    signal: AbortSignal,
+  ): Promise<TurnUsageSnapshot> {
     await this.start();
-    return await this.#lease(`detail:${sessionID}`, signal, (owned) => {
-      const detail: SessionUsage = {
-        sessionID,
-        total: {
-          tokens: {
-            input: 0,
-            output: 0,
-            reasoning: 0,
-            cache: { read: 0, write: 0 },
+    return await this.#lease(
+      `detail:${JSON.stringify([sessionID, turnID])}`,
+      signal,
+      (owned) => {
+        const detail: TurnUsageSnapshot = {
+          sessionID,
+          turnID,
+          revision: 0,
+          summary: {
+            calls: 0,
+            contextPeak: 0,
+            tokens: {
+              input: 0,
+              output: 0,
+              reasoning: 0,
+              cache: { read: 0, write: 0 },
+            },
+            cost: 0,
           },
-          cost: 0,
-          models: [],
-        },
-        turns: {},
-        messages: [],
-      };
-      let part = 0, total = false;
-      return this.#request({ t: "detail", sessionID }, owned, (message) => {
-        if (message.t !== "detail") return;
-        if (message.sessionID !== sessionID || message.part !== part++) {
-          throw new Error("Out-of-order digest detail");
-        }
-        if (message.total) {
-          detail.total = message.total;
-          total = true;
-        }
-        Object.assign(detail.turns, message.turns);
-        detail.messages.push(...message.messages);
-        if (message.last) {
-          if (!total) throw new Error("Missing digest detail total");
-          return { value: detail };
-        }
-      });
-    });
+          calls: [],
+        };
+        let part = 0, total = false;
+        return this.#request(
+          { t: "detail", sessionID, turnID },
+          owned,
+          (message) => {
+            if (message.t !== "detail") return;
+            if (
+              message.sessionID !== sessionID || message.turnID !== turnID ||
+              message.part !== part++
+            ) {
+              throw new Error("Out-of-order digest detail");
+            }
+            if (message.summary) {
+              detail.summary = message.summary;
+              detail.revision = message.revision;
+              total = true;
+            }
+            detail.calls.push(...message.calls);
+            if (message.last) {
+              if (!total) throw new Error("Missing digest detail total");
+              return { value: detail };
+            }
+          },
+        );
+      },
+    );
   }
   async transcriptMetadata(
     sessionID: string,

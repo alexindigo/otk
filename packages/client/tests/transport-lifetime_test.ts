@@ -84,7 +84,10 @@ Deno.test("replacement connections retire sockets RPCs availability and every ol
     await connection.connect();
     sockets[0].open();
     sockets[0].welcome();
-    const pending = connection.rpc.call("usage.get", { sessionID: "s" });
+    const pending = connection.rpc.call("usage.get", {
+      sessionID: "s",
+      turnID: "user",
+    });
     const rejected = assertRejects(() => pending, Error, "disconnected");
     const staleOpen = sockets[0].onopen!, staleMessage = sockets[0].onmessage!;
     const replacing = connection.connect();

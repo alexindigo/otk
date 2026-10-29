@@ -76,6 +76,10 @@ License: LGPL-3.0-only. Workspace validation: `deno task test:unit` and
 invalidations, visible-scope priority, deletion intents and lifecycle. Libraries
 receive `DigestPolicy`; they do not read application environment variables or
 invent policy defaults. `DigestSink` owns provider work and durable cursors.
+`detail(sessionID,turnID,signal)` returns a scalar `TurnUsageSnapshot`; the
+adapter captures its content checkpoint before the worker read and supplies the
+wire `TurnUsageDetail`. Detail identity and cancellation survive chunked worker
+publication. Complete charged calls do not depend on visible transcript pages.
 
 Its generation-fenced `deleted(connection,sessionID,revision,metadata?)` input
 expresses accepted provider deletion authority, distinct from a presence

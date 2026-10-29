@@ -309,10 +309,29 @@ export class OpencodeV1Adapter implements Harness {
       "usage",
       digest
         ? {
-          getUsage: (id, signal) =>
-            digest.detail(id, signal ?? new AbortController().signal),
+          getUsage: async (id, turnID, signal) => {
+            const clock = this.#replay.clock(id);
+            const detail = await digest.detail(
+              id,
+              turnID,
+              signal ?? new AbortController().signal,
+            );
+            return { ...detail, clock };
+          },
         }
-        : usage(this.#db, this.#messages, directory),
+        : {
+          getUsage: async (id, turnID, signal) => {
+            const clock = this.#replay.clock(id);
+            return {
+              ...await usage(this.#db, this.#messages, directory).getUsage(
+                id,
+                turnID,
+                signal,
+              ),
+              clock,
+            };
+          },
+        },
     );
     if (digest) {
       registry.register("digests", {

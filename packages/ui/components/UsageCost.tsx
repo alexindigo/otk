@@ -3,7 +3,7 @@ import { usageCost } from "@otk/client";
 
 /** Data-only money text; visible cents and exact, title-free accessible detail. */
 export default function UsageCost(
-  props: { value: number },
+  props: { value: number | null },
 ): import("solid-js").Element {
   return (
     <span

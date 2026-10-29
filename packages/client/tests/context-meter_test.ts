@@ -31,11 +31,20 @@ Deno.test("context meter uses latest footprint without aggregating charged usage
     cache: { read: 0, write: 0 },
   };
   assertEquals(contextMeter([reply("a", 1000, .1), empty]), {
+    tokens: 0,
+  });
+  empty.tokens = {
+    input: null,
+    output: null,
+    reasoning: null,
+    cache: { read: null, write: null },
+  };
+  assertEquals(contextMeter([reply("a", 1000, .1), empty]), {
     tokens: 1128,
   });
 });
 
-Deno.test("context window matches the reported footprint's exact provider/model, not catalog defaults or a later empty step", () => {
+Deno.test("context window matches the reported footprint's exact provider/model, not catalog defaults or a later unreported step", () => {
   const message: AssistantMessage = {
     id: "used",
     sessionID: "s",
@@ -72,7 +81,12 @@ Deno.test("context window matches the reported footprint's exact provider/model,
     ...message,
     id: "empty",
     model: { provider: "other", model: "beam-free" },
-    tokens: { input: 0, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
+    tokens: {
+      input: null,
+      output: null,
+      reasoning: null,
+      cache: { read: null, write: null },
+    },
   };
   assertEquals(contextMeter([message, empty], catalog), {
     tokens: 2500,

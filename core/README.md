@@ -77,12 +77,14 @@ from the respective `revert` and `restore` capabilities. Both validate session
 identity; revert additionally validates the boundary message. Neither operation
 adds confirmation or overlap detection around the backend's native semantics.
 
-`usage.get` delegates to the optional usage capability. Its whole-session and
-user-turn summaries include source-model totals and keyed message-usage
-baselines, call clocks and small existing tool labels, never transcript parts or
-tool inputs/output. The public UsageLedger owns aggregation and the complete
-turn range, and idempotent live replacement; transcript pagination never limits
-charged usage totals.
+`usage.get` requires a session and turn identity and delegates cancellation to
+the optional usage capability. The result includes only that turn's complete
+charged call ledger, nullable summary, digest revision and producer content
+checkpoint. Source-model baselines, call clocks and existing tool labels contain
+no transcript parts or tool inputs/output. Worker detail chunks retain
+publication credits and row budgets; bridge leases coalesce by session and turn.
+The public UsageLedger supplies keyed live changes without full-session
+snapshotting.
 
 `session.messages` validates qualified identity, an optional nonempty cursor of
 at most 4096 characters and the exact input shape. It forwards per-call read

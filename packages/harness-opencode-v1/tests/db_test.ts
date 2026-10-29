@@ -176,15 +176,24 @@ test("usage reads every bounded metadata page and tool labels without content or
       throw new Error("cached directory expected");
     });
   try {
-    const sql = await usage(reader, messages, directory).getUsage("opcv1-s");
+    const sql = await usage(reader, messages, directory).getUsage(
+      "opcv1-s",
+      "user",
+    );
     assertEquals(calls, []);
-    assertEquals(sql.turns.user.tokens.input, 102);
-    assertEquals(sql.total.tokens.cache.write, 515);
+    assertEquals(sql.summary.tokens.input, 102);
+    assertEquals(sql.summary.tokens.cache.write, 510);
+    assertEquals(sql.calls.length, 102);
+    assertEquals(
+      (await usage(reader, messages, directory).getUsage("opcv1-s", "next"))
+        .summary.tokens.cache.write,
+      5,
+    );
     assert(!JSON.stringify(sql).includes("secret-content"));
     assert(!JSON.stringify(sql).includes("secret-input"));
     assert(!JSON.stringify(sql).includes("secret-output"));
-    assertEquals(sql.turns.user.time, { start: 0, end: 101500 });
-    assertEquals(sql.messages[0].tools, [{
+    assertEquals(sql.summary.time, { start: 0, end: 101500 });
+    assertEquals(sql.calls[0].tools, [{
       id: "tool-0",
       name: "glob",
       summary: "Find source files",
@@ -205,12 +214,13 @@ test("usage reads every bounded metadata page and tool labels without content or
     assert(live.kind === "tool" && live.call.tool === "search");
     assertEquals(
       usageTool(live),
-      sql.messages[0].tools![0],
+      sql.calls[0].tools![0],
       "Normalized live kinds retain exactly the SQL/API source labels",
     );
     assert(!JSON.stringify(sql).includes('"total":15'));
     const fallback = await usage(missing, messages, directory).getUsage(
       "opcv1-s",
+      "user",
     );
     assertEquals(calls, [100, 100]);
     assertEquals(fallback, sql);

@@ -78,6 +78,7 @@ export interface MessageControl {
 export default function Message(
   props: {
     sidecarId?: string;
+    ownerID?: string;
     message: OtkMessage;
     lastID?: string;
     pending?: boolean;
@@ -94,6 +95,11 @@ export default function Message(
     onOpenChild(id: string): void;
     queued: boolean;
     control?(control: MessageControl): (() => void) | void;
+    copySource?(
+      id: string,
+      text: (part: Part) => string | undefined,
+    ): Promise<string>;
+    copyIncomplete?: boolean;
   },
 ): import("solid-js").Element {
   const { parts } = useUiRegistries();
@@ -106,6 +112,7 @@ export default function Message(
   const frames = () => framing().frames;
   const prompt = () => framing().prompt;
   const identity = () => ({
+    ownerID: props.ownerID,
     sidecarId: props.sidecarId,
     sessionID: props.message.sessionID,
     messageID: props.message.id,
@@ -129,7 +136,15 @@ export default function Message(
   const [revealed, setRevealed] = createSignal(false);
   const target = () => ({
     ...identity(),
-    text: text(),
+    source: framing().copyable || props.copyIncomplete
+      ? () =>
+        props.copySource
+          ? props.copySource(
+            props.message.id,
+            (part) => parts.presentation(part, props.prefs).text,
+          )
+          : text()
+      : undefined,
     lastID: props.lastID ?? props.message.id,
     completed: props.message.role === "assistant" &&
       props.message.time.completed !== undefined,

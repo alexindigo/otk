@@ -252,14 +252,18 @@ reply from that state; choosing a single option retains unselected typed text.
 The request-keyed form survives view replacement until `forgetQuestionForm(id)`
 after a successful reply. The UI owns focus, collapse and reply progress only.
 
-`replyMetadata(messages)` combines backend steps for the same session/user reply
-using the same grouping owner as `replyMessages(messages)`. The latter supplies
-the transcript with stable first-step keys, so expanding a work log or tool is
-preserved as later backend steps stream in. Metadata is projected into one final
-metadata record, retaining the reply's start, final clock and interrupted state.
-No session content is duplicated into a second store; the projection also
-combines source parts for whole-reply copying. No session content is stored
-outside the currently loaded transcript.
+`createTranscriptProjection` owns canonical message/part indexes, ordered reply
+membership, borrowed source segments and queued state. Ordinary part changes
+address one indexed message/part and reply; historical reply wrappers and
+segment references stay stable. Logical keys are `reply:<turnID>` inside a
+session resource, independently of acquired first/last native action boundaries.
+`replyMetadata`, `replyMessages` and `queuedMessages` remain detached pure
+compatibility helpers over those same primitives, including session
+partitioning. Shipped rendering borrows the resource projection instead of
+invoking those whole-list helpers on live frames.
+`TranscriptOwner.source(id, presentPart)` acquires missing reply steps through
+its original cursor chain only on explicit copy, then resolves source through
+the consumer's injected part presenters.
 
 `timelinePrompts(messages, busy?)` projects that same loaded transcript into
 chronological prompt identities, creation clocks, shared queued flags and
@@ -272,50 +276,47 @@ request cannot revive completed history, and idle retires pending state. Views
 forward that projection to part renderers; they do not infer native part kinds
 or retain another transcript store.
 
-`createSession().usage` is the framework-free shared SessionUsageOwner. Its
-target-keyed load/get API supplies full session and user-turn metadata from the
-optional usage capability, independently of transcript pages. Public
-`createSessionUsage(connection, factory?, metadata?)` supports smaller
-compositions. The selected session binds the authoritative index metadata
-reader, seeding detail revision ownership before any status patch. Cooked
-transcript numeric defaults and transcript removals cannot change that bound
-ledger's charged history; it refreshes through the explicit reader on newer
-digest revisions. Existing tool labels still merge live. Smaller unbound
-compositions retain keyed header/removal replacement through UsageLedger,
-including snapshot replay and completed-header fences. Reconnect/resync rejects
-old reads. stop releases all metadata/requests. No content parts are retained,
-only call clocks and existing tool labels; missing capability never causes a
-partial-page estimate. The ledger supplies the complete turn's first start/last
-end independently of transcript pages.
+`createSession().usage` is the framework-free shared SessionUsageOwner.
+`createSessionUsage(connection, factory?, metadata?)` also supports smaller
+compositions. Targets always contain `{sidecarId,sessionID,turnID}`. Explicit
+`load/get` reads return `TurnUsageDetail`; `priced(target,catalog?)` caches
+keyed call presentation and preserves unchanged row identities. A footer,
+selected session or scope never admits detail work. Session/turn footer totals
+remain authoritative keyed-index reads, independently of acquired bodies. Live
+headers, tool labels and removals update only the opened turn; text does no
+pricing. Held reads use bounded operation/UTF-8 replay and one delayed
+replacement intent; the connection's welcomed policy supplies all limits.
+Closing the last lease, deletion, server removal and stop release its calls,
+pricing and replay.
 
 Explicitly opened breakdowns hold `retain(target)` leases; the returned release
 is idempotent and bound to that exact resource. Selecting a transcript,
 rendering a footer or mounting Sessions never loads detail. `sessionSummary`,
 `reportedTokens` and `summaryMeter` project nullable session/turn metadata from
-the keyed index. Open details refresh on changed digest revisions, not ordinary
-status upserts. Shared targets coalesce work until the last lease releases,
-which aborts reads and removes both ledger and published snapshot. Explicit
-index removals and `removeServer(id)` invalidate targets, including held reads.
-One-shot load/get consumers retain at most 32 unleased targets in
-least-recently-loaded order; leased targets are never evicted by that reuse
-cache. `stop()` ends the owner and cannot be undone by late frame delivery or
-loading.
+the keyed index. Open details refresh when their own turn summary changes, not
+unrelated turns or ordinary status upserts. Shared targets coalesce work until
+the last lease releases, which aborts reads and removes both ledger and
+published snapshot. Explicit index removals and `removeServer(id)` invalidate
+targets, including held reads. One-shot load/get consumers retain at most 32
+unleased targets in admission order; leased targets are never evicted by that
+reuse cache. `stop()` ends the owner and cannot be undone by late frame delivery
+or loading.
 
 `priceUsage(total, catalog?)` prices the owner's exact per-model summaries, with
-reasoning at the output rate. Unknown prices leave category costs absent and
-known zero prices remain zero. Backend-reported totals stay authoritative,
-independent of catalog estimates. `usageTokens` supplies compact token labels;
-`usageCost` owns one USD presentation rule for every consumer: two decimal
-places, `<$0.01` for positive sub-cent amounts, and `$0.00` only for actual
-zero. Its `"exact"` mode preserves the reported amount for title-free accessible
-detail, including arbitrarily small nonzero values. `turnUsage` projects ordered
-per-call rows with exact counts, reported costs, activity labels and clocks plus
-the ledger's one turn range. The shared priced projection also supplies
-`context`: New input plus cache read and write, for each call and the total. It
-is a prompt subtotal, not another charged token category; `tokens` still
-includes each of the five categories once. Detail Total cells retain category
-prices. U5 can load/get other targets through the same owner and read
-value.total.cost without another aggregation path.
+reasoning at the output rate. Unknown prices leave category costs null and known
+zero prices remain zero. Backend-reported totals stay authoritative, independent
+of catalog estimates. `usageTokens` supplies compact token labels; `usageCost`
+owns one USD presentation rule for every consumer: two decimal places, `<$0.01`
+for positive sub-cent amounts, and `$0.00` only for actual zero. Its `"exact"`
+mode preserves the reported amount for title-free accessible detail, including
+arbitrarily small nonzero values. `turnUsage` projects ordered per-call rows
+with exact counts, reported costs, activity labels and clocks plus the ledger's
+one turn range. The shared priced projection also supplies `context`: New input
+plus cache read and write, for each call and the total. It is a prompt subtotal,
+not another charged token category; `tokens` still includes each of the five
+categories once. Detail Total cells retain category prices. Explicit turn reads
+expose `value.summary.cost`; whole-session totals remain keyed digest-summary
+reads through `sessionSummary` and `summaryMeter`.
 
 The turn projection also supplies `contextPeak`, the largest individual prompt
 including both caches, independently of the final prompt or sum. Turn detail

@@ -22,6 +22,12 @@ warms ten messages plus the next ten, and inactive scopes unload after their
 configured interaction deadline. Attention preloads do not navigate or mark
 sessions seen; drafts and supervision metadata survive cooling.
 
+Transcript updates now address keyed messages, parts and stable logical replies.
+Opened usage breakdowns acquire only their complete turn and update changed
+calls incrementally; unreported categories remain unknown through live
+replacements. Copy reply lazily acquires missing steps before copying its
+complete source.
+
 **Performance.** Sessions renders a measured window of the active project's
 hierarchy. Search, scroll anchors, focused rows and in-place edits retain their
 identities while panels unmount or lists change. Project and required session

@@ -15,7 +15,7 @@ import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
-import { publishUsage } from "../support/usage-summary.ts";
+import { publishUsage, turnDetail } from "../support/usage-summary.ts";
 
 const row = (id: string) => `.otk-session-row[data-session="${id}"]`;
 const cost = (id: string) =>
@@ -97,10 +97,13 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
   const unknown = Promise.withResolvers<SessionUsage>();
   const f = await coreBackendFixture(root, {
     usage: {
-      getUsage(id) {
+      async getUsage(id, turnID) {
         reads.push(id);
         const ledger = ledgers.get(id);
-        return ledger ? Promise.resolve(ledger.snapshot()) : unknown.promise;
+        return turnDetail(
+          ledger ? ledger.snapshot() : await unknown.promise,
+          turnID,
+        );
       },
     },
   });
@@ -202,11 +205,12 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
       2,
       "Selected newest10 + reserve10",
     );
-    assertEquals(
-      [...new Set(contentReads)].sort(),
-      ["tstv1-core", "tstv1-helper", "tstv1-idle", "tstv1-unknown"],
-      "Only the active project receives C2 scope warming",
-    );
+    assertEquals([...new Set(contentReads)].sort(), [
+      "tstv1-core",
+      "tstv1-helper",
+      "tstv1-idle",
+      "tstv1-unknown",
+    ], "Only the active project receives C2 scope warming");
     const hydratedReads = [...contentReads];
     assertEquals(
       reads.filter((id) => id === "tstv1-core").length,

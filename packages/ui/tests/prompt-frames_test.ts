@@ -48,3 +48,20 @@ Deno.test("shared message framing owns prompt visibility for markers, hidden par
     transcript: false,
   }]);
 });
+
+Deno.test("framing borrows copy availability without constructing source strings", () => {
+  let copies = 0;
+  const value = framing.messageFrames({
+    id: "m",
+    role: "assistant",
+    parts: [{ id: "p", kind: "text", synthetic: false, blocks: [] }],
+  }, () => ({
+    copyable: true,
+    get text() {
+      copies++;
+      return "Only on explicit copy";
+    },
+  }));
+  assertEquals(value.copyable, true);
+  assertEquals(copies, 0);
+});

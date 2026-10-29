@@ -9,7 +9,7 @@ import type {
   ModelCatalog,
   Preferences,
 } from "@otk/protocol";
-import { type SessionUsage, usageHeader, UsageLedger } from "@otk/protocol";
+import { type TurnUsageDetail, usageHeader, UsageLedger } from "@otk/protocol";
 import {
   browserFixture,
   openSession,
@@ -19,7 +19,7 @@ import { WsClient } from "../support/ws-client.ts";
 import { Cdp } from "../support/cdp.ts";
 import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
-import { publishUsage } from "../support/usage-summary.ts";
+import { publishUsage, turnDetail } from "../support/usage-summary.ts";
 
 const trigger = ".otk-turn-usage > button";
 async function hover(b: Cdp, selector: string) {
@@ -36,11 +36,11 @@ async function hover(b: Cdp, selector: string) {
 const categories = (
   m: Pick<AssistantMessage, "tokens">,
 ) => [
-  m.tokens.input,
-  m.tokens.output,
-  m.tokens.reasoning,
-  m.tokens.cache.read,
-  m.tokens.cache.write,
+  m.tokens.input!,
+  m.tokens.output!,
+  m.tokens.reasoning!,
+  m.tokens.cache.read!,
+  m.tokens.cache.write!,
 ];
 
 test("U4 stored multi-step turn usage reaches the footer and hover/focus split; Display cost off persists after reload", async () => {
@@ -164,14 +164,14 @@ test("U4 stored multi-step turn usage reaches the footer and hover/focus split; 
         counts: categories({ tokens: row.info.tokens! }),
         cost: row.info.cost,
       })),
-      steps.map((m) => ({ counts: categories(m), cost: m.cost })),
+      steps.map((m) => ({ counts: categories(m), cost: m.cost! })),
     );
     const sums = steps.reduce(
       (sum, m) => categories(m).map((n, i) => n + sum[i]),
       [0, 0, 0, 0, 0],
     );
     const total = sums.reduce((a, n) => a + n, 0),
-      cost = steps.reduce((a, m) => a + m.cost, 0);
+      cost = steps.reduce((a, m) => a + m.cost!, 0);
     assert(total > 300000 && cost > 0);
     const text = `3 model calls · ${
       new Intl.NumberFormat("en-US", {
@@ -231,8 +231,8 @@ test("U4 stored multi-step turn usage reaches the footer and hover/focus split; 
         rows[i].slice(3, 8),
         categories(message).map((n) => n.toLocaleString("en-US")),
       );
-      const context = message.tokens.input + message.tokens.cache.read +
-        message.tokens.cache.write;
+      const context = message.tokens.input! + message.tokens.cache.read! +
+        message.tokens.cache.write!;
       assertEquals(rows[i][2], context.toLocaleString("en-US"));
       if (i) {
         assert(
@@ -243,7 +243,7 @@ test("U4 stored multi-step turn usage reaches the footer and hover/focus split; 
       }
       assertAlmostEquals(
         Number(rows[i][8].replace(/[$,]/g, "")),
-        message.cost,
+        message.cost!,
         .005,
       );
       assertEquals(
@@ -454,15 +454,18 @@ test("U4 unknown model prices show all five charged token categories without inv
   const root = await fixture(),
     f = await coreBackendFixture(root, {
       usage: {
-        getUsage: async (id): Promise<SessionUsage> =>
-          new UsageLedger(
-            id,
-            (await collectMessages(f.app.backend.core, id)).filter((
-              m,
-            ): m is AssistantMessage => m.role === "assistant").map(
-              usageHeader,
-            ),
-          ).snapshot(),
+        getUsage: async (id, turnID): Promise<TurnUsageDetail> =>
+          turnDetail(
+            new UsageLedger(
+              id,
+              (await collectMessages(f.app.backend.core, id)).filter((
+                m,
+              ): m is AssistantMessage => m.role === "assistant").map(
+                usageHeader,
+              ),
+            ).snapshot(),
+            turnID,
+          ),
       },
     });
   f.app.backend.core.listMessages = () =>
@@ -485,7 +488,7 @@ test("U4 unknown model prices show all five charged token categories without inv
     }]));
   publishUsage(
     f.app.index,
-    await f.app.backend.capabilities.usage!.getUsage("tstv1-core"),
+    await f.app.backend.capabilities.usage!.getUsage("tstv1-core", "usage"),
   );
   const b = await Cdp.launch(root);
   try {
@@ -564,13 +567,18 @@ test("U4 queued prompts do not split a turn and category costs use each step's e
   const f = await coreBackendFixture(root, {
     models: { listModels: () => Promise.resolve(catalog) },
     usage: {
-      getUsage: async (id): Promise<SessionUsage> =>
-        new UsageLedger(
-          id,
-          (await collectMessages(f.app.backend.core, id)).filter((
-            m,
-          ): m is AssistantMessage => m.role === "assistant").map(usageHeader),
-        ).snapshot(),
+      getUsage: async (id, turnID): Promise<TurnUsageDetail> =>
+        turnDetail(
+          new UsageLedger(
+            id,
+            (await collectMessages(f.app.backend.core, id)).filter((
+              m,
+            ): m is AssistantMessage => m.role === "assistant").map(
+              usageHeader,
+            ),
+          ).snapshot(),
+          turnID,
+        ),
     },
   });
   const step = (id: string, provider: string): AssistantMessage => ({
@@ -601,7 +609,7 @@ test("U4 queued prompts do not split a turn and category costs use each step's e
     }, step("last-step", "second")]));
   publishUsage(
     f.app.index,
-    await f.app.backend.capabilities.usage!.getUsage("tstv1-core"),
+    await f.app.backend.capabilities.usage!.getUsage("tstv1-core", "user"),
   );
   const b = await Cdp.launch(root);
   try {

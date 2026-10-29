@@ -184,6 +184,12 @@ bodies while preserving metadata, lights and unsent drafts. The `[messages]`
 `coolms`, `preloadms` and `concurrency` leaves configure these thresholds; page
 size and the ten-message reserve remain product contracts.
 
+Live body changes now update indexed message/part/reply projections rather than
+regrouping acquired history. A usage breakdown requests only its complete turn,
+retains unreported categories as unknown, and releases its call/pricing state on
+close. Copy reply acquires missing steps through the same cursor owner before
+writing complete source to the clipboard.
+
 Deleting a native session retains its last metadata and task membership as a
 tombstone. Select its struck-through row to see details, copy its title, remove
 it from its task or close its view. An external deletion retains unsent browser

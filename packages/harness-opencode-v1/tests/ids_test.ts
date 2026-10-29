@@ -272,7 +272,7 @@ test("public adapter qualifies every capability boundary, including externally c
     await c.commands!.listCommands(id);
     await c.resources!.listResources(id);
     await c.files!.findFiles(id, "file");
-    await c.usage!.getUsage(id);
+    await c.usage!.getUsage(id, "user");
     await c.prompt!.prompt({
       sessionID: id,
       mode: "normal",
@@ -314,7 +314,7 @@ test("public adapter qualifies every capability boundary, including externally c
         () => c.files!.findFiles(bad, ""),
         () => c.commands!.listCommands(bad),
         () => c.questions!.listQuestions(bad),
-        () => c.usage!.getUsage(bad),
+        () => c.usage!.getUsage(bad, "user"),
         () => c.prompt!.abort(bad),
         () => c.sessionActions!.rename(bad, "Title"),
         () => c.revert!.revert(bad, "msg_1"),

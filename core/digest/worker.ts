@@ -240,7 +240,7 @@ async function start(
     scheduler.register({
       identity: sink.identity,
       catalog: (signal) => selectedSink.catalog(signal),
-      detail: (id, signal) => selectedSink.detail(id, signal),
+      detail: (id, turnID, signal) => selectedSink.detail(id, turnID, signal),
       close: () => selectedSink.close(),
       step: async (job, budget, signal) => {
         try {
@@ -604,12 +604,15 @@ function handle(message: ToWorker): void {
           metadata,
         });
       } else if (message.t === "detail") {
-        const detail = await sink!.detail(message.sessionID, signal);
-        const turns = Object.entries(detail.turns);
+        const detail = await sink!.detail(
+          message.sessionID,
+          message.turnID,
+          signal,
+        );
         const count = Math.max(
           1,
           Math.ceil(
-            Math.max(detail.messages.length, turns.length) / policy.publishrows,
+            detail.calls.length / policy.publishrows,
           ),
         );
         for (let part = 0; part < count; part++) {
@@ -620,14 +623,10 @@ function handle(message: ToWorker): void {
             sessionID: message.sessionID,
             part,
             last: part === count - 1,
-            ...(part === 0 ? { total: detail.total } : {}),
-            turns: Object.fromEntries(
-              turns.slice(
-                part * policy.publishrows,
-                (part + 1) * policy.publishrows,
-              ),
-            ),
-            messages: detail.messages.slice(
+            turnID: detail.turnID,
+            revision: detail.revision,
+            ...(part === 0 ? { summary: detail.summary } : {}),
+            calls: detail.calls.slice(
               part * policy.publishrows,
               (part + 1) * policy.publishrows,
             ),

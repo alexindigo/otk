@@ -11,6 +11,8 @@ export default function UsageDetail(
 ): import("solid-js").Element {
   const duration = (time: Usage["time"]) =>
     time?.end === undefined ? "—" : elapsed(time.start, time.end);
+  const count = (value: number | null) =>
+    value === null ? "Not reported" : value.toLocaleString("en-US");
   return (
     <div class="otk-usage-detail">
       <dl class="otk-usage-summary">
@@ -21,10 +23,8 @@ export default function UsageDetail(
         <div
           data-usage-summary="context"
           role="group"
-          aria-label={`Context peak: ${
-            props.usage.contextPeak.toLocaleString("en-US")
-          } tokens`}
-          title={`${props.usage.contextPeak.toLocaleString("en-US")} tokens`}
+          aria-label={`Context peak: ${count(props.usage.contextPeak)} tokens`}
+          title={`${count(props.usage.contextPeak)} tokens`}
         >
           <dt>Context peak</dt>
           <dd>{usageTokens(props.usage.contextPeak)}</dd>
@@ -32,10 +32,8 @@ export default function UsageDetail(
         <div
           data-usage-summary="tokens"
           role="group"
-          aria-label={`Total tokens: ${
-            props.usage.tokens.toLocaleString("en-US")
-          }`}
-          title={`${props.usage.tokens.toLocaleString("en-US")} tokens`}
+          aria-label={`Total tokens: ${count(props.usage.tokens)}`}
+          title={`${count(props.usage.tokens)} tokens`}
         >
           <dt>Total tokens</dt>
           <dd>{usageTokens(props.usage.tokens)}</dd>
@@ -87,7 +85,7 @@ export default function UsageDetail(
                   </td>
                   <td>
                     <span class="otk-usage-context">
-                      <span>{call().context.toLocaleString("en-US")}</span>
+                      <span>{count(call().context)}</span>
                       <span
                         class="otk-usage-context-bar"
                         aria-hidden="true"
@@ -95,8 +93,8 @@ export default function UsageDetail(
                         <span
                           style={{
                             width: `${
-                              props.usage.contextPeak
-                                ? call().context / props.usage.contextPeak *
+                              props.usage.contextPeak && call().context !== null
+                                ? call().context! / props.usage.contextPeak *
                                   100
                                 : 0
                             }%`,
@@ -109,9 +107,7 @@ export default function UsageDetail(
                     each={call().categories}
                     keyed={(category) => category.label}
                   >
-                    {(category) => (
-                      <td>{category().tokens.toLocaleString("en-US")}</td>
-                    )}
+                    {(category) => <td>{count(category().tokens)}</td>}
                   </For>
                   <Show when={props.showCost}>
                     <td>
@@ -126,16 +122,16 @@ export default function UsageDetail(
           <tfoot>
             <tr>
               <th scope="row" colspan="2">Total</th>
-              <td>{props.usage.context.toLocaleString("en-US")}</td>
+              <td>{count(props.usage.context)}</td>
               <For
                 each={props.usage.categories}
                 keyed={(category) => category.label}
               >
                 {(category) => (
                   <td>
-                    <span>{category().tokens.toLocaleString("en-US")}</span>
+                    <span>{count(category().tokens)}</span>
                     <Show
-                      when={props.showCost && category().cost !== undefined}
+                      when={props.showCost && category().cost !== null}
                     >
                       <small class="otk-usage-category-cost">
                         <UsageCost value={category().cost!} />
@@ -160,9 +156,7 @@ export default function UsageDetail(
         </p>
         <Show
           when={props.showCost &&
-            props.usage.categories.some((category) =>
-              category.cost !== undefined
-            )}
+            props.usage.categories.some((category) => category.cost !== null)}
         >
           <p class="otk-usage-note">
             Category costs use model prices. The total is reported by the

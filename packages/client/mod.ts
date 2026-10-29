@@ -17,6 +17,7 @@ export {
   type TranscriptState,
 } from "./transcript.ts";
 export * from "./transcripts.ts";
+export * from "./transcript-projection.ts";
 export * from "./message-policy.ts";
 export * from "./transcript-scopes.ts";
 export * from "./sidecars.ts";
@@ -42,10 +43,13 @@ export { replyMessages, replyMetadata } from "./replies.ts";
 export {
   createSessionUsage,
   type SessionUsageOwner,
+  usageKey,
   type UsageState,
+  type UsageTarget,
 } from "./session-usage.ts";
 export {
   type CallUsage,
+  createTurnPricing,
   type PricedUsage,
   priceUsage,
   type TurnUsage,

@@ -12,7 +12,7 @@ import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
-import { publishUsage } from "../support/usage-summary.ts";
+import { publishUsage, turnDetail } from "../support/usage-summary.ts";
 
 test("U14 r2 one money rule and exact title-free accessibility reach overlay, footer, meter and session rows", async () => {
   const root = await fixture();
@@ -59,9 +59,12 @@ test("U14 r2 one money rule and exact title-free accessibility reach overlay, fo
   };
   const f = await coreBackendFixture(root, {
     usage: {
-      getUsage: () =>
+      getUsage: (_id, turnID) =>
         Promise.resolve(
-          new UsageLedger("tstv1-core", [usageHeader(message())]).snapshot(),
+          turnDetail(
+            new UsageLedger("tstv1-core", [usageHeader(message())]).snapshot(),
+            turnID,
+          ),
         ),
     },
     models: { listModels: () => Promise.resolve(catalog) },

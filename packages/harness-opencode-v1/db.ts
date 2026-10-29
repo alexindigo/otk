@@ -4,6 +4,7 @@ import { DatabaseSync } from "node:sqlite";
 import type { NativeMessage } from "./messages.ts";
 import type { Info, RawPart } from "./types.ts";
 import type { UsageMessage } from "@otk/protocol";
+import { reportedNumber, reportedTokens } from "./usage-values.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { runningDirectories } from "./db-hints.ts";
 /** Never creates or writes the harness database; schema checks name query columns. */
@@ -178,7 +179,11 @@ export class BootstrapDb {
     }
   }
   /** Bounded usage headers and existing tool labels; never bodies/inputs/output. */
-  usageMessages(id: string): Iterable<UsageMessage> | undefined {
+  usageMessages(
+    id: string,
+    turnID: string,
+    signal?: AbortSignal,
+  ): Iterable<UsageMessage> | undefined {
     id = ids.decode(id);
     if (!this.#db) return;
     try {
@@ -191,34 +196,45 @@ export class BootstrapDb {
         json_extract(data, '$.time.created') AS created,
         json_extract(data, '$.time.completed') AS completed
         FROM message WHERE session_id = ? AND id > ?
+        AND coalesce(json_extract(data, '$.parentID'),id) = ?
         AND json_extract(data, '$.role') = 'assistant' ORDER BY id LIMIT 100`);
-      const tools = this.#db.prepare(`SELECT id,
-        json_extract(data, '$.tool') AS name,
-        json_extract(data, '$.state.title') AS summary
-        FROM part WHERE session_id = ? AND message_id = ? AND id > ?
-        AND json_extract(data, '$.type') = 'tool' ORDER BY id LIMIT 100`);
+      const tools = this.#db.prepare(`SELECT p.id,p.message_id,
+        json_extract(p.data, '$.tool') AS name,
+        json_extract(p.data, '$.state.title') AS summary
+        FROM part p JOIN json_each(?) wanted ON wanted.value=p.message_id
+        WHERE p.session_id = ? AND p.id > ?
+        AND json_extract(p.data, '$.type') = 'tool' ORDER BY p.id LIMIT 100`);
       return (function* () {
         let after = "";
         while (true) {
-          const rows = query.all(id, after);
+          signal?.throwIfAborted();
+          const rows = query.all(id, after, turnID);
           if (!rows.length) break;
-          for (const row of rows) {
-            const labels: NonNullable<UsageMessage["tools"]> = [];
-            let partAfter = "";
-            while (true) {
-              const parts = tools.all(id, String(row.id), partAfter);
-              if (!parts.length) break;
-              for (const part of parts) {
-                labels.push({
-                  id: String(part.id),
-                  name: String(part.name),
-                  ...(part.summary == null
-                    ? {}
-                    : { summary: String(part.summary) }),
-                });
-              }
-              partAfter = String(parts.at(-1)!.id);
+          const labels = new Map<string, NonNullable<UsageMessage["tools"]>>();
+          let partAfter = "";
+          for (;;) {
+            signal?.throwIfAborted();
+            const parts = tools.all(
+              JSON.stringify(rows.map((row) => row.id)),
+              id,
+              partAfter,
+            );
+            if (!parts.length) break;
+            for (const part of parts) {
+              const key = String(part.message_id);
+              let items = labels.get(key);
+              if (!items) labels.set(key, items = []);
+              items.push({
+                id: String(part.id),
+                name: String(part.name),
+                ...(part.summary == null
+                  ? {}
+                  : { summary: String(part.summary) }),
+              });
             }
+            partAfter = String(parts.at(-1)!.id);
+          }
+          for (const row of rows) {
             yield {
               id: String(row.id),
               turnID: row.parent == null ? String(row.id) : String(row.parent),
@@ -226,15 +242,10 @@ export class BootstrapDb {
                 provider: String(row.provider),
                 model: String(row.model),
               },
-              tokens: row.tokens == null
-                ? {
-                  input: 0,
-                  output: 0,
-                  reasoning: 0,
-                  cache: { read: 0, write: 0 },
-                }
-                : JSON.parse(String(row.tokens)),
-              cost: Number(row.cost ?? 0),
+              tokens: reportedTokens(
+                row.tokens == null ? undefined : JSON.parse(String(row.tokens)),
+              ),
+              cost: reportedNumber(row.cost, false),
               completed: row.completed != null,
               time: {
                 start: Number(row.created),
@@ -242,7 +253,7 @@ export class BootstrapDb {
                   ? {}
                   : { end: Number(row.completed) }),
               },
-              tools: labels,
+              tools: labels.get(String(row.id)) ?? [],
             };
           }
           after = String(rows.at(-1)!.id);

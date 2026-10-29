@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { publishUsage } from "../support/usage-summary.ts";
+import { publishUsage, turnDetail } from "../support/usage-summary.ts";
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import type { AssistantMessage, Message } from "@otk/protocol";
@@ -163,21 +163,29 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
     b = await Cdp.launch(root);
   Object.assign(f.app.backend.capabilities, {
     usage: {
-      getUsage: (id: string) =>
+      getUsage: (id: string, turnID: string) =>
         Promise.resolve(
-          new UsageLedger(
-            id,
-            messages.filter((m): m is AssistantMessage =>
-              m.role === "assistant"
-            ).map(usageHeader),
-          ).snapshot(),
+          turnDetail(
+            new UsageLedger(
+              id,
+              messages.filter((m): m is AssistantMessage =>
+                m.role === "assistant"
+              ).map(usageHeader),
+            ).snapshot(),
+            turnID,
+          ),
         ),
     },
   });
   registerUsage(f.app.connections.rpc, f.app.backend);
   publishUsage(
     f.app.index,
-    await f.app.backend.capabilities.usage!.getUsage("tstv1-otk"),
+    new UsageLedger(
+      "tstv1-otk",
+      messages.filter((m): m is AssistantMessage => m.role === "assistant").map(
+        usageHeader,
+      ),
+    ).snapshot(),
   );
   try {
     await b.send("Emulation.setDeviceMetricsOverride", {

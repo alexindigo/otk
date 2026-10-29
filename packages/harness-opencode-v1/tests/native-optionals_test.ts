@@ -2,6 +2,7 @@
 import { assert, assertEquals, assertThrows } from "@std/assert";
 import { agentColors, agents } from "../agents.ts";
 import { Client } from "../client.ts";
+import { usageHeader, UsageLedger } from "@otk/protocol";
 import { sessionDirectory } from "../directory.ts";
 import {
   mapIndex,
@@ -19,6 +20,40 @@ const settings = {
   heartbeattimeout: 25,
   reconnectmax: 30,
 };
+
+Deno.test("live reported usage keeps missing and invalid categories unknown before actual zero and nonzero replacements", () => {
+  const ledger = new UsageLedger("opcv1-session");
+  for (const value of [undefined, null, -1, 0, 7]) {
+    const message = mapMessage(
+      JSON.parse(
+        JSON.stringify({
+          id: "call",
+          sessionID: "session",
+          role: "assistant",
+          parentID: "turn",
+          agent: "build",
+          providerID: "test",
+          modelID: "test",
+          time: { created: 1, completed: 2 },
+          cost: value,
+          tokens: {
+            input: value,
+            output: 0,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        }),
+      ),
+    );
+    assert(message.role === "assistant");
+    const expected = typeof value === "number" && value >= 0 ? value : null;
+    assertEquals(message.cost, expected);
+    assertEquals(message.tokens.input, expected);
+    ledger.upsert(usageHeader(message));
+    assertEquals(ledger.summary("turn")?.cost, expected);
+    assertEquals(ledger.summary("turn")?.tokens.input, expected);
+  }
+});
 
 Deno.test("native null agent metadata becomes absent for primary and mention consumers", async () => {
   const raw = [

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { publishUsage } from "../support/usage-summary.ts";
+import { publishUsage, turnDetail } from "../support/usage-summary.ts";
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import {
@@ -116,9 +116,12 @@ test("U6 file changes start collapsed, disclose real content and follow the pers
   }, reply];
   const f = await coreBackendFixture(root, {
     usage: {
-      getUsage: () =>
+      getUsage: (_id, turnID) =>
         Promise.resolve(
-          new UsageLedger("tstv1-core", [usageHeader(reply)]).snapshot(),
+          turnDetail(
+            new UsageLedger("tstv1-core", [usageHeader(reply)]).snapshot(),
+            turnID,
+          ),
         ),
     },
     prompt: { prompt: () => Promise.resolve(), abort: () => Promise.resolve() },
@@ -127,7 +130,7 @@ test("U6 file changes start collapsed, disclose real content and follow the pers
     Promise.resolve(f.page(messages, opts.before));
   publishUsage(
     f.app.index,
-    await f.app.backend.capabilities.usage!.getUsage("tstv1-core"),
+    new UsageLedger("tstv1-core", [usageHeader(reply)]).snapshot(),
   );
   const b = await Cdp.launch(root), c = new WsClient(f.url);
   const shots = Deno.env.get("OTK_COLLAPSE_SHOTS");
@@ -272,9 +275,12 @@ test("U6 one-token labels and literal fallback phrases reach plain and picker fo
         abort: () => Promise.resolve(),
       },
       usage: {
-        getUsage: () =>
+        getUsage: (_id, turnID) =>
           Promise.resolve(
-            new UsageLedger("tstv1-core", [usageHeader(reply)]).snapshot(),
+            turnDetail(
+              new UsageLedger("tstv1-core", [usageHeader(reply)]).snapshot(),
+              turnID,
+            ),
           ),
       },
       ...(picker ? { agents: { listAgents: () => Promise.resolve([]) } } : {}),
@@ -282,7 +288,7 @@ test("U6 one-token labels and literal fallback phrases reach plain and picker fo
     f.app.backend.core.listMessages = () => Promise.resolve(f.page([reply]));
     publishUsage(
       f.app.index,
-      await f.app.backend.capabilities.usage!.getUsage("tstv1-core"),
+      new UsageLedger("tstv1-core", [usageHeader(reply)]).snapshot(),
     );
     const b = await Cdp.launch(root), c = new WsClient(f.url);
     try {

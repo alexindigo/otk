@@ -276,8 +276,8 @@ export interface AssistantMessage {
   agentColor?: AgentColor;
   replyTo?: string;
   model: ModelRef;
-  tokens: Tokens;
-  cost: number;
+  tokens: import("./digest.ts").ReportedTokens;
+  cost: number | null;
   error?: { kind: string; message: string };
   interrupted: boolean;
   parts: Part[];

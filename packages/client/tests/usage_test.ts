@@ -78,8 +78,13 @@ Deno.test("charged turn usage accumulates every category across exact-model step
     kind: "step",
     id: "bookkeeping",
     phase: "finish",
-    tokens: first.tokens,
-    cost: first.cost,
+    tokens: {
+      input: 100000,
+      output: 20000,
+      reasoning: 30000,
+      cache: { read: 40000, write: 50000 },
+    },
+    cost: .43,
   }];
   const usage = replyUsage([
     first,
@@ -106,7 +111,7 @@ Deno.test("usage retains reported cost and tokens when prices are unknown, and d
   const known = step("a"), unknown = step("b", "missing");
   assertEquals(
     usageFor([known, unknown], catalog).categories.map((c) => c.cost),
-    Array(5).fill(undefined),
+    Array(5).fill(null),
   );
   const free = structuredClone(catalog);
   free.providers[0].models[0].cost = {
@@ -257,8 +262,8 @@ Deno.test("complete call metadata orders rows by start, owns one turn span and p
   assertEquals(turn.calls.map((call) => call.tokens), [240000, 240000, 240000]);
   assertAlmostEquals(turn.calls[1].categories[0].cost!, .4);
   assertAlmostEquals(
-    turn.cost,
-    turn.calls.reduce((sum, call) => sum + call.cost, 0),
+    turn.cost!,
+    turn.calls.reduce((sum, call) => sum + call.cost!, 0),
   );
   assertEquals(JSON.stringify(snapshot).includes("secret-output"), false);
   ledger.tool("z", { id: "tool", name: "bash", summary: "Updated label" });
@@ -328,6 +333,6 @@ Deno.test("turn context peak includes both caches and survives a smaller final p
   assertEquals(turn.calls[2].context, 1);
   assertEquals(
     turn.context,
-    a.tokens.input + a.tokens.cache.read + a.tokens.cache.write + 390001,
+    a.tokens.input! + a.tokens.cache.read! + a.tokens.cache.write! + 390001,
   );
 });

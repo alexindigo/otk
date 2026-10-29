@@ -12,7 +12,7 @@ import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
-import { publishUsage } from "../support/usage-summary.ts";
+import { publishUsage, turnDetail } from "../support/usage-summary.ts";
 
 test("U4 complete102-step turn and session totals survive paging, duplicate live updates, held snapshots and reload", async () => {
   const root = await fixture();
@@ -61,12 +61,13 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
   let hold: PromiseWithResolvers<SessionUsage> | undefined, held = false;
   const f = await coreBackendFixture(root, {
     usage: {
-      getUsage: () => {
+      getUsage: async (_id, turnID) => {
+        const clock = f.clock();
         if (hold) {
           held = true;
-          return hold.promise;
+          return turnDetail(await hold.promise, turnID, clock);
         }
-        return Promise.resolve(ledger.snapshot());
+        return turnDetail(ledger.snapshot(), turnID, clock);
       },
     },
   });
@@ -110,6 +111,21 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     publishUsage(f.app.index, ledger.snapshot());
     f.app.connections.content("tstv1-core", { op: "message.upsert", message });
   };
+  const usagePoint = async () =>
+    await b.poll(`(async()=>{
+    const e=[...document.querySelectorAll('.otk-turn-usage > button')].at(-1);
+    if (!e) return false;
+    e.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
+    let r=e.getBoundingClientRect();
+    for (let frame=0;frame<2;frame++) {
+      await new Promise(requestAnimationFrame);
+      const next=e.getBoundingClientRect();
+      if(r.x!==next.x||r.y!==next.y||r.width!==next.width||r.height!==next.height) return false;
+      r=next;
+    }
+    const point={x:r.x+r.width/2,y:r.y+r.height/2};
+    return e.isConnected && e.contains(document.elementFromPoint(point.x,point.y)) && point;
+  })()`) as { x: number; y: number };
   try {
     await b.goto(`${f.url}/#/local/tstv1-core`);
     await b.poll(
@@ -118,9 +134,7 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     assertEquals(calls, [{ before: undefined }, { before: "fixture:93" }]);
     await b.reload();
     await b.poll(`${visible}==='102 model calls · 102 tokens · $1.02'`);
-    const point = await b.evaluate<{ x: number; y: number }>(
-      "(()=>{const trigger=document.querySelector('.otk-turn-usage > button');trigger.scrollIntoView({block:'center'});const r=trigger.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
-    );
+    const point = await usagePoint();
     await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
     await b.poll("!!document.querySelector('.otk-turn-usage :popover-open')");
     await b.poll(
@@ -199,14 +213,9 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
       x: 1,
       y: 1,
     });
-    assertEquals(calls, [
-      { before: undefined },
-      {
-        before: "fixture:93",
-      },
-      { before: undefined },
-      { before: "fixture:93" },
-    ]);
+    assertEquals(calls, [{ before: undefined }, { before: "fixture:93" }, {
+      before: undefined,
+    }, { before: "fixture:93" }]);
     const shots = Deno.env.get("OTK_USAGE_OWNER_SHOTS");
     if (shots) {
       await Deno.mkdir(shots, { recursive: true });
@@ -238,9 +247,7 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     hold = Promise.withResolvers<SessionUsage>();
     await b.reload();
     await b.poll(`${last}==='1 model call · 5 tokens · $0.05'`);
-    const detailPoint = await b.evaluate<{ x: number; y: number }>(
-      "(()=>{const r=[...document.querySelectorAll('.otk-turn-usage > button')].at(-1).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
-    );
+    const detailPoint = await usagePoint();
     await b.send("Input.dispatchMouseEvent", {
       type: "mouseMoved",
       ...detailPoint,

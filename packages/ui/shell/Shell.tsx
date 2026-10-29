@@ -684,12 +684,10 @@ export default function Shell(
                             prefs={toggles.state.prefs}
                             info={info()}
                             label={selectedSidecar()?.label || "Server"}
-                            messages={session.state.content.messages}
+                            transcript={session.transcript}
                             latestPrompt={session.state.latestPrompt}
                             continuity={session.state.continuity}
-                            usage={session.state.selection
-                              ? session.usage.get(session.state.selection)
-                              : undefined}
+                            usageOwner={session.usage}
                             entry={actions.selectedEntry()}
                             openUsage={resources.declares(
                                 session.state.selection!.sidecarId,
@@ -697,15 +695,20 @@ export default function Shell(
                               ) &&
                                 actions.eligibility(session.state.selection!)
                                   .live
-                              ? () => {
-                                const target = session.state.selection!;
+                              ? (turnID) => {
+                                const target = {
+                                  ...session.state.selection!,
+                                  turnID,
+                                };
                                 const release = session.usage.retain(target);
                                 void session.usage.load(target);
                                 return release;
                               }
                               : undefined}
-                            usageError={() =>
-                              session.usage.state.entries[draftKey()]?.error}
+                            usageError={(turnID) => session.usage.error({
+                              ...session.state.selection!,
+                              turnID,
+                            })}
                             catalog={session.models?.state.available
                               ? session.models.state.value
                               : undefined}

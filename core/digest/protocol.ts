@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { DigestPolicy, DirtySession } from "@otk/harness";
-import type { DigestDelta, SessionMetadata, SessionUsage } from "@otk/protocol";
+import type {
+  DigestDelta,
+  SessionMetadata,
+  TurnUsageSnapshot,
+} from "@otk/protocol";
 import type { OpencodeV1Config } from "@otk/harness-opencode-v1";
 import type { TranscriptMetadata } from "@otk/harness";
 export interface DigestPressure {
@@ -35,7 +39,7 @@ export type ToWorker =
     }
     | { t: "scope"; owner: string; directory?: string; sessions: string[] }
     | { t: "interactive"; owner: string; active: boolean }
-    | { t: "detail"; sessionID: string }
+    | { t: "detail"; sessionID: string; turnID: string }
     | { t: "transcript"; sessionID: string; turns: string[]; cutoff?: string }
     | {
       t: "deleteIntent";
@@ -75,9 +79,10 @@ export type FromWorker =
       sessionID: string;
       part: number;
       last: boolean;
-      total?: SessionUsage["total"];
-      turns: SessionUsage["turns"];
-      messages: SessionUsage["messages"];
+      turnID: string;
+      revision: number;
+      summary?: TurnUsageSnapshot["summary"];
+      calls: TurnUsageSnapshot["calls"];
     }
     | ({ t: "pressure" } & DigestPressure)
     | {

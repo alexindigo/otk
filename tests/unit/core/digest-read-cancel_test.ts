@@ -75,8 +75,14 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
   const db = new OtkDb(root, [prefsMigrations]);
   const harness = stub({
     usage: {
-      getUsage: (id: string, signal?: AbortSignal) =>
-        bridge.detail(id, signal ?? new AbortController().signal),
+      getUsage: async (id: string, turnID: string, signal?: AbortSignal) => ({
+        ...await bridge.detail(
+          id,
+          turnID,
+          signal ?? new AbortController().signal,
+        ),
+        clock: { epoch: "fixture", seq: 0 },
+      }),
     },
   });
   const registry = new RpcRegistry(harness, db);
@@ -119,7 +125,11 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
   const owner = createSessionUsage(() =>
     ({ supports: () => true, rpc }) as unknown as SidecarConnection
   );
-  const target = { sidecarId: "local", sessionID: "opcv1-ses_one" };
+  const target = {
+    sidecarId: "local",
+    sessionID: "opcv1-ses_one",
+    turnID: "user",
+  };
   try {
     await bridge.catalog(1, new AbortController().signal);
     await waitFor(() => ready, Boolean);
@@ -144,7 +154,7 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
     assertEquals(frames.length, count);
     assertEquals(aborted, 1);
     await owner.load(target, true);
-    assertEquals(owner.get(target)?.total.cost, 0);
+    assertEquals(owner.get(target)?.summary.cost, 0);
   } finally {
     holding = false;
     owner.stop();
@@ -160,15 +170,18 @@ test("RPC read cancellation is connection-scoped and ignores completed, duplicat
   const signals: AbortSignal[] = [];
   const harness = stub({
     usage: {
-      getUsage: (_id: string, signal?: AbortSignal) => {
+      getUsage: (_id: string, turnID: string, signal?: AbortSignal) => {
         signals.push(signal ?? new AbortController().signal);
         return Promise.resolve({
           sessionID: "tstv1-one",
-          messages: [],
-          turns: {},
-          total: {
+          turnID,
+          clock: { epoch: "fixture", seq: 0 },
+          revision: 0,
+          calls: [],
+          summary: {
+            calls: 0,
+            contextPeak: 0,
             cost: 0,
-            models: [],
             tokens: {
               input: 0,
               output: 0,
@@ -223,7 +236,7 @@ test("RPC read cancellation is connection-scoped and ignores completed, duplicat
       t: "rpc",
       id: "finished",
       method: "usage.get",
-      params: { sessionID: "tstv1-one" },
+      params: { sessionID: "tstv1-one", turnID: "user" },
     });
     const count = first.frames.length;
     await first.send({ t: "rpc.cancel", id: "finished" });

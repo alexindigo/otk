@@ -34,9 +34,15 @@ export function partFrames(
 export function messageFrames(
   message: Pick<Message, "id" | "role" | "parts">,
   presentation: (part: Part) => PartPresentation,
-): { frames: PartFrame[]; prompt: boolean } {
-  const frames = partFrames(message.parts, presentation);
+): { frames: PartFrame[]; prompt: boolean; copyable: boolean } {
+  let copyable = false;
+  const frames = partFrames(message.parts, (part) => {
+    const value = presentation(part);
+    copyable ||= value.copyable ?? !!value.text;
+    return value;
+  });
   return {
+    copyable,
     frames: frames.length || message.role === "user" ? frames : [{
       id: message.id,
       parts: [],

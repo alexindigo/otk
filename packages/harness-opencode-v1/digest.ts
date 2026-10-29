@@ -3,7 +3,7 @@ import type { DatabaseSync } from "node:sqlite";
 import {
   type DigestDelta,
   type SessionMetadata,
-  type SessionUsage,
+  type TurnUsageSnapshot,
   UsageLedger,
   type UsageMessage,
   type UsageSummary,
@@ -23,6 +23,7 @@ import { mapIndex } from "./map.ts";
 import type { Info, Session } from "./types.ts";
 import { type DigestHeader, DigestNativeDb } from "./digest-db.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
+import { reportedNumber } from "./usage-values.ts";
 
 export interface DigestSnapshot {
   metadata: SessionMetadata;
@@ -94,7 +95,9 @@ function header(raw: DigestHeader): DigestHeader {
     time_completed: counter(raw.time_completed, "time_completed"),
   };
   for (const key of categories) {
-    result[key] = raw.role === "assistant" ? counter(raw[key], key) : null;
+    result[key] = raw.role === "assistant"
+      ? reportedNumber(raw[key], key !== "cost")
+      : null;
   }
   for (const key of ["turn_id", "agent", "provider_id", "model_id"] as const) {
     if (result[key] !== null && typeof result[key] !== "string") {
@@ -1035,33 +1038,69 @@ export class OpencodeV1DigestSink implements DigestSink {
     });
     return next;
   }
-  async detail(id: string, signal: AbortSignal): Promise<SessionUsage> {
+  async detail(
+    id: string,
+    turnID: string,
+    signal: AbortSignal,
+  ): Promise<TurnUsageSnapshot> {
     ids.decode(id);
-    const saved = this.storage.read(id);
+    let saved = this.storage.read(id);
     if (!saved) throw new Error("Session usage is unavailable");
     if (saved.deleted) {
       throw new Error("Session usage is unavailable for a deleted session");
+    }
+    const scan = this.storage.sql.prepare(
+      "SELECT dirty,observed_revision,complete_revision FROM opcv1_scan WHERE session_id=?",
+    ).get(id);
+    if (
+      this.#nativeVerified && this.#native &&
+      (saved.summary.state !== "ready" || scan?.dirty === 1 ||
+        scan?.observed_revision !== scan?.complete_revision)
+    ) {
+      // Explicit detail already holds the scheduler's interactive read slot. Finish
+      // its scalar baseline in bounded slices before reading this one turn.
+      let cursor: string | undefined;
+      do {
+        signal.throwIfAborted();
+        cursor = await this.step({
+          provider: this.identity,
+          sessionID: id,
+          directory: saved.metadata.directory,
+          updated: saved.metadata.timeUpdated,
+          revision: saved.summary.revision,
+          cursor,
+        }, {
+          rows: this.policy.batch,
+          until: performance.now() + this.policy.slicems,
+        }, signal);
+        saved = this.storage.read(id)!;
+        if (cursor) await new Promise((resolve) => setTimeout(resolve, 0));
+      } while (cursor);
+      if (saved.summary.state !== "ready") {
+        throw new Error("Usage metadata is unavailable");
+      }
     }
     const metadata = saved.metadata;
     const ledger = new UsageLedger(id);
     const consume = (row: DigestHeader): UsageMessage | undefined => {
       row = header(row);
-      if (row.role !== "assistant") return;
       if (
-        categories.some((key) => row[key] === null) || !row.provider_id ||
-        !row.model_id
-      ) throw new Error("Detailed usage is unavailable for unreported headers");
+        row.role !== "assistant" || (row.turn_id ?? row.message_id) !== turnID
+      ) return;
+      if (!row.provider_id || !row.model_id) {
+        throw new Error("Detailed usage model is unavailable");
+      }
       return {
         id: row.message_id,
         turnID: row.turn_id ?? row.message_id,
         model: { provider: row.provider_id, model: row.model_id },
         tokens: {
-          input: row.input!,
-          output: row.output!,
-          reasoning: row.reasoning!,
-          cache: { read: row.cache_read!, write: row.cache_write! },
+          input: row.input,
+          output: row.output,
+          reasoning: row.reasoning,
+          cache: { read: row.cache_read, write: row.cache_write },
         },
-        cost: row.cost!,
+        cost: row.cost,
         completed: row.time_completed !== null,
         time: {
           start: row.time_created,
@@ -1073,12 +1112,14 @@ export class OpencodeV1DigestSink implements DigestSink {
       let after = "";
       while (true) {
         signal.throwIfAborted();
-        const rows = this.#native.headers(
-          [id],
-          ids.decode(id),
+        const rows = this.storage.sql.prepare(
+          "SELECT * FROM opcv1_messages WHERE session_id=? AND turn_id=? AND message_id>? AND role='assistant' ORDER BY message_id LIMIT ?",
+        ).all(
+          id,
+          turnID,
           after,
           this.policy.batch,
-        );
+        ) as unknown as DigestHeader[];
         if (!rows.length) break;
         for (const row of rows) {
           const usage = consume(row);
@@ -1113,7 +1154,7 @@ export class OpencodeV1DigestSink implements DigestSink {
         const usage = consume(fromInfo(message.info));
         if (usage) ledger.upsert(usage);
         // Only existing tool labels leave the fallback page; bodies are released.
-        for (const part of message.parts) {
+        for (const part of usage ? message.parts : []) {
           if (part.type === "tool" && part.tool) {
             ledger.tool(message.info.id, {
               id: part.id,
@@ -1123,7 +1164,7 @@ export class OpencodeV1DigestSink implements DigestSink {
           }
         }
       }}
-    return ledger.snapshot();
+    return ledger.detail(turnID, saved.summary.revision);
   }
   close(): void {
     if (!this.#closed) {
