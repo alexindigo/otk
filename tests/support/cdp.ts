@@ -153,8 +153,19 @@ export class Cdp {
         this.evaluate<false | { x: number; y: number }>(`(async () => {
           const el = document.querySelector(${JSON.stringify(selector)});
           if (!el || el.matches(':disabled')) return false;
-          el.scrollIntoView({block:'center',inline:'nearest',behavior:'instant'});
           let r = el.getBoundingClientRect();
+          const x = r.x+r.width/2, y = r.y+r.height/2;
+          let clipped = x<0 || y<0 || x>=innerWidth || y>=innerHeight;
+          for (let parent=el.parentElement; parent && !clipped; parent=parent.parentElement) {
+            const style=getComputedStyle(parent), box=parent.getBoundingClientRect();
+            const left=box.left+parent.clientLeft, top=box.top+parent.clientTop;
+            if (/(auto|scroll|hidden|clip)/.test(style.overflowX) && (x<left || x>=left+parent.clientWidth)) clipped=true;
+            if (/(auto|scroll|hidden|clip)/.test(style.overflowY) && (y<top || y>=top+parent.clientHeight)) clipped=true;
+          }
+          if (clipped) {
+            el.scrollIntoView({block:'nearest',inline:'nearest',behavior:'instant'});
+            r = el.getBoundingClientRect();
+          }
           for (let frame = 0; frame < 2; frame++) {
             await new Promise(requestAnimationFrame);
             const next = el.getBoundingClientRect();
