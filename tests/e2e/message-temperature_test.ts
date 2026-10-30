@@ -95,20 +95,36 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await openSession(browser, a.id);
       await waitFor(() => settledPages(a.id).length, (n) => n >= 2);
       await browser.fill("textarea[name=prompt]", "Unsent temperature draft");
+      // The first intersecting row is a moving virtual-window boundary. Borrow
+      // the visible tail's source, not that boundary's transient row identity.
       const borrowed = await browser.evaluate<string>(
-        "(()=>{const v=document.querySelector('.otk-messages').getBoundingClientRect();return [...document.querySelectorAll('.otk-message-flow p')].find(e=>{const r=e.getBoundingClientRect();return r.bottom>v.top && r.top<v.bottom && e.textContent.startsWith('Alpha prompt')})?.textContent})()",
+        "(()=>{const v=document.querySelector('.otk-messages').getBoundingClientRect();return [...document.querySelectorAll('.otk-message-flow p')].findLast(e=>{const r=e.getBoundingClientRect();return r.bottom>v.top && r.top<v.bottom && e.textContent.startsWith('Alpha prompt')})?.textContent})()",
       );
       assert(
         borrowed,
         "the warm-return baseline is actual visible native source",
       );
+      // A smaller viewport deliberately changes the first visible row on return;
+      // retained source and drafts must paint independently of that geometry.
+      await browser.send("Emulation.setDeviceMetricsOverride", {
+        width: 1280,
+        height: 800,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
       await openSession(browser, bSession.id);
       await browser.evaluate("temperaturePages.hold=true");
+      const warmReturnStarted = performance.now();
       await openSession(browser, a.id);
       await browser.poll(
         `document.querySelector('textarea[name=prompt]')?.value==='Unsent temperature draft' && document.querySelector('.otk-message-flow')?.textContent.includes(${
           JSON.stringify(borrowed)
         })`,
+      );
+      console.info(
+        "Warm retained-source paint (ms)",
+        theme,
+        performance.now() - warmReturnStarted,
       );
       assertEquals(
         await browser.evaluate("temperaturePages.hold"),
