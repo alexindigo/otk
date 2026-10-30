@@ -13,7 +13,7 @@ import {
   waitForCollapsedPanels,
 } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
-import { usageCost } from "@otk/client";
+import { sessionFamily, usageCost } from "@otk/client";
 import type { PermissionRequest } from "@otk/protocol";
 import { menuReady } from "../support/menu.ts";
 import { wheelViewport } from "../support/message-viewport.ts";
@@ -24,6 +24,48 @@ const framesAhead =
   "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))";
 // Five default overscan rows on either side, plus two viewport-edge rows.
 const WINDOW_EXTRA_ROWS = 2 * 5 + 2;
+function assertScopedWarming(
+  calls: ReturnType<typeof sentFrames>[number]["frame"][],
+  selected: string,
+  members: ReadonlySet<string>,
+  attention: ReadonlySet<string> = new Set(),
+) {
+  const reads = new Map<string, unknown[]>();
+  for (const frame of calls) {
+    const params = frame.params as
+      | { sessionID?: string; before?: string }
+      | undefined;
+    const id = params?.sessionID;
+    if (!id || id === selected) continue;
+    if (frame.method === "permission.list" && attention.has(id)) continue;
+    assertEquals(
+      frame.method,
+      "session.messages",
+      "Nonselected rows admit no model, point or detail demand",
+    );
+    assert(
+      members.has(id),
+      `Body demand escaped the active/attention scopes: ${id}`,
+    );
+    assertEquals(
+      Object.keys(params!).sort(),
+      params?.before ? ["before", "sessionID"] : ["sessionID"],
+    );
+    const cursors = reads.get(id) ?? [];
+    cursors.push(params?.before);
+    reads.set(id, cursors);
+  }
+  for (const [id, cursors] of reads) {
+    assert(
+      cursors.length <= 2,
+      `Only newest10 + reserve10 warm ${id}: ${JSON.stringify(cursors)}`,
+    );
+    assertEquals(cursors[0], undefined);
+    if (cursors.length === 2) {
+      assert(typeof cursors[1] === "string" && !!cursors[1]);
+    }
+  }
+}
 async function visibleLight(browser: Cdp, selector: string) {
   await browser.poll(`!!document.querySelector(${JSON.stringify(selector)})`);
   assert(
@@ -210,15 +252,15 @@ for (const theme of ["otk-dark", "otk-light"]) {
       (frame) => frame.t === "rpc",
     );
     assertEquals(coldCalls.filter((frame) => frame.method === "usage.get"), []);
-    assertEquals(
-      coldCalls.filter((frame) => {
-        const id = (frame.params as { sessionID?: string } | undefined)
-          ?.sessionID;
-        return id !== undefined && id !== selected.id;
-      }),
-      [],
-      "Opening the project must not admit per-row requests",
+    const taskRoots = new Set([selected.id, f.manifest.sessions[4].id]);
+    const taskMembers = new Set(
+      f.manifest.sessions.filter((row) =>
+        sessionFamily(row.id, (id) => app.index.get(id)).some((id) =>
+          taskRoots.has(id)
+        )
+      ).map((row) => row.id),
     );
+    assertScopedWarming(coldCalls, selected.id, taskMembers);
     await capture("cold-digesting");
     const actionsStart = performance.now();
     await b.click(".otk-task-new");
@@ -517,14 +559,19 @@ for (const theme of ["otk-dark", "otk-light"]) {
       "Usage unavailable",
     );
     await capture("warm-ready");
-    // List demand has no per-row body, model or detail requests.
-    const calls = sentFrames(b).map((e) => e.frame).filter((f) =>
-      f.t === "rpc"
+    // The current connection may warm active/attention scopes. List rows admit
+    // no model/point/detail requests, and nonselected bodies stop at two pages.
+    const sent = sentFrames(b);
+    const allCalls = sent.map((event) => event.frame).filter((frame) =>
+      frame.t === "rpc"
     );
-    assertEquals(calls.filter((f) => f.method === "usage.get").length, 0);
-    const admitted = new Set([selected.id, `opcv1-${live.id}`, working.id]);
+    const current = sent.slice(
+      sent.findLastIndex(({ frame }) => frame.t === "hello"),
+    );
+    const calls = current.map((e) => e.frame).filter((f) => f.t === "rpc");
+    assertEquals(allCalls.filter((f) => f.method === "usage.get").length, 0);
     const attention = new Set([finished.id, blocked.id]);
-    const attentionReads = calls.filter((frame) =>
+    const attentionReads = allCalls.filter((frame) =>
       frame.method === "permission.list" &&
       attention.has(String((frame.params as { sessionID?: string })?.sessionID))
     );
@@ -534,15 +581,16 @@ for (const theme of ["otk-dark", "otk-light"]) {
       "Each deliberately blocked background session has one notification detail read",
     );
     observations.attentionReads = attentionReads;
-    assertEquals(
-      calls.filter((frame) => {
-        const id = (frame.params as { sessionID?: string } | undefined)
-          ?.sessionID;
-        return id !== undefined && !admitted.has(id) &&
-          !(frame.method === "permission.list" && attention.has(id));
-      }),
-      [],
-    );
+    const warmScopes = new Set([
+      ...taskMembers,
+      ...f.manifest.sessions.filter((row) => row.directory === background).map(
+        (row) => row.id,
+      ),
+      finished.id,
+      working.id,
+      blocked.id,
+    ]);
+    assertScopedWarming(calls, selected.id, warmScopes, attention);
     await wheelViewport(b, viewport, 100000);
     await b.poll(
       `!!document.querySelector('[data-session="${
