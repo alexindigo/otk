@@ -94,7 +94,10 @@ export function createRequestFeedback(
       const operations = tracker.operations(owner).filter((operation) =>
         metadata.get(operation.state.method)?.kind === "mutation"
       );
-      const operation = operations.at(-1);
+      const operation =
+        operations.findLast((operation) =>
+          metadata.get(operation.state.method)?.presentation !== "bookkeeping"
+        ) ?? operations.at(-1);
       if (!operation) return local;
       const state = operation.state;
       const identified = (value: Feedback): Feedback => ({

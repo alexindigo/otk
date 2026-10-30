@@ -2,6 +2,8 @@
 export interface RequestMetadata {
   readonly kind: "read" | "mutation" | "lease";
   readonly pending: string;
+  /** Secondary persistence must not replace the user's still-pending action. */
+  readonly presentation?: "bookkeeping";
 }
 /** Feature-owned descriptions, never execution dispatch or displayable method names. */
 export class RequestMetadataRegistry {

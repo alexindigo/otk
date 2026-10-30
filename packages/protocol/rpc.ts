@@ -34,7 +34,11 @@ export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "agents.list": { kind: "read", pending: "Loading agents" },
   "resources.list": { kind: "read", pending: "Loading resources" },
   "frecency.list": { kind: "read", pending: "Loading recent files" },
-  "frecency.bump": { kind: "mutation", pending: "Saving recent file" },
+  "frecency.bump": {
+    kind: "mutation",
+    pending: "Saving recent file",
+    presentation: "bookkeeping",
+  },
   "permission.list": { kind: "read", pending: "Loading requests" },
   "permission.reply": { kind: "mutation", pending: "Sending response" },
   "question.list": { kind: "read", pending: "Loading requests" },

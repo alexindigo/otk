@@ -5,7 +5,11 @@ export const inboxRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "projects.list": { kind: "read", pending: "Loading projects" },
   "projects.add": { kind: "mutation", pending: "Creating project session" },
   "projects.inactive": { kind: "mutation", pending: "Saving project" },
-  "projects.visit": { kind: "mutation", pending: "Saving project visit" },
+  "projects.visit": {
+    kind: "mutation",
+    pending: "Saving project visit",
+    presentation: "bookkeeping",
+  },
   "projects.scan": { kind: "read", pending: "Finding projects" },
   "projects.templates": { kind: "mutation", pending: "Saving paths" },
   "tasks.list": { kind: "read", pending: "Loading tasks" },
@@ -16,7 +20,11 @@ export const inboxRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "tasks.addSession": { kind: "mutation", pending: "Adding to task" },
   "tasks.removeSession": { kind: "mutation", pending: "Removing from task" },
   "tasks.sessions": { kind: "mutation", pending: "Saving task sessions" },
-  "sessions.seen": { kind: "mutation", pending: "Saving viewed conversation" },
+  "sessions.seen": {
+    kind: "mutation",
+    pending: "Saving viewed conversation",
+    presentation: "bookkeeping",
+  },
   "sessions.finishes": { kind: "read", pending: "Loading session activity" },
 };
 /** Inbox metadata is server-local; callers pair it with their connection ID. */
