@@ -23,6 +23,8 @@ export interface RpcExecutionPolicy<P, R> {
   receipt(result: R): ReceiptData | undefined;
   /** Explicit runtime encoder for safe intermediate witnesses. */
   checkpoint?(receipt: ReceiptData): ReceiptData;
+  /** Completion validation is independent of the handler's internal write result. */
+  completion?(receipt: ReceiptData): ReceiptData;
   recover(
     ctx: RpcContext,
     record: Readonly<RequestRecord>,

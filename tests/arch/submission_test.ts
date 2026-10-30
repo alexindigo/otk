@@ -177,12 +177,8 @@ Deno.test("submission policy covers recursive production sources including all t
   ) {
     const text = sources.get(file)!;
     const bypass = file.includes("session-actions")
-      ? text.replace("submission(target)(async () => {", "(async () => {")
-        .replace(
-          "      });\n    },\n    async abort",
-          "      })();\n    },\n    async abort",
-        )
-      : text.replace(/ctx\.submit\((async )?\(\) =>/g, "counterfeit($1() =>");
+      ? text.replace("submission(target)", "counterfeit(target)")
+      : text.replace(/ctx\.submit\(/g, "counterfeit(");
     assert(bypass !== text, file);
     assert(shellPolicyErrors(file, bypass).length > 0, file);
   }

@@ -16,7 +16,7 @@ import {
   type HarnessSink,
   SessionIndex,
 } from "@otk/harness";
-import { Client, HttpFailure } from "./client.ts";
+import { Client, HttpFailure, NativeRequestFailure } from "./client.ts";
 import { SessionErrors } from "./errors.ts";
 import { sessionErrorMessage, type SessionErrorState } from "@otk/protocol";
 import { BootstrapDb } from "./db.ts";
@@ -234,9 +234,10 @@ export class OpencodeV1Adapter implements Harness {
     });
     const directory = sessionDirectory(
       (id) => this.#directory(id),
-      (id) =>
+      (id, signal) =>
         this.client.json<Session>(
           `/session/${encodeURIComponent(ids.decode(id))}`,
+          { signal },
         ),
     );
     const version = () => this.version;
@@ -677,15 +678,24 @@ export class OpencodeV1Adapter implements Harness {
     const settled = this.client.json(path, {
       ...options,
       signal: controller.signal,
-      ...(options?.classification ? {} : { timeout: null }),
+      classification: "effect",
     }).then(() => {});
     const request = settled.then(() => this.#errors.settled(token)).catch(
       (error) => {
         if (!this.#stopped && !controller.signal.aborted) {
+          const cause = error instanceof NativeRequestFailure
+            ? error.original
+            : error;
           this.#errors.http(
             token,
-            error instanceof HttpFailure
-              ? { ...error.detail, status: error.status }
+            cause instanceof HttpFailure
+              ? {
+                ...cause.detail,
+                status: cause.status,
+                ...(error instanceof NativeRequestFailure
+                  ? { failure: error.failure }
+                  : {}),
+              }
               : {
                 message: errorMessage(error),
                 kind: normalizeError(error).name,
@@ -760,7 +770,7 @@ export class OpencodeV1Adapter implements Harness {
         watchdog.touch();
         const response = await this.client.request("/global/event", {
           signal: controller.signal,
-          stream: true,
+          classification: "stream",
         });
         if (!this.#current(controller)) {
           await response.body?.cancel();

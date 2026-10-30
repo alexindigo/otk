@@ -27,9 +27,8 @@ export function sessionActions(
         {
           method: "POST",
           query: { directory: dir },
-          ...(operation
-            ? { classification: "effect" as const, operation }
-            : { timeout: null }),
+          classification: "effect",
+          ...(operation ? { operation } : {}),
           body: { providerID: model.provider, modelID: model.model },
         },
       );

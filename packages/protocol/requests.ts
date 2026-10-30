@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { InboxRequestReceipts } from "./inbox.ts";
+import type { PreferencesRequestReceipts } from "./prefs.ts";
+import type { FrecencyRequestReceipts } from "./frecency.ts";
+import type { ApprovalRequestReceipts } from "./approvals.ts";
+import type { CoreRequestReceipts } from "./rpc.ts";
+import type { SessionActionsRequestReceipts } from "./capabilities/session-actions.ts";
 /** Additive request services. Wire composition selects these at activation. */
 export interface RequestWindow {
   id: string;
@@ -83,9 +89,51 @@ export interface ClientRequestPolicy {
   maxpending: number;
   inputbytes: number;
 }
+export function clientRequestPolicyFrom(value: unknown): ClientRequestPolicy {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new TypeError("Invalid request policy");
+  }
+  const policy = value as ClientRequestPolicy;
+  const fields = [
+    "livenessms",
+    "stoppingms",
+    "httpms",
+    "pingms",
+    "silencems",
+    "retrybase",
+    "retrymax",
+    "resumebatch",
+    "maxpending",
+    "inputbytes",
+  ] as const;
+  if (
+    Object.keys(policy).length !== fields.length ||
+    fields.some((field) =>
+      !Number.isSafeInteger(policy[field]) || policy[field] <= 0
+    ) || policy.retrymax < policy.retrybase || policy.silencems <= policy.pingms
+  ) throw new TypeError("Invalid request policy");
+  return {
+    livenessms: policy.livenessms,
+    stoppingms: policy.stoppingms,
+    httpms: policy.httpms,
+    pingms: policy.pingms,
+    silencems: policy.silencems,
+    retrybase: policy.retrybase,
+    retrymax: policy.retrymax,
+    resumebatch: policy.resumebatch,
+    maxpending: policy.maxpending,
+    inputbytes: policy.inputbytes,
+  };
+}
 /** Open metadata vocabulary; features contribute explicit allowlisted records. */
-// deno-lint-ignore no-empty-interface -- Declaration-mergeable feature receipt vocabulary.
-export interface RequestReceipts {}
+export interface RequestReceipts
+  extends
+    InboxRequestReceipts,
+    PreferencesRequestReceipts,
+    FrecencyRequestReceipts,
+    ApprovalRequestReceipts,
+    CoreRequestReceipts,
+    SessionActionsRequestReceipts {}
 export type ReceiptData = {
   [K in keyof RequestReceipts]: { kind: K; value: RequestReceipts[K] };
 }[keyof RequestReceipts];

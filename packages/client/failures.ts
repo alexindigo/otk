@@ -1,10 +1,19 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PublicFailure, RequestProgress } from "@otk/protocol";
 export interface Feedback {
+  /** Opaque operation and failure correlation, never display copy. */
+  identity?: string;
+  diagnosticID?: string;
   kind: "pending" | "connection" | "error" | "info";
   text: string;
   field?: string;
   action?: { label: string; run(): void };
+}
+export interface FeedbackOwner {
+  current(): Feedback | undefined;
+  subscribe(listener: () => void): () => void;
+  fail(cause: unknown): void;
+  clear(): void;
 }
 export class RequestFailure extends Error {
   constructor(readonly failure: PublicFailure) {
@@ -26,12 +35,13 @@ export class FailurePresenter {
     this.#contributions.set(code, present);
   }
   present(failure: PublicFailure): Feedback {
-    return this.#contributions.get(failure.code)?.(failure) ??
+    const feedback = this.#contributions.get(failure.code)?.(failure) ??
       {
         kind: "error",
         text: "Could not finish this action. Try again",
         ...(failure.field ? { field: failure.field } : {}),
       };
+    return feedback;
   }
   progress(progress: RequestProgress): Feedback {
     const text: Record<RequestProgress["code"], string> = {
@@ -62,4 +72,18 @@ export function localFailure(
     diagnostic(diagnosticID, cause);
   } catch { /* Diagnostics do not replace failure facts. */ }
   return { code: "action.local", retry: "new-intent", diagnosticID };
+}
+
+/** One entry for definite failures and local exceptions; release is silent. */
+export function failureFeedback(
+  cause: unknown,
+  presenter: FailurePresenter,
+  diagnostic: (id: string, cause: unknown) => void = () => {},
+): Feedback | undefined {
+  if (cause instanceof RequestReleased) return undefined;
+  return presenter.present(
+    cause instanceof RequestFailure
+      ? cause.failure
+      : localFailure(cause, diagnostic),
+  );
 }

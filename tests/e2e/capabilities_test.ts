@@ -59,7 +59,7 @@ test("core-only welcome loads a session without optional RPCs and preserves a dr
     );
     assertEquals(
       sentFrames(browser).flatMap(({ frame }) =>
-        frame.t === "rpc" ? [frame.method] : []
+        frame.t === "request" ? [frame.method] : []
       ).filter((method) =>
         ![
           "session.get",

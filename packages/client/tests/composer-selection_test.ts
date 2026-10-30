@@ -217,7 +217,10 @@ Deno.test("composer owns initial readiness, refresh coalescing, errors and last 
   assertEquals(f.owner.state.models.value, catalog);
   pending.reject(new Error("catalog offline"));
   await failed;
-  assertEquals(f.owner.state.models.error, "catalog offline");
+  assertEquals(
+    f.owner.state.models.error,
+    "Could not finish this action. Try again",
+  );
   assertEquals(f.owner.state.models.value, catalog);
   await f.owner.ready();
   assertEquals(calls, 2, "Readiness does not repeatedly retry a known failure");

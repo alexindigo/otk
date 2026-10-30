@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "./failure-features.ts";
 import {
   type ApprovalSnapshot,
   autoApproveOwner,
@@ -160,7 +160,7 @@ export function createApprovals(
               activity: {
                 ...value.activity,
                 loading: false,
-                error: errorMessage(error),
+                error: failureText(error),
               },
             });
           }

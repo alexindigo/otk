@@ -3,6 +3,11 @@ import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assertEquals } from "@std/assert";
 import { PROTOCOL_VERSION } from "@otk/protocol";
 import { createSidecars } from "@otk/client";
+import {
+  bootstrapFetch,
+  fixtureRequests,
+  replyRequest,
+} from "../../../tests/support/request-wire.ts";
 
 declare module "@otk/protocol" {
   interface CapabilityContracts {
@@ -42,17 +47,7 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
     });
   install("location", new URL("http://example.test/"));
   install("localStorage", { getItem: () => null, setItem() {} });
-  install(
-    "fetch",
-    () =>
-      Promise.resolve(
-        Response.json({
-          authenticated: true,
-          setupRequired: false,
-          authType: "none",
-        }),
-      ),
-  );
+  install("fetch", bootstrapFetch());
   install("WebSocket", Socket);
   const legacy = [
     "prompt",
@@ -93,6 +88,7 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
             t: "welcome",
             protocol: PROTOCOL_VERSION,
             messages: fixtureMessagePolicy,
+            requests: fixtureRequests(),
             sidecar: {
               version: "legacy",
               harness: {
@@ -136,11 +132,14 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
         ]);
         Socket.current.onmessage?.({ data: JSON.stringify({ t: "ping" }) });
         assertEquals(JSON.parse(Socket.current.sent.at(-1)!), { t: "pong" });
-        const pending = connection.rpc.call("session.get", {
+        const pending = connection.rpc.start("session.get", {
           sessionID: "open",
-        }).catch((error) => error.message);
+        });
+        let settled = false;
+        void pending.result.then(() => settled = true, () => settled = true);
         Socket.current.close();
-        assertEquals(await pending, "Sidecar disconnected");
+        await Promise.resolve();
+        assertEquals(settled, false);
         assertEquals(sidecars.state.list[0].status, "reconnecting");
         assertEquals(sidecars.state.list[0].connectionVersion, 1);
         assertEquals(sidecars.state.list[0].capabilities, expected);
@@ -152,6 +151,7 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
             t: "welcome",
             protocol: PROTOCOL_VERSION,
             messages: fixtureMessagePolicy,
+            requests: fixtureRequests(),
             sidecar: {
               version: "reconnected",
               harness: {
@@ -166,7 +166,15 @@ Deno.test("welcome consumers retain legacy capabilities while honoring explicit 
         assertEquals(Socket.current.sent.map((value) => JSON.parse(value).t), [
           "hello",
           "subscribe",
+          "request.resume",
         ]);
+        replyRequest(connection.rpc, {
+          t: "request",
+          ref: pending.state.ref,
+          method: "session.get",
+          params: { sessionID: "open" },
+        }, { id: "open" });
+        assertEquals((await pending.result).id, "open");
         assertEquals(sidecars.state.list[0].status, "connected");
         assertEquals(sidecars.state.list[0].connectionVersion, 2);
       } finally {

@@ -2,12 +2,18 @@
 import { test } from "../support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
-import { createIndex, createSession, SidecarConnection } from "@otk/client";
+import {
+  createIndex,
+  createSession,
+  RequestFailure,
+  SidecarConnection,
+} from "@otk/client";
 import type { Preferences, PromptInput } from "@otk/protocol";
 import { CapabilityRegistry, requireCapability } from "@otk/harness";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { fixture } from "../support/config.ts";
 import { waitFor } from "../support/opencode.ts";
+import { originFetch } from "../support/request-wire.ts";
 
 declare module "@otk/protocol" {
   interface CapabilityContracts {
@@ -53,6 +59,7 @@ async function consumer(url: string) {
       session.receive("app", frame);
     },
   }, {
+    fetcher: originFetch(url),
     socket: (address) =>
       socket = Reflect.construct(WebSocket, [address, {
         headers: { Origin: url },
@@ -110,16 +117,16 @@ test("application composition with an external core-only backend reaches client 
       sessionID: "tstv1-core",
       path: "src/example.ts",
     });
-    await assertRejects(
+    const rejected = await assertRejects(
       () =>
         client.connection.rpc.call("session.prompt", {
           sessionID: "tstv1-core",
           parts: [],
           mode: "normal",
         }),
-      Error,
-      "Unknown method: session.prompt",
+      RequestFailure,
     );
+    assertEquals(rejected.failure.code, "request.method");
     await client.stop();
     await app.app.stop();
     app = await coreBackendFixture(root);
@@ -181,15 +188,15 @@ test("application composition registers only supplied optional capabilities and 
       [{ path: "src/example.ts", directory: false }],
     );
     assertEquals(searches, [["tstv1-core", "example"]]);
-    await assertRejects(
+    const rejected = await assertRejects(
       () =>
         client.connection.rpc.call("session.shell", {
           sessionID: "tstv1-core",
           command: "unused",
         }),
-      Error,
-      "Unknown method: session.shell",
+      RequestFailure,
     );
+    assertEquals(rejected.failure.code, "request.method");
   } finally {
     await client.stop();
     await app.app.stop();

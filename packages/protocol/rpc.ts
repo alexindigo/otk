@@ -16,6 +16,33 @@ import type { ApprovalRpcMethods } from "./approvals.ts";
 import type { SessionActionsRpcMethods } from "./capabilities/session-actions.ts";
 import type { RestoreRpcMethods } from "./capabilities/restore.ts";
 import type { DigestsRpcMethods } from "./capabilities/digests.ts";
+import type { RequestMetadata } from "./request-metadata.ts";
+export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
+  "session.get": { kind: "read", pending: "Loading conversation" },
+  "session.children": { kind: "read", pending: "Loading sessions" },
+  "session.messages": { kind: "read", pending: "Loading messages" },
+  "session.create": { kind: "mutation", pending: "Creating session" },
+  "session.prompt": { kind: "mutation", pending: "Sending prompt" },
+  "session.shell": { kind: "mutation", pending: "Running command" },
+  "session.command": { kind: "mutation", pending: "Running command" },
+  "session.abort": { kind: "mutation", pending: "Stopping session" },
+  "session.revert": { kind: "mutation", pending: "Rolling back" },
+  "commands.list": { kind: "read", pending: "Loading commands" },
+  "history.list": { kind: "read", pending: "Loading prompt history" },
+  "history.attachment": { kind: "read", pending: "Preparing attachments" },
+  "find.files": { kind: "read", pending: "Finding files" },
+  "agents.list": { kind: "read", pending: "Loading agents" },
+  "resources.list": { kind: "read", pending: "Loading resources" },
+  "frecency.list": { kind: "read", pending: "Loading recent files" },
+  "frecency.bump": { kind: "mutation", pending: "Saving recent file" },
+  "permission.list": { kind: "read", pending: "Loading requests" },
+  "permission.reply": { kind: "mutation", pending: "Sending response" },
+  "question.list": { kind: "read", pending: "Loading requests" },
+  "question.reply": { kind: "mutation", pending: "Sending answer" },
+  "question.reject": { kind: "mutation", pending: "Skipping question" },
+  "prefs.get": { kind: "read", pending: "Loading settings" },
+  "prefs.set": { kind: "mutation", pending: "Saving" },
+};
 export type PromptPart =
   | { kind: "text"; text: string }
   | {
@@ -186,3 +213,27 @@ export interface RpcMethods
 export type RpcMethod = keyof RpcMethods;
 export type RpcParams<M extends RpcMethod> = RpcMethods[M]["params"];
 export type RpcResult<M extends RpcMethod> = RpcMethods[M]["result"];
+
+export interface CreatedSessionReceipt {
+  id: string;
+  directory: string;
+  title: string;
+  projectID: string;
+  timeCreated: number;
+  timeUpdated: number;
+  archived: boolean;
+  parentID?: string;
+}
+export interface CoreRequestReceipts {
+  "session-created": CreatedSessionReceipt;
+  "session-rename-intent": { sessionID: string; title: string };
+  "session-boundary-intent": { sessionID: string; messageID: string | null };
+  "session-boundary": { sessionID: string; messageID: string | null };
+  "prompt-sent": { completed: true };
+  "shell-settled": { completed: true };
+  "command-settled": { completed: true };
+  "interrupt-sent": { completed: true };
+  "permission-replied": { completed: true };
+  "question-replied": { completed: true };
+  "question-rejected": { completed: true };
+}

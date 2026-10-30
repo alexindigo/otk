@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  connectRequests,
+  type FixtureRequest,
+  replyRequest,
+} from "../../../tests/support/request-wire.ts";
 import { assert, assertEquals } from "@std/assert";
 import { createSession, SidecarConnection } from "../mod.ts";
 import type { ContentClock, ContentOp, MessagePage } from "@otk/protocol";
@@ -50,14 +55,15 @@ const page = (older: string | null = null): MessagePage => ({
   recovering: [],
 });
 function fixture() {
-  const frames: { id: string; method: string; params: unknown }[] = [];
+  const frames: FixtureRequest[] = [];
   const connection = new SidecarConnection("http://fixture.invalid", {
     status() {},
     frame() {},
   }, { messages: policy });
   connection.send = (frame) => {
-    if (frame.t === "rpc") frames.push(frame);
+    if (frame.t === "request") frames.push(frame);
   };
+  connectRequests(connection.rpc);
   connection.supports = () => false;
   connection.subscribe = () => {};
   const owner = createSession(() => connection, () => undefined);
@@ -71,7 +77,7 @@ function fixture() {
   const reply = (result: MessagePage) => {
     const frame = frames.find((f) => f.method === "session.messages")!;
     assert(frame);
-    connection.rpc.receive({ t: "rpc.result", id: frame.id, ok: true, result });
+    replyRequest(connection.rpc, frame, result);
     frames.splice(frames.indexOf(frame), 1);
   };
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));

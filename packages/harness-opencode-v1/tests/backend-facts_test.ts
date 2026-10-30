@@ -22,6 +22,7 @@ Deno.test("agent catalog and transcript colours carry neutral roles, literal col
     db: "",
     heartbeattimeout: 25,
     reconnectmax: 30,
+    requestms: 60000,
   }, () => Promise.resolve(Response.json(raw)));
   const directory = sessionDirectory(() => "/project", () => {
     throw new Error("Cached directory should be used");

@@ -8,11 +8,20 @@ import { ChevronDownIcon, CopyIcon, RevertIcon } from "./ChromeIcons.tsx";
 import ChangeCounts from "./ChangeCounts.tsx";
 import { useCommandPorts } from "../keyboard/context.tsx";
 import { copyContent } from "../features/transcript-context.tsx";
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "@otk/client";
 /** View-local disclosure; operation state and projection belong to the client. */
 export default function RolledBackStrip(
   props: { strip?: RevertStrip; state: SessionRevert["state"] },
 ) {
+  return (
+    <ComposerNotice>
+      <RolledBackContent {...props} />
+    </ComposerNotice>
+  );
+}
+export function RolledBackContent(
+  props: { strip?: RevertStrip; state: SessionRevert["state"] },
+): import("solid-js").Element {
   const { commands } = useCommandPorts();
   const [expanded, setExpanded] = createSignal(false);
   const [feedback, setFeedback] = createSignal("");
@@ -22,133 +31,134 @@ export default function RolledBackStrip(
     try {
       await action();
     } catch (error) {
-      setFeedback(errorMessage(error));
+      setFeedback(failureText(error));
     }
   };
   return (
-    <ComposerNotice>
-      <aside
-        class="otk-rolled-back-strip"
-        aria-label="Rolled-back prompts"
-        aria-busy={props.state.pending ? "true" : undefined}
-      >
-        <Show when={props.state.pending}>
-          <div class="otk-rollback-status" role="status">
-            <RevertIcon />
-            {props.state.pending === "restore" || props.state.pending === "redo"
-              ? "Restoring…"
-              : "Rolling back…"}
-          </div>
-        </Show>
-        <Show when={props.strip}>
-          {(strip) => (
-            <>
-              <ComposerNoticeRow
-                class="otk-rollback-disclosure"
-                icon={<RevertIcon />}
-                expanded={expanded()}
-                onClick={() => setExpanded(!expanded())}
-                trailing={
-                  <ChevronDownIcon class={expanded() ? "is-expanded" : ""} />
-                }
+    <aside
+      class="otk-rolled-back-strip"
+      aria-label="Rolled-back prompts"
+      aria-busy={props.state.pending ? "true" : undefined}
+    >
+      <Show when={props.state.pending}>
+        <ComposerNoticeRow
+          class="otk-rollback-status"
+          role="status"
+          icon={<RevertIcon />}
+        >
+          {props.state.pending === "restore" || props.state.pending === "redo"
+            ? "Restoring…"
+            : "Rolling back…"}
+        </ComposerNoticeRow>
+      </Show>
+      <Show when={props.strip}>
+        {(strip) => (
+          <>
+            <ComposerNoticeRow
+              class="otk-rollback-disclosure"
+              icon={<RevertIcon />}
+              expanded={expanded()}
+              onClick={() => setExpanded(!expanded())}
+              trailing={
+                <ChevronDownIcon class={expanded() ? "is-expanded" : ""} />
+              }
+            >
+              <strong>
+                {countLabel(strip().count, "prompt")} rolled back
+              </strong>
+              <span
+                class="otk-control-label otk-control-grow otk-rollback-preview"
+                title={strip().preview}
               >
-                <strong>
-                  {countLabel(strip().count, "prompt")} rolled back
-                </strong>
-                <span
-                  class="otk-control-label otk-control-grow otk-rollback-preview"
-                  title={strip().preview}
+                {strip().preview}
+              </span>
+            </ComposerNoticeRow>
+            <Show when={expanded()}>
+              <div class="otk-rollback-details">
+                <For
+                  each={strip().prompts}
+                  keyed={(prompt) => prompt.messageID}
                 >
-                  {strip().preview}
-                </span>
-              </ComposerNoticeRow>
-              <Show when={expanded()}>
-                <div class="otk-rollback-details">
-                  <For
-                    each={strip().prompts}
-                    keyed={(prompt) => prompt.messageID}
-                  >
-                    {(prompt) => (
-                      <div class="otk-rollback-prompt">
-                        <span
-                          class="otk-control-label otk-control-grow"
-                          title={prompt().preview}
-                        >
-                          {prompt().preview}
-                        </span>
-                        <time datetime={new Date(prompt().time).toISOString()}>
-                          {new Date(prompt().time).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </time>
-                        <button
-                          type="button"
-                          class="otk-icon-button"
-                          aria-label="Copy rolled-back prompt"
-                          title="Copy rolled-back prompt"
-                          onClick={() =>
-                            void perform(() => copyContent(prompt().preview))}
-                        >
-                          <CopyIcon />
-                        </button>
-                      </div>
-                    )}
-                  </For>
-                  <Show when={strip().more}>
-                    <p class="otk-muted">and {strip().more} more</p>
-                  </Show>
-                  <For each={strip().files} keyed={(file) => file.path}>
-                    {(file) => (
-                      <div class="otk-rollback-file">
-                        <span
-                          class="otk-path otk-control-label otk-control-grow"
-                          title={file().path}
-                        >
-                          {file().path}
-                        </span>
-                        <span>
-                          <ChangeCounts
-                            additions={file().additions}
-                            deletions={file().deletions}
-                          />
-                        </span>
-                      </div>
-                    )}
-                  </For>
-                  <div class="otk-rollback-footer otk-control-row">
-                    <span>Your next prompt makes this permanent.</span>
-                    <Show when={restore()}>
+                  {(prompt) => (
+                    <div class="otk-rollback-prompt">
+                      <span
+                        class="otk-control-label otk-control-grow"
+                        title={prompt().preview}
+                      >
+                        {prompt().preview}
+                      </span>
+                      <time datetime={new Date(prompt().time).toISOString()}>
+                        {new Date(prompt().time).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </time>
                       <button
                         type="button"
-                        class="otk-pill"
+                        class="otk-icon-button"
+                        aria-label="Copy rolled-back prompt"
+                        title="Copy rolled-back prompt"
                         onClick={() =>
-                          void perform(() => commands.run("session.restore"))}
+                          void perform(() => copyContent(prompt().preview))}
                       >
-                        Restore
+                        <CopyIcon />
                       </button>
-                    </Show>
-                  </div>
+                    </div>
+                  )}
+                </For>
+                <Show when={strip().more}>
+                  <p class="otk-muted">and {strip().more} more</p>
+                </Show>
+                <For each={strip().files} keyed={(file) => file.path}>
+                  {(file) => (
+                    <div class="otk-rollback-file">
+                      <span
+                        class="otk-path otk-control-label otk-control-grow"
+                        title={file().path}
+                      >
+                        {file().path}
+                      </span>
+                      <span>
+                        <ChangeCounts
+                          additions={file().additions}
+                          deletions={file().deletions}
+                        />
+                      </span>
+                    </div>
+                  )}
+                </For>
+                <div class="otk-rollback-footer otk-control-row">
+                  <span>Your next prompt makes this permanent.</span>
+                  <Show when={restore()}>
+                    <button
+                      type="button"
+                      class="otk-pill"
+                      onClick={() =>
+                        void perform(() => commands.run("session.restore"))}
+                    >
+                      Restore
+                    </button>
+                  </Show>
                 </div>
-              </Show>
-            </>
-          )}
-        </Show>
-        <Show when={props.state.error || feedback()}>
-          <ComposerNoticeRow
-            class="otk-error"
-            role="alert"
-            icon={<RevertIcon />}
+              </div>
+            </Show>
+          </>
+        )}
+      </Show>
+      <Show when={props.state.error || feedback()}>
+        <ComposerNoticeRow
+          class="otk-error"
+          role="alert"
+          icon={<RevertIcon />}
+        >
+          <span
+            class="otk-control-label otk-control-grow"
+            title={props.state.error || feedback()}
           >
-            <span
-              class="otk-control-label otk-control-grow"
-              title={props.state.error || feedback()}
-            >
-              {props.state.error || feedback()}
-            </span>
-          </ComposerNoticeRow>
-        </Show>
-      </aside>
-    </ComposerNotice>
+            {props.state.error || feedback()}
+          </span>
+        </ComposerNoticeRow>
+      </Show>
+    </aside>
   );
 }

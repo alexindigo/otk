@@ -1,21 +1,39 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { type Harness, HarnessError } from "@otk/harness";
-import type { PermissionReply } from "@otk/protocol";
+import type { OperationContext, PermissionReply } from "@otk/protocol";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID, text } from "../ws/params.ts";
+import {
+  nativeEffect,
+  nativeExecution,
+  readExecution,
+} from "../requests/policies.ts";
+import { completionReceipt } from "./session-receipts.ts";
 
 export function register(
   rpc: RpcRegistry,
   harness: Harness,
-  reply?: (input: PermissionReply) => Promise<void>,
+  reply?: (
+    input: PermissionReply,
+    operation?: OperationContext,
+  ) => Promise<void>,
 ): void {
   const capability = harness.capabilities.permissions;
   if (!capability) return;
+  const receipt = completionReceipt("permission-replied");
   rpc.register("permission.list", {
+    execution: readExecution((id: string) => ({ sessionID: id })),
     params: (p) => sessionID(p)!,
-    handler: (_ctx, id) => capability.listPermissions(id),
+    handler: (ctx, id) => capability.listPermissions(id, ctx.execution?.signal),
   });
   rpc.register("permission.reply", {
+    execution: nativeExecution(
+      (p: PermissionReply) => ({
+        sessionID: p.sessionID,
+        resource: p.requestID,
+      }),
+      receipt,
+    ),
     params(p): PermissionReply {
       const reply = p.reply;
       if (reply !== "once" && reply !== "always" && reply !== "reject") {
@@ -28,9 +46,12 @@ export function register(
         message: text(p, "message", true),
       };
     },
-    async handler(_ctx, input) {
-      await (reply ? reply(input) : capability.replyPermission(input));
-      return null;
-    },
+    handler: (ctx, input) =>
+      nativeEffect(ctx, async (operation) => {
+        await (reply
+          ? reply(input, operation)
+          : capability.replyPermission(input, operation));
+        return null;
+      }, receipt),
   });
 }

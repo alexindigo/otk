@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "@otk/client";
 import "./ThemePicker.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -64,7 +64,7 @@ export default function ThemePicker(props: {
         await props.onSave(selected());
         if (active) cancel();
       } catch (error) {
-        if (active) setError(errorMessage(error));
+        if (active) setError(failureText(error));
       } finally {
         if (active) setPending(false);
       }
@@ -114,7 +114,7 @@ export default function ThemePicker(props: {
             try {
               await props.onSystemLightSave(id);
             } catch (error) {
-              if (active) setError(errorMessage(error));
+              if (active) setError(failureText(error));
             } finally {
               if (active) {
                 select.value = props.systemLightTheme;

@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  connectRequests,
+  replyRequest,
+} from "../../../tests/support/request-wire.ts";
 import { assertEquals, assertStrictEquals } from "@std/assert";
 import type { AssistantMessage, HelperSummary } from "@otk/protocol";
 import { createTranscriptProjection } from "../transcript-projection.ts";
@@ -62,15 +66,16 @@ Deno.test("changed child metadata reaches the parent consumer without a child bo
     rev: 0,
     entries: [shellEntry("tstv1-parent"), shellEntry("tstv1-child")],
   });
-  const requests: Extract<ClientFrame, { t: "rpc" }>[] = [];
+  const requests: Extract<ClientFrame, { t: "request" }>[] = [];
   const connection = new SidecarConnection("http://example.test", {
     status() {},
     frame() {},
   }, { messages: fixtureMessagePolicy });
   connection.subscribe = () => {};
   connection.send = (frame) => {
-    if (frame.t === "rpc") requests.push(frame);
+    if (frame.t === "request") requests.push(frame);
   };
+  connectRequests(connection.rpc);
   const owner = createTranscripts({
     connection: () => connection,
     entry: (server, id) => index.get(server, id),
@@ -86,12 +91,11 @@ Deno.test("changed child metadata reaches the parent consumer without a child bo
     const request = requests.find((frame) =>
       frame.method === "session.messages"
     )!;
-    connection.rpc.receive({
-      t: "rpc.result",
-      id: request.id,
-      ok: true,
-      result: fixturePage(target.sessionID, [linked()]),
-    });
+    replyRequest(
+      connection.rpc,
+      request,
+      fixturePage(target.sessionID, [linked()]),
+    );
     for (let i = 0; i < 15; i++) await Promise.resolve();
     const frame = {
       t: "index.patch" as const,

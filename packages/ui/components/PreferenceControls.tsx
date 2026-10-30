@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "@otk/client";
 import "./PreferenceControls.css" with { type: "text" };
 import { createSignal, type Element, For, onCleanup, Show } from "solid-js";
 import {
@@ -42,7 +42,7 @@ export default function PreferenceControls(
     setError("");
     void set({ key, value }).catch((failure: unknown) => {
       if (alive) {
-        setError(errorMessage(failure));
+        setError(failureText(failure));
       }
     }).finally(() => {
       if (alive) restore();

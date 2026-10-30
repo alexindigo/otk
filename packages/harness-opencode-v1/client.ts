@@ -15,8 +15,6 @@ export interface NativeRequestOptions {
   body?: unknown;
   query?: Record<string, string | number | undefined>;
   signal?: AbortSignal;
-  stream?: boolean;
-  timeout?: number | null;
   classification?: "read" | "effect" | "stream";
   operation?: OperationContext;
 }
@@ -103,12 +101,8 @@ function displayMessage(
   }
   // Characterized native Identifier prefixes, including identities absent from
   // the envelope. Unknown kinds still cannot leak them through fallback copy.
-  return /(?:job|evt|ses|msg|per|que|prt|pty|tool|wrk)_[a-z0-9]+/i.test(
-      reason,
-    ) ||
-      identities.some((id) => reason.includes(id))
-    ? fallback
-    : reason;
+  void identities;
+  return fallback;
 }
 export class HttpFailure extends HarnessError {
   constructor(
@@ -146,11 +140,8 @@ export class Client {
     path: string,
     options: NativeRequestOptions = {},
   ): Promise<Response> {
-    if (!options.classification) return await this.#request(path, options);
-    const classification = options.classification;
-    if (options.timeout !== undefined || options.stream !== undefined) {
-      throw new TypeError("Classified requests use the injected native policy");
-    }
+    const classification = options.classification ??
+      (["GET", "HEAD"].includes(options.method ?? "GET") ? "read" : "effect");
     if (
       classification === "read" &&
       (!Number.isSafeInteger(this.cfg.requestms) || this.cfg.requestms! <= 0)
@@ -164,8 +155,7 @@ export class Client {
       return await this.#request(path, {
         ...options,
         signal,
-        stream: classification === "stream",
-        timeout: classification === "read" ? this.cfg.requestms : null,
+        classification,
       });
     } catch (cause) {
       throw classifyNative(cause, classification);
@@ -188,8 +178,8 @@ export class Client {
     const read = async () => {
       // A native deadline begins at I/O admission, not while waiting for permission.
       let signal = options.signal;
-      if (!options.stream && options.timeout !== null) {
-        const deadline = AbortSignal.timeout(options.timeout ?? 15_000);
+      if (options.classification === "read") {
+        const deadline = AbortSignal.timeout(this.cfg.requestms);
         signal = signal ? AbortSignal.any([signal, deadline]) : deadline;
       }
       signal?.throwIfAborted();
@@ -204,15 +194,15 @@ export class Client {
           : JSON.stringify(options.body),
         signal,
       }).then((value) =>
-        (this.admission || options.classification) && !options.stream
-          ? finiteResponse(value)
-          : value
+        options.classification !== "stream" ? finiteResponse(value) : value
       );
     };
-    const exchange = options.stream ? this.wait(read()) : this.readiness.run(
-      options.signal ?? new AbortController().signal,
-      read,
-    );
+    const exchange = options.classification === "stream"
+      ? this.wait(read())
+      : this.readiness.run(
+        options.signal ?? new AbortController().signal,
+        read,
+      );
     const response =
       await (options.operation?.wait
         ? options.operation.wait(exchange)
@@ -281,10 +271,13 @@ export class Client {
         ? undefined as T
         : await this.wait(response.json());
     } catch (cause) {
-      if (options.classification) {
-        throw classifyNative(cause, options.classification);
-      }
-      throw cause;
+      throw classifyNative(
+        cause,
+        options.classification ??
+          (["GET", "HEAD"].includes(options.method ?? "GET")
+            ? "read"
+            : "effect"),
+      );
     }
   }
 }

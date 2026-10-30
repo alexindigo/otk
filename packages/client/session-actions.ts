@@ -17,8 +17,11 @@ import {
   type SessionSubmission,
 } from "./session-submission.ts";
 import { familySelection, familyTask, sessionFamily } from "./session-tree.ts";
+import { IntentGroup, type RequestOptions } from "./requests.ts";
+import type { InboxRpc } from "./inbox.ts";
 
 export interface SessionActions {
+  rpc(target: Selection): InboxRpc["call"];
   eligibility(
     target: Selection,
   ): { live: boolean; member: boolean; close: boolean };
@@ -27,17 +30,26 @@ export interface SessionActions {
   selectedEntry(): IndexEntry | undefined;
   info(): ContentSession | undefined;
   directory(target: Selection): Promise<string>;
-  act<T>(target: Selection, action: () => Promise<T>): Promise<T>;
+  act<T>(
+    target: Selection,
+    action: () => Promise<T>,
+    options?: RequestOptions,
+  ): Promise<T>;
   submission(target: Selection): SessionSubmission;
+  group(target: Selection): IntentGroup;
   attachments(parts: PromptPart[], sidecarId: string): Promise<PromptPart[]>;
   prompt(parts: PromptPart[], selection: PromptChoices): Promise<void>;
-  abort(target?: Selection): Promise<void>;
+  abort(target?: Selection, options?: RequestOptions): Promise<void>;
   rename(target: Selection, title: string): Promise<ContentSession>;
   remove(target: Selection): Promise<void>;
   fork(target: Selection, through?: string): Promise<ContentSession>;
   compact(target: Selection, model: ModelRef): Promise<void>;
-  revert(target: Selection, messageID: string): Promise<ContentSession>;
-  restore(target: Selection): Promise<ContentSession>;
+  revert(
+    target: Selection,
+    messageID: string,
+    options?: RequestOptions,
+  ): Promise<ContentSession>;
+  restore(target: Selection, options?: RequestOptions): Promise<ContentSession>;
   working(target: Selection): boolean;
   familyEntries(target: Selection): IndexEntry[];
   permission(input: PermissionReply & { sidecarId?: string }): Promise<void>;
@@ -80,7 +92,12 @@ export function createSessionActions(o: {
   const act = async <T>(
     target: Selection,
     action: () => Promise<T>,
+    options?: RequestOptions,
   ): Promise<T> => {
+    const visit = options ??
+      new IntentGroup(
+        resources.sidecars.connection(target.sidecarId).rpc.intent(),
+      ).options("visit", target.sessionID);
     const path = await directory(target);
     if (resources.entry(target.sidecarId, target.sessionID)?.deleted) {
       throw new Error("This session was deleted from the agent service");
@@ -90,11 +107,15 @@ export function createSessionActions(o: {
         throw new Error("This session was deleted from the agent service");
       }
       return action();
-    });
+    }, visit);
   };
   const submission = (target: Selection): SessionSubmission =>
     createSessionSubmission({
       sessionID: target.sessionID,
+      group: () =>
+        new IntentGroup(
+          resources.sidecars.connection(target.sidecarId).rpc.intent(),
+        ),
       directory: () => directory(target),
       inbox: resources.inbox(target.sidecarId),
       tabs: (directory) =>
@@ -130,6 +151,14 @@ export function createSessionActions(o: {
     return !!status && status !== "idle";
   };
   return {
+    rpc: (target) => (method, params, input) =>
+      resources.sidecars.connection(target.sidecarId).rpc.call(
+        method,
+        params,
+        input instanceof AbortSignal
+          ? { signal: input, owner: target.sessionID }
+          : { ...input, owner: target.sessionID },
+      ),
     eligibility(target) {
       const entry = resources.entry(target.sidecarId, target.sessionID);
       const member = resources.inbox(target.sidecarId).state.inbox.tasks.some((
@@ -176,6 +205,10 @@ export function createSessionActions(o: {
     directory,
     act,
     submission,
+    group: (target) =>
+      new IntentGroup(
+        resources.sidecars.connection(target.sidecarId).rpc.intent(),
+      ),
     attachments,
     working,
     familyEntries: (target) =>
@@ -184,13 +217,26 @@ export function createSessionActions(o: {
         sessionFamily(entry.id, (id) => resources.entry(target.sidecarId, id))
           .includes(target.sessionID)
       ),
-    async remove(target) {
+    remove(target) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
-      await act(target, async () => {
-        if (working(target)) {
-          await rpc.call("session.abort", { sessionID: target.sessionID });
-        }
-        await rpc.call("session.delete", { sessionID: target.sessionID });
+      return rpc.intents.run(`delete:${target.sessionID}`, (group) => {
+        const interrupt = group.options("interrupt", target.sessionID);
+        const remove = group.options("delete", target.sessionID);
+        const visit = group.options("visit", target.sessionID);
+        return act(target, async () => {
+          if (working(target)) {
+            await rpc.call(
+              "session.abort",
+              { sessionID: target.sessionID },
+              interrupt,
+            );
+          }
+          await rpc.call(
+            "session.delete",
+            { sessionID: target.sessionID },
+            remove,
+          );
+        }, visit);
       });
     },
     fork(target, through) {
@@ -217,7 +263,7 @@ export function createSessionActions(o: {
           title,
         }));
     },
-    revert(target, messageID) {
+    revert(target, messageID, options) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
       return act(
         target,
@@ -225,32 +271,34 @@ export function createSessionActions(o: {
           rpc.call("session.revert", {
             sessionID: target.sessionID,
             messageID,
-          }),
+          }, options),
       );
     },
-    restore(target) {
+    restore(target, options) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
       return act(
         target,
-        () => rpc.call("session.restore", { sessionID: target.sessionID }),
+        () =>
+          rpc.call("session.restore", { sessionID: target.sessionID }, options),
       );
     },
     async prompt(parts, selection) {
       const { selection: target, rpc } = current.context();
-      await submission(target)(async () => {
+      await submission(target)(async (options) => {
         await rpc.call("session.prompt", {
           sessionID: target.sessionID,
           mode: "normal",
           parts: await attachments(parts, target.sidecarId),
           ...selection,
-        });
+        }, options);
       });
     },
-    async abort(target = current.context().selection) {
+    async abort(target = current.context().selection, options) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
       await act(
         target,
-        () => rpc.call("session.abort", { sessionID: target.sessionID }),
+        () =>
+          rpc.call("session.abort", { sessionID: target.sessionID }, options),
       );
     },
     async permission(input) {
@@ -268,8 +316,10 @@ export function createSessionActions(o: {
         target,
         () =>
           input.answers
-            ? rpc.call("question.reply", { ...input, answers: input.answers })
-            : rpc.call("question.reject", input),
+            ? rpc.call("question.reply", { ...input, answers: input.answers }, {
+              owner: target.sessionID,
+            })
+            : rpc.call("question.reject", input, { owner: target.sessionID }),
       );
     },
     location(target, id) {

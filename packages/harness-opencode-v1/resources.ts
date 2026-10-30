@@ -7,7 +7,7 @@ export function resources(
   directory: Directory,
 ): ResourcesCapability {
   return {
-    async listResources(sessionID) {
+    async listResources(sessionID, signal) {
       const resources = await client.json<
         Record<
           string,
@@ -20,7 +20,8 @@ export function resources(
           }
         >
       >("/experimental/resource", {
-        query: { directory: await directory.resolve(sessionID) },
+        query: { directory: await directory.resolve(sessionID, signal) },
+        signal,
       });
       return Object.values(resources).map((resource) => ({
         name: resource.name,

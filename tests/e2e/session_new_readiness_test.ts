@@ -31,23 +31,23 @@ test("new-session slash and palette pointer/keyboard invocations resolve their d
             const frame = JSON.parse(event.data);
             if (window.holdCreationLoads && (
               frame.t === 'index.patch' || frame.t === 'index.snapshot' ||
-              frame.t === 'rpc.result' && window.creationLoadReplies.has(frame.id)
+              frame.t === 'request.result' && window.creationLoadReplies.has(frame.ref.key)
             )) {
               event.stopImmediatePropagation();
-              if (frame.t === 'rpc.result' && window.creationPageRequests.has(frame.id)) window.creationHeldPages.add(window.creationPageRequests.get(frame.id));
+              if (frame.t === 'request.result' && window.creationPageRequests.has(frame.ref.key)) window.creationHeldPages.add(window.creationPageRequests.get(frame.ref.key));
               window.heldCreationLoads.push(() => this.dispatchEvent(new MessageEvent('message', {data:event.data})));
             }
           });
         }
         send(data) {
           const frame = JSON.parse(data);
-          if (window.holdCreationLoads && frame.t === 'rpc') {
-            if (frame.method === 'question.list') window.creationLoadReplies.add(frame.id);
+          if (window.holdCreationLoads && frame.t === 'request') {
+            if (frame.method === 'question.list') window.creationLoadReplies.add(frame.ref.key);
             if (frame.method === 'session.messages') {
-              window.creationPageRequests.set(frame.id, frame.params.sessionID);
-              window.creationLoadReplies.add(frame.id);
+              window.creationPageRequests.set(frame.ref.key, frame.params.sessionID);
+              window.creationLoadReplies.add(frame.ref.key);
             }
-            if (frame.method === 'session.get' && window.holdCreationDirectory) window.creationLoadReplies.add(frame.id);
+            if (frame.method === 'session.get' && window.holdCreationDirectory) window.creationLoadReplies.add(frame.ref.key);
           }
           super.send(data);
         }

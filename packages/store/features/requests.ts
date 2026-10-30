@@ -168,6 +168,17 @@ function validate(record: RequestRecord): void {
 /** Metadata-only duplicate fences. Feature encoders own safe receipt JSON shapes. */
 export class Requests {
   constructor(readonly db: OtkDb) {}
+  /** Durable admission order, including equal millisecond clocks. Features name conflict resources. */
+  superseded(record: RequestRecord): boolean {
+    return !!this.db.connection.prepare(
+      `SELECT 1 FROM request_receipts WHERE principal=? AND scope_session IS ? AND scope_resource IS ? AND state NOT IN ('failed','released') AND rowid>(SELECT rowid FROM request_receipts WHERE ${predicate}) LIMIT 1`,
+    ).get(
+      record.principal,
+      record.scope_session,
+      record.scope_resource,
+      ...keys(record),
+    );
+  }
   windowInfo(id: string): { id: string; expires_at: number } | undefined {
     return this.db.connection.prepare(
       "SELECT id,expires_at FROM request_windows WHERE id=?",
@@ -285,7 +296,7 @@ export class Requests {
     integer(limit, 1);
     return this.db.write(() => {
       const result = this.db.connection.prepare(
-        "DELETE FROM request_receipts WHERE rowid IN (SELECT rowid FROM request_receipts WHERE state IN ('succeeded','failed','released') AND retention_until<=? ORDER BY retention_until LIMIT ?)",
+        "DELETE FROM request_receipts WHERE rowid IN (SELECT r.rowid FROM request_receipts r WHERE r.state IN ('succeeded','failed','released') AND r.retention_until<=? AND NOT (r.state='succeeded' AND r.scope_resource IS NOT NULL AND EXISTS (SELECT 1 FROM request_receipts older WHERE older.principal=r.principal AND older.scope_session IS r.scope_session AND older.scope_resource=r.scope_resource AND older.execution='native' AND older.state IN ('queued','running','waiting','reconciling') AND older.rowid<r.rowid)) ORDER BY r.retention_until LIMIT ?)",
       ).run(now, limit);
       this.db.connection.prepare(
         "DELETE FROM request_windows WHERE id IN (SELECT id FROM request_windows w WHERE expires_at<=? AND NOT EXISTS (SELECT 1 FROM request_receipts r WHERE r.window_id=w.id) ORDER BY expires_at LIMIT ?)",

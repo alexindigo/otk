@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { PublicFailure } from "./requests.ts";
 /** Nonempty feedback for an arbitrary thrown value. Failure reporting must not
  * itself throw, including for circular objects or hostile conversion hooks. */
 export function errorMessage(value: unknown): string {
@@ -26,6 +27,7 @@ export function normalizeError(value: unknown): Error {
 }
 
 export interface ErrorObservation {
+  failure?: PublicFailure;
   id: string;
   source: "http" | "event";
   message: string;
@@ -41,6 +43,15 @@ export interface SessionErrorState {
   revision: number;
   currentRequestID?: string;
   observations: ErrorObservation[];
+}
+export function sessionErrorObservation(
+  state: SessionErrorState,
+): ErrorObservation | undefined {
+  const active = state.observations.filter((item) => !item.cleared);
+  return active.find((item) => item.source === "event") ??
+    active.find((item) =>
+      item.source === "http" && item.requestID === state.currentRequestID
+    ) ?? active[0];
 }
 export function sessionErrorMessage(
   state: SessionErrorState,

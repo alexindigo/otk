@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { RequestMetadata } from "../request-metadata.ts";
+export const digestsRequestMetadata: Readonly<Record<string, RequestMetadata>> =
+  { "digests.scope": { kind: "lease", pending: "Loading active scope" } };
 export interface DigestScope {
   directory?: string;
   sessions: string[];

@@ -4,6 +4,7 @@ import { assertEquals, assertRejects } from "@std/assert";
 import { OtkDb, permissionMigrations, PermissionStore } from "@otk/store";
 import type { Harness } from "@otk/harness";
 import type { IndexEntry, PermissionRequest, ServerFrame } from "@otk/protocol";
+import { OperationFailure } from "@otk/protocol";
 import { PermissionFeature } from "../../../core/features/approvals.ts";
 import { IndexStore, RpcRegistry } from "../../../core/mod.ts";
 import { fixture } from "../../support/config.ts";
@@ -50,7 +51,13 @@ test("automatic failure is attempted once across unrelated index changes; reques
     },
     replyPermission: () => {
       attempts++;
-      return Promise.reject(new Error("held failure"));
+      return Promise.reject(
+        new OperationFailure(
+          "rejected",
+          "native.rejected",
+          new Error("held failure"),
+        ),
+      );
     },
   });
   try {

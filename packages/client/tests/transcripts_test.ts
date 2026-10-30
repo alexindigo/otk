@@ -8,6 +8,10 @@ import type {
 } from "@otk/protocol";
 import { createTranscripts, type TranscriptClock } from "../transcripts.ts";
 import { SidecarConnection } from "../connection.ts";
+import {
+  connectRequests,
+  replyRequest,
+} from "../../../tests/support/request-wire.ts";
 import { createState, type StateFactory } from "../state.ts";
 import {
   fixtureMessagePolicy,
@@ -51,15 +55,16 @@ const turns = async () => {
 };
 function fixture(policy?: MessagePolicy) {
   const time = clock();
-  const requests: Extract<ClientFrame, { t: "rpc" }>[] = [];
+  const requests: Extract<ClientFrame, { t: "request" }>[] = [];
   const subscriptions = new Set<string>();
   const connection = new SidecarConnection("http://example.test", {
     status() {},
     frame() {},
   }, { messages: policy });
   connection.send = (frame) => {
-    if (frame.t === "rpc") requests.push(frame);
+    if (frame.t === "request") requests.push(frame);
   };
+  connectRequests(connection.rpc);
   connection.subscribe = (id, enabled) => {
     if (enabled) subscriptions.add(id);
     else subscriptions.delete(id);
@@ -81,16 +86,15 @@ function fixture(policy?: MessagePolicy) {
     const request = requests.splice(index, 1)[0];
     assert(request, "expected queued body read");
     const input = request.params as { sessionID: string; before?: string };
-    connection.rpc.receive({
-      t: "rpc.result",
-      id: request.id,
-      ok: true,
-      result: fixturePage(
+    replyRequest(
+      connection.rpc,
+      request,
+      fixturePage(
         input.sessionID,
         messages(input.sessionID, count),
         input.before,
       ),
-    });
+    );
     await turns();
   };
   return {
@@ -222,6 +226,18 @@ Deno.test("temperature retains visited bodies, cools on one deadline timer, abor
     f.time.advance(1);
     assertEquals(a.state.temperature, "cold");
     assertEquals(a.state.messageIDs, []);
+    assertEquals(Object.keys(a.state.messagesByID), []);
+    assertEquals(a.state.replyIDs, []);
+    assertEquals(Object.keys(a.state.repliesByID), []);
+    assertEquals(a.state.content.messages, []);
+    assertEquals(a.state.recovering, []);
+    assertEquals(a.state.pageLoading, false);
+    assertEquals(
+      f.connection.requests.operations("a").filter((operation) =>
+        !["succeeded", "failed", "released"].includes(operation.state.phase)
+      ).length,
+      0,
+    );
     assertEquals(f.subscriptions.has("a"), false);
     f.owner.stop();
     assertEquals(f.subscriptions.size, 0);

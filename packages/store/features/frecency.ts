@@ -47,18 +47,20 @@ export class Frecency {
       last: Number(row.last),
     }));
   }
-  bump(directory: string, path: string, tx?: StoreWrite): void {
-    this.db.write(() => {
+  bump(directory: string, path: string, tx?: StoreWrite): number {
+    return this.db.write(() => {
+      const time = Date.now();
       const canonicalDirectory = this.#key(resolve(this.#key(directory)));
       const canonicalPath = this.#key(
         resolve(canonicalDirectory, this.#key(path)),
       );
       this.db.connection.prepare(
         "INSERT INTO frecency(directory,path,score,last) VALUES(?,?,1,?) ON CONFLICT(directory,path) DO UPDATE SET score=frecency.score+1,last=excluded.last",
-      ).run(canonicalDirectory, canonicalPath, Date.now());
+      ).run(canonicalDirectory, canonicalPath, time);
       this.db.connection.prepare(
         "DELETE FROM frecency WHERE rowid NOT IN (SELECT rowid FROM frecency ORDER BY last DESC,rowid DESC LIMIT 1000)",
       ).run();
+      return time;
     }, tx);
   }
 }

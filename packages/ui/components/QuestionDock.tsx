@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "@otk/client";
 import "./QuestionDock.css" with { type: "text" };
 import ContentTextarea from "./ContentTextarea.tsx";
 import Takeover from "./surface/Takeover.tsx";
@@ -35,11 +35,14 @@ export function registerQuestionTakeover(
     active: (session) => session.questions().length > 0,
   });
 }
-function QuestionTakeover() {
+function QuestionTakeover(
+  props: { notice?: () => import("solid-js").Element } = {},
+) {
   const session = useSessionPorts(), { commands } = useCommandPorts();
   const request = () => session.questions()[0];
   return (
     <QuestionDock
+      notice={props.notice}
       request={request()}
       where={request()
         ? session.location?.(request()!.sessionID) ??
@@ -66,6 +69,7 @@ import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 function Request(
   props: {
     request: QuestionRequest;
+    notice?: () => import("solid-js").Element;
     childTitle?: string;
     where?: string;
     onReply(id: string, answers?: string[][]): Promise<void>;
@@ -73,10 +77,14 @@ function Request(
   },
 ) {
   const form = createQuestionForm(props.request, solidState);
+  const feedback = useSessionPorts()?.feedback;
   const [collapsed, setCollapsed] = createSignal(false),
     [pending, setPending] = createSignal(false),
     [error, setError] = createSignal("");
-  let card!: HTMLElement, advance!: HTMLButtonElement, alive = true;
+  let card!: HTMLElement,
+    advance!: HTMLButtonElement,
+    pendingStatus!: HTMLSpanElement,
+    alive = true;
   const rowRefs: HTMLElement[][] = form.questions.map(() => []);
   const ownFields: HTMLTextAreaElement[] = [];
   const step = () => form.state.step;
@@ -84,13 +92,16 @@ function Request(
   const reply = async (answers?: string[][]) => {
     if (pending()) return;
     setPending(true);
+    queueMicrotask(() => pendingStatus?.focus());
+    feedback?.clear();
     setError("");
     try {
       await props.onReply(props.request.id, answers);
       forgetQuestionForm(props.request.id);
       props.onDirty(false);
     } catch (failure) {
-      if (alive) setError(errorMessage(failure));
+      if (feedback) feedback.fail(failure);
+      else if (alive) setError(failureText(failure));
     } finally {
       if (alive) setPending(false);
     }
@@ -296,6 +307,7 @@ function Request(
       onKeyDown={onKey}
     >
       <Takeover
+        notice={props.notice}
         collapsed={collapsed()}
         title={
           <TakeoverHeader
@@ -308,13 +320,21 @@ function Request(
         }
         actions={
           <div class="otk-question-actions">
+            <span
+              ref={pendingStatus}
+              tabindex={-1}
+              hidden={!pending()}
+              role="status"
+            >
+              Sending answer…
+            </span>
             <button
               type="button"
               class="otk-primary otk-pill"
               ref={(element) => {
                 advance = element;
               }}
-              disabled={pending()}
+              hidden={pending()}
               onClick={() => void answer()}
               title={onReview() ? "Send the answers" : "Next step"}
             >
@@ -323,7 +343,7 @@ function Request(
             <button
               type="button"
               class="otk-pill"
-              disabled={pending()}
+              hidden={pending()}
               onClick={() => void reject()}
               title="Skip question (Esc with question controls focused)"
             >
@@ -332,7 +352,7 @@ function Request(
             <button
               type="button"
               class="otk-pill otk-question-submit"
-              disabled={pending()}
+              hidden={pending()}
               onClick={() => void submit()}
               title="Send the answers given so far"
             >
@@ -341,6 +361,9 @@ function Request(
           </div>
         }
       >
+        <Show when={pending() && !feedback}>
+          <p role="status">Sending answer…</p>
+        </Show>
         <Show
           when={!collapsed()}
           fallback={
@@ -384,6 +407,7 @@ function Request(
 export default function QuestionDock(
   props: {
     request?: QuestionRequest;
+    notice?: () => import("solid-js").Element;
     childTitle?: string;
     where?: string;
     onReply(id: string, answers?: string[][]): Promise<void>;
@@ -394,6 +418,7 @@ export default function QuestionDock(
     <For each={props.request ? [props.request] : []} keyed={(q) => q.id}>
       {(q) => (
         <Request
+          notice={props.notice}
           request={q()}
           childTitle={props.childTitle}
           where={props.where}

@@ -19,8 +19,8 @@ test("request owners report RPC failures once while unsolicited errors still rea
       WebSocket.prototype.send = function(value) {
         globalThis.feedbackSocket=this;
         const frame = JSON.parse(value);
-        if(frame.t==='rpc' && frame.method==='layout.patch') frame.params={leftWidth:'invalid'};
-        if(frame.t==='rpc' && frame.method==='prefs.set') frame.params={key:frame.params.key,value:{invalid:true}};
+        if(frame.t==='request' && frame.method==='layout.patch') frame.params={leftWidth:'invalid'};
+        if(frame.t==='request' && frame.method==='prefs.set') frame.params={key:frame.params.key,value:{invalid:true}};
         return send.call(this,JSON.stringify(frame));
       };
     })()`);

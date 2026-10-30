@@ -41,6 +41,11 @@ export async function observeReply(
       session.receive("core", frame);
     },
   }, {
+    fetcher: (input, options) => {
+      const headers = new Headers(options?.headers);
+      headers.set("Origin", new URL(baseUrl).origin);
+      return fetch(input, { ...options, headers });
+    },
     socket: (url) =>
       // Deno's native constructor supports headers; root checks also use DOM types.
       Reflect.construct(WebSocket, [url, {

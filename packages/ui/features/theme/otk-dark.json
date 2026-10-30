@@ -35,6 +35,7 @@
     "status-busy": "#ff4d00",
     "status-retry": "#ff8a3d",
     "status-error": "#ff8080",
+    "danger": "#ff8080",
     "lamp-blocked": "#ff2e4d",
     "lamp-finished": "#e8bd42",
     "lamp-working": "#65c88b",

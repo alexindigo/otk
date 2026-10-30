@@ -23,6 +23,7 @@ const driver = {
   conceal: (_value: boolean) => {},
   lists: (_members: string[], _selected?: string, _editing?: string) => {},
   menuItems: (_keys: string[]) => {},
+  feedback: (_state: "clear" | "pending" | "error") => {},
 };
 declare global {
   var styleTest: typeof driver;
@@ -34,6 +35,8 @@ const scenes = {
   siblings: () => import("./siblings.tsx"),
   chrome: () => import("./chrome.tsx"),
   lists: () => import("./lists.tsx"),
+  requests: () => import("./requests.tsx"),
+  forms: () => import("./forms.tsx"),
 };
 const name = new URL(location.href).searchParams.get(
   "scene",

@@ -2,6 +2,7 @@
 import { createContext, type Element, useContext } from "solid-js";
 import type {
   ApprovalModel,
+  FeedbackOwner,
   InboxRpc,
   ModelCatalogOwner,
   SessionSubmission,
@@ -30,6 +31,7 @@ export interface SessionPorts {
   onToolCompleted?: ToolCompletionSource;
   modelCatalog?: ModelCatalogOwner;
   approvals?: ApprovalModel;
+  feedback?: FeedbackOwner;
   sessionID(): string;
   directory(): Promise<string>;
   entry(id: string): IndexEntry | undefined;

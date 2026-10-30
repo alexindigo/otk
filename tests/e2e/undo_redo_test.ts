@@ -87,7 +87,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await b.fill("textarea[name=prompt]", "/redo");
       await b.key("Enter");
       await b.poll(
-        "document.querySelector('.otk-rollback-status')?.textContent==='Restoring…'",
+        "document.querySelector('.otk-composer-notice [role=status]')?.textContent.includes('Restoring')",
       );
       await capture(b, `${theme}-redo-pending`);
       restoring.resolve();

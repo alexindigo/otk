@@ -372,7 +372,7 @@ test("theme save rejection stays visible, retains preview and never replaces hos
         WebSocket.prototype.send=function(data) {
           if(typeof data==='string') {
             const frame=JSON.parse(data);
-            if(frame.t==='rpc' && frame.method==='prefs.set' && frame.params.key==='theme') {
+            if(frame.t==='request' && frame.method==='prefs.set' && frame.params.key==='theme') {
               frame.params.value='invalid theme identity'; data=JSON.stringify(frame);
             }
           }
@@ -389,7 +389,7 @@ test("theme save rejection stays visible, retains preview and never replaces hos
     );
     await browser.click(".otk-theme-actions button:last-child");
     await browser.poll(
-      "document.querySelector('dialog[aria-label=Theme] [role=alert]')?.textContent.includes('Invalid preference key or value') && !document.querySelector('.otk-theme-actions button:last-child').disabled",
+      "document.querySelector('dialog[aria-label=Theme] [role=alert]')?.textContent.includes('Could not finish this action') && !document.querySelector('.otk-theme-actions button:last-child').disabled",
     );
     assertEquals(
       await browser.evaluate(

@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+export interface FrecencyRequestReceipts {
+  "frecency-bumped": { time: number };
+}
 import type { FrecencyEntry } from "./rpc.ts";
 export function frecency(
   entry: FrecencyEntry | undefined,

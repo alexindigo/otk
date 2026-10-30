@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { type Harness, HarnessError } from "@otk/harness";
 import type { OtkDb } from "@otk/store";
-import type { RpcMethod, RpcResult } from "@otk/protocol";
+import type { IndexMetadata, RpcMethod, RpcResult } from "@otk/protocol";
 import { object } from "./params.ts";
 import type {
   PreparedRequest,
@@ -15,6 +15,7 @@ export interface RpcContext {
   store: OtkDb;
   request?: RequestLifetime;
   execution?: RequestExecution;
+  sessionMetadata?(sessionID: string): IndexMetadata | undefined;
   sessionDirectory(sessionID: string): Promise<string>;
 }
 /** Socket-owned leases are distinct from a single read's execution signal. */
@@ -24,7 +25,8 @@ export interface RequestLifetime {
   defer(release: () => void): void;
 }
 export interface RpcDefinition<P, R> {
-  execution?: RpcExecutionPolicy<P, R>;
+  // Validation owns P. Policy factories consume it without widening handlers.
+  execution?: RpcExecutionPolicy<NoInfer<P>, R>;
   params(value: Record<string, unknown>): P;
   handler(ctx: RpcContext, params: P): R | Promise<R>;
 }
@@ -40,10 +42,12 @@ export class RpcRegistry {
     harness: Harness,
     store: OtkDb,
     readonly observe?: (owner: string, active: boolean) => void,
+    readonly metadata?: (sessionID: string) => IndexMetadata | undefined,
   ) {
     this.context = {
       harness,
       store,
+      sessionMetadata: (id) => this.metadata?.(id),
       sessionDirectory: async (id) =>
         (await harness.core.getSession(id)).directory,
     };
@@ -91,11 +95,23 @@ export class RpcRegistry {
               }
               : undefined;
             try {
-              return await definition.handler({
+              const result = definition.handler({
                 ...this.context,
                 request,
                 execution: scoped,
+                sessionDirectory: async (id) => {
+                  const ready = this.context.harness.core.getSession(
+                    id,
+                    scoped?.signal,
+                  );
+                  return (await (scoped?.wait?.(ready) ?? ready)).directory;
+                },
               }, params);
+              // Read ownership ends at the returned promise: synchronous work
+              // above was observed, but waiting for the reader is not pressure.
+              return await (scoped && definition.execution?.kind === "read"
+                ? scoped.wait(Promise.resolve(result))
+                : result);
             } finally {
               observe(false);
               finished = true;

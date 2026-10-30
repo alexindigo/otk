@@ -6,7 +6,10 @@ export interface ErrorRequest {
   sessionID: string;
   operation: NonNullable<ErrorObservation["operation"]>;
 }
-type Detail = Pick<ErrorObservation, "message" | "kind" | "ref" | "status">;
+type Detail = Pick<
+  ErrorObservation,
+  "message" | "kind" | "ref" | "status" | "failure"
+>;
 
 // Owns accepted observations and actual local HTTP lifetimes, not native outcomes.
 export class SessionErrors {

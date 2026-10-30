@@ -65,6 +65,7 @@ test("accepted deletions survive a worker restart, coalesce in bounded batches a
         password: "",
         heartbeattimeout: 25,
         reconnectmax: 30,
+        requestms: 60000,
       },
       index: { days: 30 },
     },

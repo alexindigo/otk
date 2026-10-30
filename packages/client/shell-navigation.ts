@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "./failure-features.ts";
 import type { ProjectLocation, TaskRecord } from "@otk/protocol";
 import type { InputGuard } from "./input-guard.ts";
 import type { Drafts } from "./drafts.ts";
@@ -85,7 +85,7 @@ export function createShellNavigation(o: {
   let revision = 0, viewed = "", viewedFinish = 0, projectOnly = false;
   const fail = (error: unknown): void =>
     store.update((draft) => {
-      draft.error = errorMessage(error);
+      draft.error = failureText(error);
     });
   const clearError = (): void =>
     store.update((draft) => {
@@ -216,17 +216,30 @@ export function createShellNavigation(o: {
     directory: string,
     task?: TaskRecord,
   ): Promise<void> => {
-    if (!guard.release()) return;
-    const intent = ++revision,
-      rpc = resources.sidecars.connection(sidecarId).rpc;
-    const taskActions = resources.taskActions({ sidecarId, directory });
-    try {
-      const created = await rpc.call("session.create", { directory });
-      if (task) await taskActions.add(task, created.id);
-      if (intent === revision) navigate({ sidecarId, sessionID: created.id });
-    } catch (error) {
-      if (intent === revision) fail(error);
-    }
+    const rpc = resources.sidecars.connection(sidecarId).rpc;
+    return await rpc.intents.run(
+      JSON.stringify(["create-session", directory, task?.id]),
+      async (group) => {
+        const create = group.options("create", directory);
+        const add = group.options("add", directory);
+        if (!guard.release()) return;
+        const intent = ++revision;
+        const taskActions = resources.taskActions({ sidecarId, directory });
+        try {
+          const created = await rpc.call(
+            "session.create",
+            { directory },
+            create,
+          );
+          if (task) await taskActions.add(task, created.id, add);
+          if (intent === revision) {
+            navigate({ sidecarId, sessionID: created.id });
+          }
+        } catch (error) {
+          if (intent === revision) fail(error);
+        }
+      },
+    );
   };
   const creationTarget = (
     input?: ProjectSelection,

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { connectRequests } from "../../../tests/support/request-wire.ts";
 import { assert, assertEquals } from "@std/assert";
 import { createIndex, createTranscripts, SidecarConnection } from "@otk/client";
 import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
@@ -86,8 +87,9 @@ Deno.test("scope admission indexes target priority once instead of rescanning me
   }, { messages: fixtureMessagePolicy });
   connection.subscribe = () => {};
   connection.send = (frame) => {
-    if (frame.t === "rpc") admitted++;
+    if (frame.t === "request") admitted++;
   };
+  connectRequests(connection.rpc);
   const owner = createTranscripts({
     connection: () => connection,
     entry: () => undefined,

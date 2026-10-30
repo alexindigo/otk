@@ -33,6 +33,7 @@ export const THEME_SLOTS = [
   "status-busy",
   "status-retry",
   "status-error",
+  "danger",
   "lamp-blocked",
   "lamp-finished",
   "lamp-working",

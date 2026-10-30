@@ -82,8 +82,13 @@ export function startApplication(
   try {
     options.upgrade?.(store);
     const prefs = new Prefs(store, prefsOptions);
-    const rpc = new RpcRegistry(backend, store, options.interactive);
     const index = options.index ?? new IndexStore();
+    const rpc = new RpcRegistry(
+      backend,
+      store,
+      options.interactive,
+      (id) => index.getMetadata(id),
+    );
     const inbox = new InboxFeature(
       {
         projects: new Projects(store),
@@ -102,11 +107,15 @@ export function startApplication(
     registerPrefs(rpc, backend, prefs);
     registerLayout(rpc, prefs);
     registerFrecency(rpc, backend, new Frecency(store, frecencyOptions));
-    registerSessions(rpc, backend, (directory) => inbox.activate(directory));
+    registerSessions(
+      rpc,
+      backend,
+      (directory, tx) => inbox.activate(directory, tx),
+    );
     registerSessionActions(
       rpc,
       backend,
-      (directory) => inbox.activate(directory),
+      (directory, tx) => inbox.activate(directory, tx),
     );
     registerPrompt(rpc, backend);
     registerShell(rpc, backend);
@@ -130,7 +139,7 @@ export function startApplication(
     registerPermissions(
       rpc,
       backend,
-      approvals && ((input) => approvals.reply(input)),
+      approvals && ((input, operation) => approvals.reply(input, operation)),
     );
     registerQuestions(rpc, backend);
     registerRevert(rpc, backend);

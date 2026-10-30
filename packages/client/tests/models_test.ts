@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  connectRequests,
+  fixtureFailure,
+  replyRequest,
+} from "../../../tests/support/request-wire.ts";
+import {
   fixtureMessagePolicy,
   fixturePage,
 } from "../../../tests/support/message-pages.ts";
@@ -16,15 +21,16 @@ import {
 } from "@otk/client";
 
 function fixture() {
-  const frames: Extract<ClientFrame, { t: "rpc" }>[] = [];
+  const frames: Extract<ClientFrame, { t: "request" }>[] = [];
   const subscriptions: [string, boolean][] = [];
   const connection = new SidecarConnection("http://example.test", {
     status() {},
     frame() {},
   }, { messages: fixtureMessagePolicy });
   connection.send = (frame) => {
-    if (frame.t === "rpc") frames.push(frame);
+    if (frame.t === "request") frames.push(frame);
   };
+  connectRequests(connection.rpc);
   connection.supports = () => false;
   connection.subscribe = (id, enabled) => {
     subscriptions.push([id, enabled]);
@@ -41,7 +47,7 @@ function fixture() {
     );
     assert(at >= 0, method);
     const frame = frames.splice(at, 1)[0];
-    connection.rpc.receive({ t: "rpc.result", id: frame.id, ok: true, result });
+    replyRequest(connection.rpc, frame, result);
   };
   const session = createSession(() => connection, () => undefined);
   return { connection, session, answer, frames, subscriptions };
@@ -191,12 +197,7 @@ Deno.test("catalog discovery remains available after a failed initial body attem
       frames.findIndex((frame) => frame.method === "session.messages"),
       1,
     )[0];
-    connection.rpc.receive({
-      t: "rpc.result",
-      id: request.id,
-      ok: false,
-      error: { code: "fixture", message: "Body unavailable" },
-    });
+    replyRequest(connection.rpc, request, undefined, fixtureFailure("fixture"));
     await settle();
     assertEquals(session.state.loading, false);
     assert(frames.some((frame) => frame.method === "models.list"));
@@ -274,15 +275,13 @@ Deno.test("session catalog is optional, nonblocking and generation-bound across 
       frames.findIndex((f) => f.method === "models.list"),
       1,
     )[0];
-    connection.rpc.receive({
-      t: "rpc.result",
-      id: failed.id,
-      ok: false,
-      error: { code: "backend", message: "Catalog unavailable" },
-    });
+    replyRequest(connection.rpc, failed, undefined, fixtureFailure("backend"));
     await session.models?.ready();
     assertEquals(session.models?.state.value, old);
-    assertEquals(session.models?.state.error, "Catalog unavailable");
+    assertEquals(
+      session.models?.state.error,
+      "Could not finish this action. Try again",
+    );
     await settle();
     assertEquals(session.state.error, undefined);
     assertEquals(session.state.content.messages[0].id, "still available");
@@ -338,6 +337,16 @@ Deno.test("current RPC context follows selection and history retains partial res
         partID: "p",
       }],
     }]);
+    const unavailable = two.frames.find((frame) =>
+      frame.method === "history.list"
+    );
+    assert(unavailable);
+    replyRequest(
+      two.connection.rpc,
+      unavailable,
+      undefined,
+      fixtureFailure("native.rejected"),
+    );
     two.connection.rpc.close();
     assertEquals((await history)[0].parts[0], {
       kind: "file",

@@ -6,11 +6,19 @@ import { OpencodeTest } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-test("oversized total receives an immediate RPC-id error and leaves the connection usable", async () => {
+test("oversized total receives an immediate correlated pre-admission rejection and leaves the connection usable", async () => {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
   const server = await SidecarTest.start(oc), client = new WsClient(server.url);
   try {
     await client.connect();
+    const welcome = client.frames.find((frame) => frame.t === "welcome");
+    assert(welcome?.t === "welcome");
+    const ref = {
+      id: crypto.randomUUID(),
+      key: crypto.randomUUID(),
+      clientID: crypto.randomUUID(),
+      window: welcome.requests.window.id,
+    };
     const upload = {
       kind: "file",
       source: "upload",
@@ -19,8 +27,8 @@ test("oversized total receives an immediate RPC-id error and leaves the connecti
       dataBase64: "AAAA".repeat(17 * 1024 * 1024 / 4),
     };
     const serialized = JSON.stringify({
-      t: "rpc",
-      id: "oversized",
+      t: "request",
+      ref,
       method: "session.prompt",
       params: { sessionID: "unused", parts: [upload, upload, upload, upload] },
     });
@@ -34,12 +42,12 @@ test("oversized total receives an immediate RPC-id error and leaves the connecti
       });
     }
     const frame = await client.wait(
-      (frame) => frame.t === "rpc.result" && frame.id === "oversized",
+      (frame) => frame.t === "request.rejected" && frame.ref.key === ref.key,
       5000,
     );
-    assert(frame.t === "rpc.result" && !frame.ok);
-    assertEquals(frame.error.code, "frame");
-    assert(frame.error.message.includes("64 MiB"));
+    assert(frame.t === "request.rejected");
+    assertEquals(frame.error.code, "request.capacity");
+    assertEquals("message" in frame.error, false);
     assertEquals(fake.requests.length, 0);
     await client.rpc("prefs.get", {});
   } finally {

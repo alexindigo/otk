@@ -6,9 +6,10 @@ export interface HistoryAttachmentRef {
   partID: string;
 }
 export interface HistoryCapability {
-  listHistory(): Promise<HistoryEntry[]>;
+  listHistory(signal?: AbortSignal): Promise<HistoryEntry[]>;
   attachment(
     ref: HistoryAttachmentRef,
+    signal?: AbortSignal,
   ): Promise<Extract<PromptPart, { source: "upload" }>>;
 }
 export interface HistoryCapabilities {

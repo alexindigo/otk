@@ -1,0 +1,20 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-pane-state {
+  grid-area: 1 / 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  align-self: stretch;
+  justify-self: stretch;
+  min-inline-size: 0;
+  min-block-size: 0;
+  gap: 8px;
+  color: var(--otk-fg);
+  text-align: center;
+}
+.otk-pane-state p {
+  margin: 0;
+}
+.otk-pane-state.is-error {
+  color: var(--danger);
+}

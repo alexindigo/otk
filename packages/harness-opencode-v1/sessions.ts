@@ -30,13 +30,13 @@ export function sessions(
       ids.decode(id);
       lifecycle.subscriptions(id, count);
     },
-    getSession: (id) => transcript.session(id),
+    getSession: (id, signal) => transcript.session(id, signal),
     listMessages: (id, opts, signal) =>
       transcript.page(id, opts.before, signal),
-    async listChildren(id): Promise<ContentSession[]> {
+    async listChildren(id, signal): Promise<ContentSession[]> {
       const raw = await client.json<Session[]>(
         `/session/${encodeURIComponent(ids.decode(id))}/children`,
-        { query: { directory: directory.cached(id) } },
+        { query: { directory: directory.cached(id) }, signal },
       );
       return raw.map(mapSession).sort((a, b) => a.id.localeCompare(b.id));
     },

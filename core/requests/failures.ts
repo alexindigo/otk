@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { OperationFailure, type PublicFailure } from "@otk/protocol";
+import { HarnessError } from "@otk/harness";
 /** Explicit semantic failures only; arbitrary exceptions remain diagnostic causes. */
 export class ExecutionFailure extends Error {
   constructor(readonly failure: Omit<PublicFailure, "diagnosticID">) {
@@ -17,6 +18,13 @@ export function publicFailure(
   return {
     ...(cause instanceof ExecutionFailure
       ? cause.failure
+      : cause instanceof HarnessError
+      ? {
+        code: cause.code === "method" || cause.code === "params"
+          ? `request.${cause.code}`
+          : cause.code,
+        retry: "new-intent" as const,
+      }
       : cause instanceof OperationFailure
       ? {
         code: cause.code,

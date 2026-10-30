@@ -11,6 +11,13 @@ unknown effect outcomes; its cause is diagnostic. `canonicalRequest` rejects
 unsupported/nonfinite JSON inputs and `requestFingerprint` hashes their equality
 representation asynchronously.
 
+Shipped metadata receipt contracts live beside their feature contracts and are
+composed into `RequestReceipts` by interface inheritance, following `RpcMethods`
+and the JSR-compatible preference pattern. Task/project records, selected
+preference snapshots, seen clocks and approval policy snapshots are explicit
+metadata; body, history and catalog reads contribute no durable result payload.
+External consumers may augment the same open receipt interface.
+
 Harness-neutral OTK wire contracts and shared helpers, with no runtime
 dependencies. This package does not connect to a harness or sidecar, parse
 markdown, store data, or render a UI.

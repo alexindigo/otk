@@ -19,6 +19,7 @@ const settings = {
   db: "",
   heartbeattimeout: 25,
   reconnectmax: 30,
+  requestms: 60000,
 };
 
 Deno.test("live reported usage keeps missing and invalid categories unknown before actual zero and nonzero replacements", () => {

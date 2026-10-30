@@ -14,6 +14,7 @@ Deno.test("compact launches an owned unbounded summarize request with the captur
     db: "",
     heartbeattimeout: 25,
     reconnectmax: 30,
+    requestms: 60000,
   }, () => {
     throw new Error("Only the launch owner may send this request");
   });
@@ -41,7 +42,7 @@ Deno.test("compact launches an owned unbounded summarize request with the captur
       {
         method: "POST",
         query: { directory: "/captured" },
-        timeout: null,
+        classification: "effect",
         body: { providerID: "chosen", modelID: "m/id" },
       },
     ]]);

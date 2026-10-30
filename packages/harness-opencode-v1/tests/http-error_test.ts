@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertRejects } from "@std/assert";
-import { Client, HttpFailure } from "../client.ts";
+import { assert, assertEquals, assertRejects } from "@std/assert";
+import { Client, HttpFailure, NativeRequestFailure } from "../client.ts";
 
 Deno.test("native HTTP errors preserve both reason envelopes and use a plain fallback instead of JSON", async () => {
   for (
@@ -40,8 +40,8 @@ Deno.test("native HTTP errors preserve both reason envelopes and use a plain fal
         },
         500,
         {
-          message: "Native operation failed",
           kind: "UnknownError",
+          message: "Request failed (HTTP 500).",
           ref: "native-ref",
         },
       ],
@@ -60,11 +60,14 @@ Deno.test("native HTTP errors preserve both reason envelopes and use a plain fal
       db: "",
       heartbeattimeout: 25,
       reconnectmax: 30,
+      requestms: 60000,
     }, () => Promise.resolve(Response.json(body, { status })));
-    const failure = await assertRejects(
+    const classified = await assertRejects(
       () => client.json("/session/test/revert"),
-      HttpFailure,
+      NativeRequestFailure,
     );
+    const failure = classified.original;
+    assert(failure instanceof HttpFailure);
     assertEquals(failure.status, status);
     assertEquals(failure.message, expected.message);
     assertEquals(failure.detail, expected);
@@ -100,11 +103,14 @@ async function failure(body: unknown, status = 500) {
     db: "",
     heartbeattimeout: 25,
     reconnectmax: 30,
+    requestms: 60000,
   }, () => Promise.resolve(Response.json(body, { status })));
-  return await assertRejects(
+  const classified = await assertRejects(
     () => client.json("/session/test/revert"),
-    HttpFailure,
+    NativeRequestFailure,
   );
+  assert(classified.original instanceof HttpFailure);
+  return classified.original;
 }
 
 for (const [kind, status, message] of mapped) {
@@ -178,7 +184,7 @@ Deno.test("legacy not-found diagnostics identify the unavailable item without co
   }
 });
 
-Deno.test("unmapped native reasons retain readable detail but never raw native or envelope IDs", async () => {
+Deno.test("unmapped native reasons remain diagnostic causes and never become display copy", async () => {
   for (
     const kind of [
       "InvalidRequestError",
@@ -229,6 +235,9 @@ Deno.test("unmapped native reasons retain readable detail but never raw native o
       _tag: kind,
       message: "The upstream service is unavailable.",
     });
-    assertEquals(readable.message, "The upstream service is unavailable.");
+    assertEquals(readable.message, "Request failed (HTTP 500).");
+    assert(
+      String(readable.cause).includes("The upstream service is unavailable."),
+    );
   }
 });

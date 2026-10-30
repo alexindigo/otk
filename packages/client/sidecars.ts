@@ -192,7 +192,7 @@ export function createSidecars(
           apiBase(baseUrl),
           "health",
           undefined,
-          AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
+          controller.signal,
         );
         controller.signal.throwIfAborted();
         if (stopped) throw new Error("Sidecar collection is stopped");

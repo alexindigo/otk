@@ -24,6 +24,10 @@ export function revert(
           body: { messageID },
         },
       );
+      await operation?.checkpoint("session-boundary", {
+        kind: "session-boundary",
+        value: { sessionID: id, messageID },
+      });
       return getSession(id);
     },
   };
@@ -45,6 +49,10 @@ export function restore(
           query: { directory: await directory.resolve(id) },
         },
       );
+      await operation?.checkpoint("session-boundary", {
+        kind: "session-boundary",
+        value: { sessionID: id, messageID: null },
+      });
       return getSession(id);
     },
   };

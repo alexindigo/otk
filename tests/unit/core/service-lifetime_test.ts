@@ -2,7 +2,7 @@
 import { fixturePage } from "../../support/message-pages.ts";
 import { assert, assertEquals, assertRejects, assertThrows } from "@std/assert";
 import type { Harness } from "@otk/harness";
-import { OtkDb, Prefs, prefsMigrations } from "@otk/store";
+import { OtkDb, Prefs, prefsMigrations, requestsMigrations } from "@otk/store";
 import {
   IndexStore,
   prefsOptions,
@@ -44,7 +44,7 @@ for (
         createSession: () => Promise.reject(new Error("unused")),
       },
     };
-    const store = new OtkDb(root, [prefsMigrations]),
+    const store = new OtkDb(root, [prefsMigrations, requestsMigrations]),
       prefs = new Prefs(store, prefsOptions),
       index = new IndexStore();
     let listeners = 0;

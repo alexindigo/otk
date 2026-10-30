@@ -4,6 +4,11 @@ import { assert, assertEquals, assertRejects } from "@std/assert";
 import { SidecarConnection } from "../connection.ts";
 import { createSidecars } from "../sidecars.ts";
 import { PROTOCOL_VERSION } from "@otk/protocol";
+import {
+  bootstrapFetch,
+  fixtureRequests,
+  replyRequest,
+} from "../../../tests/support/request-wire.ts";
 
 class Socket {
   readyState: number = WebSocket.CONNECTING;
@@ -29,6 +34,7 @@ class Socket {
         t: "welcome",
         protocol: PROTOCOL_VERSION,
         messages: fixtureMessagePolicy,
+        requests: fixtureRequests(),
         sidecar: {
           version: "test",
           harness: {
@@ -68,8 +74,7 @@ Deno.test("replacement connections retire sockets RPCs availability and every ol
   const original = globalThis.fetch,
     sockets: Socket[] = [],
     frames: unknown[] = [];
-  globalThis.fetch = () =>
-    Promise.resolve(Response.json({ authenticated: true }));
+  globalThis.fetch = bootstrapFetch();
   const connection = new SidecarConnection("http://example.test", {
     status() {},
     frame: (frame) => frames.push(frame),
@@ -84,11 +89,12 @@ Deno.test("replacement connections retire sockets RPCs availability and every ol
     await connection.connect();
     sockets[0].open();
     sockets[0].welcome();
-    const pending = connection.rpc.call("usage.get", {
+    const pending = connection.rpc.start("usage.get", {
       sessionID: "s",
       turnID: "user",
     });
-    const rejected = assertRejects(() => pending, Error, "disconnected");
+    let settled = false;
+    void pending.result.then(() => settled = true, () => settled = true);
     const staleOpen = sockets[0].onopen!, staleMessage = sockets[0].onmessage!;
     const replacing = connection.connect();
     assertEquals(
@@ -104,7 +110,15 @@ Deno.test("replacement connections retire sockets RPCs availability and every ol
     assertEquals(sockets[0].sent.length, before);
     sockets[1].open();
     sockets[1].welcome();
-    await rejected;
+    await Promise.resolve();
+    assertEquals(settled, false);
+    replyRequest(connection.rpc, {
+      t: "request",
+      ref: pending.state.ref,
+      method: "usage.get",
+      params: {},
+    }, { sessionID: "s", turnID: "user" });
+    assertEquals((await pending.result).sessionID, "s");
     assertEquals(frames.length, 2);
   } finally {
     connection.stop();

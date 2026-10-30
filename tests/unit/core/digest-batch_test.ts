@@ -102,6 +102,7 @@ test("bulk digest row credit reaches the index consumer as bounded multi-session
         db: root + "/absent.db",
         heartbeattimeout: 25,
         reconnectmax: 30,
+        requestms: 60000,
       },
       index: { days: 30 },
     },

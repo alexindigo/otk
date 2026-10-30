@@ -3,7 +3,7 @@ import { ViewHeader } from "./View.tsx";
 import "./Settings.css" with { type: "text" };
 import { For, Show } from "solid-js";
 import { LOCAL_SIDECAR, type SidecarState } from "@otk/client";
-import Form from "./Form.tsx";
+import Form, { FormInput } from "./Form.tsx";
 import Login from "./Login.tsx";
 import Setup from "./Setup.tsx";
 import ConnectionBadge from "./ConnectionBadge.tsx";
@@ -96,6 +96,7 @@ export default function Settings(props: {
         <Form
           title="Add server"
           submitLabel="Add server"
+          pendingLabel="Checking server…"
           onSubmit={async (data) => {
             await props.onAdd(
               String(data.get("url")),
@@ -104,7 +105,7 @@ export default function Settings(props: {
           }}
         >
           <label>
-            Base URL<input
+            Base URL<FormInput
               name="url"
               type="url"
               placeholder="http://127.0.0.1:31502"
@@ -112,7 +113,7 @@ export default function Settings(props: {
             />
           </label>
           <label>
-            Label<input name="label" placeholder="Optional name" />
+            Label<FormInput name="label" placeholder="Optional name" />
           </label>
         </Form>
       </div>

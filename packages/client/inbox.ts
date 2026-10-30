@@ -14,6 +14,7 @@ import { createState, type StateFactory } from "./state.ts";
 import type { TabSession } from "./tabs.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
 import { projectName } from "./project-navigation.ts";
+import type { IntentGroups, RequestOptions } from "./requests.ts";
 /** Attention first. All aggregate lights use this one immutable priority order. */
 export const INBOX_STATUS_PRIORITY = Object.freeze(
   [
@@ -150,8 +151,9 @@ export interface InboxRpc {
   call<M extends RpcMethod>(
     method: M,
     params: RpcParams<M>,
-    signal?: AbortSignal,
+    signal?: AbortSignal | RequestOptions,
   ): Promise<RpcResult<M>>;
+  readonly intents?: IntentGroups;
 }
 export interface InboxState {
   /** The initial snapshot is unknown until its first accepted metadata frame. */
@@ -162,10 +164,14 @@ export interface InboxModel {
   state: InboxState;
   subscribe(listener: (state: InboxState) => void): () => void;
   receive(frame: ServerFrame): void;
-  promote(session: TabSession): Promise<TaskRecord>;
+  promote(session: TabSession, options?: RequestOptions): Promise<TaskRecord>;
   openProject(directory: string): Promise<void>;
   openSession(sessionID: string, directory: string): Promise<void>;
-  act<T>(directory: string, action: () => Promise<T>): Promise<T>;
+  act<T>(
+    directory: string,
+    action: () => Promise<T>,
+    options?: RequestOptions,
+  ): Promise<T>;
 }
 /** Connection-local model; the caller owns routing, clock scheduling and errors. */
 export function createInbox(
@@ -188,12 +194,12 @@ export function createInbox(
     state: store.state,
     subscribe: store.subscribe,
     /** Atomic server-side promotion, suitable as createTabs' injected port. */
-    promote(session: TabSession) {
+    promote(session: TabSession, options?: RequestOptions) {
       return rpc.call("tasks.create", {
         directory: session.directory,
         name: session.title || "Session",
         sessions: [session.id],
-      });
+      }, options);
     },
     receive(frame: ServerFrame): void {
       if (frame.t === "inbox") {
@@ -211,13 +217,16 @@ export function createInbox(
       await rpc.call("sessions.seen", { sessionID });
     },
     /** Wrap send/approve/answer/interrupt so every successful action resets visits. */
-    async act<T>(directory: string, action: () => Promise<T>): Promise<T> {
+    async act<T>(
+      directory: string,
+      action: () => Promise<T>,
+      options?: RequestOptions,
+    ): Promise<T> {
       const result = await action();
-      try {
-        await rpc.call("projects.visit", { directory, active: true });
-      } catch (error) {
-        reportDiagnostic(report, error);
-      }
+      // The successful action is settled independently of its bookkeeping read/write.
+      // A lost visit receipt must not keep an already-sent draft looking unsent.
+      void rpc.call("projects.visit", { directory, active: true }, options)
+        .catch((error) => reportDiagnostic(report, error));
       return result;
     },
   };

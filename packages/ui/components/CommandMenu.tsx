@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "@otk/client";
 import {
   createEffect,
   createMemo,
@@ -110,15 +110,9 @@ export default function CommandMenu(props: {
       if (current === generation) menu.close(() => {});
     } catch (cause) {
       if (current !== generation) return;
-      const message = errorMessage(cause);
-      const text = !message ||
-          /(?:Unknown command|Command unavailable|Command owner inactive)/.test(
-            message,
-          ) || message.includes(action.id)
-        ? "This action couldn't finish. Open the menu and try again."
-        : message;
-      setError({ key: action.key, text });
-      props.onError?.(text);
+      const text = failureText(cause);
+      if (props.onError) props.onError(text);
+      else setError({ key: action.key, text });
     } finally {
       if (current === generation) setPending(undefined);
     }

@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { RequestMetadata } from "./request-metadata.ts";
+export const usageRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
+  "usage.get": { kind: "read", pending: "Loading usage" },
+};
 import type { AssistantMessage, ModelRef, Part } from "./content.ts";
 import type { ReportedTokens, UsageSummary } from "./digest.ts";
 import type { ContentClock, TranscriptVersion } from "./transcript.ts";

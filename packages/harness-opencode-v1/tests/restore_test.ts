@@ -15,6 +15,7 @@ test("restore resolves its directory and posts unrevert before returning authori
         db: join(await tempDir("restore-"), "missing.db"),
         heartbeattimeout: 25,
         reconnectmax: 30,
+        requestms: 60000,
       },
       index: { days: 30 },
       messages: fixtureMessagePolicy,

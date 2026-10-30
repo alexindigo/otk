@@ -9,6 +9,8 @@ import { startApplication } from "../../../application.ts";
 import { serveBackend } from "../../../core/example.ts";
 import { AuthState, config, prefsOptions } from "../../../core/mod.ts";
 import { defaultsPath, fixture } from "../../support/config.ts";
+import { HttpRequests } from "@otk/client";
+import { originFetch } from "../../support/request-wire.ts";
 
 for (
   const scenario of [
@@ -125,12 +127,17 @@ for (
           const info = await discovery.json();
           assertEquals(info.setupRequired, first);
           if (first) {
-            const response = await fetch(base + "/api/setup", {
-              method: "POST",
-              headers: { Origin: base, "Content-Type": "application/json" },
-              body: JSON.stringify({ type: "none" }),
+            const http = new HttpRequests({
+              base: new URL(base + "/api/"),
+              fetcher: originFetch(base),
             });
-            assertEquals(response.status, 200, await response.text());
+            try {
+              assertEquals(await http.start("setup", { type: "none" }).result, {
+                ok: true,
+              });
+            } finally {
+              await http.stop();
+            }
           }
           assert((await Deno.stat(join(expected, "otk.db"))).isFile);
           assert((await Deno.stat(join(expected, "auth.toml"))).isFile);

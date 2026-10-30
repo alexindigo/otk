@@ -64,8 +64,8 @@ for (const theme of ["otk-dark", "otk-light"]) {
         const target=${JSON.stringify(a.id)}, Native=WebSocket;
         globalThis.temperaturePages={hold:false,pending:[],requests:new Set(),release(){this.hold=false;for(const [socket,data]of this.pending.splice(0))socket.dispatchEvent(new MessageEvent('message',{data}))}};
         globalThis.WebSocket=class extends Native {
-          constructor(...args){super(...args);this.addEventListener('message',event=>{const frame=JSON.parse(event.data);if(temperaturePages.hold&&frame.t==='rpc.result'&&temperaturePages.requests.has(frame.id)){temperaturePages.pending.push([this,event.data]);event.stopImmediatePropagation()}})}
-          send(data){const frame=JSON.parse(data);if(frame.t==='rpc'&&frame.method==='session.messages'&&frame.params.sessionID===target)temperaturePages.requests.add(frame.id);return super.send(data)}
+          constructor(...args){super(...args);this.addEventListener('message',event=>{const frame=JSON.parse(event.data);if(temperaturePages.hold&&frame.t==='request.result'&&temperaturePages.requests.has(frame.ref.key)){temperaturePages.pending.push([this,event.data]);event.stopImmediatePropagation()}})}
+          send(data){const frame=JSON.parse(data);if(frame.t==='request'&&frame.method==='session.messages'&&frame.params.sessionID===target)temperaturePages.requests.add(frame.ref.key);return super.send(data)}
         };
       })()`,
       });
@@ -82,14 +82,17 @@ for (const theme of ["otk-dark", "otk-light"]) {
           (frame.params as { sessionID?: string }).sessionID === id
         );
       const settledPages = (id: string) => {
-        const requests = new Set(pages(id).map(({ frame }) => frame.id));
+        const requests = new Set(
+          pages(id).map(({ frame }) => (frame.ref as { key: string }).key),
+        );
         return browser.events.filter((e) =>
           e.method === "Network.webSocketFrameReceived"
         ).map((e) =>
           JSON.parse((e.params.response as { payloadData: string }).payloadData)
         ).filter((frame) =>
-          frame.t === "rpc.result" && frame.ok && requests.has(frame.id) &&
-          (frame.result as MessagePage)?.items
+          frame.t === "request.result" && frame.outcome.ok &&
+          requests.has(frame.ref.key) &&
+          (frame.outcome.result as MessagePage)?.items
         );
       };
       await openSession(browser, a.id);

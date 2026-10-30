@@ -11,8 +11,8 @@ export interface OpencodeV1Config {
     db: string;
     heartbeattimeout: number;
     reconnectmax: number;
-    /** Required when composing classified request execution. */
-    requestms?: number;
+    /** Injected finite read I/O policy; effects have lifecycle cancellation only. */
+    requestms: number;
   };
   index: { days: number };
 }

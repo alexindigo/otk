@@ -9,6 +9,7 @@ import { cfg, fixture } from "../support/config.ts";
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { startApplication } from "../../application.ts";
+import { originFetch } from "../support/request-wire.ts";
 
 async function consumer(url: string) {
   let latest: InboxSnapshot | undefined, socket: WebSocket | undefined;
@@ -19,6 +20,7 @@ async function consumer(url: string) {
       model.receive(frame);
     },
   }, {
+    fetcher: originFetch(url),
     socket: (address) =>
       socket = Reflect.construct(WebSocket, [address, {
         headers: { Origin: url },

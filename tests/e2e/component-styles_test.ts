@@ -88,6 +88,136 @@ async function consumer(
   }
 }
 
+test("shipped Form captures once, retains readonly values and stable feedback geometry without disabled controls", () =>
+  consumer("forms", async (browser) => {
+    const before = await browser.evaluate<number[]>(
+      `(() => {const r=document.querySelector('.otk-form').getBoundingClientRect();return [r.x,r.y,r.width,r.height]})()`,
+    );
+    const calls = await browser.evaluate<number>(
+      "Number(document.querySelector('[data-form-calls]').dataset.formCalls)",
+    );
+    await browser.evaluate(
+      "document.querySelector('form').requestSubmit();document.querySelector('form').requestSubmit()",
+    );
+    await browser.poll(
+      `Number(document.querySelector('[data-form-calls]').dataset.formCalls)===${
+        calls + 1
+      }`,
+    );
+    const pending = await browser.evaluate<
+      { disabled: number; readonly: boolean; value: string; bounds: number[] }
+    >(`(() => {const f=document.querySelector('.otk-form'),r=f.getBoundingClientRect(),i=f.querySelector('input');return {disabled:f.querySelectorAll('[disabled],[aria-disabled="true"]').length,readonly:i.readOnly,value:i.value,bounds:[r.x,r.y,r.width,r.height]}})()`);
+    await browser.evaluate("styleTest.feedback('error')");
+    await browser.poll("!!document.querySelector('[role=alert]')?.textContent");
+    const after = await browser.evaluate<number[]>(
+      `(() => {const r=document.querySelector('.otk-form').getBoundingClientRect();return [r.x,r.y,r.width,r.height]})()`,
+    );
+    assertEquals(pending.disabled, 0);
+    assert(pending.readonly);
+    assertEquals(pending.value, "perf");
+    assertEquals(pending.bounds, before);
+    assertEquals(after, before);
+    assertEquals(
+      await browser.evaluate(
+        "document.body.textContent.includes('/secret/path')",
+      ),
+      false,
+    );
+    assertEquals(
+      await browser.evaluate("document.querySelector('input').readOnly"),
+      false,
+    );
+  }));
+
+test("request feedback reserves form geometry, shares notice centrelines and centres the transcript state in Dark and Linen", () =>
+  consumer("requests", async (browser, root) => {
+    const theme = await browser.evaluate<string>(
+      "document.documentElement.dataset.otkTheme",
+    );
+    for (const width of [1280, 800]) {
+      await browser.send("Emulation.setDeviceMetricsOverride", {
+        width,
+        height: 700,
+        deviceScaleFactor: 1,
+        mobile: false,
+      });
+      const bounds: unknown[] = [];
+      for (const state of ["clear", "pending", "error"]) {
+        await browser.evaluate(`styleTest.feedback('${state}')`);
+        await browser.evaluate(
+          "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+        );
+        const probe = await browser.evaluate<{
+          field: number[];
+          track: number[];
+          disabled: number;
+          colour: string;
+          danger: string;
+          focus: string;
+          pane: number[];
+          content: number[];
+          rowCentres: number[];
+        }>(`(() => {
+          const rect = el => { const r = el.getBoundingClientRect(); return [r.x,r.y,r.width,r.height]; };
+          const field = document.querySelector('.request-feedback-form input');
+          const pane = document.querySelector('.request-feedback-pane');
+          const items = [...pane.querySelectorAll('p,button')].map(el=>el.getBoundingClientRect());
+          const left=Math.min(...items.map(r=>r.left)), right=Math.max(...items.map(r=>r.right)), top=Math.min(...items.map(r=>r.top)), bottom=Math.max(...items.map(r=>r.bottom));
+          const operation=document.querySelector('.otk-operation-feedback');
+          return { field:rect(field), track:rect(document.querySelector('#task-feedback')),
+            disabled:document.querySelectorAll('[disabled],[aria-disabled="true"]').length,
+            colour:getComputedStyle(operation).color,
+            danger:getComputedStyle(document.documentElement).getPropertyValue('--otk-danger').trim(),
+            focus:getComputedStyle(document.documentElement).getPropertyValue('--otk-focus').trim(),
+            pane:rect(pane), content:[left,top,right-left,bottom-top],
+            rowCentres:[...operation.children].map(el=>{const r=el.getBoundingClientRect();return r.y+r.height/2;}) };
+        })()`);
+        bounds.push({ field: probe.field, track: probe.track });
+        assertEquals(probe.disabled, 0);
+        assert(
+          Math.abs(
+            probe.pane[0] + probe.pane[2] / 2 - probe.content[0] -
+              probe.content[2] / 2,
+          ) < 1,
+        );
+        assert(
+          Math.abs(
+            probe.pane[1] + probe.pane[3] / 2 - probe.content[1] -
+              probe.content[3] / 2,
+          ) < 1,
+        );
+        assert(
+          Math.max(...probe.rowCentres) - Math.min(...probe.rowCentres) < 1,
+        );
+        if (state === "error") {
+          assert(probe.danger !== probe.focus);
+          assertEquals(
+            probe.colour,
+            theme === "otk-dark" ? "rgb(255, 128, 128)" : "rgb(181, 20, 26)",
+          );
+        }
+      }
+      assertEquals(bounds[0], bounds[1]);
+      assertEquals(bounds[1], bounds[2]);
+      if (width === 1280) {
+        await browser.screenshot(join(root, `requests-wide-${theme}.png`));
+      }
+    }
+    for (const region of ["form", "notice", "pane"]) {
+      const clip = await browser.evaluate<
+        { x: number; y: number; width: number; height: number }
+      >(`(() => { const r=document.querySelector('[data-feedback-region="${region}"]').getBoundingClientRect(); return {x:r.x,y:r.y,width:r.width,height:r.height}; })()`);
+      const result = await browser.send("Page.captureScreenshot", {
+        format: "png",
+        clip: { ...clip, scale: 2 },
+      }) as { data: string };
+      await Deno.writeFile(
+        join(root, `review-requests-${theme}-${region}.png`),
+        Uint8Array.from(atob(result.data), (value) => value.charCodeAt(0)),
+      );
+    }
+  }));
+
 test("keyed breadcrumbs and menu rows retain identity through folding, replacement and shrinking", () =>
   consumer("lists", async (browser) => {
     const ids = Array.from({ length: 10 }, (_, i) => `session-${i}`);

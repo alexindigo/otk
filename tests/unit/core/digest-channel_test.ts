@@ -50,6 +50,7 @@ test("dirty channel has one acknowledged batch in flight and retains full-sessio
         password: "",
         heartbeattimeout: 25,
         reconnectmax: 30,
+        requestms: 60000,
       },
       index: { days: 30 },
     },

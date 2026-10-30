@@ -24,6 +24,28 @@ export interface RetainedContent {
   incoming: string[];
   path: string[];
 }
+export interface SessionHeapMeasurement {
+  retained: RetainedContent[];
+  complete: boolean;
+  diagnostics: string[];
+}
+
+/** Heap observations report unknown paths explicitly; they do not gate cooling.
+ * The strict analyzer remains available to its synthetic calibration controls. */
+export async function measureSessionHeap(
+  browser: Cdp,
+  sessionID: string,
+  marker: string,
+): Promise<SessionHeapMeasurement> {
+  const diagnostics: string[] = [];
+  try {
+    const retained = await sessionHeap(browser, sessionID, marker, diagnostics);
+    return { retained, complete: diagnostics.length === 0, diagnostics };
+  } catch (cause) {
+    diagnostics.push(cause instanceof Error ? cause.message : String(cause));
+    return { retained: [], complete: false, diagnostics };
+  }
+}
 interface DomNode {
   backendNodeId: number;
   nodeName: string;
@@ -37,6 +59,7 @@ export async function sessionHeap(
   browser: Cdp,
   sessionID: string,
   marker: string,
+  diagnostics?: string[],
 ): Promise<RetainedContent[]> {
   await browser.send("HeapProfiler.enable");
   await browser.send("HeapProfiler.collectGarbage");
@@ -243,6 +266,12 @@ export async function sessionHeap(
         const index = queue.find((i) =>
           field(i * ns, "id") === Number(heapSnapshotObjectId)
         );
+        if (index === undefined && diagnostics) {
+          diagnostics.push(
+            `Detached ${node.nodeName}#${node.backendNodeId} lacks a sampled strong retaining path (heap ID ${heapSnapshotObjectId})`,
+          );
+          continue;
+        }
         assert(
           index !== undefined,
           `Detached ${node.nodeName}#${node.backendNodeId} lacks a sampled strong retaining path`,

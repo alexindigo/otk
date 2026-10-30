@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { HarnessError } from "@otk/harness";
+import { OperationFailure } from "@otk/protocol";
 import {
   type ApprovalSnapshot,
   autoApproveOwner,
   canAutoApprove,
+  isSessionID,
+  type OperationContext,
   type PermissionActivityPage,
   type PermissionReply,
   type PermissionRequest,
@@ -15,6 +18,27 @@ import type { IndexStore } from "../index/store.ts";
 import type { FrameSource } from "../ws/connections.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID } from "../ws/params.ts";
+import {
+  localExecution,
+  localWrite,
+  metadataReceipt,
+  readExecution,
+} from "../requests/policies.ts";
+import { object } from "../ws/params.ts";
+
+const policyReceipt = metadataReceipt("approval-policy", (value) => {
+  const snapshot = object(value);
+  if (
+    !Array.isArray(snapshot.enabled) || !snapshot.enabled.every(isSessionID) ||
+    !Number.isSafeInteger(snapshot.revision) || Number(snapshot.revision) < 0
+  ) {
+    throw new TypeError("Invalid approval policy receipt");
+  }
+  return {
+    enabled: [...snapshot.enabled] as string[],
+    revision: Number(snapshot.revision),
+  };
+});
 
 /** Server-owned approvals, independent of browser connections/subscriptions. */
 export class PermissionFeature implements FrameSource {
@@ -26,6 +50,8 @@ export class PermissionFeature implements FrameSource {
   #closed = false;
   #scheduled = false;
   #revision = 0;
+  #controller = new AbortController();
+  #requestIdentity = crypto.randomUUID();
   #stops: (() => void)[];
   constructor(
     readonly store: PermissionStore,
@@ -65,6 +91,7 @@ export class PermissionFeature implements FrameSource {
   }
   close(): void {
     this.#closed = true;
+    this.#controller.abort();
     for (const stop of this.#stops) stop();
     this.#listeners.clear();
     this.#failed.clear();
@@ -116,7 +143,10 @@ export class PermissionFeature implements FrameSource {
           for (const request of requests) {
             if (this.#closed) return;
             const owner = this.owner(request.sessionID);
-            if (!owner || this.store.confirmed(request.sessionID, request.id)) {
+            if (
+              !owner || this.store.confirmed(request.sessionID, request.id) ||
+              this.store.unconfirmed(request.sessionID, request.id)
+            ) {
               continue;
             }
             const key = JSON.stringify([request.sessionID, request.id]);
@@ -148,7 +178,10 @@ export class PermissionFeature implements FrameSource {
       }
     })();
   }
-  async reply(input: PermissionReply): Promise<void> {
+  async reply(
+    input: PermissionReply,
+    operation?: OperationContext,
+  ): Promise<void> {
     const requests = await this.capability.listPermissions(input.sessionID);
     const request = requests.find((request) =>
       request.id === input.requestID && request.sessionID === input.sessionID
@@ -159,12 +192,13 @@ export class PermissionFeature implements FrameSource {
         "Permission request is no longer pending in this session",
       );
     }
-    await this.#answer(request, input);
+    await this.#answer(request, input, undefined, operation);
   }
   async #answer(
     request: PermissionRequest,
     input: PermissionReply,
     owner?: string,
+    operation?: OperationContext,
   ): Promise<void> {
     const key = JSON.stringify([request.sessionID, request.id]);
     if (this.#closed) {
@@ -179,9 +213,38 @@ export class PermissionFeature implements FrameSource {
         "Permission request is already being answered",
       );
     }
+    if (this.store.unconfirmed(request.sessionID, request.id)) {
+      throw new OperationFailure(
+        "unknown",
+        "permission.unconfirmed",
+        new Error("A previous reply has no confirmed outcome"),
+      );
+    }
     // There is no await between this final policy check and dispatch.
     if (owner && this.owner(request.sessionID) !== owner) return;
     this.#flights.add(key);
+    const context = operation ?? (owner
+      ? {
+        key: {
+          clientID: this.#requestIdentity,
+          key: crypto.randomUUID(),
+          window: this.#requestIdentity,
+        },
+        signal: this.#controller.signal,
+        progress() {},
+        beforeEffect: () => {
+          if (this.#closed || this.owner(request.sessionID) !== owner) {
+            throw new OperationFailure(
+              "rejected",
+              "permission.policy-off",
+              new Error("Automatic policy changed before dispatch"),
+            );
+          }
+          return Promise.resolve();
+        },
+        checkpoint: () => Promise.resolve(),
+      } satisfies OperationContext
+      : undefined);
     let journal: number | undefined;
     try {
       journal = this.store.start({
@@ -193,10 +256,15 @@ export class PermissionFeature implements FrameSource {
         owner,
         message: input.message,
       }, this.index.ancestors(request.sessionID));
-      await this.capability.replyPermission(input);
+      await context?.beforeEffect();
+      await this.capability.replyPermission(input, context);
       if (!this.#closed) this.store.finish(journal, { outcome: "confirmed" });
     } catch (error) {
-      if (!this.#closed && journal !== undefined) {
+      if (
+        !this.#closed && journal !== undefined &&
+        (!context ||
+          error instanceof OperationFailure && error.outcome === "rejected")
+      ) {
         this.store.finish(journal, {
           outcome: "failed",
           error: error instanceof Error
@@ -213,6 +281,10 @@ export class PermissionFeature implements FrameSource {
   }
   register(rpc: RpcRegistry): void {
     rpc.register("permission.auto", {
+      execution: localExecution(
+        (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
+        policyReceipt,
+      ),
       params(p) {
         if (typeof p.enabled !== "boolean") {
           throw new HarnessError("params", "Expected enabled boolean");
@@ -238,12 +310,32 @@ export class PermissionFeature implements FrameSource {
         if (this.#closed) {
           throw new HarnessError("permission", "Server is stopping");
         }
-        this.store.setAuto(input.sessionID, input.enabled);
+        const result = localWrite(ctx, (tx) => {
+          if (
+            this.#closed ||
+            input.enabled && this.index.get(input.sessionID)?.deleted
+          ) {
+            throw new HarnessError(
+              "permission",
+              "Session is no longer available",
+            );
+          }
+          const changed =
+            this.store.enabled().includes(input.sessionID) !== input.enabled;
+          this.store.setAuto(input.sessionID, input.enabled, tx);
+          return {
+            enabled: this.store.enabled(),
+            revision: this.#revision + (changed ? 1 : 0),
+          };
+        }, policyReceipt);
         if (input.enabled) this.#scan(input.sessionID);
-        return this.get();
+        return result;
       },
     });
     rpc.register("permission.activity", {
+      execution: readExecution((p: { sessionID: string }) => ({
+        sessionID: p.sessionID,
+      })),
       params(p) {
         if (
           p.before !== undefined &&

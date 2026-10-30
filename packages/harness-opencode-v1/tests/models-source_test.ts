@@ -13,6 +13,7 @@ Deno.test("model catalog acquires connected providers only and keeps the explici
     db: "",
     heartbeattimeout: 25,
     reconnectmax: 30,
+    requestms: 60000,
   }, (input) => {
     const url = new URL(String(input));
     assertEquals(url.searchParams.get("directory"), "/project");

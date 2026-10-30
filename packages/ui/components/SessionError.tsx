@@ -1,71 +1,48 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./SessionError.css" with { type: "text" };
-import { For, Show } from "solid-js";
-import { sessionErrorMessage, type SessionErrorState } from "@otk/protocol";
+import { Show } from "solid-js";
+import { sessionErrorObservation, type SessionErrorState } from "@otk/protocol";
+import { presentFailure } from "@otk/client";
 
 export default function SessionError(
-  props: { state?: SessionErrorState; error?: string },
+  props: {
+    state?: SessionErrorState;
+    error?: string;
+    operationKey?: string;
+    diagnosticID?: string;
+  },
 ) {
-  const message = () =>
-    props.state ? sessionErrorMessage(props.state) : props.error;
+  const feedback = () => {
+    const observation = props.state && sessionErrorObservation(props.state);
+    const sameFailure = props.diagnosticID &&
+      observation?.failure?.diagnosticID === props.diagnosticID;
+    const sameRequest = props.operationKey && observation?.source === "http" &&
+      observation.requestID === props.operationKey;
+    if (sameFailure || sameRequest) return;
+    return observation?.failure
+      ? presentFailure(observation.failure)
+      : observation || props.error
+      ? {
+        kind: "error",
+        text:
+          "The agent reported a session failure. Review the conversation before continuing",
+      }
+      : undefined;
+  };
   return (
-    <Show when={message()}>
+    <Show when={feedback()}>
       <section
         class="otk-session-error"
-        role="alert"
+        role={feedback()?.kind === "error" ? "alert" : "status"}
         data-error-revision={props.state?.revision}
       >
-        <p class="otk-error otk-session-error-message">{message()}</p>
-        <Show when={props.state?.observations.length}>
-          <details class="otk-session-error-details">
-            <summary>
-              Failure details · observed state {props.state?.revision}
-            </summary>
-            <ul>
-              <For
-                each={props.state?.observations || []}
-                keyed={(item) => item.id}
-              >
-                {(item) => (
-                  <li class="otk-error-observation" data-source={item().source}>
-                    <p class="otk-error-observation-origin">
-                      <span>
-                        {item().source === "event"
-                          ? "Native session observation"
-                          : `${item().operation || "HTTP"} request${
-                            item().requestID === props.state?.currentRequestID
-                              ? ""
-                              : " (earlier)"
-                          }`}
-                      </span>
-                      <Show when={item().status}>
-                        <span>HTTP {item().status}</span>
-                      </Show>
-                      <Show when={item().kind}>
-                        <span>{item().kind}</span>
-                      </Show>
-                    </p>
-                    <p class="otk-error-observation-message">
-                      {item().message}
-                    </p>
-                    <Show when={item().cleared}>
-                      <p>Observed before a later native busy state.</p>
-                    </Show>
-                    <Show when={item().ref}>
-                      <p>Reference: {item().ref}</p>
-                    </Show>
-                    <Show when={item().requestID}>
-                      <p>Local request: {item().requestID}</p>
-                    </Show>
-                    <Show when={item().eventID}>
-                      <p>Native event: {item().eventID}</p>
-                    </Show>
-                  </li>
-                )}
-              </For>
-            </ul>
-          </details>
-        </Show>
+        <p
+          class={["otk-session-error-message", {
+            "otk-error": feedback()?.kind === "error",
+          }]}
+        >
+          {feedback()?.text}
+        </p>
       </section>
     </Show>
   );

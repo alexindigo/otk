@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import { createApprovals, type InboxRpc } from "@otk/client";
+import { fixtureRequests } from "../../../tests/support/request-wire.ts";
 import type {
   PermissionActivity,
   PermissionActivityPage,
@@ -15,6 +16,7 @@ const deferred = <T>() => {
   return { promise, resolve };
 };
 const welcome: ServerFrame = {
+  requests: fixtureRequests(),
   messages: {
     coolms: 300000,
     recoveryconcurrency: 2,

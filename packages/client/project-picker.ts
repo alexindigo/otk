@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "./failure-features.ts";
 import { createState, type StateFactory } from "./state.ts";
 import type { ProjectSelection } from "./project-navigation.ts";
 import type { Selection } from "./session.ts";
@@ -76,7 +76,7 @@ export function createProjectPicker(options: {
       connect();
       if (alive && at === generation) {
         update({
-          error: errorMessage(error),
+          error: failureText(error),
         });
       }
     }).finally(() => {

@@ -104,6 +104,7 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
             db: mode === "SQL" ? oc.db : join(oc.root, "missing.db"),
             heartbeattimeout: 25,
             reconnectmax: 30,
+            requestms: 60000,
           },
           index: { days: 30 },
           messages: fixtureMessagePolicy,

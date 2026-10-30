@@ -11,7 +11,8 @@ import {
   type ServerFrame,
   type SessionMetadata,
 } from "@otk/protocol";
-import { OtkDb, Prefs, prefsMigrations } from "@otk/store";
+import { OtkDb, Prefs, prefsMigrations, requestsMigrations } from "@otk/store";
+import { requestServices } from "../../support/core-request-services.ts";
 import {
   Connections,
   IndexStore,
@@ -39,7 +40,7 @@ const metadata: SessionMetadata = {
 };
 
 async function connectionFixture() {
-  const db = new OtkDb(await fixture(), [prefsMigrations]);
+  const db = new OtkDb(await fixture(), [prefsMigrations, requestsMigrations]);
   const backend: Harness = {
     core: {
       kind: "test",
@@ -55,13 +56,16 @@ async function connectionFixture() {
     capabilities: {},
   };
   const index = new IndexStore(), frames: ServerFrame[] = [];
+  const rpc = new RpcRegistry(backend, db),
+    requests = await requestServices(rpc, db);
   const connections = new Connections(
     backend,
     index,
     "test",
     new Prefs(db, prefsOptions),
-    new RpcRegistry(backend, db),
+    rpc,
     fixtureMessagePolicy,
+    requests,
   );
   const socket = {
     readyState: WebSocket.OPEN,
@@ -95,8 +99,9 @@ async function connectionFixture() {
       cursor = frames.length;
       return client.get("test", metadata.id);
     },
-    close() {
+    async close() {
       connections.close();
+      await requests.coordinator.stop();
       db.close();
     },
   };
@@ -107,12 +112,16 @@ test("hello establishes an index baseline after already queued publications", as
   try {
     f.index.upsertMetadata(metadata);
     const hello = f.send({ t: "hello", protocol: PROTOCOL_VERSION });
-    assertEquals(f.consume()?.title, "Baseline");
+    assertEquals(
+      f.consume(),
+      undefined,
+      "The baseline is not visible before authenticated welcome finishes",
+    );
     f.index.upsertMetadata({ ...metadata, title: "Live" });
     await hello;
     assertEquals(f.consume()?.title, "Live");
   } finally {
-    f.close();
+    await f.close();
   }
 });
 
@@ -128,7 +137,7 @@ test("resnapshot orders queued index publications before the replacement baselin
     await snapshot;
     assertEquals(f.consume()?.title, "Live");
   } finally {
-    f.close();
+    await f.close();
   }
 });
 

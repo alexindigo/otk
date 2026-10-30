@@ -137,8 +137,11 @@ export class History implements HistoryCapability {
     }
     return db;
   }
-  listHistory(): Promise<HistoryEntry[]> {
-    return new Promise((resolve) => resolve(this.#list()));
+  listHistory(signal?: AbortSignal): Promise<HistoryEntry[]> {
+    return new Promise((resolve) => {
+      signal?.throwIfAborted();
+      resolve(this.#list());
+    });
   }
   entry(sessionID: string, messageID: string): HistoryEntry | undefined {
     const native = ids.decode(sessionID);
@@ -242,8 +245,12 @@ export class History implements HistoryCapability {
   }
   attachment(
     ref: HistoryAttachmentRef,
+    signal?: AbortSignal,
   ): Promise<Extract<PromptPart, { source: "upload" }>> {
-    return new Promise((resolve) => resolve(this.#attachment(ref)));
+    return new Promise((resolve) => {
+      signal?.throwIfAborted();
+      resolve(this.#attachment(ref));
+    });
   }
   #attachment(
     { messageID, partID }: HistoryAttachmentRef,

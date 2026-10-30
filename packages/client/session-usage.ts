@@ -3,7 +3,6 @@ import {
   compareTranscriptVersion,
   type ContentClock,
   type ContentOp,
-  errorMessage,
   type IndexEntry,
   type ModelCatalog,
   type ServerFrame,
@@ -16,6 +15,7 @@ import {
   usageTool,
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
+import { failureText } from "./failure-features.ts";
 import type { SidecarConnection } from "./connection.ts";
 import { type ClientIndex, createIndex } from "./index.ts";
 import { createTurnPricing, type TurnUsage } from "./usage.ts";
@@ -288,7 +288,7 @@ export function createSessionUsage(
             resource.again = true;
             return;
           }
-          publish(key, resource, false, errorMessage(error));
+          publish(key, resource, false, failureText(error));
           schedule(resource);
         }
       } finally {

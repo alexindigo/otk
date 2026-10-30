@@ -12,6 +12,7 @@ import type {
   Projects,
   ProjectTemplates,
   Seen,
+  StoreWrite,
   Tasks,
 } from "@otk/store";
 import type { IndexStore } from "../index/store.ts";
@@ -19,6 +20,27 @@ import type { FrameSource } from "../ws/connections.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID, text } from "../ws/params.ts";
 import { pathTemplate, projectPath, scanProjects } from "./project-scan.ts";
+import {
+  localExecution,
+  localResultExecution,
+  localWrite,
+  nativeEffect,
+  nativeExecution,
+  readExecution,
+} from "../requests/policies.ts";
+import {
+  closedReceipt,
+  projectReceipt,
+  projectSessionReceipt,
+  seenReceipt,
+  taskReceipt,
+  tasksReceipt,
+  templatesReceipt,
+  visitReceipt,
+} from "./inbox-receipts.ts";
+import { createdReceipt } from "./session-receipts.ts";
+import type { ContentSession } from "@otk/protocol";
+import type { RpcContext } from "../ws/registry.ts";
 export interface InboxStores {
   projects: Projects;
   tasks: Tasks;
@@ -122,7 +144,7 @@ export class InboxFeature implements FrameSource {
       for (const listener of this.#listeners) listener(frame);
     });
   }
-  #observe(entry: IndexEntry, previous?: IndexEntry): void {
+  #observe(entry: IndexEntry, previous?: IndexEntry, tx?: StoreWrite): void {
     const s = this.stores;
     if (
       previous?.status !== undefined && previous.status !== "idle" &&
@@ -141,24 +163,30 @@ export class InboxFeature implements FrameSource {
       !entry.deleted && (active || unseen) &&
       (!previous || previous.status !== entry.status ||
         JSON.stringify(previous.attention) !== JSON.stringify(entry.attention))
-    ) this.promote?.(entry.id);
-    for (const project of this.#policies) {
+    ) {
+      const promote = () => this.promote?.(entry.id);
+      if (tx) s.projects.db.afterCommit(tx, promote);
+      else promote();
+    }
+    // Joined writes have not published their policy changes yet. Revalidate
+    // against that transaction's current rows, using the same activity owner.
+    for (const project of tx ? s.projects.policies() : this.#policies) {
       if (
         project.directory === entry.directory && project.inactive &&
         (active ||
           (this.#finishes[entry.id] ?? 0) >
             (this.#seen.get(project.user)?.get(entry.id) ?? 0))
       ) {
-        s.projects.reactivate(project.user, entry.directory);
+        s.projects.reactivate(project.user, entry.directory, tx);
       }
     }
   }
   /** Creation and successful action bookkeeping share the persisted project owner. */
-  activate(directory: string): void {
+  activate(directory: string, tx?: StoreWrite): void {
     const project = this.stores.projects.find(this.user, directory);
-    if (!project) this.stores.projects.add(this.user, directory);
+    if (!project) this.stores.projects.add(this.user, directory, tx);
     else if (project.inactive) {
-      this.stores.projects.inactive(this.user, directory, false);
+      this.stores.projects.inactive(this.user, directory, false, tx);
     }
   }
   async #scan(): Promise<void> {
@@ -178,6 +206,18 @@ export class InboxFeature implements FrameSource {
   }
   register(rpc: RpcRegistry): void {
     const s = this.stores, user = () => this.user;
+    const added = (ctx: RpcContext, session: ContentSession) => {
+      const run = (tx: StoreWrite) => {
+        this.activate(session.directory, tx);
+        return {
+          ...s.projects.get(user(), session.directory),
+          sessionID: session.id,
+        };
+      };
+      return ctx.execution
+        ? ctx.execution.local(run, projectSessionReceipt.encode)
+        : ctx.store.write(run);
+    };
     const strings = (p: Record<string, unknown>, name: string): string[] => {
       const values = p[name];
       if (
@@ -195,14 +235,47 @@ export class InboxFeature implements FrameSource {
       return values;
     };
     rpc.register("inbox.get", {
+      execution: readExecution(() => ({ resource: "inbox" })),
       params: () => undefined,
       handler: () => this.get(),
     });
     rpc.register("projects.list", {
+      execution: readExecution(() => ({ resource: "projects" })),
       params: () => undefined,
       handler: () => s.projects.list(user()),
     });
     rpc.register("projects.add", {
+      execution: {
+        ...nativeExecution(
+          (directory: string) => ({ directory }),
+          projectSessionReceipt,
+        ),
+        checkpoint: (receipt) =>
+          receipt.kind === createdReceipt.kind
+            ? createdReceipt.validate(receipt)
+            : projectSessionReceipt.validate(receipt),
+        recover: (ctx, record, execution) => {
+          if (record.receipt_kind === projectSessionReceipt.kind) {
+            return Promise.resolve({
+              state: "complete",
+              result: projectSessionReceipt.restore(record),
+            });
+          }
+          if (record.receipt_kind === createdReceipt.kind) {
+            return Promise.resolve({
+              state: "complete",
+              result: added(
+                { ...ctx, execution },
+                createdReceipt.restore(record),
+              ),
+            });
+          }
+          return Promise.resolve({
+            state: "pending",
+            progress: { phase: "reconciling", code: "checking-outcome" },
+          });
+        },
+      },
       params: (p) => projectPath(text(p, "directory")!),
       handler: async (ctx, directory) => {
         if (!(await Deno.stat(directory)).isDirectory) {
@@ -210,15 +283,20 @@ export class InboxFeature implements FrameSource {
         }
         // The existing Add project entry creates its initial session; empty
         // directory-only tracking is no longer a product operation.
-        const session = await ctx.harness.core.createSession({ directory });
-        this.activate(session.directory);
-        return {
-          ...s.projects.get(user(), session.directory),
-          sessionID: session.id,
-        };
+        const session = await nativeEffect(
+          ctx,
+          (operation) =>
+            ctx.harness.core.createSession({ directory }, operation),
+          createdReceipt,
+        );
+        return added(ctx, session);
       },
     });
     rpc.register("projects.inactive", {
+      execution: localExecution(
+        (p: { directory: string }) => ({ directory: p.directory }),
+        projectReceipt,
+      ),
       params(p) {
         if (typeof p.inactive !== "boolean") {
           throw new HarnessError("params", "Expected inactive boolean");
@@ -228,15 +306,22 @@ export class InboxFeature implements FrameSource {
           inactive: p.inactive,
         };
       },
-      handler: (_ctx, p) => {
-        const project = s.projects.inactive(user(), p.directory, p.inactive);
-        for (const entry of this.index.values()) {
-          if (entry.directory === p.directory) this.#observe(entry);
-        }
-        return s.projects.get(user(), project.directory);
-      },
+      handler: (ctx, p) =>
+        localWrite(ctx, (tx) => {
+          s.projects.inactive(user(), p.directory, p.inactive, tx);
+          for (const entry of this.index.values()) {
+            if (entry.directory === p.directory) {
+              this.#observe(entry, undefined, tx);
+            }
+          }
+          return s.projects.get(user(), p.directory);
+        }, projectReceipt),
     });
     rpc.register("projects.visit", {
+      execution: localExecution(
+        (p: { directory: string }) => ({ directory: p.directory }),
+        visitReceipt,
+      ),
       params(p) {
         if (p.active !== undefined && typeof p.active !== "boolean") {
           throw new HarnessError("params", "Expected active boolean");
@@ -246,22 +331,36 @@ export class InboxFeature implements FrameSource {
           active: p.active === true,
         };
       },
-      handler: (_ctx, p) => {
-        if (p.active) this.activate(p.directory);
-        return s.projects.find(user(), p.directory)
-          ? s.projects.visit(user(), p.directory)
-          : null;
-      },
+      handler: (ctx, p) =>
+        localWrite(ctx, (tx) => {
+          if (p.active) this.activate(p.directory, tx);
+          return s.projects.find(user(), p.directory)
+            ? s.projects.visit(user(), p.directory, tx)
+            : null;
+        }, visitReceipt),
     });
     rpc.register("projects.scan", {
+      execution: readExecution(() => ({ resource: "project-discovery" })),
       params: () => undefined,
-      handler: () => scanProjects(s.templates.list()),
+      handler: (ctx) => scanProjects(s.templates.list(), ctx.execution?.signal),
     });
     rpc.register("projects.templates", {
+      execution: localExecution(
+        () => ({ resource: "project-templates" }),
+        templatesReceipt,
+      ),
       params: (p) => strings(p, "templates").map(pathTemplate),
-      handler: (_ctx, templates) => s.templates.set(templates),
+      handler: (ctx, templates) =>
+        localWrite(
+          ctx,
+          (tx) => s.templates.set(templates, tx),
+          templatesReceipt,
+        ),
     });
     rpc.register("tasks.list", {
+      execution: readExecution((directory: string | undefined) => ({
+        directory,
+      })),
       params: (p) =>
         p.directory === undefined
           ? undefined
@@ -269,6 +368,10 @@ export class InboxFeature implements FrameSource {
       handler: (_ctx, directory) => s.tasks.list(directory),
     });
     rpc.register("tasks.create", {
+      execution: localExecution(
+        (p: { directory: string }) => ({ directory: p.directory }),
+        taskReceipt,
+      ),
       params: (p) => ({
         directory: projectPath(text(p, "directory")!),
         name: text(p, "name")!,
@@ -283,24 +386,50 @@ export class InboxFeature implements FrameSource {
             );
           }
         }
-        return s.tasks.create(p.directory, p.name, p.sessions);
+        return localWrite(
+          ctx,
+          (tx) => s.tasks.create(p.directory, p.name, p.sessions, tx),
+          taskReceipt,
+        );
       },
     });
     rpc.register("tasks.rename", {
+      execution: localExecution(
+        (p: { id: string }) => ({ resource: p.id }),
+        taskReceipt,
+      ),
       params: (p) => ({ id: text(p, "id")!, name: text(p, "name")! }),
-      handler: (_ctx, p) => s.tasks.rename(p.id, p.name),
+      handler: (ctx, p) =>
+        localWrite(ctx, (tx) => s.tasks.rename(p.id, p.name, tx), taskReceipt),
     });
     rpc.register("tasks.reorder", {
+      execution: localExecution(
+        (p: { directory: string }) => ({ directory: p.directory }),
+        tasksReceipt,
+      ),
       params: (p) => ({
         directory: projectPath(text(p, "directory")!),
         ids: strings(p, "ids"),
       }),
-      handler: (_ctx, p) => s.tasks.reorder(p.directory, p.ids),
+      handler: (ctx, p) =>
+        localWrite(
+          ctx,
+          (tx) => s.tasks.reorder(p.directory, p.ids, tx),
+          tasksReceipt,
+        ),
     });
     rpc.register("tasks.close", {
+      execution: localResultExecution(
+        (id: string) => ({ resource: id }),
+        closedReceipt,
+        () => null,
+      ),
       params: (p) => text(p, "id")!,
-      handler: (_ctx, id) => {
-        s.tasks.close(id);
+      handler: (ctx, id) => {
+        localWrite(ctx, (tx) => {
+          s.tasks.close(id, tx);
+          return { taskID: id, closed: true as const };
+        }, closedReceipt);
         return null;
       },
     });
@@ -309,6 +438,13 @@ export class InboxFeature implements FrameSource {
       sessionID: sessionID(p)!,
     });
     rpc.register("tasks.addSession", {
+      execution: localExecution(
+        (p: { sessionID: string; id: string }) => ({
+          sessionID: p.sessionID,
+          resource: p.id,
+        }),
+        taskReceipt,
+      ),
       params: member,
       async handler(ctx, p) {
         const directory = s.tasks.get(p.id).directory;
@@ -318,14 +454,35 @@ export class InboxFeature implements FrameSource {
             "Session belongs to another project",
           );
         }
-        return s.tasks.addSession(p.id, p.sessionID);
+        return localWrite(ctx, (tx) => {
+          if (s.tasks.get(p.id).directory !== directory) {
+            throw new HarnessError("params", "Task project changed");
+          }
+          return s.tasks.addSession(p.id, p.sessionID, tx);
+        }, taskReceipt);
       },
     });
     rpc.register("tasks.removeSession", {
+      execution: localExecution(
+        (p: { sessionID: string; id: string }) => ({
+          sessionID: p.sessionID,
+          resource: p.id,
+        }),
+        taskReceipt,
+      ),
       params: member,
-      handler: (_ctx, p) => s.tasks.removeSession(p.id, p.sessionID),
+      handler: (ctx, p) =>
+        localWrite(
+          ctx,
+          (tx) => s.tasks.removeSession(p.id, p.sessionID, tx),
+          taskReceipt,
+        ),
     });
     rpc.register("tasks.sessions", {
+      execution: localExecution(
+        (p: { id: string }) => ({ resource: p.id }),
+        taskReceipt,
+      ),
       params: (p) => ({ id: text(p, "id")!, sessions: sessions(p) }),
       async handler(ctx, p) {
         const directory = s.tasks.get(p.id).directory;
@@ -337,17 +494,31 @@ export class InboxFeature implements FrameSource {
             );
           }
         }
-        return s.tasks.sessions(p.id, p.sessions);
+        return localWrite(ctx, (tx) => {
+          if (s.tasks.get(p.id).directory !== directory) {
+            throw new HarnessError("params", "Task project changed");
+          }
+          return s.tasks.sessions(p.id, p.sessions, tx);
+        }, taskReceipt);
       },
     });
     rpc.register("sessions.seen", {
+      execution: localExecution(
+        (id: string) => ({ sessionID: id }),
+        seenReceipt,
+      ),
       params: (p) => sessionID(p)!,
       handler: async (ctx, id) => {
         if (!this.index.get(id)?.deleted) await ctx.sessionDirectory(id);
-        return s.seen.mark(user(), id);
+        return localWrite(
+          ctx,
+          (tx) => s.seen.mark(user(), id, tx),
+          seenReceipt,
+        );
       },
     });
     rpc.register("sessions.finishes", {
+      execution: readExecution(() => ({ resource: "session-finishes" })),
       params: () => undefined,
       handler: () => s.finishes.list(),
     });

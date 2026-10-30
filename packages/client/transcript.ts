@@ -3,13 +3,13 @@ import {
   type ClockedContent,
   compareTranscriptVersion,
   type ContentClock,
-  errorMessage,
   type LatestPrompt,
   type MessageCursor,
   type MessagePolicy,
   type TranscriptVersion,
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
+import { failureText } from "./failure-features.ts";
 import type { ContentOp, ContentSession, Message, Part } from "@otk/protocol";
 import { isAttentionOp } from "@otk/protocol";
 import { belongsToSession } from "@otk/protocol";
@@ -380,7 +380,7 @@ export function createTranscript(
       } catch (error) {
         if (valid()) {
           setState((draft) => {
-            draft.error = errorMessage(error);
+            draft.error = failureText(error);
           });
         }
       } finally {
@@ -404,7 +404,7 @@ export function createTranscript(
       }).catch((error) => {
         if (valid()) {
           setState((draft) => {
-            draft.error = errorMessage(error);
+            draft.error = failureText(error);
           });
         }
       });
@@ -444,7 +444,7 @@ export function createTranscript(
       const diagnostic = (error: unknown) => {
         if (current(id, request)) {
           setState((draft) => {
-            draft.error = errorMessage(error);
+            draft.error = failureText(error);
           });
         }
       };
@@ -564,7 +564,7 @@ export function createTranscript(
       setState((draft) => {
         draft.loading = false;
         draft.continuity = "missing";
-        draft.error = errorMessage(error);
+        draft.error = failureText(error);
         draft.pageError = draft.error;
       });
       if (resynced) {
@@ -1137,7 +1137,7 @@ export function createTranscript(
           if (current(id, request)) {
             setState((draft) => {
               draft.paging = false;
-              draft.error = errorMessage(error);
+              draft.error = failureText(error);
               draft.pageError = draft.error;
             });
           }

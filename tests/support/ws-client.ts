@@ -4,7 +4,8 @@ import WebSocket from "ws";
 import type { ServerFrame } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
 import { PROTOCOL_VERSION } from "@otk/protocol";
-import { type ClientIndex, createIndex } from "@otk/client";
+import { type ClientIndex, createIndex, RequestFailure } from "@otk/client";
+import type { RequestEvent } from "@otk/protocol";
 import { waitFor } from "./opencode.ts";
 import { resources } from "./resources.ts";
 export function ownSocket(socket: WebSocket): () => Promise<void> {
@@ -27,7 +28,7 @@ export function ownSocket(socket: WebSocket): () => Promise<void> {
 export class WsClient {
   frames: ServerFrame[] = [];
   ws: WebSocket;
-  #next = 0;
+  #clientID = crypto.randomUUID();
   #index?: ClientIndex;
   #indexed = 0;
   #close: () => Promise<void>;
@@ -104,15 +105,27 @@ export class WsClient {
     ) as Promise<ServerFrame>;
   }
   async rpc<T = unknown>(method: string, params: unknown): Promise<T> {
-    const id = String(++this.#next);
-    this.send({ t: "rpc", id, method, params });
-    const frame = await this.wait((frame) =>
-      frame.t === "rpc.result" && frame.id === id
-    ) as Extract<ServerFrame, { t: "rpc.result" }>;
-    if (!frame.ok) {
-      throw new Error(`${frame.error.code}: ${frame.error.message}`);
+    const welcome = this.frames.findLast((frame) => frame.t === "welcome");
+    if (!welcome || welcome.t !== "welcome") {
+      throw new Error("Request needs a welcome");
     }
-    return frame.result as T;
+    const ref = {
+      id: crypto.randomUUID(),
+      key: crypto.randomUUID(),
+      clientID: this.#clientID,
+      window: welcome.requests.window.id,
+    };
+    this.send({ t: "request", ref, method, params });
+    const frame = await this.wait((frame) =>
+      (frame.t === "request.result" || frame.t === "request.rejected") &&
+      frame.ref.key === ref.key
+    ) as Extract<RequestEvent, { t: "request.result" | "request.rejected" }>;
+    if (frame.t === "request.rejected") throw new RequestFailure(frame.error);
+    this.send({ t: "request.received", refs: [{ ref, seq: frame.seq }] });
+    if (!frame.outcome.ok) {
+      throw new RequestFailure(frame.outcome.error);
+    }
+    return frame.outcome.result as T;
   }
   async close(): Promise<void> {
     await this.#close();

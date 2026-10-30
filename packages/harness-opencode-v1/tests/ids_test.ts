@@ -136,6 +136,7 @@ test("public adapter qualifies every capability boundary, including externally c
         password: "",
         heartbeattimeout: 25,
         reconnectmax: 30,
+        requestms: 60000,
       },
       index: { days: 30 },
       messages: fixtureMessagePolicy,

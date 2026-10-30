@@ -7,7 +7,10 @@ export interface PermissionsCapability {
     input: PermissionReply,
     operation?: OperationContext,
   ): Promise<void>;
-  listPermissions(sessionID: string): Promise<PermissionRequest[]>;
+  listPermissions(
+    sessionID: string,
+    signal?: AbortSignal,
+  ): Promise<PermissionRequest[]>;
 }
 export interface PermissionsCapabilities {
   permissions: PermissionsCapability;

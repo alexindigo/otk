@@ -81,7 +81,7 @@ for (const mode of ["prompt", "command"] as const) {
         else await Deno.chmod(path, 0);
         await browser.click(".otk-prompt button[type=submit]");
         await browser.poll(
-          "document.querySelector('.otk-prompt [role=alert]')?.textContent.includes('Cannot read attachment \"selected.txt\"')",
+          "document.querySelector('.otk-composer-notice [role=alert]')?.textContent.includes('An attachment cannot be read')",
           5000,
         );
         assertEquals(
@@ -104,18 +104,22 @@ for (const mode of ["prompt", "command"] as const) {
         )!;
         assert(request, "The browser did not submit through the expected path");
         const result = browser.events.findLast((event) =>
-          event.method === "Network.webSocketFrameReceived" &&
-          JSON.parse(
+          event.method === "Network.webSocketFrameReceived" && (() => {
+            const frame = JSON.parse(
               (event.params.response as { payloadData: string }).payloadData,
-            ).id === request.frame.id
+            );
+            return (frame.t === "request.result" ||
+              frame.t === "request.rejected") &&
+              frame.ref.key === (request.frame.ref as { key: string }).key;
+          })()
         );
         assert(result);
         const frame = JSON.parse(
           (result.params.response as { payloadData: string }).payloadData,
         );
-        assertEquals(frame.t, "rpc.result");
+        assertEquals(frame.t, "request.result");
         assertEquals(
-          frame.ok,
+          frame.outcome.ok,
           false,
           "The attachment failure was acknowledged as success",
         );

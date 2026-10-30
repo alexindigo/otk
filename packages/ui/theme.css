@@ -166,7 +166,7 @@ p {
   color: var(--secondary);
 }
 .otk-error {
-  color: var(--otk-attention);
+  color: var(--danger);
   overflow-wrap: anywhere;
 }
 .otk-chip {
@@ -401,4 +401,5 @@ h6 {
 }
 :root {
   --deleted-fg: color-mix(in srgb, var(--otk-fg) 70%, var(--otk-bg));
+  --danger: var(--otk-danger);
 }

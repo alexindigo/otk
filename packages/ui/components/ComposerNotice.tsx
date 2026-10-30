@@ -33,7 +33,7 @@ export function ComposerNoticeRow(props: {
         : "false"}
       {...native.attributes}
     >
-      {props.icon}
+      <span class="otk-composer-notice-icon">{props.icon}</span>
       <span class="otk-composer-notice-content">{props.children}</span>
       {props.trailing}
     </Control>

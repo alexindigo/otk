@@ -25,3 +25,6 @@
 .otk-composer:focus-within {
   border-color: var(--otk-action-focus);
 }
+.otk-composer-body.is-noticed {
+  border-top: 1px solid var(--otk-border);
+}

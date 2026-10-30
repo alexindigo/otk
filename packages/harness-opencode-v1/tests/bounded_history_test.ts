@@ -189,6 +189,7 @@ for (const mode of ["SQL", "API"] as const) {
           db,
           heartbeattimeout: 25,
           reconnectmax: 30,
+          requestms: 60000,
         },
         index: { days: 30 },
         messages: fixtureMessagePolicy,
@@ -258,6 +259,7 @@ test("message collection owner rejects stock's unbounded limit values and stalle
     db: "",
     heartbeattimeout: 25,
     reconnectmax: 30,
+    requestms: 60000,
   }, () => {
     calls++;
     return Promise.resolve(

@@ -3,6 +3,10 @@ import { createSignal, onSettled, Show } from "solid-js";
 import { render } from "@solidjs/web";
 import ContentTextarea from "../../components/ContentTextarea.tsx";
 import { nativeAttributes } from "../../components/native-attributes.ts";
+import {
+  contextTarget,
+  contextTargets,
+} from "../../components/context-target.ts";
 import "./style.css" with { type: "text" };
 
 const [shown, setShown] = createSignal(true),
@@ -11,6 +15,25 @@ const [getter, setGetter] = createSignal(false),
   [target, setTarget] = createSignal("");
 const [clicks, setClicks] = createSignal(0),
   [receiver, setReceiver] = createSignal("");
+const [contextShown, setContextShown] = createSignal(true);
+let retainedTarget: HTMLElement | undefined;
+declare global {
+  var contextProbe: () => number;
+}
+globalThis.contextProbe = () =>
+  contextTargets(retainedTarget ? [retainedTarget] : []).length;
+function ContextProbe() {
+  return (
+    <div
+      id="context-target"
+      ref={[(element: HTMLElement) => {
+        retainedTarget = element;
+      }, contextTarget(() => ({ kind: "probe", data: "live" }))]}
+    >
+      Context target
+    </div>
+  );
+}
 const [forwarded, setForwarded] = createSignal<Record<string, unknown>>({
   id: "forwarded-button",
   "aria-label": "Original attributes",
@@ -94,6 +117,16 @@ render(() => (
     <ForwardedButton />
     <output id="clicks">{clicks()}</output>
     <output id="receiver">{receiver()}</output>
+    <button
+      type="button"
+      id="retire-context"
+      onClick={() => setContextShown(false)}
+    >
+      Retire context
+    </button>
+    <Show when={contextShown()}>
+      <ContextProbe />
+    </Show>
     <Show when={shown()}>
       <Editor />
     </Show>

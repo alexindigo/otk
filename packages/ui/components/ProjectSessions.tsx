@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "@otk/client";
 import "./ProjectSessions.css" with { type: "text" };
 import ListRow from "./ListRow.tsx";
 import { createMemo, createSignal, Show } from "solid-js";
@@ -66,7 +66,7 @@ export default function ProjectSessions(props: {
   );
   const create = ownedAction("project.session.new", props.onCreate);
   const run = (promise: Promise<unknown>) =>
-    void promise.catch((e) => setError(errorMessage(e)));
+    void promise.catch((e) => setError(failureText(e)));
   const hierarchy = createSessionTree();
   const rows = createMemo(() => {
     const project = props.project;
@@ -334,7 +334,7 @@ export default function ProjectSessions(props: {
                       </Show>
                       <Show when={row().session.attention.error}>
                         <span
-                          title={row().session.attention.error}
+                          title="The agent reported a session failure"
                           aria-label="Session error"
                         >
                           Error

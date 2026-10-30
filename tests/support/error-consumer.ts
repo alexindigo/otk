@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import type { ContentSession } from "@otk/protocol";
+import { type ContentSession, sessionErrorObservation } from "@otk/protocol";
+import { presentFailure } from "@otk/client";
 import { waitFor } from "./opencode.ts";
 import type { Cdp } from "./cdp.ts";
 import type { WsClient } from "./ws-client.ts";
@@ -25,7 +26,9 @@ export async function assertErrorConsumer(
     await browser.evaluate(
       "document.querySelector('.otk-session-error-message').textContent",
     ),
-    snapshot.error,
+    sessionErrorObservation(state)?.failure
+      ? presentFailure(sessionErrorObservation(state)!.failure!).text
+      : "The agent reported a session failure. Review the conversation before continuing",
   );
   const content = await client.wait((frame) =>
     frame.t === "content" && frame.sessionID === sessionID &&
@@ -47,60 +50,27 @@ export async function assertErrorConsumer(
         JSON.stringify(sessionID)
       }] [aria-label="Session error"]').title`,
     ),
-    snapshot.error,
-  );
-  if (
-    !await browser.evaluate(
-      "document.querySelector('.otk-session-error-details').open",
-    )
-  ) await browser.click(".otk-session-error-details summary");
-  await browser.poll(
-    "document.querySelector('.otk-session-error-details').open",
+    "The agent reported a session failure",
   );
   assertEquals(
     await browser.evaluate(
-      "[...document.querySelectorAll('.otk-error-observation-message')].map(el=>el.textContent)",
+      "document.querySelector('.otk-session-error-details')",
     ),
-    state.observations.map((item) => item.message),
-  );
-  assertEquals(
-    await browser.evaluate(
-      "[...document.querySelectorAll('.otk-error-observation')].map(el=>el.dataset.source)",
-    ),
-    state.observations.map((item) => item.source),
+    null,
   );
   const rendered = await browser.evaluate<string>(
-    "document.querySelector('.otk-session-error-details').textContent",
+    "document.querySelector('.otk-session-error').textContent",
   );
   for (const observation of state.observations) {
-    if (observation.ref) assert(rendered.includes(observation.ref));
-    if (observation.requestID) assert(rendered.includes(observation.requestID));
-    if (observation.eventID) assert(rendered.includes(observation.eventID));
-    if (observation.kind) assert(rendered.includes(observation.kind));
-    if (observation.status) {
-      assert(rendered.includes(String(observation.status)));
+    if (observation.ref) assert(!rendered.includes(observation.ref));
+    if (observation.requestID) {
+      assert(!rendered.includes(observation.requestID));
     }
+    if (observation.eventID) assert(!rendered.includes(observation.eventID));
     if (observation.source === "event") {
       assertEquals(observation.requestID, undefined);
     }
   }
-  await browser.click(".otk-session-error-details summary");
-  await browser.poll(
-    "!document.querySelector('.otk-session-error-details').open",
-  );
-  for (const type of ["rawKeyDown", "char", "keyUp"]) {
-    await browser.send("Input.dispatchKeyEvent", {
-      type,
-      key: "Enter",
-      code: "Enter",
-      windowsVirtualKeyCode: 13,
-      nativeVirtualKeyCode: 13,
-      ...(type === "char" ? { text: "\r", unmodifiedText: "\r" } : {}),
-    });
-  }
-  await browser.poll(
-    "document.querySelector('.otk-session-error-details').open",
-  );
   return snapshot;
 }
 export async function reloadErrorConsumer(

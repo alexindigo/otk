@@ -4,6 +4,11 @@ import { Client, NativeRequestFailure } from "../client.ts";
 import type { OperationContext } from "@otk/protocol";
 import { prompt } from "../prompt.ts";
 import { shell } from "../shell.ts";
+import { commands } from "../commands.ts";
+import { files } from "../files.ts";
+import { resources } from "../resources.ts";
+import { questions } from "../questions.ts";
+import { sessionDirectory } from "../directory.ts";
 
 Deno.test("classified native effect fences before I/O and reports ambiguous abort separately from rejection", async () => {
   const calls: string[] = [];
@@ -144,4 +149,54 @@ Deno.test("mutating native ports forward the context and scoped launches join ac
   held.resolve();
   await work;
   assertEquals(completed, true);
+});
+
+Deno.test("native catalog readers propagate cancellation through directory preparation and HTTP", async () => {
+  const controller = new AbortController(),
+    observed: (AbortSignal | undefined | null)[] = [];
+  const client = new Client({
+    url: "http://fixture",
+    username: "",
+    password: "",
+    db: "",
+    heartbeattimeout: 25,
+    reconnectmax: 30,
+    requestms: 1000,
+  }, (url, options) => {
+    observed.push(options?.signal);
+    return Promise.resolve(
+      Response.json(
+        new URL(String(url)).pathname === "/experimental/resource" ? {} : [],
+      ),
+    );
+  });
+  const directory = {
+    cached: () => "/p",
+    resolve: () => Promise.resolve("/p"),
+  };
+  await commands(
+    client,
+    directory,
+    () => ({ admitted: Promise.resolve(), settled: Promise.resolve() }),
+  ).listCommands("opcv1-s", controller.signal);
+  await files(client, directory).findFiles("opcv1-s", "", controller.signal);
+  await resources(client, directory).listResources(
+    "opcv1-s",
+    controller.signal,
+  );
+  await questions(client, directory, () => undefined, new Map()).listQuestions(
+    "opcv1-s",
+    controller.signal,
+  );
+  controller.abort();
+  assertEquals(observed.length, 6);
+  assertEquals(observed.map((signal) => signal?.aborted), Array(6).fill(true));
+  let prepared = 0;
+  const resolver = sessionDirectory(() => undefined, (_id, signal) => {
+    signal?.throwIfAborted();
+    prepared++;
+    return Promise.resolve({ directory: "/p" });
+  });
+  await assertRejects(() => resolver.resolve("opcv1-s", controller.signal));
+  assertEquals(prepared, 0);
 });

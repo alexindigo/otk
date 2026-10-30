@@ -86,6 +86,7 @@ for (const api of [false, true]) {
           password: "",
           heartbeattimeout: 25,
           reconnectmax: 30,
+          requestms: 60000,
         },
         index: { days: 30 },
       },

@@ -102,7 +102,7 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
                 parts?: Extract<PromptPart, { kind: "file" }>[];
               } = {},
             ) => {
-              return ctx.submit(async () => {
+              return ctx.submit(async (options) => {
                 if (!args.selection) await ctx.ready();
                 const selection = args.selection ??
                   ctx.nextSelection(ctx.change((draft) => draft)).input;
@@ -116,7 +116,7 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
                   ): part is Extract<PromptPart, { kind: "file" }> =>
                     part.kind === "file"
                   ),
-                });
+                }, options);
               });
             },
           });

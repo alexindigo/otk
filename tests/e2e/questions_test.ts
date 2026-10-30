@@ -116,7 +116,7 @@ test("P1 question tabs, keyboard choices, multi/custom answers, confirmation and
     );
     assert(
       await browser.evaluate(
-        "document.querySelector('.otk-question-actions button:nth-child(2)').title.includes('Esc') && !document.querySelector('.otk-question-actions').textContent.includes('j/k')",
+        "document.querySelector('.otk-question-actions button[title^=\"Skip question\"]').title.includes('Esc') && !document.querySelector('.otk-question-actions').textContent.includes('j/k')",
       ),
     );
     await browser.screenshot(join(f.oc.root, "p1-question-tabs.png"));

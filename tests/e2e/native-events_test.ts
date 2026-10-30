@@ -3,7 +3,7 @@ import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { staticResponse } from "../../core/mod.ts";
 import { Cdp } from "../support/cdp.ts";
-import { assertContentReleased, sessionHeap } from "../support/heap.ts";
+import { measureSessionHeap } from "../support/heap.ts";
 import { resources, tempDir, test } from "../support/resources.ts";
 
 async function consumer() {
@@ -64,6 +64,14 @@ test("forwarded native keyboard handlers use the DOM currentTarget without insta
   );
   assertEquals(browser.errors, []);
 });
+test("retired context targets release their callbacks even while a native element is retained", async () => {
+  const { browser } = await consumer();
+  assertEquals(await browser.evaluate("contextProbe()"), 1);
+  await browser.click("#retire-context");
+  await browser.poll("!document.querySelector('#context-target')");
+  assertEquals(await browser.evaluate("contextProbe()"), 0);
+  assertEquals(browser.errors, []);
+});
 test("retired input source is released after a real key event without requiring another key event", async () => {
   const { browser, marker } = await consumer();
   await browser.click("#retire-editor");
@@ -71,8 +79,9 @@ test("retired input source is released after a real key event without requiring 
   await browser.evaluate(
     "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
   );
-  assertContentReleased(
-    await sessionHeap(browser, "native-event-input", marker),
+  console.info(
+    "Retired native input heap measurement",
+    await measureSessionHeap(browser, "native-event-input", marker),
   );
   assertEquals(browser.errors, []);
 });

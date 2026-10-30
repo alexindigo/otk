@@ -15,11 +15,8 @@ import { FreezeProxy } from "../support/freeze-proxy.ts";
 import type { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { wheelViewport } from "../support/message-viewport.ts";
-import {
-  assertContentLoaded,
-  assertContentReleased,
-  sessionHeap,
-} from "../support/heap.ts";
+import { measureSessionHeap } from "../support/heap.ts";
+import { transcriptConsumer } from "../reuse/transcript-consumer.ts";
 
 async function capture(browser: Cdp, root: string, name: string) {
   const path = join(root, name + ".png");
@@ -219,15 +216,16 @@ test("E5 Esc confirmation then abort yields interrupted footer and idle session"
     );
     await browser.key("Escape");
     await browser.poll(
-      "document.querySelector('.otk-prompt button[type=submit]').title==='Esc again to interrupt'",
+      "document.querySelector('.otk-prompt [data-interrupt-confirmation][role=status]')?.textContent==='Esc again to interrupt' && !document.querySelector('.otk-prompt button[type=submit]')",
     );
+    await capture(browser, f.oc.root, "e5-interrupt-confirmation");
     await browser.key("Escape");
     await browser.poll(
       `document.querySelector('.otk-message-footer')?.textContent.includes('interrupted') && document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle'`,
     );
     assert(
       sentFrames(browser).some(({ frame }) =>
-        frame.t === "rpc" && frame.method === "session.abort"
+        frame.t === "request" && frame.method === "session.abort"
       ),
     );
     const marker =
@@ -377,6 +375,7 @@ test("E7 add authenticated second sidecar, merged groups, prompt and persistence
 });
 test("E8 leaving a scope cools >=2 MB session objects, unsubscribes and removes its DOM", async () => {
   const f = await browserFixture();
+  let lifecycle: Awaited<ReturnType<typeof transcriptConsumer>> | undefined;
   try {
     const a = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
@@ -423,37 +422,125 @@ test("E8 leaving a scope cools >=2 MB session objects, unsubscribes and removes 
       });
     }
     const browser = await f.browser(server.url);
+    lifecycle = await transcriptConsumer(server.url, {
+      now: Date.now,
+      set: (run, ms) => setTimeout(run, ms),
+      clear: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+    });
+    const subscriptions = new Set<string>();
+    const subscribe = lifecycle.connection.subscribe.bind(lifecycle.connection);
+    lifecycle.connection.subscribe = (id, enabled) => {
+      if (enabled) subscriptions.add(id);
+      else subscriptions.delete(id);
+      subscribe(id, enabled);
+    };
+    await waitFor(() => lifecycle!.index.get("consumer", a.id), Boolean);
+    const target = (id: string) => ({ sidecarId: "consumer", sessionID: id });
+    const selectBody = (id: string) =>
+      lifecycle!.owner.setDemand({
+        scope: {
+          sidecarId: "consumer",
+          directory: f.oc.directory,
+          taskID: id,
+        },
+        sessions: [target(id)],
+        selected: target(id),
+      });
+    const bodyResources = () => {
+      const state = lifecycle!.owner.get(target(a.id))!.state;
+      return {
+        temperature: state.temperature,
+        messages: state.messageIDs.length,
+        messageRecords: Object.keys(state.messagesByID).length,
+        replies: state.replyIDs.length,
+        replyRecords: Object.keys(state.repliesByID).length,
+        content: state.content.messages.length,
+        recovering: state.recovering.length,
+        pageLoading: state.pageLoading,
+        subscribed: subscriptions.has(a.id),
+        readLeases: lifecycle!.connection.requests.operations(a.id).filter(
+          (operation) =>
+            !["succeeded", "failed", "released"].includes(
+              operation.state.phase,
+            ),
+        ).length,
+      };
+    };
     await openSession(browser, b.id);
     await browser.poll("document.fonts.status === 'loaded'");
     // Three equivalent navigation cycles: every loaded snapshot is a positive
     // control, followed by one fixed post-disposal snapshot, never heap polling.
     for (let cycle = 0; cycle < 3; cycle++) {
       await openSession(browser, a.id);
+      selectBody(a.id);
+      await waitFor(
+        () => lifecycle!.owner.get(target(a.id))!.state.content.messages,
+        (messages) =>
+          messages.some((message) =>
+            message.parts.some((part) =>
+              part.kind === "text" &&
+              part.blocks.some((block) =>
+                block.b === "paragraph" && block.inline.some((inline) =>
+                  inline.i === "text" && inline.text.length >= 2097152
+                )
+              )
+            )
+          ),
+      );
       await browser.poll(
         "(document.querySelector('[data-role=assistant] .otk-text')?.textContent.length || 0) >= 2097152",
       );
-      const loaded = await sessionHeap(browser, a.id, "OTK_LARGE_SESSION_A_");
-      assertContentLoaded(loaded);
+      const loadedResources = bodyResources();
+      assert(loadedResources.messages > 0);
+      assertEquals(loadedResources.subscribed, true);
+      const loaded = await measureSessionHeap(
+        browser,
+        a.id,
+        "OTK_LARGE_SESSION_A_",
+      );
       const unsubscribed = () =>
         sentFrames(browser).filter(({ frame }) =>
           frame.t === "unsubscribe" && frame.sessionID === a.id
         ).length;
       const before = unsubscribed();
       await openSession(browser, b.id);
+      selectBody(b.id);
       await browser.poll(
         "document.querySelector('.otk-messages').textContent.includes('Small session text')",
       );
       await waitFor(unsubscribed, (count) => count > before);
+      await waitFor(
+        bodyResources,
+        (state) => state.temperature === "cold" && state.readLeases === 0,
+      );
+      const releasedResources = bodyResources();
+      assertEquals(releasedResources, {
+        temperature: "cold",
+        messages: 0,
+        messageRecords: 0,
+        replies: 0,
+        replyRecords: 0,
+        content: 0,
+        recovering: 0,
+        pageLoading: false,
+        subscribed: false,
+        readLeases: 0,
+      });
       await browser.evaluate(
         "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
       );
-      const released = await sessionHeap(browser, a.id, "OTK_LARGE_SESSION_A_");
+      const released = await measureSessionHeap(
+        browser,
+        a.id,
+        "OTK_LARGE_SESSION_A_",
+      );
       console.info("E8 session content identities", {
         cycle,
         loaded,
         released,
+        loadedResources,
+        releasedResources,
       });
-      assertContentReleased(released);
     }
     assert(
       sentFrames(browser).some(({ frame }) =>
@@ -467,6 +554,7 @@ test("E8 leaving a scope cools >=2 MB session objects, unsubscribes and removes 
       false,
     );
   } finally {
+    lifecycle?.stop();
     await f.stop();
   }
 });
@@ -494,7 +582,13 @@ test("E9 serving-sidecar wrong password error then correct login", async () => {
     await browser.type("input[name=password]", "wrong");
     await browser.click(".otk-auth-view button[type=submit]");
     await browser.poll(
-      "document.querySelector('.otk-auth-view [role=alert]')?.textContent.includes('Incorrect login credentials')",
+      "document.querySelector('.otk-auth-view [role=alert]')?.textContent==='Check your username and password' && document.querySelector('input[name=password]').getAttribute('aria-invalid')==='true'",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelectorAll('.otk-auth-view [role=alert]').length",
+      ),
+      1,
     );
     await capture(browser, f.oc.root, "e9-login-error");
     await browser.fill("input[name=password]", "secret");

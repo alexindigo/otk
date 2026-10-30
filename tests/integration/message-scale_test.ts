@@ -172,7 +172,10 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
     {
       status() {},
       frame(frame) {
-        if (frame.t === "rpc.result" && !frame.ok) failures.push(frame);
+        if (
+          frame.t === "request.result" && !frame.outcome.ok ||
+          frame.t === "request.rejected"
+        ) failures.push(frame);
         let accepted = true;
         if (frame.t === "index.snapshot" || frame.t === "index.patch") {
           accepted = index.receive("scale", frame);

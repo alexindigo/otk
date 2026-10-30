@@ -27,6 +27,7 @@ const text = THEME_SLOTS.filter((slot) =>
     "accent-text",
     "status-retry",
     "status-error",
+    "danger",
     "warning",
     "success",
     "attention",
@@ -94,6 +95,23 @@ Deno.test("every theme text, CTA and focus pair meets its contrast contract on e
   }
   assert(pairs > 800, "The complete surface matrix must be exercised");
   assertEquals(failures, []);
+});
+Deno.test("failure text has a semantic danger role independent of focus and action paint", () => {
+  const themes = new ThemeRegistry();
+  registerOtkThemes(themes);
+  for (
+    const [id, expected] of [
+      ["otk-dark", "#ff8080"],
+      ["otk-light", "#b5141a"],
+      ["otk-light-stone", "#b5141a"],
+    ] as const
+  ) {
+    const colors =
+      themes.resolve(id, id === "otk-dark" ? "dark" : "light").colors;
+    assertEquals(colors.danger, expected);
+    assert(colors.danger !== colors.focus);
+    assert(colors.danger !== colors.accent);
+  }
 });
 Deno.test("status lamps consume semantic theme paint through the shared role aliases", async () => {
   const css = await Deno.readTextFile(

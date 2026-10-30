@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { relative, resolve, toFileUrl } from "@std/path";
-import type { PromptPart } from "@otk/protocol";
+import {
+  type OperationContext,
+  OperationFailure,
+  type PromptPart,
+} from "@otk/protocol";
 import { HarnessError, type PromptCapability } from "@otk/harness";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
@@ -25,7 +29,7 @@ export function prompt(
             : {}),
           query: { directory: dir },
           body: {
-            parts: await mapPromptParts(input.parts, dir),
+            parts: await mapPromptParts(input.parts, dir, operation),
             variant: input.variant,
             agent: input.agent,
             model: input.model
@@ -53,6 +57,7 @@ export function prompt(
 export async function mapPromptParts(
   parts: PromptPart[],
   directory: string,
+  operation?: OperationContext,
 ): Promise<RawPromptPart[]> {
   return await Promise.all(
     parts.map(async (part): Promise<RawPromptPart> => {
@@ -111,7 +116,14 @@ export async function mapPromptParts(
         url: url.href,
       };
     }),
-  );
+  ).catch((cause: unknown) => {
+    // This owner knows preparation completed no native I/O. A conservative core
+    // fence must not turn a proven input rejection into an uncertain effect.
+    if (operation && cause instanceof HarnessError) {
+      throw new OperationFailure("rejected", cause.code, cause);
+    }
+    throw cause;
+  });
 }
 
 /** Submission requires readable paths; discovery's no-match policy cannot apply. */
@@ -128,12 +140,14 @@ async function requiredAttachment(
       using _file = await Deno.open(path, { read: true });
     }
     return info;
-  } catch {
-    throw new HarnessError(
+  } catch (cause) {
+    const failure = new HarnessError(
       "attachment",
       `Cannot read attachment ${
         JSON.stringify(label)
       }. Restore access or remove it before sending.`,
     );
+    failure.cause = cause;
+    throw failure;
   }
 }

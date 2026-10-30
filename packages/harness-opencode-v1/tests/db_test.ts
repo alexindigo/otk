@@ -157,6 +157,7 @@ test("usage reads every bounded metadata page and tool labels without content or
     db: "",
     heartbeattimeout: 25,
     reconnectmax: 30,
+    requestms: 60000,
   }, (input) => {
     const url = new URL(String(input)),
       limit = Number(url.searchParams.get("limit"));

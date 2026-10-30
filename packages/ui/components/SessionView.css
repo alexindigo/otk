@@ -47,3 +47,11 @@
   display: grid;
   grid-template-rows: auto var(--radius-composer) auto;
 }
+.otk-messages.is-empty {
+  display: grid;
+}
+.otk-messages.is-empty .otk-message-flow {
+  grid-area: 1 / 1;
+  align-self: center;
+  width: 100%;
+}

@@ -138,7 +138,7 @@ test("active Sessions windows its DOM and releases it on collapse", async () => 
       mounted: count,
     });
     const rowRequests = sentFrames(b).map((e) => e.frame).filter((frame) =>
-      frame.t === "rpc" &&
+      frame.t === "request" &&
       [
         "session.get",
         "session.messages",
@@ -451,7 +451,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
         assert(Math.max(...gaps) - Math.min(...gaps) <= 1);
       }
       const frames = sentFrames(b).map((e) => e.frame).filter((f) =>
-        f.t === "rpc"
+        f.t === "request"
       );
       assertEquals(frames.filter((f) => f.method === "usage.get").length, 0);
       assertEquals(b.errors, []);

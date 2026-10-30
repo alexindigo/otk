@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  connectRequests,
+  fixtureFailure,
+  replyRequest,
+} from "../../../tests/support/request-wire.ts";
+import {
   fixtureMessagePolicy,
   fixturePage,
 } from "../../../tests/support/message-pages.ts";
@@ -30,14 +35,15 @@ const message: Message = {
   parts: [],
 };
 function fixture() {
-  const frames: Extract<ClientFrame, { t: "rpc" }>[] = [];
+  const frames: Extract<ClientFrame, { t: "request" }>[] = [];
   const connection = new SidecarConnection("http://example.test", {
     status() {},
     frame() {},
   }, { messages: fixtureMessagePolicy });
   connection.send = (frame) => {
-    if (frame.t === "rpc") frames.push(frame);
+    if (frame.t === "request") frames.push(frame);
   };
+  connectRequests(connection.rpc);
   connection.supports = (capability) =>
     capability === "permissions" || capability === "questions";
   connection.subscribe = () => {};
@@ -45,16 +51,12 @@ function fixture() {
   const reply = (method: string, result: unknown, error?: string) => {
     const at = frames.findIndex((frame) => frame.method === method);
     assert(at >= 0, `missing request: ${method}`);
-    const { id } = frames.splice(at, 1)[0];
-    connection.rpc.receive(
-      error
-        ? {
-          t: "rpc.result",
-          id,
-          ok: false,
-          error: { code: "fixture", message: error },
-        }
-        : { t: "rpc.result", id, ok: true, result },
+    const frame = frames.splice(at, 1)[0];
+    replyRequest(
+      connection.rpc,
+      frame,
+      result,
+      error ? fixtureFailure("fixture") : undefined,
     );
   };
   let sequence = 0;
@@ -304,7 +306,9 @@ Deno.test("essential transcript publishes independently of failed or held attent
     });
     f.reply("question.list", []);
     f.reply("session.children", undefined, "siblings offline");
-    await f.until(() => !!f.owner.state.error?.includes("siblings offline"));
+    await f.until(() =>
+      f.owner.state.error === "Could not finish this action. Try again"
+    );
     assertEquals(
       f.owner.state.content.questions.map((question) => question.id),
       ["live"],

@@ -34,6 +34,7 @@ Deno.test("fork translates inclusive boundaries with scalar DB and bounded API f
     db: "",
     heartbeattimeout: 25,
     reconnectmax: 30,
+    requestms: 60000,
   }, (input, options) => {
     const url = new URL(String(input));
     if (url.pathname.endsWith("/message")) {

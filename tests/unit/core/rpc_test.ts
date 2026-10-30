@@ -34,6 +34,7 @@ import {
   RpcRegistry,
 } from "../../../core/mod.ts";
 import { fixture } from "./support.ts";
+import { connectRequests, replyRequest } from "../../support/request-wire.ts";
 
 declare module "@otk/protocol" {
   interface RpcMethods {
@@ -114,16 +115,12 @@ test("feature-owned RPC augmentation reaches direct and invocation-time selected
     frame() {},
   });
   connection.send = (frame) => {
-    if (frame.t !== "rpc") return;
+    if (frame.t !== "request") return;
     void registry.dispatch(frame.method, frame.params).then((result) => {
-      connection.rpc.receive(JSON.parse(JSON.stringify({
-        t: "rpc.result",
-        id: frame.id,
-        ok: true,
-        result,
-      })));
+      replyRequest(connection.rpc, frame, JSON.parse(JSON.stringify(result)));
     });
   };
+  connectRequests(connection.rpc);
   let selection: Selection = { sidecarId: "owned", sessionID: "first" };
   const current = createCurrentClient(() => selection, () => connection);
   try {

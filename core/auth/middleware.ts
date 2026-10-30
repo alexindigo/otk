@@ -12,6 +12,7 @@ const publicPaths = new Set([
   "/api/setup",
   "/api/login",
   "/api/session",
+  "/api/request-events",
 ]);
 const middleware: Middleware = async (request, { app }) => {
   if (
@@ -26,7 +27,8 @@ const middleware: Middleware = async (request, { app }) => {
         "Access-Control-Allow-Origin": origin,
         "Access-Control-Allow-Credentials": "true",
         "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type",
+        "Access-Control-Allow-Headers":
+          "Content-Type, X-OTK-Request, X-OTK-Receipt",
         "Vary": "Origin",
       },
     });

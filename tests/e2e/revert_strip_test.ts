@@ -40,6 +40,7 @@ test("shared-directory revert follows native file rollback without confirmation 
       name: "edit",
       input: { filePath: path, oldString: "A", newString: "B" },
     });
+    await waitForReply(b, other.id, "Finished edit.");
     const transcript = await f.oc.request(`/session/${other.id}/message`);
     assertEquals(await Deno.readTextFile(path), "B\n");
     await openSession(b, a.id);
@@ -129,7 +130,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await capture(b, `${theme}-strip-collapsed`);
       assertEquals(
         await b.evaluate(
-          "(()=>{const notice=document.querySelector('.otk-composer-notice').getBoundingClientRect(),input=document.querySelector('.otk-composer-input').getBoundingClientRect(),prompt=document.querySelector('.otk-prompt').getBoundingClientRect();return {sameLeft:notice.left===input.left,sameRight:notice.right===input.right,joined:notice.bottom>input.top,promptInside:prompt.top>=input.top}})()",
+          "(()=>{const notice=document.querySelector('.otk-composer-notice').getBoundingClientRect(),input=document.querySelector('.otk-composer-input').getBoundingClientRect(),prompt=document.querySelector('.otk-prompt').getBoundingClientRect();return {sameLeft:notice.left===input.left,sameRight:notice.right===input.right,joined:Math.abs(notice.bottom-input.top)<=1,promptInside:prompt.top>=input.top}})()",
         ),
         { sameLeft: true, sameRight: true, joined: true, promptInside: true },
       );
@@ -236,10 +237,11 @@ test("revert pending and error stay joined to the composer and retry clears fail
     await client.connect();
     const b = await f.browser(server.url);
     await openSession(b, s.id);
+    await b.poll("!!document.querySelector('.otk-user-bubble')");
     await b.evaluate("document.querySelector('.otk-user-bubble').focus()");
     await b.click('[data-message-command="prompt.revert"]');
     await b.poll(
-      "document.querySelector('.otk-rollback-status')?.textContent==='Rolling back…'",
+      "document.querySelector('.otk-composer-notice [role=status]')?.textContent.includes('Rolling back')",
     );
     for (const theme of ["otk-dark", "otk-light"]) {
       await client.rpc("prefs.set", { key: "theme", value: theme });
@@ -248,7 +250,15 @@ test("revert pending and error stay joined to the composer and retry clears fail
     }
     release.resolve();
     await b.poll(
-      "document.querySelector('.otk-rolled-back-strip [role=alert]')?.textContent==='The session is working. Try again when it finishes.'",
+      "document.querySelector('.otk-composer-notice [role=alert]')?.textContent.includes('This session is working')",
+    );
+    await b.poll("!document.querySelector('.otk-rollback-status')");
+    assertEquals(
+      await b.evaluate(
+        "document.querySelectorAll('.otk-composer-notice [role=alert]').length",
+      ),
+      1,
+      "A correlated rollback rejection has one feedback owner",
     );
     assertEquals(
       await b.evaluate("document.querySelectorAll('[data-role=user]').length"),
@@ -266,7 +276,7 @@ test("revert pending and error stay joined to the composer and retry clears fail
       >(`(()=>{
       const row=document.querySelector(${
         JSON.stringify(selector)
-      }),text=row.querySelector('.otk-composer-notice-content')||row.querySelector('strong')||row,icon=row.querySelector(':scope > svg');
+      }),text=row.querySelector('.otk-composer-notice-content')||row.querySelector('strong')||row,icon=row.querySelector('.otk-composer-notice-icon');
       const r=row.getBoundingClientRect(),t=text.getBoundingClientRect(),i=icon?.getBoundingClientRect();
       return {row:r.height,notice:document.querySelector('.otk-composer-notice').getBoundingClientRect().height,textOffset:(t.top+t.height/2)-(r.top+r.height/2),icon:i?[i.width,i.height]:null,iconOffset:i?(i.top+i.height/2)-(r.top+r.height/2):null};
     })()`);
@@ -276,7 +286,7 @@ test("revert pending and error stay joined to the composer and retry clears fail
       await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
       errorRows.set(
         theme,
-        await geometry(".otk-rolled-back-strip [role=alert]"),
+        await geometry(".otk-composer-notice [role=alert]"),
       );
       await capture(b, `${theme}-strip-error`);
     }
@@ -308,7 +318,7 @@ test("revert pending and error stay joined to the composer and retry clears fail
         collapsedGeometry.icon,
         "The leading icon slot must match",
       );
-      assertEquals(errorGeometry.icon, [16, 16]);
+      assertEquals(errorGeometry.icon, [errorGeometry.row, errorGeometry.row]);
       assertEquals(
         Math.abs(errorGeometry.textOffset) < 0.5,
         true,

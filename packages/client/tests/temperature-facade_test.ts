@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  connectRequests,
+  replyRequest,
+} from "../../../tests/support/request-wire.ts";
 import { assert, assertEquals } from "@std/assert";
 import type { ClientFrame } from "@otk/protocol";
 import { createSession, SidecarConnection } from "../mod.ts";
@@ -8,14 +12,15 @@ import {
 } from "../../../tests/support/message-pages.ts";
 
 Deno.test("selected facade borrows a preloaded resource on return and immediately reserves the next ten", async () => {
-  const frames: Extract<ClientFrame, { t: "rpc" }>[] = [];
+  const frames: Extract<ClientFrame, { t: "request" }>[] = [];
   const connection = new SidecarConnection("http://example.test", {
     status() {},
     frame() {},
   }, { messages: fixtureMessagePolicy });
   connection.send = (frame) => {
-    if (frame.t === "rpc") frames.push(frame);
+    if (frame.t === "request") frames.push(frame);
   };
+  connectRequests(connection.rpc);
   connection.subscribe = () => {};
   const owner = createSession(() => connection, () => undefined);
   const flush = async () => {
@@ -26,11 +31,10 @@ Deno.test("selected facade borrows a preloaded resource on return and immediatel
     assert(at >= 0, "the next page is admitted without a scroll event");
     const frame = frames.splice(at, 1)[0];
     const input = frame.params as { sessionID: string; before?: string };
-    connection.rpc.receive({
-      t: "rpc.result",
-      id: frame.id,
-      ok: true,
-      result: fixturePage(
+    replyRequest(
+      connection.rpc,
+      frame,
+      fixturePage(
         input.sessionID,
         Array.from(
           { length: 30 },
@@ -44,7 +48,7 @@ Deno.test("selected facade borrows a preloaded resource on return and immediatel
         ),
         input.before,
       ),
-    });
+    );
     await flush();
   };
   try {

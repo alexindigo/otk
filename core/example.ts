@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Harness } from "@otk/harness";
-import { OtkDb, Prefs, prefsMigrations } from "@otk/store";
+import { OtkDb, Prefs, prefsMigrations, requestsMigrations } from "@otk/store";
 import {
   type CoreServer,
   prefsOptions,
@@ -18,7 +18,10 @@ export function serveBackend(
   cfg: ServiceConfig,
   staticRoot: string,
 ): Promise<CoreServer> {
-  const store = new OtkDb(cfg.state.path, [prefsMigrations]);
+  const store = new OtkDb(cfg.state.path, [
+    prefsMigrations,
+    requestsMigrations,
+  ]);
   try {
     const prefs = new Prefs(store, prefsOptions),
       rpc = new RpcRegistry(backend, store);

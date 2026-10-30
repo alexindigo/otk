@@ -8,7 +8,7 @@ import {
   Show,
 } from "solid-js";
 import type { Selection, TimelinePrompt } from "@otk/client";
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "@otk/client";
 import { contextTarget } from "./context-target.ts";
 import MessageActions from "./MessageActions.tsx";
 import ListRow from "./ListRow.tsx";
@@ -99,7 +99,7 @@ export default function Timeline(props: {
       await action();
     } catch (error) {
       if (session === props.session && request === operation) {
-        setError(errorMessage(error));
+        setError(failureText(error));
       }
     }
   };

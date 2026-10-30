@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+export { default as OperationFeedback } from "./components/OperationFeedback.tsx";
+export { default as FieldFeedback } from "./components/FieldFeedback.tsx";
+export { default as PaneState } from "./components/PaneState.tsx";
 export {
   createHighlightLease,
   type HighlightLease,
@@ -69,6 +72,19 @@ export { default as VisualSettings } from "./components/VisualSettings.tsx";
 export { paintVisualPreferences } from "./features/visual.ts";
 export { default as Login } from "./components/Login.tsx";
 export { default as Setup } from "./components/Setup.tsx";
+export {
+  Credentials,
+  default as Form,
+  FormInput,
+  FormSelect,
+  FormTextarea,
+} from "./components/Form.tsx";
+export {
+  ComposerNoticeRow,
+  default as ComposerNotice,
+} from "./components/ComposerNotice.tsx";
+export { ForkFact } from "./components/ForkNote.tsx";
+export { RolledBackContent } from "./components/RolledBackStrip.tsx";
 export {
   default as PermissionDock,
   registerPermissionDock,

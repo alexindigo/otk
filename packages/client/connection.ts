@@ -1,14 +1,24 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
-import type { CapabilityName, ClientFrame, ServerFrame } from "@otk/protocol";
 import {
-  type MessagePolicy,
+  clientRequestPolicyFrom,
+  createRequestMetadata,
   messagePolicy,
   PROTOCOL_VERSION,
   welcomeCapabilities,
 } from "@otk/protocol";
-import { apiBase, type AuthStatus, request } from "./auth.ts";
+import type {
+  CapabilityName,
+  ClientFrame,
+  ClientRequestPolicy,
+  MessagePolicy,
+  RequestControl,
+  ServerFrame,
+} from "@otk/protocol";
+import { apiBase, type AuthStatus, bootstrapRequestMetadata } from "./auth.ts";
 import { Rpc } from "./rpc.ts";
+import { RequestTracker, type RequestTrackerOptions } from "./requests.ts";
+import { HttpRequests } from "./http-requests.ts";
+import { RequestReleased } from "./failures.ts";
 
 export type ConnectionState =
   | "connecting"
@@ -21,19 +31,38 @@ export interface ConnectionSink {
   status(state: ConnectionState, error?: string, authType?: string): void;
   frame(frame: ServerFrame): void;
 }
-/** Non-browser callers inject their authenticated/Origin-aware transport. */
 export interface ConnectionOptions {
   messages?: MessagePolicy;
   api?: URL;
   socket?: (url: URL) => WebSocket;
+  fetcher?: typeof fetch;
+  requests?: Omit<RequestTrackerOptions, "send" | "server" | "available">;
+}
+function browserStorage(server: string): RequestTrackerOptions["storage"] {
+  if (
+    typeof globalThis.document === "undefined" ||
+    typeof globalThis.sessionStorage === "undefined"
+  ) return;
+  const key = `otk.requests.v1:${server}`;
+  return {
+    load: () => {
+      const value = sessionStorage.getItem(key);
+      return value ? JSON.parse(value) : undefined;
+    },
+    save: (value) => sessionStorage.setItem(key, JSON.stringify(value)),
+  };
 }
 export class SidecarConnection {
   readonly base: URL;
   readonly rpc: Rpc;
+  readonly requests: RequestTracker;
+  readonly http: HttpRequests;
   #socket?: WebSocket;
   #controller?: AbortController;
   #retry?: ReturnType<typeof setTimeout>;
-  #backoff = 1000;
+  #silence?: ReturnType<typeof setTimeout>;
+  #attempt = 0;
+  #policy?: ClientRequestPolicy;
   #stopped = false;
   #welcomed = false;
   #subscriptions = new Set<string>();
@@ -48,7 +77,57 @@ export class SidecarConnection {
     readonly options: ConnectionOptions = {},
   ) {
     this.base = options.api ?? apiBase(baseUrl);
-    this.rpc = new Rpc((frame) => this.send(frame));
+    const metadata = createRequestMetadata();
+    this.requests = new RequestTracker({
+      ...options.requests,
+      server: this.base.href,
+      storage: options.requests?.storage ?? browserStorage(this.base.href),
+      kind: options.requests?.kind ??
+        ((method) =>
+          metadata.get(method)?.kind ??
+            bootstrapRequestMetadata[method]?.kind ??
+            "mutation"),
+      available: (control) => this.#welcomed || this.#bootstrap(control),
+      send: (control) => this.#route(control),
+    });
+    this.rpc = new Rpc((frame) => this.send(frame), this.requests);
+    this.http = new HttpRequests({
+      base: this.base,
+      tracker: this.requests,
+      fetcher: options.fetcher,
+    });
+  }
+  #bootstrap(control: RequestControl): boolean {
+    if (control.t === "request") return control.ref.window === "bootstrap";
+    const items = control.t === "request.resume" ? control.items : control.refs;
+    return items.some((item) =>
+      ("ref" in item ? item.ref : item).window === "bootstrap"
+    );
+  }
+  #route(control: RequestControl): void {
+    if (control.t === "request") {
+      if (control.ref.window === "bootstrap") this.http.send(control);
+      else this.send(control);
+      return;
+    }
+    if (control.t === "request.resume") {
+      const http = control.items.filter(({ ref }) =>
+          ref.window === "bootstrap"
+        ),
+        ws = control.items.filter(({ ref }) => ref.window !== "bootstrap");
+      if (http.length) this.http.send({ ...control, items: http });
+      if (ws.length) this.send({ ...control, items: ws });
+    } else if (control.t === "request.release") {
+      const http = control.refs.filter((ref) => ref.window === "bootstrap"),
+        ws = control.refs.filter((ref) => ref.window !== "bootstrap");
+      if (http.length) this.http.send({ ...control, refs: http });
+      if (ws.length) this.send({ ...control, refs: ws });
+    } else {
+      const http = control.refs.filter(({ ref }) => ref.window === "bootstrap"),
+        ws = control.refs.filter(({ ref }) => ref.window !== "bootstrap");
+      if (http.length) this.http.send({ ...control, refs: http });
+      if (ws.length) this.send({ ...control, refs: ws });
+    }
   }
   send(frame: ClientFrame): void {
     if (!this.#welcomed || this.#socket?.readyState !== WebSocket.OPEN) {
@@ -67,25 +146,23 @@ export class SidecarConnection {
     }
   }
   async connect(): Promise<void> {
-    // Removal/unmount ends this instance's lifetime; late async callers cannot
-    // restart it. Reconnects use a live instance, re-adds create a new one.
     if (this.#stopped) return;
     this.#retire();
     const controller = this.#controller = new AbortController();
     const current = () =>
       this.#controller === controller && !controller.signal.aborted &&
       !this.#stopped;
-    this.sink.status(this.#backoff === 1000 ? "connecting" : "reconnecting");
+    this.sink.status(this.#attempt === 0 ? "connecting" : "reconnecting");
     try {
+      const auth = await this.http.start<AuthStatus>("session", undefined, {
+        signal: controller.signal,
+        owner: "connection",
+      }).result;
       if (!current()) return;
-      const auth = await request<AuthStatus>(
-        this.base,
-        "session",
-        undefined,
-        AbortSignal.any([controller.signal, AbortSignal.timeout(15_000)]),
-      );
-      if (!current()) return;
+      this.#policy = clientRequestPolicyFrom(auth.requests.policy);
+      this.http.policy(this.#policy);
       if (auth.setupRequired || !auth.authenticated) {
+        this.requests.authenticationRequired();
         this.sink.status(
           auth.setupRequired ? "setup required" : "login required",
           undefined,
@@ -110,6 +187,15 @@ export class SidecarConnection {
       socket.onmessage = ({ data }) => {
         if (!current() || socket !== this.#socket) return;
         const frame: ServerFrame = JSON.parse(data);
+        if (this.#policy) {
+          clearTimeout(this.#silence);
+          this.#silence = setTimeout(() => {
+            if (current()) {
+              this.#retire();
+              this.#schedule();
+            }
+          }, this.#policy.silencems);
+        }
         if (frame.t === "ping") {
           socket.send(JSON.stringify({ t: "pong" }));
           return;
@@ -121,18 +207,24 @@ export class SidecarConnection {
           }
           try {
             this.#messages = messagePolicy(frame.messages);
+            this.#policy = clientRequestPolicyFrom(frame.requests.policy);
           } catch {
             this.#protocolMismatch();
             return;
           }
           this.#welcomed = true;
           this.#capabilities = new Set(welcomeCapabilities(frame));
-          this.#backoff = 1000;
-          this.sink.status("connected");
-          if (!current()) return;
-          for (const sessionID of this.#subscriptions) {
-            this.send({ t: "subscribe", sessionID });
+          this.#attempt = 0;
+          this.http.policy(this.#policy);
+          for (const id of this.#subscriptions) {
+            this.send({ t: "subscribe", sessionID: id });
           }
+          this.requests.connect(
+            frame.requests.window,
+            this.#policy.resumebatch,
+            frame.requests.principal,
+          );
+          this.sink.status("connected");
         }
         if (frame.t === "error" && frame.code === "protocol") {
           this.#protocolMismatch();
@@ -142,32 +234,40 @@ export class SidecarConnection {
         this.sink.frame(frame);
       };
       socket.onclose = () => {
-        if (!current() || socket !== this.#socket) return;
-        this.#retire();
-        if (!this.#stopped) this.#schedule();
+        if (current() && socket === this.#socket) {
+          this.#retire();
+          this.#schedule();
+        }
       };
-    } catch (error) {
-      if (current()) {
+    } catch (cause) {
+      if (current() && !(cause instanceof RequestReleased)) {
         this.#retire();
-        this.#schedule(errorMessage(error));
+        this.#schedule();
       }
     }
   }
-  #schedule(error?: string): void {
+  #schedule(): void {
     if (this.#stopped) return;
-    const delay = this.#backoff;
-    this.#backoff = Math.min(this.#backoff * 2, 30_000);
-    this.#retry = setTimeout(() => void this.connect(), delay);
-    this.sink.status("reconnecting", error);
+    const attempt = this.#attempt++;
+    if (this.#policy) {
+      this.#retry = setTimeout(
+        () => void this.connect(),
+        Math.min(
+          this.#policy.retrybase * 2 ** Math.min(attempt, 30),
+          this.#policy.retrymax,
+        ),
+      );
+    }
+    this.sink.status("reconnecting");
   }
   #retire(): void {
     this.#controller?.abort();
     this.#controller = undefined;
     clearTimeout(this.#retry);
+    clearTimeout(this.#silence);
     this.#retry = undefined;
     this.#welcomed = false;
-    this.#capabilities.clear();
-    this.rpc.close();
+    this.requests.disconnect();
     const socket = this.#socket;
     this.#socket = undefined;
     if (socket) {
@@ -183,18 +283,20 @@ export class SidecarConnection {
     );
   }
   async login(input: { username: string; password: string }): Promise<void> {
-    await request(this.base, "login", input);
+    await this.http.start("login", input, { owner: "login" }).result;
     await this.connect();
   }
   async setup(
     input: { type: string; username: string; password: string },
   ): Promise<void> {
-    await request(this.base, "setup", input);
+    await this.http.start("setup", input, { owner: "setup" }).result;
     await this.connect();
   }
   stop(): void {
     this.#stopped = true;
     this.#retire();
     this.#subscriptions.clear();
+    this.requests.stop();
+    void this.http.stop();
   }
 }

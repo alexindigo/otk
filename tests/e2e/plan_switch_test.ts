@@ -102,7 +102,7 @@ test("V7 completed plan_exit and plan_enter switch the footer and the next promp
         variant,
       });
       const frame = sentFrames(b).map((f) => f.frame).find((f) =>
-        f.t === "rpc" && f.method === "session.prompt" &&
+        f.t === "request" && f.method === "session.prompt" &&
         (f.params as { parts: { text?: string }[] }).parts.some((p) =>
           p.text === text
         )

@@ -186,7 +186,13 @@ test("compact HTTP failure reaches ordinary session error presentation", async (
     await sessionContext(b, `[data-session="${session.id}"]`);
     await b.click(`${menu} [data-context-command="session.compact"]`);
     await b.poll(
-      "document.querySelector('.otk-session-error-message')?.textContent==='Compact refused' && document.querySelector('.otk-error-observation-origin')?.textContent.includes('compact request')",
+      "document.querySelector('.otk-operation-feedback .otk-control-label')?.textContent==='Checking whether this finished' && !document.querySelector('.otk-session-error') && !document.body.textContent.includes('Compact refused')",
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelectorAll('.otk-operation-feedback').length",
+      ),
+      1,
     );
     assertEquals(b.errors, []);
   } finally {
@@ -368,7 +374,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await capture(b, `${theme}-fork-note`);
       assertEquals(
         await b.evaluate(
-          `(()=>{const note=document.querySelector('.otk-fork-note'),button=note.querySelector('button'),icons=[note.querySelector(':scope > svg'),button.querySelector('svg')];return {button:[button.getBoundingClientRect().width,button.getBoundingClientRect().height],icons:icons.map(icon=>[icon.getBoundingClientRect().width,icon.getBoundingClientRect().height])}})()`,
+          `(()=>{const note=document.querySelector('.otk-fork-note'),button=note.querySelector('button'),icons=[note.querySelector('.otk-composer-notice-icon > svg'),button.querySelector('svg')];return {button:[button.getBoundingClientRect().width,button.getBoundingClientRect().height],icons:icons.map(icon=>[icon.getBoundingClientRect().width,icon.getBoundingClientRect().height])}})()`,
         ),
         { button: [28, 28], icons: [[16, 16], [16, 16]] },
       );

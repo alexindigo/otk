@@ -33,14 +33,14 @@ export function registerShellPrompt(prompt: PromptRegistry): void {
       return {
         async submit(draft, parts, selection) {
           if (draft.mode !== "shell") return false;
-          await ctx.submit(() =>
+          await ctx.submit((options) =>
             ctx.rpc("session.shell", {
               sessionID: ctx.sessionID(),
               command: parts.filter((p) => p.kind === "text").map((p) => p.text)
                 .join("\n"),
               agent: selection.agent,
               model: selection.model,
-            })
+            }, options)
           );
           return true;
         },

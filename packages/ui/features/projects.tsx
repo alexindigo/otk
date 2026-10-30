@@ -4,7 +4,11 @@ import { createEffect, createSignal, For, onCleanup, Show } from "solid-js";
 import { createProjectPicker } from "@otk/client";
 import type { DialogProps, DialogRegistry } from "../registries/shell.ts";
 import { useShellPorts } from "../shell/context.tsx";
-import Form from "../components/Form.tsx";
+import Form, {
+  FormInput,
+  FormSelect,
+  FormTextarea,
+} from "../components/Form.tsx";
 import { solidState } from "../state/binding.ts";
 import { useCommandPorts } from "../keyboard/context.tsx";
 
@@ -51,31 +55,36 @@ function AddProject(props: DialogProps) {
       <Form
         title="Project directory"
         submitLabel="Create session"
-        onSubmit={() => picker.add({ sidecarId: server(), directory: path() })}
+        pendingLabel="Creating project session…"
+        onSubmit={(data) =>
+          picker.add({
+            sidecarId: String(data.get("server")),
+            directory: String(data.get("directory")),
+          })}
       >
         <p class="otk-muted">
           Create the first session to start tracking this project.
         </p>
         <label>
-          Server<select
+          Server<FormSelect
             name="server"
             value={server()}
             onChange={(e) => setServer(e.currentTarget.value)}
           >
             <For
-              each={shell.servers()}
+              each={shell.servers().filter((s) => s.status === "connected")}
               keyed={(s) => s.id}
             >
               {(s) => (
-                <option value={s().id} disabled={s().status !== "connected"}>
+                <option value={s().id}>
                   {s().label}
                 </option>
               )}
             </For>
-          </select>
+          </FormSelect>
         </label>
         <label>
-          Path<input
+          Path<FormInput
             name="directory"
             class="otk-path"
             required
@@ -143,7 +152,7 @@ export function ProjectSettings(): import("solid-js").Element {
             {(n) => (
               <label>
                 Level {n + 1}
-                <input
+                <FormInput
                   name={`age${n + 1}`}
                   type="number"
                   min="0.01"
@@ -174,10 +183,10 @@ export function ProjectSettings(): import("solid-js").Element {
             >
               <label>
                 One path per line; use {"{project}"}{" "}
-                for a directory name<textarea
+                for a directory name<FormTextarea
                   name="templates"
                   class="otk-path"
-                  disabled={s().status !== "connected"}
+                  readonly={s().status !== "connected"}
                   value={shell.inbox(s().id).state.inbox.pathTemplates.join(
                     "\n",
                   )}

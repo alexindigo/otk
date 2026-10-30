@@ -6,13 +6,14 @@ import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
 export function files(client: Client, directory: Directory): FilesCapability {
   return {
-    async findFiles(sessionID, query) {
-      const dir = await directory.resolve(sessionID);
+    async findFiles(sessionID, query, signal) {
+      const dir = await directory.resolve(sessionID, signal);
       const search = isAbsolute(query) ? relative(dir, query) : query;
       const paths = await Promise.all(
         ["file", "directory"].map((type) =>
           client.json<string[]>("/find/file", {
             query: { directory: dir, query: search, type, limit: 100 },
+            signal,
           })
         ),
       );
@@ -25,7 +26,9 @@ export function files(client: Client, directory: Directory): FilesCapability {
         ]),
       ];
       return (await Promise.all(candidates.map(async (path) => {
+        signal?.throwIfAborted();
         const info = await statMatch(resolve(dir, path));
+        signal?.throwIfAborted();
         return info ? { path, directory: info.isDirectory } : undefined;
       }))).filter((file): file is FileMatch => !!file);
     },

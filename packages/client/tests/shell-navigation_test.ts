@@ -239,7 +239,10 @@ Deno.test("shell navigation owns route state, unknown-server errors, project vis
   assertEquals(f.navigation.state.project, undefined);
   assertEquals(f.session.state.selection, undefined);
   f.navigation.fail(new Error("plain failure"));
-  assertEquals(f.navigation.state.error, "plain failure");
+  assertEquals(
+    f.navigation.state.error,
+    "Could not finish this action. Try again",
+  );
   f.navigation.clearError();
   assertEquals(f.navigation.state.error, "");
   assert(changes > 0);

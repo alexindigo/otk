@@ -2,11 +2,13 @@
 import type { Harness } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID } from "../ws/params.ts";
+import { readExecution } from "../requests/policies.ts";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
   const capability = harness.capabilities.models;
   if (!capability) return;
   rpc.register("models.list", {
+    execution: readExecution((id: string) => ({ sessionID: id })),
     params: (p) => sessionID(p)!,
     handler: (ctx, id) => capability.listModels(id, ctx.execution?.signal),
   });

@@ -40,6 +40,7 @@ test("a rejected first digest commit leaves scan generation and baseline togethe
         password: "",
         heartbeattimeout: 25,
         reconnectmax: 30,
+        requestms: 60000,
       },
       index: { days: 30 },
     },

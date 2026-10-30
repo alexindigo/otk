@@ -1,4 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { RequestMetadata } from "./request-metadata.ts";
+export const approvalsRequestMetadata: Readonly<
+  Record<string, RequestMetadata>
+> = {
+  "permission.auto": { kind: "mutation", pending: "Saving auto-approve" },
+  "permission.activity": { kind: "read", pending: "Loading activity" },
+};
 import type { PermissionReply } from "./rpc.ts";
 import type { PermissionRequest } from "./content.ts";
 import { sessionAncestors, type SessionLookup } from "./session-tree.ts";
@@ -7,6 +14,9 @@ import { sessionAncestors, type SessionLookup } from "./session-tree.ts";
 export interface ApprovalSnapshot {
   enabled: string[];
   revision: number;
+}
+export interface ApprovalRequestReceipts {
+  "approval-policy": ApprovalSnapshot;
 }
 export interface PermissionActivity {
   id: number;

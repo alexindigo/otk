@@ -1,28 +1,53 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
-import { type ContentOp, isAttentionOp, type Preferences } from "@otk/protocol";
-import type { ClientFrame, HarnessState, ServerFrame } from "@otk/protocol";
-import { capabilityNames, checkClientFrameSize } from "@otk/protocol";
-import { PROTOCOL_VERSION, SIDECAR_VERSION } from "@otk/protocol";
+import {
+  capabilityNames,
+  checkClientFrameSize,
+  isAttentionOp,
+  PROTOCOL_VERSION,
+  requestFingerprint,
+  requestRef,
+  SIDECAR_VERSION,
+} from "@otk/protocol";
+import type {
+  ClientFrame,
+  ClientRequestPolicy,
+  ContentClock,
+  ContentOp,
+  HarnessState,
+  MessagePolicy,
+  Preferences,
+  RequestControl,
+  RequestEvent,
+  RequestRef,
+  ServerFrame,
+} from "@otk/protocol";
 import { type Harness, HarnessError } from "@otk/harness";
-import type { IndexStore } from "../index/store.ts";
-import { object, sessionID, text } from "./params.ts";
-import type { RpcRegistry } from "./registry.ts";
 import type { Prefs } from "@otk/store";
+import type { IndexStore } from "../index/store.ts";
+import { object, sessionID } from "./params.ts";
+import type { RpcRegistry } from "./registry.ts";
 import type { SectionObserver } from "../diagnostics.ts";
-import type { ContentClock, MessagePolicy } from "@otk/protocol";
+import type { RequestCoordinator } from "../requests/coordinator.ts";
+import { ExecutionFailure, publicFailure } from "../requests/failures.ts";
+
 interface Connection {
   ws: WebSocket;
   welcomed: boolean;
   sessions: Set<string>;
   close(): void;
 }
-/** Feature-owned metadata streams, including a fresh snapshot on every hello. */
 export interface FrameSource {
   snapshot(): ServerFrame;
   listen(listener: (frame: ServerFrame) => void): () => void;
   close?(): void;
 }
+export interface ConnectionRequests {
+  coordinator: RequestCoordinator;
+  identity(): string;
+  policy: ClientRequestPolicy;
+  helloms: number;
+}
+/** Socket recipients own delivery and leases, never action execution. */
 export class Connections {
   #connections = new Set<Connection>();
   #counts = new Map<string, number>();
@@ -36,6 +61,7 @@ export class Connections {
     readonly prefs: Prefs<Preferences>,
     readonly rpc: RpcRegistry,
     readonly messages: MessagePolicy,
+    readonly requests: ConnectionRequests,
     readonly sources: readonly FrameSource[] = [],
     readonly diagnostics?: SectionObserver,
   ) {
@@ -69,16 +95,13 @@ export class Connections {
       this.#connections.has(connection) &&
       connection.ws.readyState === WebSocket.OPEN
     ) {
-      const start = performance.now();
-      const serialized = JSON.stringify(frame);
+      const start = performance.now(), serialized = JSON.stringify(frame);
       this.diagnostics?.(`serialize:${frame.t}`, performance.now() - start);
       connection.ws.send(serialized);
     }
   }
   broadcast(frame: ServerFrame): void {
-    for (const connection of this.#connections) {
-      if (connection.welcomed) this.#send(connection, frame);
-    }
+    for (const c of this.#connections) if (c.welcomed) this.#send(c, frame);
   }
   connection(state: HarnessState): void {
     this.harnessState = state;
@@ -88,12 +111,9 @@ export class Connections {
     const recipients = isAttentionOp(event)
       ? [sessionID, ...this.index.ancestors(sessionID)]
       : [sessionID];
-    for (const connection of this.#connections) {
-      if (
-        connection.welcomed &&
-        recipients.some((id) => connection.sessions.has(id))
-      ) {
-        this.#send(connection, {
+    for (const c of this.#connections) {
+      if (c.welcomed && recipients.some((id) => c.sessions.has(id))) {
+        this.#send(c, {
           t: "content",
           sessionID,
           event,
@@ -102,35 +122,29 @@ export class Connections {
       }
     }
   }
-  #subscribe(
-    connection: Connection,
-    sessionID: string,
-    subscribe: boolean,
-  ): void {
-    if (subscribe === connection.sessions.has(sessionID)) return;
-    if (subscribe) connection.sessions.add(sessionID);
-    else connection.sessions.delete(sessionID);
-    const count = (this.#counts.get(sessionID) ?? 0) + (subscribe ? 1 : -1);
-    if (count) this.#counts.set(sessionID, count);
-    else this.#counts.delete(sessionID);
-    this.backend.core.subscriptions(sessionID, count);
+  #subscribe(c: Connection, id: string, enabled: boolean): void {
+    if (enabled === c.sessions.has(id)) return;
+    if (enabled) c.sessions.add(id);
+    else c.sessions.delete(id);
+    const count = (this.#counts.get(id) ?? 0) + (enabled ? 1 : -1);
+    if (count) this.#counts.set(id, count);
+    else this.#counts.delete(id);
+    this.backend.core.subscriptions(id, count);
   }
   accept(ws: WebSocket): void {
     if (this.#closed) {
       ws.close(1001, "server stopping");
       return;
     }
-    const connection: Connection = {
+    const c: Connection = {
       ws,
       welcomed: false,
       sessions: new Set(),
       close: () => dispose(),
     };
-    this.#connections.add(connection);
-    const controller = new AbortController();
-    const releases = new Set<() => void>();
-    const reads = new Map<string, AbortController>();
-    const request = {
+    this.#connections.add(c);
+    const controller = new AbortController(), releases = new Set<() => void>();
+    const lease = {
       id: crypto.randomUUID(),
       signal: controller.signal,
       defer(release: () => void) {
@@ -138,24 +152,30 @@ export class Connections {
         else releases.add(release);
       },
     };
+    const recipient = {
+      send: (event: RequestEvent) => this.#send(c, event),
+      lease,
+    };
+    let principal = "", welcoming = false;
+    const policy = this.requests.policy;
     const helloDeadline = setTimeout(() => {
-      if (!connection.welcomed) ws.close(1008, "hello required");
-    }, 10_000);
-    const ping = setInterval(
-      () => this.#send(connection, { t: "ping" }),
-      20_000,
-    );
+      if (!c.welcomed) ws.close(1008, "hello required");
+    }, this.requests.helloms);
+    const ping = setInterval(() => this.#send(c, { t: "ping" }), policy.pingms);
     const silent = () => ws.close(1001, "heartbeat timeout");
-    let silenceDeadline = setTimeout(silent, 60_000);
+    let silenceDeadline = setTimeout(silent, policy.silencems);
+    const refresh = () => {
+      clearTimeout(silenceDeadline);
+      silenceDeadline = setTimeout(silent, policy.silencems);
+    };
     const dispose = () => {
-      if (!this.#connections.delete(connection)) return;
+      if (!this.#connections.delete(c)) return;
       clearTimeout(helloDeadline);
       clearTimeout(silenceDeadline);
       clearInterval(ping);
-      const errors: unknown[] = [];
       controller.abort();
-      for (const read of reads.values()) read.abort();
-      reads.clear();
+      this.requests.coordinator.detach(recipient);
+      const errors: unknown[] = [];
       for (const release of releases) {
         try {
           release();
@@ -164,9 +184,9 @@ export class Connections {
         }
       }
       releases.clear();
-      for (const sessionID of connection.sessions) {
+      for (const id of c.sessions) {
         try {
-          this.#subscribe(connection, sessionID, false);
+          this.#subscribe(c, id, false);
         } catch (error) {
           errors.push(error);
         }
@@ -177,37 +197,49 @@ export class Connections {
     };
     ws.onclose = dispose;
     ws.onmessage = async (event) => {
-      if (!this.#connections.has(connection)) return;
-      let rpcID: string | undefined;
+      if (!this.#connections.has(c)) return;
+      let ref: RequestRef | undefined;
       try {
         if (typeof event.data !== "string") {
           throw new HarnessError("frame", "Invalid frame");
         }
         const raw = object(JSON.parse(event.data)),
           frame = raw as unknown as ClientFrame;
-        if (connection.welcomed && frame.t === "rpc") rpcID = text(raw, "id")!;
+        if (frame.t === "request") ref = requestRef(raw.ref);
         try {
           checkClientFrameSize(event.data);
-        } catch (error) {
-          throw new HarnessError("frame", errorMessage(error));
+        } catch (cause) {
+          const failure = new ExecutionFailure({
+            code: "request.capacity",
+            retry: "new-intent",
+          });
+          failure.cause = cause;
+          throw failure;
         }
-        if (!connection.welcomed) {
+        refresh();
+        if (!c.welcomed) {
           if (frame.t !== "hello" || frame.protocol !== PROTOCOL_VERSION) {
-            this.#send(connection, { t: "error", code: "protocol" });
+            this.#send(c, { t: "error", code: "protocol" });
             ws.close(1002, "protocol mismatch");
             return;
           }
-          // Drain publications covered by the initial baseline before this
-          // connection becomes a live recipient of the index stream.
+          if (welcoming) return;
+          welcoming = true;
+          principal = this.requests.identity();
+          const identity = await requestFingerprint(`principal:${principal}`);
+          if (!this.#connections.has(c)) return;
           const snapshot = this.index.snapshot();
-          connection.welcomed = true;
+          c.welcomed = true;
           clearTimeout(helloDeadline);
-          clearTimeout(silenceDeadline);
-          silenceDeadline = setTimeout(silent, 60_000);
-          this.#send(connection, {
+          this.#send(c, {
             t: "welcome",
             protocol: PROTOCOL_VERSION,
             messages: this.messages,
+            requests: {
+              window: this.requests.coordinator.window(),
+              policy,
+              principal: identity,
+            },
             sidecar: {
               version: SIDECAR_VERSION,
               harness: {
@@ -218,92 +250,57 @@ export class Connections {
               },
             },
           });
-          this.#send(connection, { t: "harness", state: this.harnessState });
-          this.#send(connection, snapshot);
-          this.#send(connection, { t: "prefs", prefs: this.prefs.get() });
-          for (const source of this.sources) {
-            this.#send(connection, source.snapshot());
-          }
+          this.#send(c, { t: "harness", state: this.harnessState });
+          this.#send(c, snapshot);
+          this.#send(c, { t: "prefs", prefs: this.prefs.get() });
+          for (const source of this.sources) this.#send(c, source.snapshot());
           return;
         }
-        if (frame.t === "pong") {
-          clearTimeout(silenceDeadline);
-          silenceDeadline = setTimeout(silent, 60_000);
-          return;
-        }
+        if (frame.t === "pong") return;
         if (frame.t === "subscribe" || frame.t === "unsubscribe") {
-          this.#subscribe(
-            connection,
-            sessionID(raw)!,
-            frame.t === "subscribe",
-          );
+          this.#subscribe(c, sessionID(raw)!, frame.t === "subscribe");
         } else if (frame.t === "resnapshot") {
-          this.#send(connection, this.index.snapshot());
-        } else if (frame.t === "rpc.cancel") {
-          reads.get(text(raw, "id")!)?.abort();
-        } else if (frame.t === "rpc") {
-          const id = text(raw, "id")!;
-          if (reads.has(id)) {
-            throw new HarnessError("params", "Request ID is already in flight");
-          }
-          const read = new AbortController();
-          reads.set(id, read);
-          try {
-            const result = await this.rpc.dispatch(
-              text(raw, "method")!,
-              frame.params,
-              request,
-              { signal: read.signal },
-            );
-            this.#send(connection, { t: "rpc.result", id, ok: true, result });
-          } catch (error) {
-            this.#send(connection, {
-              t: "rpc.result",
-              id,
-              ok: false,
-              error: {
-                code: error instanceof HarnessError ? error.code : "harness",
-                message: errorMessage(error),
-              },
-            });
-          } finally {
-            if (reads.get(id) === read) reads.delete(id);
-          }
+          this.#send(c, this.index.snapshot());
+        } else if (
+          ["request", "request.resume", "request.release", "request.received"]
+            .includes(frame.t)
+        ) {
+          await this.requests.coordinator.accept(
+            principal,
+            frame as RequestControl,
+            recipient,
+          );
         } else throw new HarnessError("frame", "Unknown frame");
-        if (this.#connections.has(connection)) {
-          clearTimeout(silenceDeadline);
-          silenceDeadline = setTimeout(silent, 60_000);
-        }
-      } catch (error) {
-        const detail = {
-          code: error instanceof HarnessError ? error.code : "frame",
-          message: errorMessage(error),
-        };
-        this.#send(
-          connection,
-          rpcID
-            ? { t: "rpc.result", id: rpcID, ok: false, error: detail }
-            : { t: "error", ...detail },
-        );
+      } catch (cause) {
+        if (ref) {
+          this.#send(c, {
+            t: "request.rejected",
+            ref,
+            error: publicFailure(
+              cause,
+              (id, error) => console.warn("request admission", id, error),
+            ),
+          });
+        } else this.#send(c, { t: "error", code: "frame" });
       }
     };
   }
   close(): void {
     if (this.#closed) return;
     this.#closed = true;
-    const errors: unknown[] = [];
-    const attempt = (release: () => void) => {
-      try {
-        release();
-      } catch (error) {
-        errors.push(error);
-      }
-    };
+    const errors: unknown[] = [],
+      attempt = (release: () => void) => {
+        try {
+          release();
+        } catch (error) {
+          errors.push(error);
+        }
+      };
     for (const stop of this.#stops.splice(0).reverse()) attempt(stop);
     for (const source of this.sources) attempt(() => source.close?.());
-    for (const connection of this.#connections) {
-      attempt(() => connection.close());
-      attempt(() => connection.ws.close(1001, "server stopping"));
+    for (const c of this.#connections) {
+      attempt(() => c.close());
+      attempt(() => c.ws.close(1001, "server stopping"));
     }
     if (errors.length) {
       throw new AggregateError(errors, "Connection cleanup failed");

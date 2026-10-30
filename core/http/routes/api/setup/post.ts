@@ -1,26 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
-import { type Handler, HttpError } from "@pathfinder/pathfinder";
+import type { Handler } from "@pathfinder/pathfinder";
 import "../../../app.ts";
-import { object, text } from "../../../../ws/params.ts";
-const handler: Handler = async (request, { app }) => {
-  if (!app.auth.setupRequired) {
-    throw new HttpError(409, { code: "already_configured" });
-  }
-  try {
-    const input = object(await request.body.json());
-    await app.auth.setup({
-      type: text(input, "type")!,
-      username: text(input, "username", true),
-      password: text(input, "password", true),
-    });
-    return { ok: true };
-  } catch (e) {
-    const message = errorMessage(e);
-    throw new HttpError(
-      message === "already_configured" ? 409 : 400,
-      { code: "setup", message },
-    );
-  }
-};
+import { bootstrapAdmission } from "../../../bootstrap-route.ts";
+const handler: Handler = (request, { app }) =>
+  bootstrapAdmission(app.bootstrap, "bootstrap.setup", request._raw);
 export default handler;

@@ -40,9 +40,8 @@ export function shell(
         {
           method: "POST",
           query: { directory: dir },
-          ...(operation
-            ? { classification: "effect" as const, operation }
-            : { timeout: null }),
+          classification: "effect",
+          ...(operation ? { operation } : {}),
           body: {
             command: input.command,
             agent,

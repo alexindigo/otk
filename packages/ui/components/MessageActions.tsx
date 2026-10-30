@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./MessageActions.css" with { type: "text" };
 import { createSignal, For, onCleanup, onSettled, Show } from "solid-js";
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "@otk/client";
 import type { ContentTarget } from "../features/transcript-context.tsx";
 import { commandHints, useCommandPorts } from "../keyboard/context.tsx";
 import { CopyIcon, ForkIcon, RevertIcon } from "./ChromeIcons.tsx";
@@ -59,7 +59,7 @@ export default function MessageActions(props: {
     try {
       await ports.commands.run(id, props.target);
     } catch (error) {
-      if (active) setError(errorMessage(error));
+      if (active) setError(failureText(error));
     } finally {
       if (active) setPending("");
     }

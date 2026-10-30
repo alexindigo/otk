@@ -25,6 +25,11 @@ export async function transcriptConsumer(base: string, clock: TranscriptClock) {
       owner.receive("consumer", frame, accepted);
     },
   }, {
+    fetcher: (input, options) => {
+      const headers = new Headers(options?.headers);
+      headers.set("Origin", new URL(base).origin);
+      return fetch(input, { ...options, headers });
+    },
     socket: (url) =>
       Reflect.construct(WebSocket, [url, {
         headers: { Origin: new URL(base).origin },

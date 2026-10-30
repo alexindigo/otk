@@ -6,7 +6,7 @@ import { staticResponse } from "../../core/mod.ts";
 import { cfg } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
-import { sessionHeap } from "../support/heap.ts";
+import { measureSessionHeap } from "../support/heap.ts";
 import {
   captureMessageHeap,
   messageHeapRetention,
@@ -229,10 +229,12 @@ test("ten full native scale body cycles report retained heap with another sessio
       workerLoaded,
       released,
       workerReleased,
-      paths: [] as Awaited<ReturnType<typeof sessionHeap>>,
+      paths: undefined as
+        | Awaited<ReturnType<typeof measureSessionHeap>>
+        | undefined,
     };
     observations.push(observation);
-    const paths = await sessionHeap(browser, a.id, "Scale fixture 0/");
+    const paths = await measureSessionHeap(browser, a.id, "Scale fixture 0/");
     observation.paths = paths;
     console.info("Cooled scale heap measurement", {
       cycle,

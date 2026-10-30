@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  connectRequests,
+  replyRequest,
+} from "../../../tests/support/request-wire.ts";
+import {
   fixtureMessagePolicy,
   fixturePage,
 } from "../../../tests/support/message-pages.ts";
@@ -68,7 +72,7 @@ async function settle() {
   for (let i = 0; i < 20; i++) await Promise.resolve();
 }
 function fixture(loadAgents = () => Promise.resolve(agents)) {
-  const frames: Extract<ClientFrame, { t: "rpc" }>[] = [];
+  const frames: Extract<ClientFrame, { t: "request" }>[] = [];
   let sequence = 0, producerGeneration = 0;
   const checkpoints = new Map<string, number>();
   const connection = new SidecarConnection("http://example.test", {
@@ -76,15 +80,18 @@ function fixture(loadAgents = () => Promise.resolve(agents)) {
     frame() {},
   }, { messages: fixtureMessagePolicy });
   connection.send = (frame) => {
-    if (frame.t === "rpc.cancel") {
-      const at = frames.findIndex((pending) => pending.id === frame.id);
-      if (at >= 0) frames.splice(at, 1);
+    if (frame.t === "request.release") {
+      for (const ref of frame.refs) {
+        const at = frames.findIndex((pending) => pending.ref.key === ref.key);
+        if (at >= 0) frames.splice(at, 1);
+      }
     }
-    if (frame.t === "rpc") {
+    if (frame.t === "request") {
       frames.push(frame);
-      checkpoints.set(frame.id, sequence);
+      checkpoints.set(frame.ref.id, sequence);
     }
   };
+  connectRequests(connection.rpc);
   connection.supports = () => false;
   connection.subscribe = () => {};
   const session = createSession(() => connection, () => undefined);
@@ -95,20 +102,19 @@ function fixture(loadAgents = () => Promise.resolve(agents)) {
     const at = frames.findIndex((frame) => frame.method === method);
     assert(at >= 0, method);
     const frame = frames.splice(at, 1)[0];
-    connection.rpc.receive({
-      t: "rpc.result",
-      id: frame.id,
-      ok: true,
-      result: method === "session.messages"
+    replyRequest(
+      connection.rpc,
+      frame,
+      method === "session.messages"
         ? {
           ...fixturePage("s", result as Message[], undefined, info, {
             epoch: "fixture",
-            seq: checkpoints.get(frame.id)!,
+            seq: checkpoints.get(frame.ref.id)!,
           }),
           version: { generation: producerGeneration, revision: 0 },
         }
         : result,
-    });
+    );
   };
   const receive = (event: ContentOp, sidecarId = "server", sessionID = "s") =>
     session.receive(sidecarId, {

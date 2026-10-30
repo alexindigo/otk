@@ -57,6 +57,11 @@ export class PermissionStore extends Changes<PermissionChange> {
       "SELECT 1 FROM permission_activity WHERE session=? AND request_id=? AND outcome='confirmed' LIMIT 1",
     ).get(key(session), key(requestID));
   }
+  unconfirmed(session: string, requestID: string): boolean {
+    return !!this.db.connection.prepare(
+      "SELECT 1 FROM permission_activity WHERE session=? AND request_id=? AND outcome='started' LIMIT 1",
+    ).get(key(session), key(requestID));
+  }
   start(
     input: Omit<PermissionRecord, "id" | "time" | "outcome" | "error">,
     ancestors: string[] = [],

@@ -147,7 +147,7 @@ message asking you to use `opencode-v1`; OTK does not rewrite your operator
 file. Environment overrides retain precedence.
 
 Session IDs are now `opcv1-<native id>` throughout the API and browser, using
-wire protocol 15. An older browser is rejected with a protocol mismatch and must
+wire protocol 16. An older browser is rejected with a protocol mismatch and must
 reload. Old bare-ID bookmarks show a compatibility notice; choose the session
 again from Sessions or its task to obtain the canonical URL.
 
@@ -173,6 +173,17 @@ page, preserving composer context and Undo. Content clocks align page snapshots
 with live changes. Replay is bounded by `[messages]` configuration; a lost or
 overflowed baseline shows “Refreshing messages…” and reacquires a provider page.
 No transcript content is persisted in OTK's databases.
+
+Actions and reads now use accepted, pending and correlated result events. A
+disconnected browser resumes the same intent rather than repeating its effect;
+elapsed liveness intervals report connection state, not a failed action. Durable
+metadata receipts live in `otk.db`, without request bodies or credentials. Local
+mutations commit atomically with their receipts; an unconfirmed native effect
+remains pending for reconciliation instead of being sent again. Bootstrap
+login/setup/discovery use receipt-authorized HTTP events before the
+authenticated socket is available. The `[requests]`, `[connection]` and
+`harness.requestms` defaults describe admission, retention, liveness and native
+read policy.
 
 Metadata bootstrap completion does not restart an already-current transcript.
 Real native reconnect, instance disposal and revert-boundary changes carry an

@@ -1,4 +1,24 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { RequestMetadata } from "./request-metadata.ts";
+export const inboxRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
+  "inbox.get": { kind: "read", pending: "Loading projects" },
+  "projects.list": { kind: "read", pending: "Loading projects" },
+  "projects.add": { kind: "mutation", pending: "Creating project session" },
+  "projects.inactive": { kind: "mutation", pending: "Saving project" },
+  "projects.visit": { kind: "mutation", pending: "Saving project visit" },
+  "projects.scan": { kind: "read", pending: "Finding projects" },
+  "projects.templates": { kind: "mutation", pending: "Saving paths" },
+  "tasks.list": { kind: "read", pending: "Loading tasks" },
+  "tasks.create": { kind: "mutation", pending: "Creating task" },
+  "tasks.rename": { kind: "mutation", pending: "Renaming task" },
+  "tasks.reorder": { kind: "mutation", pending: "Saving task order" },
+  "tasks.close": { kind: "mutation", pending: "Closing task" },
+  "tasks.addSession": { kind: "mutation", pending: "Adding to task" },
+  "tasks.removeSession": { kind: "mutation", pending: "Removing from task" },
+  "tasks.sessions": { kind: "mutation", pending: "Saving task sessions" },
+  "sessions.seen": { kind: "mutation", pending: "Saving viewed conversation" },
+  "sessions.finishes": { kind: "read", pending: "Loading session activity" },
+};
 /** Inbox metadata is server-local; callers pair it with their connection ID. */
 export interface ProjectRecord {
   directory: string;
@@ -72,4 +92,15 @@ export interface InboxRpcMethods {
     params: Record<string, never>;
     result: Record<string, number>;
   };
+}
+
+export interface InboxRequestReceipts {
+  "project-session": ProjectRecord & { sessionID: string };
+  task: TaskRecord;
+  tasks: TaskRecord[];
+  "task-closed": { taskID: string; closed: true };
+  project: ProjectRecord;
+  "project-visit": ProjectRecord | null;
+  "project-templates": string[];
+  "session-seen": number;
 }

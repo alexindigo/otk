@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { fixtureMessagePolicy } from "../../support/message-pages.ts";
-import { assertEquals } from "@std/assert";
-import { OtkDb, Prefs, prefsMigrations } from "@otk/store";
+import { assert, assertEquals } from "@std/assert";
+import { OtkDb, Prefs, prefsMigrations, requestsMigrations } from "@otk/store";
+import { requestServices } from "../../support/core-request-services.ts";
+import { readExecution } from "../../../core/requests/policies.ts";
 import { createSessionUsage, Rpc } from "@otk/client";
 import type { SidecarConnection } from "@otk/client";
 import { PROTOCOL_VERSION, type ServerFrame } from "@otk/protocol";
@@ -55,6 +57,7 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
         db: root + "/absent.db",
         heartbeattimeout: 25,
         reconnectmax: 30,
+        requestms: 60000,
       },
       index: { days: 30 },
     },
@@ -72,7 +75,7 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
       ready ||= value.delta.summary.state === "ready";
     },
   });
-  const db = new OtkDb(root, [prefsMigrations]);
+  const db = new OtkDb(root, [prefsMigrations, requestsMigrations]);
   const harness = stub({
     usage: {
       getUsage: async (id: string, turnID: string, signal?: AbortSignal) => ({
@@ -88,6 +91,7 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
   });
   const registry = new RpcRegistry(harness, db);
   registerUsage(registry, harness);
+  const requests = await requestServices(registry, db);
   const connections = new Connections(
     harness,
     new IndexStore(),
@@ -95,6 +99,7 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
     new Prefs(db, prefsOptions),
     registry,
     fixtureMessagePolicy,
+    requests,
   );
   const frames: ServerFrame[] = [];
   const socket = {
@@ -123,6 +128,13 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
     );
   connections.accept(socket as unknown as WebSocket);
   await send({ t: "hello", protocol: PROTOCOL_VERSION });
+  const welcome = frames.find((frame) => frame.t === "welcome");
+  assert(welcome?.t === "welcome");
+  rpc.requests.connect(
+    welcome.requests.window,
+    welcome.requests.policy.resumebatch,
+    welcome.requests.principal,
+  );
   const owner = createSessionUsage(() =>
     ({ supports: () => true, rpc }) as unknown as SidecarConnection
   );
@@ -145,13 +157,15 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
     await waitFor(() => aborted, (n) => n === 1, 2000);
     holding = false;
     await owner.load(target);
-    const completedID = frames.findLast((frame) =>
-      frame.t === "rpc.result" && frame.ok
-    )?.id;
+    const completed = frames.findLast((frame) => frame.t === "request.result");
+    assert(completed?.t === "request.result");
     const count = frames.length;
-    await send({ t: "rpc.cancel", id: completedID });
-    await send({ t: "rpc.cancel", id: completedID });
-    await send({ t: "rpc.cancel", id: "unknown" });
+    await send({ t: "request.release", refs: [completed.ref] });
+    await send({ t: "request.release", refs: [completed.ref] });
+    await send({
+      t: "request.release",
+      refs: [{ ...completed.ref, key: crypto.randomUUID() }],
+    });
     assertEquals(frames.length, count);
     assertEquals(aborted, 1);
     await owner.load(target, true);
@@ -161,13 +175,17 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
     owner.stop();
     rpc.close();
     connections.close();
+    await requests.coordinator.stop();
     await bridge.stop();
     db.close();
   }
 });
 
 test("RPC read cancellation is connection-scoped and ignores completed, duplicate and unknown ids", async () => {
-  const db = new OtkDb(await tempDir("rpc-read-cancel-"), [prefsMigrations]);
+  const db = new OtkDb(await tempDir("rpc-read-cancel-"), [
+    prefsMigrations,
+    requestsMigrations,
+  ]);
   const signals: AbortSignal[] = [];
   const harness = stub({
     usage: {
@@ -197,6 +215,7 @@ test("RPC read cancellation is connection-scoped and ignores completed, duplicat
   });
   const rpc = new RpcRegistry(harness, db);
   registerUsage(rpc, harness);
+  const requests = await requestServices(rpc, db);
   const connections = new Connections(
     harness,
     new IndexStore(),
@@ -204,6 +223,7 @@ test("RPC read cancellation is connection-scoped and ignores completed, duplicat
     new Prefs(db, prefsOptions),
     rpc,
     fixtureMessagePolicy,
+    requests,
   );
   const makeSocket = () => {
     const frames: ServerFrame[] = [];
@@ -234,21 +254,32 @@ test("RPC read cancellation is connection-scoped and ignores completed, duplicat
     for (const socket of [first, second]) {
       await socket.send({ t: "hello", protocol: PROTOCOL_VERSION });
     }
+    const ref = {
+      id: crypto.randomUUID(),
+      clientID: crypto.randomUUID(),
+      key: crypto.randomUUID(),
+      window: requests.coordinator.window().id,
+    };
     await first.send({
-      t: "rpc",
-      id: "finished",
+      t: "request",
+      ref,
       method: "usage.get",
       params: { sessionID: "tstv1-one", turnID: "user" },
     });
+    await requests.coordinator.idle();
     const count = first.frames.length;
-    await first.send({ t: "rpc.cancel", id: "finished" });
-    await first.send({ t: "rpc.cancel", id: "finished" });
-    await first.send({ t: "rpc.cancel", id: "unknown" });
+    await first.send({ t: "request.release", refs: [ref] });
+    await first.send({ t: "request.release", refs: [ref] });
+    await first.send({
+      t: "request.release",
+      refs: [{ ...ref, key: crypto.randomUUID() }],
+    });
     assertEquals(first.frames.length, count);
     assertEquals(signals[0].aborted, false);
     let active: AbortSignal | undefined;
     const gate = Promise.withResolvers<string>();
     rpc.register("external.directory", {
+      execution: readExecution(() => ({ resource: "external" })),
       params: () => undefined,
       handler: (ctx) => {
         active = Reflect.get(ctx, "execution")?.signal;
@@ -256,21 +287,25 @@ test("RPC read cancellation is connection-scoped and ignores completed, duplicat
       },
     });
     const work = first.send({
-      t: "rpc",
-      id: "active",
+      t: "request",
+      ref: { ...ref, key: "00000000-0000-4000-8000-000000000001" },
       method: "external.directory",
       params: {},
     });
-    await second.send({ t: "rpc.cancel", id: "active" });
+    await work;
+    await waitFor(() => active, Boolean);
+    const activeRef = { ...ref, key: "00000000-0000-4000-8000-000000000001" };
+    await second.send({ t: "request.release", refs: [activeRef] });
     assertEquals(active?.aborted, false);
-    await first.send({ t: "rpc.cancel", id: "active" });
+    await first.send({ t: "request.release", refs: [activeRef] });
     assertEquals(active?.aborted, true);
     gate.resolve("finished");
-    await work;
+    await requests.coordinator.idle();
     assertEquals(first.frames.filter((frame) => frame.t === "error"), []);
     assertEquals(second.frames.filter((frame) => frame.t === "error"), []);
   } finally {
     connections.close();
+    await requests.coordinator.stop();
     db.close();
   }
 });

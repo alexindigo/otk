@@ -65,7 +65,7 @@ export default function PermissionActivity(props: {
                 {entry().outcome === "confirmed"
                   ? (entry().reply === "reject" ? "Rejected" : "Allowed")
                   : entry().outcome === "failed"
-                  ? `Reply failed: ${entry().error}`
+                  ? "The response could not be sent. Review this request before trying again"
                   : "Reply started; outcome not confirmed"}
               </p>
               <Show when={entry().message}>

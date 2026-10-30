@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "@otk/client";
 import "./PermissionDock.css" with { type: "text" };
 import Takeover from "./surface/Takeover.tsx";
 import type { DockRegistry } from "../registries/renderers.ts";
@@ -52,7 +52,9 @@ function waitingPermissions(session: SessionPorts) {
     )
     : session.permissions();
 }
-function PermissionTakeover() {
+function PermissionTakeover(
+  props: { notice?: () => import("solid-js").Element } = {},
+) {
   const session = useSessionPorts(), { commands } = useCommandPorts();
   const request = () =>
     oldestPermission(
@@ -68,6 +70,7 @@ function PermissionTakeover() {
         <p class="otk-auto-approving" role="status">Auto-approving…</p>
       </Show>
       <PermissionDock
+        notice={props.notice}
         request={request()}
         where={request()
           ? `${request()!.kind} in ${
@@ -88,19 +91,21 @@ function PermissionTakeover() {
 function RequestDock(
   props: {
     request: PermissionRequest;
+    notice?: () => import("solid-js").Element;
     childTitle?: string;
     where?: string;
     onReply(input: PermissionReply): Promise<void>;
     onDirty(value: boolean, input?: string): void;
   },
 ) {
+  const feedback = useSessionPorts()?.feedback;
   const [mode, setMode] = createSignal<"normal" | "always" | "reject">(
     "normal",
   );
   const [message, setMessage] = createSignal(""),
     [pending, setPending] = createSignal(false),
     [error, setError] = createSignal("");
-  let active = true, card!: HTMLElement;
+  let active = true, card!: HTMLElement, pendingStatus!: HTMLSpanElement;
   createEffect(mode, (_value, previous) => {
     if (previous !== undefined) {
       card.querySelector<HTMLButtonElement>(".otk-permission-actions button")
@@ -119,12 +124,15 @@ function RequestDock(
       message: reply === "reject" ? message().trim() || undefined : undefined,
     };
     setPending(true);
+    queueMicrotask(() => pendingStatus?.focus());
+    feedback?.clear();
     setError("");
     try {
       await props.onReply(input);
       props.onDirty(false);
     } catch (error) {
-      if (active) setError(errorMessage(error));
+      if (feedback) feedback.fail(error);
+      else if (active) setError(failureText(error));
     } finally {
       if (active) setPending(false);
     }
@@ -203,6 +211,7 @@ function RequestDock(
       }}
     >
       <Takeover
+        notice={props.notice}
         title={
           <TakeoverHeader
             title={props.request.detail.kind === "bash"
@@ -214,95 +223,109 @@ function RequestDock(
           />
         }
         actions={
-          <Switch>
-            <Match when={mode() === "normal"}>
-              <div class="otk-permission-actions">
-                <button
-                  type="button"
-                  disabled={pending()}
-                  onClick={() => void once()}
-                  class="otk-primary otk-pill"
-                  title={`Allow once (${shortcuts.once.key} when focused)`}
-                >
-                  Allow once
-                </button>
-                <button
-                  type="button"
-                  disabled={pending()}
-                  onClick={() => void always()}
-                  class="otk-pill"
-                  title={`Review future grant (${shortcuts.always.key} when focused)`}
-                >
-                  Always allow
-                </button>
-                <button
-                  type="button"
-                  disabled={pending()}
-                  onClick={() => void reject()}
-                  class="otk-pill"
-                  title={`Reject (${shortcuts.reject.key} when focused)`}
-                >
-                  Reject
-                </button>
-                <input
-                  class="otk-rejection-reason"
-                  aria-label="Reason for rejecting (optional)"
-                  placeholder="Reason for rejecting (optional)"
-                  value={message()}
-                  onInput={(event) => {
-                    setMessage(event.currentTarget.value);
-                    props.onDirty(
-                      !!event.currentTarget.value,
-                      event.currentTarget.value,
-                    );
-                  }}
-                />
-              </div>
-            </Match>
-            <Match when={mode() === "always"}>
-              <div class="otk-permission-actions">
-                <button
-                  type="button"
-                  disabled={pending()}
-                  onClick={() => void answerCommand("always")}
-                  class="otk-primary otk-pill"
-                >
-                  Confirm allow always
-                </button>
-                <button
-                  type="button"
-                  disabled={pending()}
-                  onClick={() => void close()}
-                  class="otk-pill"
-                >
-                  Cancel
-                </button>
-              </div>
-            </Match>
-            <Match when={mode() === "reject"}>
-              <div class="otk-permission-actions">
-                <button
-                  type="submit"
-                  form={`otk-reject-${props.request.id}`}
-                  class="otk-pill"
-                  disabled={pending()}
-                >
-                  Reject request
-                </button>
-                <button
-                  type="button"
-                  disabled={pending()}
-                  onClick={() => void close()}
-                  class="otk-pill"
-                >
-                  Cancel
-                </button>
-              </div>
-            </Match>
-          </Switch>
+          <>
+            <span
+              ref={pendingStatus}
+              tabindex={-1}
+              hidden={!pending()}
+              role="status"
+            >
+              Sending response…
+            </span>
+            <Switch>
+              <Match when={mode() === "normal"}>
+                <div class="otk-permission-actions">
+                  <button
+                    type="button"
+                    hidden={pending()}
+                    onClick={() => void once()}
+                    class="otk-primary otk-pill"
+                    title={`Allow once (${shortcuts.once.key} when focused)`}
+                  >
+                    Allow once
+                  </button>
+                  <button
+                    type="button"
+                    hidden={pending()}
+                    onClick={() => void always()}
+                    class="otk-pill"
+                    title={`Review future grant (${shortcuts.always.key} when focused)`}
+                  >
+                    Always allow
+                  </button>
+                  <button
+                    type="button"
+                    hidden={pending()}
+                    onClick={() => void reject()}
+                    class="otk-pill"
+                    title={`Reject (${shortcuts.reject.key} when focused)`}
+                  >
+                    Reject
+                  </button>
+                  <input
+                    class="otk-rejection-reason"
+                    aria-label="Reason for rejecting (optional)"
+                    placeholder="Reason for rejecting (optional)"
+                    value={message()}
+                    readonly={pending()}
+                    onInput={(event) => {
+                      setMessage(event.currentTarget.value);
+                      props.onDirty(
+                        !!event.currentTarget.value,
+                        event.currentTarget.value,
+                      );
+                    }}
+                  />
+                </div>
+              </Match>
+              <Match when={mode() === "always"}>
+                <div class="otk-permission-actions">
+                  <button
+                    type="button"
+                    hidden={pending()}
+                    onClick={() => void answerCommand("always")}
+                    class="otk-primary otk-pill"
+                  >
+                    Confirm allow always
+                  </button>
+                  <button
+                    type="button"
+                    hidden={pending()}
+                    onClick={() => void close()}
+                    class="otk-pill"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </Match>
+              <Match when={mode() === "reject"}>
+                <div class="otk-permission-actions">
+                  <button
+                    type="submit"
+                    form={`otk-reject-${props.request.id}`}
+                    class="otk-pill"
+                    hidden={pending()}
+                  >
+                    Reject request
+                  </button>
+                  <button
+                    type="button"
+                    hidden={pending()}
+                    onClick={() => void close()}
+                    class="otk-pill"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </Match>
+            </Switch>
+          </>
         }
       >
         <PermissionSummary request={props.request} />
+        <Show when={pending() && !feedback}>
+          <p role="status">Sending response…</p>
+        </Show>
         <Show when={error()}>
           <p class="otk-error" role="alert">{error()}</p>
         </Show>
@@ -345,6 +368,7 @@ function RequestDock(
 export default function PermissionDock(
   props: {
     request?: PermissionRequest;
+    notice?: () => import("solid-js").Element;
     childTitle?: string;
     where?: string;
     onReply(input: PermissionReply): Promise<void>;
@@ -358,6 +382,7 @@ export default function PermissionDock(
     >
       {(request) => (
         <RequestDock
+          notice={props.notice}
           request={request()}
           childTitle={props.childTitle}
           where={props.where}

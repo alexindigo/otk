@@ -1,7 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ResourceOption } from "../rpc.ts";
 export interface ResourcesCapability {
-  listResources(sessionID: string): Promise<ResourceOption[]>;
+  listResources(
+    sessionID: string,
+    signal?: AbortSignal,
+  ): Promise<ResourceOption[]>;
 }
 export interface ResourcesCapabilities {
   resources: ResourcesCapability;

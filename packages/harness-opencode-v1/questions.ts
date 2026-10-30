@@ -18,9 +18,10 @@ export function questions(
     owners.set(id, session),
 ): QuestionsCapability {
   return {
-    async listQuestions(sessionID) {
+    async listQuestions(sessionID, signal) {
       const pending = await client.json<RawQuestion[]>("/question", {
-        query: { directory: await directory.resolve(sessionID) },
+        query: { directory: await directory.resolve(sessionID, signal) },
+        signal,
       });
       const mapped = pending.map(mapQuestion);
       for (const request of mapped) observed(request.id, request.sessionID);

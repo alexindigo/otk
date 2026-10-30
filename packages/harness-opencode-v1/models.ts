@@ -29,7 +29,7 @@ export function models(client: Client, directory: Directory): ModelsCapability {
   return {
     async listModels(sessionID, signal) {
       signal?.throwIfAborted();
-      const query = { directory: await directory.resolve(sessionID) };
+      const query = { directory: await directory.resolve(sessionID, signal) };
       signal?.throwIfAborted();
       const [native, config] = await Promise.all([
         client.json<Providers>("/config/providers", { query, signal }),

@@ -1,6 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Preferences } from "./preference-contract.ts";
 export type { Preferences } from "./preference-contract.ts";
+export interface PreferencesRequestReceipts {
+  preferences: Preferences;
+}
 export type PreferenceKey = Extract<keyof Preferences, string>;
 
 export type PreferenceControl =

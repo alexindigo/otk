@@ -20,6 +20,7 @@ export interface HttpRequestOptions
   resultHeaders?: (
     ref: RequestRef,
     event: Extract<RequestEvent, { t: "request.result" }>,
+    origin: string,
   ) => HeadersInit | undefined;
 }
 const identity = (origin: string, ref: RequestRef) =>
@@ -213,7 +214,7 @@ export class HttpRequestAdapter {
           ...Object.fromEntries(
             new Headers(
               event.t === "request.result" && event.outcome.ok
-                ? this.options.resultHeaders(ref, event)
+                ? this.options.resultHeaders(ref, event, origin)
                 : undefined,
             ),
           ),

@@ -30,7 +30,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
             window.scanSockets.push(this);
             this.addEventListener('message', event => {
               const frame = JSON.parse(event.data);
-              const queue = frame.t === 'rpc.result' && window.scanReplies.has(frame.id) && window.holdScans
+              const queue = frame.t === 'request.result' && window.scanReplies.has(frame.ref.key) && window.holdScans
                 ? window.heldScans
                 : window.holdScanWelcome ? window.heldScanWelcome : undefined;
               if (!queue) return;
@@ -40,7 +40,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
           }
           send(data) {
             const frame = JSON.parse(data);
-            if (frame.method === 'projects.scan') window.scanReplies.add(frame.id);
+            if (frame.t === 'request' && frame.method === 'projects.scan') window.scanReplies.add(frame.ref.key);
             super.send(data);
           }
         };
@@ -65,7 +65,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       // The native option is the current adapter's rendered connection state,
       // not a guessed quiet interval for the rejected scan continuation.
       await b.poll(
-        "document.querySelector('select[name=server] option:checked')?.disabled && window.heldScanWelcome.length>0",
+        "!document.querySelector('select[name=server] option:checked') && window.heldScanWelcome.length>0",
       );
       await b.evaluate(
         "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",

@@ -1,4 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { RequestMetadata } from "../request-metadata.ts";
+export const layoutRequestMetadata: Readonly<Record<string, RequestMetadata>> =
+  {
+    "layout.patch": { kind: "mutation", pending: "Saving layout" },
+    "layout.location": { kind: "mutation", pending: "Saving location" },
+  };
 import type { PreferenceRegistry } from "../prefs.ts";
 import type { Preferences } from "../preference-contract.ts";
 import { isSessionID } from "../session-id.ts";

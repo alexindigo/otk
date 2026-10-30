@@ -256,14 +256,15 @@ for (const method of ["shell", "command"] as const) {
           );
           await wait(() =>
             ops.some((op) =>
-              op.op === "session.error" && op.error === "Deferred shell failure"
+              op.op === "session.error" &&
+              op.error === "Request failed (HTTP 503)."
             )
           );
           assertEquals(
             (await adapter.core.getSession(
               opencodeV1SessionID.encode(session.id),
             )).error,
-            "Deferred shell failure",
+            "Request failed (HTTP 503).",
           );
           const send = (type: string, properties: Record<string, unknown>) =>
             events.enqueue(

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { tempDir, test } from "../../../tests/support/resources.ts";
 import { assertEquals, assertRejects } from "@std/assert";
+import { OperationFailure } from "@otk/protocol";
 import { join, toFileUrl } from "@std/path";
 import { HarnessError } from "@otk/harness";
 import type { PromptPart } from "@otk/protocol";
@@ -8,6 +9,60 @@ import { Client } from "../client.ts";
 import { commands } from "../commands.ts";
 import { prompt } from "../prompt.ts";
 import { cfg } from "../../../tests/support/config.ts";
+
+test("captured native sends classify known attachment preparation rejection after the conservative core fence", async () => {
+  const root = await tempDir("prep-");
+  let writes = 0;
+  const client = new Client(cfg().harness, () => {
+    writes++;
+    return Promise.resolve(new Response(null, { status: 204 }));
+  });
+  const directory = {
+    cached: () => root,
+    resolve: () => Promise.resolve(root),
+  };
+  const operation = {
+    key: {
+      clientID: crypto.randomUUID(),
+      key: crypto.randomUUID(),
+      window: crypto.randomUUID(),
+    },
+    signal: new AbortController().signal,
+    progress() {},
+    beforeEffect: () => Promise.resolve(),
+    checkpoint: () => Promise.resolve(),
+  };
+  const parts: PromptPart[] = [{
+    kind: "file",
+    source: "path",
+    path: "missing.txt",
+  }];
+  for (
+    const send of [
+      () =>
+        prompt(client, directory, () => {}).prompt({
+          sessionID: "opcv1-session",
+          mode: "normal",
+          parts,
+        }, operation),
+      () =>
+        commands(client, directory, () => {
+          writes++;
+        }).command({
+          sessionID: "opcv1-session",
+          command: "probe",
+          arguments: "",
+          parts: parts as Extract<PromptPart, { kind: "file" }>[],
+        }, operation),
+    ]
+  ) {
+    await operation.beforeEffect();
+    const error = await assertRejects(send, OperationFailure);
+    assertEquals(error.outcome, "rejected");
+    assertEquals(error.code, "attachment");
+    assertEquals(writes, 0);
+  }
+});
 
 for (const mode of ["prompt", "command"] as const) {
   for (

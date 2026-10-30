@@ -88,14 +88,20 @@ bytes allocated by the entire V8 isolate. A 2 MiB ASCII reply does not imply a 2
 MiB allocation increase: strings can share representations. Conversely,
 framework/grammar/cache warmup can grow the isolate after correct disposal.
 
-The measurement unit therefore changes from whole-isolate byte delta (old 1 MiB
-allowance) to retained session objects, marker-bearing strings and detached
-transcript DOM nodes (**zero allowed in every category**). The payload remains
-at least 2 MiB in E8; its DOM length is checked. This is not a larger byte
-allowance. Three equivalent load/dispose cycles each take one loaded and one
-post-disposal GC snapshot. Loaded snapshots positively identify message objects
-by `sessionID` + `parts`, and source-bearing objects by their unique `text` or
-`source` marker. Post-disposal snapshots must contain none, including any copied
+Heap retention is a reported measurement, not a cooling gate. Reports identify
+retained session objects, marker-bearing strings and detached transcript DOM
+nodes rather than using a whole-isolate byte allowance. The payload remains at
+least 2 MiB in E8; its DOM length is checked. Three equivalent load/dispose
+cycles each take one loaded and one post-disposal GC snapshot. The structural
+gate observes the real public client resource against the native sidecar: loaded
+message bodies are a positive control; after cooling its message/reply records,
+content, recovery state and active read leases are zero, and its subscription is
+released. The application browser independently must unsubscribe and remove the
+departed source from the DOM. These checks remain assertions even when a heap
+measurement is incomplete or reports retained objects.
+
+Snapshots identify message objects by `sessionID` + `parts`, and source-bearing
+objects by their unique `text` or `source` marker. Reports include any copied
 objects with that identity. Strong root reachability excludes weak edges and
 unreferenced entries in the snapshot's string table. Every string node type is
 examined through the snapshot JSON's names and string edges, independently of
@@ -112,8 +118,12 @@ detached trees are therefore checked for marker-bearing text and transcript
 root/message classes, including empty transcript roots. Only matching detached
 trees are resolved temporarily to associate their native heap IDs with the same
 sample's strong root paths. Heap IDs, kinds, types, immediate incoming retaining
-edges and complete root paths are reported on failure. The transient object
-group is released and the DOM agent disabled in finally before any later sample.
+edges and complete root paths are reported. Native nodes whose V8 wrapper has no
+sampled heap ID are explicitly reported as unresolved paths; they do not turn a
+successful resource-release assertion into a failure or a zero-retention claim.
+`measureSessionHeap` returns the observed identities, completeness and
+diagnostic facts, including capture/analysis errors. The transient object group
+is released and the DOM agent disabled in finally before any later sample.
 
 Post-disposal sampling follows replacement transcript readiness and two render
 frames; code history additionally waits for the owned worker target to
@@ -122,14 +132,15 @@ Unsubscribe and DOM absence remain independent assertions. Existing client
 generation/cancellation and highlighting-disposal units cover the deterministic
 owner contracts.
 
-The measurement-control browser tests deliberately retain identifiable content
-alongside an unrelated large allocation, proves retention is rejected, then
-releases only the content and proves the unrelated allocation cannot cause a
-false leak report. Independent closure-held Map, flat tail, sliced backing,
-split cons, detached native text and empty-transcript controls each require
-retention rejection with strong paths, followed by zero retention after removing
-the sole owner. Markers are constructed from character codes outside evaluated
-source literals so debugger/source strings cannot masquerade as content leaks.
+The analyzer's synthetic calibration tests keep their strict assertions. They
+deliberately retain identifiable content alongside an unrelated large
+allocation, prove the analyzer detects it, then releases only the content and
+proves the unrelated allocation cannot cause a false leak report. Independent
+closure-held Map, flat tail, sliced backing, split cons, detached native text
+and empty-transcript controls each require retention rejection with strong
+paths, followed by zero retention after removing the sole owner. Markers are
+constructed from character codes outside evaluated source literals so
+debugger/source strings cannot masquerade as content leaks.
 
 ## Fixture lifetime
 

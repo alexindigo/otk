@@ -62,6 +62,7 @@ test("essential transcript metadata is served while bulk catalog publication awa
         db: root + "/absent.db",
         heartbeattimeout: 25,
         reconnectmax: 30,
+        requestms: 60000,
       },
       index: { days: 30 },
     },

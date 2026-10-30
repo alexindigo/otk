@@ -479,7 +479,7 @@ test("preference controls remain authoritative while pending, reject unready int
     );
     await b.click(field);
     await b.poll(
-      "document.querySelector('.otk-visual-settings [role=alert]')?.textContent==='Preferences are not ready yet'",
+      "document.querySelector('.otk-visual-settings [role=alert]')?.textContent==='Could not finish this action. Try again'",
     );
     assertEquals(
       await b.evaluate(`document.querySelector('${field}').checked`),

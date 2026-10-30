@@ -2,10 +2,17 @@
 import type { Handler } from "@pathfinder/pathfinder";
 import "../../../app.ts";
 import { PROTOCOL_VERSION, SIDECAR_VERSION } from "@otk/protocol";
-const handler: Handler = (_request, { app }) => ({
-  ok: true,
-  version: SIDECAR_VERSION,
-  protocol: PROTOCOL_VERSION,
-  harness: { kind: app.backend.core.kind, version: app.backend.core.version },
-});
+import { bootstrapAdmission } from "../../../bootstrap-route.ts";
+const handler: Handler = (request, { app }) =>
+  request.headers.has("X-OTK-Request")
+    ? bootstrapAdmission(app.bootstrap, "bootstrap.health", request._raw)
+    : ({
+      ok: true,
+      version: SIDECAR_VERSION,
+      protocol: PROTOCOL_VERSION,
+      harness: {
+        kind: app.backend.core.kind,
+        version: app.backend.core.version,
+      },
+    });
 export default handler;

@@ -85,6 +85,7 @@ for (const sql of [true, false]) {
           db,
           heartbeattimeout: 25,
           reconnectmax: 30,
+          requestms: 60000,
         },
         index: { days: 30 },
         messages: fixtureMessagePolicy,

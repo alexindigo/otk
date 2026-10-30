@@ -3,7 +3,10 @@ import type { CommandInput, CommandOption } from "../rpc.ts";
 import type { OperationContext } from "../requests.ts";
 export interface CommandsCapability {
   command(input: CommandInput, operation?: OperationContext): Promise<void>;
-  listCommands(sessionID: string): Promise<CommandOption[]>;
+  listCommands(
+    sessionID: string,
+    signal?: AbortSignal,
+  ): Promise<CommandOption[]>;
 }
 export interface CommandsCapabilities {
   commands: CommandsCapability;

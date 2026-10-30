@@ -33,6 +33,7 @@ test("accepted deletion before catalog seeds retained metadata and survives rest
           password: "",
           heartbeattimeout: 25,
           reconnectmax: 30,
+          requestms: 60000,
         },
         index: { days: 30 },
       },

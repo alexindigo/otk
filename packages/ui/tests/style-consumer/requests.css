@@ -1,0 +1,25 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.request-feedback-scene {
+  display: grid;
+  gap: 16px;
+  width: min(100%, var(--lane-width));
+  margin-inline: auto;
+}
+.request-feedback-form {
+  display: grid;
+  max-width: 28rem;
+}
+.request-feedback-form label {
+  display: grid;
+  gap: 8px;
+}
+.request-feedback-action {
+  min-block-size: var(--control-size);
+  display: flex;
+  align-items: center;
+}
+.request-feedback-pane {
+  display: grid;
+  block-size: 180px;
+  border: 1px solid var(--otk-border);
+}

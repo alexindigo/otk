@@ -16,3 +16,28 @@
   flex-direction: column;
   gap: 8px;
 }
+.otk-form-action {
+  display: grid;
+  align-items: center;
+}
+.otk-form-action > * {
+  grid-area: 1 / 1;
+  justify-self: start;
+}
+.otk-form.is-pending .otk-form-action > button {
+  visibility: hidden;
+}
+.otk-form-choice {
+  display: grid;
+}
+.otk-form-choice > * {
+  grid-area: 1 / 1;
+  min-inline-size: 0;
+}
+.otk-form-choice-value,
+.otk-form-choice.is-pending > select {
+  visibility: hidden;
+}
+.otk-form-choice.is-pending > .otk-form-choice-value {
+  visibility: visible;
+}

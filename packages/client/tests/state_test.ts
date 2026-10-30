@@ -1,4 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import {
+  connectRequests,
+  replyRequest,
+} from "../../../tests/support/request-wire.ts";
+import { RequestReleased } from "../failures.ts";
 import { assert, assertEquals } from "@std/assert";
 import type { Message, Part } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
@@ -174,21 +179,31 @@ Deno.test("web URL round-trips selection and rejects malformed hashes", () => {
   assertEquals(route("#/missing"), undefined);
   assertEquals(route("#/%zz/x"), undefined);
 });
-Deno.test("web RPC owns pending calls until result, cancellation or disconnect", async () => {
+Deno.test("web RPC owns pending calls through disconnect and releases cancelled reads silently", async () => {
   const frames: ClientFrame[] = [],
     rpc = new Rpc((frame) => frames.push(frame));
+  connectRequests(rpc);
   const promise = rpc.call("session.children", { sessionID: "x" });
-  assert(frames[0].t === "rpc");
-  rpc.receive({ t: "rpc.result", id: frames[0].id, ok: true, result: [] });
+  assert(frames[0].t === "request");
+  replyRequest(rpc, frames[0], []);
   assertEquals(await promise, []);
   const abort = new AbortController();
   const cancelled = rpc.call("session.get", { sessionID: "x" }, abort.signal)
-    .catch((e) => e.message);
+    .catch((e) => e);
   abort.abort();
-  assertEquals(await cancelled, "Request cancelled");
-  const disconnected = rpc.call("session.get", { sessionID: "x" }).catch((e) =>
-    e.message
-  );
+  assert((await cancelled) instanceof RequestReleased);
+  const disconnected = rpc.start("session.children", { sessionID: "x" });
+  let settled = false;
+  void disconnected.result.then(() => settled = true, () => settled = true);
   rpc.close();
-  assertEquals(await disconnected, "Sidecar disconnected");
+  await Promise.resolve();
+  assertEquals(settled, false);
+  connectRequests(rpc);
+  replyRequest(rpc, {
+    t: "request",
+    ref: disconnected.state.ref,
+    method: "session.children",
+    params: { sessionID: "x" },
+  }, []);
+  assertEquals(await disconnected.result, []);
 });

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { readRpcMessages } from "../support/message-pages.ts";
-import { assertEquals, assertRejects } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
+import { RequestFailure } from "@otk/client";
 import { test } from "../support/resources.ts";
 import { browserFixture } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
@@ -8,7 +9,7 @@ import type { ContentSession } from "@otk/protocol";
 import type { InboxSnapshot, TaskRecord } from "@otk/protocol";
 import { waitFor } from "../support/opencode.ts";
 
-test("busy revert reports the real native reason through the RPC error mapper without JSON", async () => {
+test("busy revert reports structured native rejection facts without native prose", async () => {
   const f = await browserFixture();
   let client: WsClient | undefined;
   const held = f.fake.queueHeld({ chunks: ["Working until interrupted."] });
@@ -40,10 +41,9 @@ test("busy revert reports the real native reason through the RPC error mapper wi
       () => client!.rpc("session.revert", { sessionID: s.id, messageID }),
       Error,
     );
-    assertEquals(
-      error.message,
-      "harness_409: The session is working. Try again when it finishes.",
-    );
+    assert(error instanceof RequestFailure);
+    assertEquals(error.message, "Could not finish this action");
+    assertEquals(error.failure.code, "session.busy");
   } finally {
     held.release();
     await client?.close();

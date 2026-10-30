@@ -13,7 +13,7 @@ import { OpencodeV1Adapter as Opencode1Adapter } from "../adapter.ts";
 import { Attention } from "../attention.ts";
 import { consumeEvents } from "../events.ts";
 import { AgentColors } from "../agents.ts";
-import { Client } from "../client.ts";
+import { Client, NativeRequestFailure } from "../client.ts";
 import { MessageRecovery } from "../recovery.ts";
 import { mapIndex } from "../map.ts";
 import type { Info, Session } from "../types.ts";
@@ -373,10 +373,10 @@ test("optional color retries retain independent subscribers and cleared generati
   colors.clear();
   const retired = colors.get("/project");
   colors.peek("/project", "retired");
-  const cancelled = assertRejects(() => retired, DOMException, "aborted");
+  const cancelled = assertRejects(() => retired, NativeRequestFailure);
   colors.clear();
   held[2].resolve(Response.json([{ name: "build", color: "#abcdef" }]));
-  await cancelled;
+  assertEquals((await cancelled).outcome, "unavailable");
   assertEquals(deliveries, [["first", "second"]]);
 });
 

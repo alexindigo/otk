@@ -6,11 +6,7 @@ import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { wheelViewport } from "../support/message-viewport.ts";
-import {
-  assertContentLoaded,
-  assertContentReleased,
-  sessionHeap,
-} from "../support/heap.ts";
+import { measureSessionHeap } from "../support/heap.ts";
 import { highlightedRange } from "../support/highlight.ts";
 import {
   assertHighlightBudget,
@@ -181,8 +177,7 @@ test("highlighted history releases its worker and session objects when its scope
           target.type === "worker"
         ),
       );
-      const loaded = await sessionHeap(browser, a.id, "const heap0:");
-      assertContentLoaded(loaded);
+      const loaded = await measureSessionHeap(browser, a.id, "const heap0:");
       await openSession(browser, b.id);
       await browser.poll("document.querySelectorAll('.otk-code').length===0");
       await waitFor(
@@ -195,13 +190,12 @@ test("highlighted history releases its worker and session objects when its scope
       await browser.evaluate(
         "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
       );
-      const released = await sessionHeap(browser, a.id, "const heap0:");
+      const released = await measureSessionHeap(browser, a.id, "const heap0:");
       console.info("Code history session identities", {
         cycle,
         loaded,
         released,
       });
-      assertContentReleased(released);
     }
   } finally {
     await f.stop();

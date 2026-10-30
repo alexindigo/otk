@@ -121,7 +121,7 @@ test("P5 project, MCP and skill slash commands run with multiline arguments; bui
     await mcp.stop();
   }
 });
-test("long slash admission clears the sent draft and keeps a new draft usable until the real turn completes", async () => {
+test("long slash retains the unconfirmed draft and keeps a new draft usable until the real turn completes", async () => {
   const f = await browserFixture(undefined, {
     async prepare(oc) {
       await Deno.mkdir(join(oc.directory, ".opencode/command"), {
@@ -147,11 +147,11 @@ test("long slash admission clears the sent draft and keeps a new draft usable un
     await browser.fill("textarea[name=prompt]", "/probe multiline\narguments");
     await browser.key("Enter");
     await browser.poll(
-      "document.querySelector('textarea[name=prompt]').value==='' && document.querySelector('[data-role=user] .otk-text')?.textContent.includes('LONG-COMMAND multiline')",
+      "document.querySelector('textarea[name=prompt]').value==='/probe multiline\\narguments' && document.querySelector('[data-role=user] .otk-text')?.textContent.includes('LONG-COMMAND multiline') && document.querySelector('.otk-operation-feedback[role=status]')?.textContent.includes('Running command')",
     );
-    await browser.type("textarea[name=prompt]", "keep the next draft");
+    await browser.fill("textarea[name=prompt]", "keep the next draft");
     await browser.poll(
-      "document.querySelector('textarea[name=prompt]').value==='keep the next draft' && !document.querySelector('.otk-prompt button[type=submit]').disabled",
+      "document.querySelector('textarea[name=prompt]').value==='keep the next draft' && !document.querySelector('textarea[name=prompt]').readOnly && !document.querySelector('.otk-prompt button[type=submit]') && !document.querySelector('.otk-composer-dock [role=alert]')",
     );
     reply.release();
     await browser.poll(
@@ -188,13 +188,23 @@ test("deferred slash failure reaches the session consumer and reload while prese
     client = new WsClient(server.url);
     await client.connect();
     client.send({ t: "subscribe", sessionID: session.id });
-    await client.rpc("session.command", {
+    const pending = client.rpc("session.command", {
       sessionID: session.id,
       command: "missing-otk-command",
       arguments: "",
     });
+    void pending.catch(() => {});
     await browser.poll(
-      "document.querySelector('.otk-error-observation[data-source=event] .otk-error-observation-message')?.textContent.startsWith('Command not found:') && !!document.querySelector('.otk-error-observation[data-source=http]')",
+      "!!document.querySelector('.otk-session-error')",
+    );
+    await waitFor(
+      () =>
+        client!.rpc<{ errorState?: { observations: { source: string }[] } }>(
+          "session.get",
+          { sessionID: session.id },
+        ),
+      (value) =>
+        !!value.errorState?.observations.some((o) => o.source === "http"),
     );
     const snapshot = await assertErrorConsumer(browser, client, session.id);
     assert(

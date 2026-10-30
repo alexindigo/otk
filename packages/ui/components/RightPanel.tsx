@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "@otk/client";
 import "./RightPanel.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -39,7 +39,7 @@ export default function RightPanel(props: {
       await props.onLayout({ rightWidth });
       setError("");
     },
-    fail: (error) => setError(errorMessage(error)),
+    fail: (error) => setError(failureText(error)),
   });
   const width = resize.width;
   const native = nativeAttributes(() => resize.handlers);
@@ -48,7 +48,7 @@ export default function RightPanel(props: {
       await props.onLayout(patch);
       setError("");
     } catch (error) {
-      setError(errorMessage(error));
+      setError(failureText(error));
     }
   };
   function Views(input: { rail: boolean }) {

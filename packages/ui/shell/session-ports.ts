@@ -25,12 +25,13 @@ export function sessionPorts(o: {
       c === "history"
         ? resources.anyAdvertised(c)
         : resources.declares(target.sidecarId, c),
-    rpc: connection.rpc.call.bind(connection.rpc),
+    rpc: actions.rpc(target),
     connectionKey: () => resources.connectionKey(target.sidecarId),
     connected: () => resources.linked(target.sidecarId),
     onToolCompleted: (listener) => session.onToolCompleted(target, listener),
     modelCatalog: session.models,
     approvals: resources.approvals(target.sidecarId),
+    feedback: connection.rpc.feedback(target.sessionID),
     sessionID: () => target.sessionID,
     directory: () => actions.directory(target),
     entry: (id) => resources.entry(target.sidecarId, id),

@@ -170,7 +170,7 @@ export default function Sidebar(
                               </Show>
                               <Show when={entry().attention.error}>
                                 <span
-                                  title={entry().attention.error}
+                                  title="The agent reported a session failure"
                                   aria-label="Session error"
                                 >
                                   Error

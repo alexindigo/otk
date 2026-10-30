@@ -4,6 +4,7 @@ import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { waitFor } from "../support/opencode.ts";
 import {
   assertErrorConsumer,
   reloadErrorConsumer,
@@ -87,11 +88,13 @@ test("P2 shell mode emits bash output without permission, exits locally, and sur
     );
     await browser.key("Enter");
     await browser.poll(
-      "!!document.querySelector('[data-tool=bash][data-tool-status=running]') && document.querySelector('textarea[name=prompt]').value===''",
+      "!!document.querySelector('[data-tool=bash][data-tool-status=running]') && document.querySelector('textarea[name=prompt]').value==='sleep 31; echo long-shell-finished' && document.querySelector('.otk-operation-feedback[role=status]')?.textContent.includes('Running command')",
     );
-    await browser.type("textarea[name=prompt]", "next draft during command");
+    // Stock shell HTTP has no earlier admission receipt. Retain the captured
+    // draft until settlement, but keep the input editable for the next draft.
+    await browser.fill("textarea[name=prompt]", "next draft during command");
     await browser.poll(
-      "document.querySelector('textarea[name=prompt]').value==='next draft during command' && !document.querySelector('.otk-prompt button[type=submit]').disabled",
+      "document.querySelector('textarea[name=prompt]').value==='next draft during command' && !document.querySelector('textarea[name=prompt]').readOnly && !document.querySelector('.otk-prompt button[type=submit]') && !document.querySelector('.otk-composer-dock [role=alert]')",
     );
     await browser.poll(
       "[...document.querySelectorAll('[data-tool=bash]')].some(el=>el.dataset.toolStatus==='completed'&&el.textContent.includes('long-shell-finished')) && document.querySelector('textarea[name=prompt]').value==='next draft during command'",
@@ -122,13 +125,23 @@ test("deferred shell failure reaches the session consumer and reload without cha
     client = new WsClient(server.url);
     await client.connect();
     client.send({ t: "subscribe", sessionID: session.id });
-    await client.rpc("session.shell", {
+    const pending = client.rpc("session.shell", {
       sessionID: session.id,
       command: "echo should-not-run",
       agent: "missing-otk-agent",
     });
+    void pending.catch(() => {});
     await browser.poll(
-      "document.querySelector('.otk-error-observation[data-source=event] .otk-error-observation-message')?.textContent.startsWith('Agent not found:') && !!document.querySelector('.otk-error-observation[data-source=http]')",
+      "!!document.querySelector('.otk-session-error')",
+    );
+    await waitFor(
+      () =>
+        client!.rpc<{ errorState?: { observations: { source: string }[] } }>(
+          "session.get",
+          { sessionID: session.id },
+        ),
+      (value) =>
+        !!value.errorState?.observations.some((o) => o.source === "http"),
     );
     const snapshot = await assertErrorConsumer(browser, client, session.id);
     assert(

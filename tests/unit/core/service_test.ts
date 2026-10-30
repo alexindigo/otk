@@ -7,7 +7,7 @@ import { join } from "@std/path";
 // @deno-types="npm:@types/ws@8.18.1"
 import WebSocket from "ws";
 import type { Harness } from "@otk/harness";
-import { OtkDb, Prefs, prefsMigrations } from "@otk/store";
+import { OtkDb, Prefs, prefsMigrations, requestsMigrations } from "@otk/store";
 import {
   prefsOptions,
   registerPrefs,
@@ -54,7 +54,10 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
     },
     capabilities: { prompt: undefined },
   };
-  const db = new OtkDb(settings.state.path, [prefsMigrations]),
+  const db = new OtkDb(settings.state.path, [
+      prefsMigrations,
+      requestsMigrations,
+    ]),
     prefs = new Prefs(db, prefsOptions),
     rpc = new RpcRegistry(harness, db);
   registerSessions(rpc, harness);
@@ -118,35 +121,45 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
     const welcome = await wait((frame) => frame.t === "welcome");
     assert(welcome.t === "welcome");
     assertEquals(welcome.sidecar.harness.capabilities, []);
+    const owned = {
+      id: crypto.randomUUID(),
+      key: crypto.randomUUID(),
+      clientID: crypto.randomUUID(),
+      window: welcome.requests.window.id,
+    };
     ws.send(
       JSON.stringify({
-        t: "rpc",
-        id: "owned",
+        t: "request",
+        ref: owned,
         method: "session.get",
         params: { sessionID: "tstv1-s" },
       }),
     );
-    assertEquals(
-      await wait((frame) => frame.t === "rpc.result" && frame.id === "owned"),
-      { t: "rpc.result", id: "owned", ok: true, result: session },
+    const result = await wait((frame) =>
+      frame.t === "request.result" && frame.ref.key === owned.key
     );
+    assert(result.t === "request.result");
+    assertEquals(result.outcome, { ok: true, result: session });
+    const absent = {
+      ...owned,
+      id: crypto.randomUUID(),
+      key: crypto.randomUUID(),
+    };
     ws.send(
       JSON.stringify({
-        t: "rpc",
-        id: "absent",
+        t: "request",
+        ref: absent,
         method: "session.prompt",
         params: {},
       }),
     );
-    assertEquals(
-      await wait((frame) => frame.t === "rpc.result" && frame.id === "absent"),
-      {
-        t: "rpc.result",
-        id: "absent",
-        ok: false,
-        error: { code: "method", message: "Unknown method: session.prompt" },
-      },
+    const rejected = await wait((frame) =>
+      frame.t === "request.rejected" && frame.ref.key === absent.key
     );
+    assert(rejected.t === "request.rejected");
+    assertEquals(rejected.error.code, "request.method");
+    assert(rejected.error.diagnosticID);
+    assertEquals("message" in rejected.error, false);
   } finally {
     if (ws && ws.readyState !== WebSocket.CLOSED) {
       await new Promise<void>((resolve) => {

@@ -186,7 +186,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       globalThis.WebSocket=class extends Native {
         constructor(...args){super(...args);this.addEventListener('message',event=>{
           const f=JSON.parse(event.data),at=performance.now();
-          if(f.t==='rpc.result')scale.results.push({at,wall:Date.now(),...f});
+          if(f.t==='request.result')scale.results.push({at,wall:Date.now(),...f,id:f.ref.key,ok:f.outcome.ok});
           if(f.t!=='index.snapshot'||f.entries.length<${SCALE.sessions}||!location.hash.endsWith('/${selected.id}'))return;
           const snapshot={at,ready:f.entries.every(e=>e.digest.state==='ready')};scale.snapshots.push(snapshot);
           const paint=()=>{const rows=[...document.querySelectorAll('.otk-session-row')],v=document.querySelector('${viewport}');
@@ -196,7 +196,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
             if(valid)scale.paints.push({snapshot,at:performance.now(),elapsed:performance.now()-at,rows:rows.length,bound});else requestAnimationFrame(paint);
           };requestAnimationFrame(paint);
         });}
-        send(data){const f=JSON.parse(data);if(f.t==='rpc')scale.calls.push({at:performance.now(),wall:Date.now(),...f});if(f.t==='rpc.cancel')scale.cancels.push({at:performance.now(),...f});super.send(data);}
+        send(data){const f=JSON.parse(data);if(f.t==='request')scale.calls.push({at:performance.now(),wall:Date.now(),...f,id:f.ref.key});if(f.t==='request.release')scale.cancels.push(...f.refs.map(ref=>({at:performance.now(),id:ref.key,ref})));super.send(data);}
       };
     })()`,
     });
@@ -236,7 +236,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       "First backfill must be observed while digesting",
     );
     const coldCalls = sentFrames(b).map((event) => event.frame).filter(
-      (frame) => frame.t === "rpc",
+      (frame) => frame.t === "request",
     );
     assertEquals(coldCalls.filter((frame) => frame.method === "usage.get"), []);
     const taskRoots = new Set([selected.id, f.manifest.sessions[4].id]);
@@ -550,12 +550,12 @@ for (const theme of ["otk-dark", "otk-light"]) {
     // no model/point/detail requests, and nonselected bodies stop at two pages.
     const sent = sentFrames(b);
     const allCalls = sent.map((event) => event.frame).filter((frame) =>
-      frame.t === "rpc"
+      frame.t === "request"
     );
     const current = sent.slice(
       sent.findLastIndex(({ frame }) => frame.t === "hello"),
     );
-    const calls = current.map((e) => e.frame).filter((f) => f.t === "rpc");
+    const calls = current.map((e) => e.frame).filter((f) => f.t === "request");
     assertEquals(allCalls.filter((f) => f.method === "usage.get").length, 0);
     const attention = new Set([finished.id, blocked.id]);
     const attentionReads = allCalls.filter((frame) =>

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "./failure-features.ts";
 import type { Selection } from "./session.ts";
 import { createState, type StateFactory } from "./state.ts";
 
@@ -90,7 +90,7 @@ export function createSessionRename(options: {
         pending = false;
         store.update((state) => {
           state.pending = false;
-          state.error = errorMessage(error);
+          state.error = failureText(error);
         });
       }
     },

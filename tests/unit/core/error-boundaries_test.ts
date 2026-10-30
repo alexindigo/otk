@@ -15,6 +15,8 @@ import {
 import { test } from "../../support/resources.ts";
 import { WsClient } from "../../support/ws-client.ts";
 import { cfg, fixture } from "./support.ts";
+import { RequestFailure } from "@otk/client";
+import { requestsMigrations } from "@otk/store";
 
 function backend(get: (id: string) => never = () => {
   throw new Error("unused");
@@ -118,7 +120,10 @@ test("unknown backend failures always reach the real WS caller with nonempty tex
   const harness = backend((id) => {
     throw failures[Number(id.slice("tstv1-".length))];
   });
-  const db = new OtkDb(settings.state.path, [prefsMigrations]),
+  const db = new OtkDb(settings.state.path, [
+      prefsMigrations,
+      requestsMigrations,
+    ]),
     rpc = new RpcRegistry(harness, db);
   registerSessions(rpc, harness);
   const app = await startCore({
@@ -133,11 +138,16 @@ test("unknown backend failures always reach the real WS caller with nonempty tex
   try {
     await ws.connect();
     for (const [index, message] of expected.entries()) {
-      await assertRejects(
+      const failure = await assertRejects(
         () => ws.rpc("session.get", { sessionID: `tstv1-${index}` }),
-        Error,
-        `${index === 4 ? "owned" : "harness"}: ${message}`,
+        RequestFailure,
       );
+      assertEquals(failure.message, "Could not finish this action");
+      assertEquals(
+        failure.failure.code,
+        index === 4 ? "owned" : "action.rejected",
+      );
+      assertEquals(JSON.stringify(failure.failure).includes(message), false);
     }
   } finally {
     await ws.close();

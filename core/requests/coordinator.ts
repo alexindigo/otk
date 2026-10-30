@@ -468,7 +468,12 @@ export class RequestCoordinator {
         return Promise.resolve();
       },
       local: (run, encode) => {
-        if (entry.policy.kind !== "local") {
+        if (
+          entry.policy.kind !== "local" &&
+          !(entry.policy.kind === "native" &&
+            entry.record.dispatched_at !== null &&
+            entry.record.receipt_json !== null)
+        ) {
           throw new Error("Not a local execution");
         }
         let next: RequestRecord | undefined;
@@ -477,7 +482,11 @@ export class RequestCoordinator {
           const receipt = encode(value);
           if (
             canonicalRequest(receipt) !==
-              canonicalRequest(entry.policy.receipt(value))
+              canonicalRequest(
+                entry.policy.completion
+                  ? entry.policy.completion(receipt)
+                  : entry.policy.receipt(value),
+              )
           ) throw new Error("Receipt encoder mismatch");
           next = this.options.receipts.transition(
             entry.record,
@@ -509,7 +518,10 @@ export class RequestCoordinator {
   #schedule(entry: Entry, recover: boolean): void {
     if (entry.work || this.#stopped) return;
     const scope = entry.record.scope_session;
-    const queue = scope
+    // Serialize effects, not observations: a held native exchange must remain
+    // observable, and a held read must not prevent its session's next action.
+    const queue = scope &&
+        (entry.policy.kind === "local" || entry.policy.kind === "native")
       ? JSON.stringify([entry.record.principal, scope])
       : undefined;
     const predecessor = queue && entry.policy.priority !== "interrupt"

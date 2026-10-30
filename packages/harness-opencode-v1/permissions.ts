@@ -39,13 +39,16 @@ export function permissions(
         },
       );
     },
-    listPermissions(sessionID) {
+    listPermissions(sessionID, signal) {
       ids.decode(sessionID);
-      return Promise.resolve(
-        [...pending()].map(({ request }) => request).filter((request) =>
-          belongsToSession(request.sessionID, sessionID, entry)
-        ).map((request) => structuredClone(request)),
-      );
+      return new Promise((resolve) => {
+        signal?.throwIfAborted();
+        resolve(
+          [...pending()].map(({ request }) => request).filter((request) =>
+            belongsToSession(request.sessionID, sessionID, entry)
+          ).map((request) => structuredClone(request)),
+        );
+      });
     },
   };
 }

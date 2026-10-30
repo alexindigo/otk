@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage, type RevertInfo } from "@otk/protocol";
+import type { PublicFailure, RevertInfo } from "@otk/protocol";
+import { failureText } from "./failure-features.ts";
+import { RequestFailure } from "./failures.ts";
 import type { SessionActions } from "./session-actions.ts";
 import type { ClientSession, Selection } from "./session.ts";
 import type { ContentState } from "./reduce.ts";
@@ -24,6 +26,8 @@ type RevertIntent = "revert" | "restore" | "undo" | "redo";
 export interface SessionRevertState {
   pending?: RevertIntent;
   error?: string;
+  key?: string;
+  failure?: PublicFailure;
 }
 export interface SessionRevert {
   readonly state: SessionRevertState;
@@ -39,7 +43,9 @@ export interface SessionRevert {
 /** One selected-session operation lifetime; server content is never optimistic. */
 export function createSessionRevert(options: {
   session: Pick<ClientSession, "state" | "subscribe">;
-  actions: Pick<SessionActions, "revert" | "restore" | "abort">;
+  actions:
+    & Pick<SessionActions, "revert" | "restore" | "abort">
+    & Partial<Pick<SessionActions, "group">>;
   drafts: Drafts;
   status: {
     working(target: Selection): boolean;
@@ -63,6 +69,8 @@ export function createSessionRevert(options: {
     store.update((state) => {
       state.pending = undefined;
       state.error = undefined;
+      state.key = undefined;
+      state.failure = undefined;
     });
   };
   const observe = () => {
@@ -77,8 +85,6 @@ export function createSessionRevert(options: {
     ready: () => boolean,
     subscribe: (listener: () => void) => () => void,
     signal: AbortSignal,
-    timeout: number,
-    message: string,
   ): Promise<void> => {
     signal.throwIfAborted();
     if (ready()) return Promise.resolve();
@@ -87,7 +93,6 @@ export function createSessionRevert(options: {
       const finish = (error?: unknown) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
         stop();
         signal.removeEventListener("abort", cancel);
         if (error) reject(error);
@@ -98,10 +103,6 @@ export function createSessionRevert(options: {
         if (ready()) finish();
       };
       const stop = subscribe(check);
-      const timer = setTimeout(
-        () => finish(new Error(message)),
-        timeout,
-      );
       signal.addEventListener("abort", cancel, { once: true });
       if (signal.aborted) cancel();
       else check();
@@ -116,6 +117,10 @@ export function createSessionRevert(options: {
     }
     if ((kind === "undo" || kind === "revert") && !messageID) return;
     const captured = { ...target }, current = generation;
+    const group = options.actions.group?.(captured);
+    const interrupt = group?.options("interrupt", captured.sessionID);
+    const change = group?.options("boundary", captured.sessionID);
+    const stopping = kind === "undo" && options.status.working(captured);
     const previousBoundary = options.session.state.content.revert?.messageID;
     const previousEpoch = options.session.state.clock?.epoch;
     const active = () => {
@@ -130,23 +135,26 @@ export function createSessionRevert(options: {
     store.update((state) => {
       state.pending = kind;
       state.error = undefined;
+      state.failure = undefined;
+      state.key = (stopping ? interrupt : change)?.intent?.key;
     });
     try {
-      if (kind === "undo" && options.status.working(captured)) {
-        await options.actions.abort(captured);
+      if (stopping) {
+        await options.actions.abort(captured, interrupt);
         if (!active()) return;
         await waitFor(
           () => !options.status.working(captured),
           options.status.subscribe,
           controller.signal,
-          10_000,
-          "The session is still stopping. Try Undo again.",
         );
       }
       if (!active()) return;
+      store.update((state) => {
+        state.key = change?.intent?.key;
+      });
       const result = kind === "revert" || kind === "undo"
-        ? await options.actions.revert(captured, messageID!)
-        : await options.actions.restore(captured);
+        ? await options.actions.revert(captured, messageID!, change)
+        : await options.actions.restore(captured, change);
       if (!active()) return;
       // RPC completion admits the mutation. The selected transcript remains
       // authoritative, including a resync that is still reading its messages.
@@ -164,8 +172,6 @@ export function createSessionRevert(options: {
         },
         (listener) => options.session.subscribe(listener),
         controller.signal,
-        30_000,
-        "The session is still updating. Try again.",
       );
       if (!active()) return;
       const entry = result.revert?.prompt;
@@ -185,7 +191,10 @@ export function createSessionRevert(options: {
       observe();
       if (alive && generation === current) {
         store.update((state) => {
-          state.error = errorMessage(error);
+          state.error = failureText(error);
+          state.failure = error instanceof RequestFailure
+            ? error.failure
+            : undefined;
         });
       }
     } finally {

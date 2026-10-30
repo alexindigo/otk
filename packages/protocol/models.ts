@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { RequestMetadata } from "./request-metadata.ts";
+export const modelsRequestMetadata: Readonly<Record<string, RequestMetadata>> =
+  { "models.list": { kind: "read", pending: "Loading models" } };
 import type { ModelRef } from "./content.ts";
 
 /** USD per million tokens; zero is a known free rate, absence is unknown. */

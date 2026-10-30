@@ -277,18 +277,24 @@ Deno.test("selection retirement cancels an idle wait without reverting or writin
     f.owner.dispose();
   }
 });
-Deno.test("undo reports the bounded stopping timeout and never reverts a still-working session", async () => {
+Deno.test("undo remains pending without a failure deadline and never reverts until authoritative idle", async () => {
   const f = fixture();
   f.status.update((state) => {
     state.working = true;
   });
   try {
-    await f.owner.undo();
-    assertEquals(
-      f.owner.state.error,
-      "The session is still stopping. Try Undo again.",
-    );
+    const work = f.owner.undo();
+    await Promise.resolve();
+    await Promise.resolve();
+    assertEquals(f.owner.state.error, undefined);
     assertEquals(f.calls.length, 1);
+    assertEquals(f.owner.state.pending, "undo");
+    f.status.update((state) => {
+      state.working = false;
+    });
+    f.publish("p2");
+    await work;
+    assertEquals(f.calls.length, 2);
     assertEquals(f.owner.state.pending, undefined);
   } finally {
     f.owner.dispose();

@@ -33,9 +33,12 @@ export function pathTemplate(template: string): string {
 /** Bounded template expansion, never a recursive walk of unrelated directories. */
 export async function scanProjects(
   templates: readonly string[],
+  signal?: AbortSignal,
 ): Promise<string[]> {
+  signal?.throwIfAborted();
   const found = new Set<string>();
   for (const template of templates) {
+    signal?.throwIfAborted();
     const path = pathTemplate(template),
       parts = path.split(SEPARATOR),
       wildcard = parts.indexOf("{project}");
@@ -45,6 +48,7 @@ export async function scanProjects(
         const parent = parts.slice(0, wildcard).join(SEPARATOR) || SEPARATOR;
         candidates = [];
         for await (const child of Deno.readDir(parent)) {
+          signal?.throwIfAborted();
           if (child.isDirectory) {
             candidates.push(
               join(parent, child.name, ...parts.slice(wildcard + 1)),
@@ -53,6 +57,7 @@ export async function scanProjects(
         }
       }
       for (const candidate of candidates) {
+        signal?.throwIfAborted();
         try {
           if (
             (await Deno.stat(candidate)).isDirectory &&

@@ -9,6 +9,16 @@ export function registerDigests(rpc: RpcRegistry, harness: Harness): void {
   if (!port) return;
   const owners = new Set<string>();
   rpc.register("digests.scope", {
+    execution: {
+      kind: "lease",
+      scope: (p: { directory?: string; sessions: string[] }) => ({
+        directory: p.directory,
+      }),
+      receipt: () => undefined,
+      // A reattachment settles the old receipt; only a fresh connection intent
+      // may apply its current demand. The old socket owns its release callback.
+      recover: () => Promise.resolve({ state: "complete", result: null }),
+    },
     params(p) {
       if (
         !Array.isArray(p.sessions) || !p.sessions.every(isSessionID) ||

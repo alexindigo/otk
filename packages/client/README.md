@@ -2,6 +2,28 @@
 
 ## Request event consumers
 
+`createFormIntent({capture, presenter, diagnostic?})` owns a form's captured
+values, synchronous pending reservation, joined submission promise and safe
+feedback. `capture` is injected so native form APIs stay at the UI boundary.
+Repeated submits join before any asynchronous work; a definite rejection retains
+the captured values and a later explicit submit gets a new key. Presentation
+subscriptions can detach without cancelling the captured work. `failureFeedback`
+handles typed request failures, silent releases and locally diagnosed exceptions
+through one presenter, without rendering arbitrary exception text.
+
+`createSubmissionIntent` separates input preparation from captured send
+settlement. Repeated preparation joins synchronously and repeated sends cannot
+replace an in-flight payload. A later input command can still prepare and run
+while a send or its follow-up bookkeeping remains pending; command handling is
+not mistaken for a duplicate send. Both lifetimes stay framework-free, with
+native input and focus owned by the UI adapter.
+
+The protocol's `RequestMetadataRegistry` is an empty, injectable description
+registry. `createRequestMetadata()` selects the shipped feature-owned kind and
+pending-copy contributions. A tracker composition can inject its `get(method)`
+projection as its lifetime classification without adding execution dispatch to
+the transport or displaying method names.
+
 `RequestTracker` is the framework-free long-lived owner for request-event
 transports. Inject `send`, optional tab identity, server identity, metadata
 storage and feature-owned read/mutation classification. `connect(window, batch)`
@@ -23,11 +45,21 @@ Restored operations with no captured input remain input-required.
 `IntentGroup.step(name)` allocates each child identity once for composed
 intents.
 
-`new Rpc(legacySend, tracker)` composes the typed compatibility facade over that
-owner; `start` supplies handles, `call` delegates to the result, and `receive`
-accepts request events. Both `AbortSignal` and `RequestOptions` remain
-supported. Without an injected tracker, the selected legacy transport stays
-coherent.
+`new Rpc(send, tracker?)` composes the typed facade over that owner; `start`
+supplies handles, `call` delegates to the result, and `receive` accepts protocol
+16 request events. Both `AbortSignal` and `RequestOptions` remain supported.
+Without an injected tracker, Rpc constructs the same event owner. There is no
+legacy RPC completion path or failure deadline.
+
+`Rpc.intents.run(targetKey, action)` reserves a composed intent synchronously;
+repeated activation joins its pending promise.
+`IntentGroup.options(step, owner)` allocates each child once. Submission threads
+separate promotion, send and visit keys through the common port, while deletion
+and Undo retain interrupt/boundary identities. Successful action settlement is
+independent of later visit bookkeeping. `Rpc.feedback(owner)` borrows request
+state and retains classified local feedback by target across view replacement;
+it never renders method names or exception prose. `RequestTracker.subscribe`
+observes these state transitions without a second pending map.
 
 `HttpRequests` supplies an HTTP event transport over the same tracker. It sends
 envelopes and private receipt headers, then consumes held NDJSON events. It owns

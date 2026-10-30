@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals, assertRejects } from "@std/assert";
-import { Client } from "../client.ts";
+import { Client, NativeRequestFailure } from "../client.ts";
 import { models } from "../models.ts";
 import { agentColors, agents } from "../agents.ts";
 import { sessionDirectory } from "../directory.ts";
@@ -13,6 +13,7 @@ const settings = {
   db: "",
   heartbeattimeout: 25,
   reconnectmax: 30,
+  requestms: 60000,
 };
 const directory = sessionDirectory(() => "/project", () => {
   throw new Error("Cached directory should be used");
@@ -234,11 +235,11 @@ Deno.test("catalog resolves each session directory and propagates native errors"
   const capability = models(client, resolver);
   await capability.listModels("opcv1-first");
   await capability.listModels("opcv1-second");
-  await assertRejects(
+  const unavailable = await assertRejects(
     () => capability.listModels("opcv1-error"),
-    Error,
-    "catalog unavailable",
+    NativeRequestFailure,
   );
+  assertEquals(unavailable.outcome, "unavailable");
   assertEquals(resolved, ["opcv1-first", "opcv1-second", "opcv1-error"]);
   for (const id of resolved) {
     assert(calls.includes(`/config/providers:/projects/${id}`));

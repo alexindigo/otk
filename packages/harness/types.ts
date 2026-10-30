@@ -48,8 +48,8 @@ export interface HarnessCore {
   start(sink: HarnessSink): Promise<void>;
   stop(): Promise<void>;
   subscriptions(sessionID: string, count: number): void;
-  getSession(id: string): Promise<ContentSession>;
-  listChildren(id: string): Promise<ContentSession[]>;
+  getSession(id: string, signal?: AbortSignal): Promise<ContentSession>;
+  listChildren(id: string, signal?: AbortSignal): Promise<ContentSession[]>;
   listMessages(
     id: string,
     opts: { before?: MessageCursor },

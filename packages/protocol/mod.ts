@@ -20,4 +20,6 @@ export * from "./session-id.ts";
 export * from "./version.ts";
 export * from "./transcript.ts";
 export * from "./requests.ts";
+export * from "./request-metadata.ts";
+export * from "./request-features.ts";
 export * from "./failures.ts";

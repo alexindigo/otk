@@ -16,6 +16,38 @@ import { fixture } from "./support.ts";
 import { prefsOptions } from "./support.ts";
 import { record } from "./request-fixture.ts";
 
+test("scope conflict witnesses outlive retention while an older native outcome is unknown", async () => {
+  const db = new OtkDb(await fixture(), [requestsMigrations]);
+  const receipts = new Requests(db), window = receipts.window(0, 100);
+  const old = {
+    ...record(window.id, "old"),
+    execution: "native" as const,
+    scope_session: "tstv1-root",
+    scope_resource: "title",
+  };
+  try {
+    receipts.admit(old);
+    const next = { ...old, intent_key: "newer" };
+    receipts.admit(next);
+    receipts.transition(next, 1, { state: "succeeded", updated_at: 20 });
+    assertEquals(
+      receipts.superseded(old),
+      true,
+      "admission order is independent of equal timestamps",
+    );
+    assertEquals(
+      receipts.sweep(301, 64),
+      0,
+      "pruning must not erase evidence needed by an active outcome",
+    );
+    assertEquals(receipts.superseded(old), true);
+    receipts.transition(old, 1, { state: "released", updated_at: 302 });
+    assertEquals(receipts.sweep(303, 64), 2);
+  } finally {
+    db.close();
+  }
+});
+
 test("request admission, CAS, expiry and bounded recovery retain unknown effects", async () => {
   const path = await fixture(), db = new OtkDb(path, [requestsMigrations]);
   const other = new OtkDb(path, [requestsMigrations]);

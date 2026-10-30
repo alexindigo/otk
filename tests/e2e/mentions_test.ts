@@ -35,7 +35,8 @@ test("empty completion results leave Enter, native ArrowUp and normal Escape own
               const frame = JSON.parse(
                 (event.params.response as { payloadData: string }).payloadData,
               );
-              return frame.t === "rpc.result" && frame.id === request!.frame.id;
+              return frame.t === "request.result" &&
+                frame.ref.key === (request!.frame.ref as { key: string }).key;
             })()
           ),
         (value) => value,

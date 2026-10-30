@@ -33,12 +33,12 @@ for (const theme of ["otk-dark", "otk-light"]) {
             super(...args); window.lifetimeSockets.push(this); this.sessionReads = new Set();
             this.addEventListener('message', event => {
               const frame = JSON.parse(event.data);
-              if (!window.holdSessionFrames || !(frame.t === 'index.snapshot' || frame.t === 'index.patch' || (frame.t === 'rpc.result' && this.sessionReads.has(frame.id)))) return;
+              if (!window.holdSessionFrames || !(frame.t === 'index.snapshot' || frame.t === 'index.patch' || (frame.t === 'request.result' && this.sessionReads.has(frame.ref.key)))) return;
               event.stopImmediatePropagation();
               window.heldSessionFrames.push(() => this.dispatchEvent(new MessageEvent('message', {data:event.data})));
             });
           }
-          send(data) { const frame=JSON.parse(data); if(frame.method==='session.get') this.sessionReads.add(frame.id); super.send(data); }
+          send(data) { const frame=JSON.parse(data); if(frame.t==='request' && frame.method==='session.get') this.sessionReads.add(frame.ref.key); super.send(data); }
         };
         window.releaseSessionFrames = () => { window.holdSessionFrames=false; for(const deliver of window.heldSessionFrames.splice(0)) deliver(); };
       `,

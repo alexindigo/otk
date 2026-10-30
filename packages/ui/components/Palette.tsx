@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "@otk/client";
 import "./Palette.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -32,7 +32,7 @@ export default function Palette(
       await commands.run(id);
       if (active) props.onClose();
     } catch (error) {
-      if (active) setError(errorMessage(error));
+      if (active) setError(failureText(error));
     }
   };
   return (

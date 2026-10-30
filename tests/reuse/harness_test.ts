@@ -21,6 +21,7 @@ test("standalone harness consumer lists stock-server sessions without a sidecar"
       db: oc.db,
       heartbeattimeout: 25,
       reconnectmax: 30,
+      requestms: 60000,
     },
     index: { days: 30 },
     messages: fixtureMessagePolicy,

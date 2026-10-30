@@ -9,6 +9,7 @@ import type { SessionMetadata as IndexEntry } from "@otk/protocol";
 import type { ContentOp } from "@otk/protocol";
 import type { Session } from "@otk/harness-opencode-v1";
 import { resources, tempDir, test } from "./resources.ts";
+const safeHttp = "Request failed (HTTP 503).";
 
 export interface Observation {
   id: string;
@@ -321,7 +322,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.wait(() =>
         f.ops.some((item) =>
           Reflect.get(item.event, "error") ===
-            "HTTP diagnostic before native busy"
+            safeHttp
         )
       );
       f.busy();
@@ -334,7 +335,7 @@ export function errorObservationCases(method: "shell" | "command") {
       assertEquals(cleared.state.observations.length, 1);
       assertEquals(
         cleared.state.observations[0].message,
-        "HTTP diagnostic before native busy",
+        safeHttp,
       );
       assertEquals(cleared.state.observations[0].cleared, true);
       f.native("Current native detail after busy");
@@ -355,27 +356,26 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.stop();
     }
   });
-  test(`${method} HTTP-only failure remains visible with exact detail and actual provenance`, async () => {
+  test(`${method} HTTP-only failure retains actual provenance without exposing arbitrary native reason text`, async () => {
     const f = await observationFixture();
     try {
       const message = "HTTP-only diagnostic " + "detail ".repeat(180);
       await f.submit(method);
       f.fail(0, message, "native-http-ref");
       await f.wait(() =>
-        f.ops.some((item) =>
-          Reflect.get(item.event, "error")?.startsWith("HTTP-only diagnostic")
-        )
+        f.ops.some((item) => Reflect.get(item.event, "error") === safeHttp)
       );
       const { query, state } = await f.coherent();
       assertEquals(
         query.error,
-        message,
-        "Available HTTP diagnostic detail was lost",
+        safeHttp,
+        "The safe HTTP failure summary was lost",
       );
       assertEquals(state.observations.length, 1);
       const observation = state.observations[0];
       assertEquals(observation.source, "http");
-      assertEquals(observation.message, message);
+      assertEquals(observation.message, safeHttp);
+      assert(!JSON.stringify(state).includes(message));
       assertEquals(observation.kind, "UnknownError");
       assertEquals(observation.status, 503);
       assertEquals(observation.ref, "native-http-ref");
@@ -414,9 +414,7 @@ export function errorObservationCases(method: "shell" | "command") {
         if (order === "http-first") {
           f.fail(0, "HTTP coarse diagnostic");
           await f.wait(() =>
-            f.ops.some((item) =>
-              Reflect.get(item.event, "error") === "HTTP coarse diagnostic"
-            )
+            f.ops.some((item) => Reflect.get(item.event, "error") === safeHttp)
           );
           f.native("Native useful detail");
         } else {
@@ -437,8 +435,8 @@ export function errorObservationCases(method: "shell" | "command") {
         const { query, state } = await f.coherent();
         assertEquals(query.error, "Native useful detail");
         assertEquals(state.observations.map((item) => item.message).sort(), [
-          "HTTP coarse diagnostic",
           "Native useful detail",
+          safeHttp,
         ]);
         assertEquals(
           state.observations.find((item) => item.source === "event")?.requestID,
@@ -460,9 +458,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.submit(method);
       f.fail(1, "New request failure", "new-ref");
       await f.wait(() =>
-        f.ops.some((item) =>
-          Reflect.get(item.event, "error") === "New request failure"
-        )
+        f.ops.some((item) => Reflect.get(item.event, "error") === safeHttp)
       );
       const first = await f.coherent();
       const frozen = structuredClone(first.state);
@@ -473,7 +469,7 @@ export function errorObservationCases(method: "shell" | "command") {
         )
       );
       const next = await f.coherent();
-      assertEquals(next.query.error, "New request failure");
+      assertEquals(next.query.error, safeHttp);
       assert(next.state.revision > first.state.revision);
       assertEquals(
         first.state,
@@ -485,7 +481,7 @@ export function errorObservationCases(method: "shell" | "command") {
       )!;
       assert(old);
       assert(old.requestID !== next.state.currentRequestID);
-      assertEquals(old.message, "Earlier request failure");
+      assertEquals(old.message, safeHttp);
     } finally {
       await f.stop();
     }
@@ -534,13 +530,11 @@ export function errorObservationCases(method: "shell" | "command") {
       );
       f.fail(0, "Current HTTP failure after busy");
       await f.wait(() =>
-        f.ops.some((item) =>
-          Reflect.get(item.event, "error") === "Current HTTP failure after busy"
-        )
+        f.ops.some((item) => Reflect.get(item.event, "error") === safeHttp)
       );
       assertEquals(
         (await f.coherent()).query.error,
-        "Current HTTP failure after busy",
+        safeHttp,
       );
     } finally {
       await f.stop();
@@ -564,13 +558,13 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.wait(() =>
         f.ops.some((item) =>
           item.sessionID === "opcv1-case-b" &&
-          Reflect.get(item.event, "error") === "Unrelated real failure"
+          Reflect.get(item.event, "error") === safeHttp
         )
       );
       assertEquals((await f.coherent("case-a")).state.observations, []);
       assertEquals(
         (await f.coherent("case-b")).query.error,
-        "Unrelated real failure",
+        safeHttp,
       );
       await f.submit(method, "case-a");
       f.remove();
@@ -607,9 +601,7 @@ export function errorObservationCases(method: "shell" | "command") {
       await f.submit(method);
       f.fail(0, "HTTP-only retained on reconnect");
       await f.wait(() =>
-        f.ops.some((item) =>
-          Reflect.get(item.event, "error") === "HTTP-only retained on reconnect"
-        )
+        f.ops.some((item) => Reflect.get(item.event, "error") === safeHttp)
       );
       const first = await f.coherent();
       await f.reconnect();
@@ -641,7 +633,10 @@ export function errorObservationCases(method: "shell" | "command") {
       );
       assertEquals(
         f.ops.slice(before).some((item) =>
-          Reflect.get(item.event, "error") === "Disposed instance late failure"
+          item.sessionID === "opcv1-case-a" &&
+          Reflect.get(item.event, "errorState")?.observations.some((
+            observation: Observation,
+          ) => observation.source === "http")
         ),
         false,
       );

@@ -45,6 +45,7 @@ export async function start(
         db: harnessDb(cfg),
         heartbeattimeout: cfg.harness.heartbeattimeout,
         reconnectmax: cfg.harness.reconnectmax,
+        requestms: cfg.harness.requestms,
       },
       index: cfg.index,
     },

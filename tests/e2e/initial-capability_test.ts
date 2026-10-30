@@ -32,13 +32,13 @@ async function holdHandshake(browser: Cdp, holdQuestions = false) {
          }
          send(data) {
            const frame=JSON.parse(data);
-           if(frame.t==='rpc' && frame.method==='question.list')window.initialQuestionReads.add(frame.id);
+           if(frame.t==='request' && frame.method==='question.list')window.initialQuestionReads.add(frame.ref.key);
            super.send(data);
          }
         };
         function frameIsInitialQuestion(event) {
           const frame=JSON.parse(event.data);
-          return frame.t==='rpc.result' && window.initialQuestionReads.has(frame.id);
+          return frame.t==='request.result' && window.initialQuestionReads.has(frame.ref.key);
         }
       window.releaseHandshake = () => {
         window.holdHandshake = false;

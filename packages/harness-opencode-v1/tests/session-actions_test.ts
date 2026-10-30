@@ -26,6 +26,7 @@ Deno.test("rename resolves the target directory, encodes its ID and maps the nat
     db: "",
     heartbeattimeout: 25,
     reconnectmax: 30,
+    requestms: 60000,
   }, (input, options) => {
     const url = new URL(String(input));
     calls.push([

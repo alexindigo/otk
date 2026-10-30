@@ -7,6 +7,14 @@ imports and knows no native backend.
 
 ## Composition and API
 
+`OperationFeedback`, `FieldFeedback` and `PaneState` consume client `Feedback`
+data and callbacks only. OperationFeedback supplies a row inside the caller's
+single joined ComposerNotice. FieldFeedback preserves its empty one-line field
+track or two-line action track in normal flow; callers associate its ID with
+their actual field. PaneState occupies a shared transcript grid cell and centres
+its content without viewport offsets. Their error paint uses semantic `danger`,
+separate from focus/action paint; Dark uses `#ff8080` and Linen/Stone `#b5141a`.
+
 Import from `@otk/ui`. `createUiRegistries()` creates empty `tools`, `parts`,
 `prompt`, `dialogs`, `panels`, `takeovers` and legacy `docks` collections.
 Choose feature-owned `register*` functions in your composition root, then
@@ -708,13 +716,15 @@ the no-target app fallback. Features attach
 without installing listeners. Compose with another ref through Solid's array
 form: `ref={[elementRef, contextTarget(target)]}`. Commands contribute the same
 kind through their public client context metadata; the owner resolves the
-composed path innermost first. The client groups available actions, and the UI
-separates target groups and trailing destructive actions. At most two non-area
-target groups are shown, then the nearest enclosing area group. Areas declare
-`area: true` through the same binding. App actions follow on empty area space or
-no target, but never when a non-area target was hit, even when that target has
-no available actions. Shared area/app actions appear once. Built-in selection
-outside fields, link and image targets require no binding.
+composed path innermost first. Target registrations release their callbacks at
+the binding owner's cleanup, even when a native DOM reference outlives the view.
+The client groups available actions, and the UI separates target groups and
+trailing destructive actions. At most two non-area target groups are shown, then
+the nearest enclosing area group. Areas declare `area: true` through the same
+binding. App actions follow on empty area space or no target, but never when a
+non-area target was hit, even when that target has no available actions. Shared
+area/app actions appear once. Built-in selection outside fields, link and image
+targets require no binding.
 
 Menu owns role/menuitem semantics, roving focus with arrows/Home/End, type-ahead
 and Enter/Space activation for all consumers. Tab closes and restores origin

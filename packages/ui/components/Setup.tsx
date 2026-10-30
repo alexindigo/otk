@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal } from "solid-js";
-import Form, { Credentials } from "./Form.tsx";
+import Form, { Credentials, FormSelect } from "./Form.tsx";
 export default function Setup(
   props: {
     onSetup(
@@ -15,6 +15,7 @@ export default function Setup(
       <Form
         title="Configure this sidecar"
         submitLabel="Configure sidecar"
+        pendingLabel="Configuring server…"
         onSubmit={(data) =>
           props.onSetup({
             type: String(data.get("type")),
@@ -23,14 +24,14 @@ export default function Setup(
           })}
       >
         <label>
-          Authentication<select
+          Authentication<FormSelect
             name="type"
             value={type()}
             onChange={(event) => setType(event.currentTarget.value)}
           >
             <option value="password">Password</option>
             <option value="none">None</option>
-          </select>
+          </FormSelect>
         </label>
         <Credentials required={type() === "password"} newPassword />
       </Form>

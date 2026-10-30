@@ -10,6 +10,12 @@ import type {
   TranscriptInvalidation,
 } from "./transcript.ts";
 import { type CapabilityName, legacyCapabilities } from "./capabilities.ts";
+import type {
+  ClientRequestPolicy,
+  RequestControl,
+  RequestEvent,
+  RequestWindow,
+} from "./requests.ts";
 export const MAX_CLIENT_FRAME_BYTES: number = 64 * 1024 * 1024;
 export function checkClientFrameSize(serialized: string): void {
   if (
@@ -23,17 +29,22 @@ export function checkClientFrameSize(serialized: string): void {
 }
 export type HarnessState = "connecting" | "connected" | "reconnecting";
 export type ClientFrame =
+  | RequestControl
   | { t: "hello"; protocol: number }
   | { t: "pong" }
   | { t: "subscribe" | "unsubscribe"; sessionID: string }
-  | { t: "resnapshot" }
-  | { t: "rpc.cancel"; id: string }
-  | { t: "rpc"; id: string; method: string; params: unknown };
+  | { t: "resnapshot" };
 export type ServerFrame =
+  | RequestEvent
   | {
     t: "welcome";
     protocol: number;
     messages: MessagePolicy;
+    requests: {
+      window: RequestWindow;
+      policy: ClientRequestPolicy;
+      principal: string;
+    };
     sidecar: {
       version: string;
       harness: {
@@ -55,13 +66,6 @@ export type ServerFrame =
   | { t: "content"; sessionID: string; event: ContentOp; clock?: ContentClock }
   | { t: "bootstrap.complete" }
   | ({ t: "transcript.invalidated" } & TranscriptInvalidation)
-  | { t: "rpc.result"; id: string; ok: true; result: unknown }
-  | {
-    t: "rpc.result";
-    id: string;
-    ok: false;
-    error: { code: string; message: string };
-  }
   | { t: "error"; code: string; message?: string };
 
 // A missing advertisement uses the compatibility families; an explicit []

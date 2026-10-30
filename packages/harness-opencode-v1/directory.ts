@@ -5,20 +5,26 @@ import { opencodeV1SessionID as ids } from "./ids.ts";
 /** One directory resolution contract for every native capability. */
 export interface Directory {
   cached(id: string): string | undefined;
-  resolve(id: string): Promise<string>;
+  resolve(id: string, signal?: AbortSignal): Promise<string>;
 }
 export function sessionDirectory(
   cached: Directory["cached"],
-  getSession: (id: string) => Promise<Pick<ContentSession, "directory">>,
+  getSession: (
+    id: string,
+    signal?: AbortSignal,
+  ) => Promise<Pick<ContentSession, "directory">>,
 ): Directory {
   return {
     cached(id) {
       ids.decode(id);
       return cached(id);
     },
-    async resolve(id) {
+    async resolve(id, signal) {
+      signal?.throwIfAborted();
       ids.decode(id);
-      return cached(id) ?? (await getSession(id)).directory;
+      const directory = cached(id) ?? (await getSession(id, signal)).directory;
+      signal?.throwIfAborted();
+      return directory;
     },
   };
 }

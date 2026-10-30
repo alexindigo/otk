@@ -1,8 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
 import "./Prompt.css" with { type: "text" };
 import ContentTextarea from "./ContentTextarea.tsx";
-import { createEffect, createSignal, For, onSettled, Show } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  For,
+  onCleanup,
+  onSettled,
+  Show,
+} from "solid-js";
 import {
   type DraftChange,
   editDraft,
@@ -20,7 +26,16 @@ import {
 import { createKeyboard } from "../keyboard/dispatcher.ts";
 import { useSessionPorts } from "../registries/session.tsx";
 import { SendIcon } from "./ChromeIcons.tsx";
-import { clearDraft, effectiveSelection } from "@otk/client";
+import {
+  actionFeedback,
+  clearDraft,
+  createFailurePresenter,
+  createSubmissionIntent,
+  effectiveSelection,
+  type Feedback,
+} from "@otk/client";
+import ComposerNotice from "./ComposerNotice.tsx";
+import OperationFeedback from "./OperationFeedback.tsx";
 import type { PromptChoices } from "../registries/prompt.ts";
 import { ModelLabel, selectionLabel } from "./prompt/labels.tsx";
 import { contextTarget } from "./context-target.ts";
@@ -29,8 +44,18 @@ const INTERRUPT_WINDOW_MS = 5000;
 
 /** Input and submission lifetime; concrete prompt concepts are injected features. */
 export default function Prompt(props: PromptProps): import("solid-js").Element {
-  const [pending, setPending] = createSignal(false),
-    [error, setError] = createSignal(""),
+  const session = useSessionPorts();
+  const intent = createSubmissionIntent<PromptProps["value"]>({
+    capture: (value) => value,
+    presenter: createFailurePresenter(),
+  });
+  const [revision, setRevision] = createSignal(0);
+  onCleanup(intent.subscribe(() => setRevision(revision() + 1)));
+  const pending = () => {
+    revision();
+    return intent.state.pending;
+  };
+  const [feedback, setFeedback] = createSignal<Feedback>(),
     [armed, setArmed] = createSignal(false),
     [caret, setCaret] = createSignal(0);
   let active = true, input!: HTMLTextAreaElement;
@@ -63,7 +88,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     return draft;
   };
   const ctx: PromptContext = {
-    ...useSessionPorts(),
+    ...session,
     commands: ports.commands,
     keyboard,
     own: (release) => releases.push(release),
@@ -83,7 +108,8 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
       await Promise.all(features.map((feature) => feature.ready?.()));
     },
     fail: (error) => {
-      if (active) setError(errorMessage(error));
+      if (session?.feedback) session.feedback.fail(error);
+      else if (active) setFeedback(actionFeedback(error));
     },
     acceptFiles: async (files) => {
       for (const feature of features) await feature.drop?.(files);
@@ -114,39 +140,40 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     ) ?? ctx.supports("prompt"));
   const submit = async () => {
     if (!canSubmit()) return;
+    session?.feedback?.clear();
+    setFeedback(undefined);
+    input.focus();
     await ctx.ready();
     if (!active || !canSubmit()) return;
-    let draft = change((current) => current);
+    const draft = change((current) => current);
     for (const feature of features) {
       if (await feature.beforeSubmit?.(draft)) return;
     }
-    draft = change((current) => current);
     if (
-      !active || !hasDraftContent(draft) || !canSubmit() || pending() ||
+      !active || !hasDraftContent(draft) || !canSubmit() ||
       draft.chips.some((chip) => chip.pending || chip.error)
     ) return;
-    setPending(true);
-    setError("");
-    try {
-      const parts = serialize(draft);
-      const effective = ctx.nextSelection(draft);
-      const selection = effective.input;
-      let handled = false;
-      for (const feature of features) {
-        if (await feature.submit?.(draft, parts, selection)) {
-          handled = true;
-          break;
-        }
+    return draft;
+  };
+  const performSend = async (draft: PromptProps["value"]) => {
+    const parts = serialize(draft);
+    const effective = ctx.nextSelection(draft);
+    const selection = effective.input;
+    let handled = false;
+    for (const feature of features) {
+      if (await feature.submit?.(draft, parts, selection)) {
+        handled = true;
+        break;
       }
-      if (!handled) await send({ parts, mode: draft.mode, selection });
-      change((current) => current === draft ? clearDraft(current) : current);
-      for (const feature of features) {
+    }
+    if (!handled) await send({ parts, mode: draft.mode, selection });
+    change((current) => current === draft ? clearDraft(current) : current);
+    for (const feature of features) {
+      try {
         await feature.submitted?.(draft, selection, handled);
+      } catch (cause) {
+        ctx.fail(cause);
       }
-    } catch (error) {
-      if (active && change((current) => current) === draft) ctx.fail(error);
-    } finally {
-      if (active) setPending(false);
     }
   };
   const send = ownedCommand(ports, {
@@ -170,7 +197,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     category: "Prompt",
     hidden: true,
     enabled: canSubmit,
-    run: submit,
+    run: () => intent.submit(submit, performSend),
   });
   ownedCommand(ports, {
     id: "prompt.newline",
@@ -345,20 +372,36 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
           </Show>
         </div>
         <For each={features}>{(feature) => feature.actions?.()}</For>
-        <button
-          type="submit"
-          class="otk-primary otk-send-button"
-          aria-label="Send"
-          title={submitTitle()}
-          disabled={pending() ||
-            props.value.chips.some((chip) => chip.pending || chip.error) ||
-            !canSubmit() || !hasDraftContent(props.value)}
+        <Show when={armed()}>
+          <span
+            class="otk-control-label"
+            data-interrupt-confirmation="true"
+            role="status"
+          >
+            {submitTitle()}
+          </span>
+        </Show>
+        <Show
+          when={!pending() && canSubmit() && hasDraftContent(props.value) &&
+            !props.value.chips.some((chip) => chip.pending || chip.error)}
         >
-          <SendIcon />
-        </button>
+          <button
+            type="submit"
+            class="otk-primary otk-send-button"
+            aria-label="Send"
+            title={submitTitle()}
+          >
+            <SendIcon />
+          </button>
+        </Show>
       </div>
-      <Show when={error()}>
-        <p class="otk-error" role="alert">{error()}</p>
+      <Show when={!session?.feedback && (pending() || feedback())}>
+        <ComposerNotice>
+          <OperationFeedback
+            feedback={feedback() ??
+              { kind: "pending", text: "Sending prompt…" }}
+          />
+        </ComposerNotice>
       </Show>
       <For each={features}>{(feature) => feature.overlay?.()}</For>
     </form>

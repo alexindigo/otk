@@ -4,15 +4,27 @@ import type { PromptPart } from "@otk/protocol";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { object, sessionID, text } from "../ws/params.ts";
 import { promptParts } from "./prompt-parts.ts";
+import {
+  nativeEffect,
+  nativeExecution,
+  readExecution,
+} from "../requests/policies.ts";
+import { completionReceipt } from "./session-receipts.ts";
 
 export function register(rpc: RpcRegistry, harness: Harness): void {
   const capability = harness.capabilities.commands;
   if (!capability) return;
+  const receipt = completionReceipt("command-settled");
   rpc.register("commands.list", {
+    execution: readExecution((id: string) => ({ sessionID: id })),
     params: (p) => sessionID(p)!,
-    handler: (_ctx, id) => capability.listCommands(id),
+    handler: (ctx, id) => capability.listCommands(id, ctx.execution?.signal),
   });
   rpc.register("session.command", {
+    execution: nativeExecution(
+      (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
+      receipt,
+    ),
     params(p) {
       const model = p.model === undefined ? undefined : object(p.model),
         parts = p.parts === undefined ||
@@ -42,9 +54,10 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
           : {}),
       };
     },
-    async handler(_ctx, input) {
-      await capability.command(input);
-      return null;
-    },
+    handler: (ctx, input) =>
+      nativeEffect(ctx, async (operation) => {
+        await capability.command(input, operation);
+        return null;
+      }, receipt),
   });
 }

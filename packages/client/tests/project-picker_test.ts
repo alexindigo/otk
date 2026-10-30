@@ -105,7 +105,7 @@ Deno.test("project picker owns server and welcome identity, current failures and
       connected: true,
       paths: [],
       loading: false,
-      error: "scan failed",
+      error: "Could not finish this action. Try again",
     });
     await f.owner.ready();
     assertEquals(

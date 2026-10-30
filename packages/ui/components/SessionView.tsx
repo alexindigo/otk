@@ -23,12 +23,17 @@ import Prompt from "./Prompt.tsx";
 import ComposerTakeovers from "./ComposerTakeovers.tsx";
 import type { Preferences } from "@otk/protocol";
 import SubagentBar from "./SubagentBar.tsx";
-import RolledBackStrip from "./RolledBackStrip.tsx";
-import ForkNote from "./ForkNote.tsx";
+import { RolledBackContent } from "./RolledBackStrip.tsx";
+import { ForkFact } from "./ForkNote.tsx";
+import ComposerNotice from "./ComposerNotice.tsx";
+import OperationFeedback from "./OperationFeedback.tsx";
+import PaneState from "./PaneState.tsx";
+import { useSessionPorts } from "../registries/session.tsx";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
 import {
   createTranscriptProjection,
+  failureText,
   sessionSummary,
   type SessionUsageOwner,
   type TranscriptOwner,
@@ -90,6 +95,19 @@ export default function SessionView(props: {
   onAbort(): Promise<void>;
 }): Element {
   const writeDraft = props.onDraft;
+  const feedbackOwner = useSessionPorts()?.feedback;
+  const [feedbackRevision, setFeedbackRevision] = createSignal(0);
+  if (feedbackOwner) {
+    onCleanup(
+      feedbackOwner.subscribe(() =>
+        setFeedbackRevision(feedbackRevision() + 1)
+      ),
+    );
+  }
+  const feedback = () => {
+    feedbackRevision();
+    return feedbackOwner?.current();
+  };
   const returnAnchor = props.transcript?.interaction.anchor();
   const revealLifetime = new AbortController();
   onCleanup(() => revealLifetime.abort());
@@ -108,7 +126,16 @@ export default function SessionView(props: {
   const rollbackNotice = () =>
     !!props.strip || !!props.rollback?.state.pending ||
     !!props.rollback?.state.error;
-  const noticed = () => rollbackNotice() || !!props.forkNote;
+  const rollbackState = () => {
+    const state = props.rollback?.state ?? {}, shown = feedback();
+    const sameRequest = shown?.identity && state.key === shown.identity;
+    const sameFailure = shown?.diagnosticID &&
+      state.failure?.diagnosticID === shown.diagnosticID;
+    return sameRequest || sameFailure
+      ? { ...state, pending: undefined, error: undefined }
+      : state;
+  };
+  const noticed = () => rollbackNotice() || !!props.forkNote || !!feedback();
   const [now, setNow] = createSignal(Date.now());
   const [revealError, setRevealError] = createSignal<string>();
   const older = ownedAction("session.page", () => props.onOlder());
@@ -199,11 +226,7 @@ export default function SessionView(props: {
         await window?.restore(returnAnchor);
       }).catch((error) => {
         if (error.name !== "AbortError") {
-          setRevealError(
-            error instanceof Error
-              ? error.message
-              : "Previous position is unavailable",
-          );
+          setRevealError(failureText(error));
         }
       });
     }
@@ -243,6 +266,7 @@ export default function SessionView(props: {
           <div
             class={["otk-messages", {
               "otk-scrollbar-hidden": !props.prefs.scrollbar,
+              "is-empty": !count(),
             }]}
             ref={[
               (element) => {
@@ -260,7 +284,28 @@ export default function SessionView(props: {
               })),
             ]}
           >
-            <Show when={props.loading || props.continuity === "missing"}>
+            <Show
+              when={!count() &&
+                (props.loading || props.error ||
+                  props.continuity === "missing")}
+            >
+              <PaneState
+                feedback={props.error
+                  ? {
+                    kind: "error",
+                    text: props.error,
+                    action: {
+                      label: "Retry messages",
+                      run: () => void retry(),
+                    },
+                  }
+                  : { kind: "pending", text: "Loading messages…" }}
+              />
+            </Show>
+            <Show
+              when={!!count() &&
+                (props.loading || props.continuity === "missing")}
+            >
               <p role="status">
                 {count() || props.continuity === "missing"
                   ? "Refreshing messages…"
@@ -290,7 +335,7 @@ export default function SessionView(props: {
                   Load older messages
                 </button>
               </Show>
-              <Show when={props.error}>
+              <Show when={props.error && !!count()}>
                 <p role="alert" class="otk-error">{props.error}</p>
                 <button type="button" onClick={() => void retry()}>
                   Retry messages
@@ -302,12 +347,14 @@ export default function SessionView(props: {
               <SessionError
                 state={props.errorState}
                 error={props.sessionError}
+                operationKey={feedback()?.identity}
+                diagnosticID={feedback()?.diagnosticID}
               />
               <Show when={props.retryState}>
                 {(retry) => (
                   <div class="otk-retry-banner" role="status">
                     <strong>Retrying · attempt {retry().attempt}</strong>
-                    <p>{retry().message}</p>
+                    <p>Waiting for the agent to retry</p>
                     <span>
                       Next attempt in{" "}
                       {Math.max(0, Math.ceil((retry().next - now()) / 1000))}s
@@ -463,33 +510,39 @@ export default function SessionView(props: {
             </div>
           </div>
           <Show when={!props.child}>
-            <ComposerTakeovers>
+            <ComposerTakeovers
+              notice={noticed()
+                ? () => (
+                  <ComposerNotice>
+                    <Show when={feedback()}>
+                      {(value) => <OperationFeedback feedback={value()} />}
+                    </Show>
+                    <Show when={rollbackNotice()}>
+                      <RolledBackContent
+                        strip={props.strip}
+                        state={rollbackState()}
+                      />
+                    </Show>
+                    <Show when={props.forkNote}>
+                      {(note) => (
+                        <ForkFact
+                          note={note()}
+                          onDismiss={() => props.onDismissForkNote?.()}
+                        />
+                      )}
+                    </Show>
+                  </ComposerNotice>
+                )
+                : undefined}
+            >
               {(active) => (
                 <div
-                  class={["otk-composer-stack", {
-                    "is-noticed": noticed(),
-                  }]}
+                  class={["otk-composer-stack", {}]}
                   hidden={active()}
                   inert={active()}
                 >
-                  <Show when={rollbackNotice()}>
-                    <RolledBackStrip
-                      strip={props.strip}
-                      state={props.rollback?.state ?? {}}
-                    />
-                  </Show>
-                  <Show when={!rollbackNotice() && props.forkNote}>
-                    {(note) => (
-                      <ForkNote
-                        note={note()}
-                        onDismiss={() => props.onDismissForkNote?.()}
-                      />
-                    )}
-                  </Show>
                   <div
-                    class={["otk-composer-input", {
-                      "is-noticed": noticed(),
-                    }]}
+                    class={["otk-composer-input", {}]}
                   >
                     <Prompt
                       suspended={active()}

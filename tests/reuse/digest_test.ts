@@ -123,6 +123,7 @@ test("independent public-entry consumer composes native sink, scheduler and deri
         password: "",
         heartbeattimeout: 25,
         reconnectmax: 30,
+        requestms: 60000,
       },
       index: { days: 30 },
     },

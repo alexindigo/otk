@@ -57,9 +57,7 @@ test("paste drop and clipboard refusals reach owned feedback without clearing in
             })`,
           );
           await b.poll(
-            `document.querySelector('.otk-prompt [role=alert]')?.textContent==='${
-              mode === "sync" ? "Synchronous" : "Asynchronous"
-            } ${event} refusal'`,
+            "document.querySelector('.otk-prompt [role=alert] .otk-control-label')?.textContent==='Could not finish this action. Try again'",
           );
           assertEquals(
             await b.evaluate(
@@ -71,7 +69,7 @@ test("paste drop and clipboard refusals reach owned feedback without clearing in
       }
       await b.click(".otk-copy-message");
       await b.poll(
-        "document.querySelector('.otk-message [role=alert]')?.textContent==='Clipboard refused'",
+        "document.querySelector('.otk-message [role=alert]')?.textContent==='Could not finish this action. Try again'",
       );
       await b.poll(
         "document.body.textContent.includes('Keep this reply available')",
@@ -98,7 +96,7 @@ test("a clipboard refusal is visible at the reply action without an unhandled re
     );
     await b.click(".otk-copy-message");
     await b.poll(
-      "document.querySelector('.otk-message [role=alert]')?.textContent==='Clipboard refused'",
+      "document.querySelector('.otk-message [role=alert]')?.textContent==='Could not finish this action. Try again'",
     );
     assertEquals(b.errors, []);
   } finally {

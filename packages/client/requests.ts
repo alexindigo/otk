@@ -13,7 +13,13 @@ import type {
   RpcParams,
   RpcResult,
 } from "@otk/protocol";
-import { RequestFailure, RequestReleased } from "./failures.ts";
+import {
+  failureFeedback,
+  type FailurePresenter,
+  type Feedback,
+  RequestFailure,
+  RequestReleased,
+} from "./failures.ts";
 
 export interface RequestOptions {
   signal?: AbortSignal;
@@ -51,6 +57,8 @@ export interface RememberedRequests {
 }
 export interface RequestTrackerOptions {
   send(frame: RequestControl): void;
+  /** Independent HTTP/bootstrap and socket readiness share the same intent owner. */
+  available?(frame: RequestControl): boolean;
   clientID?: string;
   server?: string;
   /** Opaque authenticated identity supplied by the transport composition. */
@@ -81,11 +89,16 @@ const active = (state: OperationState) =>
 export class RequestTracker {
   readonly clientID: string;
   #pending = new Map<string, Pending>();
+  #listeners = new Set<() => void>();
   #window?: RequestWindow;
   #batch = 0;
   #connected = false;
   #stopped = false;
   #principal?: string;
+  #controls = new Map<
+    string,
+    { control: RequestControl; principal?: string }
+  >();
   constructor(readonly options: RequestTrackerOptions) {
     this.#principal = options.principal;
     const loaded = options.storage?.load();
@@ -161,7 +174,7 @@ export class RequestTracker {
   }
   #publish(item: Pending): void {
     this.#save();
-    for (const listener of item.listeners) {
+    for (const listener of new Set([...item.listeners, ...this.#listeners])) {
       try {
         listener();
       } catch (cause) {
@@ -170,7 +183,12 @@ export class RequestTracker {
     }
   }
   #send(frame: RequestControl): void {
-    if (this.#stopped || !this.#connected && frame.t !== "request.resume") {
+    if (
+      this.#stopped ||
+      !this.#connected && frame.t !== "request.resume" &&
+        !this.options.available?.(frame)
+    ) {
+      if (!this.#stopped) this.#defer(frame);
       return;
     }
     if (frame.t === "request") {
@@ -183,6 +201,27 @@ export class RequestTracker {
     } catch (cause) {
       this.options.diagnostic?.(cause);
       this.disconnect();
+      this.#defer(frame);
+    }
+  }
+  #defer(frame: RequestControl): void {
+    if (frame.t !== "request.release" && frame.t !== "request.received") return;
+    for (const item of frame.refs) {
+      const ref = "ref" in item ? item.ref : item;
+      if (!ref.window) continue;
+      const control: RequestControl = frame.t === "request.release"
+        ? { t: "request.release", refs: [ref] }
+        : {
+          t: "request.received",
+          refs: [item as { ref: RequestRef; seq: number }],
+        };
+      this.#controls.set(
+        `${frame.t}:${ref.clientID}:${ref.window}:${ref.key}`,
+        {
+          control,
+          principal: this.#pending.get(ref.key)?.principal ?? this.#principal,
+        },
+      );
     }
   }
   #create(
@@ -272,10 +311,11 @@ export class RequestTracker {
         {
           clientID: this.clientID,
           key: crypto.randomUUID(),
-          window: this.#window?.id ?? "bootstrap",
+          window: this.#window?.id ?? "",
         }),
       id: crypto.randomUUID(),
     };
+    if (!ref.window && this.#window) ref.window = this.#window.id;
     const canonical = canonicalRequest(params);
     const prior = this.#pending.get(ref.key);
     if (
@@ -326,6 +366,7 @@ export class RequestTracker {
     this.#save();
     if (options.signal?.aborted) item.operation.release();
     else this.#send({ t: "request", ref, method, params: item.params });
+    this.#publish(item);
     return item.operation;
   }
   connect(
@@ -341,6 +382,20 @@ export class RequestTracker {
     this.#batch = resumebatch;
     this.#connected = true;
     this.#principal = principal;
+    for (const [key, queued] of [...this.#controls]) {
+      if (queued.principal !== principal) continue;
+      this.#controls.delete(key);
+      this.#send(queued.control);
+    }
+    for (const item of this.#pending.values()) {
+      if (item.state.ref.window === "") {
+        item.principal = principal;
+        item.state = {
+          ...item.state,
+          ref: { ...item.state.ref, window: window.id },
+        };
+      }
+    }
     for (const item of this.#pending.values()) {
       if (active(item.state) && item.principal !== principal) {
         item.state = { ...item.state, connection: "authentication-required" };
@@ -492,6 +547,40 @@ export class RequestTracker {
       owner === undefined || item.state.owner === owner
     ).map((item) => item.operation);
   }
+  subscribe(listener: () => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+  forgetFailures(owner: string, method: string): void {
+    for (const [key, item] of this.#pending) {
+      if (
+        item.state.owner === owner && item.state.method === method &&
+        item.state.phase === "failed"
+      ) this.#pending.delete(key);
+    }
+  }
+  intent(): IntentIdentity {
+    return {
+      clientID: this.clientID,
+      key: crypto.randomUUID(),
+      window: this.#window?.id ?? "",
+    };
+  }
+  connectionFor(key: string, connection: OperationState["connection"]): void {
+    const item = this.#pending.get(key);
+    if (item && active(item.state)) {
+      item.state = { ...item.state, connection };
+      this.#publish(item);
+    }
+  }
+  authenticationRequired(): void {
+    this.#connected = false;
+    for (const item of this.#pending.values()) {
+      if (active(item.state)) {
+        this.connectionFor(item.state.ref.key, "authentication-required");
+      }
+    }
+  }
   stop(): void {
     this.disconnect();
     this.#stopped = true;
@@ -511,4 +600,167 @@ export class IntentGroup {
     }
     return step;
   }
+  options(name: string, owner?: string): RequestOptions {
+    return { intent: this.step(name), owner };
+  }
+}
+
+/** Reserve a composed intent before any preparation or deferred UI publication. */
+export class IntentGroups {
+  #pending = new Map<string, Promise<unknown>>();
+  constructor(readonly identity: () => IntentIdentity) {}
+  run<T>(key: string, action: (group: IntentGroup) => Promise<T>): Promise<T> {
+    const prior = this.#pending.get(key);
+    if (prior) return prior as Promise<T>;
+    const deferred = Promise.withResolvers<T>();
+    this.#pending.set(key, deferred.promise);
+    void deferred.promise.catch(() => {});
+    const group = new IntentGroup(this.identity());
+    const finish = () => {
+      if (this.#pending.get(key) === deferred.promise) {
+        this.#pending.delete(key);
+      }
+    };
+    try {
+      void action(group).then((result) => {
+        finish();
+        deferred.resolve(result);
+      }, (cause) => {
+        finish();
+        deferred.reject(cause);
+      });
+    } catch (cause) {
+      finish();
+      deferred.reject(cause);
+    }
+    return deferred.promise;
+  }
+}
+
+export interface FormIntentState<T> {
+  readonly pending: boolean;
+  readonly key?: string;
+  readonly captured?: T;
+  readonly feedback?: Feedback;
+}
+export interface FormIntent<T, R> {
+  readonly state: FormIntentState<T>;
+  subscribe(listener: () => void): () => void;
+  submit(value: T, run: (captured: T) => Promise<R>): Promise<R>;
+}
+
+export interface SubmissionIntent<T> {
+  readonly state: FormIntentState<T>;
+  subscribe(listener: () => void): () => void;
+  submit(
+    prepare: () => Promise<T | undefined>,
+    run: (captured: T) => Promise<void>,
+  ): Promise<void>;
+}
+/** Input preparation can finish while an admitted effect is still settling.
+ * A subsequent input command gets its own preparation lifetime; another send
+ * cannot replace or repeat the captured effect. */
+export function createSubmissionIntent<T>(options: {
+  capture(value: T): T;
+  presenter: FailurePresenter;
+  diagnostic?(id: string, cause: unknown): void;
+}): SubmissionIntent<T> {
+  const input = createFormIntent<void, { result: Promise<void> } | undefined>({
+    ...options,
+    capture: () => undefined,
+  });
+  const effect = createFormIntent<T, void>(options);
+  return {
+    get state() {
+      return {
+        ...effect.state,
+        pending: input.state.pending || effect.state.pending,
+        feedback: input.state.feedback ?? effect.state.feedback,
+      };
+    },
+    subscribe(listener) {
+      const first = input.subscribe(listener),
+        second = effect.subscribe(listener);
+      return () => {
+        first();
+        second();
+      };
+    },
+    submit(prepare, run) {
+      return input.submit(undefined, async () => {
+        const value = await prepare();
+        if (value === undefined || effect.state.pending) return;
+        return { result: effect.submit(value, run) };
+      }).then((admitted) => admitted?.result);
+    },
+  };
+}
+/** Form capture and duplicate admission are independent of native fields or view lifetime. */
+export function createFormIntent<T, R>(options: {
+  capture(value: T): T;
+  presenter: FailurePresenter;
+  diagnostic?(id: string, cause: unknown): void;
+}): FormIntent<T, R> {
+  let state: FormIntentState<T> = { pending: false },
+    active: Promise<R> | undefined;
+  const listeners = new Set<() => void>();
+  const publish = () => {
+    for (const listener of listeners) {
+      try {
+        listener();
+      } catch (cause) {
+        try {
+          options.diagnostic?.(crypto.randomUUID(), cause);
+        } catch { /* Observer diagnostics cannot change the intent outcome. */ }
+      }
+    }
+  };
+  return {
+    get state() {
+      return state;
+    },
+    subscribe(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    submit(value, run) {
+      if (state.pending) return active!;
+      const deferred = Promise.withResolvers<R>();
+      active = deferred.promise;
+      void active.catch(() => {});
+      state = { pending: true, key: crypto.randomUUID() };
+      let captured: T;
+      const fail = (cause: unknown) => {
+        state = {
+          ...state,
+          pending: false,
+          feedback: failureFeedback(
+            cause,
+            options.presenter,
+            options.diagnostic,
+          ),
+        };
+        active = undefined;
+        publish();
+        deferred.reject(cause);
+      };
+      try {
+        captured = options.capture(value);
+      } catch (cause) {
+        fail(cause);
+        return deferred.promise;
+      }
+      state = { ...state, captured };
+      publish();
+      void Promise.resolve().then(() => run(captured)).then((result) => {
+        state = { ...state, pending: false, feedback: undefined };
+        active = undefined;
+        publish();
+        deferred.resolve(result);
+      }, fail);
+      return deferred.promise;
+    },
+  };
 }

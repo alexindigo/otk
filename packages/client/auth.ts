@@ -1,8 +1,22 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { HttpRequests } from "./http-requests.ts";
+import type { ClientRequestPolicy, RequestWindow } from "@otk/protocol";
+import type { RequestMetadata } from "@otk/protocol";
+export const bootstrapRequestMetadata: Readonly<
+  Record<string, RequestMetadata>
+> = {
+  "bootstrap.session": { kind: "read", pending: "Connecting" },
+  "bootstrap.health": { kind: "read", pending: "Checking server" },
+  "bootstrap.login": { kind: "mutation", pending: "Signing in" },
+  "bootstrap.setup": { kind: "mutation", pending: "Configuring server" },
+  "bootstrap.logout": { kind: "mutation", pending: "Signing out" },
+};
 export interface AuthStatus {
   authenticated: boolean;
   setupRequired: boolean;
   authType: string;
+  principal: string;
+  requests: { window: RequestWindow; policy: ClientRequestPolicy };
 }
 export async function request<T>(
   base: URL,
@@ -10,20 +24,15 @@ export async function request<T>(
   body?: unknown,
   signal?: AbortSignal,
 ): Promise<T> {
-  const response = await fetch(new URL(path, base), {
-    credentials: "include",
-    method: body === undefined ? "GET" : "POST",
-    headers: body === undefined
-      ? undefined
-      : { "Content-Type": "application/json" },
-    body: body === undefined ? undefined : JSON.stringify(body),
-    signal: signal ?? AbortSignal.timeout(15_000),
+  const http = new HttpRequests({
+    base,
+    kind: (method) => bootstrapRequestMetadata[method]?.kind ?? "mutation",
   });
-  const result = await response.json();
-  if (!response.ok) {
-    throw new Error(result.message || result.code || `HTTP ${response.status}`);
+  try {
+    return await http.start<T>(path, body, { signal }).result;
+  } finally {
+    await http.stop();
   }
-  return result;
 }
 export function normalizeBase(value: string): string {
   const url = new URL(value.trim());

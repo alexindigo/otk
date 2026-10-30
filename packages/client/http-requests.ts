@@ -7,12 +7,15 @@ import type {
 } from "@otk/protocol";
 import { RequestTracker } from "./requests.ts";
 import type { Operation, RequestOptions } from "./requests.ts";
+import type { RequestTrackerOptions } from "./requests.ts";
 export interface HttpRequestsOptions {
   base: URL;
   fetcher?: typeof fetch;
   clientID?: string;
   policy?: Pick<ClientRequestPolicy, "httpms" | "retrybase" | "retrymax">;
   diagnostic?: (cause: unknown) => void;
+  tracker?: RequestTracker;
+  kind?: RequestTrackerOptions["kind"];
 }
 interface Delivery {
   secret: string;
@@ -36,16 +39,19 @@ export class HttpRequests {
   #policy?: HttpRequestsOptions["policy"];
   constructor(readonly options: HttpRequestsOptions) {
     this.#policy = options.policy;
-    this.tracker = new RequestTracker({
-      send: (control) => this.#send(control),
+    this.tracker = options.tracker ?? new RequestTracker({
+      send: (control) => this.send(control),
       clientID: options.clientID,
       server: options.base.href,
       diagnostic: options.diagnostic,
+      kind: options.kind,
     });
-    this.tracker.connect({
-      id: "bootstrap",
-      expiresAt: Number.MAX_SAFE_INTEGER,
-    }, 1);
+    if (!options.tracker) {
+      this.tracker.connect({
+        id: "bootstrap",
+        expiresAt: Number.MAX_SAFE_INTEGER,
+      }, 1);
+    }
   }
   policy(value: NonNullable<HttpRequestsOptions["policy"]>): void {
     this.#policy = value;
@@ -78,12 +84,12 @@ export class HttpRequests {
         stopped: false,
       });
     }
-    return this.tracker.capture(path, input ?? null, {
+    return this.tracker.capture(`bootstrap.${path}`, input ?? null, {
       ...options,
       intent: ref,
     }) as Operation<R>;
   }
-  #send(control: RequestControl): void {
+  send(control: RequestControl): void {
     if (control.t === "request") this.#run(control.ref.key, control.ref.id);
     else if (control.t === "request.resume") {
       for (const { ref, after } of control.items) {
@@ -116,12 +122,16 @@ export class HttpRequests {
     const ref = { ...delivery.ref, id };
     const run = async () => {
       let liveness: ReturnType<typeof setTimeout> | undefined;
-      if (this.#policy) {
-        liveness = setTimeout(
-          () => this.tracker.disconnect(),
-          this.#policy.httpms,
-        );
-      }
+      const observe = () => {
+        clearTimeout(liveness);
+        if (this.#policy) {
+          liveness = setTimeout(
+            () => this.tracker.connectionFor(ref.key, "reconnecting"),
+            this.#policy.httpms,
+          );
+        }
+      };
+      observe();
       try {
         if (!delivery.accepted) {
           const headers = new Headers({ "X-OTK-Receipt": delivery.secret });
@@ -143,13 +153,18 @@ export class HttpRequests {
               signal: delivery.controller.signal,
             },
           );
+          if (delivery.stopped) {
+            await response.body?.cancel().catch(() => {});
+            return;
+          }
           const event: RequestEvent = await response.json();
+          this.tracker.connectionFor(ref.key, "connected");
           this.tracker.receive(event);
           if (event.t !== "request.accepted") return;
           delivery.accepted = true;
           delivery.after = event.seq;
         }
-        clearTimeout(liveness);
+        observe();
         const response = await fetcher(
           new URL("request-events", this.options.base),
           {
@@ -189,6 +204,8 @@ export class HttpRequests {
               buffer = buffer.slice(newline + 1);
               if (!line.trim()) continue;
               const event: RequestEvent = JSON.parse(line);
+              observe();
+              this.tracker.connectionFor(ref.key, "connected");
               if ("seq" in event) delivery.after = event.seq;
               this.tracker.receive(event);
               if (
@@ -210,7 +227,7 @@ export class HttpRequests {
     delivery.work = Promise.resolve().then(run).catch((cause) => {
       if (delivery.stopped) return;
       this.options.diagnostic?.(cause);
-      this.tracker.disconnect();
+      this.tracker.connectionFor(ref.key, "reconnecting");
       if (this.#policy) {
         const delay = Math.min(
           this.#policy.retrymax,
@@ -237,7 +254,7 @@ export class HttpRequests {
       clearTimeout(delivery.retry);
       if (delivery.work) work.push(delivery.work);
     }
-    this.tracker.stop();
+    if (!this.options.tracker) this.tracker.stop();
     await Promise.all(work);
     this.#deliveries.clear();
   }

@@ -2,7 +2,10 @@
 import type { QuestionRequest } from "../content.ts";
 import type { OperationContext } from "../requests.ts";
 export interface QuestionsCapability {
-  listQuestions(sessionID: string): Promise<QuestionRequest[]>;
+  listQuestions(
+    sessionID: string,
+    signal?: AbortSignal,
+  ): Promise<QuestionRequest[]>;
   answerQuestion(
     requestID: string,
     answers?: string[][],

@@ -2,6 +2,24 @@
 
 ## Resumable request services
 
+Native registrations use `nativeExecution` and `nativeEffect`: the core fences
+independent backends before invocation, adapters repeat the fence at I/O, and
+feature-owned encoders checkpoint only metadata. Creation/fork outcomes
+checkpoint their returned identity before activation bookkeeping.
+`RequestExecution.local` also commits post-native bookkeeping with its terminal
+receipt after a checkpoint. `completion` validates that receipt independently of
+the write callback's internal result, so a clock-producing write can retain its
+clock while its wire result is null. Conflict resources are feature-owned; newer
+admitted scope witnesses remain available while an older native outcome is
+unknown, including after ordinary terminal-retention cleanup.
+
+`BootstrapRequests` contributes setup/login/logout/discovery handlers to the
+memory-only HTTP adapter. Its input equality and private receipt authorization
+are origin-bound; credentials and cookie tokens never enter SQLite. Cookie
+headers are retained privately and emitted/replayed only with their
+corresponding successful terminal result. It exposes admission and event ports
+for reflective HTTP route composition.
+
 `RpcRegistry.prepare(method, params)` validates a feature's input without
 running its handler. A registration can contribute `execution`: kind, target
 scope, explicit metadata receipt encoder and recovery. Generic
@@ -17,8 +35,12 @@ later macrotask executes it. Principal, tab identity and intent key form its
 duplicate fence; attempt IDs and recipient sockets do not. Different wire
 payloads cannot share an intent key. `detach` removes delivery only. Release
 cancels the last read subscriber, while a native mutation remains tracked.
-`idle()` joins current owned work, not an assertion that a genuinely uncertain
-native outcome has become terminal.
+Same-session local/native effects retain FIFO order; declared reads and
+connection leases do not join that effect queue. A held native exchange remains
+observable, and a held read cannot prevent a later action. Declared interrupt
+priority continues to bypass ordinary effect order. `idle()` joins current owned
+work, not an assertion that a genuinely uncertain native outcome has become
+terminal.
 
 Local registrations use `ctx.execution.local(run, encode)`: pass its
 `StoreWrite` to every metadata mutation so effect and completion receipt commit
@@ -35,6 +57,23 @@ The existing unique-token interactive observation wraps actual handler work.
 `ctx.execution.wait(promise)` releases that pressure while I/O or readiness is
 outstanding and reacquires it for the continuation. Late continuations cannot
 reactivate a finished handler. This uses the existing digest scheduling input.
+
+`readExecution(scope)` declares volatile, reloadable reads. The registry
+observes their synchronous work and releases interactive pressure while their
+returned promise is outstanding. Per-call cancellation reaches the selected
+reader, including session-directory preparation. Connection leases remain
+separate from read ownership.
+
+`metadataReceipt(kind, parse)` composes a feature-owned runtime allowlist for
+both completion encoding and restart rehydration.
+`localExecution(scope, receipt)` and `localWrite(ctx, run, receipt)` join
+metadata writes to the completion receipt; independent in-process callers retain
+an explicit standalone write. Inbox, task, seen, preference/layout and approval
+policy writes use these scopes. Deferred notifications observe the committed
+completion. Preference receipts use the injected preference schema, including
+external contributions, rather than a second global key list. Replaying a
+receipt returns its original result without rewriting current projections or
+reapplying visit clocks and frequency scores.
 
 `HttpRequestAdapter` uses the same coordinator with `VolatileRequests`, not a
 second request state machine. Compose it with selected bootstrap registrations

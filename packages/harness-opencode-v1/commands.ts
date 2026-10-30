@@ -12,15 +12,16 @@ export function commands(
   launch: Launch,
 ): CommandsCapability {
   return {
-    async listCommands(sessionID) {
-      const dir = await directory.resolve(sessionID);
+    async listCommands(sessionID, signal) {
+      const dir = await directory.resolve(sessionID, signal);
       const [commands, skills] = await Promise.all([
         client.json<{ name: string; description?: string; source?: string }[]>(
           "/command",
-          { query: { directory: dir } },
+          { query: { directory: dir }, signal },
         ),
         client.json<{ name: string; description?: string }[]>("/skill", {
           query: { directory: dir },
+          signal,
         }),
       ]);
       const result = new Map<string, CommandOption>();
@@ -57,9 +58,8 @@ export function commands(
         {
           method: "POST",
           query: { directory: dir },
-          ...(operation
-            ? { classification: "effect" as const, operation }
-            : { timeout: null }),
+          classification: "effect",
+          ...(operation ? { operation } : {}),
           body: {
             command: input.command,
             arguments: input.arguments,
@@ -68,7 +68,7 @@ export function commands(
             model: input.model
               ? `${input.model.provider}/${input.model.model}`
               : undefined,
-            parts: await mapPromptParts(input.parts || [], dir),
+            parts: await mapPromptParts(input.parts || [], dir, operation),
           },
         },
       );

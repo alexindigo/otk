@@ -8,6 +8,7 @@ import type {
 import { type InboxStatus, inboxStatus, rollup } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
 import { familyTask, sessionFamily } from "./session-tree.ts";
+import type { RequestOptions } from "./requests.ts";
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
   id: string;
@@ -49,13 +50,20 @@ export interface ClientTabs {
   select(selection: TabSelection, sessionID?: string): void;
   preview(sessionID: string): void;
   close(sessionID: string): void;
-  pin(sessionID: string): Promise<TaskRecord>;
-  send<T>(sessionID: string, action: () => Promise<T>): Promise<T>;
+  pin(sessionID: string, options?: RequestOptions): Promise<TaskRecord>;
+  send<T>(
+    sessionID: string,
+    action: () => Promise<T>,
+    options?: RequestOptions,
+  ): Promise<T>;
   stop(): void;
 }
 /** The current idle/seen phantom is retained until selection moves elsewhere. */
 export function createTabs(
-  promote: (session: TabSession) => Promise<TaskRecord>,
+  promote: (
+    session: TabSession,
+    options?: RequestOptions,
+  ) => Promise<TaskRecord>,
   factory: StateFactory = createState,
   sources?: TabSources,
 ): ClientTabs {
@@ -244,7 +252,10 @@ export function createTabs(
         else draft.preview = sessionID;
       });
     },
-    async pin(sessionID: string): Promise<TaskRecord> {
+    async pin(
+      sessionID: string,
+      options?: RequestOptions,
+    ): Promise<TaskRecord> {
       refresh();
       const directory = input.directory;
       const entry = input.entries.find((e) =>
@@ -263,7 +274,7 @@ export function createTabs(
           if (session?.id !== sessionID || session.directory !== directory) {
             throw new Error("Unknown project session");
           }
-          return await promote(session);
+          return await promote(session, options);
         });
         promotions.set(sessionID, pending);
         void pending.catch(() => {
@@ -299,8 +310,12 @@ export function createTabs(
         }
       });
     },
-    async send<T>(sessionID: string, action: () => Promise<T>): Promise<T> {
-      await this.pin(sessionID);
+    async send<T>(
+      sessionID: string,
+      action: () => Promise<T>,
+      options?: RequestOptions,
+    ): Promise<T> {
+      await this.pin(sessionID, options);
       if (stopped) throw new Error("Project tabs are stopped");
       return await action();
     },

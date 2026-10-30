@@ -2,8 +2,10 @@
 /** OTK application core: backend-neutral services and feature adapters. */
 export * from "./requests/coordinator.ts";
 export * from "./requests/types.ts";
+export * from "./requests/policies.ts";
 export * from "./requests/failures.ts";
 export * from "./http/requests.ts";
+export * from "./http/bootstrap.ts";
 export { type CoreOptions, type CoreServer, startCore } from "./service.ts";
 export {
   type RequestLifetime,

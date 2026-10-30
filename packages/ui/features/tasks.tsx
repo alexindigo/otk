@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal } from "solid-js";
 import type { DialogProps, DialogRegistry } from "../registries/shell.ts";
-import Form from "../components/Form.tsx";
+import Form, { FormInput } from "../components/Form.tsx";
 export interface TaskNameInput {
   name?: string;
   save(name: string): Promise<void>;
@@ -21,13 +21,16 @@ function TaskName(props: DialogProps) {
     <Form
       title="Task name"
       submitLabel="Save task"
-      onSubmit={async () => {
-        await input.save(name().trim());
+      pendingLabel={input.name === undefined
+        ? "Creating task…"
+        : "Renaming task…"}
+      onSubmit={async (data) => {
+        await input.save(String(data.get("taskName")).trim());
         props.close();
       }}
     >
       <label>
-        Name<input
+        Name<FormInput
           name="taskName"
           required
           value={name()}

@@ -17,9 +17,12 @@ test("injected unknown failures remain visible in form preference and command co
     await b.fill("[data-login] input[name=username]", "consumer");
     await b.fill("[data-login] input[name=password]", "test input");
     for (
-      const [kind, expected] of [["null", "Unknown error"], [
+      const [kind, expected] of [[
+        "null",
+        "Could not finish this action. Try again",
+      ], [
         "string",
-        "Injected failure",
+        "Could not finish this action. Try again",
       ]]
     ) {
       await b.click(`[data-${kind}]`);

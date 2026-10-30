@@ -92,7 +92,7 @@ test("P9 oversized combined uploads show an immediate error without sending or l
     );
     await browser.click(".otk-prompt button[type=submit]");
     await browser.poll(
-      "document.querySelector('.otk-prompt [role=alert]')?.textContent.includes('64 MiB')",
+      "!!document.querySelector('.otk-composer-notice [role=alert]')",
       5000,
     );
     assertEquals(

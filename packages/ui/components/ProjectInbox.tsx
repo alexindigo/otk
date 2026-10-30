@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import { failureText } from "@otk/client";
 import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
 import { selection } from "./selection.ts";
@@ -92,7 +92,7 @@ export default function ProjectInbox(props: {
       await props.onLayout({ leftWidth });
       setError("");
     },
-    fail: (error) => setError(errorMessage(error)),
+    fail: (error) => setError(failureText(error)),
   });
   const width = resize.width;
   const open = ownedAction("project.open", props.onOpen);
@@ -243,7 +243,7 @@ export default function ProjectInbox(props: {
             aria-label="Add project"
             title="Add project"
             onClick={() =>
-              void add().catch((error) => setError(errorMessage(error)))}
+              void add().catch((error) => setError(failureText(error)))}
           >
             <PlusIcon />
           </button>
@@ -344,7 +344,7 @@ export default function ProjectInbox(props: {
           aria-expanded={discoveredOpen() ? "true" : "false"}
           onClick={() =>
             void toggleDiscovered().catch((error) =>
-              setError(errorMessage(error))
+              setError(failureText(error))
             )}
         >
           <ChevronIcon class="otk-discovered-chevron" />
@@ -374,7 +374,7 @@ export default function ProjectInbox(props: {
           class="otk-inactive-toggle"
           aria-expanded={inactiveOpen() ? "true" : "false"}
           onClick={() =>
-            void inactive().catch((error) => setError(errorMessage(error)))}
+            void inactive().catch((error) => setError(failureText(error)))}
         >
           <ChevronIcon class="otk-inactive-chevron" />
           <span class="otk-control-label" title="Inactive">Inactive</span>

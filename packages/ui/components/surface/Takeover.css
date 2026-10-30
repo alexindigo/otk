@@ -18,3 +18,13 @@
   flex: 1 1 auto;
   min-height: 0;
 }
+.otk-takeover.is-noticed {
+  --overlay-radius: 0 0 var(--radius-composer) var(--radius-composer);
+}
+.otk-takeover-notice {
+  border: 1px solid var(--otk-border);
+  border-bottom: 0;
+  border-radius: var(--radius-composer) var(--radius-composer) 0 0;
+  overflow: clip;
+  flex: none;
+}

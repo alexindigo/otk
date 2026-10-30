@@ -75,7 +75,8 @@ async function recording(stage?: Stage, watchdog = false, failStatus = false) {
       if (stage === "page body" && hold) {
         const response = new Response(
           new ReadableStream<Uint8Array>({
-            async start(controller) {
+            async pull(controller) {
+              reached.resolve();
               await held.promise;
               controller.enqueue(
                 new TextEncoder().encode(JSON.stringify([session("stale")])),
@@ -84,12 +85,6 @@ async function recording(stage?: Stage, watchdog = false, failStatus = false) {
             },
           }),
         );
-        const json = response.json.bind(response);
-        response.json = () => {
-          const reading = json();
-          reached.resolve();
-          return reading;
-        };
         return response;
       }
       return Response.json([session(hold ? "stale" : "root")], {
@@ -336,7 +331,7 @@ test("native finite read deadline remains active with an owner signal", async ()
   const owner = new AbortController();
   let reason: unknown;
   const client = new Client(
-    cfg().harness,
+    { ...cfg().harness, requestms: 10 },
     (_input, options) =>
       new Promise((resolve) => {
         options!.signal!.addEventListener("abort", () => {
@@ -347,7 +342,7 @@ test("native finite read deadline remains active with an owner signal", async ()
   );
   const cleanup = setTimeout(() => owner.abort(), 1000);
   try {
-    await client.json("/global/health", { signal: owner.signal, timeout: 10 });
+    await client.json("/global/health", { signal: owner.signal });
     assert(reason instanceof DOMException);
     assertEquals(
       reason.name,

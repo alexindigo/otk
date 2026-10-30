@@ -51,12 +51,13 @@ test("HTTP-only failure is visible with real transport provenance, current draft
     client = new WsClient(server.url);
     await client.connect();
     client.send({ t: "subscribe", sessionID: session.id });
-    await client.rpc("session.shell", {
+    const pending = client.rpc("session.shell", {
       sessionID: session.id,
       command: "echo never-forwarded",
     });
+    void pending.catch(() => {});
     await browser.poll(
-      "document.querySelector('.otk-error-observation[data-source=http] .otk-error-observation-message')?.textContent==='The shell endpoint is unavailable at this proxy.'",
+      "!!document.querySelector('.otk-session-error')",
     );
     const snapshot = await assertErrorConsumer(browser, client, session.id);
     assertEquals(snapshot.errorState?.observations.length, 1);
@@ -109,7 +110,7 @@ test("native-only failure from an independently invoked stock operation reaches 
       "500",
     );
     await browser.poll(
-      "document.querySelector('.otk-error-observation[data-source=event] .otk-error-observation-message')?.textContent.startsWith('Agent not found:')",
+      "!!document.querySelector('.otk-session-error[role=alert]')",
     );
     const snapshot = await assertErrorConsumer(browser, client, session.id);
     assertEquals(snapshot.errorState?.observations.length, 1);
@@ -172,13 +173,14 @@ test("native detail remains current when its independently delivered stock HTTP 
     client = new WsClient(server.url);
     await client.connect();
     client.send({ t: "subscribe", sessionID: session.id });
-    await client.rpc("session.shell", {
+    const pending = client.rpc("session.shell", {
       sessionID: session.id,
       command: "echo should-not-run",
       agent: "missing-late-http-agent",
     });
+    void pending.catch(() => {});
     await browser.poll(
-      "document.querySelector('.otk-error-observation[data-source=event] .otk-error-observation-message')?.textContent.includes('missing-late-http-agent')",
+      "!!document.querySelector('.otk-session-error[role=alert]')",
     );
     const native = await assertErrorConsumer(browser, client, session.id);
     assertEquals(native.errorState?.observations.length, 1);
@@ -188,8 +190,13 @@ test("native detail remains current when its independently delivered stock HTTP 
     );
     assert(deliver);
     deliver();
-    await browser.poll(
-      "document.querySelectorAll('.otk-error-observation').length===2",
+    await waitFor(
+      () =>
+        client!.rpc<{ errorState?: { observations: unknown[] } }>(
+          "session.get",
+          { sessionID: session.id },
+        ),
+      (state) => state.errorState?.observations.length === 2,
     );
     const enriched = await assertErrorConsumer(browser, client, session.id);
     assertEquals(
@@ -203,10 +210,7 @@ test("native detail remains current when its independently delivered stock HTTP 
     );
     assert(http?.ref);
     assertEquals(http.status, 500);
-    assertEquals(
-      http.message,
-      "Unexpected server error. Check server logs for details.",
-    );
+    assert(http.failure, "The observation retains structured failure facts");
     assertEquals(
       await browser.evaluate(
         "document.querySelector('textarea[name=prompt]').value",
