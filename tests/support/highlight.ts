@@ -11,7 +11,9 @@ export async function highlightedRange(
 ): Promise<void> {
   try {
     await browser.poll(`(async()=>{
-    const code=document.querySelector(${JSON.stringify(selector)});
+    const code=[...document.querySelectorAll(${
+      JSON.stringify(selector)
+    })].find(code=>code.textContent.includes(${JSON.stringify(marker)}));
     if(!code) return false;
     const walker=document.createTreeWalker(code,NodeFilter.SHOW_TEXT);
     let node,range;

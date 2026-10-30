@@ -5,6 +5,7 @@ import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { wheelViewport } from "../support/message-viewport.ts";
 import {
   assertContentLoaded,
   assertContentReleased,
@@ -262,7 +263,8 @@ test("R-perf visible-source to styled-range latency for 2000 TS lines, acknowled
     await browser.key("Enter");
     // The warmup lives in an earlier reply. Scope every sample to the measured
     // reply, and release the next revision only after its predecessor is styled.
-    const measured = "[data-role=assistant]:last-of-type .otk-text";
+    const measured =
+      '[aria-label="Transcript messages"] > :nth-last-child(1 of .otk-virtual-item) [data-role=assistant] .otk-text';
     await browser.evaluate(
       `highlightMeasure(${
         JSON.stringify(measured + " .otk-code code")
@@ -298,13 +300,11 @@ test("R-perf visible-source to styled-range latency for 2000 TS lines, acknowled
     );
     // The second streamed block can fill the transcript's visible height. Bring
     // the first block's final lines into view before demanding their lazy tokens.
-    await browser.evaluate(
-      `document.querySelector('${measured} .otk-code').scrollIntoView({block:'end'})`,
+    const height = await browser.evaluate<number>(
+      "document.querySelector('.otk-messages').clientHeight",
     );
-    await browser.poll(
-      "[...document.querySelectorAll('.otk-token')].some(el=>el.textContent==='value1999')",
-      60000,
-    );
+    await wheelViewport(browser, ".otk-messages", -height);
+    await highlightedRange(browser, measured + " .otk-code code", "value1999");
     assertEquals(
       await browser.evaluate(
         `document.querySelector('${measured} .otk-code code').textContent`,
@@ -312,6 +312,9 @@ test("R-perf visible-source to styled-range latency for 2000 TS lines, acknowled
       big,
       "Highlighting changed code bytes",
     );
+    // Return to the physical tail before starting an unacknowledged producer.
+    // The previous range inspection intentionally paused following above it.
+    await wheelViewport(browser, ".otk-messages", 100000);
     // No consumer acknowledgements or range-demand helper during this phase.
     // 240 releases at the original 100 ms cadence leave >=200 actual visible
     // source revisions (at least ten observations in the p95 tail).

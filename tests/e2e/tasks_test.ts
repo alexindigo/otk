@@ -4,6 +4,8 @@ import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import type { Info, RawPart } from "@otk/harness-opencode-v1";
+import { waitFor } from "../support/opencode.ts";
+import { revealViewportElement } from "../support/message-viewport.ts";
 test("R5 task progress, real child navigation, parent/history and sibling cycle preserve navigation ownership", async () => {
   const f = await browserFixture({ bash: "ask", task: "allow" });
   try {
@@ -12,6 +14,12 @@ test("R5 task progress, real child navigation, parent/history and sibling cycle 
       body: { title: "Subagents" },
     });
     const server = await f.sidecar(), browser = await f.browser(server.url);
+    await browser.send("Emulation.setDeviceMetricsOverride", {
+      width: 1280,
+      height: 1000,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
     await openSession(browser, root.id);
     f.fake.queue(
       {
@@ -64,8 +72,15 @@ test("R5 task progress, real child navigation, parent/history and sibling cycle 
     await browser.type("textarea[name=prompt]", "Delegate second");
     await browser.key("Enter");
     await browser.poll(
-      "document.querySelectorAll('[data-tool=task][data-tool-status=completed]').length===2",
+      "[...document.querySelectorAll('[data-tool=task][data-tool-status=completed] .otk-tool-brief')].some(e=>e.textContent==='Second inspection')",
       60000,
+    );
+    await waitFor(
+      () => f.oc.request<{ parts: RawPart[] }[]>(`/session/${root.id}/message`),
+      (rows) =>
+        rows.flatMap((row) => row.parts).filter((part) =>
+          part.tool === "task" && part.state?.status === "completed"
+        ).length === 2,
     );
     await browser.poll(
       `document.querySelector('[data-session="${root.id}"]').dataset.status==='idle'`,
@@ -84,7 +99,10 @@ test("R5 task progress, real child navigation, parent/history and sibling cycle 
     await browser.poll(
       "document.querySelector('textarea[name=prompt]').value==='Unsent parent work' && !document.querySelector('.otk-prompt button[type=submit]').disabled",
     );
-    await browser.click(".otk-task-card");
+    const firstCard =
+      '[data-tool=task]:has(.otk-tool-brief[title="First inspection"]) .otk-task-card';
+    await revealViewportElement(browser, ".otk-messages", firstCard);
+    await browser.click(firstCard);
     await browser.poll(
       `location.hash==='#/local/${root.id}/${first.id}' && document.querySelector('.otk-subagent-bar')?.textContent.includes('First inspection') && !document.querySelector('.otk-prompt')`,
     );
@@ -109,8 +127,11 @@ test("R5 task progress, real child navigation, parent/history and sibling cycle 
     await browser.poll(
       `location.hash==='#/local/${root.id}' && !!document.querySelector('.otk-prompt')`,
     );
+    await revealViewportElement(browser, ".otk-messages", firstCard);
     await browser.poll(
-      "(()=>{const text=document.querySelector('[data-tool=task][data-tool-status=completed] .otk-task-card')?.textContent ?? ''; return text.includes('1 tool call') && /\\ds/.test(text)})()",
+      `(()=>{const text=document.querySelector(${
+        JSON.stringify(firstCard)
+      })?.textContent ?? ''; return text.includes('1 tool call') && /\\ds/.test(text)})()`,
       60000,
     );
     const parent = await f.oc.request<{ info: Info; parts: RawPart[] }[]>(
@@ -124,7 +145,7 @@ test("R5 task progress, real child navigation, parent/history and sibling cycle 
       JSON.stringify({ parent, child }, null, 2),
     );
     const frames = await browser.evaluate<string>(
-      "document.querySelector('[data-tool=task][data-tool-status=completed] .otk-task-card').textContent",
+      `document.querySelector(${JSON.stringify(firstCard)}).textContent`,
     );
     assert(
       frames.includes("1 tool call") && !frames.includes("1 tool calls") &&

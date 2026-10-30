@@ -47,7 +47,7 @@ test("U3 response progress follows streaming content, motion preferences, comple
     await b.type("textarea[name=prompt]", "Continue with a longer response");
     await b.key("Enter");
     await b.poll(
-      "document.querySelectorAll('[data-role=assistant]').length===2 && document.querySelector('[data-role=assistant]:last-of-type .otk-text')?.textContent.includes('More content follows here.')",
+      "(()=>{const replies=[...document.querySelectorAll('[data-role=assistant]')];return replies.length===2 && replies.at(-1).querySelector('.otk-message-content')?.textContent.includes('More content follows here.')})()",
     );
 
     const capture = async (name: string) => {
@@ -147,18 +147,18 @@ test("U3 response progress follows streaming content, motion preferences, comple
     await b.type("textarea[name=prompt]", "Read the directory, then explain");
     await b.key("Enter");
     await b.poll(
-      "document.querySelector('[data-role=assistant]:last-of-type .otk-text')?.textContent==='The next step is still streaming.' && document.querySelectorAll('.otk-response-progress').length===1",
+      "[...document.querySelectorAll('[data-role=assistant]')].at(-1)?.querySelector('.otk-text')?.textContent==='The next step is still streaming.' && document.querySelectorAll('.otk-response-progress').length===1",
     );
     assert(
       await b.evaluate(
-        "(()=>{const a=document.querySelector('[data-role=assistant]:last-of-type');return !!a.querySelector('[data-tool=bash]')&&a.querySelector('.otk-message-content').lastElementChild.matches('.otk-response-progress')})()",
+        "(()=>{const a=[...document.querySelectorAll('[data-role=assistant]')].at(-1);return !!a.querySelector('[data-tool=bash]')&&a.querySelector('.otk-message-content').lastElementChild.matches('.otk-response-progress')})()",
       ),
       "Continued backend steps share one progress line after all content",
     );
     await b.key("Escape");
     await b.key("Escape");
     await b.poll(
-      `!document.querySelector('.otk-response-progress') && document.querySelector('[data-session="${session.id}"]')?.dataset.status==='idle' && document.querySelector('[data-role=assistant]:last-of-type footer')?.textContent.includes('interrupted')`,
+      `!document.querySelector('.otk-response-progress') && document.querySelector('[data-session="${session.id}"]')?.dataset.status==='idle' && [...document.querySelectorAll('[data-role=assistant]')].at(-1)?.querySelector('footer')?.textContent.includes('interrupted')`,
     );
     continued.release();
   } finally {

@@ -10,6 +10,10 @@ import {
 } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
+import {
+  revealViewportElement,
+  wheelViewport,
+} from "../support/message-viewport.ts";
 
 test("U8 pasted and dropped images have one independent chip, persist as loaded message thumbnails and open the original in Dialog", async () => {
   const f = await browserFixture();
@@ -57,6 +61,36 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
             : "new DragEvent('drop',{bubbles:true,dataTransfer:d})"
         });})()`,
       );
+    const imageMessages = async (count: number) => {
+      const rows = await waitFor(
+        () =>
+          f.oc.request<
+            {
+              info: { id: string; role: string };
+              parts: { type: string; url?: string }[];
+            }[]
+          >(`/session/${session.id}/message`),
+        (rows) =>
+          rows.filter((row) =>
+            row.info.role === "user" && row.parts.some((p) => p.type === "file")
+          ).length === count,
+      );
+      for (const row of rows.filter((row) => row.info.role === "user")) {
+        assertEquals(
+          row.parts.filter((p) => p.type === "file").map((p) => p.url),
+          [image],
+        );
+        const selector = `[data-message="${row.info.id}"] .otk-file-image img`;
+        await revealViewportElement(b, ".otk-messages", selector);
+        await b.poll(
+          `(()=>{const images=document.querySelectorAll(${
+            JSON.stringify(selector)
+          });return images.length===1 && images[0].complete && images[0].naturalWidth===640 && images[0].src===${
+            JSON.stringify(image)
+          }})()`,
+        );
+      }
+    };
     await b.fill("textarea[name=prompt]", "What is in this image?");
     await addImage("paste");
     await b.poll(
@@ -165,7 +199,7 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
     f.fake.queue({ chunks: ["Second image received."] });
     await b.click(".otk-prompt button[type=submit]");
     await b.poll(
-      "document.querySelectorAll('[data-role=user] .otk-file-image img').length===2 && !document.querySelector('.otk-prompt-chip')",
+      "!!document.querySelector('[data-role=user] .otk-file-image img') && !document.querySelector('.otk-prompt-chip')",
     );
     const prompts = sentFrames(b).filter(({ frame }) =>
       frame.method === "session.prompt"
@@ -180,6 +214,7 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
       true,
     );
     await waitForReply(b, session.id, "Second image received.");
+    await imageMessages(2);
     await capture("image-only");
     // New image-only history keeps attachment metadata lazy without a token.
     await b.click("textarea[name=prompt]");
@@ -199,7 +234,7 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
     f.fake.queue({ chunks: ["Recalled image received."] });
     await b.click(".otk-prompt button[type=submit]");
     await b.poll(
-      "document.querySelectorAll('[data-role=user] .otk-file-image img').length===3 && !document.querySelector('.otk-prompt-chip')",
+      "!!document.querySelector('[data-role=user] .otk-file-image img') && !document.querySelector('.otk-prompt-chip')",
     );
     assertEquals(
       sentFrames(b).filter(({ frame }) => frame.method === "history.attachment")
@@ -207,6 +242,8 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
       1,
     );
     await waitForReply(b, session.id, "Recalled image received.");
+    await imageMessages(3);
+    await wheelViewport(b, ".otk-messages", 100000);
     await addImage("paste", "remove.png");
     await b.poll("!!document.querySelector('.otk-prompt-chip img')");
     await b.click('.otk-prompt-chip button[aria-label^="Remove"]');

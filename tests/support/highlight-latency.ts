@@ -67,7 +67,7 @@ export const highlightObservers = `(() => {
     const inspect=(rendered=false)=>{
       if(done)return;
       const began=performance.now();highlightEvidence.reads++;
-      const code=root.querySelector(selector);
+      const code=[...root.querySelectorAll(selector)].find(code=>code.textContent.includes(marker));
       if(code) {
         const source=code.textContent;
         if(passive && source!==previous) {

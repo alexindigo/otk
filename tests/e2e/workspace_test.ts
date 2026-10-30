@@ -14,6 +14,7 @@ import { SidecarTest } from "../support/sidecar.ts";
 import { FreezeProxy } from "../support/freeze-proxy.ts";
 import type { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { wheelViewport } from "../support/message-viewport.ts";
 import {
   assertContentLoaded,
   assertContentReleased,
@@ -618,19 +619,22 @@ test("web history paging preserves viewport and autoscroll follows only the bott
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await openSession(browser, session.id);
     await browser.poll(
-      "document.querySelectorAll('[data-message]').length === 100 && document.querySelector('.otk-messages').scrollTop > 100",
+      "Number(document.querySelector('.otk-message-flow').dataset.messageCount)>=20 && Number(document.querySelector('.otk-message-flow').dataset.messageCount)<103 && document.querySelector('.otk-messages').scrollTop > 100",
     );
     const point = await browser.evaluate<{ x: number; y: number }>(
       "(()=>{const r=document.querySelector('.otk-messages').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
     );
-    await browser.send("Input.dispatchMouseEvent", {
-      type: "mouseWheel",
-      ...point,
-      deltaX: 0,
-      deltaY: -100000,
-    });
-    await browser.poll(
-      "document.querySelectorAll('[data-message]').length === 103 && document.querySelector('.otk-messages').textContent.includes('History row 0')",
+    await waitFor(async () => {
+      await wheelViewport(browser, ".otk-messages", -100000);
+      return await browser.evaluate(
+        "document.querySelector('.otk-message-flow').dataset.messageCount==='103' && document.querySelector('.otk-messages').textContent.includes('History row 0')",
+      );
+    }, Boolean);
+    assert(
+      await browser.evaluate(
+        "document.querySelectorAll('[data-message]').length<103",
+      ),
+      "Acquired history remains windowed",
     );
     const before = await browser.evaluate<number>(
       "document.querySelector('.otk-messages').scrollTop",
@@ -645,8 +649,18 @@ test("web history paging preserves viewport and autoscroll follows only the bott
       `document.querySelector('[data-session="${session.id}"]').dataset.status === 'busy'`,
     );
     olderReply.release();
+    await waitFor(
+      () =>
+        f.oc.request<
+          { info: { role: string; time: { completed?: number } } }[]
+        >(`/session/${session.id}/message`),
+      (rows) =>
+        rows.some((row) =>
+          row.info.role === "assistant" && row.info.time.completed !== undefined
+        ),
+    );
     await browser.poll(
-      `document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle' && !!document.querySelector('[data-role=assistant]')`,
+      `document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle'`,
     );
     const after = await browser.evaluate<{ top: number; gap: number }>(
       "(()=>{const el=document.querySelector('.otk-messages');return {top:el.scrollTop,gap:el.scrollHeight-el.clientHeight-el.scrollTop}})()",
@@ -779,9 +793,24 @@ test("web renders all remaining markdown block and inline kinds from the real ad
     await browser.poll(
       `document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle' && !!document.querySelector('.otk-text table')`,
     );
-    const rendered = await browser.evaluate(
-      "(()=>{const el=document.querySelector('[data-role=assistant] .otk-text');return {heading:el.querySelector('h2')?.textContent,strong:el.querySelector('strong')?.textContent,em:el.querySelector('em')?.textContent,del:el.querySelector('del')?.textContent,code:el.querySelector('code')?.textContent,link:el.querySelector('a')?.getAttribute('rel'),target:el.querySelector('a')?.target,br:!!el.querySelector('br'),quote:el.querySelector('blockquote')?.textContent.trim(),start:el.querySelector('ol')?.start,task:el.querySelector('input[type=checkbox]')?.checked,rule:!!el.querySelector('hr'),cells:[...el.querySelectorAll('td')].map(td=>td.textContent),image:el.querySelector('img')?.alt}})()",
-    );
+    const rendered: Record<string, unknown> = {};
+    await wheelViewport(browser, ".otk-messages", -100000);
+    while (true) {
+      const visible = await browser.evaluate<Record<string, unknown>>(
+        "(()=>{const el=document.querySelector('[data-role=assistant] .otk-text');return {heading:el.querySelector('h2')?.textContent,strong:el.querySelector('strong')?.textContent,em:el.querySelector('em')?.textContent,del:el.querySelector('del')?.textContent,code:el.querySelector('code')?.textContent,link:el.querySelector('a')?.getAttribute('rel'),target:el.querySelector('a')?.target,br:!!el.querySelector('br'),quote:el.querySelector('blockquote')?.textContent.trim(),start:el.querySelector('ol')?.start,task:el.querySelector('input[type=checkbox]')?.checked,rule:!!el.querySelector('hr'),cells:[...el.querySelectorAll('td')].map(td=>td.textContent),image:el.querySelector('img')?.alt}})()",
+      );
+      for (const [key, value] of Object.entries(visible)) {
+        if (
+          value !== undefined && value !== null && value !== false &&
+          (!Array.isArray(value) || value.length)
+        ) rendered[key] = value;
+      }
+      const position = await browser.evaluate<
+        { top: number; end: number; height: number }
+      >("(()=>{const p=document.querySelector('.otk-messages');return{top:p.scrollTop,end:p.scrollHeight-p.clientHeight,height:p.clientHeight}})()");
+      if (position.top >= position.end - 1) break;
+      await wheelViewport(browser, ".otk-messages", position.height / 2);
+    }
     assertEquals(rendered, {
       heading: "Structured content",
       strong: "strong",
