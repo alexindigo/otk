@@ -8,7 +8,12 @@ import {
   openSession,
   waitForReply,
 } from "../support/browser-fixture.ts";
-import { recordTools, runTool } from "../support/rendering.ts";
+import {
+  expandTool,
+  recordTools,
+  runTool,
+  toolRow,
+} from "../support/rendering.ts";
 import { waitFor } from "../support/opencode.ts";
 import type { RawPart } from "@otk/harness-opencode-v1";
 test("R1 bash output is ten lines, expands to thirty, and displays differing cwd", async () => {
@@ -32,6 +37,7 @@ test("R1 bash output is ten lines, expands to thirty, and displays differing cwd
         workdir: join(f.oc.directory, "sub"),
       },
     });
+    await expandTool(browser, "[data-tool=bash]");
     await browser.poll(
       "document.querySelector('[data-tool=bash] .otk-tool-output')?.textContent.split('\\n').length===10",
     );
@@ -42,10 +48,6 @@ test("R1 bash output is ten lines, expands to thirty, and displays differing cwd
       true,
     );
     await browser.screenshot(join(f.oc.root, "r1-bash-collapsed.png"));
-    await browser.click("[data-tool=bash] .otk-tool-toggle");
-    await browser.poll(
-      "!document.querySelector('[data-tool=bash] .otk-tool-body').hidden",
-    );
     await browser.click("[data-tool=bash] .otk-output-toggle");
     await browser.poll(
       "document.querySelector('[data-tool=bash] .otk-tool-output').textContent.split('\\n').length===30",
@@ -116,6 +118,7 @@ test("R4 real read, directory listing, glob, grep, local fetch, skill and generi
         },
       }),
     );
+    await expandTool(browser, toolRow(parts.at(-1)!));
     await browser.poll(
       "document.querySelector('[data-tool=read]')?.textContent.includes('↳ Loaded')",
     );
@@ -125,6 +128,7 @@ test("R4 real read, directory listing, glob, grep, local fetch, skill and generi
         input: { filePath: join(f.oc.directory, "src") },
       }),
     );
+    await expandTool(browser, toolRow(parts.at(-1)!));
     await browser.poll(
       "document.querySelector('[data-search-mode=list]')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('2 entries')",
     );
@@ -133,6 +137,10 @@ test("R4 real read, directory listing, glob, grep, local fetch, skill and generi
         name: "glob",
         input: { pattern: "*.txt", path: join(f.oc.directory, "src") },
       }),
+    );
+    await expandTool(browser, toolRow(parts.at(-1)!));
+    await browser.poll(
+      "document.querySelector('[data-search-mode=glob]')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('1 match') && !document.querySelector('[data-search-mode=glob]')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('1 matches')",
     );
     parts.push(
       await runTool(f, browser, s.id, {
@@ -144,8 +152,9 @@ test("R4 real read, directory listing, glob, grep, local fetch, skill and generi
         },
       }),
     );
+    await expandTool(browser, toolRow(parts.at(-1)!));
     await browser.poll(
-      "['glob','grep'].every(mode=>document.querySelector('[data-search-mode='+mode+']')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('1 match') && !document.querySelector('[data-search-mode='+mode+']')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('1 matches'))",
+      "document.querySelector('[data-search-mode=grep]')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('1 match') && !document.querySelector('[data-search-mode=grep]')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('1 matches')",
     );
     const url = `http://127.0.0.1:${(http.addr as Deno.NetAddr).port}/fixture`;
     parts.push(
@@ -173,11 +182,11 @@ test("R4 real read, directory listing, glob, grep, local fetch, skill and generi
     );
     await browser.click(".otk-display-menu > button");
     await browser.click("input[name=genericToolOutput]");
+    await browser.click(".otk-display-menu > button");
+    await expandTool(browser, toolRow(parts.at(-1)!));
     await browser.poll(
       "document.querySelector('[data-tool=external] .otk-tool-output')?.textContent==='first\\nsecond\\nthird'",
     );
-    await browser.click(".otk-display-menu > button");
-    await browser.click("[data-tool=external] .otk-tool-toggle");
     await browser.click("[data-tool=external] .otk-output-toggle");
     await browser.poll(
       "document.querySelector('[data-tool=external] .otk-tool-output')?.textContent.includes('fifth')",

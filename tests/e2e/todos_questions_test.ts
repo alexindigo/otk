@@ -5,6 +5,7 @@ import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 import type { RawPart } from "@otk/harness-opencode-v1";
+import { expandTool } from "../support/rendering.ts";
 test("R4 todo checklist states and read-only question answers from real opencode", async () => {
   const f = await browserFixture();
   try {
@@ -22,6 +23,7 @@ test("R4 todo checklist states and read-only question answers from real opencode
     });
     await browser.type("textarea[name=prompt]", "Record the checklist");
     await browser.key("Enter");
+    await expandTool(browser, "[data-tool=todo]");
     await browser.poll(
       "document.querySelectorAll('.otk-todos li').length === 4",
     );
@@ -56,6 +58,7 @@ test("R4 todo checklist states and read-only question answers from real opencode
       () => f.oc.request<{ id: string }[]>("/question"),
       (items) => items.length === 1,
     );
+    await expandTool(browser, "[data-tool=question]");
     await browser.poll(
       "document.querySelector('.otk-questions')?.textContent.includes('Awaiting answer')",
     );

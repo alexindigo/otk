@@ -3,7 +3,7 @@ import { test } from "../support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { WsClient } from "../support/ws-client.ts";
 import { join } from "@std/path";
-import { runTool } from "../support/rendering.ts";
+import { expandTool, runTool } from "../support/rendering.ts";
 import {
   browserFixture,
   openSession,
@@ -168,6 +168,14 @@ test("D5 actual session/code/diff paint changes with no worker work; preview/can
       body: { title: "Theme consumers" },
     });
     const server = await f.sidecar(), browser = await f.browser("about:blank");
+    // This proof compares simultaneous visible code/diff consumers, not cached
+    // DOM outside the transcript window.
+    await browser.send("Emulation.setDeviceMetricsOverride", {
+      width: 1600,
+      height: 1200,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
     await browser.send("Page.addScriptToEvaluateOnNewDocument", {
       source: `(() => {
       globalThis.themeWorkerEvidence = { created:0, sent:0, received:0, terminated:0 };
@@ -193,6 +201,7 @@ test("D5 actual session/code/diff paint changes with no worker work; preview/can
         newString: "newPaint",
       },
     });
+    await expandTool(browser, "[data-tool=edit]");
     f.fake.queue({
       chunks: [
         "Theme consumer text.\n\n```ts\n// Theme comment\nconst orange: number = 7;\nfunction run(name: string) { return name + orange; }\n```\n",

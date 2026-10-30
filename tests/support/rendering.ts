@@ -6,6 +6,31 @@ import type { Script } from "./fake-llm.ts";
 import { waitFor } from "./opencode.ts";
 import type { browserFixture } from "./browser-fixture.ts";
 export type RenderingFixture = Awaited<ReturnType<typeof browserFixture>>;
+export function toolRow(part: RawPart): string {
+  return `[data-message="${part.messageID}"] .otk-tool-line`;
+}
+/** Exercise lazy tool bodies through their real disclosure, not hidden DOM. */
+export async function expandTool(
+  browser: Cdp,
+  selector: string,
+): Promise<void> {
+  const toggle = `${selector} .otk-tool-toggle`;
+  await browser.poll(`!!document.querySelector(${JSON.stringify(toggle)})`);
+  if (
+    await browser.evaluate(
+      `document.querySelector(${
+        JSON.stringify(toggle)
+      }).getAttribute('aria-expanded')==='false'`,
+    )
+  ) await browser.click(toggle);
+  await browser.poll(
+    `document.querySelector(${
+      JSON.stringify(toggle)
+    }).getAttribute('aria-expanded')==='true' && !!document.querySelector(${
+      JSON.stringify(selector + " .otk-tool-body")
+    })`,
+  );
+}
 export async function runTool(
   f: RenderingFixture,
   browser: Cdp,

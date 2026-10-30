@@ -8,6 +8,7 @@ import {
   waitForReply,
 } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { expandTool } from "../support/rendering.ts";
 
 const questions = [
   {
@@ -197,10 +198,11 @@ test("U15 own-answer Enter and all question transitions focus visible controls; 
       await b.poll(
         "!document.querySelector('.otk-question-dock') && document.activeElement===document.querySelector('textarea[name=prompt]')",
       );
+      await waitForReply(b, session.id, "Answers recorded.");
+      await expandTool(b, "[data-tool=question]");
       await b.poll(
         "document.querySelector('.otk-questions').textContent.includes('My own details')",
       );
-      await waitForReply(b, session.id, "Answers recorded.");
       await b.key("Tab");
       for (
         const selector of [

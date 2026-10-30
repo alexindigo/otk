@@ -3,7 +3,8 @@ import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
-import { runTool } from "../support/rendering.ts";
+import { expandTool, runTool, toolRow } from "../support/rendering.ts";
+import { revealViewportElement } from "../support/message-viewport.ts";
 
 test("tool headers, bodies and path-list results share project context, including outside paths and reload", async () => {
   const f = await browserFixture({
@@ -36,15 +37,19 @@ test("tool headers, bodies and path-list results share project context, includin
     });
     const server = await f.sidecar(), browser = await f.browser(server.url);
     await openSession(browser, s.id);
-    const checks: { expected: string; result?: string; text?: string }[] = [];
-    let ordinal = 0;
+    const checks: {
+      selector: string;
+      expected: string;
+      result?: string;
+      text?: string;
+    }[] = [];
     for (const outside of [false, true]) {
       const directory = outside
         ? join(f.oc.root, "outside")
         : join(f.oc.directory, "src");
       for (const kind of ["read", "list", "glob"] as const) {
         const file = kind === "read" ? join(directory, "probe.txt") : directory;
-        await runTool(
+        const part = await runTool(
           f,
           browser,
           s.id,
@@ -52,18 +57,12 @@ test("tool headers, bodies and path-list results share project context, includin
             ? { name: "glob", input: { pattern: "*.txt", path: directory } }
             : { name: "read", input: { filePath: file } },
         );
-        ordinal++;
+        const selector = toolRow(part);
         await browser.poll(
-          `document.querySelectorAll('.otk-tool-line')[${
-            ordinal - 1
-          }]?.dataset.toolStatus==='completed'`,
+          `document.querySelector(${
+            JSON.stringify(selector)
+          })?.dataset.toolStatus==='completed'`,
         );
-        await browser.evaluate(
-          `document.querySelectorAll('.otk-tool-line')[${
-            ordinal - 1
-          }].setAttribute('data-path-probe', '${ordinal}')`,
-        );
-        const selector = `[data-path-probe="${ordinal}"]`;
         const expected = outside
           ? file
           : kind === "read"
@@ -74,12 +73,7 @@ test("tool headers, bodies and path-list results share project context, includin
             JSON.stringify(selector + " .otk-tool-target")
           })?.textContent===${JSON.stringify(expected)}`,
         );
-        await browser.click(`${selector} .otk-tool-toggle`);
-        await browser.poll(
-          `!document.querySelector(${
-            JSON.stringify(selector + " .otk-tool-body")
-          }).hidden`,
-        );
+        await expandTool(browser, selector);
         assertEquals(
           await browser.evaluate(
             `document.querySelector(${
@@ -143,7 +137,7 @@ test("tool headers, bodies and path-list results share project context, includin
           );
           assertEquals(text.includes(f.oc.directory), false);
         }
-        checks.push({ expected, result, text: sourceText });
+        checks.push({ selector, expected, result, text: sourceText });
       }
     }
     await runTool(f, browser, s.id, {
@@ -163,26 +157,21 @@ test("tool headers, bodies and path-list results share project context, includin
     );
     await browser.reload();
     await openSession(browser, s.id);
-    for (const [index, check] of checks.entries()) {
+    for (const check of checks) {
+      const selector = check.selector;
+      await revealViewportElement(browser, ".otk-messages", selector);
       await browser.poll(
-        `document.querySelectorAll('.otk-tool-line')[${index}]?.dataset.toolStatus==='completed'`,
+        `document.querySelector(${
+          JSON.stringify(selector)
+        })?.dataset.toolStatus==='completed'`,
       );
       const actual = await browser.evaluate<string>(
-        `document.querySelectorAll('.otk-tool-target')[${index}].textContent`,
+        `document.querySelector(${
+          JSON.stringify(selector + " .otk-tool-target")
+        }).textContent`,
       );
       assertEquals(actual, check.expected);
-      await browser.evaluate(
-        `document.querySelectorAll('.otk-tool-line')[${index}].setAttribute('data-path-probe', '${
-          index + 1
-        }')`,
-      );
-      const selector = `[data-path-probe="${index + 1}"]`;
-      await browser.click(`${selector} .otk-tool-toggle`);
-      await browser.poll(
-        `!document.querySelector(${
-          JSON.stringify(selector + " .otk-tool-body")
-        }).hidden`,
-      );
+      await expandTool(browser, selector);
       assertEquals(
         await browser.evaluate(
           `document.querySelector(${

@@ -6,6 +6,7 @@ import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { selectionGeometry } from "../support/selection-geometry.ts";
 import { waitFor } from "../support/opencode.ts";
+import { expandTool } from "../support/rendering.ts";
 const panel = ".otk-tabs-panel[data-active=true]";
 const tabs = ".otk-question-dock .otk-tabs-strip";
 export const questions = [
@@ -200,6 +201,7 @@ test("P1 question tabs, keyboard choices, multi/custom answers, confirmation and
       `document.querySelector('${tabs} button:last-child').getAttribute('aria-selected')==='true'`,
     );
     await browser.click(".otk-question-actions .otk-primary");
+    await expandTool(browser, "[data-tool=question]");
     await browser.poll(
       "!document.querySelector('.otk-question-dock') && document.querySelector('.otk-questions').textContent.includes('Typed') && document.querySelector('.otk-questions').textContent.includes('Tools, Custom detail')",
     );
@@ -248,6 +250,7 @@ test("P1 question tabs, keyboard choices, multi/custom answers, confirmation and
     );
     await browser.click(`${tabs} [role=tab]:first-child`);
     await browser.key("Escape");
+    await expandTool(browser, "[data-tool=question][data-tool-status=denied]");
     await browser.poll(
       "!document.querySelector('.otk-question-dock') && document.querySelector('[data-tool-status=denied] .otk-questions dd')?.textContent==='Dismissed'",
     );
