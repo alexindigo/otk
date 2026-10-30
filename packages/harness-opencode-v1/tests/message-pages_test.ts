@@ -219,6 +219,50 @@ Deno.test("a rollback observed while initial session metadata is held retires th
   await assertRejects(() => reading);
 });
 
+Deno.test("ordinary observations during initial metadata acquisition preserve page authority and current metadata", async () => {
+  const settings = cfg(), held = Promise.withResolvers<Session>();
+  const raw: Session = {
+    id: "s",
+    directory: "/p",
+    projectID: "p",
+    title: "S",
+    time: { created: 1, updated: 1 },
+  };
+  const replay = new ContentReplay({
+    ...settings.messages,
+    nonce: () => crypto.randomUUID(),
+    emit() {},
+  });
+  let reads = 0;
+  const transcript = new Transcript({
+    replay,
+    buffers: new StreamBuffers(),
+    reader: new Messages(
+      new Client(settings.harness, () => Promise.resolve(Response.json([]))),
+      () => "/p",
+    ),
+    raw: () => {
+      reads++;
+      return held.promise;
+    },
+    info: (value) => Promise.resolve(mapSession(value)),
+    decorate: (message) => message,
+    summaries: () => ({}),
+  });
+  const reading = transcript.page("opcv1-s");
+  transcript.observe({
+    ...raw,
+    title: "Renamed",
+    time: { created: 1, updated: 2 },
+  });
+  held.resolve(raw);
+  const page = await reading;
+  assertEquals(page.session.title, "Renamed");
+  assertEquals(page.clock.epoch, page.from.epoch);
+  assertEquals(page.version, { generation: 0, revision: 0 });
+  assertEquals(reads, 1);
+});
+
 Deno.test("cold session observations do not become a second native session index", async () => {
   const settings = cfg();
   const raw: Session = {

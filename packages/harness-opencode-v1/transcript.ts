@@ -83,6 +83,7 @@ export class Transcript {
       promise: Promise<Baseline>;
       users: number;
       settled: boolean;
+      observed?: Session;
     }
   >();
   constructor(
@@ -116,12 +117,23 @@ export class Transcript {
   ) {}
   observe(raw: Session): void {
     const id = ids.encode(raw.id), previous = this.#baselines.get(id);
-    if (!previous && !this.#opening.has(id)) return;
-    if (previous && previous.raw.revert?.messageID !== raw.revert?.messageID) {
+    const opening = this.#opening.get(id);
+    if (!previous && !opening) return;
+    if (!previous && opening) {
+      // An update is not a body boundary. Keep the newest event metadata with
+      // the acquisition owner; compare its cutoff when the raw read settles.
+      if (
+        !opening.observed ||
+        opening.observed.revert?.messageID === raw.revert?.messageID
+      ) {
+        opening.observed = raw;
+        return;
+      }
       this.invalidate(id);
       this.options.buffers.removeSession(id);
-    } else if (!previous && this.#opening.has(id)) {
-      this.release(id);
+    }
+    if (previous && previous.raw.revert?.messageID !== raw.revert?.messageID) {
+      this.invalidate(id);
       this.options.buffers.removeSession(id);
     }
     const current = this.#baselines.get(id);
@@ -172,6 +184,7 @@ export class Transcript {
         controller,
         users: 0,
         settled: false,
+        observed: undefined as Session | undefined,
         promise: Promise.resolve(undefined as unknown as Baseline),
       };
       this.#opening.set(id, owner);
@@ -187,6 +200,16 @@ export class Transcript {
             "cursor-stale",
             "Message baseline was retired",
           );
+        }
+        if (owner.observed) {
+          if (owner.observed.revert?.messageID !== raw.revert?.messageID) {
+            this.invalidate(id);
+            this.options.buffers.removeSession(id);
+            throw new HarnessError("cursor-stale", "Message boundary changed");
+          }
+          if (owner.observed.time.updated >= raw.time.updated) {
+            raw = owner.observed;
+          }
         }
         const baseline: Baseline = { raw, epoch, controller };
         this.#baselines.set(id, baseline);
