@@ -53,10 +53,14 @@ export class SessionErrors {
     } else this.#states.delete(sessionID);
     this.publish(sessionID, structuredClone(state));
   }
-  begin(sessionID: string, operation: ErrorRequest["operation"]): ErrorRequest {
+  begin(
+    sessionID: string,
+    operation: ErrorRequest["operation"],
+    requestID?: string,
+  ): ErrorRequest {
     this.register(sessionID);
     const request = {
-      id: `request-${++this.#requestID}`,
+      id: requestID ?? `request-${++this.#requestID}`,
       sessionID,
       operation,
     };

@@ -4,19 +4,23 @@ import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
 import type { ErrorRequest } from "./errors.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
+export interface NativeLaunch {
+  admitted: Promise<void>;
+  settled: Promise<void>;
+}
 export type Launch = (
   sessionID: string,
   operation: ErrorRequest["operation"],
   path: string,
   options: Parameters<Client["request"]>[1],
-) => void;
+) => NativeLaunch | void;
 export function shell(
   client: Client,
   directory: Directory,
   launch: Launch,
 ): ShellCapability {
   return {
-    async shell(input) {
+    async shell(input, operation) {
       const dir = await directory.resolve(input.sessionID);
       const agent = input.agent ??
         (await client.json<{ name: string; hidden?: boolean; mode: string }[]>(
@@ -29,14 +33,16 @@ export function shell(
           "No visible primary agent available",
         );
       }
-      launch(
+      const launched = launch(
         input.sessionID,
         "shell",
         `/session/${encodeURIComponent(ids.decode(input.sessionID))}/shell`,
         {
           method: "POST",
           query: { directory: dir },
-          timeout: null,
+          ...(operation
+            ? { classification: "effect" as const, operation }
+            : { timeout: null }),
           body: {
             command: input.command,
             agent,
@@ -51,6 +57,7 @@ export function shell(
           },
         },
       );
+      if (operation && launched) await launched.settled;
     },
   };
 }

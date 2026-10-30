@@ -217,6 +217,56 @@ export function loadServiceConfig(
       }
     }
   }
+  for (const section of ["requests", "connection"] as const) {
+    const values = tree[section];
+    if (!isObject(values)) continue;
+    for (const [key, value] of Object.entries(values)) {
+      if (
+        typeof value === "number" &&
+        (!Number.isSafeInteger(value) || value <= 0)
+      ) {
+        errors.push(
+          `${section}.${key} (${
+            envName(`${section}.${key}`)
+          }): expected positive safe integer`,
+        );
+      }
+    }
+  }
+  const connection = tree.connection;
+  if (isObject(connection)) {
+    if (Number(connection.retrymax) < Number(connection.retrybase)) {
+      errors.push(
+        "connection.retrymax (OTK_CONNECTION_RETRYMAX): must be >= connection.retrybase",
+      );
+    }
+    if (Number(connection.silencems) <= Number(connection.pingms)) {
+      errors.push(
+        "connection.silencems (OTK_CONNECTION_SILENCEMS): must exceed connection.pingms",
+      );
+    }
+  }
+  const requests = tree.requests;
+  if (isObject(requests)) {
+    if (Number(requests.inputbytes) < Number(requests.maxpending)) {
+      errors.push(
+        "requests.inputbytes (OTK_REQUESTS_INPUTBYTES): must hold at least one byte per pending key",
+      );
+    }
+    if (Number(requests.resultbytes) < Number(requests.resumebatch)) {
+      errors.push(
+        "requests.resultbytes (OTK_REQUESTS_RESULTBYTES): must hold at least one byte per resume item",
+      );
+    }
+  }
+  if (
+    isObject(tree.harness) && typeof tree.harness.requestms === "number" &&
+    tree.harness.requestms <= 0
+  ) {
+    errors.push(
+      "harness.requestms (OTK_HARNESS_REQUESTMS): expected positive safe integer",
+    );
+  }
   if (errors.length) throw new ConfigError(errors);
   return {
     config: tree as unknown as ServiceConfig,

@@ -12,7 +12,7 @@ export function prompt(
   cancel: (id: string) => void,
 ): PromptCapability {
   return {
-    async prompt(input) {
+    async prompt(input, operation) {
       const dir = await directory.resolve(input.sessionID);
       await client.request(
         `/session/${
@@ -20,6 +20,9 @@ export function prompt(
         }/prompt_async`,
         {
           method: "POST",
+          ...(operation
+            ? { classification: "effect" as const, operation }
+            : {}),
           query: { directory: dir },
           body: {
             parts: await mapPromptParts(input.parts, dir),
@@ -32,11 +35,14 @@ export function prompt(
         },
       );
     },
-    async abort(id) {
+    async abort(id, operation) {
       await client.json(
         `/session/${encodeURIComponent(ids.decode(id))}/abort`,
         {
           method: "POST",
+          ...(operation
+            ? { classification: "effect" as const, operation }
+            : {}),
           query: { directory: directory.cached(id) },
         },
       );

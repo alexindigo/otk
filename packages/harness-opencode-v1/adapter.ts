@@ -666,31 +666,39 @@ export class OpencodeV1Adapter implements Harness {
     operation: Parameters<Launch>[1],
     path: string,
     options: Parameters<Client["request"]>[1],
-  ): void {
+  ): ReturnType<Launch> {
     if (this.#stopped) throw new HarnessError("stopped", "Harness is stopped");
     const controller = new AbortController();
-    const token = this.#errors.begin(sessionID, operation);
-    const request = this.client.json(path, {
+    const token = this.#errors.begin(
+      sessionID,
+      operation,
+      options?.operation?.key.key,
+    );
+    const settled = this.client.json(path, {
       ...options,
       signal: controller.signal,
-      timeout: null,
-    }).then(() => this.#errors.settled(token)).catch((error) => {
-      if (!this.#stopped && !controller.signal.aborted) {
-        this.#errors.http(
-          token,
-          error instanceof HttpFailure
-            ? { ...error.detail, status: error.status }
-            : {
-              message: errorMessage(error),
-              kind: normalizeError(error).name,
-            },
-        );
-      }
-    }).finally(() => {
+      ...(options?.classification ? {} : { timeout: null }),
+    }).then(() => {});
+    const request = settled.then(() => this.#errors.settled(token)).catch(
+      (error) => {
+        if (!this.#stopped && !controller.signal.aborted) {
+          this.#errors.http(
+            token,
+            error instanceof HttpFailure
+              ? { ...error.detail, status: error.status }
+              : {
+                message: errorMessage(error),
+                kind: normalizeError(error).name,
+              },
+          );
+        }
+      },
+    ).finally(() => {
       this.#errors.settled(token);
       this.#commands.delete(controller);
     });
     this.#commands.set(controller, { sessionID, task: request });
+    return { admitted: settled, settled };
   }
   #abortCommands(sessionID?: string): void {
     for (const [controller, request] of this.#commands) {

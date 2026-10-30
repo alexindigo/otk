@@ -11,6 +11,8 @@ export interface OpencodeV1Config {
     db: string;
     heartbeattimeout: number;
     reconnectmax: number;
+    /** Required when composing classified request execution. */
+    requestms?: number;
   };
   index: { days: number };
 }

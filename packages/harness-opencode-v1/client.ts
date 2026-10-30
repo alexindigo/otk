@@ -4,6 +4,60 @@ import { HarnessError } from "@otk/harness";
 import { errorMessage } from "@otk/protocol";
 import { finiteResponse } from "./finite-response.ts";
 import { NativeReadiness } from "./readiness.ts";
+import {
+  type OperationContext,
+  OperationFailure,
+  type PublicFailure,
+} from "@otk/protocol";
+
+export interface NativeRequestOptions {
+  method?: string;
+  body?: unknown;
+  query?: Record<string, string | number | undefined>;
+  signal?: AbortSignal;
+  stream?: boolean;
+  timeout?: number | null;
+  classification?: "read" | "effect" | "stream";
+  operation?: OperationContext;
+}
+export class NativeRequestFailure extends OperationFailure {
+  readonly failure: PublicFailure;
+  constructor(
+    outcome: "unknown" | "unavailable" | "rejected",
+    readonly original: unknown,
+    code: string,
+  ) {
+    super(outcome, code, original);
+    this.failure = {
+      code,
+      retry: outcome === "unknown"
+        ? "none"
+        : outcome === "unavailable"
+        ? "same-intent"
+        : "new-intent",
+      diagnosticID: crypto.randomUUID(),
+    };
+  }
+}
+function classifyNative(
+  cause: unknown,
+  classification: NativeRequestOptions["classification"],
+): NativeRequestFailure {
+  if (cause instanceof NativeRequestFailure) return cause;
+  if (
+    cause instanceof HttpFailure && cause.status >= 400 && cause.status < 500
+  ) {
+    const code = cause.detail.kind === "SessionBusyError"
+      ? "session.busy"
+      : cause.status === 404
+      ? "resource.missing"
+      : "native.rejected";
+    return new NativeRequestFailure("rejected", cause, code);
+  }
+  return classification === "effect"
+    ? new NativeRequestFailure("unknown", cause, "native.unknown")
+    : new NativeRequestFailure("unavailable", cause, "native.unavailable");
+}
 // Native diagnostics name opaque resources; display copy never interpolates them.
 const nativeMessages = new Map<string, string>([
   ["SessionBusyError", "The session is working. Try again when it finishes."],
@@ -60,8 +114,10 @@ export class HttpFailure extends HarnessError {
   constructor(
     readonly status: number,
     readonly detail: { message: string; kind?: string; ref?: string },
+    original?: unknown,
   ) {
     super(`harness_${status}`, detail.message.slice(0, 1024));
+    this.cause = original;
   }
 }
 export class Client {
@@ -88,14 +144,36 @@ export class Client {
   }
   async request(
     path: string,
-    options: {
-      method?: string;
-      body?: unknown;
-      query?: Record<string, string | number | undefined>;
-      signal?: AbortSignal;
-      stream?: boolean;
-      timeout?: number | null;
-    } = {},
+    options: NativeRequestOptions = {},
+  ): Promise<Response> {
+    if (!options.classification) return await this.#request(path, options);
+    const classification = options.classification;
+    if (options.timeout !== undefined || options.stream !== undefined) {
+      throw new TypeError("Classified requests use the injected native policy");
+    }
+    if (
+      classification === "read" &&
+      (!Number.isSafeInteger(this.cfg.requestms) || this.cfg.requestms! <= 0)
+    ) throw new TypeError("Native read policy is required");
+    const signal = options.operation
+      ? options.signal
+        ? AbortSignal.any([options.signal, options.operation.signal])
+        : options.operation.signal
+      : options.signal;
+    try {
+      return await this.#request(path, {
+        ...options,
+        signal,
+        stream: classification === "stream",
+        timeout: classification === "read" ? this.cfg.requestms : null,
+      });
+    } catch (cause) {
+      throw classifyNative(cause, classification);
+    }
+  }
+  async #request(
+    path: string,
+    options: NativeRequestOptions = {},
   ): Promise<Response> {
     const headers = new Headers();
     if (this.cfg.password) {
@@ -107,7 +185,7 @@ export class Client {
     if (options.body !== undefined) {
       headers.set("Content-Type", "application/json");
     }
-    const read = () => {
+    const read = async () => {
       // A native deadline begins at I/O admission, not while waiting for permission.
       let signal = options.signal;
       if (!options.stream && options.timeout !== null) {
@@ -115,6 +193,9 @@ export class Client {
         signal = signal ? AbortSignal.any([signal, deadline]) : deadline;
       }
       signal?.throwIfAborted();
+      if (options.classification === "effect") {
+        await options.operation?.beforeEffect();
+      }
       return this.fetcher(this.url(path, options.query), {
         method: options.method || "GET",
         headers,
@@ -123,15 +204,19 @@ export class Client {
           : JSON.stringify(options.body),
         signal,
       }).then((value) =>
-        this.admission && !options.stream ? finiteResponse(value) : value
+        (this.admission || options.classification) && !options.stream
+          ? finiteResponse(value)
+          : value
       );
     };
-    const response = options.stream
-      ? await this.wait(read())
-      : await this.readiness.run(
-        options.signal ?? new AbortController().signal,
-        read,
-      );
+    const exchange = options.stream ? this.wait(read()) : this.readiness.run(
+      options.signal ?? new AbortController().signal,
+      read,
+    );
+    const response =
+      await (options.operation?.wait
+        ? options.operation.wait(exchange)
+        : exchange);
     if (!response.ok) {
       const text = await this.wait(response.text());
       const fallback = `Request failed (HTTP ${response.status}).`;
@@ -182,7 +267,7 @@ export class Client {
         message: displayMessage(kind, message, fallback, identities),
         ...(kind ? { kind } : {}),
         ...(ref ? { ref } : {}),
-      });
+      }, text);
     }
     return response;
   }
@@ -190,9 +275,16 @@ export class Client {
     path: string,
     options: Parameters<Client["request"]>[1] = {},
   ): Promise<T> {
-    const response = await this.request(path, options);
-    return response.status === 204
-      ? undefined as T
-      : await this.wait(response.json());
+    try {
+      const response = await this.request(path, options);
+      return response.status === 204
+        ? undefined as T
+        : await this.wait(response.json());
+    } catch (cause) {
+      if (options.classification) {
+        throw classifyNative(cause, options.classification);
+      }
+      throw cause;
+    }
   }
 }

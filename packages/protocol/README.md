@@ -1,5 +1,16 @@
 # @otk/protocol
 
+The additive request-service contracts export `RequestRef`, `RequestControl`,
+`RequestEvent`, progress/failure facts and injected request policies
+independently of the currently selected wire union. `RequestReceipts` is
+declaration-mergeable: features contribute exact allowlisted metadata rather
+than arbitrary results. `OperationContext` carries action identity, lifecycle
+cancellation, progress, effect fence and typed checkpoint ports.
+`OperationFailure` distinguishes a definite rejection from unavailable reads and
+unknown effect outcomes; its cause is diagnostic. `canonicalRequest` rejects
+unsupported/nonfinite JSON inputs and `requestFingerprint` hashes their equality
+representation asynchronously.
+
 Harness-neutral OTK wire contracts and shared helpers, with no runtime
 dependencies. This package does not connect to a harness or sidecar, parse
 markdown, store data, or render a UI.

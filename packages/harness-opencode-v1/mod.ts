@@ -19,7 +19,13 @@ export { DigestNativeDb } from "./digest-db.ts";
 export type { DigestHeader } from "./digest-db.ts";
 export { History } from "./history.ts";
 export { BootstrapDb } from "./db.ts";
-export { Client, HttpFailure } from "./client.ts";
+export {
+  Client,
+  HttpFailure,
+  NativeRequestFailure,
+  type NativeRequestOptions,
+} from "./client.ts";
+export type { NativeLaunch } from "./shell.ts";
 export { consumeEvents } from "./events.ts";
 export { envelopeType } from "./envelope.ts";
 export { Backoff, Watchdog } from "./watchdog.ts";

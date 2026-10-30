@@ -1,5 +1,49 @@
 # @otk/client
 
+## Request event consumers
+
+`RequestTracker` is the framework-free long-lived owner for request-event
+transports. Inject `send`, optional tab identity, server identity, metadata
+storage and feature-owned read/mutation classification. `connect(window, batch)`
+resumes captured work in bounded batches before callers start dependent work.
+`disconnect()` changes connection state without rejecting pending promises. An
+optional opaque principal identity on `connect` keeps another identity's pending
+operations authentication-required until their original identity returns.
+`receive(event)` handles correlated acceptance, sequence snapshots, progress and
+results. A missing admission in a live window resupplies the same captured
+payload and key; an expired unknown window cannot become a new execution.
+
+`start(method, params, options)` returns a typed `Operation`: observable state,
+`result`, same-intent `retry` and subscriber `release`. Reservation happens
+before publication/transport. Payloads are captured as JSON and cannot be
+changed by subsequent edits. Read release is a silent `RequestReleased`;
+mutation release detaches its surface while retaining the tracked outcome.
+Metadata storage never contains params, drafts, credentials or result bodies.
+Restored operations with no captured input remain input-required.
+`IntentGroup.step(name)` allocates each child identity once for composed
+intents.
+
+`new Rpc(legacySend, tracker)` composes the typed compatibility facade over that
+owner; `start` supplies handles, `call` delegates to the result, and `receive`
+accepts request events. Both `AbortSignal` and `RequestOptions` remain
+supported. Without an injected tracker, the selected legacy transport stays
+coherent.
+
+`HttpRequests` supplies an HTTP event transport over the same tracker. It sends
+envelopes and private receipt headers, then consumes held NDJSON events. It owns
+its fetch lifetimes and same-key reconnects; liveness does not abort a slow
+request or settle it as failed. Inject retry/liveness policy explicitly after
+discovery, with no hidden bootstrap deadline. Stop joins owned transport work.
+Lost admission delivery reattaches by receipt without submitting credential
+input again. A reset bootstrap receipt remains input-required; feature
+composition can re-read configured state or offer an explicit fresh sign-in.
+
+`FailurePresenter` is an empty feature-extensible registry for safe `Feedback`.
+Unknown failures use fixed copy. `RequestFailure` carries structured public
+facts and a fixed message; `localFailure` reports its original cause to an
+injected diagnostic port rather than rendering it. Views consume feedback
+data/callbacks, not raw exceptions or method names.
+
 Framework-free OTK networking, RPC and state. Production code depends only on
 `@otk/protocol`. No Solid runtime is required. LGPL-3.0-only.
 

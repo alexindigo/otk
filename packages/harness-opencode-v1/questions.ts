@@ -28,7 +28,7 @@ export function questions(
         belongsToSession(request.sessionID, sessionID, entry)
       ).sort((a, b) => a.id.localeCompare(b.id));
     },
-    async answerQuestion(requestID, answers) {
+    async answerQuestion(requestID, answers, operation) {
       const owner = owners.get(requestID);
       if (!owner) {
         throw new HarnessError("question", "Question is no longer pending");
@@ -60,6 +60,9 @@ export function questions(
         }`,
         {
           method: "POST",
+          ...(operation
+            ? { classification: "effect" as const, operation }
+            : {}),
           query: { directory: dir },
           ...(answers ? { body: { answers } } : {}),
         },

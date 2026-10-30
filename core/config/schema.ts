@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { DigestPolicy } from "@otk/harness";
-import type { MessagePolicy } from "@otk/protocol";
+import type {
+  ClientRequestPolicy,
+  MessagePolicy,
+  RequestPolicy,
+} from "@otk/protocol";
 export type LeafType = "string" | "int" | "float" | "bool" | "list";
 export type Schema = { [node: string]: LeafType | Schema };
 export const SERVICE_SCHEMA: Schema = {
@@ -24,6 +28,26 @@ export const SERVICE_SCHEMA: Schema = {
     db: "string",
     heartbeattimeout: "int",
     reconnectmax: "int",
+    requestms: "int",
+  },
+  requests: {
+    windowms: "int",
+    retentionms: "int",
+    maxpending: "int",
+    inputbytes: "int",
+    resultbytes: "int",
+    resumebatch: "int",
+    sweepbatch: "int",
+    livenessms: "int",
+    stoppingms: "int",
+  },
+  connection: {
+    helloms: "int",
+    pingms: "int",
+    silencems: "int",
+    httpms: "int",
+    retrybase: "int",
+    retrymax: "int",
   },
   index: { days: "int" },
   messages: {
@@ -68,8 +92,38 @@ export interface ServiceConfig {
     db: string;
     heartbeattimeout: number;
     reconnectmax: number;
+    requestms: number;
+  };
+  requests: RequestPolicy;
+  connection: {
+    helloms: number;
+    pingms: number;
+    silencems: number;
+    httpms: number;
+    retrybase: number;
+    retrymax: number;
   };
   index: { days: number };
   digest: DigestPolicy;
   messages: MessagePolicy;
+}
+/** Explicit safe subset; never serialize the service config into welcome/HTTP. */
+export function clientRequestPolicy(
+  cfg: Pick<ServiceConfig, "requests" | "connection">,
+): ClientRequestPolicy {
+  const { livenessms, stoppingms, resumebatch, maxpending, inputbytes } =
+    cfg.requests;
+  const { httpms, pingms, silencems, retrybase, retrymax } = cfg.connection;
+  return {
+    livenessms,
+    stoppingms,
+    resumebatch,
+    maxpending,
+    inputbytes,
+    httpms,
+    pingms,
+    silencems,
+    retrybase,
+    retrymax,
+  };
 }

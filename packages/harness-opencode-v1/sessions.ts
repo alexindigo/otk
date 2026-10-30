@@ -40,7 +40,7 @@ export function sessions(
       );
       return raw.map(mapSession).sort((a, b) => a.id.localeCompare(b.id));
     },
-    async createSession(input): Promise<ContentSession> {
+    async createSession(input, operation): Promise<ContentSession> {
       const { directory, parentID, ...rest } = input;
       const body = {
         ...rest,
@@ -49,6 +49,9 @@ export function sessions(
       return mapSession(
         await client.json<Session>("/session", {
           method: "POST",
+          ...(operation
+            ? { classification: "effect" as const, operation }
+            : {}),
           query: { directory },
           body,
         }),

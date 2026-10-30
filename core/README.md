@@ -1,5 +1,57 @@
 # OTK application core
 
+## Resumable request services
+
+`RpcRegistry.prepare(method, params)` validates a feature's input without
+running its handler. A registration can contribute `execution`: kind, target
+scope, explicit metadata receipt encoder and recovery. Generic
+registry/coordinator machinery imports no feature list. Existing in-process
+`dispatch` remains usable.
+
+`RequestCoordinator` composes a prepared registry, `Requests` repository and
+injected `RequestPolicy`. Call `start()` before admission and join `stop()`
+before closing storage. `window()` issues admission windows.
+`accept(principal, control,
+recipient)` acknowledges an admitted intent before a
+later macrotask executes it. Principal, tab identity and intent key form its
+duplicate fence; attempt IDs and recipient sockets do not. Different wire
+payloads cannot share an intent key. `detach` removes delivery only. Release
+cancels the last read subscriber, while a native mutation remains tracked.
+`idle()` joins current owned work, not an assertion that a genuinely uncertain
+native outcome has become terminal.
+
+Local registrations use `ctx.execution.local(run, encode)`: pass its
+`StoreWrite` to every metadata mutation so effect and completion receipt commit
+together. Feature-contributed `RequestReceipts` are the only typed persistence
+vocabulary; read results remain volatile. Intermediate
+`checkpoint(kind, receipt)` requires a registration-owned runtime encoder.
+`beforeEffect()` commits the native dispatch fence; an unknown post-fence
+outcome stays reconciling and is never redispatched. Recovery is feature-owned,
+with reload allowed only for reads. Progress/liveness never fabricates a failed
+result. `maintenance()` performs bounded receipt/cache cleanup; active or
+unknown work is not expired to make room.
+
+The existing unique-token interactive observation wraps actual handler work.
+`ctx.execution.wait(promise)` releases that pressure while I/O or readiness is
+outstanding and reacquires it for the continuation. Late continuations cannot
+reactivate a finished handler. This uses the existing digest scheduling input.
+
+`HttpRequestAdapter` uses the same coordinator with `VolatileRequests`, not a
+second request state machine. Compose it with selected bootstrap registrations
+and pass an already-validated allowed origin. `admit` returns acceptance and
+`events` holds an event-driven, receipt-authorized NDJSON response. A
+client-held 256-bit secret is verified by hash; input equality uses a per-run
+HMAC. Neither credentials nor their equality hashes enter SQLite. Optional
+`resultHeaders` are emitted only with a successful terminal response, enabling
+cookie replay without publishing headers early. Reflective HTTP routes remain
+the application entry points; the adapter introduces no route or method-dispatch
+table.
+
+The layered `[requests]`, `[connection]` and `harness.requestms` policy leaves
+are documented in the defaults. `clientRequestPolicy(cfg)` returns the exact
+browser-safe subset. Services are independently composable; the shipped wire
+continues to use its currently selected protocol contract.
+
 OTK is the main application. Its core owns config/authentication, reflective
 HTTP routing, WebSocket transport, the live session index and feature-owned RPC
 adapters. Reusable kit libraries supply protocol, content, backend contracts and

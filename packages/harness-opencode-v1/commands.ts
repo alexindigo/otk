@@ -48,16 +48,18 @@ export function commands(
       }
       return [...result.values()];
     },
-    async command(input) {
+    async command(input, operation) {
       const dir = await directory.resolve(input.sessionID);
-      launch(
+      const launched = launch(
         input.sessionID,
         "command",
         `/session/${encodeURIComponent(ids.decode(input.sessionID))}/command`,
         {
           method: "POST",
           query: { directory: dir },
-          timeout: null,
+          ...(operation
+            ? { classification: "effect" as const, operation }
+            : { timeout: null }),
           body: {
             command: input.command,
             arguments: input.arguments,
@@ -70,6 +72,7 @@ export function commands(
           },
         },
       );
+      if (operation && launched) await launched.settled;
     },
   };
 }

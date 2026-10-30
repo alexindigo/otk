@@ -28,7 +28,9 @@ Deno.test("compact launches an owned unbounded summarize request with the captur
     db,
     new Messages(client, () => "/captured"),
     () => Promise.resolve(undefined),
-    (...args) => launched.push(args),
+    (...args) => {
+      launched.push(args);
+    },
   );
   try {
     await actions.compact("opcv1-s_id", { provider: "chosen", model: "m/id" });

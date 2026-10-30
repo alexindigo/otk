@@ -1,5 +1,21 @@
 # @otk/harness-opencode-v1
 
+The public `Client` also supports explicit
+`classification: read | effect |
+stream` and optional neutral `operation`
+context. Classified reads require the consumer's `harness.requestms`; there is
+no classified library default or caller timeout override. Effects fence
+immediately before native I/O, use lifecycle cancellation and classify ambiguous
+network/5xx outcomes as unknown. A definite 4xx rejection is separate.
+`NativeRequestFailure` exposes neutral certainty and safe semantic failure
+facts, retaining the original cause for diagnostics. Optional operation contexts
+on mutating capability ports reach that same owner; standalone consumers can
+omit them. Scoped shell/command/compact calls join the owned launch's
+settlement, while callers without an operation keep their selected admission
+contract. `NativeLaunch.admitted` equals settlement when stock HTTP supplies no
+earlier reliable admission evidence. Independent native event errors retain
+their separate provenance.
+
 Worker composition injects cooperative readiness and native I/O-admission ports
 into the digest sink. HTTP permission, response settlement, hashing and bounded
 scan yields release the scheduler turn; standalone sinks without a scheduler

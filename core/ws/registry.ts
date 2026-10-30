@@ -3,13 +3,18 @@ import { type Harness, HarnessError } from "@otk/harness";
 import type { OtkDb } from "@otk/store";
 import type { RpcMethod, RpcResult } from "@otk/protocol";
 import { object } from "./params.ts";
+import type {
+  PreparedRequest,
+  RequestExecution,
+  RpcExecutionPolicy,
+} from "../requests/types.ts";
 
 /** Shared resources; features own their validation and operation handlers. */
 export interface RpcContext {
   harness: Harness;
   store: OtkDb;
   request?: RequestLifetime;
-  execution?: { signal: AbortSignal };
+  execution?: RequestExecution;
   sessionDirectory(sessionID: string): Promise<string>;
 }
 /** Socket-owned leases are distinct from a single read's execution signal. */
@@ -19,6 +24,7 @@ export interface RequestLifetime {
   defer(release: () => void): void;
 }
 export interface RpcDefinition<P, R> {
+  execution?: RpcExecutionPolicy<P, R>;
   params(value: Record<string, unknown>): P;
   handler(ctx: RpcContext, params: P): R | Promise<R>;
 }
@@ -26,9 +32,10 @@ export interface RpcDefinition<P, R> {
 export class RpcRegistry {
   #handlers = new Map<
     string,
-    (ctx: RpcContext, p: Record<string, unknown>) => unknown
+    (p: Record<string, unknown>) => PreparedRequest
   >();
   readonly context: RpcContext;
+  #policies = new Map<string, RpcExecutionPolicy<never, unknown>>();
   constructor(
     harness: Harness,
     store: OtkDb,
@@ -50,11 +57,66 @@ export class RpcRegistry {
     }
     this.#handlers.set(
       method,
-      (ctx, p) => definition.handler(ctx, definition.params(p)),
+      (raw) => {
+        const params = definition.params(raw);
+        return {
+          execution: definition.execution,
+          scope: definition.execution?.scope(params) ?? {},
+          run: async (execution, request) => {
+            const owner = crypto.randomUUID();
+            let finished = false, active = false;
+            const observe = (next: boolean) => {
+              if (finished || active === next) return;
+              active = next;
+              this.observe?.(owner, next);
+            };
+            observe(true);
+            const scoped = execution
+              ? {
+                ...execution,
+                progress: (
+                  value: Parameters<RequestExecution["progress"]>[0],
+                ) => {
+                  observe(value.phase === "running");
+                  execution.progress(value);
+                },
+                wait: async <T>(ready: Promise<T>): Promise<T> => {
+                  observe(false);
+                  try {
+                    return await ready;
+                  } finally {
+                    observe(true);
+                  }
+                },
+              }
+              : undefined;
+            try {
+              return await definition.handler({
+                ...this.context,
+                request,
+                execution: scoped,
+              }, params);
+            } finally {
+              observe(false);
+              finished = true;
+            }
+          },
+        };
+      },
     );
+    if (definition.execution) this.#policies.set(method, definition.execution);
+  }
+  policy(method: string): RpcExecutionPolicy<never, unknown> | undefined {
+    return this.#policies.get(method);
   }
   methods(): string[] {
     return [...this.#handlers.keys()];
+  }
+  prepare(method: string, value: unknown): PreparedRequest {
+    const params = object(value);
+    const prepare = this.#handlers.get(method);
+    if (!prepare) throw new HarnessError("method", `Unknown method: ${method}`);
+    return prepare(params);
   }
   async dispatch(
     method: string,
@@ -62,15 +124,23 @@ export class RpcRegistry {
     request?: RequestLifetime,
     execution?: { signal: AbortSignal },
   ): Promise<unknown> {
-    const params = object(value);
-    const handler = this.#handlers.get(method);
-    if (!handler) throw new HarnessError("method", `Unknown method: ${method}`);
-    const owner = crypto.randomUUID();
-    this.observe?.(owner, true);
-    try {
-      return await handler({ ...this.context, request, execution }, params);
-    } finally {
-      this.observe?.(owner, false);
-    }
+    const prepared = this.prepare(method, value);
+    return await prepared.run(
+      execution
+        ? {
+          ...execution,
+          key: {
+            clientID: "standalone",
+            key: crypto.randomUUID(),
+            window: "standalone",
+          },
+          progress() {},
+          beforeEffect: () => Promise.resolve(),
+          checkpoint: () => Promise.resolve(),
+          local: (run) => this.context.store.write(run),
+        }
+        : undefined,
+      request,
+    );
   }
 }

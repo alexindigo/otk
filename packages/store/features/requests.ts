@@ -168,6 +168,17 @@ function validate(record: RequestRecord): void {
 /** Metadata-only duplicate fences. Feature encoders own safe receipt JSON shapes. */
 export class Requests {
   constructor(readonly db: OtkDb) {}
+  windowInfo(id: string): { id: string; expires_at: number } | undefined {
+    return this.db.connection.prepare(
+      "SELECT id,expires_at FROM request_windows WHERE id=?",
+    ).get(key(id)) as { id: string; expires_at: number } | undefined;
+  }
+  activeCount(principal: string): number {
+    const row = this.db.connection.prepare(
+      `SELECT COUNT(*) AS count FROM request_receipts WHERE principal=? AND ${active}`,
+    ).get(key(principal)) as { count: number };
+    return row.count;
+  }
   get(input: ReceiptKey): RequestRecord | undefined {
     return this.db.connection.prepare(
       `SELECT ${columns.join(",")} FROM request_receipts WHERE ${predicate}`,

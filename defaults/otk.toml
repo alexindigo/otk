@@ -31,6 +31,7 @@ password = "" # OTK_HARNESS_PASSWORD — empty disables Basic auth
 db = "" # OTK_HARNESS_DB — empty means XDG data home/opencode/opencode.db
 heartbeattimeout = 25 # OTK_HARNESS_HEARTBEATTIMEOUT — seconds without SSE bytes
 reconnectmax = 30 # OTK_HARNESS_RECONNECTMAX — maximum reconnect backoff seconds
+requestms = 60000 # OTK_HARNESS_REQUESTMS — classified native read I/O deadline in milliseconds
 
 [index]
 days = 30 # OTK_INDEX_DAYS — recent-background priority horizon in days; older sessions remain indexed
@@ -56,3 +57,23 @@ replaybytes = 4194304 # OTK_MESSAGES_REPLAYBYTES — retained serialized UTF-8 b
 recoveryconcurrency = 2 # OTK_MESSAGES_RECOVERYCONCURRENCY — aggregate simultaneous native missing-seed checkpoint reads per adapter
 recoverypending = 128 # OTK_MESSAGES_RECOVERYPENDING — missing message/part identity keys before source-free scoped reconciliation
 retryms = 1000 # OTK_MESSAGES_RETRYMS — minimum failed-baseline retry backoff in milliseconds
+
+# Request receipts and pending work; liveness changes status, never the outcome.
+[requests]
+windowms = 86400000 # OTK_REQUESTS_WINDOWMS — admission window for new intents
+retentionms = 86400000 # OTK_REQUESTS_RETENTIONMS — terminal receipt retention after window expiry
+maxpending = 512 # OTK_REQUESTS_MAXPENDING — active intent keys per principal
+inputbytes = 67108864 # OTK_REQUESTS_INPUTBYTES — retained pending UTF-8 input bytes per principal
+resultbytes = 16777216 # OTK_REQUESTS_RESULTBYTES — aggregate volatile replay-result bytes
+resumebatch = 64 # OTK_REQUESTS_RESUMEBATCH — refs per control/recovery batch
+sweepbatch = 64 # OTK_REQUESTS_SWEEPBATCH — terminal rows/windows per cleanup turn
+livenessms = 30000 # OTK_REQUESTS_LIVENESSMS — quiet-work observation interval, not failure
+stoppingms = 10000 # OTK_REQUESTS_STOPPINGMS — stopping observation interval, not failure
+
+[connection]
+helloms = 10000 # OTK_CONNECTION_HELLOMS — WS hello admission interval
+pingms = 20000 # OTK_CONNECTION_PINGMS — application heartbeat interval
+silencems = 60000 # OTK_CONNECTION_SILENCEMS — transport silence before reconnect
+httpms = 15000 # OTK_CONNECTION_HTTPMS — HTTP no-response liveness interval, never aborts work
+retrybase = 1000 # OTK_CONNECTION_RETRYBASE — initial reconnect/reattach delay
+retrymax = 30000 # OTK_CONNECTION_RETRYMAX — reconnect/reattach delay ceiling

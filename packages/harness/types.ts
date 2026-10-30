@@ -6,6 +6,7 @@ import type {
   ContentSession,
   MessageCursor,
   MessagePage,
+  OperationContext,
   TranscriptInvalidation,
 } from "@otk/protocol";
 import type { SessionMetadata } from "@otk/protocol";
@@ -21,6 +22,7 @@ export type {
   HistoryAttachmentRef,
   HistoryCapability,
   ModelsCapability,
+  OperationContext,
   PermissionsCapability,
   PromptCapability,
   QuestionsCapability,
@@ -55,6 +57,7 @@ export interface HarnessCore {
   ): Promise<MessagePage>;
   createSession(
     input: { directory: string; title?: string; parentID?: string },
+    operation?: OperationContext,
   ): Promise<ContentSession>;
 }
 export interface Harness {

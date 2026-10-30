@@ -22,6 +22,7 @@ password = ""
 db = ""
 heartbeattimeout = 25
 reconnectmax = 30
+requestms = 60000
 [index]
 days = 30
 [digest]
@@ -33,6 +34,23 @@ maxpending = 512
 publishrows = 64
 retryms = 1000
 busyms = 100
+[requests]
+windowms = 86400000
+retentionms = 86400000
+maxpending = 512
+inputbytes = 67108864
+resultbytes = 16777216
+resumebatch = 64
+sweepbatch = 64
+livenessms = 30000
+stoppingms = 10000
+[connection]
+helloms = 10000
+pingms = 20000
+silencems = 60000
+httpms = 15000
+retrybase = 1000
+retrymax = 30000
 [messages]
 coolms = 300000
 preloadms = 30000

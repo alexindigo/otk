@@ -20,7 +20,7 @@ export function permissions(
   pending: () => Iterable<PendingPermission>,
 ): PermissionsCapability {
   return {
-    async replyPermission(input) {
+    async replyPermission(input, operation) {
       ids.decode(input.sessionID);
       const asking = [...pending()].find(({ request }) =>
         request.id === input.requestID && request.sessionID === input.sessionID
@@ -31,6 +31,9 @@ export function permissions(
         `/permission/${encodeURIComponent(input.requestID)}/reply`,
         {
           method: "POST",
+          ...(operation
+            ? { classification: "effect" as const, operation }
+            : {}),
           query: { directory: target },
           body: { reply: input.reply, message: input.message },
         },

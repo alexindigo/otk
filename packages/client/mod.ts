@@ -97,4 +97,7 @@ export {
 export * from "./session-summary.ts";
 export * from "./window.ts";
 export * from "./list-scopes.ts";
+export * from "./requests.ts";
+export * from "./failures.ts";
+export * from "./http-requests.ts";
 export { createSessionTree, type SessionListRow } from "./session-tree.ts";

@@ -12,11 +12,14 @@ export function revert(
   getSession: (id: string) => Promise<ContentSession>,
 ): RevertCapability {
   return {
-    async revert(id, messageID) {
+    async revert(id, messageID, operation) {
       await client.json(
         `/session/${encodeURIComponent(ids.decode(id))}/revert`,
         {
           method: "POST",
+          ...(operation
+            ? { classification: "effect" as const, operation }
+            : {}),
           query: { directory: await directory.resolve(id) },
           body: { messageID },
         },
@@ -31,11 +34,14 @@ export function restore(
   getSession: (id: string) => Promise<ContentSession>,
 ): RestoreCapability {
   return {
-    async restore(id) {
+    async restore(id, operation) {
       await client.json(
         `/session/${encodeURIComponent(ids.decode(id))}/unrevert`,
         {
           method: "POST",
+          ...(operation
+            ? { classification: "effect" as const, operation }
+            : {}),
           query: { directory: await directory.resolve(id) },
         },
       );

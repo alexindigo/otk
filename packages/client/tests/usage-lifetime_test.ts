@@ -13,7 +13,7 @@ Deno.test("usage leases coalesce independent consumers and last release cancels 
   });
   connection.supports = () => true;
   connection.rpc.call = (_method, _params, abort) => {
-    signal = abort;
+    signal = abort instanceof AbortSignal ? abort : abort?.signal;
     return held.promise as never;
   };
   const owner = createSessionUsage(() => connection),

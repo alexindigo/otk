@@ -18,21 +18,24 @@ export function sessionActions(
   launch: Launch,
 ): SessionActionsCapability {
   return {
-    async compact(id, model) {
+    async compact(id, model, operation) {
       const dir = await directory.resolve(id);
-      launch(
+      const launched = launch(
         id,
         "compact",
         `/session/${encodeURIComponent(ids.decode(id))}/summarize`,
         {
           method: "POST",
           query: { directory: dir },
-          timeout: null,
+          ...(operation
+            ? { classification: "effect" as const, operation }
+            : { timeout: null }),
           body: { providerID: model.provider, modelID: model.model },
         },
       );
+      if (operation && launched) await launched.settled;
     },
-    async fork(id, through) {
+    async fork(id, through, operation) {
       const dir = await directory.resolve(id);
       let next: string | null | undefined;
       if (through !== undefined) {
@@ -61,24 +64,31 @@ export function sessionActions(
           `/session/${encodeURIComponent(ids.decode(id))}/fork`,
           {
             method: "POST",
+            ...(operation
+              ? { classification: "effect" as const, operation }
+              : {}),
             query: { directory: dir },
             body: messageID ? { messageID } : {},
           },
         ),
       );
     },
-    async remove(id) {
+    async remove(id, operation) {
       await client.json(`/session/${encodeURIComponent(ids.decode(id))}`, {
         method: "DELETE",
+        ...(operation ? { classification: "effect" as const, operation } : {}),
         query: { directory: await directory.resolve(id) },
       });
     },
-    async rename(id, title) {
+    async rename(id, title, operation) {
       return mapSession(
         await client.json<Session>(
           `/session/${encodeURIComponent(ids.decode(id))}`,
           {
             method: "PATCH",
+            ...(operation
+              ? { classification: "effect" as const, operation }
+              : {}),
             query: { directory: await directory.resolve(id) },
             body: { title },
           },
