@@ -458,10 +458,23 @@ for (const theme of ["otk-dark", "otk-light"]) {
     await b.goto(`${url}/#/local/${selected.id}`);
     await b.fill(search, "");
     // Complete warm snapshot includes all exact summaries and turn metadata.
-    await waitFor(
-      () => ready.size,
-      (count) => count === SCALE.sessions + 4,
-      240000,
+    const readinessStarted = performance.now(), target = SCALE.sessions + 4;
+    const readinessProgress: { elapsed: number; ready: number }[] = [];
+    observations.warmReadiness = { target, progress: readinessProgress };
+    while (ready.size < target) {
+      const previous = ready.size;
+      // Elapsed backfill is a measurement. Only lack of further completed work
+      // uses the fixture's ordinary liveness bound; never fail a progressing scan.
+      await waitFor(() => ready.size, (count) => count > previous);
+      readinessProgress.push({
+        elapsed: performance.now() - readinessStarted,
+        ready: ready.size,
+      });
+    }
+    assertEquals(ready.size, target);
+    console.info(
+      "Scale warm readiness wait (ms)",
+      performance.now() - readinessStarted,
     );
     browserRuns.push(await b.evaluate("globalThis.scale"));
     await b.reload();
