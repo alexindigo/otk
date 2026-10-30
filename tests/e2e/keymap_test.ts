@@ -104,7 +104,7 @@ test("D3 Esc closes palette before permission confirmation and real double Esc i
     );
     await browser.key("Escape");
     await browser.poll(
-      "document.querySelector('.otk-prompt button[type=submit]')?.title==='Esc again to interrupt'",
+      "document.querySelector('[data-interrupt-confirmation]')?.textContent==='Esc again to interrupt' && !document.querySelector('.otk-prompt button[type=submit]')",
     );
     await browser.key("Escape");
     await browser.poll(

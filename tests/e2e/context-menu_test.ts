@@ -225,12 +225,17 @@ test("context menu: trusted right click, native escape hatch, keyboard navigatio
       await browser.poll("!document.querySelector('dialog[open]')");
     }
     const before = f.entries.length;
+    const previousHash = await browser.evaluate<string>("location.hash");
     await rightClick(browser, ".otk-tabs-project");
     await action(browser, "session.new");
     await browser.poll(
-      'location.hash && !location.hash.endsWith("/otk") && document.querySelector("textarea[name=prompt]")',
+      `location.hash!==${
+        JSON.stringify(previousHash)
+      } && !!document.querySelector("textarea[name=prompt]")`,
     );
     assertEquals(f.entries.length, before + 1);
+    const created = f.entries[before];
+    await browser.poll(`location.hash.includes(${JSON.stringify(created.id)})`);
     assertEquals(browser.errors, []);
     console.info("context screenshot root", root);
   } finally {
@@ -634,10 +639,10 @@ test("all shared Menu callers distinguish pointer and keyboard opening with comp
     );
     assertEquals(
       await browser.evaluate(
-        `(()=>{const items=document.querySelector('${selector}').getBoundingClientRect(),panel=document.querySelector('${selector}').closest('.otk-surface').getBoundingClientRect();return Math.abs((items.top-panel.top)-(panel.bottom-items.bottom))<.5})()`,
+        `(()=>{const menu=document.querySelector('${selector}'),first=menu.parentElement.firstElementChild.getBoundingClientRect(),last=menu.parentElement.lastElementChild.getBoundingClientRect(),panel=menu.closest('.otk-surface').getBoundingClientRect();return Math.abs((first.top-panel.top)-(panel.bottom-last.bottom))<.5})()`,
       ),
       true,
-      "A menu without status has balanced block padding around its item column",
+      "Menu items and reserved feedback have balanced block padding around their complete flow",
     );
   };
   const enterTrigger = async () => {

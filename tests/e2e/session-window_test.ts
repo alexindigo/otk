@@ -13,7 +13,7 @@ import {
 import { join } from "@std/path";
 import { registerSessionActions } from "../../core/mod.ts";
 import { menuReady } from "../support/menu.ts";
-import type { TaskRecord } from "@otk/protocol";
+import { OperationFailure, type TaskRecord } from "@otk/protocol";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { waitFor } from "../support/opencode.ts";
 import { wheelViewport } from "../support/message-viewport.ts";
@@ -179,8 +179,10 @@ for (const theme of ["otk-dark", "otk-light"]) {
       sessionActions: {
         async rename(id: string, title: string) {
           if (rejectRename) {
-            throw new Error(
-              "Rename refused; keep the edited title and try again.",
+            throw new OperationFailure(
+              "rejected",
+              "request.params",
+              new Error("Rename refused; keep the edited title and try again."),
             );
           }
           f.update(id, { title });
