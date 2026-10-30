@@ -127,10 +127,28 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     );
     assertEquals(Object.keys(first.entry()!.digest.turns).length > 0, true);
     const firstTurn = Object.keys(first.entry()!.digest.turns)[0];
-    const initialDetail = await first.client.rpc<TurnUsageDetail>("usage.get", {
-      sessionID: session.id,
-      turnID: firstTurn,
-    });
+    const terminalDetail = async (turnID: string) => {
+      // Ready describes a reconciled snapshot, including a still-running call.
+      // Compare immutable ledgers only after this turn's completion reaches us.
+      await waitFor(
+        first.entry,
+        (entry) =>
+          entry?.digest.state === "ready" &&
+          entry.digest.turns[turnID]?.time?.end !== undefined,
+      );
+      const detail = await first.client.rpc<TurnUsageDetail>("usage.get", {
+        sessionID: session.id,
+        turnID,
+      });
+      assertEquals(
+        detail.calls.every((call) =>
+          call.completed && call.time?.end !== undefined
+        ),
+        true,
+      );
+      return detail;
+    };
+    const initialDetail = await terminalDetail(firstTurn);
     assertEquals(initialDetail.calls.length, 1);
     assertEquals(initialDetail.turnID, firstTurn);
     const initialCalls = first.entry()!.digest.total!.calls;
@@ -180,10 +198,7 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     assertEquals(older.older, null);
     assertEquals(newest.prompt?.id, native.at(-2)!.info.id);
     const secondTurn = native.at(-2)!.info.id;
-    const changedDetail = await first.client.rpc<TurnUsageDetail>("usage.get", {
-      sessionID: session.id,
-      turnID: secondTurn,
-    });
+    const changedDetail = await terminalDetail(secondTurn);
     assertEquals(changedDetail.calls.length, 1);
     assertEquals(changedDetail.turnID, secondTurn);
     assertEquals(
