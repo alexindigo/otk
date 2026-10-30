@@ -60,8 +60,25 @@ export class FakeLlm {
           });
         }
         let cancelled = false;
+        let heartbeat: ReturnType<typeof setInterval> | undefined;
         const stream = new ReadableStream<Uint8Array>({
           async start(controller) {
+            // A consumer-owned gate is not a stalled provider. SSE comments
+            // preserve that lifetime without generating model content/events.
+            const waitForConsumer = async (gate?: Promise<void>) => {
+              if (!gate) return;
+              heartbeat = setInterval(() => {
+                if (!cancelled) {
+                  controller.enqueue(new TextEncoder().encode(": held\n\n"));
+                }
+              }, 1000);
+              try {
+                await gate;
+              } finally {
+                clearInterval(heartbeat);
+                heartbeat = undefined;
+              }
+            };
             const send = (
               delta: unknown,
               finish_reason: string | null = null,
@@ -102,12 +119,12 @@ export class FakeLlm {
               });
             }
             for (const [index, chunk] of (script.chunks ?? []).entries()) {
-              await script.beforeChunk?.(index);
+              await waitForConsumer(script.beforeChunk?.(index));
               await new Promise((r) => setTimeout(r, script.delay ?? 5));
               if (cancelled) return;
               send({ content: chunk });
             }
-            await script.finish;
+            await waitForConsumer(script.finish);
             if (cancelled) return;
             send({}, script.tool ? "tool_calls" : "stop");
             if (!cancelled) {
@@ -117,6 +134,7 @@ export class FakeLlm {
           },
           cancel() {
             cancelled = true;
+            clearInterval(heartbeat);
           },
         });
         return new Response(stream, {

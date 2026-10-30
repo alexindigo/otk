@@ -188,7 +188,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
           const f=JSON.parse(event.data),at=performance.now();
           if(f.t==='request.result')scale.results.push({at,wall:Date.now(),...f,id:f.ref.key,ok:f.outcome.ok});
           if(f.t!=='index.snapshot'||f.entries.length<${SCALE.sessions}||!location.hash.endsWith('/${selected.id}'))return;
-          const snapshot={at,ready:f.entries.every(e=>e.digest.state==='ready')};scale.snapshots.push(snapshot);
+           const snapshot={at,ready:f.entries.every(e=>e.digest.state==='ready'),count:f.entries.length,unready:f.entries.filter(e=>e.digest.state!=='ready').slice(0,20).map(e=>({id:e.id,state:e.digest.state,revision:e.digest.revision}))};scale.snapshots.push(snapshot);
           const paint=()=>{const rows=[...document.querySelectorAll('.otk-session-row')],v=document.querySelector('${viewport}');
             const chosen=document.querySelector('[data-session="${selected.id}"]');
             const boxes=rows.map(row=>row.getBoundingClientRect()),bound=v?Math.ceil(v.clientHeight/Math.min(...boxes.map(r=>r.height)))+${WINDOW_EXTRA_ROWS}:0;
@@ -224,7 +224,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
         elapsed: number;
         rows: number;
         bound: number;
-        snapshot: { ready: boolean };
+        snapshot: { ready: boolean; count: number };
       }
     >("scale.paints[0]");
     console.info("Scale cold paint", theme, cold);
@@ -363,12 +363,13 @@ for (const theme of ["otk-dark", "otk-light"]) {
           parts: [{ type: "text", text }],
         },
       });
-    const providerSaw = (text: string) =>
-      fake.requests.some((request) => {
+    const providerRequests = (text: string) =>
+      fake.requests.filter((request) => {
         const body = JSON.stringify(request);
         return body.includes(text) &&
           !body.includes("Generate a title for this conversation:");
       });
+    const providerSaw = (text: string) => providerRequests(text).length > 0;
     const finished = await createBackground("Background finished"),
       initialHold = fake.queueHeld({ chunks: ["Background working"] });
     await b.fill(search, "No matching scale title");
@@ -501,6 +502,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       });
     }
     assertEquals(ready.size, target);
+    assertEquals(app.index.get(working.id)?.status, "busy");
     console.info(
       "Scale warm readiness wait (ms)",
       performance.now() - readinessStarted,
@@ -514,6 +516,13 @@ for (const theme of ["otk-dark", "otk-light"]) {
       warm.snapshot.ready,
       true,
       "Warm snapshot must contain all ready summaries",
+    );
+    assertEquals(warm.snapshot.count, target);
+    assertEquals(app.index.get(working.id)?.status, "busy");
+    assertEquals(
+      providerRequests("Keep background work active").length,
+      1,
+      "The consumer-held reply must remain active without a native retry",
     );
     console.info("Scale warm paint", theme, warm);
     observations.warm = warm;
