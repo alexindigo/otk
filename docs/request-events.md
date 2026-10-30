@@ -1,0 +1,124 @@
+# Request events and recovery
+
+OTK protocol **16** gives actions and reads the same observable lifetime:
+admission, pending progress and a correlated result. Connection state is
+separate from operation state. A slow or disconnected operation is not reported
+failed merely because a liveness interval elapsed.
+
+## Identity and delivery
+
+A client captures one intent before asynchronous preparation. Its identity is
+`(principal, clientID, key)` in a server-issued admission window. Transport
+attempts have separate IDs. Reconnecting or explicitly retrying unchanged work
+reattaches to that intent; it does not allocate another key. Reusing a key with
+different parameters is rejected before execution.
+
+The server acknowledges admission before running the handler in a later turn.
+Request sequences belong to that request, independently of transcript/index
+revisions. A replayed acceptance can establish a newer sequence snapshot before
+progress or a result. Resume frames are bounded by `requests.resumebatch`.
+Releasing one read subscriber does not cancel another subscriber; releasing the
+last read subscriber releases its demand. Detaching a mutation's presentation or
+socket does not undo its effect.
+
+`request.received` releases volatile delivery data, not the durable duplicate
+fence. Read bodies larger than the aggregate replay budget are delivered in full
+and then reacquired through the authoritative reader when needed. The consumer
+must resupply captured parameters when the server no longer has them; metadata
+receipts cannot reconstruct a prompt, body or discarded read input.
+
+## What a result proves
+
+| # | Operation class      | Result and recovery contract                                                                                                                                                                                                                       |
+| - | -------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1 | Local metadata write | The effect and allowlisted completion receipt commit in one SQLite write scope. Restart returns the original outcome without repeating a task creation, visit clock or frequency increment. A later authoritative broadcast remains authoritative. |
+| 2 | Native mutation      | A durable dispatch fence precedes backend invocation. A confirmed returned identity is checkpointed before local bookkeeping. If OTK loses the response before that checkpoint, recovery does not resend the mutation.                             |
+| 3 | Read                 | Results are volatile. Restart/replay can reload current provider data, with cancellation and generation ownership preserved. A native read deadline reports backend liveness while the browser operation remains pending.                          |
+| 4 | Connection lease     | Disconnect releases that socket's lease. The replacement connection applies its current scope rather than recovering an obsolete lease.                                                                                                            |
+
+OTK and stock opencode do not share a transaction. An unconfirmed native effect
+can remain **Checking whether this finished** until identity-specific evidence
+establishes an outcome. Generic idle activity, elapsed time, a matching title or
+the disappearance of an approval is not evidence that this particular action
+succeeded or failed. There is no repeat-effect Retry action for this state.
+
+Prompt submission completes when the native async endpoint confirms it was sent;
+the agent's subsequent reply has its own lifecycle. Shell, command and
+compaction wait for their owned HTTP exchange. A transcript may therefore show
+completed native work while its operation still awaits HTTP settlement. Captured
+input is retained until reliable admission/settlement evidence; a newer edited
+draft is never cleared by the older result. Successful sends are not made to
+look unsent by later visit/location bookkeeping.
+
+## Storage, retention and upgrades
+
+`otk.db` contains durable request windows and metadata receipts alongside tasks,
+preferences and other user state. Keep it in backups. `digest.db` is a separate
+rebuildable cache; rebuilding it must not erase request fences. Request receipts
+contain no message bodies, prompts, answers, shell text, attachment bytes,
+credentials or raw exceptions. Local user metadata such as a TaskRecord can be
+retained as the immutable original result.
+
+New intents require a live server-issued window. Known pending receipts remain
+resumable after that window expires. Terminal receipts are retained through the
+window expiry plus the configured minimum retention. Active or uncertain work is
+never evicted to free capacity. An expired unknown key is rejected rather than
+being silently executed again. Capacity rejection occurs before acceptance.
+
+Login, setup and discovery use the same event contract over HTTP before an
+authenticated WebSocket exists. Their origin-bound receipt secrets and input
+equality hashes are memory-only. Cookies accompany successful terminal delivery,
+not acceptance, and can be replayed during that live receipt lifetime. Following
+a server restart, interrupted login needs explicit sign-in; setup first rereads
+the committed configuration instead of submitting setup again.
+
+The beta.1 upgrade first performs the existing atomic
+qualified-session-reference migration, then composes the request schema.
+Existing tasks, preferences, seen/finish marks and approval data are retained.
+There is no invented historical request backfill: old calls did not have intent
+keys. Old browser protocol peers must reload. Downgrading to beta.1 after the
+reference migration is unsupported; restoring an older backup cannot reconstruct
+native evidence that was never checkpointed. Restore does not create a
+cross-database exactly-once guarantee.
+
+Policy is layered through the tracked defaults: `[requests]`, `[connection]` and
+`harness.requestms`. Browser liveness never aborts an effect or fabricates a
+failure. Libraries receive policy from their composition rather than duplicating
+defaults. Failure copy comes from the shared presenter at the captured target's
+single feedback surface; raw native exceptions stay diagnostic-only.
+
+## Qualification
+
+Run workloads only in the assigned OTK VM through its pinned access route, with
+disk-backed `TMPDIR`. C5's assigned guest is `arch-niri-otk-devbase-otk-alpha`
+on `ark.home`, transfer profile `otk-alpha`, workspace
+`/home/tester/otk/c5/source`, `TMPDIR=/home/tester/otk/c5/t`. The following
+commands are **inside that guest workspace**:
+
+```sh
+deno task test tests/integration/request-restart_test.ts tests/integration/native-request-events_test.ts tests/integration/compiled-requests_test.ts tests/integration/request-scale_test.ts
+deno task test tests/e2e/request-activation_test.ts tests/e2e/request-feedback_test.ts tests/e2e/native-request-events_test.ts tests/e2e/request-scale_test.ts
+```
+
+The compiled proof builds with the tracked recipe when `OTK_TEST_BINARY` is
+absent; it never silently skips. It launches off-source with empty runtime
+caches, replays one persisted `perf` task after lost result acknowledgement and
+process replacement, then verifies one native create after losing its HTTP
+response and replacing OTK again. Stock opencode remains alive throughout that
+native crash leg. Source and compiled variants use the same proof.
+
+The native browser proof separates actual shell output from held HTTP
+settlement, reconnects and checks the newer draft after the final result. Scale
+uses the existing stock-schema fixture: **4,615 sessions, 251 sessions / 27,205
+messages in one project, 1,525 messages / 5,672 parts in the largest session**.
+Admission tests exercise bounded active keys, replay bytes and reconnect
+batches; browser tests observe exactly one selected task. The retained
+session-scale suites prove complete summaries and absence of per-session list
+demand. Timing and heap measurements are reported; structural assertions remain
+gates.
+
+The full milestone gate and complete integration/browser compatibility pairs run
+sequentially on one frozen tree. `OTK_TEST_OPENCODE` selects stock 1.19.3 or
+1.18.35; the default is stock 1.18.34. The scripted provider uses no model
+account. An individual passing probe is not a claim that the entire matrix
+passed.

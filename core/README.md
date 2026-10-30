@@ -159,9 +159,10 @@ member is a separate idempotent user-metadata operation.
 the returned session's project through the same creation bookkeeping port as
 `session.create`.
 
-`session.compact` requires a session ID and nonempty provider/model strings,
-delegates to `sessionActions.compact` and returns admission only. Native summary
-requests and their lifecycle remain in the harness adapter.
+`session.compact` requires a session ID and nonempty provider/model strings and
+delegates to `sessionActions.compact` with the request execution context. Its
+result joins the owned native HTTP settlement; admission is pending progress,
+not completion. Native summary requests remain in the harness adapter.
 
 `registerRevert` independently selects `session.revert` and `session.restore`
 from the respective `revert` and `restore` capabilities. Both validate session
@@ -248,6 +249,7 @@ import type { Harness } from "@otk/harness";
 import { OtkDb, Prefs, prefsMigrations } from "@otk/store";
 import {
   prefsOptions,
+  readExecution,
   registerPrefs,
   registerPrompt,
   registerSessions,
@@ -265,6 +267,7 @@ async function run(backend: Harness, cfg: ServiceConfig, staticRoot: string) {
   registerPrefs(rpc, backend, prefs);
   rpc.register("example.directory", {
     params: () => "example-session",
+    execution: readExecution(() => ({})),
     handler: (ctx, id) => ctx.sessionDirectory(id),
   });
   return await startCore({ cfg, backend, store, prefs, rpc, staticRoot });
@@ -419,10 +422,11 @@ deletions or reading their cached tombstones.
 
 `digests.scope` is feature-owned and replaces one socket's visible priority
 hint. Generic `RequestLifetime` owns socket leases. A separate per-call
-`ctx.execution.signal` reaches usage detail: `rpc.cancel` releases only that
-connection's matching in-flight read, with unknown/completed IDs ignored. The
-registry's injected observation callback uses unique dispatch tokens for
-interactive pressure. Mutation handlers do not consume read cancellation.
+`ctx.execution.signal` reaches usage detail: `request.release` releases only
+that recipient's matching read, cancelling demand when its last subscriber
+leaves. Unknown/completed release identities are harmless. The registry's
+injected observation callback uses unique dispatch tokens for interactive
+pressure. Mutation handlers do not consume read cancellation.
 
 Inbox observers use hydrated project policy and seen/finish projections, updated
 by committed store changes. A busy→idle edge records its returned committed

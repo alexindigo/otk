@@ -185,6 +185,10 @@ authenticated socket is available. The `[requests]`, `[connection]` and
 `harness.requestms` defaults describe admission, retention, liveness and native
 read policy.
 
+The [request-event contract](./docs/request-events.md) describes intent
+identity, native uncertain outcomes, receipt retention, backup/upgrade behavior
+and the source/compiled/browser qualification paths.
+
 Metadata bootstrap completion does not restart an already-current transcript.
 Real native reconnect, instance disposal and revert-boundary changes carry an
 ordered invalidation version, so duplicate or delayed notices cannot discard a
