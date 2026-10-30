@@ -10,6 +10,7 @@ import {
 import { runTool } from "../support/rendering.ts";
 import { WsClient } from "../support/ws-client.ts";
 import type { Cdp } from "../support/cdp.ts";
+import { revealViewportElement } from "../support/message-viewport.ts";
 
 async function capture(b: Cdp, name: string) {
   const destination = Deno.env.get("OTK_SESSION_ACTION_SCREENSHOTS");
@@ -99,10 +100,23 @@ for (const theme of ["otk-dark", "otk-light"]) {
       await b.fill('textarea[name="prompt"]', "Explain the file change");
       await b.key("Enter");
       await waitForReply(b, s.id, "Second reply.");
-      const first = '[data-role="user"] [data-message-command="prompt.revert"]';
-      await b.evaluate(
-        "document.querySelector('[data-role=user]').scrollIntoView({block:'center',behavior:'instant'});document.querySelector('.otk-user-bubble').focus({preventScroll:true})",
-      );
+      const messages = await f.oc.request<
+        { info: { id: string; role: string } }[]
+      >(`/session/${s.id}/message`);
+      const promptID = messages.find((message) => message.info.role === "user")!
+        .info.id;
+      const bubble = `[data-message="${promptID}"] .otk-user-bubble`;
+      const first =
+        `[data-message="${promptID}"] [data-message-command="prompt.revert"]`;
+      const revealFirst = async () => {
+        // A native scroll gesture transfers follow intent to the reader. Direct
+        // scrollIntoView can fight the measured viewport's pending tail layout.
+        await revealViewportElement(b, ".otk-messages", bubble);
+        await b.evaluate(
+          `document.querySelector('${bubble}').focus({preventScroll:true})`,
+        );
+      };
+      await revealFirst();
       await b.poll(`!!document.querySelector('${first}')`);
       await b.click(first);
       await b.poll(
@@ -154,9 +168,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
         await Deno.readTextFile(join(f.oc.directory, "revert.txt")),
         "after\n",
       );
-      await b.evaluate(
-        "document.querySelector('[data-role=user]').scrollIntoView({block:'center',behavior:'instant'});document.querySelector('.otk-user-bubble').focus({preventScroll:true})",
-      );
+      await revealFirst();
       await b.click(first);
       await b.poll("!!document.querySelector('.otk-rolled-back-strip strong')");
       f.fake.queue({ chunks: ["New direction."] });
