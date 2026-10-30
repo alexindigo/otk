@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { productionSources, Source } from "./analysis.ts";
-import { nodes, property } from "./syntax.ts";
+import { nodes, property, type t } from "./syntax.ts";
 import { shellPolicyErrors } from "./shell-policy.ts";
 import { layoutBypasses, shellBypasses } from "./bypasses.ts";
 layoutBypasses(layoutOwnerErrors);
@@ -39,15 +39,49 @@ export function layoutOwnerErrors(source: string): string[] {
     [...nodes(handler.body)].some((node) => node.type === "AwaitExpression")
   ) return error;
   const patch = handler.params[1];
-  const outputs = handler.body.type === "BlockStatement"
-    ? handler.body.body.flatMap((node) =>
-      node.type === "ReturnStatement" && node.argument && parsed.live(node)
-        ? [node.argument]
-        : []
-    )
-    : [handler.body];
-  if (outputs.length !== 1) return error;
-  const call = parsed.value(outputs[0]);
+  const output = (fn: t.ArrowFunctionExpression | t.FunctionExpression) => {
+    const values = fn.body.type === "BlockStatement"
+      ? fn.body.body.flatMap((node) =>
+        node.type === "ReturnStatement" && node.argument && parsed.live(node)
+          ? [node.argument]
+          : []
+      )
+      : [fn.body];
+    return values.length === 1 ? parsed.value(values[0]) : undefined;
+  };
+  let writer = handler;
+  let call = output(handler);
+  if (call?.type === "CallExpression") {
+    const helper = parsed.imported(call.callee);
+    if (
+      helper?.module === "../requests/policies.ts" &&
+      helper.name === "localWrite"
+    ) {
+      const context = parsed.access(handler.params[0]);
+      const forwarded = parsed.access(call.arguments[0]);
+      const run = parsed.value(call.arguments[1]);
+      if (
+        !context || context.fields.length || !forwarded ||
+        forwarded.fields.length ||
+        context.binding !== forwarded.binding || call.arguments.length !== 3 ||
+        (run?.type !== "ArrowFunctionExpression" &&
+          run?.type !== "FunctionExpression") ||
+        run.async || [...nodes(run.body)].some((node) =>
+          node.type === "AwaitExpression"
+        )
+      ) return error;
+      writer = run;
+      const scope = parsed.access(run.params[0]);
+      call = output(run);
+      if (
+        !scope || scope.fields.length || call?.type !== "CallExpression"
+      ) return error;
+      const joined = parsed.access(call.arguments[2]);
+      if (
+        !joined || joined.fields.length || joined.binding !== scope.binding
+      ) return error;
+    }
+  }
   if (
     call?.type !== "CallExpression" ||
     parsed.string(call.arguments[0]) !== "shellLayout"
@@ -87,7 +121,10 @@ export function layoutOwnerErrors(source: string): string[] {
       "shellLayout"
   ) return error;
   const read = parsed.value(latest.object);
-  if (read?.type !== "CallExpression" || read.arguments.length) return error;
+  if (
+    read?.type !== "CallExpression" || read.arguments.length ||
+    parsed.function(read) !== writer
+  ) return error;
   const getter = parsed.access(read.callee);
   const fields = parsed.access(intent.argument);
   const input = parsed.access(patch);
@@ -410,6 +447,42 @@ Deno.test("A12 layout contract accepts renamed parameters, const aliases and com
   `),
     [],
   );
+});
+
+Deno.test("layout ownership follows the synchronous atomic-write callback and its exact scope", () => {
+  const source = (
+    handler: string,
+    imports = 'import { localWrite as commit } from "../requests/policies.ts";',
+  ) => `
+    ${imports}
+    export function register(rpc, prefs) {
+      const receipt = codec;
+      rpc.register("layout.patch", { handler: ${handler} });
+    }
+  `;
+  assertEquals(
+    layoutOwnerErrors(source(`(context, fields) => commit(context,
+    scope => prefs.set("shellLayout", { ...prefs.get().shellLayout, ...fields }, scope), receipt)`)),
+    [],
+  );
+  for (
+    const handler of [
+      '(context, fields) => commit(other, scope => prefs.set("shellLayout", { ...prefs.get().shellLayout, ...fields }, scope), receipt)',
+      '(context, fields) => commit(context, async scope => prefs.set("shellLayout", { ...prefs.get().shellLayout, ...fields }, scope), receipt)',
+      '(context, fields) => commit(context, scope => prefs.set("shellLayout", { ...prefs.get().shellLayout, ...fields }), receipt)',
+      '(context, fields) => commit(context, scope => prefs.set("shellLayout", { ...prefs.get().shellLayout, ...fields }, otherScope), receipt)',
+      '(context, fields) => { const cached = prefs.get().shellLayout; return commit(context, scope => prefs.set("shellLayout", { ...cached, ...fields }, scope), receipt); }',
+      '(context, fields) => commit(context, scope => prefs.set("shellLayout", fields, scope), receipt)',
+    ]
+  ) assert(layoutOwnerErrors(source(handler)).length > 0, handler);
+  const body =
+    '(context, fields) => commit(context, scope => prefs.set("shellLayout", { ...prefs.get().shellLayout, ...fields }, scope), receipt)';
+  for (
+    const imports of [
+      'import { localWrite as commit } from "./impostor.ts";',
+      "function commit(context, run) { return run(fakeScope); }",
+    ]
+  ) assert(layoutOwnerErrors(source(body, imports)).length > 0, imports);
 });
 
 for (
