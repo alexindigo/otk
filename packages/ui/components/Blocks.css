@@ -44,10 +44,10 @@
   border: 1px solid var(--muted);
   padding: 8px 12px;
 }
-.otk-prose-compact > :first-child {
+.otk-prose-block.is-compact-start > :first-child {
   margin-top: 0;
 }
-.otk-prose-compact > :last-child {
+.otk-prose-block.is-compact-end > :last-child {
   margin-bottom: 0;
 }
 .otk-prose-unconcealed .otk-prose-strong::before,

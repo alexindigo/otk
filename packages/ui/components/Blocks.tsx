@@ -288,12 +288,20 @@ export default function Blocks(props: {
         key={(row) => String(row.index)}
         label="Source blocks"
         render={(row) => (
-          <BlockView
-            block={row().block}
-            streaming={props.streaming &&
-              row().index === props.blocks.length - 1}
-            conceal={props.conceal}
-          />
+          <div
+            class={["otk-prose-block", {
+              "is-compact-start": props.compact && row().index === 0,
+              "is-compact-end": props.compact &&
+                row().index === props.blocks.length - 1,
+            }]}
+          >
+            <BlockView
+              block={row().block}
+              streaming={props.streaming &&
+                row().index === props.blocks.length - 1}
+              conceal={props.conceal}
+            />
+          </div>
         )}
       />
     </div>
