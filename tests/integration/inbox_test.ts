@@ -2,7 +2,12 @@
 import { test } from "../support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
-import { createInbox, inboxProjects, SidecarConnection } from "@otk/client";
+import {
+  createInbox,
+  HttpRequests,
+  inboxProjects,
+  SidecarConnection,
+} from "@otk/client";
 import type { InboxSnapshot } from "@otk/protocol";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { cfg, fixture } from "../support/config.ts";
@@ -254,28 +259,37 @@ test("first-run setup and restart retain the same user's inbox metadata", async 
   settings.server.port = 0;
   settings.state.path = join(root, "fresh-state");
   let app = await startApplication(settings, backend, root);
+  let http: HttpRequests | undefined;
   const clients: WsClient[] = [];
   try {
     const url = `http://127.0.0.1:${app.server.addr.port}`;
-    const setup = await fetch(url + "/api/setup", {
-      method: "POST",
-      headers: { Origin: url, "Content-Type": "application/json" },
-      body: JSON.stringify({
+    let cookie = "";
+    const fetcher = originFetch(url);
+    http = new HttpRequests({
+      base: new URL(url + "/api/"),
+      fetcher: async (input, options) => {
+        const response = await fetcher(input, options);
+        const header = response.headers.get("set-cookie");
+        if (header) cookie = header.split(";")[0];
+        return response;
+      },
+    });
+    assertEquals(
+      await http.start("setup", {
         type: "password",
         username: "Alice",
         password: "test-password",
-      }),
-    });
-    assertEquals(setup.status, 200);
-    await setup.json();
-    const login = await fetch(url + "/api/login", {
-      method: "POST",
-      headers: { Origin: url, "Content-Type": "application/json" },
-      body: JSON.stringify({ username: "Alice", password: "test-password" }),
-    });
-    assertEquals(login.status, 200);
-    await login.json();
-    const cookie = login.headers.get("set-cookie")!.split(";")[0];
+      }).result,
+      { ok: true },
+    );
+    assertEquals(
+      await http.start("login", {
+        username: "Alice",
+        password: "test-password",
+      }).result,
+      { ok: true },
+    );
+    assert(cookie, "successful login must deliver its cookie with the result");
     const first = new WsClient(url, cookie);
     clients.push(first);
     await first.connect();
@@ -299,6 +313,7 @@ test("first-run setup and restart retain the same user's inbox metadata", async 
     assert(inbox.projects.some((p) => p.directory === empty && p.added));
     assertEquals(inbox.seen["tstv1-core"], seen);
   } finally {
+    await http?.stop();
     for (const client of clients) await client.close();
     await app.stop();
   }

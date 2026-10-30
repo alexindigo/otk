@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../support/resources.ts";
 import { assertEquals, assertRejects } from "@std/assert";
-import { createTaskActions } from "@otk/client";
+import { createTaskActions, RequestFailure } from "@otk/client";
 import type { TaskRecord } from "@otk/protocol";
 import { fixture } from "../support/config.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
@@ -91,11 +91,11 @@ test("task member operations are idempotent, ordered, exclusive, validated and d
     await Promise.all([add("tstv1-second"), add("tstv1-second")]);
     assertEquals((await add(base.id)).sessions, [base.id, "tstv1-second"]);
     await assertRejects(() => add("tstv1-third"));
-    await assertRejects(
+    const foreign = await assertRejects(
       () => add("tstv1-atmosphera"),
-      Error,
-      "another project",
+      RequestFailure,
     );
+    assertEquals(foreign.failure.code, "request.params");
     assertEquals((await remove("tstv1-third")).sessions, [
       base.id,
       "tstv1-second",

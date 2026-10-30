@@ -2,6 +2,7 @@
 import { assertEquals, assertMatch, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import type { ContentSession } from "@otk/protocol";
+import { RequestFailure } from "@otk/client";
 import { test } from "../support/resources.ts";
 import {
   browserFixture,
@@ -29,11 +30,11 @@ test("qualified identities survive native creation, prompt, external helper, col
         session,
       ) => session.title === root.title)!;
     assertEquals(root.id, `opcv1-${native.id}`);
-    await assertRejects(
+    const bare = await assertRejects(
       () => client!.rpc("session.get", { sessionID: native.id }),
-      Error,
-      "qualified sessionID",
+      RequestFailure,
     );
+    assertEquals(bare.failure.code, "request.params");
 
     const b = await f.browser(server.url);
     await openSession(b, root.id);
