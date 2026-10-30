@@ -28,6 +28,7 @@ import { ForkFact } from "./ForkNote.tsx";
 import ComposerNotice from "./ComposerNotice.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
 import PaneState from "./PaneState.tsx";
+import { bindFeedback } from "../state/feedback.ts";
 import { useSessionPorts } from "../registries/session.tsx";
 import SessionError from "./SessionError.tsx";
 import type { SessionErrorState } from "@otk/protocol";
@@ -96,18 +97,8 @@ export default function SessionView(props: {
 }): Element {
   const writeDraft = props.onDraft;
   const feedbackOwner = useSessionPorts()?.feedback;
-  const [feedbackRevision, setFeedbackRevision] = createSignal(0);
-  if (feedbackOwner) {
-    onCleanup(
-      feedbackOwner.subscribe(() =>
-        setFeedbackRevision(feedbackRevision() + 1)
-      ),
-    );
-  }
-  const feedback = () => {
-    feedbackRevision();
-    return feedbackOwner?.current();
-  };
+  const feedback = bindFeedback(() => feedbackOwner);
+  let noticeControl: { focus(): void } | undefined;
   const returnAnchor = props.transcript?.interaction.anchor();
   const revealLifetime = new AbortController();
   onCleanup(() => revealLifetime.abort());
@@ -136,6 +127,30 @@ export default function SessionView(props: {
       : state;
   };
   const noticed = () => rollbackNotice() || !!props.forkNote || !!feedback();
+  // The slot's identity is its mounted lifetime, not each feedback publication.
+  const notice = () => (
+    <ComposerNotice>
+      <Show when={feedback()}>
+        {(value) => (
+          <OperationFeedback
+            feedback={value()}
+            control={(control) => noticeControl = control}
+          />
+        )}
+      </Show>
+      <Show when={rollbackNotice()}>
+        <RolledBackContent strip={props.strip} state={rollbackState()} />
+      </Show>
+      <Show when={props.forkNote}>
+        {(note) => (
+          <ForkFact
+            note={note()}
+            onDismiss={() => props.onDismissForkNote?.()}
+          />
+        )}
+      </Show>
+    </ComposerNotice>
+  );
   const [now, setNow] = createSignal(Date.now());
   const [revealError, setRevealError] = createSignal<string>();
   const older = ownedAction("session.page", () => props.onOlder());
@@ -320,7 +335,12 @@ export default function SessionView(props: {
               }}
             >
               <Show when={props.paging}>
-                <p role="status">Loading earlier messages…</p>
+                <PaneState
+                  feedback={{
+                    kind: "pending",
+                    text: "Loading earlier messages…",
+                  }}
+                />
               </Show>
               <Show
                 when={!props.exhausted && count() &&
@@ -336,10 +356,16 @@ export default function SessionView(props: {
                 </button>
               </Show>
               <Show when={props.error && !!count()}>
-                <p role="alert" class="otk-error">{props.error}</p>
-                <button type="button" onClick={() => void retry()}>
-                  Retry messages
-                </button>
+                <PaneState
+                  feedback={{
+                    kind: "error",
+                    text: props.error!,
+                    action: {
+                      label: "Retry messages",
+                      run: () => void retry(),
+                    },
+                  }}
+                />
               </Show>
               <Show when={revealError()}>
                 <p role="alert" class="otk-error">{revealError()}</p>
@@ -511,29 +537,8 @@ export default function SessionView(props: {
           </div>
           <Show when={!props.child}>
             <ComposerTakeovers
-              notice={noticed()
-                ? () => (
-                  <ComposerNotice>
-                    <Show when={feedback()}>
-                      {(value) => <OperationFeedback feedback={value()} />}
-                    </Show>
-                    <Show when={rollbackNotice()}>
-                      <RolledBackContent
-                        strip={props.strip}
-                        state={rollbackState()}
-                      />
-                    </Show>
-                    <Show when={props.forkNote}>
-                      {(note) => (
-                        <ForkFact
-                          note={note()}
-                          onDismiss={() => props.onDismissForkNote?.()}
-                        />
-                      )}
-                    </Show>
-                  </ComposerNotice>
-                )
-                : undefined}
+              focusNotice={() => noticeControl?.focus()}
+              notice={noticed() ? notice : undefined}
             >
               {(active) => (
                 <div

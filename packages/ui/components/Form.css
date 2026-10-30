@@ -16,17 +16,6 @@
   flex-direction: column;
   gap: 8px;
 }
-.otk-form-action {
-  display: grid;
-  align-items: center;
-}
-.otk-form-action > * {
-  grid-area: 1 / 1;
-  justify-self: start;
-}
-.otk-form.is-pending .otk-form-action > button {
-  visibility: hidden;
-}
 .otk-form-choice {
   display: grid;
 }

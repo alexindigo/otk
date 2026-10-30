@@ -17,6 +17,7 @@ registerOtkThemes(themes);
 const theme = new ThemeEngine(themes, browserThemeEnvironment(), "otk-dark");
 theme.start();
 const driver = {
+  engine: theme,
   theme: (id: string) => theme.commit(id),
   reserve: (_value: boolean) => {},
   collapse: (_value: boolean) => {},
@@ -24,6 +25,19 @@ const driver = {
   lists: (_members: string[], _selected?: string, _editing?: string) => {},
   menuItems: (_keys: string[]) => {},
   feedback: (_state: "clear" | "pending" | "error") => {},
+  holdMenu: (_value: boolean) => {},
+  settleMenu: (_failed: boolean) => {},
+  fieldFailure: (_name: string) => {},
+  feedbackOwner: (_index: number) => {},
+  mountFeedback: (_value: boolean) => {},
+  emitFeedback: (
+    _index: number,
+    _kind: "pending" | "connection" | "error",
+  ) => {},
+  settlePreference: () => {},
+  resetNotice: () => {},
+  settleNotice: () => {},
+  refreshNotice: () => {},
 };
 declare global {
   var styleTest: typeof driver;
@@ -37,6 +51,9 @@ const scenes = {
   lists: () => import("./lists.tsx"),
   requests: () => import("./requests.tsx"),
   forms: () => import("./forms.tsx"),
+  "feedback-owners": () => import("./feedback-owners.tsx"),
+  "preference-feedback": () => import("./preference-feedback.tsx"),
+  "notice-lifetime": () => import("./notice-lifetime.tsx"),
 };
 const name = new URL(location.href).searchParams.get(
   "scene",

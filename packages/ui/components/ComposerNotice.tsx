@@ -15,6 +15,10 @@ export function ComposerNoticeRow(props: {
   trailing?: Element;
   class?: string;
   role?: "alert" | "status";
+  "aria-atomic"?: "true";
+  "aria-hidden"?: "true";
+  focusable?: boolean;
+  control?(control: { focus(): void }): void;
   expanded?: boolean;
   onClick?(): void;
 }): Element {
@@ -22,10 +26,22 @@ export function ComposerNoticeRow(props: {
   const native = nativeAttributes(() => ({ onClick: props.onClick }));
   return (
     <Control
-      ref={native.ref}
+      ref={(element: HTMLElement) => {
+        native.ref(element);
+        props.control?.({
+          focus: () => {
+            if (element.isConnected && element.getClientRects().length) {
+              element.focus();
+            }
+          },
+        });
+      }}
+      tabindex={props.focusable ? -1 : undefined}
       class={`otk-composer-notice-row ${props.class ?? ""}`}
       type={props.onClick ? "button" : undefined}
       role={props.role}
+      aria-atomic={props["aria-atomic"]}
+      aria-hidden={props["aria-hidden"]}
       aria-expanded={props.expanded === undefined
         ? undefined
         : props.expanded

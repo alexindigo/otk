@@ -59,6 +59,7 @@ export default function MessageActions(props: {
     try {
       await ports.commands.run(id, props.target);
     } catch (error) {
+      if (ports.failureOwned?.(error)) return;
       if (active) setError(failureText(error));
     } finally {
       if (active) setPending("");

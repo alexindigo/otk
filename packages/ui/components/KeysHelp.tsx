@@ -4,6 +4,8 @@ import "./KeysHelp.css" with { type: "text" };
 import { createSignal, For, onSettled, Show } from "solid-js";
 import { comboFromEvent, type Keymap } from "../keyboard/keys.ts";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
+import FieldFeedback from "./FieldFeedback.tsx";
+import ActionSlot from "./ActionSlot.tsx";
 export default function KeysHelp(props: {
   keymap: Keymap;
   ready: boolean;
@@ -15,6 +17,7 @@ export default function KeysHelp(props: {
     [error, setError] = createSignal(""),
     [pending, setPending] = createSignal(false);
   let active = true;
+  let status: { focus(): void } | undefined, resetButton!: HTMLButtonElement;
   onSettled(() => {
     const release = props.keymap.subscribe(() => setRevision((n) => n + 1));
     return () => {
@@ -30,6 +33,7 @@ export default function KeysHelp(props: {
   const save = async (value: Record<string, string>) => {
     if (pending() || !props.ready) return;
     setPending(true);
+    onSettled(() => status?.focus());
     setError("");
     try {
       await props.onSave(value);
@@ -111,7 +115,7 @@ export default function KeysHelp(props: {
         keeps the browser menu. ContextMenu or Shift+F10 opens the focused
         item's menu. Arrow keys, Home, End and typing navigate app menu actions.
       </p>
-      <div class="otk-keys-list">
+      <div class={["otk-keys-list", { "is-pending": pending() }]}>
         <For each={rows()} keyed={(row) => row.id}>
           {(row) => (
             <div class="otk-keys-row" data-binding={row().id}>
@@ -124,14 +128,14 @@ export default function KeysHelp(props: {
               <kbd>{row().key || "Unbound"}</kbd>
               <button
                 type="button"
-                disabled={!props.ready || pending()}
+                hidden={!props.ready}
                 onClick={() => void capture(row().id)}
               >
                 Rebind
               </button>
               <button
                 type="button"
-                disabled={!props.ready || pending() || !row().overridden}
+                hidden={!props.ready || !row().overridden}
                 onClick={() => void reset(row().id)}
               >
                 Reset
@@ -161,16 +165,30 @@ export default function KeysHelp(props: {
           )}
         </For>
       </div>
-      <Show when={error()}>
-        <p role="alert">{error()}</p>
-      </Show>
-      <button
-        type="button"
-        disabled={!props.ready || pending()}
-        onClick={() => void resetAll()}
+      <FieldFeedback
+        action
+        feedback={error() ? { kind: "error", text: error() } : undefined}
+      />
+      <ActionSlot
+        class="otk-key-actions"
+        pending={pending()}
+        feedback={pending()
+          ? { kind: "pending", text: "Saving shortcuts…" }
+          : undefined}
+        control={(control) => status = control}
+        focusAction={() => {
+          if (resetButton.isConnected) resetButton.focus();
+        }}
       >
-        Reset all shortcuts
-      </button>
+        <button
+          ref={(element) => resetButton = element}
+          type="button"
+          hidden={!props.ready}
+          onClick={() => void resetAll()}
+        >
+          Reset all shortcuts
+        </button>
+      </ActionSlot>
     </>
   );
 }

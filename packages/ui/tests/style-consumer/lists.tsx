@@ -90,6 +90,15 @@ export default function Scene() {
   const [keys, setKeys] = createSignal(["one", "two", "delete"]);
   styleTest.menuItems = setKeys;
   const { commands } = useCommandPorts();
+  let held = false,
+    settlement: ReturnType<typeof Promise.withResolvers<void>> | undefined;
+  styleTest.holdMenu = (value) => {
+    held = value;
+  };
+  styleTest.settleMenu = (failed) => {
+    if (failed) settlement?.reject(new Error("private SQL /secret/path"));
+    else settlement?.resolve();
+  };
   onSettled(() => {
     const releases = ["one", "two", "delete"].map((id) =>
       commands.register({
@@ -99,7 +108,11 @@ export default function Scene() {
         hidden: true,
         context: { kind: "list-probe", destructive: id === "delete" },
         enabled: () => keys().includes(id),
-        run: () => {},
+        run: () => {
+          if (!held) return;
+          settlement = Promise.withResolvers<void>();
+          return settlement.promise;
+        },
       })
     );
     return () => releases.forEach((release) => release());

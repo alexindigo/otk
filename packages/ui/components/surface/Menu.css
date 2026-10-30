@@ -1,9 +1,5 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-menu-items {
-  --menu-row-height: 28px;
-  --menu-item-inset: 8px;
-  --menu-block-inset: 4px;
-  --menu-row-gap: 0px;
   display: flex;
   flex-direction: column;
   gap: var(--menu-row-gap);

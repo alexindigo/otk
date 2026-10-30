@@ -15,6 +15,38 @@ their actual field. PaneState occupies a shared transcript grid cell and centres
 its content without viewport offsets. Their error paint uses semantic `danger`,
 separate from focus/action paint; Dark uses `#ff8080` and Linen/Stone `#b5141a`.
 
+`feedbackState({feedback,class})` binds status/alert semantics, empty-track
+accessibility and pending/error/reconnecting classes together. `FeedbackStatus`
+is the shared in-flow text/action presentation used by fields, menu status cells
+and pane states. Empty reserved tracks stay in flow and longer visible copy
+ellipsizes while the complete accessible description remains available.
+`bindFeedback(() => owner)` borrows a replaceable client FeedbackOwner, releases
+the previous subscription and restores the target's retained state on remount;
+it never cancels an operation or stores a second pending map.
+
+`ContentSlot({content})` gives an injected render factory its own mounted
+lifetime. Replacing data read by that content does not reconstruct its subtree;
+replacing or releasing the factory does. Composer and takeover notice hosts use
+the same slot, so a metadata refresh cannot reset an open rollback disclosure.
+
+`ActionSlot` supplies one shared grid cell for an action and its pending status,
+retaining intrinsic control geometry while unavailable controls are hidden. Its
+focus port addresses the status; the consumer supplies the return-to-action
+callback. Forms, command menus, theme saves and keymap saves use that same cell.
+
+Native form inputs, textareas and select controls share concerned-field feedback
+IDs, preserve supplied descriptions and retain submitted values while pending. A
+hidden submit or menu action hands focus to its visible status cell. TitleEditor
+uses the same reserved field track. Registered takeovers receive an optional
+`focusNotice` callback alongside their notice content, so pending replies can
+focus the one joined notice rather than a hidden action or duplicate status.
+Independent takeovers without that port retain a local status cell.
+
+CommandProvider can inject `failureOwned(cause)` from the client resource owner.
+Menus, palette and message actions then defer an exactly correlated failure to
+its retained target sink; independent/local failures keep their own reserved
+feedback. No component infers ownership from error prose or a method name.
+
 Import from `@otk/ui`. `createUiRegistries()` creates empty `tools`, `parts`,
 `prompt`, `dialogs`, `panels`, `takeovers` and legacy `docks` collections.
 Choose feature-owned `register*` functions in your composition root, then

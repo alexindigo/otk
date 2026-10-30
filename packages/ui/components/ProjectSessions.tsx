@@ -93,6 +93,7 @@ export default function ProjectSessions(props: {
         ...raw,
         sidecarId: props.project!.sidecarId,
         attention: projected?.attention ?? raw.attention,
+        operationStatus: projected?.operationStatus,
       }
       : projected!;
   };

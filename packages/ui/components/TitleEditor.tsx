@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./TitleEditor.css" with { type: "text" };
-import { createSignal, createUniqueId, onSettled, Show } from "solid-js";
+import { createSignal, createUniqueId, onSettled } from "solid-js";
 import type { SessionRename } from "@otk/client";
+import FieldFeedback from "./FieldFeedback.tsx";
 
 /** Native input only. The injected owner owns editing, admission and failures. */
 export default function TitleEditor(props: { owner: SessionRename }) {
@@ -22,7 +23,7 @@ export default function TitleEditor(props: { owner: SessionRename }) {
       <input
         ref={(element) => input = element}
         aria-label="Rename session"
-        aria-describedby={props.owner.state.error ? errorID : undefined}
+        aria-describedby={errorID}
         aria-invalid={props.owner.state.error ? "true" : undefined}
         aria-busy={props.owner.state.pending ? "true" : undefined}
         maxlength={200}
@@ -42,11 +43,14 @@ export default function TitleEditor(props: { owner: SessionRename }) {
           }
         }}
       />
-      <Show when={props.owner.state.error}>
-        <span id={errorID} role="alert" class="otk-error">
-          {props.owner.state.error}
-        </span>
-      </Show>
+      <FieldFeedback
+        id={errorID}
+        feedback={props.owner.state.pending
+          ? { kind: "pending", text: "Renaming session…" }
+          : props.owner.state.error
+          ? { kind: "error", text: props.owner.state.error }
+          : undefined}
+      />
     </span>
   );
 }

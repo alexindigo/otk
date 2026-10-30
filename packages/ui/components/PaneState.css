@@ -12,9 +12,3 @@
   color: var(--otk-fg);
   text-align: center;
 }
-.otk-pane-state p {
-  margin: 0;
-}
-.otk-pane-state.is-error {
-  color: var(--danger);
-}

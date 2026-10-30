@@ -83,10 +83,12 @@ export function createShellNavigation(o: {
     error: "",
   });
   let revision = 0, viewed = "", viewedFinish = 0, projectOnly = false;
-  const fail = (error: unknown): void =>
+  const fail = (error: unknown): void => {
+    if (resources.ownsFailure?.(error)) return;
     store.update((draft) => {
       draft.error = failureText(error);
     });
+  };
   const clearError = (): void =>
     store.update((draft) => {
       draft.error = "";

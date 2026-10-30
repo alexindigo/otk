@@ -6,6 +6,9 @@ import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, type Element, For, onSettled, Show } from "solid-js";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 import type { ThemeEngine } from "../theme/engine.ts";
+import FieldFeedback from "./FieldFeedback.tsx";
+import ActionSlot from "./ActionSlot.tsx";
+import { FormSelect } from "./Form.tsx";
 /** Preview is locally owned; committed state and saves are supplied by the host. */
 export default function ThemePicker(props: {
   theme: ThemeEngine;
@@ -21,6 +24,7 @@ export default function ThemePicker(props: {
     [pending, setPending] = createSignal(false),
     [error, setError] = createSignal("");
   let active = true, preview: ReturnType<ThemeEngine["preview"]> | undefined;
+  let status: { focus(): void } | undefined, saveButton!: HTMLButtonElement;
   onSettled(() => {
     preview = props.theme.preview();
     return () => {
@@ -59,6 +63,7 @@ export default function ThemePicker(props: {
     run: async () => {
       if (pending() || !props.ready) return;
       setPending(true);
+      onSettled(() => status?.focus());
       setError("");
       try {
         await props.onSave(selected());
@@ -82,7 +87,11 @@ export default function ThemePicker(props: {
       <p class="otk-muted">
         Preview a theme. Save to use it in connected tabs.
       </p>
-      <div class="otk-theme-choices" role="group" aria-label="Theme choices">
+      <div
+        class={["otk-theme-choices", { "is-pending": pending() }]}
+        role="group"
+        aria-label="Theme choices"
+      >
         <For each={choices} keyed={(choice) => choice.id}>
           {(choice) => (
             <button
@@ -93,7 +102,6 @@ export default function ThemePicker(props: {
                 kind: "pressed",
                 selected: selected() === choice().id,
               })}
-              disabled={pending()}
               onClick={() => void select(choice().id)}
             >
               <SelectionContent>{choice().label}</SelectionContent>
@@ -103,13 +111,15 @@ export default function ThemePicker(props: {
       </div>
       <label class="otk-system-light">
         Light theme used by System
-        <select
+        <FormSelect
           name="systemLightTheme"
           value={props.systemLightTheme}
-          disabled={!props.ready || pending()}
+          pending={!props.ready || pending()}
           onChange={async (event) => {
             const select = event.currentTarget, id = select.value;
+            if (!props.ready || pending()) return;
             setPending(true);
+            onSettled(() => status?.focus());
             setError("");
             try {
               await props.onSystemLightSave(id);
@@ -135,20 +145,39 @@ export default function ThemePicker(props: {
           <For each={lightThemes} keyed={(theme) => theme.id}>
             {(theme) => <option value={theme().id}>{theme().label}</option>}
           </For>
-        </select>
+        </FormSelect>
       </label>
-      <Show when={error()}>
-        <p role="alert">{error()}</p>
-      </Show>
+      <FieldFeedback
+        action
+        feedback={error() ? { kind: "error", text: error() } : undefined}
+      />
       <footer class="otk-theme-actions">
         <button type="button" onClick={() => void close()}>Cancel</button>
-        <button
-          type="button"
-          disabled={!props.ready || pending()}
-          onClick={() => void save()}
+        <ActionSlot
+          pending={pending()}
+          feedback={pending()
+            ? {
+              kind: "pending",
+              text: `Saving ${
+                choices.find((choice) => choice.id === selected())?.label ??
+                  "theme"
+              }…`,
+            }
+            : undefined}
+          control={(control) => status = control}
+          focusAction={() => {
+            if (saveButton.isConnected) saveButton.focus();
+          }}
         >
-          {pending() ? "Saving…" : "Save theme"}
-        </button>
+          <button
+            ref={(element) => saveButton = element}
+            type="button"
+            hidden={!props.ready}
+            onClick={() => void save()}
+          >
+            Save theme
+          </button>
+        </ActionSlot>
       </footer>
     </>
   );

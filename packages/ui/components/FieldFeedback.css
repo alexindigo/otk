@@ -1,23 +1,11 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-field-feedback {
-  display: grid;
-  align-content: start;
+  align-items: start;
   min-inline-size: 0;
+  contain: inline-size;
   block-size: var(--line-ui);
   font: 400 var(--text-ui)/var(--line-ui) var(--font-ui);
-  visibility: hidden;
-  color: var(--otk-fg);
-}
-.otk-field-feedback.is-visible {
-  visibility: visible;
-}
-.otk-field-feedback.is-error {
-  color: var(--danger);
 }
 .otk-field-feedback.is-action {
   block-size: calc(2 * var(--line-ui));
-}
-.otk-field-feedback > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
 }

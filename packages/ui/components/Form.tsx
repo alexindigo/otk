@@ -17,9 +17,10 @@ import type { ComponentProps } from "@solidjs/web";
 import { nativeAttributes } from "./native-attributes.ts";
 import { ownedAction } from "../keyboard/context.tsx";
 import FieldFeedback from "./FieldFeedback.tsx";
+import ActionSlot from "./ActionSlot.tsx";
 const FormContext = createContext<
-  { pending(): boolean; feedback(): Feedback | undefined }
->();
+  { pending(): boolean; feedback(): Feedback | undefined } | null
+>(null);
 export default function Form(
   props: {
     title: string;
@@ -46,7 +47,7 @@ export default function Form(
   };
   const pending = () => state().pending;
   const context = { pending, feedback: () => state().feedback };
-  let status!: HTMLSpanElement;
+  let status: { focus(): void } | undefined, button!: HTMLButtonElement;
   const send = ownedAction(
     "form.submit",
     (data: FormData) => props.onSubmit(data),
@@ -75,67 +76,114 @@ export default function Form(
           action
           feedback={state().feedback?.field ? undefined : state().feedback}
         />
-        <div class="otk-form-action">
-          <button type="submit">{props.submitLabel}</button>
-          <span ref={status} role="status" tabindex={-1}>
-            {pending() ? props.pendingLabel ?? "Working…" : ""}
-          </span>
-        </div>
+        <ActionSlot
+          class="otk-form-action"
+          pending={pending()}
+          control={(control) => status = control}
+          focusAction={() => {
+            if (button.isConnected) button.focus();
+          }}
+          feedback={pending()
+            ? { kind: "pending", text: props.pendingLabel ?? "Working…" }
+            : undefined}
+        >
+          <button ref={(element) => button = element} type="submit">
+            {props.submitLabel}
+          </button>
+        </ActionSlot>
       </form>
     </FormContext>
   );
 }
 /** Native fields borrow the form's captured lifetime without parent DOM mutation. */
-export function FormInput(props: ComponentProps<"input">): Element {
+function formField(
+  name: () => unknown,
+  described: () => unknown,
+) {
   const form = useContext(FormContext), id = createUniqueId();
-  const native = nativeAttributes(() => props);
   const feedback = () =>
-    form?.feedback()?.field === props.name ? form.feedback() : undefined;
+    typeof name() === "string" && form?.feedback()?.field === name()
+      ? form?.feedback()
+      : undefined;
+  return {
+    form,
+    id,
+    feedback,
+    get description() {
+      const description = described();
+      return [typeof description === "string" ? description : undefined, id]
+        .filter(Boolean).join(" ");
+    },
+    get invalid(): "true" | undefined {
+      return feedback()?.kind === "error" ? "true" : undefined;
+    },
+  };
+}
+export function FormInput(props: ComponentProps<"input">): Element {
+  const field = formField(() => props.name, () => props["aria-describedby"]);
+  const native = nativeAttributes(() => props);
   return (
     <>
       <input
         {...native.attributes}
         ref={[props.ref, native.ref]}
-        readonly={form?.pending() || props.readonly}
-        aria-describedby={id}
-        aria-invalid={feedback()?.kind === "error" ? "true" : undefined}
+        readonly={field.form?.pending() || props.readonly}
+        aria-describedby={field.description}
+        aria-invalid={field.invalid}
       />
-      <FieldFeedback id={id} feedback={feedback()} />
+      <FieldFeedback id={field.id} feedback={field.feedback()} />
     </>
   );
 }
 export function FormTextarea(props: ComponentProps<"textarea">): Element {
-  const form = useContext(FormContext), native = nativeAttributes(() => props);
+  const field = formField(() => props.name, () => props["aria-describedby"]),
+    native = nativeAttributes(() => props);
   return (
-    <textarea
-      {...native.attributes}
-      ref={[props.ref, native.ref]}
-      readonly={form?.pending() || props.readonly}
-    />
+    <>
+      <textarea
+        {...native.attributes}
+        ref={[props.ref, native.ref]}
+        readonly={field.form?.pending() || props.readonly}
+        aria-describedby={field.description}
+        aria-invalid={field.invalid}
+      />
+      <FieldFeedback id={field.id} feedback={field.feedback()} />
+    </>
   );
 }
-export function FormSelect(props: ComponentProps<"select">): Element {
-  const form = useContext(FormContext), native = nativeAttributes(() => props);
+export function FormSelect(
+  props: ComponentProps<"select"> & { pending?: boolean },
+): Element {
+  const field = formField(() => props.name, () => props["aria-describedby"]),
+    form = field.form,
+    native = nativeAttributes(() => ({ ...props, pending: undefined }));
   let select!: HTMLSelectElement;
   const label = () => {
-    form?.pending();
+    pending();
     return select?.selectedOptions[0]?.textContent ?? String(props.value ?? "");
   };
+  const pending = () => form?.pending() || props.pending;
   return (
-    <span class={["otk-form-choice", { "is-pending": form?.pending() }]}>
-      <select
-        {...native.attributes}
-        ref={[props.ref, native.ref, (element) => select = element]}
-      >
-        {props.children}
-      </select>
-      <input
-        class="otk-form-choice-value"
-        value={label()}
-        readonly
-        aria-label={props.name}
-      />
-    </span>
+    <>
+      <span class={["otk-form-choice", { "is-pending": pending() }]}>
+        <select
+          {...native.attributes}
+          ref={[props.ref, native.ref, (element) => select = element]}
+          aria-describedby={field.description}
+          aria-invalid={field.invalid}
+        >
+          {props.children}
+        </select>
+        <input
+          class="otk-form-choice-value"
+          value={label()}
+          readonly
+          aria-label={props.name}
+          aria-describedby={field.description}
+        />
+      </span>
+      <FieldFeedback id={field.id} feedback={field.feedback()} />
+    </>
   );
 }
 export function Credentials(

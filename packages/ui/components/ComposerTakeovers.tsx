@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ComposerTakeovers.css" with { type: "text" };
-import { type Element, For, Show } from "solid-js";
+import { type Element, For } from "solid-js";
 import { useUiRegistries } from "../registries/context.tsx";
 import { useSessionPorts } from "../registries/session.tsx";
+import ContentSlot from "./ContentSlot.tsx";
 export default function ComposerTakeovers(
   props: {
     children?: (active: () => boolean) => Element;
     notice?: () => Element;
+    focusNotice?(): void;
   },
 ): Element {
   const { takeovers } = useUiRegistries(), session = useSessionPorts();
@@ -23,6 +25,7 @@ export default function ComposerTakeovers(
             get notice() {
               return item().id === first() ? props.notice : undefined;
             },
+            focusNotice: () => props.focusNotice?.(),
           })}
       </For>
       <div
@@ -30,7 +33,7 @@ export default function ComposerTakeovers(
         data-takeover={active() ? "true" : "false"}
         hidden={active()}
       >
-        <Show when={!active()}>{props.notice?.()}</Show>
+        <ContentSlot content={!active() ? props.notice : undefined} />
         <div class={["otk-composer-body", { "is-noticed": !!props.notice }]}>
           {props.children?.(active)}
         </div>

@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import FieldFeedback from "./FieldFeedback.tsx";
+import FeedbackStatus from "./FeedbackStatus.tsx";
+import { bindFeedback } from "../state/feedback.ts";
 import { failureText } from "@otk/client";
 import "./PermissionDock.css" with { type: "text" };
 import Takeover from "./surface/Takeover.tsx";
@@ -53,7 +56,8 @@ function waitingPermissions(session: SessionPorts) {
     : session.permissions();
 }
 function PermissionTakeover(
-  props: { notice?: () => import("solid-js").Element } = {},
+  props: { notice?: () => import("solid-js").Element; focusNotice?(): void } =
+    {},
 ) {
   const session = useSessionPorts(), { commands } = useCommandPorts();
   const request = () =>
@@ -71,6 +75,7 @@ function PermissionTakeover(
       </Show>
       <PermissionDock
         notice={props.notice}
+        focusNotice={props.focusNotice}
         request={request()}
         where={request()
           ? `${request()!.kind} in ${
@@ -92,6 +97,7 @@ function RequestDock(
   props: {
     request: PermissionRequest;
     notice?: () => import("solid-js").Element;
+    focusNotice?(): void;
     childTitle?: string;
     where?: string;
     onReply(input: PermissionReply): Promise<void>;
@@ -99,13 +105,25 @@ function RequestDock(
   },
 ) {
   const feedback = useSessionPorts()?.feedback;
+  const operation = bindFeedback(() => feedback);
   const [mode, setMode] = createSignal<"normal" | "always" | "reject">(
     "normal",
   );
   const [message, setMessage] = createSignal(""),
     [pending, setPending] = createSignal(false),
     [error, setError] = createSignal("");
-  let active = true, card!: HTMLElement, pendingStatus!: HTMLSpanElement;
+  let active = true, card!: HTMLElement, pendingStatus!: HTMLDivElement;
+  createEffect(
+    () => ({ pending: pending(), feedback: operation() }),
+    (value) => {
+      if (value.pending) {
+        onSettled(() => {
+          if (props.focusNotice && value.feedback) props.focusNotice();
+          else pendingStatus?.focus();
+        });
+      }
+    },
+  );
   createEffect(mode, (_value, previous) => {
     if (previous !== undefined) {
       card.querySelector<HTMLButtonElement>(".otk-permission-actions button")
@@ -124,7 +142,6 @@ function RequestDock(
       message: reply === "reject" ? message().trim() || undefined : undefined,
     };
     setPending(true);
-    queueMicrotask(() => pendingStatus?.focus());
     feedback?.clear();
     setError("");
     try {
@@ -224,14 +241,13 @@ function RequestDock(
         }
         actions={
           <>
-            <span
-              ref={pendingStatus}
-              tabindex={-1}
-              hidden={!pending()}
-              role="status"
-            >
-              Sending response…
-            </span>
+            <Show when={pending() && !(props.focusNotice && operation())}>
+              <FeedbackStatus
+                ref={(element) => pendingStatus = element}
+                focusable
+                feedback={{ kind: "pending", text: "Sending response…" }}
+              />
+            </Show>
             <Switch>
               <Match when={mode() === "normal"}>
                 <div class="otk-permission-actions">
@@ -323,12 +339,10 @@ function RequestDock(
         }
       >
         <PermissionSummary request={props.request} />
-        <Show when={pending() && !feedback}>
-          <p role="status">Sending response…</p>
-        </Show>
-        <Show when={error()}>
-          <p class="otk-error" role="alert">{error()}</p>
-        </Show>
+        <FieldFeedback
+          action
+          feedback={error() ? { kind: "error", text: error() } : undefined}
+        />
         <Show when={mode() === "always"}>
           <div class="otk-permission-confirm">
             <p>Allow these patterns for future requests?</p>
@@ -369,6 +383,7 @@ export default function PermissionDock(
   props: {
     request?: PermissionRequest;
     notice?: () => import("solid-js").Element;
+    focusNotice?(): void;
     childTitle?: string;
     where?: string;
     onReply(input: PermissionReply): Promise<void>;
@@ -383,6 +398,7 @@ export default function PermissionDock(
       {(request) => (
         <RequestDock
           notice={props.notice}
+          focusNotice={props.focusNotice}
           request={request()}
           childTitle={props.childTitle}
           where={props.where}

@@ -54,10 +54,18 @@ async function consumer(
   const browser = await Cdp.launch(root);
   try {
     await browser.goto(`http://127.0.0.1:${server.addr.port}/?scene=${scene}`);
-    await browser.poll("document.documentElement.dataset.ready==='true'");
+    try {
+      await browser.poll("document.documentElement.dataset.ready==='true'");
+    } catch (cause) {
+      console.error("Component consumer startup errors:", browser.errors);
+      throw cause;
+    }
     const failures: unknown[] = [];
     for (const theme of ["otk-dark", "otk-light"]) {
       await browser.evaluate(`styleTest.theme('${theme}')`);
+      if (scene === "preference-feedback") {
+        await browser.click(`[data-theme-choice="${theme}"]`);
+      }
       await browser.poll(
         `document.documentElement.dataset.otkTheme==='${theme}'`,
       );
@@ -87,6 +95,170 @@ async function consumer(
     await browser.close();
   }
 }
+
+test("joined notice publications retain disclosure state, DOM identity and the available Restore action", () =>
+  consumer("notice-lifetime", async (browser, root) => {
+    await browser.evaluate(
+      "styleTest.resetNotice();new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+    );
+    const beforeRestores = await browser.evaluate<number>(
+      "Number(document.querySelector('[data-restores]').dataset.restores)",
+    );
+    await browser.evaluate(
+      "window.originalStrip=document.querySelector('.otk-rolled-back-strip')",
+    );
+    if (
+      await browser.evaluate(
+        "document.querySelector('.otk-rollback-disclosure')?.getAttribute('aria-expanded')!=='true'",
+      )
+    ) await browser.click(".otk-rollback-disclosure");
+    await browser.evaluate(
+      "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+    );
+    const opening = await browser.evaluate(
+      "[window.originalStrip===document.querySelector('.otk-rolled-back-strip'),document.querySelector('.otk-rollback-disclosure')?.getAttribute('aria-expanded')]",
+    );
+    const theme = await browser.evaluate<string>(
+      "document.documentElement.dataset.otkTheme",
+    );
+    await Deno.writeTextFile(
+      join(root, `notice-opening-${theme}.json`),
+      JSON.stringify(opening),
+    );
+    assertEquals(opening, [true, "true"]);
+    await browser.evaluate(
+      "styleTest.refreshNotice();new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "[window.originalStrip===document.querySelector('.otk-rolled-back-strip'),document.querySelector('.otk-rollback-disclosure')?.getAttribute('aria-expanded')]",
+      ),
+      [true, "true"],
+    );
+    await browser.evaluate(
+      "styleTest.settleNotice();new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "[window.originalStrip===document.querySelector('.otk-rolled-back-strip'),document.querySelector('.otk-rollback-disclosure')?.getAttribute('aria-expanded'),!!document.querySelector('.otk-rollback-footer button')]",
+      ),
+      [true, "true", true],
+    );
+    for (const state of ["pending", "error", "clear"]) {
+      await browser.evaluate(`styleTest.feedback('${state}')`);
+      await browser.evaluate(
+        "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+      );
+      assertEquals(
+        await browser.evaluate(
+          "[window.originalStrip===document.querySelector('.otk-rolled-back-strip'),document.querySelector('.otk-rollback-disclosure')?.getAttribute('aria-expanded'),!!document.querySelector('.otk-rollback-footer button'),document.querySelectorAll('.otk-composer-notice').length]",
+        ),
+        [true, "true", true, 1],
+      );
+    }
+    await browser.click(".otk-rollback-footer button");
+    await browser.poll(
+      `Number(document.querySelector('[data-restores]').dataset.restores)===${
+        beforeRestores + 1
+      }`,
+    );
+  }));
+
+test("feedback bindings release replaced owners and remount the original target's retained feedback", () =>
+  consumer("feedback-owners", async (browser) => {
+    await browser.evaluate(
+      "styleTest.mountFeedback(true);styleTest.feedbackOwner(0);styleTest.emitFeedback(0,'pending')",
+    );
+    await browser.poll(
+      "document.querySelector('[data-owner-subscriptions]').dataset.ownerSubscriptions==='1,0' && document.querySelector('[role=status]')?.textContent==='Original target'",
+    );
+    await browser.evaluate(
+      "styleTest.feedbackOwner(1);styleTest.emitFeedback(1,'connection')",
+    );
+    await browser.poll(
+      "document.querySelector('[data-owner-subscriptions]').dataset.ownerSubscriptions==='0,1' && document.querySelector('.is-reconnecting')?.textContent==='Replacement target'",
+    );
+    await browser.evaluate("styleTest.emitFeedback(0,'error')");
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector('.otk-feedback-status').textContent",
+      ),
+      "Replacement target",
+    );
+    await browser.evaluate("styleTest.mountFeedback(false)");
+    await browser.poll(
+      "document.querySelector('[data-owner-subscriptions]').dataset.ownerSubscriptions==='0,0'",
+    );
+    await browser.evaluate(
+      "styleTest.feedbackOwner(0);styleTest.mountFeedback(true)",
+    );
+    await browser.poll(
+      "document.querySelector('[data-owner-subscriptions]').dataset.ownerSubscriptions==='1,0' && document.querySelector('[role=alert]')?.textContent==='Original target'",
+    );
+    await browser.evaluate("styleTest.mountFeedback(false)");
+    await browser.poll(
+      "document.querySelector('[data-owner-subscriptions]').dataset.ownerSubscriptions==='0,0'",
+    );
+  }));
+
+test("theme and keymap saves share reserved pending/failure tracks with no disabled actions", () =>
+  consumer("preference-feedback", async (browser, root) => {
+    await browser.send("Emulation.setDeviceMetricsOverride", {
+      width: 1280,
+      height: 1000,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    for (const surface of ["theme", "keys"]) {
+      const selector = `[data-preference-surface=${surface}]`;
+      const before = await browser.evaluate<number[]>(
+        `(() => {const r=document.querySelector('${selector}').getBoundingClientRect();return [r.x,r.y,r.width,r.height]})()`,
+      );
+      const label = surface === "theme" ? "Save theme" : "Reset all shortcuts";
+      await browser.evaluate(
+        `[...document.querySelectorAll('${selector} button')].find(button=>button.textContent.trim()==='${label}').setAttribute('data-feedback-save','true')`,
+      );
+      const button = `${selector} [data-feedback-save]`;
+      try {
+        await browser.click(button);
+        await browser.evaluate(
+          "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+        );
+        assertEquals(
+          await browser.evaluate(
+            `document.querySelector('${selector}').querySelectorAll('[disabled],[aria-disabled=true]').length`,
+          ),
+          0,
+        );
+        await browser.poll(
+          `!!document.querySelector('${selector} [role=status]')?.textContent`,
+        );
+        await browser.poll(
+          "document.activeElement?.getAttribute('role')==='status'",
+        );
+        await browser.evaluate("styleTest.settlePreference()");
+        await browser.poll(
+          `!!document.querySelector('${selector} [role=alert]')?.textContent`,
+        );
+        assertEquals(
+          await browser.evaluate(
+            `(() => {const r=document.querySelector('${selector}').getBoundingClientRect();return [r.x,r.y,r.width,r.height]})()`,
+          ),
+          before,
+        );
+        const theme = await browser.evaluate<string>(
+          "document.documentElement.dataset.otkTheme",
+        );
+        await browser.screenshot(
+          join(root, `${surface}-feedback-${theme}.png`),
+        );
+      } finally {
+        await browser.evaluate(
+          "styleTest.settlePreference();new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
+        );
+      }
+    }
+  }));
 
 test("shipped Form captures once, retains readonly values and stable feedback geometry without disabled controls", () =>
   consumer("forms", async (browser) => {
@@ -127,6 +299,59 @@ test("shipped Form captures once, retains readonly values and stable feedback ge
       await browser.evaluate("document.querySelector('input').readOnly"),
       false,
     );
+  }));
+
+test("every native form field shares captured feedback tracks and retains accessible descriptions", () =>
+  consumer("forms", async (browser, root) => {
+    for (const name of ["notes", "kind"]) {
+      const selector = name === "notes"
+        ? 'textarea[name="notes"]'
+        : 'select[name="kind"]';
+      const before = await browser.evaluate<number[]>(
+        `(() => {const r=document.querySelector('.otk-form').getBoundingClientRect();return [r.x,r.y,r.width,r.height]})()`,
+      );
+      await browser.click(".otk-form button[type=submit]");
+      await browser.poll(
+        "document.querySelector('.otk-form').getAttribute('aria-busy')==='true'",
+      );
+      await browser.poll(
+        "document.activeElement?.getAttribute('role')==='status'",
+      );
+      assertEquals(
+        await browser.evaluate("document.querySelector('textarea').readOnly"),
+        true,
+      );
+      assertEquals(
+        await browser.evaluate(
+          "document.querySelector('.otk-form-choice-value').value",
+        ),
+        "Alpha",
+      );
+      await browser.evaluate(`styleTest.fieldFailure('${name}')`);
+      await browser.poll(
+        `document.querySelector('${selector}').getAttribute('aria-invalid')==='true'`,
+      );
+      const description = await browser.evaluate<
+        { ids: string[]; errors: number; text: string }
+      >(`(() => {const f=document.querySelector('${selector}'),ids=f.getAttribute('aria-describedby').split(' ');return {ids,errors:ids.map(id=>document.getElementById(id)).filter(e=>e?.getAttribute('role')==='alert').length,text:document.querySelector('[role=alert]').textContent}})()`);
+      assertEquals(description.errors, 1);
+      if (name === "notes") assert(description.ids.includes("notes-help"));
+      assertEquals(description.text, "Could not finish this action. Try again");
+      assertEquals(
+        await browser.evaluate(
+          `(() => {const r=document.querySelector('.otk-form').getBoundingClientRect();return [r.x,r.y,r.width,r.height]})()`,
+        ),
+        before,
+      );
+      assertEquals(
+        await browser.evaluate("document.querySelector('textarea').value"),
+        "Keep this text",
+      );
+      const theme = await browser.evaluate<string>(
+        "document.documentElement.dataset.otkTheme",
+      );
+      await browser.screenshot(join(root, `field-${name}-${theme}.png`));
+    }
   }));
 
 test("request feedback reserves form geometry, shares notice centrelines and centres the transcript state in Dark and Linen", () =>
@@ -216,6 +441,70 @@ test("request feedback reserves form geometry, shares notice centrelines and cen
         Uint8Array.from(atob(result.data), (value) => value.charCodeAt(0)),
       );
     }
+  }));
+
+test("command menu pending slots keep geometry and visible focus, then expose one reserved safe failure", () =>
+  consumer("lists", async (browser, root) => {
+    await browser.evaluate("styleTest.holdMenu(true)");
+    await browser.click('button[aria-label="Reactive list menu"]');
+    await browser.poll(
+      "!!document.querySelector(':popover-open [data-context-command=\"list.one\"]')",
+    );
+    const before = await browser.evaluate<number[]>(
+      `(() => {const r=document.querySelector(':popover-open').getBoundingClientRect();return [r.width,r.height]})()`,
+    );
+    await browser.evaluate(
+      "document.querySelector('[data-context-command=\"list.one\"]').focus()",
+    );
+    await browser.key("Enter");
+    await browser.poll(
+      "!!document.querySelector(':popover-open [role=status]')?.textContent",
+    );
+    const pending = await browser.evaluate<
+      {
+        bounds: number[];
+        visibleActions: number;
+        focus: boolean;
+        disabled: number;
+      }
+    >(`(() => {const p=document.querySelector(':popover-open'),r=p.getBoundingClientRect(),s=p.querySelector('[role=status]');return {bounds:[r.width,r.height],visibleActions:[...p.querySelectorAll('[role=menuitem]')].filter(e=>e.getClientRects().length&&getComputedStyle(e).visibility!=='hidden').length,focus:document.activeElement===s,disabled:p.querySelectorAll('[disabled],[aria-disabled=true]').length}})()`);
+    assertEquals(pending.bounds, before);
+    assertEquals(pending.visibleActions, 0);
+    assert(pending.focus);
+    assertEquals(pending.disabled, 0);
+    const theme = await browser.evaluate<string>(
+      "document.documentElement.dataset.otkTheme",
+    );
+    await browser.screenshot(join(root, `menu-pending-${theme}.png`));
+    await browser.evaluate("styleTest.settleMenu(true)");
+    await browser.poll(
+      "!!document.querySelector(':popover-open [role=alert]')?.textContent",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelector(':popover-open [role=alert]').textContent",
+      ),
+      "Could not finish this action. Try again",
+    );
+    assertEquals(
+      await browser.evaluate(
+        `(() => {const r=document.querySelector(':popover-open').getBoundingClientRect();return [r.width,r.height]})()`,
+      ),
+      before,
+    );
+    await browser.poll(
+      "document.activeElement?.dataset.contextCommand==='list.one'",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "document.querySelectorAll(':popover-open [role=alert]').length",
+      ),
+      1,
+    );
+    await browser.screenshot(join(root, `menu-error-${theme}.png`));
+    await browser.key("Escape");
+    await browser.poll("!document.querySelector(':popover-open')");
+    await browser.evaluate("styleTest.holdMenu(false)");
   }));
 
 test("keyed breadcrumbs and menu rows retain identity through folding, replacement and shrinking", () =>

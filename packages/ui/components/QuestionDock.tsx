@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import FieldFeedback from "./FieldFeedback.tsx";
+import FeedbackStatus from "./FeedbackStatus.tsx";
+import { bindFeedback } from "../state/feedback.ts";
 import { failureText } from "@otk/client";
 import "./QuestionDock.css" with { type: "text" };
 import ContentTextarea from "./ContentTextarea.tsx";
@@ -36,13 +39,15 @@ export function registerQuestionTakeover(
   });
 }
 function QuestionTakeover(
-  props: { notice?: () => import("solid-js").Element } = {},
+  props: { notice?: () => import("solid-js").Element; focusNotice?(): void } =
+    {},
 ) {
   const session = useSessionPorts(), { commands } = useCommandPorts();
   const request = () => session.questions()[0];
   return (
     <QuestionDock
       notice={props.notice}
+      focusNotice={props.focusNotice}
       request={request()}
       where={request()
         ? session.location?.(request()!.sessionID) ??
@@ -70,6 +75,7 @@ function Request(
   props: {
     request: QuestionRequest;
     notice?: () => import("solid-js").Element;
+    focusNotice?(): void;
     childTitle?: string;
     where?: string;
     onReply(id: string, answers?: string[][]): Promise<void>;
@@ -78,21 +84,37 @@ function Request(
 ) {
   const form = createQuestionForm(props.request, solidState);
   const feedback = useSessionPorts()?.feedback;
+  const operation = bindFeedback(() => feedback);
   const [collapsed, setCollapsed] = createSignal(false),
     [pending, setPending] = createSignal(false),
     [error, setError] = createSignal("");
   let card!: HTMLElement,
     advance!: HTMLButtonElement,
-    pendingStatus!: HTMLSpanElement,
+    pendingStatus!: HTMLDivElement,
     alive = true;
   const rowRefs: HTMLElement[][] = form.questions.map(() => []);
   const ownFields: HTMLTextAreaElement[] = [];
   const step = () => form.state.step;
   const onReview = () => step() === form.review;
+  const answers = () =>
+    form.questions.map((question, index) => ({
+      question: question.header || question.text,
+      answer: form.answers()[index].join(", ") || "(not answered)",
+    }));
+  createEffect(
+    () => ({ pending: pending(), feedback: operation() }),
+    (value) => {
+      if (value.pending) {
+        onSettled(() => {
+          if (props.focusNotice && value.feedback) props.focusNotice();
+          else pendingStatus?.focus();
+        });
+      }
+    },
+  );
   const reply = async (answers?: string[][]) => {
     if (pending()) return;
     setPending(true);
-    queueMicrotask(() => pendingStatus?.focus());
     feedback?.clear();
     setError("");
     try {
@@ -320,14 +342,13 @@ function Request(
         }
         actions={
           <div class="otk-question-actions">
-            <span
-              ref={pendingStatus}
-              tabindex={-1}
-              hidden={!pending()}
-              role="status"
-            >
-              Sending answer…
-            </span>
+            <Show when={pending() && !(props.focusNotice && operation())}>
+              <FeedbackStatus
+                ref={(element) => pendingStatus = element}
+                focusable
+                feedback={{ kind: "pending", text: "Sending answer…" }}
+              />
+            </Show>
             <button
               type="button"
               class="otk-primary otk-pill"
@@ -361,45 +382,41 @@ function Request(
           </div>
         }
       >
-        <Show when={pending() && !feedback}>
-          <p role="status">Sending answer…</p>
-        </Show>
         <Show
-          when={!collapsed()}
-          fallback={
-            <p class="otk-question-text otk-question-peek">
-              {onReview()
-                ? "Review your answers"
-                : form.questions[step()]?.text}
-            </p>
-          }
+          when={!pending()}
+          fallback={<QuestionAnswers items={answers()} />}
         >
-          <Tabs
-            label="Questions"
-            tabs={[
-              ...form.questions.map((q, index) => ({
-                label: q.header || `Question ${index + 1}`,
-                panel: () => questionPanel(index),
-              })),
-              {
-                label: "Confirm",
-                panel: () => (
-                  <QuestionAnswers
-                    items={form.questions.map((q, i) => ({
-                      question: q.header || q.text,
-                      answer: form.answers()[i].join(", ") || "(not answered)",
-                    }))}
-                  />
-                ),
-              },
-            ]}
-            selected={step()}
-            onSelect={goTo}
-          />
+          <Show
+            when={!collapsed()}
+            fallback={
+              <p class="otk-question-text otk-question-peek">
+                {onReview()
+                  ? "Review your answers"
+                  : form.questions[step()]?.text}
+              </p>
+            }
+          >
+            <Tabs
+              label="Questions"
+              tabs={[
+                ...form.questions.map((q, index) => ({
+                  label: q.header || `Question ${index + 1}`,
+                  panel: () => questionPanel(index),
+                })),
+                {
+                  label: "Confirm",
+                  panel: () => <QuestionAnswers items={answers()} />,
+                },
+              ]}
+              selected={step()}
+              onSelect={goTo}
+            />
+          </Show>
         </Show>
-        <Show when={error()}>
-          <p role="alert" class="otk-error">{error()}</p>
-        </Show>
+        <FieldFeedback
+          action
+          feedback={error() ? { kind: "error", text: error() } : undefined}
+        />
       </Takeover>
     </section>
   );
@@ -408,6 +425,7 @@ export default function QuestionDock(
   props: {
     request?: QuestionRequest;
     notice?: () => import("solid-js").Element;
+    focusNotice?(): void;
     childTitle?: string;
     where?: string;
     onReply(id: string, answers?: string[][]): Promise<void>;
@@ -419,6 +437,7 @@ export default function QuestionDock(
       {(q) => (
         <Request
           notice={props.notice}
+          focusNotice={props.focusNotice}
           request={q()}
           childTitle={props.childTitle}
           where={props.where}

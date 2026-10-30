@@ -21,3 +21,6 @@
 .otk-theme-choices button {
   --selection-inset: 16px;
 }
+.otk-theme-choices.is-pending button {
+  visibility: hidden;
+}

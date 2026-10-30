@@ -2,6 +2,7 @@
 import "./Takeover.css" with { type: "text" };
 import { type Element, Show } from "solid-js";
 import Surface from "./Surface.tsx";
+import ContentSlot from "../ContentSlot.tsx";
 
 /**
  * The composer-area surface for approvals and questions: same box as the
@@ -19,8 +20,12 @@ export default function Takeover(props: {
       class={["otk-takeover", { "is-noticed": !!props.notice }]}
       data-collapsed={props.collapsed ? "true" : "false"}
     >
-      <Show when={props.notice}>
-        <div class="otk-takeover-notice">{props.notice?.()}</div>
+      <Show when={!!props.notice}>
+        {(_present) => (
+          <div class="otk-takeover-notice">
+            <ContentSlot content={props.notice} />
+          </div>
+        )}
       </Show>
       <Surface
         title={props.title}

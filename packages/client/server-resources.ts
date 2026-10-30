@@ -32,12 +32,14 @@ import {
 import { createState, type StateFactory } from "./state.ts";
 import { type ClientTabs, createTabs, type TabInput } from "./tabs.ts";
 import { createTaskActions, type TaskActions } from "./task-actions.ts";
+import { requestAttention } from "./request-attention.ts";
 
 export interface FrameObserver {
   frame?(id: string, frame: ServerFrame, accepted: boolean): void;
   removed?(id: string): void;
 }
 export interface ServerResources {
+  ownsFailure?(cause: unknown): boolean;
   scope(project?: ProjectSelection, sessions?: string[]): void;
   sidecars: ClientSidecars;
   inbox(id: string): InboxModel;
@@ -92,6 +94,8 @@ export function createServerResources(o: {
   const inboxes = new Map<string, InboxModel>();
   const approvalModels = new Map<string, ApprovalModel>();
   const tabModels = new Map<string, ClientTabs>();
+  const requestObservers = new Map<string, () => void>();
+  const requestClock = factory({ revision: 0 });
   const observers = new Set<FrameObserver>();
   let stopped = false;
   let visible: { project: ProjectSelection; sessions: string[] } | undefined;
@@ -134,9 +138,31 @@ export function createServerResources(o: {
   };
   const attention = (id: string): ApprovalAttention =>
     approvals(id).attention(linked(id));
+  const operationAttention = (id: string) => {
+    const rpc = sidecars.connection(id).rpc;
+    if (!requestObservers.has(id) && !stopped) {
+      requestObservers.set(
+        id,
+        rpc.requests.subscribe(() =>
+          requestClock.update((state) => {
+            state.revision++;
+          })
+        ),
+      );
+    }
+    void requestClock.state.revision;
+    return requestAttention(
+      rpc.requests.operations(),
+      rpc.metadata,
+      o.index.catalog(id),
+      inbox(id).state.inbox.tasks,
+    );
+  };
   const entries = (): MergedEntry[] =>
     sidecars.state.list.flatMap((s) =>
-      attention(s.id).entries(o.index.partition(s.id))
+      operationAttention(s.id).entries(
+        attention(s.id).entries(o.index.partition(s.id)),
+      )
     );
   const inbox = (id: string): InboxModel => {
     live();
@@ -149,8 +175,11 @@ export function createServerResources(o: {
   };
   const tabInput = (p: ProjectSelection): TabInput => ({
     directory: p.directory,
-    entries: attention(p.sidecarId).entries(
-      o.index.catalog(p.sidecarId, p.directory),
+    taskActivity: operationAttention(p.sidecarId).tasks,
+    entries: operationAttention(p.sidecarId).entries(
+      attention(p.sidecarId).entries(
+        o.index.catalog(p.sidecarId, p.directory),
+      ),
     ),
     inbox: inbox(p.sidecarId).state.inbox,
   });
@@ -190,6 +219,10 @@ export function createServerResources(o: {
   };
   const sidecars = o.sidecars(receive);
   return {
+    ownsFailure: (cause) =>
+      sidecars.state.list.some((server) =>
+        sidecars.connection(server.id).rpc.ownsFailure(cause)
+      ),
     sidecars,
     scope(project, sessions = []) {
       if (
@@ -221,7 +254,9 @@ export function createServerResources(o: {
     entries,
     metadataEntries: () =>
       sidecars.state.list.flatMap((s) =>
-        attention(s.id).entries(o.index.catalog(s.id))
+        operationAttention(s.id).entries(
+          attention(s.id).entries(o.index.catalog(s.id)),
+        )
       ),
     indexEntries: (id) => o.index.partition(id),
     indexChanges: (id) => o.index.changes(id),
@@ -232,17 +267,19 @@ export function createServerResources(o: {
       sidecars.state.list.some((s) => advertised(s.id, capability)),
     connectionKey: (id) => server(id)?.connectionVersion,
     projectEntries: (p) =>
-      attention(p.sidecarId).entries(
-        o.index.partition(p.sidecarId, p.directory),
+      operationAttention(p.sidecarId).entries(
+        attention(p.sidecarId).entries(
+          o.index.partition(p.sidecarId, p.directory),
+        ),
       ),
     projects: (now, ageing) =>
       sidecars.state.list.flatMap((s) =>
-        inboxProjects(
+        operationAttention(s.id).projects(inboxProjects(
           attention(s.id).entries(o.index.catalog(s.id)),
           inbox(s.id).state.inbox,
           now,
           ageing,
-        )
+        ))
           .map((p) => ({ ...p, sidecarId: s.id, label: s.label }))
       ).sort((a, b) => {
         const rank = { tracked: 0, index: 1, template: 2 };
@@ -261,6 +298,7 @@ export function createServerResources(o: {
           ...e,
           attention: { ...e.attention },
         })),
+        taskActivity: input.taskActivity,
         inbox: {
           ...metadata,
           tasks: metadata.tasks.map((t) => ({
@@ -293,6 +331,8 @@ export function createServerResources(o: {
     },
     add: (url, label) => sidecars.add(url, label),
     remove(id) {
+      requestObservers.get(id)?.();
+      requestObservers.delete(id);
       o.index.remove(id);
       for (const observer of observers) observer.removed?.(id);
       inboxes.delete(id);
@@ -329,6 +369,8 @@ export function createServerResources(o: {
     stop() {
       if (stopped) return;
       stopped = true;
+      for (const release of requestObservers.values()) release();
+      requestObservers.clear();
       for (const model of approvalModels.values()) model.stop();
       for (const model of tabModels.values()) model.stop();
       approvalModels.clear();

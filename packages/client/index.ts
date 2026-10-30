@@ -6,9 +6,11 @@ import type { ServerFrame } from "@otk/protocol";
 
 export interface MergedEntry extends IndexEntry {
   sidecarId: string;
+  operationStatus?: import("./inbox.ts").InboxStatus;
 }
 export interface MergedMetadata extends IndexMetadata {
   sidecarId: string;
+  operationStatus?: import("./inbox.ts").InboxStatus;
 }
 export function sessionKey(sidecarId: string, sessionID: string): string {
   return `${sidecarId}/${sessionID}`;

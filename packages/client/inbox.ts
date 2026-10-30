@@ -25,6 +25,15 @@ export const INBOX_STATUS_PRIORITY = Object.freeze(
   ] as const,
 );
 export type InboxStatus = typeof INBOX_STATUS_PRIORITY[number];
+export interface OperationAttention {
+  operationStatus?: InboxStatus;
+}
+export function attentionStatus(
+  ...states: (InboxStatus | undefined)[]
+): InboxStatus {
+  return INBOX_STATUS_PRIORITY.find((state) => states.includes(state)) ??
+    "idle";
+}
 export function unread(
   sessionID: string,
   inbox: Pick<InboxSnapshot, "seen" | "finishes">,
@@ -32,7 +41,7 @@ export function unread(
   return (inbox.finishes[sessionID] ?? 0) > (inbox.seen[sessionID] ?? 0);
 }
 export function inboxStatus(
-  entry: IndexMetadata,
+  entry: IndexMetadata & OperationAttention,
   inbox: Pick<InboxSnapshot, "seen" | "finishes">,
 ): InboxStatus {
   const a = entry.attention;
@@ -40,11 +49,17 @@ export function inboxStatus(
     a.error ||
     a.permissions + a.questions + a.childPermissions + a.childQuestions > 0
   ) return "blocked";
-  if (entry.status !== "idle") return "working";
-  return unread(entry.id, inbox) ? "finished" : "idle";
+  return attentionStatus(
+    entry.operationStatus,
+    entry.status !== "idle"
+      ? "working"
+      : unread(entry.id, inbox)
+      ? "finished"
+      : "idle",
+  );
 }
 export function rollup(
-  entries: readonly IndexMetadata[],
+  entries: readonly (IndexMetadata & OperationAttention)[],
   inbox: Pick<InboxSnapshot, "seen" | "finishes">,
 ): InboxStatus {
   const states = entries.map((entry) => inboxStatus(entry, inbox));
@@ -77,7 +92,7 @@ export interface InboxProject extends ProjectRecord {
 }
 /** One projection shared by the column, collapsed rail and tab badges. */
 export function inboxProjects(
-  entries: readonly IndexMetadata[],
+  entries: readonly (IndexMetadata & OperationAttention)[],
   inbox: InboxSnapshot,
   now: number,
   thresholds?: readonly number[],

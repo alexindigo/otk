@@ -9,6 +9,7 @@ import { type InboxStatus, inboxStatus, rollup } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
 import { familyTask, sessionFamily } from "./session-tree.ts";
 import type { RequestOptions } from "./requests.ts";
+import { attentionStatus, type OperationAttention } from "./inbox.ts";
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
   id: string;
@@ -23,7 +24,8 @@ export interface InboxTab {
 }
 export interface TabInput {
   directory: string;
-  entries: readonly IndexMetadata[];
+  entries: readonly (IndexMetadata & OperationAttention)[];
+  taskActivity?: Readonly<Record<string, InboxStatus>>;
   inbox: InboxSnapshot;
 }
 /** Promotion needs identity and naming metadata, not a replicated status row. */
@@ -102,9 +104,12 @@ export function createTabs(
       title: task.name,
       sessions: [...task.sessions],
       preview: false,
-      status: rollup(
-        entries.filter((e) => task.sessions.includes(e.id)),
-        input.inbox,
+      status: attentionStatus(
+        input.taskActivity?.[task.id],
+        rollup(
+          entries.filter((e) => task.sessions.includes(e.id)),
+          input.inbox,
+        ),
       ),
     }));
     for (const entry of entries) {

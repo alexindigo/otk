@@ -19,6 +19,9 @@ import { useCommandPorts } from "../keyboard/context.tsx";
 import Menu from "./surface/Menu.tsx";
 import type { PopoverControl } from "./surface/Popover.tsx";
 import { commandRows } from "./list-presentation.ts";
+import FieldFeedback from "./FieldFeedback.tsx";
+import ActionSlot from "./ActionSlot.tsx";
+import "./CommandMenu.css" with { type: "text" };
 
 /** Shared hub projection, invocation and feedback for every command-menu entry. */
 export default function CommandMenu(props: {
@@ -32,7 +35,7 @@ export default function CommandMenu(props: {
   onClose?(): void;
   onError?(text: string): void;
 }): Element {
-  const { commands } = useCommandPorts();
+  const ports = useCommandPorts(), { commands } = ports;
   const [captured, setCaptured] = createSignal<readonly ContextTarget[]>();
   const [revision, setRevision] = createSignal(0);
   const [groups, setGroups] = createSignal<ContextAction[][]>([]);
@@ -84,7 +87,11 @@ export default function CommandMenu(props: {
     ) setArmed(undefined);
     if (!next.length) menu.close();
   });
-  const run = async (action: ContextAction) => {
+  const run = async (
+    action: ContextAction,
+    focusPending: () => void,
+    focusAction: () => void,
+  ) => {
     if (pending()) return;
     const current = generation;
     setError(undefined);
@@ -104,17 +111,29 @@ export default function CommandMenu(props: {
     }
     setArmed(undefined);
     setPending(item.key);
+    onSettled(() => {
+      if (current === generation && pending()) focusPending();
+    });
     props.beforeRun?.();
     try {
       await commands.runContext(action);
       if (current === generation) menu.close(() => {});
     } catch (cause) {
       if (current !== generation) return;
+      if (ports.failureOwned?.(cause)) {
+        menu.close();
+        return;
+      }
       const text = failureText(cause);
       if (props.onError) props.onError(text);
       else setError({ key: action.key, text });
     } finally {
-      if (current === generation) setPending(undefined);
+      if (current === generation) {
+        setPending(undefined);
+        onSettled(() => {
+          if (current === generation) focusAction();
+        });
+      }
     }
   };
   return (
@@ -144,9 +163,13 @@ export default function CommandMenu(props: {
       onClose={clear}
       onItemChange={() => setArmed(undefined)}
       status={
-        <Show when={error()}>
-          <p id={errorId} role="alert">{error()?.text}</p>
-        </Show>
+        <FieldFeedback
+          id={errorId}
+          action
+          feedback={error()
+            ? { kind: "error", text: error()!.text }
+            : undefined}
+        />
       }
     >
       <For each={rows()} keyed={false}>
@@ -159,6 +182,8 @@ export default function CommandMenu(props: {
               <For each={group()} keyed={(row) => row.action.key}>
                 {(row) => {
                   const action = () => row().action;
+                  let status: { focus(): void } | undefined,
+                    button!: HTMLButtonElement;
                   return (
                     <>
                       <Show
@@ -166,33 +191,48 @@ export default function CommandMenu(props: {
                       >
                         <hr role="separator" />
                       </Show>
-                      <button
-                        type="button"
-                        role="menuitem"
-                        data-context-command={action().id}
-                        aria-describedby={error()?.key === action().key
-                          ? errorId
+                      <ActionSlot
+                        class="otk-command-menu-row"
+                        pending={!!pending()}
+                        feedback={pending() === action().key
+                          ? { kind: "pending", text: "Working…" }
                           : undefined}
-                        aria-busy={pending() === action().key
-                          ? "true"
-                          : undefined}
-                        class={[
-                          action().destructive ? "otk-menu-destructive" : "",
-                          armed()?.key === action().key ? "is-armed" : "",
-                        ].filter(Boolean).join(" ")}
-                        onClick={() => void run(action())}
+                        control={(control) => status = control}
+                        focusAction={() => button.focus()}
                       >
-                        <span
-                          class="otk-control-label"
-                          title={armed()?.key === action().key
-                            ? action().confirm
-                            : action().title}
+                        <button
+                          ref={(element) => button = element}
+                          type="button"
+                          role="menuitem"
+                          data-context-command={action().id}
+                          aria-describedby={error()?.key === action().key
+                            ? errorId
+                            : undefined}
+                          aria-busy={pending() === action().key
+                            ? "true"
+                            : undefined}
+                          class={[
+                            "otk-command-menu-button",
+                            action().destructive ? "otk-menu-destructive" : "",
+                            armed()?.key === action().key ? "is-armed" : "",
+                          ].filter(Boolean).join(" ")}
+                          onClick={() =>
+                            void run(action(), () =>
+                              status?.focus(), () =>
+                              button.focus())}
                         >
-                          {armed()?.key === action().key
-                            ? action().confirm
-                            : action().title}
-                        </span>
-                      </button>
+                          <span
+                            class="otk-control-label"
+                            title={armed()?.key === action().key
+                              ? action().confirm
+                              : action().title}
+                          >
+                            {armed()?.key === action().key
+                              ? action().confirm
+                              : action().title}
+                          </span>
+                        </button>
+                      </ActionSlot>
                     </>
                   );
                 }}

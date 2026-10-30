@@ -8,7 +8,7 @@ import { useCommandPorts } from "../keyboard/context.tsx";
 export default function Palette(
   props: { onClose(): void },
 ): import("solid-js").Element {
-  const { commands } = useCommandPorts();
+  const ports = useCommandPorts(), { commands } = ports;
   const [query, setQuery] = createSignal(""),
     [revision, setRevision] = createSignal(0),
     [error, setError] = createSignal("");
@@ -32,6 +32,10 @@ export default function Palette(
       await commands.run(id);
       if (active) props.onClose();
     } catch (error) {
+      if (ports.failureOwned?.(error)) {
+        if (active) props.onClose();
+        return;
+      }
       if (active) setError(failureText(error));
     }
   };

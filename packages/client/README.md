@@ -61,6 +61,20 @@ state and retains classified local feedback by target across view replacement;
 it never renders method names or exception prose. `RequestTracker.subscribe`
 observes these state transitions without a second pending map.
 
+`Rpc.ownsFailure(cause)` identifies a structured failure only when that exact
+diagnostic belongs to an installed target feedback sink. Transient command
+surfaces can defer to it without swallowing unrelated local failures. Server
+resources expose the same optional query across their connections.
+
+`requestAttention` decorates the existing project/task/session projections from
+tracked mutation state. Pending work retains working lights and mandatory
+phantoms; input-required/authentication/definite failure retains attention. This
+also covers a project-owned creation before it has a result ID. Read/lease work
+does not make a session busy, and native index facts are never overwritten. The
+existing inbox priority owner combines native and operation attention. Resources
+own one presentation invalidation subscription per server and release it on
+removal/stop; operation metadata and identities still belong to the tracker.
+
 `HttpRequests` supplies an HTTP event transport over the same tracker. It sends
 envelopes and private receipt headers, then consumes held NDJSON events. It owns
 its fetch lifetimes and same-key reconnects; liveness does not abort a slow

@@ -9,6 +9,7 @@ import {
   preferences,
 } from "@otk/protocol";
 import { ownedAction } from "../keyboard/context.tsx";
+import FieldFeedback from "./FieldFeedback.tsx";
 
 export interface PreferenceControlsProps {
   prefs: Preferences;
@@ -108,9 +109,10 @@ export default function PreferenceControls(
           }}
         </For>
       </fieldset>
-      <Show when={error()}>
-        <p class="otk-error otk-preference-error" role="alert">{error()}</p>
-      </Show>
+      <FieldFeedback
+        action
+        feedback={error() ? { kind: "error", text: error() } : undefined}
+      />
     </div>
   );
 }

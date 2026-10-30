@@ -99,6 +99,12 @@ for (const theme of ["otk-dark", "otk-light"]) {
         "document.querySelector('textarea[name=prompt]')?.value==='Boundary prompt outside newest ten' && document.querySelector('.otk-rolled-back-strip strong')?.textContent==='1 prompt rolled back'",
       );
       await b.click(".otk-rollback-disclosure");
+      await b.poll(
+        "document.querySelector('.otk-rollback-disclosure')?.getAttribute('aria-expanded')==='true'",
+      );
+      if (shots) {
+        await b.screenshot(join(shots, `${theme}-rollback-expanded.png`));
+      }
       await b.click(".otk-rollback-footer button");
       await b.poll(
         "!document.querySelector('.otk-rolled-back-strip') && document.querySelector('.otk-message-flow')?.textContent.includes('The cursor keeps every earlier step.')",

@@ -44,7 +44,7 @@ export interface PanelDefinition {
 export interface TakeoverDefinition {
   id: string;
   capability: CapabilityName;
-  component(props?: { notice?: () => Element }): Element;
+  component(props?: { notice?: () => Element; focusNotice?(): void }): Element;
   active?(session: SessionPorts): boolean;
 }
 /** Open collections; consumers select features, machinery knows no implementations. */

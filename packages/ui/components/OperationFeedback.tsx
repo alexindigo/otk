@@ -3,20 +3,29 @@ import type { Feedback } from "@otk/client";
 import { type Element, Show } from "solid-js";
 import { ComposerNoticeRow } from "./ComposerNotice.tsx";
 import "./OperationFeedback.css" with { type: "text" };
+import { feedbackState } from "./feedback-state.ts";
 
 /** Content only: its consumer owns the one joined notice frame and target. */
 export default function OperationFeedback(
-  props: { feedback: Feedback; icon?: Element },
+  props: {
+    feedback: Feedback;
+    icon?: Element;
+    control?(control: { focus(): void }): void;
+  },
 ): Element {
   return (
     <ComposerNoticeRow
+      focusable
+      control={props.control}
       icon={
         <span class="otk-operation-feedback-icon" aria-hidden="true">
           {props.icon ?? "•"}
         </span>
       }
-      role={props.feedback.kind === "error" ? "alert" : "status"}
-      class={`otk-operation-feedback is-${props.feedback.kind}`}
+      {...feedbackState({
+        feedback: props.feedback,
+        class: "otk-operation-feedback",
+      })}
       trailing={
         <Show when={props.feedback.action}>
           <button type="button" onClick={() => props.feedback.action?.run()}>

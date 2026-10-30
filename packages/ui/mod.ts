@@ -2,6 +2,11 @@
 export { default as OperationFeedback } from "./components/OperationFeedback.tsx";
 export { default as FieldFeedback } from "./components/FieldFeedback.tsx";
 export { default as PaneState } from "./components/PaneState.tsx";
+export { default as FeedbackStatus } from "./components/FeedbackStatus.tsx";
+export { default as ActionSlot } from "./components/ActionSlot.tsx";
+export { default as ContentSlot } from "./components/ContentSlot.tsx";
+export { feedbackState } from "./components/feedback-state.ts";
+export { bindFeedback } from "./state/feedback.ts";
 export {
   createHighlightLease,
   type HighlightLease,

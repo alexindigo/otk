@@ -413,7 +413,11 @@ export default function Shell(
     }));
   }
   return (
-    <CommandProvider commands={commands} keyboard={keyboard}>
+    <CommandProvider
+      commands={commands}
+      keyboard={keyboard}
+      failureOwned={resources.ownsFailure}
+    >
       <ShellProvider
         ports={{
           theme: props.theme,

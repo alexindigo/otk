@@ -33,25 +33,25 @@ export function createTaskActions(
         )
         : rpc.call("tasks.create", { directory, name }),
     async rename(id, name) {
-      await rpc.call("tasks.rename", { id, name });
+      await rpc.call("tasks.rename", { id, name }, { owner: id });
     },
     async reorder(ids) {
       await rpc.call("tasks.reorder", { directory, ids });
     },
     async close(id) {
-      await rpc.call("tasks.close", { id });
+      await rpc.call("tasks.close", { id }, { owner: id });
     },
     async add(task, sessionID, options) {
       await rpc.call("tasks.addSession", {
         id: task.id,
         sessionID,
-      }, options);
+      }, { ...options, owner: task.id });
     },
     async remove(task, sessionID) {
       await rpc.call("tasks.removeSession", {
         id: task.id,
         sessionID,
-      });
+      }, { owner: task.id });
     },
   };
 }

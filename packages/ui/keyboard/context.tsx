@@ -11,6 +11,7 @@ import type { Keyboard } from "./dispatcher.ts";
 export interface CommandPorts {
   commands: CommandHub;
   keyboard?: Keyboard;
+  failureOwned?(cause: unknown): boolean;
 }
 // Solid 2 throws for an unset context. Null explicitly marks isolated controls.
 const Context = createContext<CommandPorts | null>(null);
@@ -23,6 +24,9 @@ export function CommandProvider(
     },
     get keyboard() {
       return props.keyboard;
+    },
+    get failureOwned() {
+      return props.failureOwned;
     },
   };
   return <Context value={ports}>{props.children}</Context>;

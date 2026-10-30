@@ -1,0 +1,17 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-action-slot {
+  display: grid;
+  align-items: center;
+  min-inline-size: 0;
+}
+.otk-action-slot > * {
+  grid-area: 1 / 1;
+}
+.otk-action-slot-control {
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+}
+.otk-action-slot.is-pending > .otk-action-slot-control {
+  visibility: hidden;
+}

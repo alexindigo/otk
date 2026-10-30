@@ -407,3 +407,10 @@ h6 {
 [hidden]:not([hidden="until-found"]) {
   display: none !important;
 }
+/* Public compact-menu geometry shared by controls and their status cells. */
+:root {
+  --menu-row-height: var(--control-size);
+  --menu-item-inset: 8px;
+  --menu-block-inset: 4px;
+  --menu-row-gap: 0px;
+}

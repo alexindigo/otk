@@ -26,3 +26,6 @@
     grid-template-columns: minmax(0, 1fr) auto;
   }
 }
+.otk-keys-list.is-pending button {
+  visibility: hidden;
+}

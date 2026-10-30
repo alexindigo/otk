@@ -1,0 +1,21 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-feedback-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-inline-size: 0;
+  min-block-size: var(--line-ui);
+  color: var(--otk-fg);
+}
+.otk-feedback-status:not(.is-visible) {
+  visibility: hidden;
+}
+.otk-feedback-status.is-error {
+  color: var(--danger);
+}
+.otk-feedback-text {
+  margin: 0;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

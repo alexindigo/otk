@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-command-menu-button {
+  inline-size: 100%;
+}
+.otk-command-menu-row > .otk-feedback-status {
+  min-block-size: var(--menu-row-height);
+  padding: var(--menu-block-inset) var(--menu-item-inset);
+}

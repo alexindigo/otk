@@ -6,6 +6,7 @@ import type {
 } from "@otk/protocol";
 import PermissionSummary from "./PermissionSummary.tsx";
 import "./PermissionActivity.css" with { type: "text" };
+import FeedbackStatus from "./FeedbackStatus.tsx";
 
 const action = (entry: Activity) =>
   entry.reply === "reject"
@@ -21,19 +22,21 @@ export default function PermissionActivity(props: {
 }) {
   return (
     <section class="otk-permission-activity" aria-label="Permission activity">
-      <Show when={props.value.loading}>
-        <p class="otk-muted" role="status">Loading activity…</p>
-      </Show>
-      <Show when={props.value.error}>
-        <p role="alert" class="otk-error">{props.value.error}</p>
-        <button
-          type="button"
-          onClick={() =>
-            void props.onRetry()}
-        >
-          Retry activity
-        </button>
-      </Show>
+      <FeedbackStatus
+        feedback={props.value.error
+          ? {
+            kind: "error",
+            text: props.value.error,
+            action: {
+              label: "Retry activity",
+              run: () =>
+                void props.onRetry(),
+            },
+          }
+          : props.value.loading
+          ? { kind: "pending", text: "Loading activity…" }
+          : undefined}
+      />
       <Show
         when={!props.value.loading && !props.value.entries.length &&
           !props.value.error}
