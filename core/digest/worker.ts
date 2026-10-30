@@ -303,20 +303,20 @@ async function admitCatalog(
         updated: entry.timeUpdated,
       }, entry.status === "idle" ? "background" : "attention");
     }
-    if (options.helpers) {
-      for (const entry of chunk) {
-        if (entry.parentID && !saved.get(entry.id)?.deleted_at) {
-          sink!.invalidateHelper(entry.id);
-          scheduler!.enqueue({
-            provider: sink!.identity,
-            sessionID: entry.id,
-            directory: entry.directory,
-            updated: entry.timeUpdated,
-            projection: "helper",
-            interruptible: true,
-          }, "background");
-        }
-      }
+    for (const entry of chunk) {
+      if (!entry.parentID || saved.get(entry.id)?.deleted_at) continue;
+      if (options.helpers) sink!.invalidateHelper(entry.id);
+      // A hint may finish before this identity is discovered. Catalog admission
+      // owns resuming its persisted dirty intent, without restarting ready work.
+      else if (!sink!.requestHelper(entry.id, false)) continue;
+      scheduler!.enqueue({
+        provider: sink!.identity,
+        sessionID: entry.id,
+        directory: entry.directory,
+        updated: entry.timeUpdated,
+        projection: "helper",
+        interruptible: true,
+      }, "background");
     }
     await yieldChunk(signal);
   }
