@@ -89,6 +89,7 @@ test("real-version scale summaries match independent totals with bounded serving
         JSON.stringify(pressure),
       ),
   );
+  const readinessStarted = performance.now();
   const app = await start(config, {
     admission: probe.start,
     section: probe.section,
@@ -136,7 +137,23 @@ test("real-version scale summaries match independent totals with bounded serving
       (t) => t.id === task.id && t.name === "Scale saved outcome",
     ),
   );
-  await waitFor(() => ready.size, (n) => n === SCALE.sessions, 240000);
+  while (ready.size < SCALE.sessions) {
+    const previous = ready.size;
+    // Backfill duration is a measurement; only stalled progress is a failure.
+    await waitFor(() => ready.size, (n) => n > previous, 60_000);
+  }
+  assertEquals(ready.size, SCALE.sessions);
+  const elapsedMs = performance.now() - readinessStarted;
+  const readiness = {
+    sessions: ready.size,
+    elapsedMs,
+    sessionsPerSecond: ready.size / (elapsedMs / 1000),
+  };
+  await Deno.writeTextFile(
+    join(root, "scale-readiness.json"),
+    JSON.stringify(readiness, null, 2),
+  );
+  console.info("Scale all-ready measurements", readiness);
   // Include serialization of the complete warm snapshot and normal live events.
   client.send({ t: "resnapshot" });
   await waitFor(
