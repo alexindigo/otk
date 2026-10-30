@@ -105,6 +105,19 @@ for (const kind of ["permission", "question"] as const) {
         await browser.poll(
           `document.documentElement.dataset.otkTheme==='${theme}'`,
         );
+        const icon = await browser.evaluate<{
+          width: number;
+          height: number;
+          gaps: number[];
+          text: string;
+        }>(`(() => {
+          const row=document.querySelector('.otk-operation-feedback'),slot=row.querySelector('.otk-composer-notice-icon'),svg=slot.querySelector('svg'),s=slot.getBoundingClientRect(),r=svg?.getBoundingClientRect();
+          return {width:r?.width??0,height:r?.height??0,gaps:r?[r.left-s.left,s.right-r.right,r.top-s.top,s.bottom-r.bottom]:[],text:slot.textContent};
+        })()`);
+        assertEquals([icon.width, icon.height], [16, 16]);
+        assertEquals(icon.text, "");
+        assertEquals(icon.gaps.length, 4);
+        assert(Math.max(...icon.gaps) - Math.min(...icon.gaps) <= 1);
         const observation = await browser.evaluate<
           {
             frames: number;

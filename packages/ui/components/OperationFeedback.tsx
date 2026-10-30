@@ -2,6 +2,7 @@
 import type { Feedback } from "@otk/client";
 import { type Element, Show } from "solid-js";
 import { ComposerNoticeRow } from "./ComposerNotice.tsx";
+import { ActivityIcon, CloseIcon } from "./ChromeIcons.tsx";
 import "./OperationFeedback.css" with { type: "text" };
 import { feedbackState } from "./feedback-state.ts";
 
@@ -17,11 +18,8 @@ export default function OperationFeedback(
     <ComposerNoticeRow
       focusable
       control={props.control}
-      icon={
-        <span class="otk-operation-feedback-icon" aria-hidden="true">
-          {props.icon ?? "•"}
-        </span>
-      }
+      icon={props.icon ??
+        (props.feedback.kind === "error" ? <CloseIcon /> : <ActivityIcon />)}
       {...feedbackState({
         feedback: props.feedback,
         class: "otk-operation-feedback",
