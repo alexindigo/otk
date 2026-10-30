@@ -18,6 +18,8 @@ import { openSession } from "../support/browser-fixture.ts";
 for (const kind of ["permission", "question"] as const) {
   test(`shared ${kind} notice survives takeover, keeps one pending/error sink and focuses the visible status`, async () => {
     const root = await fixture();
+    const workspace = join(root, "feedback-proof");
+    await Deno.mkdir(workspace);
     let held = Promise.withResolvers<void>(),
       fail = true,
       done = false,
@@ -61,7 +63,7 @@ for (const kind of ["permission", "question"] as const) {
       });
     };
     const f = await coreBackendFixture(
-      root,
+      workspace,
       kind === "permission"
         ? {
           permissions: {
@@ -79,6 +81,7 @@ for (const kind of ["permission", "question"] as const) {
     const browser = await Cdp.launch(root), probe = new WsClient(f.url);
     try {
       await probe.connect();
+      await probe.rpc("prefs.set", { key: "animationsOff", value: true });
       await browser.goto(f.url + "/#/local/" + sessionID);
       const dock = kind === "permission"
         ? ".otk-permission-dock"
@@ -100,6 +103,13 @@ for (const kind of ["permission", "question"] as const) {
       await browser.poll(
         "document.activeElement?.classList.contains('otk-operation-feedback')",
       );
+      const layouts: {
+        emptyTracks: number;
+        footer: boolean;
+        inset: number;
+        expectedInset: number;
+        height: number;
+      }[] = [];
       for (const theme of ["otk-dark", "otk-light"]) {
         await probe.rpc("prefs.set", { key: "theme", value: theme });
         await browser.poll(
@@ -136,9 +146,20 @@ for (const kind of ["permission", "question"] as const) {
         const visibleStatuses = await browser.evaluate<string[]>(
           `[...document.querySelectorAll('${dock} [role=status]')].filter(el=>el.getClientRects().length&&getComputedStyle(el).visibility!=='hidden').map(el=>el.textContent)`,
         );
+        const layout = await browser.evaluate<(typeof layouts)[number]>(
+          `(() => {
+          const dock=document.querySelector('${dock}'),surface=dock.querySelector('.otk-surface'),body=surface.querySelector('.otk-surface-body'),content=body.querySelector('.otk-question-answers,.otk-permission-summary'),s=getComputedStyle(surface),b=getComputedStyle(body),r=surface.getBoundingClientRect();
+          return {emptyTracks:dock.querySelectorAll('.otk-field-feedback').length,footer:!!surface.querySelector('.otk-surface-actions'),inset:r.bottom-content.getBoundingClientRect().bottom,expectedInset:parseFloat(s.borderBottomWidth)+parseFloat(s.paddingBottom)+parseFloat(b.paddingBottom),height:r.height};
+        })()`,
+        );
+        layouts.push(layout);
         await Deno.writeTextFile(
           join(root, `${kind}-pending-${theme}-proof.json`),
-          JSON.stringify({ observation, visibleStatuses }, null, 2),
+          JSON.stringify(
+            { observation, visibleStatuses, icon, layout },
+            null,
+            2,
+          ),
         );
         await browser.screenshot(join(root, `${kind}-pending-${theme}.png`));
         assertEquals(observation, {
@@ -147,6 +168,17 @@ for (const kind of ["permission", "question"] as const) {
           disabled: 0,
           hiddenFocus: false,
         });
+      }
+      console.info("Pending takeover geometry", kind, layouts);
+      for (const layout of layouts) {
+        assertEquals(layout.emptyTracks, 0);
+        if (kind === "question") {
+          assertEquals(layout.footer, false);
+          assert(
+            Math.abs(layout.inset - layout.expectedInset) <= 1,
+            JSON.stringify(layout),
+          );
+        }
       }
       held.resolve();
       await browser.poll(

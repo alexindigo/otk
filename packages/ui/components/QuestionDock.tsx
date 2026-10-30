@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import FieldFeedback from "./FieldFeedback.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { bindFeedback } from "../state/feedback.ts";
 import { failureText } from "@otk/client";
@@ -340,47 +339,49 @@ function Request(
             onCollapse={setCollapsed}
           />
         }
-        actions={
-          <div class="otk-question-actions">
-            <Show when={pending() && !(props.focusNotice && operation())}>
-              <FeedbackStatus
-                ref={(element) => pendingStatus = element}
-                focusable
-                feedback={{ kind: "pending", text: "Sending answer…" }}
-              />
-            </Show>
-            <button
-              type="button"
-              class="otk-primary otk-pill"
-              ref={(element) => {
-                advance = element;
-              }}
-              hidden={pending()}
-              onClick={() => void answer()}
-              title={onReview() ? "Send the answers" : "Next step"}
-            >
-              Answer
-            </button>
-            <button
-              type="button"
-              class="otk-pill"
-              hidden={pending()}
-              onClick={() => void reject()}
-              title="Skip question (Esc with question controls focused)"
-            >
-              Skip question
-            </button>
-            <button
-              type="button"
-              class="otk-pill otk-question-submit"
-              hidden={pending()}
-              onClick={() => void submit()}
-              title="Send the answers given so far"
-            >
-              Submit
-            </button>
-          </div>
-        }
+        actions={pending() && props.focusNotice && operation()
+          ? undefined
+          : (
+            <div class="otk-question-actions">
+              <Show when={pending() && !(props.focusNotice && operation())}>
+                <FeedbackStatus
+                  ref={(element) => pendingStatus = element}
+                  focusable
+                  feedback={{ kind: "pending", text: "Sending answer…" }}
+                />
+              </Show>
+              <button
+                type="button"
+                class="otk-primary otk-pill"
+                ref={(element) => {
+                  advance = element;
+                }}
+                hidden={pending()}
+                onClick={() => void answer()}
+                title={onReview() ? "Send the answers" : "Next step"}
+              >
+                Answer
+              </button>
+              <button
+                type="button"
+                class="otk-pill"
+                hidden={pending()}
+                onClick={() => void reject()}
+                title="Skip question (Esc with question controls focused)"
+              >
+                Skip question
+              </button>
+              <button
+                type="button"
+                class="otk-pill otk-question-submit"
+                hidden={pending()}
+                onClick={() => void submit()}
+                title="Send the answers given so far"
+              >
+                Submit
+              </button>
+            </div>
+          )}
       >
         <Show
           when={!pending()}
@@ -413,10 +414,9 @@ function Request(
             />
           </Show>
         </Show>
-        <FieldFeedback
-          action
-          feedback={error() ? { kind: "error", text: error() } : undefined}
-        />
+        <Show when={error()}>
+          <FeedbackStatus feedback={{ kind: "error", text: error() }} />
+        </Show>
       </Takeover>
     </section>
   );

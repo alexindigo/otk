@@ -40,7 +40,10 @@ hidden submit or menu action hands focus to its visible status cell. TitleEditor
 uses the same reserved field track. Registered takeovers receive an optional
 `focusNotice` callback alongside their notice content, so pending replies can
 focus the one joined notice rather than a hidden action or duplicate status.
-Independent takeovers without that port retain a local status cell.
+Independent takeovers without that port retain a local status cell. Takeovers
+size to their visible content: local failures mount in-flow status only while
+present, rather than reserving a field-feedback track. A question whose pending
+status lives in the joined notice supplies no empty action footer.
 
 CommandProvider can inject `failureOwned(cause)` from the client resource owner.
 Menus, palette and message actions then defer an exactly correlated failure to

@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import FieldFeedback from "./FieldFeedback.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { bindFeedback } from "../state/feedback.ts";
 import { failureText } from "@otk/client";
@@ -339,10 +338,9 @@ function RequestDock(
         }
       >
         <PermissionSummary request={props.request} />
-        <FieldFeedback
-          action
-          feedback={error() ? { kind: "error", text: error() } : undefined}
-        />
+        <Show when={error()}>
+          <FeedbackStatus feedback={{ kind: "error", text: error() }} />
+        </Show>
         <Show when={mode() === "always"}>
           <div class="otk-permission-confirm">
             <p>Allow these patterns for future requests?</p>
