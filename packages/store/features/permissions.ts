@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { OtkDb } from "../db.ts";
+import type { OtkDb, StoreWrite } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
 import { Changes } from "../changes.ts";
 import { key } from "./metadata.ts";
@@ -38,17 +38,19 @@ export class PermissionStore extends Changes<PermissionChange> {
       "SELECT session FROM permission_auto ORDER BY session",
     ).all().map((r) => String(r.session));
   }
-  setAuto(session: string, enabled: boolean): void {
-    key(session);
-    if (typeof enabled !== "boolean") {
-      throw new Error("Expected enabled boolean");
-    }
-    const result = this.db.connection.prepare(
-      enabled
-        ? "INSERT OR IGNORE INTO permission_auto VALUES(?)"
-        : "DELETE FROM permission_auto WHERE session=?",
-    ).run(session);
-    if (result.changes) this.changed({ kind: "policy" });
+  setAuto(session: string, enabled: boolean, tx?: StoreWrite): void {
+    this.db.write((scope) => {
+      key(session);
+      if (typeof enabled !== "boolean") {
+        throw new Error("Expected enabled boolean");
+      }
+      const result = this.db.connection.prepare(
+        enabled
+          ? "INSERT OR IGNORE INTO permission_auto VALUES(?)"
+          : "DELETE FROM permission_auto WHERE session=?",
+      ).run(session);
+      if (result.changes) this.changed({ kind: "policy" }, scope);
+    }, tx);
   }
   confirmed(session: string, requestID: string): boolean {
     return !!this.db.connection.prepare(
@@ -58,9 +60,10 @@ export class PermissionStore extends Changes<PermissionChange> {
   start(
     input: Omit<PermissionRecord, "id" | "time" | "outcome" | "error">,
     ancestors: string[] = [],
+    tx?: StoreWrite,
   ): number {
-    const family = [...new Set([key(input.session), ...ancestors.map(key)])];
-    const id = this.db.transaction(() => {
+    return this.db.write((scope) => {
+      const family = [...new Set([key(input.session), ...ancestors.map(key)])];
       const result = this.db.connection.prepare(
         "INSERT INTO permission_activity(session,request_id,request,reply,source,owner,message,time,outcome) VALUES(?,?,?,?,?,?,?,?,'started')",
       ).run(
@@ -78,28 +81,30 @@ export class PermissionStore extends Changes<PermissionChange> {
         "INSERT INTO permission_activity_family(session,activity) VALUES(?,?)",
       );
       for (const session of family) link.run(session, id);
+      this.changed({ kind: "activity", sessions: family }, scope);
       return id;
-    });
-    this.changed({ kind: "activity", sessions: family });
-    return id;
+    }, tx);
   }
   finish(
     id: number,
     result: { outcome: "confirmed" } | { outcome: "failed"; error: string },
+    tx?: StoreWrite,
   ): void {
-    const update = this.db.connection.prepare(
-      "UPDATE permission_activity SET outcome=?,error=? WHERE id=? AND outcome='started'",
-    ).run(
-      result.outcome,
-      result.outcome === "failed" ? result.error : null,
-      id,
-    );
-    if (update.changes) {
-      const sessions = this.db.connection.prepare(
-        "SELECT session FROM permission_activity_family WHERE activity=? ORDER BY session",
-      ).all(id).map((row) => String(row.session));
-      this.changed({ kind: "activity", sessions });
-    }
+    this.db.write((scope) => {
+      const update = this.db.connection.prepare(
+        "UPDATE permission_activity SET outcome=?,error=? WHERE id=? AND outcome='started'",
+      ).run(
+        result.outcome,
+        result.outcome === "failed" ? result.error : null,
+        id,
+      );
+      if (update.changes) {
+        const sessions = this.db.connection.prepare(
+          "SELECT session FROM permission_activity_family WHERE activity=? ORDER BY session",
+        ).all(id).map((row) => String(row.session));
+        this.changed({ kind: "activity", sessions }, scope);
+      }
+    }, tx);
   }
   list(
     sessions: string[],

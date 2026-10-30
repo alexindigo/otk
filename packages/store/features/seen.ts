@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { OtkDb } from "../db.ts";
+import type { OtkDb, StoreWrite } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
 import { key } from "./metadata.ts";
 import { Changes } from "../changes.ts";
@@ -29,13 +29,15 @@ export class Seen
       ).all(key(user)).map((r) => [String(r.session), Number(r.time)]),
     );
   }
-  mark(user: string, session: string): number {
-    const row = this.db.connection.prepare(
-      "INSERT INTO session_seen VALUES(?,?,?) ON CONFLICT(user,session) DO UPDATE SET time=MAX(time,excluded.time) RETURNING time",
-    ).get(key(user), key(session), this.now())!;
-    const time = Number(row.time);
-    this.changed({ user, session, time });
-    return time;
+  mark(user: string, session: string, tx?: StoreWrite): number {
+    return this.db.write((scope) => {
+      const row = this.db.connection.prepare(
+        "INSERT INTO session_seen VALUES(?,?,?) ON CONFLICT(user,session) DO UPDATE SET time=MAX(time,excluded.time) RETURNING time",
+      ).get(key(user), key(session), this.now())!;
+      const time = Number(row.time);
+      this.changed({ user, session, time }, scope);
+      return time;
+    }, tx);
   }
   all(): { user: string; session: string; time: number }[] {
     return this.db.connection.prepare(

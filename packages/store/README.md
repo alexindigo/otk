@@ -109,6 +109,55 @@ BEGIN without retiring the caller's transaction. Migrations and metadata
 features share this connection primitive; feature notifications run only after
 commit.
 
+### Composable writes and request receipts
+
+`OtkDb.write(tx => result)` opens one synchronous immediate transaction. An
+opaque `StoreWrite` is valid only for that callback and connection. Pass it as
+the final argument to task, project, preference, seen, frecency, template and
+permission mutations to join the transaction. `db.write(run, tx)` explicitly
+joins a scope; omitting it starts a new transaction, so accidental nesting still
+rejects. Foreign, fabricated and expired scopes reject. Promise-returning write
+callbacks roll back. Finish asynchronous validation before entering a write
+scope.
+
+`db.afterCommit(tx, publish)` queues post-commit delivery. Feature notifications
+capture detached payloads at the mutation boundary, remain invisible until the
+outer commit, and disappear on rollback. Observer failures do not turn a
+committed write into a failure. Standalone feature writes retain
+immediate-after-commit notifications.
+
+Compose `requestsMigrations` to add the independent `requests` feature to
+`otk.db`, and construct `new Requests(db)`. `window(now, durationMs)` issues a
+server-owned admission window. `admit(record, tx?)` returns the existing receipt
+or inserts one queued receipt under `(principal, client_id, intent_key)`,
+comparing window, method, execution and fingerprint on duplicates. The
+fingerprint is a caller-supplied SHA-256 equality check, not request content.
+Admission and `transition(key, expectedSeq, patch, tx?)` serialize through
+SQLite; transitions increment the sequence by one using compare-and-swap and
+preserve admission facts, terminal outcomes and committed dispatch fences.
+
+Inside one `write`, apply the feature effect and transition its receipt to
+success with the original result's explicit metadata encoding. A crash before
+commit retains neither; a crash after commit retains both. Rehydrate that
+original receipt on retry instead of applying the mutation again. A newer edit
+or deletion does not change the retained original result or authorize recreating
+its resource.
+
+`inFlight(afterKey, limit)` keyset-pages active receipts. `sweep(now, limit)`
+deletes at most `limit` expired terminal/released receipts and at most `limit`
+expired unreferenced windows; its return value counts deleted receipts. Pending
+and reconciling work never expires. Known receipts remain attachable after
+window expiry, but an unknown/pruned intent requires a live issued window. The
+caller sets retention to at least the window expiry plus its configured
+retention period.
+
+Receipts accept only the declared scalar columns. They contain no input/body,
+credentials, messages, attachments or raw exceptions. `receipt_kind` plus
+`receipt_json` are **feature-encoded metadata**, never a generic RPC-result
+cache; storage validates scalar/JSON structure and the application owns the
+allowlisted shape. Read/body results remain volatile. Storage imports no
+protocol, core or provider implementation.
+
 `Projects.policies()` and `Seen.all()` supply batched metadata projections.
 Project listeners carry the committed user/project record (or a discovery
 notice). Seen/finish listeners carry the committed identity and clock, allowing

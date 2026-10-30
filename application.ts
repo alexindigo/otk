@@ -14,6 +14,7 @@ import {
   projectsMigrations,
   ProjectTemplates,
   projectTemplatesMigrations,
+  requestsMigrations,
   Seen,
   seenMigrations,
   sessionReferenceMigrations,
@@ -75,6 +76,7 @@ export function startApplication(
     projectTemplatesMigrations,
     permissionMigrations,
     sessionReferenceMigrations,
+    requestsMigrations,
   ]);
   const sources: FrameSource[] = [];
   try {

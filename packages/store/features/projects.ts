@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { OtkDb } from "../db.ts";
+import type { OtkDb, StoreWrite } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
 import { key } from "./metadata.ts";
 import { Changes } from "../changes.ts";
@@ -35,11 +35,13 @@ export class Projects extends Changes<ProjectChange> {
       ...(r.inactive_at === null ? {} : { inactiveAt: Number(r.inactive_at) }),
     };
   }
-  discover(directory: string): void {
-    const result = this.db.connection.prepare(
-      "INSERT OR IGNORE INTO project_directories SELECT ?, COALESCE(MAX(position)+1,0), ? FROM project_directories",
-    ).run(key(directory), this.now());
-    if (result.changes) this.changed({ discovered: true });
+  discover(directory: string, tx?: StoreWrite): void {
+    this.db.write((scope) => {
+      const result = this.db.connection.prepare(
+        "INSERT OR IGNORE INTO project_directories SELECT ?, COALESCE(MAX(position)+1,0), ? FROM project_directories",
+      ).run(key(directory), this.now());
+      if (result.changes) this.changed({ discovered: true }, scope);
+    }, tx);
   }
   list(user: string): ProjectRecord[] {
     key(user);
@@ -74,37 +76,48 @@ export class Projects extends Changes<ProjectChange> {
     ).get(key(user), key(directory));
     return record ? this.#record(record) : undefined;
   }
-  add(user: string, directory: string): ProjectRecord {
-    this.list(user);
-    this.db.connection.prepare(
-      "INSERT INTO projects(user,directory,position,added,last_visit) SELECT ?,?,COALESCE(MAX(position)+1,0),1,? FROM projects WHERE user=? ON CONFLICT(user,directory) DO UPDATE SET added=1",
-    ).run(user, key(directory), this.now(), user);
-    const project = this.get(user, directory);
-    this.changed({ user, project });
-    return project;
+  add(user: string, directory: string, tx?: StoreWrite): ProjectRecord {
+    return this.db.write((scope) => {
+      this.list(user);
+      this.db.connection.prepare(
+        "INSERT INTO projects(user,directory,position,added,last_visit) SELECT ?,?,COALESCE(MAX(position)+1,0),1,? FROM projects WHERE user=? ON CONFLICT(user,directory) DO UPDATE SET added=1",
+      ).run(user, key(directory), this.now(), user);
+      const project = this.get(user, directory);
+      this.changed({ user, project }, scope);
+      return project;
+    }, tx);
   }
-  visit(user: string, directory: string): ProjectRecord {
-    this.get(user, directory);
-    const now = this.now();
-    this.db.connection.prepare(
-      "UPDATE projects SET last_visit=?, inactive_at=CASE WHEN inactive=1 THEN ? ELSE NULL END WHERE user=? AND directory=?",
-    ).run(now, now, user, directory);
-    const project = this.get(user, directory);
-    this.changed({ user, project });
-    return project;
+  visit(user: string, directory: string, tx?: StoreWrite): ProjectRecord {
+    return this.db.write((scope) => {
+      this.get(user, directory);
+      const now = this.now();
+      this.db.connection.prepare(
+        "UPDATE projects SET last_visit=?, inactive_at=CASE WHEN inactive=1 THEN ? ELSE NULL END WHERE user=? AND directory=?",
+      ).run(now, now, user, directory);
+      const project = this.get(user, directory);
+      this.changed({ user, project }, scope);
+      return project;
+    }, tx);
   }
-  inactive(user: string, directory: string, inactive: boolean): ProjectRecord {
-    const previous = this.get(user, directory), now = this.now();
-    if (previous.inactive === inactive) return previous;
-    const visit = !inactive && previous.inactiveAt !== undefined
-      ? previous.lastVisit + Math.max(0, now - previous.inactiveAt)
-      : previous.lastVisit;
-    this.db.connection.prepare(
-      "UPDATE projects SET inactive=?, inactive_at=?, last_visit=? WHERE user=? AND directory=?",
-    ).run(inactive ? 1 : 0, inactive ? now : null, visit, user, directory);
-    const project = this.get(user, directory);
-    this.changed({ user, project });
-    return project;
+  inactive(
+    user: string,
+    directory: string,
+    inactive: boolean,
+    tx?: StoreWrite,
+  ): ProjectRecord {
+    return this.db.write((scope) => {
+      const previous = this.get(user, directory), now = this.now();
+      if (previous.inactive === inactive) return previous;
+      const visit = !inactive && previous.inactiveAt !== undefined
+        ? previous.lastVisit + Math.max(0, now - previous.inactiveAt)
+        : previous.lastVisit;
+      this.db.connection.prepare(
+        "UPDATE projects SET inactive=?, inactive_at=?, last_visit=? WHERE user=? AND directory=?",
+      ).run(inactive ? 1 : 0, inactive ? now : null, visit, user, directory);
+      const project = this.get(user, directory);
+      this.changed({ user, project }, scope);
+      return project;
+    }, tx);
   }
   users(): string[] {
     return this.db.connection.prepare("SELECT DISTINCT user FROM projects")
@@ -120,11 +133,13 @@ export class Projects extends Changes<ProjectChange> {
     }));
   }
   /** Activity path needs no baseline SELECT; return the committed changed fact. */
-  reactivate(user: string, directory: string): void {
-    const now = this.now();
-    const row = this.db.connection.prepare(
-      "UPDATE projects SET inactive=0,last_visit=last_visit+max(0,?-coalesce(inactive_at,?)),inactive_at=NULL WHERE user=? AND directory=? AND inactive=1 RETURNING *",
-    ).get(now, now, key(user), key(directory));
-    if (row) this.changed({ user, project: this.#record(row) });
+  reactivate(user: string, directory: string, tx?: StoreWrite): void {
+    this.db.write((scope) => {
+      const now = this.now();
+      const row = this.db.connection.prepare(
+        "UPDATE projects SET inactive=0,last_visit=last_visit+max(0,?-coalesce(inactive_at,?)),inactive_at=NULL WHERE user=? AND directory=? AND inactive=1 RETURNING *",
+      ).get(now, now, key(user), key(directory));
+      if (row) this.changed({ user, project: this.#record(row) }, scope);
+    }, tx);
   }
 }

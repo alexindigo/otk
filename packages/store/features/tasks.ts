@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { OtkDb } from "../db.ts";
+import type { OtkDb, StoreWrite } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
 import { key, MetadataChanges, ordered } from "./metadata.ts";
 export const tasksMigrations: FeatureMigrations = {
@@ -39,12 +39,17 @@ export class Tasks extends MetadataChanges {
     if (!task) throw new Error("Unknown task");
     return task;
   }
-  create(directory: string, name: string, sessions: string[] = []): TaskRecord {
-    const id = crypto.randomUUID();
-    key(directory);
-    key(name);
-    ordered(sessions);
-    this.#transaction(() => {
+  create(
+    directory: string,
+    name: string,
+    sessions: string[] = [],
+    tx?: StoreWrite,
+  ): TaskRecord {
+    return this.db.write((scope) => {
+      const id = crypto.randomUUID();
+      key(directory);
+      key(name);
+      ordered(sessions);
       this.db.connection.prepare(
         "INSERT INTO tasks SELECT ?,?,?,COALESCE(MAX(position)+1,0) FROM tasks WHERE directory=?",
       ).run(id, directory, name, directory);
@@ -52,36 +57,41 @@ export class Tasks extends MetadataChanges {
         this.db.connection.prepare("INSERT INTO task_sessions VALUES(?,?,?)")
           .run(id, session, i)
       );
-    });
-    return this.get(id);
+      this.changed(undefined, scope);
+      return this.get(id);
+    }, tx);
   }
-  rename(id: string, name: string): TaskRecord {
-    this.get(id);
-    this.db.connection.prepare("UPDATE tasks SET name=? WHERE id=?").run(
-      key(name),
-      id,
-    );
-    this.changed();
-    return this.get(id);
+  rename(id: string, name: string, tx?: StoreWrite): TaskRecord {
+    return this.db.write((scope) => {
+      this.get(id);
+      this.db.connection.prepare("UPDATE tasks SET name=? WHERE id=?").run(
+        key(name),
+        id,
+      );
+      this.changed(undefined, scope);
+      return this.get(id);
+    }, tx);
   }
-  reorder(directory: string, ids: string[]): TaskRecord[] {
-    ordered(ids);
-    const existing = this.list(key(directory)).map((t) => t.id);
-    if (
-      ids.length !== existing.length || ids.some((id) => !existing.includes(id))
-    ) throw new Error("Expected all project tasks");
-    this.#transaction(() =>
+  reorder(directory: string, ids: string[], tx?: StoreWrite): TaskRecord[] {
+    return this.db.write((scope) => {
+      ordered(ids);
+      const existing = this.list(key(directory)).map((t) => t.id);
+      if (
+        ids.length !== existing.length ||
+        ids.some((id) => !existing.includes(id))
+      ) throw new Error("Expected all project tasks");
       ids.forEach((id, i) =>
         this.db.connection.prepare("UPDATE tasks SET position=? WHERE id=?")
           .run(i, id)
-      )
-    );
-    return this.list(directory);
+      );
+      this.changed(undefined, scope);
+      return this.list(directory);
+    }, tx);
   }
-  sessions(id: string, sessions: string[]): TaskRecord {
-    this.get(id);
-    ordered(sessions);
-    this.#transaction(() => {
+  sessions(id: string, sessions: string[], tx?: StoreWrite): TaskRecord {
+    return this.db.write((scope) => {
+      this.get(id);
+      ordered(sessions);
       this.db.connection.prepare("DELETE FROM task_sessions WHERE task=?").run(
         id,
       );
@@ -89,40 +99,40 @@ export class Tasks extends MetadataChanges {
         this.db.connection.prepare("INSERT INTO task_sessions VALUES(?,?,?)")
           .run(id, session, i);
       }
-    });
-    return this.get(id);
+      this.changed(undefined, scope);
+      return this.get(id);
+    }, tx);
   }
-  addSession(id: string, sessionID: string): TaskRecord {
-    key(sessionID);
-    this.#transaction(() => {
+  addSession(id: string, sessionID: string, tx?: StoreWrite): TaskRecord {
+    return this.db.write((scope) => {
+      key(sessionID);
       this.get(id);
       this.db.connection.prepare(
         "INSERT INTO task_sessions SELECT ?,?,COALESCE(MAX(position)+1,0) FROM task_sessions WHERE task=? ON CONFLICT(task,session) DO NOTHING",
       ).run(id, sessionID, id);
-    });
-    return this.get(id);
+      this.changed(undefined, scope);
+      return this.get(id);
+    }, tx);
   }
-  removeSession(id: string, sessionID: string): TaskRecord {
-    key(sessionID);
-    this.#transaction(() => {
+  removeSession(id: string, sessionID: string, tx?: StoreWrite): TaskRecord {
+    return this.db.write((scope) => {
+      key(sessionID);
       this.get(id);
       this.db.connection.prepare(
         "DELETE FROM task_sessions WHERE task=? AND session=?",
       ).run(id, sessionID);
-    });
-    return this.get(id);
+      this.changed(undefined, scope);
+      return this.get(id);
+    }, tx);
   }
-  close(id: string): void {
-    this.get(id);
-    this.#transaction(() => {
+  close(id: string, tx?: StoreWrite): void {
+    this.db.write((scope) => {
+      this.get(id);
       this.db.connection.prepare("DELETE FROM task_sessions WHERE task=?").run(
         id,
       );
       this.db.connection.prepare("DELETE FROM tasks WHERE id=?").run(id);
-    });
-  }
-  #transaction(write: () => void): void {
-    this.db.transaction(write);
-    this.changed();
+      this.changed(undefined, scope);
+    }, tx);
   }
 }

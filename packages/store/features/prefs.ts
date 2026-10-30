@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { OtkDb } from "../db.ts";
+import type { OtkDb, StoreWrite } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
 import { Changes } from "../changes.ts";
 
@@ -39,15 +39,17 @@ export class Prefs<P extends object> extends Changes<P> {
     }
     return prefs;
   }
-  set(key: unknown, value: unknown): P {
-    if (!this.options.validate(key, value)) {
-      throw this.options.invalid();
-    }
-    this.db.connection.prepare(
-      "INSERT INTO prefs(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated=excluded.updated",
-    ).run(key, JSON.stringify(value), Date.now());
-    const prefs = this.get();
-    this.changed(prefs);
-    return prefs;
+  set(key: unknown, value: unknown, tx?: StoreWrite): P {
+    return this.db.write((scope) => {
+      if (!this.options.validate(key, value)) {
+        throw this.options.invalid();
+      }
+      this.db.connection.prepare(
+        "INSERT INTO prefs(key,value,updated) VALUES(?,?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value,updated=excluded.updated",
+      ).run(key, JSON.stringify(value), Date.now());
+      const prefs = this.get();
+      this.changed(prefs, scope);
+      return prefs;
+    }, tx);
   }
 }

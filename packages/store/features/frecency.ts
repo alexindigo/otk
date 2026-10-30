@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { resolve } from "@std/path";
-import type { OtkDb } from "../db.ts";
+import type { OtkDb, StoreWrite } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
 
 /** The frecency feature owns its schema versions independently of preferences. */
@@ -47,16 +47,18 @@ export class Frecency {
       last: Number(row.last),
     }));
   }
-  bump(directory: string, path: string): void {
-    const canonicalDirectory = this.#key(resolve(this.#key(directory)));
-    const canonicalPath = this.#key(
-      resolve(canonicalDirectory, this.#key(path)),
-    );
-    this.db.connection.prepare(
-      "INSERT INTO frecency(directory,path,score,last) VALUES(?,?,1,?) ON CONFLICT(directory,path) DO UPDATE SET score=frecency.score+1,last=excluded.last",
-    ).run(canonicalDirectory, canonicalPath, Date.now());
-    this.db.connection.prepare(
-      "DELETE FROM frecency WHERE rowid NOT IN (SELECT rowid FROM frecency ORDER BY last DESC,rowid DESC LIMIT 1000)",
-    ).run();
+  bump(directory: string, path: string, tx?: StoreWrite): void {
+    this.db.write(() => {
+      const canonicalDirectory = this.#key(resolve(this.#key(directory)));
+      const canonicalPath = this.#key(
+        resolve(canonicalDirectory, this.#key(path)),
+      );
+      this.db.connection.prepare(
+        "INSERT INTO frecency(directory,path,score,last) VALUES(?,?,1,?) ON CONFLICT(directory,path) DO UPDATE SET score=frecency.score+1,last=excluded.last",
+      ).run(canonicalDirectory, canonicalPath, Date.now());
+      this.db.connection.prepare(
+        "DELETE FROM frecency WHERE rowid NOT IN (SELECT rowid FROM frecency ORDER BY last DESC,rowid DESC LIMIT 1000)",
+      ).run();
+    }, tx);
   }
 }

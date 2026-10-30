@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { OtkDb } from "../db.ts";
+import type { OtkDb, StoreWrite } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
 import { MetadataChanges, ordered } from "./metadata.ts";
 export const projectTemplatesMigrations: FeatureMigrations = {
@@ -22,16 +22,16 @@ export class ProjectTemplates extends MetadataChanges {
       "SELECT template FROM project_templates ORDER BY position",
     ).all().map((r) => String(r.template));
   }
-  set(templates: string[]): string[] {
-    ordered(templates);
-    this.db.transaction(() => {
+  set(templates: string[], tx?: StoreWrite): string[] {
+    return this.db.write((scope) => {
+      ordered(templates);
       this.db.connection.exec("DELETE FROM project_templates");
       templates.forEach((template, i) =>
         this.db.connection.prepare("INSERT INTO project_templates VALUES(?,?)")
           .run(i, template)
       );
-    });
-    this.changed();
-    return this.list();
+      this.changed(undefined, scope);
+      return this.list();
+    }, tx);
   }
 }
