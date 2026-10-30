@@ -78,20 +78,7 @@ async function visibleLight(browser: Cdp, selector: string) {
   );
 }
 async function openContext(browser: Cdp, selector: string) {
-  const point = await browser.evaluate<{ x: number; y: number }>(
-    `(()=>{const r=document.querySelector(${
-      JSON.stringify(selector)
-    }).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
-  );
-  for (const type of ["mousePressed", "mouseReleased"]) {
-    await browser.send("Input.dispatchMouseEvent", {
-      type,
-      ...point,
-      button: "right",
-      buttons: type === "mousePressed" ? 2 : 0,
-      clickCount: 1,
-    });
-  }
+  await browser.rightClick(selector);
   const menu = ':popover-open [role=menu][aria-label="Context menu"]';
   await menuReady(browser, menu);
   return menu;

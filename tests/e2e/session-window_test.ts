@@ -29,20 +29,7 @@ async function shot(b: Cdp, name: string) {
   }
 }
 async function context(b: Cdp, selector: string) {
-  const point = await b.evaluate<{ x: number; y: number }>(
-    `(()=>{const r=document.querySelector(${
-      JSON.stringify(selector)
-    }).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
-  );
-  for (const type of ["mousePressed", "mouseReleased"]) {
-    await b.send("Input.dispatchMouseEvent", {
-      type,
-      ...point,
-      button: "right",
-      buttons: type === "mousePressed" ? 2 : 0,
-      clickCount: 1,
-    });
-  }
+  await b.rightClick(selector);
   await menuReady(b, menu);
 }
 async function scroll(b: Cdp, top: string) {

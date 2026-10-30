@@ -152,6 +152,16 @@ export class Cdp {
     );
   }
   async click(selector: string, clickCount = 1): Promise<void> {
+    await this.#pointer(selector, "left", clickCount);
+  }
+  async rightClick(selector: string): Promise<void> {
+    await this.#pointer(selector, "right", 1);
+  }
+  async #pointer(
+    selector: string,
+    button: "left" | "right",
+    clickCount: number,
+  ): Promise<void> {
     // DOM presence is not pointer readiness: pending render/scroll frames can
     // invalidate a measured point before input arrives. Observe stable rendered
     // geometry and hit-testing before sending a single native gesture.
@@ -194,9 +204,9 @@ export class Cdp {
       await this.send("Input.dispatchMouseEvent", {
         type,
         ...point,
-        button: "left",
+        button,
         clickCount,
-        buttons: type === "mousePressed" ? 1 : 0,
+        buttons: type === "mousePressed" ? (button === "left" ? 1 : 2) : 0,
       });
     }
   }
