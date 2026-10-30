@@ -16,6 +16,7 @@ import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { publishUsage, turnDetail } from "../support/usage-summary.ts";
+import { settledTranscriptCount } from "../support/message-viewport.ts";
 
 const row = (id: string) => `.otk-session-row[data-session="${id}"]`;
 const cost = (id: string) =>
@@ -27,6 +28,7 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     sessionID: string,
     id: string,
     cost: number,
+    created = 2,
   ): AssistantMessage => ({
     id,
     sessionID,
@@ -34,7 +36,7 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     replyTo: "user",
     agent: "build",
     model: { provider: "test", model: "test" },
-    time: { created: 2, completed: 3 },
+    time: { created, completed: created + 1 },
     tokens: {
       input: 1,
       output: 0,
@@ -55,7 +57,7 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     },
     ...Array.from(
       { length: 102 },
-      (_, i) => step("tstv1-core", `step-${i}`, .01),
+      (_, i) => step("tstv1-core", `step-${i}`, .01, i * 1000 + 2),
     ),
   ];
   messages.at(-1)!.parts = [{
@@ -66,7 +68,10 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
       b: "paragraph",
       inline: [{
         i: "text",
-        text: "Complete session usage, independent of transcript pages.",
+        // A viewport-sized tail isolates summary reads from legitimate reserve
+        // refills for a screenful of otherwise empty historical steps.
+        text: "Complete session usage, independent of transcript pages. "
+          .repeat(100),
       }],
     }],
   }];
@@ -200,10 +205,15 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
       }==='$0.07' && ${cost("tstv1-idle")}==='$0.00'`,
     );
     assertEquals(await b.evaluate(cost("tstv1-unknown")), undefined);
+    const acquired = await settledTranscriptCount(b);
+    assert(
+      acquired < messages.length,
+      "Whole-session totals include unacquired charged steps",
+    );
     assertEquals(
       contentReads.filter((id) => id === "tstv1-core").length,
-      2,
-      "Selected newest10 + reserve10",
+      Math.ceil(acquired / 10),
+      "Only pages acquired by the selected viewport and its reserve",
     );
     assertEquals([...new Set(contentReads)].sort(), [
       "tstv1-core",
@@ -211,6 +221,13 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
       "tstv1-idle",
       "tstv1-unknown",
     ], "Only the active project receives C2 scope warming");
+    for (const id of ["tstv1-helper", "tstv1-idle", "tstv1-unknown"]) {
+      assertEquals(
+        contentReads.filter((read) => read === id).length,
+        1,
+        "Empty scope members receive exactly one page",
+      );
+    }
     const hydratedReads = [...contentReads];
     assertEquals(
       reads.filter((id) => id === "tstv1-core").length,
@@ -276,7 +293,7 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     f.app.index.upsert({ ...helper, timeUpdated: helper.timeUpdated + 1 });
     publishUsage(f.app.index, ledgers.get("tstv1-helper")!.snapshot());
     await b.poll(`${cost("tstv1-helper")}==='$0.12'`);
-    const live = step("tstv1-core", "live", .03);
+    const live = step("tstv1-core", "live", .03, 200000);
     messages.push(live);
     ledgers.get("tstv1-core")!.upsert(usageHeader(live));
     f.app.connections.content("tstv1-core", {

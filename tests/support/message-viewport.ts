@@ -1,6 +1,22 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Cdp } from "./cdp.ts";
 
+/** Wait for the consumer's measured window and its acquired range to settle. */
+export async function settledTranscriptCount(browser: Cdp): Promise<number> {
+  return await browser.poll(`(async()=>{
+    const pane=document.querySelector('.otk-messages');
+    const flow=pane?.querySelector('.otk-message-flow');
+    if(!flow || Number(flow.dataset.messageCount)<20)return false;
+    let previous='',stable=0;
+    while(stable<5){
+      await new Promise(requestAnimationFrame);
+      const next=JSON.stringify([flow.dataset.messageCount,pane.scrollTop,pane.scrollHeight,pane.clientHeight]);
+      stable=next===previous?stable+1:0;previous=next;
+    }
+    return Number(flow.dataset.messageCount);
+  })()`) as number;
+}
+
 /** Locate acquired content through the real scroll surface, including rows
  * that are not mounted until the reader reaches their measured range. */
 export async function revealViewportElement(

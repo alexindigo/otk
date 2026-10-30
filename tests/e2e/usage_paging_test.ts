@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../support/resources.ts";
-import { assertEquals } from "@std/assert";
+import { assert, assertEquals } from "@std/assert";
 import {
   type AssistantMessage,
   type Message,
@@ -13,6 +13,7 @@ import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { publishUsage, turnDetail } from "../support/usage-summary.ts";
+import { settledTranscriptCount } from "../support/message-viewport.ts";
 
 test("U4 complete102-step turn and session totals survive paging, duplicate live updates, held snapshots and reload", async () => {
   const root = await fixture();
@@ -126,14 +127,36 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     const point={x:r.x+r.width/2,y:r.y+r.height/2};
     return e.isConnected && e.contains(document.elementFromPoint(point.x,point.y)) && point;
   })()`) as { x: number; y: number };
+  let hydrationEnd = 0;
+  const hydration = async () => {
+    const acquired = await settledTranscriptCount(b);
+    assert(
+      acquired < messages.length,
+      "Usage must remain complete beyond acquired bodies",
+    );
+    const expected = Array.from(
+      { length: Math.ceil(acquired / 10) },
+      (_, i) => ({
+        before: i ? `fixture:${messages.length - i * 10}` : undefined,
+      }),
+    );
+    assertEquals(
+      calls.slice(hydrationEnd),
+      expected,
+      "Only the exact cursor chain for the measured viewport may hydrate",
+    );
+    hydrationEnd = calls.length;
+    return hydrationEnd;
+  };
   try {
     await b.goto(`${f.url}/#/local/tstv1-core`);
     await b.poll(
       `${visible}==='102 model calls · 102 tokens · $1.02' && Math.abs(Number(${cost})-1.02)<.000001`,
     );
-    assertEquals(calls, [{ before: undefined }, { before: "fixture:93" }]);
+    await hydration();
     await b.reload();
     await b.poll(`${visible}==='102 model calls · 102 tokens · $1.02'`);
+    const detailBodyReads = await hydration();
     const point = await usagePoint();
     await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
     await b.poll("!!document.querySelector('.otk-turn-usage :popover-open')");
@@ -213,9 +236,11 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
       x: 1,
       y: 1,
     });
-    assertEquals(calls, [{ before: undefined }, { before: "fixture:93" }, {
-      before: undefined,
-    }, { before: "fixture:93" }]);
+    assertEquals(
+      calls.length,
+      detailBodyReads,
+      "Opening the complete usage ledger admits zero body reads",
+    );
     const shots = Deno.env.get("OTK_USAGE_OWNER_SHOTS");
     if (shots) {
       await Deno.mkdir(shots, { recursive: true });
@@ -245,8 +270,14 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
       `${last}==='1 model call · 5 tokens · $0.05' && Math.abs(Number(${cost})-1.07)<.000001`,
     );
     hold = Promise.withResolvers<SessionUsage>();
+    assertEquals(
+      calls.length,
+      detailBodyReads,
+      "Live usage does not page historical bodies",
+    );
     await b.reload();
     await b.poll(`${last}==='1 model call · 5 tokens · $0.05'`);
+    const heldBodyReads = await hydration();
     const detailPoint = await usagePoint();
     await b.send("Input.dispatchMouseEvent", {
       type: "mouseMoved",
@@ -268,15 +299,16 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     await b.poll(
       `${last}==='1 model call · 9 tokens · $0.09' && Math.abs(Number(${cost})-1.11)<.000001`,
     );
+    assertEquals(
+      calls.length,
+      heldBodyReads,
+      "Held and duplicate usage updates admit zero body reads",
+    );
     await b.reload();
     await b.poll(
       `${last}==='1 model call · 9 tokens · $0.09' && Math.abs(Number(${cost})-1.11)<.000001`,
     );
-    assertEquals(
-      calls.length,
-      8,
-      "Only initial newest10 + reserve10 per reload, never body paging for usage",
-    );
+    await hydration();
     assertEquals(b.errors, []);
   } finally {
     hold?.resolve(ledger.snapshot());
