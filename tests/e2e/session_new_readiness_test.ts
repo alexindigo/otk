@@ -22,7 +22,8 @@ test("new-session slash and palette pointer/keyboard invocations resolve their d
       window.holdCreationDirectory = false;
       window.heldCreationLoads = [];
       window.creationLoadReplies = new Set();
-      window.creationGetSessions = new Set();
+      window.creationPageRequests = new Map();
+      window.creationHeldPages = new Set();
       window.WebSocket = class extends WebSocket {
         constructor(...args) {
           super(...args);
@@ -33,6 +34,7 @@ test("new-session slash and palette pointer/keyboard invocations resolve their d
               frame.t === 'rpc.result' && window.creationLoadReplies.has(frame.id)
             )) {
               event.stopImmediatePropagation();
+              if (frame.t === 'rpc.result' && window.creationPageRequests.has(frame.id)) window.creationHeldPages.add(window.creationPageRequests.get(frame.id));
               window.heldCreationLoads.push(() => this.dispatchEvent(new MessageEvent('message', {data:event.data})));
             }
           });
@@ -41,10 +43,11 @@ test("new-session slash and palette pointer/keyboard invocations resolve their d
           const frame = JSON.parse(data);
           if (window.holdCreationLoads && frame.t === 'rpc') {
             if (frame.method === 'question.list') window.creationLoadReplies.add(frame.id);
-            if (frame.method === 'session.get' && (window.holdCreationDirectory || !window.creationGetSessions.has(frame.params.sessionID))) {
-              window.creationGetSessions.add(frame.params.sessionID);
+            if (frame.method === 'session.messages') {
+              window.creationPageRequests.set(frame.id, frame.params.sessionID);
               window.creationLoadReplies.add(frame.id);
             }
+            if (frame.method === 'session.get' && window.holdCreationDirectory) window.creationLoadReplies.add(frame.id);
           }
           super.send(data);
         }
@@ -53,7 +56,8 @@ test("new-session slash and palette pointer/keyboard invocations resolve their d
         window.holdCreationLoads = false;
         for (const deliver of window.heldCreationLoads.splice(0)) deliver();
         window.creationLoadReplies.clear();
-        window.creationGetSessions.clear();
+        window.creationPageRequests.clear();
+        window.creationHeldPages.clear();
       };
     `,
     });
@@ -76,10 +80,15 @@ test("new-session slash and palette pointer/keyboard invocations resolve their d
       );
       const pending = await b.evaluate<string>("location.hash");
       const pendingID = pending.split("/").at(-1)!;
+      await b.poll(
+        `window.creationHeldPages.has(${JSON.stringify(pendingID)})`,
+      );
       assertEquals(
-        await b.evaluate("!!document.querySelector('.otk-project-tabs')"),
-        false,
-        "The new session's project presentation is still pending",
+        await b.evaluate(
+          `window.creationHeldPages.has(${JSON.stringify(pendingID)})`,
+        ),
+        true,
+        "The new session's initial page is still held independently of project chrome",
       );
       if (mode === "slash") {
         await b.fill("textarea[name=prompt]", "/new");
@@ -118,7 +127,7 @@ test("new-session slash and palette pointer/keyboard invocations resolve their d
         sentFrames(b).filter(({ frame }) =>
           frame.method === "session.get" &&
           (frame.params as { sessionID?: string }).sessionID === pendingID
-        ).length >= 2,
+        ).length === 1,
         "The command can resolve a directory independently of the held initial load",
       );
       assertEquals(
