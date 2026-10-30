@@ -152,7 +152,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
           ),
           "Scale interactive outcome",
         ])
-      }); globalThis.scale={snapshots:[],calls:[],results:[],paints:[]};
+      }); globalThis.scale={snapshots:[],calls:[],cancels:[],results:[],paints:[]};
       globalThis.WebSocket=class extends Native {
         constructor(...args){super(...args);this.addEventListener('message',event=>{
           const f=JSON.parse(event.data),at=performance.now();
@@ -166,7 +166,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
             if(valid)scale.paints.push({snapshot,at:performance.now(),elapsed:performance.now()-at,rows:rows.length,bound});else requestAnimationFrame(paint);
           };requestAnimationFrame(paint);
         });}
-        send(data){const f=JSON.parse(data);if(f.t==='rpc')scale.calls.push({at:performance.now(),wall:Date.now(),...f});super.send(data);}
+        send(data){const f=JSON.parse(data);if(f.t==='rpc')scale.calls.push({at:performance.now(),wall:Date.now(),...f});if(f.t==='rpc.cancel')scale.cancels.push({at:performance.now(),...f});super.send(data);}
       };
     })()`,
     });
@@ -300,7 +300,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       (status) => status === "idle",
     );
     const failed = await b.evaluate<unknown[]>(
-      "scale.results.filter(f=>f.ok===false)",
+      "scale.results.filter(f=>f.ok===false && !scale.cancels.some(c=>c.id===f.id && c.at<=f.at))",
     );
     assertEquals(failed, [], "No active request may be presented as failed");
     assertEquals(
