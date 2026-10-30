@@ -10,6 +10,7 @@ import {
 } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { menuReady } from "../support/menu.ts";
+import { waitFor } from "../support/opencode.ts";
 import {
   type AssistantMessage,
   type TurnUsageDetail,
@@ -43,7 +44,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
         });
       }
       f.fake.queue({ chunks: [markers[101]] });
-      await f.oc.request(`/session/${session.id}/message`, {
+      await f.oc.request(`/session/${session.id}/prompt_async`, {
         method: "POST",
         body: {
           agent: "build",
@@ -54,6 +55,16 @@ for (const theme of ["otk-dark", "otk-light"]) {
           }],
         },
       });
+      // Admission is a bounded request; completing 102 native calls is a job.
+      // Require both the complete scripted turn and terminal native status.
+      await waitFor(
+        () => f.fake.requests.length,
+        (count) => count === markers.length,
+      );
+      await waitFor(
+        () => f.oc.request<Record<string, unknown>>("/session/status"),
+        (state) => !state[session.nativeID],
+      );
       const server = await f.sidecar();
       client = new WsClient(server.url);
       await client.connect();
@@ -86,9 +97,22 @@ for (const theme of ["otk-dark", "otk-light"]) {
         0,
         "closed breakdown does no detail work",
       );
-      const point = await b.evaluate<{ x: number; y: number }>(
-        "(async()=>{await document.fonts.ready;const e=document.querySelector('.otk-turn-usage > button');let previous='',stable=0;while(stable<2){await new Promise(requestAnimationFrame);const r=e.getBoundingClientRect(),next=JSON.stringify([r.x,r.y,r.width,r.height]);stable=next===previous?stable+1:0;previous=next;}const r=e.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()",
-      );
+      // Reserve-page measurement may replace the footer while fonts/layout
+      // settle. A detached trigger has a stable zero rect, not a hover point.
+      const point = await b.poll(`(async()=>{
+        await document.fonts.ready;
+        const selector='.otk-turn-usage > button',e=document.querySelector(selector);
+        if(!e)return false;
+        let r=e.getBoundingClientRect();
+        for(let frame=0;frame<2;frame++){
+          await new Promise(requestAnimationFrame);
+          const next=e.getBoundingClientRect();
+          if(!e.isConnected||e!==document.querySelector(selector)||!next.width||!next.height||r.x!==next.x||r.y!==next.y||r.width!==next.width||r.height!==next.height)return false;
+          r=next;
+        }
+        const point={x:r.x+r.width/2,y:r.y+r.height/2};
+        return e.contains(document.elementFromPoint(point.x,point.y))?point:false;
+      })()`) as { x: number; y: number };
       await b.send("Input.dispatchMouseEvent", {
         type: "mouseMoved",
         ...point,
