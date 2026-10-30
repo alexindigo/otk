@@ -298,14 +298,26 @@ export class PermissionFeature implements FrameSource {
             "Deleted sessions cannot enable auto-approve",
           );
         }
-        if (
-          input.enabled &&
-          !canAutoApprove(await ctx.harness.core.getSession(input.sessionID))
-        ) {
-          throw new HarnessError(
-            "permission",
-            "Cannot enable auto-approve on a helper session; it inherits its parent policy",
+        if (input.enabled) {
+          const ready = ctx.harness.core.identities(
+            [input.sessionID],
+            ctx.execution?.signal,
           );
+          const identity = (await (ctx.execution?.wait?.(ready) ?? ready)).find(
+            (row) => row.id === input.sessionID,
+          );
+          if (!identity) {
+            throw new HarnessError(
+              "session",
+              "That session is no longer available.",
+            );
+          }
+          if (!canAutoApprove(identity)) {
+            throw new HarnessError(
+              "permission",
+              "Cannot enable auto-approve on a helper session; it inherits its parent policy",
+            );
+          }
         }
         if (this.#closed) {
           throw new HarnessError("permission", "Server is stopping");

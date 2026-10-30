@@ -121,13 +121,19 @@ release timers and subscriptions immediately and cannot rearm them from a late
 RPC completion.
 
 `RpcRegistry(backend, store)` dispatches registered methods and gives handlers
-`RpcContext` (`harness`, `store`, authoritative `sessionDirectory(id)`).
-Features own `params` validation and `handler`; `register(method, definition)`
-rejects duplicate names. Invalid params and handler errors propagate to the WS
-request owner. Unknown/unregistered methods return the existing `method` error.
-Method names and handler results derive from the open protocol `RpcMethods`
-interface. Validators still accept untrusted wire objects and may return their
-own parsed representation; that representation types the handler's input.
+`RpcContext` (`harness`, `store`, authoritative `sessionDirectory(id)` and
+`sessionDirectories(ids,signal?)`). Both identity paths use the harness's narrow
+`identities` port rather than decorating session bodies. Collection mutation
+validation deduplicates and reads one batch; missing identities reject only
+after a successful authoritative read. Waiting releases interactive pressure and
+read cancellation reaches that same validation. Task ownership is revalidated in
+the local write scope after asynchronous provider validation. Features own
+`params` validation and `handler`; `register(method, definition)` rejects
+duplicate names. Invalid params and handler errors propagate to the WS request
+owner. Unknown/unregistered methods return the existing `method` error. Method
+names and handler results derive from the open protocol `RpcMethods` interface.
+Validators still accept untrusted wire objects and may return their own parsed
+representation; that representation types the handler's input.
 
 `registerSessions`, `registerPrefs` and `registerFrecency` provide core and
 store features; prefs/frecency take their store as a third argument. Optional

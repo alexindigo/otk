@@ -29,6 +29,10 @@ function backend(get: (id: string) => never = () => {
       stop: async () => {},
       subscriptions() {},
       getSession: get,
+      identities: (ids) => {
+        ids.forEach(get);
+        return Promise.resolve([]);
+      },
       listChildren: () => Promise.resolve([]),
       listMessages: (id) => Promise.resolve(fixturePage(id)),
       createSession: () => Promise.reject(new Error("unused")),

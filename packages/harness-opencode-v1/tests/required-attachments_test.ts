@@ -18,6 +18,7 @@ test("captured native sends classify known attachment preparation rejection afte
     return Promise.resolve(new Response(null, { status: 204 }));
   });
   const directory = {
+    validate: () => Promise.resolve([]),
     cached: () => root,
     resolve: () => Promise.resolve(root),
   };
@@ -111,6 +112,7 @@ for (const mode of ["prompt", "command"] as const) {
         return Promise.resolve(new Response(null, { status: 204 }));
       });
       const directory = {
+        validate: () => Promise.resolve([]),
         cached: () => root,
         resolve: () => Promise.resolve(root),
       };
@@ -167,6 +169,7 @@ test("required attachment mapping preserves every source, order, directory and r
     return Promise.resolve(new Response(null, { status: 204 }));
   });
   const directory = {
+    validate: () => Promise.resolve([]),
     cached: () => root,
     resolve: () => Promise.resolve(root),
   };

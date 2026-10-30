@@ -239,6 +239,14 @@ export class OpencodeV1Adapter implements Harness {
           `/session/${encodeURIComponent(ids.decode(id))}`,
           { signal },
         ),
+      digest
+        ? (wanted, signal) =>
+          digest.read("identity.batch", { ids: [...wanted] }, {
+            owner: `identity:${crypto.randomUUID()}`,
+            priority: "user",
+            signal,
+          })
+        : undefined,
     );
     const version = () => this.version;
     this.#transcript = new Transcript({

@@ -22,6 +22,18 @@ const backend = (permissions: PermissionsCapability): Harness => ({
     start: () => Promise.resolve(),
     stop: () => Promise.resolve(),
     subscriptions() {},
+    identities: (ids) =>
+      Promise.resolve(
+        ids.filter((id) =>
+          [
+            "tstv1-root",
+            "tstv1-child",
+            "tstv1-other",
+            "tstv1-cycle-a",
+            "tstv1-cycle-b",
+          ].includes(id)
+        ).map((id) => ({ id, directory: "/owned" })),
+      ),
     getSession: (id) =>
       [
           "tstv1-root",
@@ -94,7 +106,7 @@ test("server-owned auto-approve can be turned off and its activity read while th
   const feature = new PermissionFeature(store, index, capability),
     unavailable = backend(capability);
   let lookups = 0;
-  unavailable.core.getSession = () => {
+  unavailable.core.identities = () => {
     lookups++;
     return Promise.reject(new Error("Backend offline"));
   };
@@ -192,7 +204,7 @@ test("server session auto-approve rechecks off after held lists, isolates ancest
           enabled: true,
         }),
       Error,
-      "Unknown session",
+      "That session is no longer available.",
     );
     assertEquals(store.enabled(), []);
     await rpc.dispatch("permission.auto", {

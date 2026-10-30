@@ -151,14 +151,14 @@ test("task membership validation cannot publish into a task closed while awaitin
   const a = new WsClient(f.url), b = new WsClient(f.url);
   const entered = Promise.withResolvers<void>(),
     release = Promise.withResolvers<void>();
-  const get = f.app.backend.core.getSession;
-  f.app.backend.core.getSession = async (id) => {
-    if (id === "tstv1-late") {
+  const get = f.app.backend.core.identities;
+  f.app.backend.core.identities = async (ids) => {
+    if (ids.includes("tstv1-late")) {
       entered.resolve();
       await release.promise;
-      return { ...await get("tstv1-otk"), id };
+      return [{ ...(await get(["tstv1-otk"]))[0], id: "tstv1-late" }];
     }
-    return await get(id);
+    return await get(ids);
   };
   try {
     await a.connect();

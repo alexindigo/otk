@@ -48,6 +48,10 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
       stop: async () => {},
       subscriptions() {},
       getSession: () => Promise.resolve(session),
+      identities: (ids) =>
+        Promise.resolve(
+          ids.map((id) => ({ id, directory: session.directory })),
+        ),
       listChildren: () => Promise.resolve([]),
       listMessages: (id) => Promise.resolve(fixturePage(id)),
       createSession: () => Promise.resolve(session),

@@ -105,6 +105,14 @@ test("server rejects helper policy and removes deleted session policy durably wi
   const feature = new PermissionFeature(store, index, capability);
   const harness = {
     core: {
+      identities: (ids: readonly string[]) =>
+        Promise.resolve(
+          ids.map((id) => ({
+            id,
+            directory: "/owned",
+            ...(id === "tstv1-child" ? { parentID: "tstv1-root" } : {}),
+          })),
+        ),
       getSession: (id: string) =>
         Promise.resolve({
           ...entry(id, id === "tstv1-child" ? "tstv1-root" : undefined),

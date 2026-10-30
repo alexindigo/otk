@@ -10,13 +10,13 @@ test("selected wire acknowledges and resumes a held actual task intent after soc
     f = await coreBackendFixture(root);
   const held = Promise.withResolvers<void>(),
     entered = Promise.withResolvers<void>();
-  const original = f.app.backend.core.getSession;
+  const original = f.app.backend.core.identities;
   let reads = 0;
-  f.app.backend.core.getSession = async (id) => {
+  f.app.backend.core.identities = async (ids) => {
     reads++;
     entered.resolve();
     await held.promise;
-    return original(id);
+    return original(ids);
   };
   const first = new WsClient(f.url);
   await first.connect();

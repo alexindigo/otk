@@ -26,6 +26,7 @@ Deno.test("a core-only harness needs no optional implementation; registry snapsh
       start: () => Promise.resolve(),
       stop: () => Promise.resolve(),
       subscriptions: () => {},
+      identities: () => Promise.resolve([]),
       getSession: () => Promise.reject(new Error("not found")),
       listChildren: () => Promise.resolve([]),
       listMessages: () => Promise.reject(new Error("not found")),

@@ -109,6 +109,7 @@ for (
         stop: () => Promise.resolve(),
         subscriptions() {},
         getSession: () => Promise.reject(new Error("No sessions")),
+        identities: () => Promise.resolve([]),
         createSession: () => Promise.reject(new Error("No sessions")),
         listChildren: () => Promise.resolve([]),
         listMessages: (id) => Promise.resolve(fixturePage(id)),

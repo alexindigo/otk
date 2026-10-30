@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { sessionDirectory } from "./directory.ts";
 import type { DatabaseSync } from "node:sqlite";
 import {
   type DigestDelta,
@@ -18,7 +19,7 @@ import type {
 } from "@otk/harness";
 import type { OpencodeV1Config } from "./config.ts";
 import { harnessDb } from "./config.ts";
-import { Client } from "./client.ts";
+import { Client, NativeRequestFailure } from "./client.ts";
 import { Messages } from "./messages.ts";
 import { mapIndex } from "./map.ts";
 import type { Info, Session } from "./types.ts";
@@ -159,6 +160,9 @@ function emptyDelta(revision = 0): DigestDelta {
 
 /** Provider-owned, restartable scalar sink; never parses Markdown or stores bodies. */
 export class OpencodeV1DigestSink implements DigestSink {
+  readonly readers: import("@otk/harness").ProviderReaders = {
+    "identity.batch": (input, signal) => this.identities(input.ids, signal),
+  };
   readonly identity = "opencode-v1";
   #client: Client;
   #messages: Messages;
@@ -292,6 +296,82 @@ export class OpencodeV1DigestSink implements DigestSink {
       });
     }
     return { prompt, boundaries: [...boundaries.values()], cutoffCreated };
+  }
+  /** Authority validation never borrows cached directory hints as evidence. */
+  async identities(
+    wanted: readonly string[],
+    signal: AbortSignal,
+  ): Promise<import("@otk/harness").SessionIdentity[]> {
+    signal.throwIfAborted();
+    const unique = [...new Set(wanted)];
+    unique.forEach(ids.decode);
+    if (!unique.length) return [];
+    const connection = this.#connection;
+    const health = await this.#client.json<{ healthy: boolean }>(
+      "/global/health",
+      { signal },
+    );
+    if (!health.healthy) {
+      throw new NativeRequestFailure(
+        "unavailable",
+        new Error("Native provider is unavailable"),
+        "native.unavailable",
+      );
+    }
+    let native: DigestNativeDb | undefined;
+    try {
+      native = await this.#metadataSource(signal);
+      if (native && native.fileIdentity() !== native.identity) {
+        native = undefined;
+      }
+    } catch (error) {
+      signal.throwIfAborted();
+      if (error instanceof NativeRequestFailure) throw error;
+      native = undefined;
+      this.storage.diagnostic(undefined, error);
+    }
+    signal.throwIfAborted();
+    if (this.#closed || connection !== this.#connection) {
+      throw new Error("Native identity generation changed");
+    }
+    if (native) {
+      const result: import("@otk/harness").SessionIdentity[] = [];
+      for (
+        let offset = 0;
+        offset < unique.length;
+        offset += this.policy.batch
+      ) {
+        signal.throwIfAborted();
+        if (
+          this.#closed || connection !== this.#connection ||
+          native.fileIdentity() !== native.identity
+        ) throw new Error("Native identity authority changed");
+        result.push(
+          ...native.identities(
+            unique.slice(offset, offset + this.policy.batch),
+          ),
+        );
+        if (offset + this.policy.batch < unique.length) {
+          await this.wait(
+            new Promise<void>((resolve) => setTimeout(resolve, 0)),
+          );
+        }
+      }
+      return result;
+    }
+    const result = await sessionDirectory(
+      (id) => this.storage.read(id)?.metadata.directory,
+      (id, signal) =>
+        this.#client.json<Session>(
+          `/session/${encodeURIComponent(ids.decode(id))}`,
+          { signal },
+        ),
+    ).validate(unique, signal);
+    signal.throwIfAborted();
+    if (this.#closed || connection !== this.#connection) {
+      throw new Error("Native identity generation changed");
+    }
+    return result;
   }
   /** Scalar demand can prove this file with one bounded identity sample; it
    * neither waits for inventory exhaustion nor changes the scan cursor domain. */

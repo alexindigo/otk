@@ -4,8 +4,12 @@ import type {
   DigestPort,
   DigestPublication,
   DirtySession,
+  ProviderReadCodecs,
+  ProviderReadKinds,
+  ProviderReadOptions,
 } from "@otk/harness";
 import type { SessionMetadata, TurnUsageSnapshot } from "@otk/protocol";
+import { OperationFailure } from "@otk/protocol";
 import type { OpencodeV1Config } from "@otk/harness-opencode-v1";
 import type { DigestPressure, FromWorker, ToWorker } from "./protocol.ts";
 import type { SectionObserver } from "../diagnostics.ts";
@@ -22,6 +26,7 @@ export interface DigestBridgeOptions {
   section?: SectionObserver;
   pressure?(value: DigestPressure): void;
   admission?(): void;
+  reads?: ProviderReadCodecs;
 }
 interface Pending {
   receive(value: FromWorker): void;
@@ -68,6 +73,7 @@ export class DigestBridge implements DigestPort {
   #scopes = new Map<string, { directory?: string; sessions: string[] }>();
   #interactive = new Set<string>();
   #running = false;
+  #readOwners = new Map<string, Set<AbortController>>();
   #deletions = new Map<string, QueuedDeletion>();
   #deleting = new Map<string, QueuedDeletion>();
   #deletionScheduled = false;
@@ -197,7 +203,7 @@ export class DigestBridge implements DigestPort {
       }
       if (
         data.t === "digest" || data.t === "digests" || data.t === "catalog" ||
-        data.t === "detail"
+        data.t === "detail" || data.t === "read.result"
       ) {
         this.#task(() => {
           if (worker === this.#worker) {
@@ -307,10 +313,17 @@ export class DigestBridge implements DigestPort {
   ): Promise<T> {
     signal.throwIfAborted();
     const gate = Promise.withResolvers<T>();
-    const id = this.#post(command);
+    const id = this.#id + 1;
+    const cancel = () => {
+      if (command.t === "read") {
+        this.#worker?.postMessage(
+          { t: "read.cancel", run: this.#run, id } satisfies ToWorker,
+        );
+      } else this.#post({ t: "cancel", request: id });
+    };
     const abort = () => {
       if (this.#pending.delete(id)) {
-        this.#post({ t: "cancel", request: id });
+        cancel();
         gate.reject(signal.reason);
       }
     };
@@ -325,12 +338,18 @@ export class DigestBridge implements DigestPort {
           }
         } catch (error) {
           this.#pending.delete(id);
-          this.#post({ t: "cancel", request: id });
+          cancel();
           gate.reject(error);
         }
       },
       reject: gate.reject,
     });
+    try {
+      this.#post(command);
+    } catch (error) {
+      this.#pending.delete(id);
+      gate.reject(error);
+    }
     return gate.promise.finally(() =>
       signal.removeEventListener("abort", abort)
     );
@@ -437,6 +456,59 @@ export class DigestBridge implements DigestPort {
         );
       },
     );
+  }
+  async read<K extends keyof ProviderReadKinds>(
+    kind: K,
+    input: ProviderReadKinds[K]["input"],
+    options: ProviderReadOptions,
+  ): Promise<ProviderReadKinds[K]["result"]> {
+    const controller = new AbortController();
+    const owners = this.#readOwners.get(options.owner) ??
+      new Set<AbortController>();
+    owners.add(controller);
+    this.#readOwners.set(options.owner, owners);
+    const signal = options.signal
+      ? AbortSignal.any([options.signal, controller.signal])
+      : controller.signal;
+    try {
+      signal.throwIfAborted();
+      await this.start();
+      signal.throwIfAborted();
+      const codec = this.options.reads?.[kind];
+      if (!codec) throw new Error("Provider read not selected");
+      const builder = codec.create();
+      let part = 0;
+      return await this.#request(
+        {
+          t: "read",
+          owner: options.owner,
+          kind,
+          input,
+          priority: options.priority,
+        },
+        signal,
+        (message) => {
+          if (message.t === "read.failure") {
+            throw new OperationFailure(
+              "unavailable",
+              message.failure.code,
+              message.failure,
+            );
+          }
+          if (message.t !== "read.result") return;
+          if (
+            message.kind !== kind || message.part !== part++
+          ) throw new Error("Out-of-order provider read");
+          builder.append(message.value);
+          if (message.last) return { value: builder.finish() };
+        },
+      );
+    } finally {
+      owners.delete(controller);
+      if (!owners.size && this.#readOwners.get(options.owner) === owners) {
+        this.#readOwners.delete(options.owner);
+      }
+    }
   }
   async transcriptMetadata(
     sessionID: string,
@@ -702,6 +774,12 @@ export class DigestBridge implements DigestPort {
     if (this.#worker) this.#post({ t: "scope", owner, ...value });
   }
   release(owner: string): void {
+    for (const controller of this.#readOwners.get(owner) ?? []) {
+      controller.abort(
+        new DOMException("Provider read released", "AbortError"),
+      );
+    }
+    this.#readOwners.delete(owner);
     this.#scopes.delete(owner);
     this.#interactive.delete(owner);
     if (this.#worker && !this.#stop) {

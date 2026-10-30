@@ -159,12 +159,27 @@ allowlisted shape. Read/body results remain volatile. Storage imports no
 protocol, core or provider implementation.
 
 `Projects.policies()` and `Seen.all()` supply batched metadata projections.
-Project listeners carry the committed user/project record (or a discovery
-notice). Seen/finish listeners carry the committed identity and clock, allowing
-observers to update those projections without reading a baseline per session.
-`Finishes.record` returns its `UPSERT ... RETURNING` clock.
-`Projects.reactivate` applies activity reactivation without a preliminary SELECT
-while retaining post-commit notification.
+Project listeners carry `{user, upsert, remove}` and task listeners carry
+`{upsert, remove}`, containing detached committed records. Template listeners
+carry `{templates}`. Multiple writes in one `StoreWrite` coalesce each key to
+its final value before a single publication; rollback emits nothing and
+unchanged member/order/template/policy edits emit no delta. Seen/finish
+listeners carry the committed identity and clock, allowing observers to update
+those projections without reading a baseline per session. `Finishes.record`
+returns its `UPSERT ... RETURNING` clock. `Projects.reactivate` applies activity
+reactivation without a preliminary SELECT while retaining post-commit
+notification.
+
+Task feature v2 adds `(directory,position,id)` indexing.
+`Tasks.list(directory?)`, `get(id)` and `getMany(ids)` use two set queries,
+including ordered memberships and empty tasks; an empty batch executes no SQL.
+`owner`/`owners` are narrow membership reads. `removeSessions(ids, tx?)` removes
+intentional grouping only, returning affected tasks in one batch; provider
+deletion never uses it. `Projects.materialize(user, tx?)` creates discovered
+user rows in one ordered statement at identity/discovery boundaries. Call it
+when selecting a new user; `list`, `get` and `find` are now read-only.
+`Seen.mark` and `Finishes.record` return their persisted monotone clock without
+a follow-up SELECT and both join explicit write scopes.
 
 `sessionReferenceMigrations` contributes only the neutral
 `session_reference_upgrades` marker schema. Applications own any data

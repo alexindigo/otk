@@ -21,6 +21,39 @@ const policy = {
   retryms: 10,
   busyms: 100,
 };
+test("identity reads require fresh provider reachability after a verified catalog and never scan headers", async () => {
+  const f = await fixture();
+  try {
+    const signal = new AbortController().signal;
+    await f.sink.catalog(signal);
+    f.native.prepare(
+      "UPDATE session SET parent_id='ses_parent' WHERE id='ses_one'",
+    ).run();
+    assertEquals(
+      await f.sink.identities(["opcv1-ses_one", "opcv1-missing"], signal),
+      [{ id: "opcv1-ses_one", directory: "/p", parentID: "opcv1-ses_parent" }],
+    );
+    assertEquals(f.queries.scans, 0);
+    f.offline();
+    await assertRejects(() => f.sink.identities(["opcv1-ses_one"], signal));
+  } finally {
+    f.close();
+  }
+});
+test("identity validation falls back to raw native authority when a verified file disappears", async () => {
+  const f = await fixture();
+  try {
+    const signal = new AbortController().signal;
+    await f.sink.catalog(signal);
+    await Deno.rename(f.nativePath, f.nativePath + ".retired");
+    assertEquals(await f.sink.identities(["opcv1-ses_one"], signal), [{
+      id: "opcv1-ses_one",
+      directory: "/p",
+    }]);
+  } finally {
+    f.close();
+  }
+});
 test("catalog reconciliation yields committed bounded chunks before admitting the remaining identities", async () => {
   let previous = 0, maximum = 0, interleaved = 0;
   const f: Awaited<ReturnType<typeof fixture>> = await fixture(
@@ -211,6 +244,9 @@ async function fixture(
           ),
         );
       }
+      if (path === "/session/ses_one") {
+        return Response.json({ id: "ses_one", directory: "/p" });
+      }
       throw new Error(`Unexpected native request ${path}`);
     }) as typeof fetch,
     (path) => new CountedDb(path),
@@ -261,6 +297,7 @@ async function fixture(
   };
   return {
     sink,
+    nativePath: path,
     native,
     derived,
     values,

@@ -94,6 +94,11 @@ test("every native feature fences its backend effect, checkpoints only metadata 
       stop: () => Promise.resolve(),
       subscriptions() {},
       getSession: (id) => Promise.resolve(sessions.get(id) ?? base),
+      identities: (ids) =>
+        Promise.resolve(ids.map((id) => {
+          const s = sessions.get(id) ?? base;
+          return { id, directory: s.directory, parentID: s.parentID };
+        })),
       listChildren: () => Promise.resolve([]),
       listMessages: () => Promise.reject(new Error("No body read needed")),
       createSession: (_input, operation) =>

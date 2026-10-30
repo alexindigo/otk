@@ -58,6 +58,10 @@ export async function coreBackendFixture(
       },
       stop: () => Promise.resolve(),
       subscriptions() {},
+      identities: (ids) =>
+        Promise.resolve(
+          ids.includes(identity) ? [{ id: identity, directory: root }] : [],
+        ),
       getSession: () => Promise.resolve(session),
       createSession: () => Promise.resolve(session),
       listChildren: () => Promise.resolve([]),

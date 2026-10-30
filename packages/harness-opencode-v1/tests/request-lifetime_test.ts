@@ -120,6 +120,7 @@ Deno.test("mutating native ports forward the context and scoped launches join ac
     requestms: 5,
   }, () => Promise.resolve(new Response(null, { status: 204 })));
   const directory = {
+    validate: () => Promise.resolve([]),
     cached: () => "/p",
     resolve: () => Promise.resolve("/p"),
   };
@@ -171,6 +172,7 @@ Deno.test("native catalog readers propagate cancellation through directory prepa
     );
   });
   const directory = {
+    validate: () => Promise.resolve([]),
     cached: () => "/p",
     resolve: () => Promise.resolve("/p"),
   };

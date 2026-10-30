@@ -8,6 +8,13 @@ Session references use the protocol's qualified-ID grammar. An adapter owns its
 native codec and validates its own provider at the boundary; the shared harness
 contracts never infer a provider from a bare native identity.
 
+`HarnessCore.identities(ids, signal?)` is required for authoritative identity
+validation. It returns one `{id, directory, parentID?}` row per extant requested
+identity, with duplicates removed. A successful missing row means not found; an
+unavailable provider rejects instead of returning cached facts or an empty
+success. This port never reads message bodies, usage, revert previews or
+Markdown.
+
 `HarnessCore.listMessages(id, {before?}, signal?)` returns a clocked ten-message
 `MessagePage`; the optional cursor is opaque outside its adapter. Session
 metadata and latest-prompt context travel with the page. `HarnessSink.content`
@@ -85,6 +92,14 @@ License: LGPL-3.0-only. Workspace validation: `deno task test:unit` and
 `deno task test:arch`.
 
 ## Digest services
+
+`ProviderReadPort` extends the same worker/scheduler lifetime with transient,
+feature-contributed reads. `identity.batch` contributes its input/result/chunk
+types and `identityReadCodec`; application composition selects the matching
+reader and codec. Reads carry an owner, priority and cancellation signal,
+publish bounded ordered chunks, and assemble one complete result. Releasing the
+owner cancels its pending reads. These results are not digest commits or durable
+request receipts.
 
 `DigestPort` separates catalog/detail reads and their cancellation from metadata
 invalidations, visible-scope priority, deletion intents and lifecycle. Libraries

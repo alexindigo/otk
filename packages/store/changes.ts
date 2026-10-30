@@ -37,4 +37,7 @@ export class Changes<T> {
       }
     }
   }
+  protected queueMetadata(tx: StoreWrite, publish: () => void): void {
+    this.changesDb.afterCommit(tx, publish);
+  }
 }

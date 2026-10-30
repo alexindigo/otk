@@ -167,6 +167,12 @@ export function stub(
       start: async () => {},
       stop: async () => {},
       subscriptions() {},
+      identities: (ids) => {
+        calls.push(["identities", ids]);
+        return Promise.resolve(
+          ids.map((id) => ({ id, directory: session.directory })),
+        );
+      },
       getSession: (id) => {
         calls.push(["get", id]);
         return Promise.resolve(session);

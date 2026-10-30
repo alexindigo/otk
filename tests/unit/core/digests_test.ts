@@ -20,6 +20,7 @@ test("visible scopes are validated, optional, connection-owned replacements and 
       start: async () => {},
       stop: async () => {},
       subscriptions() {},
+      identities: () => Promise.resolve([]),
       getSession: () =>
         Promise.reject(new Error("Scope must not hydrate a session")),
       createSession: () => Promise.reject(new Error("Not used")),

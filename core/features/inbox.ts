@@ -60,6 +60,7 @@ export class InboxFeature implements FrameSource {
   #policies: ReturnType<Projects["policies"]> = [];
   #seen = new Map<string, Map<string, number>>();
   #finishes: Record<string, number> = {};
+  #user = "";
   constructor(
     readonly stores: InboxStores,
     readonly index: IndexStore,
@@ -68,6 +69,7 @@ export class InboxFeature implements FrameSource {
       scanProjects,
     readonly promote?: (sessionID: string) => void,
   ) {
+    this.#identity();
     this.#policies = stores.projects.policies();
     this.#finishes = stores.finishes.list();
     for (const { user, session, time } of stores.seen.all()) {
@@ -78,17 +80,18 @@ export class InboxFeature implements FrameSource {
     this.#stops.push(
       index.observe((entry, previous) => this.#observe(entry, previous)),
       stores.projects.listen((change) => {
-        if (!("user" in change)) return;
-        const known = this.#policies.find((policy) =>
-          policy.user === change.user &&
-          policy.directory === change.project.directory
-        );
-        if (known) known.inactive = change.project.inactive;
-        else {this.#policies.push({
-            user: change.user,
-            directory: change.project.directory,
-            inactive: change.project.inactive,
-          });}
+        for (const project of change.upsert) {
+          const known = this.#policies.find((policy) =>
+            policy.user === change.user &&
+            policy.directory === project.directory
+          );
+          if (known) known.inactive = project.inactive;
+          else {this.#policies.push({
+              user: change.user,
+              directory: project.directory,
+              inactive: project.inactive,
+            });}
+        }
       }),
       stores.finishes.listen(({ session, time }) => {
         this.#finishes[session] = time;
@@ -108,7 +111,14 @@ export class InboxFeature implements FrameSource {
   get user(): string {
     return typeof this.identity === "string" ? this.identity : this.identity();
   }
+  #identity(): void {
+    const user = this.user;
+    if (user === this.#user) return;
+    this.stores.projects.materialize(user);
+    this.#user = user;
+  }
   get(): InboxSnapshot {
+    this.#identity();
     const s = this.stores;
     const projects = s.projects.list(this.user);
     this.#policies = s.projects.policies();
@@ -378,8 +388,9 @@ export class InboxFeature implements FrameSource {
         sessions: p.sessions === undefined ? [] : sessions(p),
       }),
       async handler(ctx, p) {
+        const directories = await ctx.sessionDirectories(p.sessions);
         for (const id of p.sessions) {
-          if (await ctx.sessionDirectory(id) !== p.directory) {
+          if (directories[id] !== p.directory) {
             throw new HarnessError(
               "params",
               "Session belongs to another project",
@@ -486,8 +497,9 @@ export class InboxFeature implements FrameSource {
       params: (p) => ({ id: text(p, "id")!, sessions: sessions(p) }),
       async handler(ctx, p) {
         const directory = s.tasks.get(p.id).directory;
+        const directories = await ctx.sessionDirectories(p.sessions);
         for (const id of p.sessions) {
-          if (await ctx.sessionDirectory(id) !== directory) {
+          if (directories[id] !== directory) {
             throw new HarnessError(
               "params",
               "Session belongs to another project",

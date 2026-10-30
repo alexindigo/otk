@@ -13,7 +13,10 @@ export const projectTemplatesMigrations: FeatureMigrations = {
   }],
 };
 /** Server-scoped settings; filesystem expansion belongs to the server feature. */
-export class ProjectTemplates extends MetadataChanges {
+export interface TemplateChange {
+  templates: string[];
+}
+export class ProjectTemplates extends MetadataChanges<TemplateChange> {
   constructor(readonly db: OtkDb) {
     super(db);
   }
@@ -25,12 +28,17 @@ export class ProjectTemplates extends MetadataChanges {
   set(templates: string[], tx?: StoreWrite): string[] {
     return this.db.write((scope) => {
       ordered(templates);
+      const previous = this.list();
+      if (
+        previous.length === templates.length &&
+        previous.every((v, i) => v === templates[i])
+      ) return previous;
       this.db.connection.exec("DELETE FROM project_templates");
       templates.forEach((template, i) =>
         this.db.connection.prepare("INSERT INTO project_templates VALUES(?,?)")
           .run(i, template)
       );
-      this.changed(undefined, scope);
+      this.changed({ templates: [...templates] }, scope);
       return this.list();
     }, tx);
   }

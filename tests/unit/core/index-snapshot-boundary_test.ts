@@ -48,6 +48,7 @@ async function connectionFixture() {
       start: () => Promise.resolve(),
       stop: () => Promise.resolve(),
       subscriptions() {},
+      identities: () => Promise.resolve([]),
       getSession: () => Promise.reject(new Error("Not requested")),
       createSession: () => Promise.reject(new Error("Not requested")),
       listChildren: () => Promise.resolve([]),

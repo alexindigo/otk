@@ -8,6 +8,7 @@ export {
 } from "./config.ts";
 export { opencodeV1SessionID } from "./ids.ts";
 export { opencodeV1DigestMigrations } from "./digest-migrations.ts";
+export { opencodeV1ReadCodecs } from "./provider-reads.ts";
 export { OpencodeV1DigestSink } from "./digest.ts";
 export type {
   DigestCheckpoint,

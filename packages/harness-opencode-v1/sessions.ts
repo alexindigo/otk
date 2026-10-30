@@ -30,6 +30,7 @@ export function sessions(
       ids.decode(id);
       lifecycle.subscriptions(id, count);
     },
+    identities: (ids, signal) => directory.validate(ids, signal),
     getSession: (id, signal) => transcript.session(id, signal),
     listMessages: (id, opts, signal) =>
       transcript.page(id, opts.before, signal),

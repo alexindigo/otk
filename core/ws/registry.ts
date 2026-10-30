@@ -17,6 +17,10 @@ export interface RpcContext {
   execution?: RequestExecution;
   sessionMetadata?(sessionID: string): IndexMetadata | undefined;
   sessionDirectory(sessionID: string): Promise<string>;
+  sessionDirectories(
+    sessionIDs: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<Record<string, string>>;
 }
 /** Socket-owned leases are distinct from a single read's execution signal. */
 export interface RequestLifetime {
@@ -48,9 +52,26 @@ export class RpcRegistry {
       harness,
       store,
       sessionMetadata: (id) => this.metadata?.(id),
-      sessionDirectory: async (id) =>
-        (await harness.core.getSession(id)).directory,
+      sessionDirectories: (ids, signal) => this.#directories(ids, signal),
+      sessionDirectory: async (id) => (await this.#directories([id]))[id],
     };
+  }
+  async #directories(
+    ids: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<Record<string, string>> {
+    signal?.throwIfAborted();
+    const unique = [...new Set(ids)];
+    if (!unique.length) return {};
+    const rows = await this.context.harness.core.identities(unique, signal);
+    signal?.throwIfAborted();
+    const result = Object.fromEntries(
+      rows.map((row) => [row.id, row.directory]),
+    );
+    if (unique.some((id) => !Object.hasOwn(result, id))) {
+      throw new HarnessError("session", "That session is no longer available.");
+    }
+    return result;
   }
   register<M extends RpcMethod, P>(
     method: M,
@@ -99,12 +120,16 @@ export class RpcRegistry {
                 ...this.context,
                 request,
                 execution: scoped,
-                sessionDirectory: async (id) => {
-                  const ready = this.context.harness.core.getSession(
-                    id,
-                    scoped?.signal,
+                sessionDirectories: (ids, signal) => {
+                  const ready = this.#directories(
+                    ids,
+                    signal ?? scoped?.signal,
                   );
-                  return (await (scoped?.wait?.(ready) ?? ready)).directory;
+                  return scoped?.wait?.(ready) ?? ready;
+                },
+                sessionDirectory: async (id) => {
+                  const ready = this.#directories([id], scoped?.signal);
+                  return (await (scoped?.wait?.(ready) ?? ready))[id];
                 },
               }, params);
               // Read ownership ends at the returned promise: synchronous work

@@ -292,8 +292,15 @@ missing limits cannot invoke stock's whole-history mode. Revert counts use a
 read-only SQL scalar. Helper progress uses the worker-owned digest described
 below, independently of parent pages. Native directory resolution reads the
 session record without decorating its revert information. The core's
-authoritative directory lookup can still use `getSession`; its revert count
-follows the same bounded contract.
+authoritative identity validation uses `core.identities`, not `getSession`. It
+returns only qualified identity, directory and optional parent. The selected
+worker uses bounded `json_each` batches against native `parent_id`, after
+current provider reachability and file-ownership checks.
+Missing/foreign/incompatible files use serial raw session GETs with normal
+admission and no revert, body, usage or Markdown work.
+`Directory.cached`/`resolve` remain routing hints; `validate` is always a fresh
+authoritative read. Unreachable providers remain unavailable, never
+authoritative absence.
 
 Public transcript pages use a fixed ten messages, while internal digest/history
 scans retain their own bounded limits. The native transcript owner wraps the

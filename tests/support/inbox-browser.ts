@@ -74,6 +74,12 @@ export async function inboxBrowserFixture(
       },
       stop: () => Promise.resolve(),
       subscriptions() {},
+      identities: (ids) =>
+        Promise.resolve(
+          entries.filter((e) => ids.includes(e.id)).map((
+            { id, directory, parentID },
+          ) => ({ id, directory, parentID })),
+        ),
       getSession: (id) =>
         Promise.resolve(content(entries.find((e) => e.id === id)!)),
       listChildren: (id) =>

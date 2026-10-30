@@ -60,6 +60,7 @@ test("feature contribution owns default, validation, display metadata and execut
         throw new Error("Unexpected backend access");
       },
       getSession: unavailable,
+      identities: unavailable,
       createSession: unavailable,
       listChildren: unavailable,
       listMessages: unavailable,

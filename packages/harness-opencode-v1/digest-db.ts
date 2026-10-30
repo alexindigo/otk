@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { DatabaseSync } from "node:sqlite";
 import type { SessionMetadata } from "@otk/protocol";
+import type { SessionIdentity } from "@otk/harness";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { runningDirectories } from "./db-hints.ts";
 
@@ -120,6 +121,21 @@ export class DigestNativeDb {
     ).all(after, limit).map(metadata);
   }
   /** Ownership proofs read the API's current identities, not an older paged list. */
+  identities(sessions: readonly string[]): SessionIdentity[] {
+    if (!sessions.length) return [];
+    this.observe?.("identities");
+    return this.db.prepare(
+      "SELECT s.id,s.directory,s.parent_id FROM session s JOIN json_each(?) wanted ON s.id=wanted.value ORDER BY s.id",
+    ).all(JSON.stringify([...new Set(sessions.map(ids.decode))])).map((
+      row,
+    ) => ({
+      id: ids.encode(String(row.id)),
+      directory: String(row.directory),
+      ...(row.parent_id == null
+        ? {}
+        : { parentID: ids.encode(String(row.parent_id)) }),
+    }));
+  }
   lookup(sessions: readonly string[]): SessionMetadata[] {
     this.observe?.("identity");
     return this.db.prepare(

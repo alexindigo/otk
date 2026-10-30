@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { OtkDb, StoreWrite } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
-import { key } from "./metadata.ts";
-import { Changes } from "../changes.ts";
+import { key, MetadataChanges } from "./metadata.ts";
 export const seenMigrations: FeatureMigrations = {
   feature: "seen",
   migrations: [{
@@ -10,8 +9,15 @@ export const seenMigrations: FeatureMigrations = {
     sql: new URL("./migrations/seen/001.sql", import.meta.url),
   }],
 };
-export class Seen
-  extends Changes<{ user: string; session: string; time: number }> {
+export interface SeenChange {
+  user: string;
+  session: string;
+  time: number;
+}
+export class Seen extends MetadataChanges<SeenChange> {
+  protected override changeKey(value: SeenChange): string {
+    return JSON.stringify([value.user, value.session]);
+  }
   constructor(readonly db: OtkDb, readonly now: () => number = Date.now) {
     super(db);
   }

@@ -531,11 +531,11 @@ test("actual task creation stays pending for forty seconds through same-intent r
   let lookups = 0;
   const harness = {
     core: {
-      getSession: async (id: string) => {
+      identities: async (ids: readonly string[]) => {
         lookups++;
         entered.resolve();
         await validation.promise;
-        return { id, directory: "/p" };
+        return ids.map((id) => ({ id, directory: "/p" }));
       },
     },
     capabilities: {},

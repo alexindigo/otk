@@ -7,6 +7,26 @@ import type {
 } from "@otk/protocol";
 import type { OpencodeV1Config } from "@otk/harness-opencode-v1";
 import type { TranscriptMetadata } from "@otk/harness";
+import type { ProviderReadKinds, ProviderReadOptions } from "@otk/harness";
+import type { PublicFailure } from "@otk/protocol";
+export type ProviderReadCommand = {
+  [K in keyof ProviderReadKinds]: {
+    t: "read";
+    owner: string;
+    kind: K;
+    input: ProviderReadKinds[K]["input"];
+    priority: ProviderReadOptions["priority"];
+  };
+}[keyof ProviderReadKinds];
+export type ProviderReadResult = {
+  [K in keyof ProviderReadKinds]: {
+    t: "read.result";
+    kind: K;
+    part: number;
+    last: boolean;
+    value: ProviderReadKinds[K]["chunk"];
+  };
+}[keyof ProviderReadKinds];
 export interface DigestPressure {
   queued: number;
   active: number;
@@ -34,6 +54,8 @@ export type ToWorker =
       diagnostics?: boolean;
     }
     | { t: "catalog"; connection: number }
+    | ProviderReadCommand
+    | { t: "read.cancel" }
     | { t: "dirty"; connection: number; sessions: DirtySession[] }
     | {
       t: "deleted";
@@ -63,6 +85,8 @@ export type FromWorker =
   & { run: string; id: number }
   & (
     | { t: "accepted" }
+    | ProviderReadResult
+    | { t: "read.failure"; failure: PublicFailure }
     | { t: "transcript"; sessionID: string; metadata: TranscriptMetadata }
     | {
       t: "catalog";

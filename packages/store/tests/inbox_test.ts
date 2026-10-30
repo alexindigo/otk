@@ -74,6 +74,8 @@ test("project visits and inactive clocks are user-scoped, pause while inactive a
   const projects = new Projects(db, () => now);
   try {
     projects.discover("/a");
+    projects.materialize("alice");
+    projects.materialize("bob");
     now = 200;
     projects.visit("alice", "/a");
     assertEquals(projects.get("bob", "/a").lastVisit, 100);
@@ -190,6 +192,7 @@ test("explicit project additions stay private to their user while automatic disc
     projects.discover("/shared");
     projects.add("alice", "/another-private");
     projects.discover("/later");
+    projects.materialize("bob");
     assertEquals(projects.list("alice").map((p) => [p.directory, p.order]), [
       ["/private", 0],
       ["/shared", 1],

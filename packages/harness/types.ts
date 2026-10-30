@@ -42,12 +42,21 @@ export interface HarnessSink {
   bootstrapComplete(): void;
   invalidate(value: TranscriptInvalidation): void;
 }
+export interface SessionIdentity {
+  id: string;
+  directory: string;
+  parentID?: string;
+}
 export interface HarnessCore {
   readonly kind: string;
   readonly version: string;
   start(sink: HarnessSink): Promise<void>;
   stop(): Promise<void>;
   subscriptions(sessionID: string, count: number): void;
+  identities(
+    ids: readonly string[],
+    signal?: AbortSignal,
+  ): Promise<SessionIdentity[]>;
   getSession(id: string, signal?: AbortSignal): Promise<ContentSession>;
   listChildren(id: string, signal?: AbortSignal): Promise<ContentSession[]>;
   listMessages(

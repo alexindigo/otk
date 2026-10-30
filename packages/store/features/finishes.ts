@@ -1,8 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { OtkDb } from "../db.ts";
+import type { OtkDb, StoreWrite } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
-import { key } from "./metadata.ts";
-import { Changes } from "../changes.ts";
+import { key, MetadataChanges } from "./metadata.ts";
 export const finishesMigrations: FeatureMigrations = {
   feature: "finishes",
   migrations: [{
@@ -10,7 +9,14 @@ export const finishesMigrations: FeatureMigrations = {
     sql: new URL("./migrations/finishes/001.sql", import.meta.url),
   }],
 };
-export class Finishes extends Changes<{ session: string; time: number }> {
+export interface FinishChange {
+  session: string;
+  time: number;
+}
+export class Finishes extends MetadataChanges<FinishChange> {
+  protected override changeKey(value: FinishChange): string {
+    return value.session;
+  }
   constructor(readonly db: OtkDb, readonly now: () => number = Date.now) {
     super(db);
   }
@@ -27,12 +33,14 @@ export class Finishes extends Changes<{ session: string; time: number }> {
         .all().map((r) => [String(r.session), Number(r.time)]),
     );
   }
-  record(session: string): number {
-    const row = this.db.connection.prepare(
-      "INSERT INTO session_finishes VALUES(?,?) ON CONFLICT(session) DO UPDATE SET time=MAX(time,excluded.time) RETURNING time",
-    ).get(key(session), this.now())!;
-    const time = Number(row.time);
-    this.changed({ session, time });
-    return time;
+  record(session: string, tx?: StoreWrite): number {
+    return this.db.write((scope) => {
+      const row = this.db.connection.prepare(
+        "INSERT INTO session_finishes VALUES(?,?) ON CONFLICT(session) DO UPDATE SET time=MAX(time,excluded.time) RETURNING time",
+      ).get(key(session), this.now())!;
+      const time = Number(row.time);
+      this.changed({ session, time }, scope);
+      return time;
+    }, tx);
   }
 }

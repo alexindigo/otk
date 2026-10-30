@@ -45,6 +45,11 @@ test("committed metadata writes survive observer failure and notify independent 
       owner.listen(() => delivered++);
     }
     projects.discover("/p");
+    assertEquals(
+      delivered,
+      0,
+      "discovery has no user projection to publish yet",
+    );
     assertEquals(projects.add("u", "/p").added, true);
     assertEquals(projects.visit("u", "/p").lastVisit, 7);
     assertEquals(projects.inactive("u", "/p", true).inactive, true);
@@ -53,17 +58,19 @@ test("committed metadata writes survive observer failure and notify independent 
     assertEquals(tasks.sessions(task.id, ["b"]).sessions, ["b"]);
     assertEquals(tasks.addSession(task.id, "c").sessions, ["b", "c"]);
     assertEquals(tasks.removeSession(task.id, "b").sessions, ["c"]);
+    const beforeReorder = delivered;
     assertEquals(tasks.reorder("/p", [task.id]).length, 1);
+    assertEquals(delivered, beforeReorder, "unchanged order emits no delta");
     tasks.close(task.id);
     assertEquals(tasks.list(), []);
     assertEquals(seen.mark("u", "s"), 8);
     assertEquals(finishes.record("s"), 9);
     assertEquals(templates.set(["/root/{project}"]), ["/root/{project}"]);
-    assertEquals(delivered, 14);
+    assertEquals(delivered, 12);
     assertEquals(logged.length, delivered);
     assert(logged.every((args) => args.includes(failure)));
     assertThrows(() => tasks.rename("missing", "bad"), Error, "Unknown task");
-    assertEquals(delivered, 14, "rejected mutations never notify");
+    assertEquals(delivered, 12, "rejected mutations never notify");
   } finally {
     console.error = previous;
     db.close();

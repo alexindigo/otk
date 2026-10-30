@@ -26,6 +26,7 @@ test("permission reply without pending instance resolves and always sends a dire
     client,
     {
       cached: () => undefined,
+      validate: () => Promise.resolve([]),
       resolve: () => {
         resolved++;
         return Promise.resolve("/resolved");

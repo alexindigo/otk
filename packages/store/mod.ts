@@ -26,9 +26,18 @@ export {
   Projects,
   projectsMigrations,
 } from "./features/projects.ts";
-export { type TaskRecord, Tasks, tasksMigrations } from "./features/tasks.ts";
-export { Seen, seenMigrations } from "./features/seen.ts";
-export { Finishes, finishesMigrations } from "./features/finishes.ts";
+export {
+  type TaskChange,
+  type TaskRecord,
+  Tasks,
+  tasksMigrations,
+} from "./features/tasks.ts";
+export { Seen, type SeenChange, seenMigrations } from "./features/seen.ts";
+export {
+  type FinishChange,
+  Finishes,
+  finishesMigrations,
+} from "./features/finishes.ts";
 export {
   type PermissionChange,
   permissionMigrations,
@@ -38,6 +47,7 @@ export {
 export {
   ProjectTemplates,
   projectTemplatesMigrations,
+  type TemplateChange,
 } from "./features/project-templates.ts";
 export { Prefs, prefsMigrations, type PrefsOptions } from "./features/prefs.ts";
 export {

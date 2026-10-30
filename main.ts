@@ -9,6 +9,7 @@ import { startApplication } from "./application.ts";
 import {
   harnessDb,
   OpencodeV1Adapter,
+  opencodeV1ReadCodecs,
   opencodeV1SessionID,
 } from "@otk/harness-opencode-v1";
 import { createSessionReferenceUpgrade } from "./core/features/session-ids.ts";
@@ -35,6 +36,7 @@ export async function start(
   }
   const index = new IndexStore(diagnostics?.section);
   const digest = new DigestBridge({
+    reads: opencodeV1ReadCodecs,
     statePath: cfg.state.path,
     provider: "opencode-v1",
     native: {

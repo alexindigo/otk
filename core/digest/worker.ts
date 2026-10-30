@@ -15,6 +15,7 @@ import {
   DigestNativeDb,
   opencodeV1DigestMigrations,
   OpencodeV1DigestSink,
+  opencodeV1ReadCodecs,
 } from "@otk/harness-opencode-v1";
 import {
   type DigestDelta,
@@ -39,6 +40,7 @@ let scheduler: DigestScheduler | undefined,
   requests: DigestRequests | undefined,
   sink: OpencodeV1DigestSink | undefined;
 let policy: Extract<ToWorker, { t: "start" }>["policy"];
+const readCodecs = opencodeV1ReadCodecs;
 const lifetime = new AbortController();
 let credits = 1,
   wake: (() => void) | undefined,
@@ -659,8 +661,11 @@ function handle(message: ToWorker): void {
     return;
   }
   if (!requests || !scheduler || !sink) return;
-  if (message.t === "cancel") {
-    requests.cancel(message.run, message.request);
+  if (message.t === "cancel" || message.t === "read.cancel") {
+    requests.cancel(
+      message.run,
+      message.t === "cancel" ? message.request : message.id,
+    );
     kick();
     return;
   }
@@ -874,6 +879,45 @@ function handle(message: ToWorker): void {
               } finally {
                 for (const reserved of changed.values()) reserved.release();
               }
+            } else if (message.t === "read") {
+              // The selected contribution owns its reader/codec; dispatch has no kind switch.
+              const reader = sink!.readers[message.kind],
+                codec = readCodecs[message.kind];
+              try {
+                if (!reader || !codec) {
+                  throw new Error("Provider read not selected");
+                }
+                const value = await reader(message.input, signal);
+                const chunks = codec.chunks(value, policy.publishrows)
+                  [Symbol.iterator]();
+                let current = chunks.next(), part = 0;
+                while (!current.done) {
+                  const next = chunks.next();
+                  await send({
+                    t: "read.result",
+                    run: run!,
+                    id: message.id,
+                    kind: message.kind,
+                    part: part++,
+                    last: !!next.done,
+                    value: current.value,
+                  }, signal);
+                  current = next;
+                }
+              } catch (error) {
+                signal.throwIfAborted();
+                post({
+                  t: "read.failure",
+                  run: run!,
+                  id: message.id,
+                  failure: {
+                    code: "native.unavailable",
+                    retry: "same-intent",
+                    diagnosticID: crypto.randomUUID(),
+                  },
+                });
+                console.warn("Provider read:", error);
+              }
             } else if (message.t === "deleted") {
               if (message.connection === connection) {
                 for (const item of message.sessions) {
@@ -944,6 +988,9 @@ function handle(message: ToWorker): void {
           policy,
           wait,
         )),
+    message.t === "read" && message.priority !== "user"
+      ? message.priority
+      : "interactive",
   );
   observeTask(task, message);
   kick();

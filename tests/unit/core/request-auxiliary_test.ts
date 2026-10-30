@@ -46,6 +46,8 @@ test("auto-approve commits its receipt before automatic work, and activity is a 
   const harness = {
     core: {
       getSession: () => Promise.resolve({ id: "tstv1-root", directory: "/p" }),
+      identities: () =>
+        Promise.resolve([{ id: "tstv1-root", directory: "/p" }]),
     },
     capabilities: { permissions: capability },
   } as unknown as Harness;
@@ -224,7 +226,10 @@ test("unconfirmed permission replies survive feature replacement without automat
     feature.close();
     feature = new PermissionFeature(store, index, capability);
     const harness = {
-      core: { getSession: () => Promise.resolve({ id: request.sessionID }) },
+      core: {
+        identities: () =>
+          Promise.resolve([{ id: request.sessionID, directory: "/p" }]),
+      },
       capabilities: { permissions: capability },
     } as unknown as Harness;
     const rpc = new RpcRegistry(harness, db);

@@ -68,6 +68,8 @@ async function composition() {
   const harness = {
     core: {
       getSession: (id: string) => Promise.resolve({ id, directory: "/p" }),
+      identities: (ids: readonly string[]) =>
+        Promise.resolve(ids.map((id) => ({ id, directory: "/p" }))),
     },
     capabilities: {},
   } as unknown as Harness;

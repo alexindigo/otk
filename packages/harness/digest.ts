@@ -5,6 +5,7 @@ import type {
   TurnUsageSnapshot,
 } from "@otk/protocol";
 import type { LatestPrompt, ReplyBoundary } from "@otk/protocol";
+import type { ProviderReadPort } from "./provider-reads.ts";
 export interface TranscriptMetadata {
   prompt?: LatestPrompt;
   boundaries: ReplyBoundary[];
@@ -32,7 +33,7 @@ export interface DirtySession {
     | "helper-hint";
   messages?: string[];
 }
-export interface DigestPort {
+export interface DigestPort extends ProviderReadPort {
   /** Optional publication budget for a consumer's live metadata reconciliation. */
   readonly publishrows?: number;
   start(): Promise<void>;

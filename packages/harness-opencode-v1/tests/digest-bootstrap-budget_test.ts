@@ -63,6 +63,7 @@ test("selected digest bootstrap prepares attention and publishes metadata within
     deleted: () => Promise.resolve(),
     detail: () => Promise.reject(new Error("Not requested")),
     transcriptMetadata: () => Promise.reject(new Error("Not requested")),
+    read: () => Promise.reject(new Error("Not requested")),
     deleteIntent: () => Promise.resolve(),
     scope() {},
     release() {},
