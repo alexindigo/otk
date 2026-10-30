@@ -6,6 +6,7 @@ import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { Cdp } from "../support/cdp.ts";
 import { waitFor } from "../support/opencode.ts";
 import { wheelViewport } from "../support/message-viewport.ts";
+import { WsClient } from "../support/ws-client.ts";
 
 const source = Array.from(
   { length: 2000 },
@@ -65,15 +66,30 @@ const sourceGeometry = String.raw`(code,index)=>{
   return {index,row:box.y+box.height/2,glyph,height,lineHeight:parseFloat(getComputedStyle(code.parentElement).lineHeight),top:box.top,bottom:box.bottom};
 }`;
 
-test("programmatic reveal keeps a transcript action in place for its real click", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`programmatic reveal keeps a transcript action in place for its real click in ${theme}`, () =>
+    programmaticReveal(theme));
+}
+
+async function programmaticReveal(theme: string) {
   const f = await browserFixture({ task: "allow" });
   try {
     const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Reveal without follow feedback" },
     });
-    const server = await f.sidecar(), browser = await f.browser(server.url);
+    const server = await f.sidecar(), client = new WsClient(server.url);
+    await client.connect();
+    try {
+      await client.rpc("prefs.set", { key: "theme", value: theme });
+    } finally {
+      await client.close();
+    }
+    const browser = await f.browser(server.url);
     await openSession(browser, session.id);
+    await browser.poll(
+      `document.documentElement.dataset.otkTheme==='${theme}'`,
+    );
     for (const name of ["First reveal", "Second reveal"]) {
       f.fake.queue(
         {
@@ -115,7 +131,8 @@ test("programmatic reveal keeps a transcript action in place for its real click"
       { x: number; y: number; before: number; after: number; inView: boolean }
     >(`(async()=>{
       const action=[...document.querySelectorAll('[data-tool=task]')].find(e=>e.querySelector('.otk-tool-brief')?.textContent==='First reveal').querySelector('.otk-task-card'),pane=document.querySelector('.otk-messages');
-      action.scrollIntoView({block:'center',inline:'nearest'});
+      // Timeline has already requested the reveal through the viewport owner.
+      // A raw scrollIntoView here would fight its retained source anchor.
       const before=pane.scrollTop;
       await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
       const r=action.getBoundingClientRect(),p=pane.getBoundingClientRect();
@@ -141,7 +158,7 @@ test("programmatic reveal keeps a transcript action in place for its real click"
   } finally {
     await f.stop();
   }
-});
+}
 
 test("actual busy rendering prepares one worker and idle plaintext releases it without code markers", async () => {
   const f = await browserFixture();
