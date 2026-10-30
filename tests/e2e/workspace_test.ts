@@ -13,6 +13,7 @@ import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { FreezeProxy } from "../support/freeze-proxy.ts";
 import type { Cdp } from "../support/cdp.ts";
+import { WsClient } from "../support/ws-client.ts";
 import {
   assertContentLoaded,
   assertContentReleased,
@@ -373,7 +374,7 @@ test("E7 add authenticated second sidecar, merged groups, prompt and persistence
     await f.stop();
   }
 });
-test("E8 switch releases >=2 MB session objects, unsubscribes and removes its DOM", async () => {
+test("E8 leaving a scope cools >=2 MB session objects, unsubscribes and removes its DOM", async () => {
   const f = await browserFixture();
   try {
     const a = await f.oc.session<{ id: string }>("/session", {
@@ -408,7 +409,19 @@ test("E8 switch releases >=2 MB session objects, unsubscribes and removes its DO
         ),
       60_000,
     );
-    const server = await f.sidecar(), browser = await f.browser(server.url);
+    const server = await f.sidecar({
+      messages: { coolms: 2500, preloadms: 1500 },
+    });
+    const client = new WsClient(server.url);
+    await client.connect();
+    for (const session of [a, b]) {
+      await client.rpc("tasks.create", {
+        directory: f.oc.directory,
+        name: session.id,
+        sessions: [session.id],
+      });
+    }
+    const browser = await f.browser(server.url);
     await openSession(browser, b.id);
     await browser.poll("document.fonts.status === 'loaded'");
     // Three equivalent navigation cycles: every loaded snapshot is a positive
@@ -420,10 +433,16 @@ test("E8 switch releases >=2 MB session objects, unsubscribes and removes its DO
       );
       const loaded = await sessionHeap(browser, a.id, "OTK_LARGE_SESSION_A_");
       assertContentLoaded(loaded);
+      const unsubscribed = () =>
+        sentFrames(browser).filter(({ frame }) =>
+          frame.t === "unsubscribe" && frame.sessionID === a.id
+        ).length;
+      const before = unsubscribed();
       await openSession(browser, b.id);
       await browser.poll(
         "document.querySelector('.otk-messages').textContent.includes('Small session text')",
       );
+      await waitFor(unsubscribed, (count) => count > before);
       await browser.evaluate(
         "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
       );

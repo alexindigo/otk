@@ -4,6 +4,7 @@ import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
+import { WsClient } from "../support/ws-client.ts";
 import {
   assertContentLoaded,
   assertContentReleased,
@@ -120,7 +121,7 @@ test("R6 shiki worker colours streaming TS before fence closure and unknown lang
     await f.stop();
   }
 });
-test("highlighted history releases its worker and session objects when switching sessions", async () => {
+test("highlighted history releases its worker and session objects when its scope cools", async () => {
   const f = await browserFixture();
   try {
     const a = await f.oc.session<{ id: string }>("/session", {
@@ -152,7 +153,19 @@ test("highlighted history releases its worker and session objects when switching
           m.info.role === "assistant" && !!m.info.time.completed
         ),
     );
-    const server = await f.sidecar(), browser = await f.browser(server.url);
+    const server = await f.sidecar({
+      messages: { coolms: 2500, preloadms: 1500 },
+    });
+    const client = new WsClient(server.url);
+    await client.connect();
+    for (const session of [a, b]) {
+      await client.rpc("tasks.create", {
+        directory: f.oc.directory,
+        name: session.id,
+        sessions: [session.id],
+      });
+    }
+    const browser = await f.browser(server.url);
     await openSession(browser, b.id);
     await browser.poll("document.fonts.status==='loaded'");
     for (let cycle = 0; cycle < 3; cycle++) {
