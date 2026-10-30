@@ -16,6 +16,7 @@ import { WsClient } from "../support/ws-client.ts";
 import { usageCost } from "@otk/client";
 import type { PermissionRequest } from "@otk/protocol";
 import { menuReady } from "../support/menu.ts";
+import { wheelViewport } from "../support/message-viewport.ts";
 
 const viewport = ".otk-project-session-tree";
 const search = '[aria-label="Search sessions by title"]';
@@ -529,9 +530,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       }),
       [],
     );
-    await b.evaluate(
-      `(()=>{const e=document.querySelector('${viewport}');e.scrollTop=e.scrollHeight;e.dispatchEvent(new Event('scroll'))})()`,
-    );
+    await wheelViewport(b, viewport, 100000);
     await b.poll(
       `!!document.querySelector('[data-session="${
         f.manifest.sessions[250].id
@@ -557,18 +556,14 @@ for (const theme of ["otk-dark", "otk-light"]) {
       `globalThis.pinnedScale=document.querySelector('[data-session="${last.id}"]');pinnedScale.focus()`,
     );
     await b.evaluate(framesAhead);
-    await b.evaluate(
-      `(()=>{const v=document.querySelector('${viewport}');v.scrollTop=0;v.dispatchEvent(new Event('scroll'))})()`,
-    );
+    await wheelViewport(b, viewport, -100000);
     await b.poll(
       "document.activeElement===pinnedScale && pinnedScale.isConnected",
     );
     await windowBound(b, 1);
     await b.evaluate(`document.querySelector('${search}').focus()`);
     await b.poll(`!document.querySelector('[data-session="${last.id}"]')`);
-    await b.evaluate(
-      `(()=>{const v=document.querySelector('${viewport}');v.scrollTop=v.scrollHeight;v.dispatchEvent(new Event('scroll'))})()`,
-    );
+    await wheelViewport(b, viewport, 100000);
     await b.poll(`!!document.querySelector('[data-session="${last.id}"]')`);
     const anchor = await b.evaluate<{ key: string; offset: number }>(
       anchorProbe,
@@ -630,9 +625,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
       assert(Math.max(...gaps) - Math.min(...gaps) <= 1, JSON.stringify(gaps));
     }
     await b.fill(search, "");
-    await b.evaluate(
-      `(()=>{const v=document.querySelector('${viewport}');v.scrollTop=0;v.dispatchEvent(new Event('scroll'))})()`,
-    );
+    await wheelViewport(b, viewport, -100000);
     await b.poll(`!!document.querySelector('[data-session="${selected.id}"]')`);
     assertEquals(
       await b.evaluate(
