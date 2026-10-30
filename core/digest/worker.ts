@@ -58,7 +58,14 @@ function yieldChunk(
 ): Promise<void> {
   return wait(sleep(0, signal));
 }
-const publicationOrder = new DigestPublicationOrder(wait);
+const publicationOrder = new DigestPublicationOrder(
+  wait,
+  (signal, publish) =>
+    wait(scheduler!.execute(
+      (signal, turn) => execution.run({ signal, turn }, publish),
+      signal,
+    )),
+);
 const publishedRevisions = new Map<string, number>();
 const nativeReadsGate = new DigestReadGate(() => scheduler?.interruptIO());
 function nativeWait<T>(readiness: Promise<T>, join = false): Promise<T> {
@@ -825,6 +832,13 @@ function handle(message: ToWorker): void {
                   );
                   if (!rows.length) break;
                   entries.push(...rows.map((row) => snapshot(row).metadata));
+                  // This catalog supersedes cached replay, including unchanged
+                  // tombstones whose digest chunks may not have arrived yet.
+                  for (const row of rows) {
+                    if (!changed.has(row.id)) {
+                      changed.set(row.id, publicationOrder.reserve(row.id));
+                    }
+                  }
                   catalogAfter = rows.at(-1)!.id;
                   await yieldChunk(signal);
                 }

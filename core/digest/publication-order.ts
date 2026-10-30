@@ -3,10 +3,16 @@ export interface DigestPublicationReservation {
   run<T>(signal: AbortSignal, publish: () => Promise<T>): Promise<T>;
   release(): void;
 }
-/** Source-free identity ordering; lock readiness always uses the executing owner. */
+/** Source-free identity ordering; committed publications own their execution. */
 export class DigestPublicationOrder {
   #tails = new Map<string, Promise<void>>();
-  constructor(readonly wait: <T>(readiness: Promise<T>) => Promise<T>) {}
+  constructor(
+    readonly wait: <T>(readiness: Promise<T>) => Promise<T>,
+    readonly schedule: <T>(
+      signal: AbortSignal,
+      publish: () => Promise<T>,
+    ) => Promise<T> = (_signal, publish) => publish(),
+  ) {}
   reserve(identity: string): DigestPublicationReservation {
     const previous = this.#tails.get(identity) ?? Promise.resolve();
     const done = Promise.withResolvers<void>();
@@ -30,12 +36,23 @@ export class DigestPublicationOrder {
           throw new Error("Publication reservation is retired");
         }
         started = true;
+        let executing = false;
         try {
-          await this.wait(previous);
-          signal.throwIfAborted();
-          return await publish();
+          return await this.schedule(signal, async () => {
+            executing = true;
+            try {
+              await this.wait(previous);
+              signal.throwIfAborted();
+              return await publish();
+            } finally {
+              // Release from the publication's execution, before its producer
+              // resumes. Interactive pressure may have paused that producer.
+              release();
+            }
+          });
         } finally {
-          release();
+          // Scheduling can reject before the publication acquires execution.
+          if (!executing) release();
         }
       },
     };

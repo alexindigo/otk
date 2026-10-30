@@ -303,10 +303,14 @@ starts only after admission, and cancellation joins actual settlement before
 reuse. Derived SQLite uses fail-fast lock admission and cooperatively retries
 within `digest.busyms`. Async request state is lifetime-local. Per-identity
 publication reservations and revision-consistent temporary scalar snapshots keep
-interleaved chunks coherent; neither contains message bodies. Startup seeds its
-first cached metadata before acknowledgement and schedules the remaining replay.
-Stop retires caller gates immediately and joins queued/waiting cleanup before
-closing the worker's single SQLite owner.
+interleaved chunks coherent; neither contains message bodies. Committed ordered
+publications run in independent essential turns and release their reservations
+before resuming producers, so interactive pressure cannot pause a predecessor
+needed by an essential read or deletion. Startup seeds its first cached metadata
+before acknowledgement and schedules the remaining replay. A fresh catalog
+replaces that replay with all retained digest snapshots, including unchanged
+tombstones. Stop retires caller gates immediately and joins queued/waiting
+cleanup before closing the worker's single SQLite owner.
 
 The shipped composition selects this worker and passes its optional port to the
 native adapter. Catalog parts seed metadata before digest deltas; the shared
