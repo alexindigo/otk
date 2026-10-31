@@ -501,21 +501,16 @@ for (const theme of ["otk-dark", "otk-light"]) {
     }
   });
 }
-export async function sessionContext(b: Cdp, selector: string) {
-  const point = await b.evaluate<{ x: number; y: number }>(`(async()=>{
-    const el=document.querySelector(${JSON.stringify(selector)});
-    el.scrollIntoView({block:'center',behavior:'instant'});
-    await new Promise(requestAnimationFrame);
-    const r=el.getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2};
-  })()`);
-  for (const type of ["mousePressed", "mouseReleased"]) {
-    await b.send("Input.dispatchMouseEvent", {
-      type,
-      ...point,
-      button: "right",
-      buttons: type === "mousePressed" ? 2 : 0,
-      clickCount: 1,
-    });
+export async function sessionContext(
+  b: Cdp,
+  selector: string,
+  readyCommand?: string,
+) {
+  await b.rightClick(selector);
+  if (readyCommand) {
+    await b.poll(
+      `!!document.querySelector('${menu} [data-context-command="${readyCommand}"]')`,
+    );
   }
   await menuReady(b, menu);
 }
@@ -624,7 +619,7 @@ test("working family deletion names helpers and aborts before native removal", a
   }
 });
 
-for (const theme of ["otk-dark", "otk-light"]) {
+for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
   test(`rename edits only its tab, chip or row and persists after reload in ${theme}`, async () => {
     const f = await browserFixture();
     let client: WsClient | undefined;
@@ -753,7 +748,13 @@ for (const theme of ["otk-dark", "otk-light"]) {
         `document.querySelector('textarea[name="prompt"]')?.value==='Keep this unsent draft'`,
       );
       const item = `${menu} [data-context-command="session.delete"]`;
-      await sessionContext(b, `[data-session="${session.id}"]`);
+      // The steady-menu two-press flow starts after the current composer's native
+      // actions arrive; a late Compact row otherwise changes the menu mid-press.
+      await sessionContext(
+        b,
+        `[data-session="${session.id}"]`,
+        "session.compact",
+      );
       await b.click(item);
       await b.poll(
         `document.querySelector('${item}')?.textContent==='Press again to delete'`,
@@ -789,7 +790,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
         body: { title: "Empty draft" },
       });
       await openSession(b, empty.id);
-      await sessionContext(b, `[data-tab="${empty.id}"]`);
+      await sessionContext(b, `[data-tab="${empty.id}"]`, "session.compact");
       await capture(b, `${theme}-delete-menu`);
       await b.click(item);
       await b.poll(
