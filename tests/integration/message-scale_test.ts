@@ -10,6 +10,7 @@ import { freePort, waitFor } from "../support/opencode.ts";
 import { resources, tempDir, test } from "../support/resources.ts";
 import { SCALE, SessionScale } from "../support/session-scale.ts";
 import { MESSAGE_CASES } from "../support/message-scale-cases.ts";
+import { originFetch } from "../support/request-wire.ts";
 
 test("message scale fixture preserves population while supplying a 102-step reply and helper/code/diff cases", async () => {
   const root = await tempDir("mf-"), fake = new FakeLlm();
@@ -210,6 +211,7 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
       },
     },
     {
+      fetcher: originFetch(`http://127.0.0.1:${config.server.port}`),
       socket: (url) =>
         Reflect.construct(WebSocket, [url, {
           headers: { Origin: `http://127.0.0.1:${config.server.port}` },
@@ -250,17 +252,22 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
   resource.viewport({ first: messageID(1520), last: messageID(1524) });
   await waitFor(() => resource.state.messageIDs.length, (n) => n >= 30);
   const begun = performance.now();
-  for (let step = 0, rank = 1520; rank >= 0; step++, rank -= 10) {
+  for (let step = 0, rank = 1520; rank >= 0; step++) {
     const due = begun + step * 200;
     await new Promise((r) =>
       setTimeout(r, Math.max(0, due - performance.now()))
     );
-    const first = Math.max(0, rank), last = Math.min(1524, first + 4);
     const loaded = resource.state.messageIDs;
     const oldest = Number(loaded[0].slice("msg_scale".length));
+    const requestedFirst = Math.max(0, rank);
+    // Real scrolling can reach the acquired edge, never an unrendered ID.
+    // Keep reporting reserve misses without turning cadence into lost demand.
+    const first = Math.max(oldest, requestedFirst);
+    const last = Math.min(1524, first + 4);
     const ready = first - oldest;
     samples.push({
       at: performance.now(),
+      requestedFirst,
       first,
       last,
       oldest,
@@ -268,6 +275,7 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
       loading: resource.state.pageLoading,
       acquired: loaded.length,
       requiredReady: !!resource.state.messagesByID[messageID(first)],
+      requestedReady: !!resource.state.messagesByID[messageID(requestedFirst)],
     });
     if (ready < 10 && oldest !== 0) {
       console.info("Native reserve cadence measurement", {
@@ -277,6 +285,7 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
       });
     }
     resource.viewport({ first: messageID(first), last: messageID(last) });
+    rank = first - 10;
   }
   await waitFor(() => resource.state.messageIDs.length, (n) => n === 1525);
   assertEquals(resource.state.olderCursor, null);

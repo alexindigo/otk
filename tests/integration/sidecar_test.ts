@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { test } from "../support/resources.ts";
+import { resources, test } from "../support/resources.ts";
 import { serve } from "../support/http.ts";
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
 import type { ContentSession, Message } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
@@ -16,6 +16,8 @@ import WebSocket from "ws";
 import { PROTOCOL_VERSION } from "@otk/protocol";
 import { readRpcMessages } from "../support/message-pages.ts";
 import type { MessagePage } from "@otk/protocol";
+import { HttpRequests, RequestFailure } from "@otk/client";
+import { originFetch } from "../support/request-wire.ts";
 
 test("I11 message paging retains opaque native continuation and exact-multiple terminal pages", async () => {
   const f = await fixture();
@@ -542,13 +544,34 @@ test("I9 password cookie, WS authentication, Origin, logout and CORS", async () 
     });
     assertEquals(rejected.status, 403);
     await rejected.text();
-    const login = await fetch(server.url + "/api/login", {
-      method: "POST",
-      headers: { Origin: server.url, "Content-Type": "application/json" },
-      body: '{"username":"tester","password":"secret"}',
-    });
+    const transport = (origin: string, cookie?: string) => {
+      const responses: Response[] = [];
+      const fetcher = originFetch(origin);
+      const http = new HttpRequests({
+        base: new URL(server.url + "/api/"),
+        fetcher: async (input, options) => {
+          const headers = new Headers(options?.headers);
+          if (cookie) headers.set("Cookie", cookie);
+          const response = await fetcher(input, { ...options, headers });
+          responses.push(response);
+          return response;
+        },
+      });
+      resources().defer("authenticated HTTP client", () => http.stop());
+      return { http, responses };
+    };
+    const sameOrigin = transport(server.url);
+    assertEquals(
+      await sameOrigin.http.start("login", {
+        username: "tester",
+        password: "secret",
+      }).result,
+      { ok: true },
+    );
+    assertEquals(sameOrigin.responses[0].status, 202);
+    assertEquals(sameOrigin.responses[0].headers.get("set-cookie"), null);
+    const login = sameOrigin.responses.at(-1)!;
     assertEquals(login.status, 200);
-    await login.json();
     const cookie = login.headers.get("set-cookie")!;
     assert(cookie.startsWith(`otk_${server.port}=`));
     assert(cookie.includes("HttpOnly") && cookie.includes("SameSite=Strict"));
@@ -573,11 +596,16 @@ test("I9 password cookie, WS authentication, Origin, logout and CORS", async () 
       preflight.headers.get("access-control-allow-methods")!.includes("POST"),
     );
     await preflight.text();
-    const crossOriginLogin = await fetch(server.url + "/api/login", {
-      method: "POST",
-      headers: { Origin: extraOrigin, "Content-Type": "application/json" },
-      body: '{"username":"tester","password":"secret"}',
-    });
+    const crossOrigin = transport(extraOrigin);
+    assertEquals(
+      await crossOrigin.http.start("login", {
+        username: "tester",
+        password: "secret",
+      }).result,
+      { ok: true },
+    );
+    assertEquals(crossOrigin.responses[0].status, 202);
+    const crossOriginLogin = crossOrigin.responses.at(-1)!;
     assertEquals(crossOriginLogin.status, 200);
     assertEquals(
       crossOriginLogin.headers.get("access-control-allow-origin"),
@@ -587,25 +615,33 @@ test("I9 password cookie, WS authentication, Origin, logout and CORS", async () 
       crossOriginLogin.headers.get("access-control-allow-credentials"),
       "true",
     );
-    await crossOriginLogin.json();
-    const incorrectCredentials = await fetch(server.url + "/api/login", {
-      method: "POST",
-      headers: { Origin: extraOrigin, "Content-Type": "application/json" },
-      body: '{"username":"tester","password":"incorrect"}',
-    });
-    assertEquals(incorrectCredentials.status, 401);
+    const incorrect = transport(extraOrigin);
+    const failure = await assertRejects(
+      () =>
+        incorrect.http.start("login", {
+          username: "tester",
+          password: "incorrect",
+        }).result,
+      RequestFailure,
+    );
+    assertEquals(failure.failure.code, "credentials");
+    assertEquals(incorrect.responses[0].status, 202);
+    const incorrectCredentials = incorrect.responses.at(-1)!;
+    assertEquals(incorrectCredentials.status, 200);
+    assertEquals(incorrectCredentials.headers.get("set-cookie"), null);
     assertEquals(
       incorrectCredentials.headers.get("access-control-allow-origin"),
       extraOrigin,
     );
-    await incorrectCredentials.json();
     await f.client(server, cookie.split(";")[0]);
-    const logout = await fetch(server.url + "/api/logout", {
-      method: "POST",
-      headers: { Origin: server.url, Cookie: cookie.split(";")[0] },
-    });
+    const authenticated = transport(server.url, cookie.split(";")[0]);
+    assertEquals(
+      await authenticated.http.start("logout", {}).result,
+      { ok: true },
+    );
+    assertEquals(authenticated.responses[0].status, 202);
+    const logout = authenticated.responses.at(-1)!;
     assertEquals(logout.status, 200);
-    await logout.json();
     assert(logout.headers.get("set-cookie")!.includes("Max-Age=0"));
   } finally {
     await f.stop();

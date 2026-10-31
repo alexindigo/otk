@@ -9,6 +9,7 @@ import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { FreezeProxy } from "../support/freeze-proxy.ts";
 import { opencodeV1SessionID } from "@otk/harness-opencode-v1";
+import { RequestFailure } from "@otk/client";
 
 test("U9 stock session auto-approve executes bash and helpers with every OTK connection closed, survives restart and off restores waiting", async () => {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
@@ -168,15 +169,15 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
     const restored = await client.wait((frame) => frame.t === "approvals");
     assert(restored.t === "approvals");
     assertEquals(restored.approvals.enabled, [root.id]);
-    await assertRejects(
+    const helperRejected = await assertRejects(
       () =>
         client!.rpc("permission.auto", {
           sessionID: children[0].id,
           enabled: true,
         }),
-      Error,
-      "helper",
+      RequestFailure,
     );
+    assertEquals(helperRejected.failure.code, "permission");
     const activity = await waitFor(
       () =>
         client!.rpc<PermissionActivityPage>("permission.activity", {
