@@ -5,6 +5,8 @@ import type {
   ContentOp,
   Message,
   MessagePolicy,
+  PermissionRequest,
+  QuestionRequest,
 } from "@otk/protocol";
 import { createTranscripts, type TranscriptClock } from "../transcripts.ts";
 import { SidecarConnection } from "../connection.ts";
@@ -119,6 +121,76 @@ const policy = {
   preloadms: 30,
   concurrency: 4,
 };
+
+Deno.test("warm transcripts reduce permission and question replacement before reselection without detail reads", async () => {
+  const f = fixture(policy);
+  f.connection.supports = (capability) =>
+    capability === "permissions" || capability === "questions";
+  try {
+    f.owner.setDemand({ scope: scope(), sessions: [target("a")] });
+    await f.reply();
+    await f.reply();
+    const a = f.owner.get(target("a"))!;
+    assertEquals(a.state.temperature, "warm");
+    const permission: PermissionRequest = {
+      id: "old-permission",
+      sessionID: "a",
+      kind: "bash",
+      title: "Old command",
+      detail: { kind: "bash", command: "old command" },
+      patterns: ["old command"],
+      alwaysPatterns: [],
+      time: 1,
+    };
+    const question: QuestionRequest = {
+      id: "old-question",
+      sessionID: "a",
+      questions: [],
+    };
+    const deliver = (event: ContentOp) =>
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        event,
+      }, true);
+    deliver({ op: "permission.upsert", request: permission });
+    deliver({ op: "question.upsert", request: question });
+    assertEquals(a.state.content.permissions, [permission]);
+    assertEquals(a.state.content.questions, [question]);
+    deliver({
+      op: "permission.remove",
+      requestID: permission.id,
+      sessionID: "a",
+    });
+    deliver({ op: "question.remove", requestID: question.id, sessionID: "a" });
+    const next = {
+      ...permission,
+      id: "new-permission",
+      time: 2,
+      detail: { kind: "bash" as const, command: "new command" },
+    };
+    deliver({ op: "permission.upsert", request: next });
+    assertEquals(a.state.content.permissions, [next]);
+    assertEquals(a.state.content.questions, []);
+    assertEquals(
+      f.requests,
+      [],
+      "Warm attention changes need no snapshot/detail read",
+    );
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    assertEquals(
+      a.state.content.permissions,
+      [next],
+      "Reselection cannot expose the previous approval target",
+    );
+  } finally {
+    f.stop();
+  }
+});
 
 Deno.test("transcript state publication never returns replacement state to a framework binding", () => {
   const f = fixture(policy), returned: unknown[] = [];

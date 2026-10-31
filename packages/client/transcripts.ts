@@ -318,9 +318,7 @@ export function createTranscripts(o: {
         ) {
           if (
             value.target.sidecarId === server &&
-            (!ids || value.owner.usesMetadata(ids)) &&
-            (frame.t !== "content" ||
-              value.owner.state.temperature === "screen")
+            (!ids || value.owner.usesMetadata(ids))
           ) value.owner.receive(server, frame);
         }}
       if (

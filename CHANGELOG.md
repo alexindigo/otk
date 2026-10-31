@@ -56,6 +56,7 @@ server's bootstrap, avoiding redundant acquisition during navigation.
 - Keep task attention visible through shared measured overflow (`cc7f2b5`).
 - Leave borrowed catalog invalidation with its directory owner (`aab086f`).
 - Exclude Git metadata from file catalogs and honor native ignore flags.
+- Keep permission and question targets current when returning to a warm session.
 - Associate failed project-menu actions with their in-row error for assistive
   technology.
 

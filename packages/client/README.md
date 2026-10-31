@@ -249,8 +249,10 @@ message identities to refill at `MESSAGE_ADMISSION_WATERMARK` (20), with a
 ten-message reserve; `ensure(id)` follows the same cursor chain and `pin(ids)`
 retains interaction identities. Screen and warm consumers borrow the same
 bodies, not a snapshot cache. Visited pages survive while warm; a background
-live tail stays bounded. Cooling aborts reads and releases subscriptions, replay
-and message maps.
+live tail stays bounded. Warm owners also reduce live permission/question
+changes, so returning to a session cannot restore an already answered approval
+target. Cooling aborts reads and releases subscriptions, replay and message
+maps.
 
 `createSession().transcripts` exposes this collection and `.transcript` borrows
 the selected resource. The compatibility `state.content` references its

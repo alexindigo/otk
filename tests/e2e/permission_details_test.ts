@@ -7,7 +7,11 @@ import { focusNotifications } from "../support/notification-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { waitFor } from "../support/opencode.ts";
 
-test("U9 permission toast and takeover share exact bash, generic and edit summaries before approval", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`U9 permission toast and takeover share exact bash, generic and edit summaries before approval (${theme})`, () =>
+    permissionDetails(theme));
+}
+async function permissionDetails(theme: string) {
   const f = await browserFixture({ bash: "ask", read: "ask", edit: "ask" });
   let client: WsClient | undefined;
   const shots = Deno.env.get("OTK_PERMISSION_SHOTS");
@@ -23,6 +27,7 @@ test("U9 permission toast and takeover share exact bash, generic and edit summar
     const server = await f.sidecar(), b = await f.browser(server.url);
     client = new WsClient(server.url);
     await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
     await client.rpc("prefs.set", { key: "animationsOff", value: true });
     await focusNotifications(b);
     await openSession(b, foreground.id);
@@ -138,4 +143,4 @@ test("U9 permission toast and takeover share exact bash, generic and edit summar
     await client?.close();
     await f.stop();
   }
-});
+}
