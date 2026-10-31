@@ -79,6 +79,21 @@ test("bootstrap features acknowledge setup/login/discovery and replay cookies on
     held.resolve();
     const setupResponse = await result;
     assert((await setupResponse.text()).includes('"ok":true'));
+    const setupCookie = setupResponse.headers.get("set-cookie");
+    assert(setupCookie);
+    assert(setupCookie.includes("HttpOnly"));
+    assert(
+      await auth.authenticated(request("session", setupCookie.split(";")[0])),
+      "Setup's completion must authenticate the browser that supplied credentials",
+    );
+    const setupReplay = await bootstrap.events(
+      request("request-events"),
+      { ...setup, id: crypto.randomUUID() },
+      0,
+      secret,
+    );
+    assertEquals(setupReplay.headers.get("set-cookie"), setupCookie);
+    await setupReplay.text();
     assertEquals(setups, 1);
     assertEquals(auth.setupRequired, false);
     const login = ref();

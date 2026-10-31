@@ -98,12 +98,13 @@ systemctl --user enable --now otk.service
 ```
 
 On first run, choose **Password**, enter a username and password, and select
-**Configure sidecar**. Then log in with those credentials. Setup also offers
-**None**, which disables OTK login. Password setup saves a PBKDF2 hash and a
-generated signing key in private `auth.toml` in OTK's state directory. Usernames
-are case-insensitive. After login, the project list and Sessions view show your
-opencode sessions. The index includes all sessions; the recent-background
-priority horizon defaults to 30 days.
+**Configure sidecar**. Setup signs this browser in; other browsers log in with
+those credentials. Setup also offers **None**, which disables OTK login.
+Password setup saves a PBKDF2 hash and a generated signing key in private
+`auth.toml` in OTK's state directory. Usernames are case-insensitive. After
+login, the project list and Sessions view show your opencode sessions. The index
+includes all sessions; the recent-background priority horizon defaults to 30
+days.
 
 TOTP is configured in the operator file, not the setup form. After password
 setup, add this to `~/.config/otk/otk.toml` and restart OTK:

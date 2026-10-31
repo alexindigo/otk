@@ -161,6 +161,13 @@ export class BootstrapRequests {
           if (!auth.setupRequired) reject("setup.configured");
           try {
             await auth.setup(p.input);
+            if (auth.local) {
+              const token = await auth.local.login(
+                p.input.username!,
+                p.input.password!,
+              );
+              cookie(p, ctx.execution!.key, auth.cookie(token));
+            }
           } catch (cause) {
             reject(
               auth.setupRequired ? "setup.rejected" : "setup.configured",
