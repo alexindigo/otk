@@ -25,7 +25,7 @@ Deno.test("inbox maintains committed keys without baseline SQL or unrelated payl
     seenMigrations,
     finishesMigrations,
     projectTemplatesMigrations,
-  ]);
+  ], { busyms: 5000 });
   const stores = {
     projects: new Projects(db),
     tasks: new Tasks(db),
@@ -79,7 +79,7 @@ Deno.test("bounded inbox baseline completes while committed marks keep changing"
     seenMigrations,
     finishesMigrations,
     projectTemplatesMigrations,
-  ]);
+  ], { busyms: 5000 });
   let clock = 0;
   const stores = {
     projects: new Projects(db),

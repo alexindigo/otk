@@ -8,10 +8,14 @@ import {
   SEPARATOR,
 } from "@std/path";
 import { HarnessError } from "@otk/harness";
+import { validateKey } from "@otk/store";
+export const MAX_NATIVE_PATH = 4096;
 export function projectPath(path: string): string {
-  if (!path.trim() || path.includes("\0") || path.length > 4096) {
-    throw new HarnessError("params", "Invalid project path");
-  }
+  validateKey(path, {
+    maxLength: MAX_NATIVE_PATH,
+    blank: false,
+    invalid: () => new HarnessError("params", "Invalid project path"),
+  });
   return resolve(
     path.startsWith("~/") ? join(Deno.env.get("HOME")!, path.slice(2)) : path,
   );

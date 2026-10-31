@@ -22,7 +22,6 @@ export default function FetchTool(
       text={props.call.output ?? ""}
       result={props.call.outputContent}
       directory={props.directory}
-      limit={10}
     />
   );
 }

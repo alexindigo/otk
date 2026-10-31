@@ -47,6 +47,11 @@ const tool = (
     status,
     time: {},
     awaitingPermission: false,
+    selectionIntent: name === "plan_exit"
+      ? { agent: "build" }
+      : name === "plan_enter"
+      ? { agent: "plan" }
+      : undefined,
   },
 });
 const message = (id = "m", parts: ToolPart[] = []): Message => ({
@@ -208,6 +213,23 @@ Deno.test("plan tools switch only on live completed parts in the current session
     assertEquals(f.draft().agent, "plan");
     assertEquals(f.draft().model, agents[1].model);
     assertEquals(f.draft().variant, "low");
+  } finally {
+    owner.dispose();
+    f.stop();
+  }
+});
+
+Deno.test("a coincidentally named external tool cannot choose a composer agent", async () => {
+  const f = fixture(), owner = f.composer();
+  try {
+    await f.snapshot();
+    await owner.ready();
+    f.change((draft) => ({ ...draft, agent: "plan" }));
+    const external = tool("external-name-only");
+    delete external.call.selectionIntent;
+    f.part(external);
+    await settle();
+    assertEquals(f.draft().agent, "plan");
   } finally {
     owner.dispose();
     f.stop();

@@ -16,7 +16,9 @@ declare module "@otk/protocol" {
 }
 
 test("request admission bounds active input and replay while bounded reconnect batches settle every consumer", async () => {
-  const db = new OtkDb(await tempDir("rq-scale-"), [requestsMigrations]);
+  const db = new OtkDb(await tempDir("rq-scale-"), [requestsMigrations], {
+    busyms: 5000,
+  });
   const registry = new RpcRegistry({} as Harness, db),
     receipts = new Requests(db);
   const held = Promise.withResolvers<void>();
@@ -149,7 +151,9 @@ test("request admission bounds active input and replay while bounded reconnect b
 });
 
 test("aggregate captured input and oversized resume controls reject before accepting more work", async () => {
-  const db = new OtkDb(await tempDir("rq-bytes-"), [requestsMigrations]);
+  const db = new OtkDb(await tempDir("rq-bytes-"), [requestsMigrations], {
+    busyms: 5000,
+  });
   const registry = new RpcRegistry({} as Harness, db);
   const held = Promise.withResolvers<void>();
   let calls = 0;

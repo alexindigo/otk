@@ -61,7 +61,7 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
   const db = new OtkDb(settings.state.path, [
       prefsMigrations,
       requestsMigrations,
-    ]),
+    ], { busyms: 5000 }),
     prefs = new Prefs(db, prefsOptions),
     rpc = new RpcRegistry(harness, db);
   registerSessions(rpc, harness);

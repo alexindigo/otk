@@ -283,15 +283,16 @@ positive native `limit.context` as `contextLimit`, and all four finite
 nonnegative native cost rates as `cost` (USD per million tokens), never
 credentials/options/headers/environment fields. Missing/incomplete/invalid
 prices stay absent; known zero rates remain zero. Variant names come from the
-model's variant keys; `free` means the `opencode` provider with zero input cost.
-Configured `model` becomes the catalog default only if present among the
-connected models. `agents.list` uses the same neutral colour normalization as
-transcripts and includes configured model/variant metadata; its optional read
-signal also reaches native `/agent` acquisition. Native user
-`info.model.variant` maps to OTK `UserMessage.variant` (stock 1.18.34).
-Session/composer discovery fetches only connected metadata. A future Connect
-provider flow must acquire the all-provider `/provider` inventory on demand,
-rather than prefetch it during ordinary session navigation.
+model's variant keys. `free` is true only when every applicable reported rate is
+known zero, false when a known rate is positive, and null for unreported
+pricing, independently of provider identity. Configured `model` becomes the
+catalog default only if present among the connected models. `agents.list` uses
+the same neutral colour normalization as transcripts and includes configured
+model/variant metadata; its optional read signal also reaches native `/agent`
+acquisition. Native user `info.model.variant` maps to OTK `UserMessage.variant`
+(stock 1.18.34). Session/composer discovery fetches only connected metadata. A
+future Connect provider flow must acquire the all-provider `/provider` inventory
+on demand, rather than prefetch it during ordinary session navigation.
 
 `usage.getUsage(sessionID,turnID,signal?)` reads only that turn's assistant
 usage headers and existing tool labels. The shipped worker queries indexed
@@ -314,6 +315,17 @@ reply parents and attachment paths follow the same boundary convention; valid
 identifiers and empty strings retain their spelling. Consumers never inherit a
 native null sentinel. Missing task agent metadata likewise stays absent rather
 than implying a built-in agent.
+
+Successful live plan approval borrows the native synthetic user message's agent,
+correlated with the native completed result and its time range, for a neutral
+`ToolBase.selectionIntent`. A tool name alone is never selection authority.
+Historical mapping has no access to that live owner; disconnect, release, revert
+and deletion retire its facts. Missing search pattern/count, diff path/status
+and todo priority stay unknown; complete decoded search results may prove an
+exact count, while truncated results without a native total cannot. A real file
+named `unknown` remains literal. `NATIVE_SCAN_ROWS` owns bounded Messages/fork
+scans and `REVERT_PROMPT_LIMIT` owns SQL and fallback rollback preview
+retention.
 
 When reconnect loses a streaming seed, one generation per subscribed message
 queues one replacement-only point checkpoint. Further deltas retain only missing

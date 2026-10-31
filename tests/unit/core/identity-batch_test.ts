@@ -12,7 +12,7 @@ import { fixture } from "./support.ts";
 import { test } from "../../support/resources.ts";
 
 test("RPC identity validation batches once, rejects missing and never hydrates session bodies", async () => {
-  const db = new OtkDb(await fixture(), []);
+  const db = new OtkDb(await fixture(), [], { busyms: 5000 });
   const batches: string[][] = [];
   const backend = {
     core: {

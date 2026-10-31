@@ -2,6 +2,7 @@
 import "./TitleEditor.css" with { type: "text" };
 import { createSignal, createUniqueId, onSettled } from "solid-js";
 import type { SessionRename } from "@otk/client";
+import { MAX_SESSION_TITLE } from "@otk/protocol";
 import FieldFeedback from "./FieldFeedback.tsx";
 
 /** Native input only. The injected owner owns editing, admission and failures. */
@@ -26,7 +27,7 @@ export default function TitleEditor(props: { owner: SessionRename }) {
         aria-describedby={errorID}
         aria-invalid={props.owner.state.error ? "true" : undefined}
         aria-busy={props.owner.state.pending ? "true" : undefined}
-        maxlength={200}
+        maxlength={MAX_SESSION_TITLE}
         value={title()}
         readonly={props.owner.state.pending}
         onInput={(event) => setTitle(event.currentTarget.value)}

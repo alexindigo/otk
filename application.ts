@@ -81,7 +81,7 @@ export function startApplication(
     permissionMigrations,
     sessionReferenceMigrations,
     requestsMigrations,
-  ]);
+  ], cfg.storage);
   const sources: FrameSource[] = [];
   try {
     options.upgrade?.(store);

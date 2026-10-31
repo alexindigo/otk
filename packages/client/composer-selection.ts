@@ -331,12 +331,7 @@ export function createComposerSelection(
     if (part.call.status !== "completed") {
       return;
     }
-    const name = part.call.selectionIntent?.agent ??
-      (part.call.tool === "external" && part.call.name === "plan_exit"
-        ? "build"
-        : part.call.tool === "external" && part.call.name === "plan_enter"
-        ? "plan"
-        : undefined);
+    const name = part.call.selectionIntent?.agent;
     if (!name || switched.has(part.id)) return;
     switched.add(part.id);
     // Use exactly the manual intent, including the agent's configured choices.

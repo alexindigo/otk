@@ -79,6 +79,7 @@ test("original version 1 and 2 databases preserve schema, timestamps and data", 
           ? [{ version: 1, sql: unavailable }]
           : feature.migrations,
       })),
+      { busyms: 5000 },
     );
     try {
       assertEquals(
@@ -121,7 +122,7 @@ test("original version 1 and 2 databases preserve schema, timestamps and data", 
     } finally {
       db.close();
     }
-    const reopened = new OtkDb(root, migrations);
+    const reopened = new OtkDb(root, migrations, { busyms: 5000 });
     assertEquals(versions(reopened.connection), shippedVersions);
     assertEquals(new Prefs(reopened, prefsOptions).get().thinking, "show");
     reopened.close();
@@ -129,7 +130,8 @@ test("original version 1 and 2 databases preserve schema, timestamps and data", 
 });
 
 test("feature upgrade lists reject gaps, duplicates and reordering before mutation", async () => {
-  const root = await fixture(), db = new OtkDb(root, migrations);
+  const root = await fixture(),
+    db = new OtkDb(root, migrations, { busyms: 5000 });
   db.connection.prepare("INSERT INTO prefs VALUES(?,?,?)").run(
     "timestamps",
     "true",
@@ -161,7 +163,7 @@ test("feature upgrade lists reject gaps, duplicates and reordering before mutati
     ]
   ) {
     assertThrows(
-      () => new OtkDb(root, invalid),
+      () => new OtkDb(root, invalid, { busyms: 5000 }),
       Error,
       invalid[0].feature === "invalid"
         ? "Expected invalid migration"
@@ -205,7 +207,7 @@ test("a failed feature rolls back all pending SQL and versions, releases connect
       ],
     },
   ];
-  assertThrows(() => new OtkDb(root, failed));
+  assertThrows(() => new OtkDb(root, failed, { busyms: 5000 }));
   const raw = new DatabaseSync(join(root, "otk.db"));
   try {
     assertEquals(versions(raw), [{ feature: "first", version: 1 }]);
@@ -222,7 +224,7 @@ test("a failed feature rolls back all pending SQL and versions, releases connect
       version: 2,
       sql: "INSERT INTO second VALUES('retried')",
     }],
-  }]);
+  }], { busyms: 5000 });
   try {
     assertEquals(versions(retried.connection), [
       { feature: "first", version: 1 },
@@ -251,7 +253,7 @@ test("public database accepts independent features and never reads or replays ap
       sql:
         "CREATE TABLE custom (value TEXT); INSERT INTO custom VALUES('standalone')",
     }],
-  }]);
+  }], { busyms: 5000 });
   assertEquals(
     schema(db.connection).map((row) => (row as { name: string }).name),
     ["custom"],
@@ -263,7 +265,7 @@ test("public database accepts independent features and never reads or replays ap
       version: 1,
       sql: new URL("file:///missing-already-applied.sql"),
     }],
-  }]);
+  }], { busyms: 5000 });
   try {
     assertEquals(
       reopened.connection.prepare("SELECT value FROM custom").get()!.value,
@@ -276,7 +278,7 @@ test("public database accepts independent features and never reads or replays ap
 
 test("fresh features start at v1, compose in any order and upgrade without editing others", async () => {
   const root = await fixture();
-  const first = new OtkDb(root, [frecencyMigrations]);
+  const first = new OtkDb(root, [frecencyMigrations], { busyms: 5000 });
   new Frecency(first, frecencyOptions).bump("/project", "README.md");
   assertEquals(versions(first.connection), [{
     feature: "frecency",
@@ -297,7 +299,9 @@ test("fresh features start at v1, compose in any order and upgrade without editi
       },
     ],
   };
-  const second = new OtkDb(root, [notes, frecencyMigrations, prefsMigrations]);
+  const second = new OtkDb(root, [notes, frecencyMigrations, prefsMigrations], {
+    busyms: 5000,
+  });
   new Prefs(second, prefsOptions).set("thinking", "show");
   assertEquals(versions(second.connection), [shippedVersions[0], {
     feature: "notes",
@@ -316,7 +320,7 @@ test("fresh features start at v1, compose in any order and upgrade without editi
     ],
   };
   // A smaller composition preserves unselected features and their records.
-  const third = new OtkDb(root, [upgraded]);
+  const third = new OtkDb(root, [upgraded], { busyms: 5000 });
   assertEquals(third.connection.prepare("SELECT * FROM notes").all(), [{
     value: "original",
     extra: "upgraded",
@@ -332,7 +336,7 @@ test("fresh features start at v1, compose in any order and upgrade without editi
     prefsMigrations,
     upgraded,
     frecencyMigrations,
-  ]);
+  ], { busyms: 5000 });
   assertEquals(new Prefs(reordered, prefsOptions).get().thinking, "show");
   assertEquals(
     new Frecency(reordered, frecencyOptions).list("/project")[0].score,
@@ -343,7 +347,8 @@ test("fresh features start at v1, compose in any order and upgrade without editi
 
 test("unknown or noncontiguous applied versions reject every selected feature before pending SQL", async () => {
   for (const invalid of [0, 2, 3]) {
-    const root = await fixture(), db = new OtkDb(root, migrations);
+    const root = await fixture(),
+      db = new OtkDb(root, migrations, { busyms: 5000 });
     db.connection.exec("DELETE FROM otk_migrations WHERE feature='prefs'");
     if (invalid !== 0) {
       db.connection.exec("INSERT INTO otk_migrations VALUES('prefs',1)");
@@ -365,7 +370,7 @@ test("unknown or noncontiguous applied versions reject every selected feature be
             }],
           },
           ...migrations,
-        ]),
+        ], { busyms: 5000 }),
       Error,
       "Unsupported otk.db feature prefs version",
     );
@@ -389,7 +394,7 @@ test("unsupported legacy versions fail without mapping or data changes", async (
     const before = schema(original);
     original.close();
     assertThrows(
-      () => new OtkDb(root, migrations),
+      () => new OtkDb(root, migrations, { busyms: 5000 }),
       Error,
       `Unsupported legacy otk.db schema ${version}`,
     );
@@ -418,11 +423,11 @@ test("legacy mapping records all old features even for a smaller composition and
     original = new DatabaseSync(join(root, "otk.db"));
   original.exec(`${legacyPrefs} ${legacyFrecency} PRAGMA user_version=2`);
   original.close();
-  const mapped = new OtkDb(root, [prefsMigrations]);
+  const mapped = new OtkDb(root, [prefsMigrations], { busyms: 5000 });
   assertEquals(versions(mapped.connection), shippedVersions);
   mapped.connection.exec("PRAGMA user_version=999");
   mapped.close();
-  const reopened = new OtkDb(root, [frecencyMigrations]);
+  const reopened = new OtkDb(root, [frecencyMigrations], { busyms: 5000 });
   assertEquals(versions(reopened.connection), shippedVersions);
   assertEquals(
     reopened.connection.prepare("PRAGMA user_version").get()!.user_version,

@@ -6,16 +6,18 @@ import { ownedAction } from "../../keyboard/context.tsx";
 import Code from "../Code.tsx";
 import ToolPath from "./ToolPath.tsx";
 import { relativeTarget } from "./paths.ts";
+import { usePathSemantics } from "../PathProvider.tsx";
 import { countLabel } from "./count.ts";
+const COLLAPSED_OUTPUT_LINES = 10;
 export default function ToolOutput(
   props: {
     text: string;
-    limit: number;
     result?: ToolResult;
     directory?: string;
   },
 ): import("solid-js").Element {
   const [open, setOpen] = createSignal(false);
+  const paths = usePathSemantics();
   const toggle = ownedAction(
     "tool.output.toggle",
     () => setOpen((value) => !value),
@@ -23,7 +25,9 @@ export default function ToolOutput(
   const text = () => {
     const result = props.result;
     if (result?.kind === "paths") {
-      return result.paths.map((path) => relativeTarget(path, props.directory))
+      return result.paths.map((path) =>
+        relativeTarget(path, props.directory, paths())
+      )
         .join("\n") || "No results";
     }
     if (result?.kind === "text") return result.text;
@@ -57,8 +61,8 @@ export default function ToolOutput(
       fallback={
         <>
           <Show when={text()}>
-            <pre class="otk-tool-output">{open()?text().trimEnd():lines().slice(0,props.limit).join("\n")}</pre>
-            <Show when={lines().length > props.limit}>
+            <pre class="otk-tool-output">{open()?text().trimEnd():lines().slice(0,COLLAPSED_OUTPUT_LINES).join("\n")}</pre>
+            <Show when={lines().length > COLLAPSED_OUTPUT_LINES}>
               <button
                 class="otk-output-toggle"
                 type="button"

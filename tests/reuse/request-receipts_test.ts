@@ -12,7 +12,9 @@ import { tempDir, test } from "../support/resources.ts";
 
 test("independent public store consumer recovers the original task result without applying its intent twice", async () => {
   const path = await tempDir("request-consumer-");
-  let db = new OtkDb(path, [tasksMigrations, requestsMigrations]);
+  let db = new OtkDb(path, [tasksMigrations, requestsMigrations], {
+    busyms: 5000,
+  });
   const window = new Requests(db).window(0, 100);
   const intent: RequestRecord = {
     principal: "consumer",
@@ -54,7 +56,7 @@ test("independent public store consumer recovers the original task result withou
   });
   db.close();
   // A newer authoritative edit cannot rewrite the immutable original receipt.
-  db = new OtkDb(path, [requestsMigrations, tasksMigrations]);
+  db = new OtkDb(path, [requestsMigrations, tasksMigrations], { busyms: 5000 });
   try {
     const tasks = new Tasks(db), requests = new Requests(db);
     const task = tasks.list()[0];

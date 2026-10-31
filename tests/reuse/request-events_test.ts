@@ -24,7 +24,7 @@ test("independent typed client and external registration observe one captured lo
   const db = new OtkDb(await tempDir("request-consumer-"), [
     requestsMigrations,
     tasksMigrations,
-  ]);
+  ], { busyms: 5000 });
   const tasks = new Tasks(db), registry = new RpcRegistry({} as Harness, db);
   let effects = 0;
   registry.register("consumer.create", {

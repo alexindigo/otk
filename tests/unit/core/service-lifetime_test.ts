@@ -45,7 +45,9 @@ for (
         createSession: () => Promise.reject(new Error("unused")),
       },
     };
-    const store = new OtkDb(root, [prefsMigrations, requestsMigrations]),
+    const store = new OtkDb(root, [prefsMigrations, requestsMigrations], {
+        busyms: 5000,
+      }),
       prefs = new Prefs(store, prefsOptions),
       index = new IndexStore();
     let listeners = 0;

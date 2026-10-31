@@ -21,7 +21,7 @@ test("metadata deltas carry final committed keys and clocks, isolate observers a
     seenMigrations,
     finishesMigrations,
     projectTemplatesMigrations,
-  ], { observerError: (e) => errors.push(e) });
+  ], { busyms: 5000, observerError: (e) => errors.push(e) });
   try {
     let now = 100;
     const projects = new Projects(db, () => now),

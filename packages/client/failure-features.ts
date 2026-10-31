@@ -6,6 +6,7 @@ import {
   type FeedbackOwner,
 } from "./failures.ts";
 import type { RequestMetadataRegistry } from "@otk/protocol";
+import { MAX_SESSION_TITLE, MAX_UPLOAD_BYTES } from "@otk/protocol";
 import type { RequestTracker } from "./requests.ts";
 
 /** Shipped failure vocabulary. The reusable presenter itself has no feature list. */
@@ -44,6 +45,15 @@ export function createFailurePresenter(): FailurePresenter {
   contribute(
     ["attachment", "attachment.unreadable", "attachment.invalid"],
     "An attachment cannot be read. Restore access or remove it before sending",
+  );
+  contribute(
+    ["attachment.upload-size"],
+    `Each upload must be ${MAX_UPLOAD_BYTES / 1024 / 1024} MiB or smaller`,
+  );
+  contribute(
+    ["session.title"],
+    `Use a session title of 1–${MAX_SESSION_TITLE} characters`,
+    "title",
   );
   contribute(
     ["request.conflict"],

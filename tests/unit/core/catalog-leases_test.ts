@@ -13,7 +13,7 @@ import {
 import { cfg, fixture } from "./support.ts";
 import { test } from "../../support/resources.ts";
 test("a settled catalog lease releases after result receipt without closing its socket", async () => {
-  const db = new OtkDb(await fixture(), [requestsMigrations]);
+  const db = new OtkDb(await fixture(), [requestsMigrations], { busyms: 5000 });
   let released = 0;
   const backend = {
     capabilities: {

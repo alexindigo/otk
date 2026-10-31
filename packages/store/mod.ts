@@ -2,6 +2,11 @@
 /** SQLite storage and caller-composed feature migrations, without app policy. */
 export { OtkDb, type StoreWrite } from "./db.ts";
 export {
+  type KeyPolicy,
+  MAX_METADATA_KEY,
+  validateKey,
+} from "./features/metadata.ts";
+export {
   type ReceiptKey,
   type RequestRecord,
   Requests,
@@ -52,6 +57,7 @@ export {
 export { Prefs, prefsMigrations, type PrefsOptions } from "./features/prefs.ts";
 export {
   Frecency,
+  FRECENCY_RETENTION,
   type FrecencyEntry,
   frecencyMigrations,
   type FrecencyOptions,

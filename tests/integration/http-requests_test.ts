@@ -13,7 +13,7 @@ declare module "@otk/protocol" {
   }
 }
 test("independent HTTP composition holds cookie headers until result and consumer sees exactly one outcome", async () => {
-  const db = new OtkDb(await tempDir("http-requests-"), []),
+  const db = new OtkDb(await tempDir("http-requests-"), [], { busyms: 5000 }),
     registry = new RpcRegistry({} as Harness, db);
   const held = Promise.withResolvers<void>();
   let effects = 0;

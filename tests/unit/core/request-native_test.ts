@@ -48,7 +48,7 @@ test("every native feature fences its backend effect, checkpoints only metadata 
     seenMigrations,
     finishesMigrations,
     projectTemplatesMigrations,
-  ]);
+  ], { busyms: 5000 });
   const receipts = new Requests(db), calls = new Map<string, number>();
   let uncertain = false;
   const base: ContentSession = {

@@ -6,6 +6,7 @@ import { mapSession } from "./map.ts";
 import type { Session } from "./types.ts";
 import type { BootstrapDb } from "./db.ts";
 import type { Messages } from "./messages.ts";
+import { NATIVE_SCAN_ROWS } from "./messages.ts";
 import type { Launch } from "./shell.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 
@@ -43,7 +44,7 @@ export function sessionActions(
           // Stock pages are oldest first within each newest-to-oldest page.
           let before: string | undefined, found = false;
           do {
-            const page = await messages.page(id, 100, before, dir);
+            const page = await messages.page(id, NATIVE_SCAN_ROWS, before, dir);
             for (const message of page.items.toReversed()) {
               if (message.info.id === through) {
                 found = true;

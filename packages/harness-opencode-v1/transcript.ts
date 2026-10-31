@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { NATIVE_SCAN_ROWS } from "./messages.ts";
 import {
   type ContentReplay,
   HarnessError,
@@ -360,7 +361,7 @@ export class Transcript {
         while (!latest && continuation) {
           const scan = await reader.page(
             id,
-            100,
+            NATIVE_SCAN_ROWS,
             continuation,
             owner.raw.directory,
             signal,

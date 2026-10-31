@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { MAX_UPLOAD_BYTES, uploadSize } from "@otk/protocol";
+import { RequestFailure } from "./failures.ts";
 import type {
   AttachmentPolicy,
   HistoryAttachment,
@@ -25,7 +26,14 @@ export async function prepareAttachments(
       : file.source === "upload"
       ? uploadSize(file.dataBase64)
       : 0;
-    if (!Number.isSafeInteger(size) || size < 0 || size > MAX_UPLOAD_BYTES) {
+    if (size > MAX_UPLOAD_BYTES) {
+      throw new RequestFailure({
+        code: "attachment.upload-size",
+        retry: "new-intent",
+        diagnosticID: crypto.randomUUID(),
+      });
+    }
+    if (!Number.isSafeInteger(size) || size < 0) {
       throw new Error("Attachment exceeds the upload limit");
     }
     bytes += size;
@@ -83,9 +91,15 @@ export async function prepareAttachments(
       ? [uploadSize(part.dataBase64)]
       : []
   );
-  if (
-    actual.some((size) => size > MAX_UPLOAD_BYTES) ||
-    actual.reduce((a, b) => a + b, 0) > policy.maxbytes
-  ) throw new Error("Combined attachments exceed the upload limit");
+  if (actual.some((size) => size > MAX_UPLOAD_BYTES)) {
+    throw new RequestFailure({
+      code: "attachment.upload-size",
+      retry: "new-intent",
+      diagnosticID: crypto.randomUUID(),
+    });
+  }
+  if (actual.reduce((a, b) => a + b, 0) > policy.maxbytes) {
+    throw new Error("Combined attachments exceed the upload limit");
+  }
   return result;
 }

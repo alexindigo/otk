@@ -7,7 +7,8 @@ import { OtkDb, Prefs } from "@otk/store";
 import { defaults, fixture, migrations, prefsOptions } from "./support.ts";
 test("otk.db migrates transactionally, uses WAL and preserves prefs on reopen", async () => {
   const root = await fixture();
-  const db = new OtkDb(root, migrations), prefs = new Prefs(db, prefsOptions);
+  const db = new OtkDb(root, migrations, { busyms: 5000 }),
+    prefs = new Prefs(db, prefsOptions);
   assertEquals(
     db.connection.prepare("PRAGMA journal_mode").get()!.journal_mode,
     "wal",
@@ -27,7 +28,7 @@ test("otk.db migrates transactionally, uses WAL and preserves prefs on reopen", 
   stop();
   assertEquals(changes.length, 2);
   db.close();
-  const reopened = new OtkDb(root, migrations);
+  const reopened = new OtkDb(root, migrations, { busyms: 5000 });
   assertEquals(new Prefs(reopened, prefsOptions).get(), {
     ...defaults,
     thinking: "show",
@@ -38,7 +39,7 @@ test("otk.db migrates transactionally, uses WAL and preserves prefs on reopen", 
   future.exec("INSERT INTO otk_migrations VALUES('prefs',2)");
   future.close();
   assertThrows(
-    () => new OtkDb(root, migrations),
+    () => new OtkDb(root, migrations, { busyms: 5000 }),
     Error,
     "Unsupported otk.db feature prefs version 2",
   );
@@ -51,7 +52,8 @@ test("otk.db migrates transactionally, uses WAL and preserves prefs on reopen", 
 });
 
 test("prefs use injected schema for reads, writes and notifications without mutating defaults", async () => {
-  const root = await fixture(), db = new OtkDb(root, migrations);
+  const root = await fixture(),
+    db = new OtkDb(root, migrations, { busyms: 5000 });
   const prefs = new Prefs(db, prefsOptions), changes: unknown[] = [];
   try {
     const insert = db.connection.prepare("INSERT INTO prefs VALUES(?,?,0)");

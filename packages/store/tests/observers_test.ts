@@ -27,7 +27,7 @@ test("committed metadata writes survive observer failure and notify independent 
     seenMigrations,
     finishesMigrations,
     projectTemplatesMigrations,
-  ]);
+  ], { busyms: 5000 });
   const logged: unknown[][] = [], previous = console.error;
   console.error = (...args) => logged.push(args);
   try {
@@ -78,7 +78,7 @@ test("committed metadata writes survive observer failure and notify independent 
 });
 
 test("preference observers receive detached payloads without changing saved or returned values", async () => {
-  const db = new OtkDb(await fixture(), [prefsMigrations]);
+  const db = new OtkDb(await fixture(), [prefsMigrations], { busyms: 5000 });
   const logged: unknown[][] = [], previous = console.error;
   console.error = (...args) => logged.push(args);
   try {
@@ -117,6 +117,7 @@ test("store observer diagnostics preserve committed outcomes when the injected r
     previous = console.error;
   console.error = (...args) => fallback.push(args);
   const db = new OtkDb(await fixture(), [seenMigrations], {
+    busyms: 5000,
     observerError: (error) => {
       reported.push(error);
       throw reportFailure;
@@ -144,7 +145,9 @@ test("store observer diagnostics preserve committed outcomes when the injected r
 });
 
 test("permission changes publish final keys once per committed write scope and nothing on rollback", async () => {
-  const db = new OtkDb(await fixture(), [permissionMigrations]);
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+    busyms: 5000,
+  });
   const store = new PermissionStore(db), changes: unknown[] = [];
   store.listen((change) => changes.push(change));
   try {
@@ -192,7 +195,9 @@ test("permission changes publish final keys once per committed write scope and n
 });
 
 test("permission journal returns committed intent identity despite observer failure", async () => {
-  const db = new OtkDb(await fixture(), [permissionMigrations]);
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+    busyms: 5000,
+  });
   const logged: unknown[][] = [], previous = console.error;
   console.error = (...args) => logged.push(args);
   try {
@@ -214,9 +219,12 @@ test("permission journal returns committed intent identity despite observer fail
       source: "manual",
     }, ["parent"]);
     assert(Number.isSafeInteger(id));
-    assertEquals(permissions.list(["parent"])[0].id, id);
+    assertEquals(permissions.list(["parent"], undefined, 101)[0].id, id);
     permissions.finish(id, { outcome: "confirmed" });
-    assertEquals(permissions.list(["s"])[0].outcome, "confirmed");
+    assertEquals(
+      permissions.list(["s"], undefined, 101)[0].outcome,
+      "confirmed",
+    );
     assertEquals(changes, [
       { kind: "policy", session: "s", enabled: true },
       {

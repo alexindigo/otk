@@ -40,7 +40,9 @@ const metadata: SessionMetadata = {
 };
 
 async function connectionFixture() {
-  const db = new OtkDb(await fixture(), [prefsMigrations, requestsMigrations]);
+  const db = new OtkDb(await fixture(), [prefsMigrations, requestsMigrations], {
+    busyms: 5000,
+  });
   const backend: Harness = {
     core: {
       kind: "test",

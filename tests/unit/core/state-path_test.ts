@@ -61,7 +61,9 @@ for (
         expected,
         "Unresolved state path escaped configuration",
       );
-      const db = new OtkDb(settings.state.path, [prefsMigrations]);
+      const db = new OtkDb(settings.state.path, [prefsMigrations], {
+        busyms: 5000,
+      });
       try {
         new Prefs(db, prefsOptions).set("timestamps", true);
         const auth = new AuthState(settings);
@@ -76,7 +78,9 @@ for (
       const restored = config(sources);
       assertEquals(restored.state.path, expected);
       assertEquals(new AuthState(restored).setupRequired, false);
-      const reopened = new OtkDb(restored.state.path, [prefsMigrations]);
+      const reopened = new OtkDb(restored.state.path, [prefsMigrations], {
+        busyms: 5000,
+      });
       try {
         assertEquals(new Prefs(reopened, prefsOptions).get().timestamps, true);
       } finally {

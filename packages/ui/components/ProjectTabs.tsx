@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText } from "@otk/client";
+import { exactCount, failureText } from "@otk/client";
 import "./ProjectTabs.css" with { type: "text" };
 import { selection, sessionState } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -216,9 +216,7 @@ export default function ProjectTabs(props: {
       meter().limit!,
       "token",
       undefined,
-      `${meter().tokens!.toLocaleString("en-US")} of ${
-        meter().limit!.toLocaleString("en-US")
-      }`,
+      `${exactCount(meter().tokens!)} of ${exactCount(meter().limit!)}`,
     );
   return (
     <section
@@ -482,7 +480,7 @@ export default function ProjectTabs(props: {
                 meter().tokens!,
                 "token",
                 undefined,
-                meter().tokens!.toLocaleString("en-US"),
+                exactCount(meter().tokens!),
               )}
             </span>
             <Show when={meter().fraction !== undefined}>

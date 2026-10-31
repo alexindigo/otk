@@ -101,7 +101,7 @@ export function typeContract(
 }
 
 test("feature-owned RPC augmentation reaches direct and invocation-time selected clients", async () => {
-  const db = new OtkDb(await fixture(), []);
+  const db = new OtkDb(await fixture(), [], { busyms: 5000 });
   const registry = new RpcRegistry(stub(), db);
   registry.register("extension.measure", {
     params: (p) => ({ id: text(p, "sessionID")!, suffix: text(p, "suffix")! }),
@@ -195,7 +195,7 @@ export function stub(
 }
 
 test("registry accepts external handlers with shared context, rejects duplicates and preserves error identity", async () => {
-  const db = new OtkDb(await fixture(), []),
+  const db = new OtkDb(await fixture(), [], { busyms: 5000 }),
     harness = stub(),
     rpc = new RpcRegistry(harness, db);
   const failure = new HarnessError("owned", "Handler failure");
@@ -249,7 +249,7 @@ test("registry accepts external handlers with shared context, rejects duplicates
 });
 
 test("each optional registration contributes only its present capability and core sessions stay usable", async () => {
-  const db = new OtkDb(await fixture(), []);
+  const db = new OtkDb(await fixture(), [], { busyms: 5000 });
   const names = [
     "prompt",
     "shell",
@@ -368,7 +368,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
   const db = new OtkDb(await fixture(), [
     prefsMigrations,
     frecencyMigrations,
-  ]);
+  ], { busyms: 5000 });
   const rpc = new RpcRegistry(harness, db);
   registerSessions(rpc, harness);
   for (const register of optional) register(rpc, harness);

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { MAX_UPLOAD_BYTES, type PromptPart } from "@otk/protocol";
+import { MAX_UPLOAD_BYTES, type PromptPart, uploadSize } from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
 import { object, text } from "../ws/params.ts";
 export { MAX_UPLOAD_BYTES } from "@otk/protocol";
@@ -20,12 +20,10 @@ export function promptParts(value: unknown): PromptPart[] {
         /=[^=]/.test(dataBase64) || /={3}/.test(dataBase64)
       ) throw new HarnessError("params", "Invalid upload base64");
       if (
-        dataBase64.length / 4 * 3 -
-            (dataBase64.endsWith("==") ? 2 : dataBase64.endsWith("=") ? 1 : 0) >
-          MAX_UPLOAD_BYTES
+        uploadSize(dataBase64) > MAX_UPLOAD_BYTES
       ) {
         throw new HarnessError(
-          "params",
+          "attachment.upload-size",
           `Upload exceeds ${MAX_UPLOAD_BYTES / 1024 / 1024} MiB`,
         );
       }

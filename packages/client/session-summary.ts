@@ -7,6 +7,7 @@ import type {
   UsageSummary,
 } from "@otk/protocol";
 import { usageCost } from "./usage.ts";
+import { exactCount } from "./format.ts";
 export function reportedTokens(
   tokens: ReportedTokens | undefined,
 ): number | undefined {
@@ -76,8 +77,9 @@ export function deletedFacts(
     { label: "Last activity", value: date(entry.timeUpdated) },
     {
       label: "Messages",
-      value: entry.digest.messageCount?.toLocaleString("en-US") ??
-        "Not yet digested",
+      value: entry.digest.messageCount == null
+        ? "Not yet digested"
+        : exactCount(entry.digest.messageCount),
     },
     ...(entry.digest.last?.agent
       ? [{ label: "Last agent", value: entry.digest.last.agent }]
@@ -91,7 +93,7 @@ export function deletedFacts(
       : []),
     ...(total
       ? [
-        { label: "Model calls", value: String(total.calls) },
+        { label: "Model calls", value: exactCount(total.calls) },
         ...Object.entries({
           "New input": total.tokens.input,
           Output: total.tokens.output,
@@ -100,7 +102,7 @@ export function deletedFacts(
           "Cache write": total.tokens.cache.write,
         }).map(([label, value]) => ({
           label,
-          value: value === null ? "Unavailable" : value.toLocaleString("en-US"),
+          value: value === null ? "Unavailable" : exactCount(value),
         })),
       ]
       : [{ label: "Reported usage", value: "Unavailable" }]),

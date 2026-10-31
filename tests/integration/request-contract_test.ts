@@ -58,7 +58,8 @@ const recipient = (events: RequestEvent[]) => ({
 test("fenced native ambiguity survives disconnect and coordinator restart without redispatch", async () => {
   const root = await tempDir("request-recovery-");
   let calls = 0;
-  const db = new OtkDb(root, [requestsMigrations]), receipts = new Requests(db);
+  const db = new OtkDb(root, [requestsMigrations], { busyms: 5000 }),
+    receipts = new Requests(db);
   const registry = new RpcRegistry({} as Harness, db);
   registry.register("probe.native", {
     params: (p) => ({ value: String(p.value) }),
@@ -134,7 +135,9 @@ test("fenced native ambiguity survives disconnect and coordinator restart withou
 });
 
 test("read cancellation is recipient-owned, liveness is nonterminal and success can reload volatile data", async () => {
-  const db = new OtkDb(await tempDir("request-read-"), [requestsMigrations]);
+  const db = new OtkDb(await tempDir("request-read-"), [requestsMigrations], {
+    busyms: 5000,
+  });
   const receipts = new Requests(db),
     registry = new RpcRegistry({} as Harness, db);
   let calls = 0, aborted = false;
@@ -225,7 +228,7 @@ test("read cancellation is recipient-owned, liveness is nonterminal and success 
 test("a lost admission asks for the same payload while expired unknown intents cannot execute", async () => {
   const db = new OtkDb(await tempDir("request-admission-"), [
     requestsMigrations,
-  ]);
+  ], { busyms: 5000 });
   const receipts = new Requests(db),
     registry = new RpcRegistry({} as Harness, db);
   const coordinator = new RequestCoordinator({ registry, receipts, policy });
@@ -264,8 +267,8 @@ test("a lost admission asks for the same payload while expired unknown intents c
 
 test("two SQLite-backed coordinators cannot dispatch one native intent twice or turn contention into failure", async () => {
   const root = await tempDir("request-contender-");
-  const firstDb = new OtkDb(root, [requestsMigrations]),
-    secondDb = new OtkDb(root, [requestsMigrations]);
+  const firstDb = new OtkDb(root, [requestsMigrations], { busyms: 5000 }),
+    secondDb = new OtkDb(root, [requestsMigrations], { busyms: 5000 });
   let calls = 0;
   const make = (db: OtkDb) => {
     const registry = new RpcRegistry({} as Harness, db);
@@ -334,7 +337,7 @@ test("two SQLite-backed coordinators cannot dispatch one native intent twice or 
 test("read readiness yields existing interactive pressure and last release cancels only its owned read", async () => {
   const db = new OtkDb(await tempDir("request-pressure-"), [
     requestsMigrations,
-  ]);
+  ], { busyms: 5000 });
   const active = new Set<string>();
   const registry = new RpcRegistry({} as Harness, db, (owner, running) => {
     if (running) active.add(owner);
@@ -414,7 +417,9 @@ test("read readiness yields existing interactive pressure and last release cance
 });
 
 test("resume retries an unavailable read and rechecks a native outcome without redispatch", async () => {
-  const db = new OtkDb(await tempDir("request-resume-"), [requestsMigrations]),
+  const db = new OtkDb(await tempDir("request-resume-"), [requestsMigrations], {
+      busyms: 5000,
+    }),
     registry = new RpcRegistry({} as Harness, db);
   let reads = 0, effects = 0, confirmed = false;
   registry.register("probe.read", {
@@ -525,7 +530,7 @@ test("actual task creation stays pending for forty seconds through same-intent r
     seenMigrations,
     finishesMigrations,
     projectTemplatesMigrations,
-  ]);
+  ], { busyms: 5000 });
   const entered = Promise.withResolvers<void>(),
     validation = Promise.withResolvers<void>();
   let lookups = 0;

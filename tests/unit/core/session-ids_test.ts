@@ -55,7 +55,7 @@ Deno.test("beta.1 references migrate atomically, merge only permitted collisions
     diagnose: (field) => diagnostics.push(field),
     now: () => 100,
   });
-  let db = new OtkDb(root, migrations);
+  let db = new OtkDb(root, migrations, { busyms: 5000 });
   try {
     seed(db);
     upgrade(db);
@@ -136,7 +136,7 @@ Deno.test("beta.1 references migrate atomically, merge only permitted collisions
     upgrade(db);
     assertEquals(dump(db), after);
     db.close();
-    db = new OtkDb(root, migrations);
+    db = new OtkDb(root, migrations, { busyms: 5000 });
     upgrade(db);
     assertEquals(dump(db), after);
   } finally {
@@ -159,7 +159,7 @@ for (
 ) {
   Deno.test(`ID upgrade rolls back after ${failed} and retries after reopen`, () => {
     const root = Deno.makeTempDirSync();
-    let db = new OtkDb(root, migrations);
+    let db = new OtkDb(root, migrations, { busyms: 5000 });
     try {
       seed(db);
       const before = dump(db);
@@ -176,7 +176,7 @@ for (
       );
       assertEquals(dump(db), before);
       db.close();
-      db = new OtkDb(root, migrations);
+      db = new OtkDb(root, migrations, { busyms: 5000 });
       createSessionReferenceUpgrade(opencodeV1SessionID.legacy, {
         diagnose: () => {},
       })(db);
@@ -195,7 +195,7 @@ for (
 
 Deno.test("conflicting task ownership aborts the entire ID upgrade", () => {
   const root = Deno.makeTempDirSync();
-  const db = new OtkDb(root, migrations);
+  const db = new OtkDb(root, migrations, { busyms: 5000 });
   try {
     seed(db);
     db.connection.exec(
@@ -216,7 +216,7 @@ Deno.test("conflicting task ownership aborts the entire ID upgrade", () => {
 
 Deno.test("unknown references and malformed preferences survive with field-only diagnostics", () => {
   const root = Deno.makeTempDirSync();
-  const db = new OtkDb(root, migrations);
+  const db = new OtkDb(root, migrations, { busyms: 5000 });
   try {
     db.connection.exec(
       "INSERT INTO tasks VALUES ('task','/p','Task',0); INSERT INTO task_sessions VALUES ('task','unknown legacy reference',0); INSERT INTO prefs VALUES ('shellLayout','{invalid preference',12)",
@@ -243,7 +243,7 @@ Deno.test("unknown references and malformed preferences survive with field-only 
 
 Deno.test("two independent startup contenders serialize the upgrade and publish one completion marker", async () => {
   const root = Deno.makeTempDirSync();
-  let db = new OtkDb(root, migrations);
+  let db = new OtkDb(root, migrations, { busyms: 5000 });
   seed(db);
   db.close();
   const owner =
@@ -253,7 +253,7 @@ Deno.test("two independent startup contenders serialize the upgrade and publish 
       JSON.stringify(owner)
     }; const db = new OtkDb(${
       JSON.stringify(root)
-    }, []); try { createSessionReferenceUpgrade(opencodeV1SessionID.legacy, {diagnose() {}})(db); } finally { db.close(); }`;
+    }, [], {busyms: 5000}); try { createSessionReferenceUpgrade(opencodeV1SessionID.legacy, {diagnose() {}})(db); } finally { db.close(); }`;
   try {
     const outcomes = await Promise.all(
       [0, 1].map(() =>
@@ -266,7 +266,7 @@ Deno.test("two independent startup contenders serialize the upgrade and publish 
     for (const outcome of outcomes) {
       assertEquals(outcome.code, 0, new TextDecoder().decode(outcome.stderr));
     }
-    db = new OtkDb(root, migrations);
+    db = new OtkDb(root, migrations, { busyms: 5000 });
     assertEquals(
       db.connection.prepare(
         "SELECT count(*) AS n FROM session_reference_upgrades",

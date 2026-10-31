@@ -4,6 +4,7 @@ import type { RpcRegistry } from "../ws/registry.ts";
 import { object, sessionID, text } from "../ws/params.ts";
 import { Requests, type StoreWrite } from "@otk/store";
 import type { ContentSession } from "@otk/protocol";
+import { MAX_SESSION_TITLE } from "@otk/protocol";
 import type { RpcContext } from "../ws/registry.ts";
 import { nativeEffect, nativeExecution } from "../requests/policies.ts";
 import {
@@ -148,8 +149,11 @@ export function register(
     params(p) {
       const id = sessionID(p)!;
       const title = text(p, "title")!.trim();
-      if (!title || title.length > 200) {
-        throw new HarnessError("params", "title must be 1..200 characters");
+      if (!title || title.length > MAX_SESSION_TITLE) {
+        throw new HarnessError(
+          "session.title",
+          `title must be 1..${MAX_SESSION_TITLE} characters`,
+        );
       }
       return { sessionID: id, title };
     },

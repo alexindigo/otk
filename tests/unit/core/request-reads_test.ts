@@ -39,7 +39,9 @@ test("every body/catalog read has volatile recovery, target scope and caller can
     ["question.list", { sessionID: "tstv1-one" }],
   ] as const;
   for (const [method, params] of cases) {
-    const db = new OtkDb(await fixture(), [requestsMigrations]);
+    const db = new OtkDb(await fixture(), [requestsMigrations], {
+      busyms: 5000,
+    });
     let observed: AbortSignal | undefined, calls = 0;
     let release!: () => void;
     const held = new Promise<void>((resolve) => release = resolve);

@@ -2,7 +2,8 @@
 import { resolve } from "@std/path";
 import type { OtkDb, StoreWrite } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
-import { mergeRecords, MetadataChanges } from "./metadata.ts";
+import { mergeRecords, MetadataChanges, validateKey } from "./metadata.ts";
+export const FRECENCY_RETENTION = 1000;
 
 /** The frecency feature owns its schema versions independently of preferences. */
 export const frecencyMigrations: FeatureMigrations = {
@@ -30,13 +31,11 @@ export interface FrecencyChange {
 /** Application-specific error construction for invalid path keys. */
 export interface FrecencyOptions {
   readonly invalid: () => Error;
+  readonly maxLength: number;
 }
 
 function key(value: string, options: FrecencyOptions): string {
-  if (!value.length || value.length > 4096 || value.includes("\0")) {
-    throw options.invalid();
-  }
-  return value;
+  return validateKey(value, { ...options, blank: true });
 }
 /** Canonical path persistence with a global 1000-entry bound. */
 export class Frecency extends MetadataChanges<FrecencyChange> {
@@ -60,8 +59,10 @@ export class Frecency extends MetadataChanges<FrecencyChange> {
   }
   list(directory: string): FrecencyEntry[] {
     return this.db.connection.prepare(
-      "SELECT path,score,last FROM frecency WHERE directory=? ORDER BY last DESC LIMIT 1000",
-    ).all(this.#key(resolve(this.#key(directory)))).map((row) => ({
+      "SELECT path,score,last FROM frecency WHERE directory=? ORDER BY last DESC,rowid DESC LIMIT ?",
+    ).all(this.#key(resolve(this.#key(directory))), FRECENCY_RETENTION).map((
+      row,
+    ) => ({
       path: String(row.path),
       score: Number(row.score),
       last: Number(row.last),
@@ -87,8 +88,8 @@ export class Frecency extends MetadataChanges<FrecencyChange> {
         remove: [],
       }, scope);
       const removed = this.db.connection.prepare(
-        "DELETE FROM frecency WHERE rowid NOT IN (SELECT rowid FROM frecency ORDER BY last DESC,rowid DESC LIMIT 1000) RETURNING directory,path",
-      ).all();
+        "DELETE FROM frecency WHERE rowid NOT IN (SELECT rowid FROM frecency ORDER BY last DESC,rowid DESC LIMIT ?) RETURNING directory,path",
+      ).all(FRECENCY_RETENTION);
       const directories = new Map<string, string[]>();
       for (const row of removed) {
         const directory = String(row.directory),

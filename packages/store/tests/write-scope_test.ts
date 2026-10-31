@@ -24,8 +24,8 @@ import { test } from "../../../tests/support/resources.ts";
 import { fixture, frecencyOptions, prefsOptions } from "./support.ts";
 
 test("explicit write scopes reject foreign, expired, async and accidental nested work", async () => {
-  const db = new OtkDb(await fixture(), [tasksMigrations]);
-  const other = new OtkDb(await fixture(), [tasksMigrations]);
+  const db = new OtkDb(await fixture(), [tasksMigrations], { busyms: 5000 });
+  const other = new OtkDb(await fixture(), [tasksMigrations], { busyms: 5000 });
   try {
     let expired!: StoreWrite;
     db.write((tx) => {
@@ -59,7 +59,7 @@ test("every local metadata writer joins one rollback and publishes only detached
     projectTemplatesMigrations,
     permissionMigrations,
     requestsMigrations,
-  ], { observerError: (e) => failures.push(e) });
+  ], { busyms: 5000, observerError: (e) => failures.push(e) });
   try {
     const tasks = new Tasks(db), projects = new Projects(db, () => 8);
     const prefs = new Prefs(db, prefsOptions), seen = new Seen(db, () => 9);
@@ -159,7 +159,7 @@ test("every local metadata writer joins one rollback and publishes only detached
     assertEquals(files.list("/p"), []);
     assertEquals(templates.list(), ["~/Projects/{project}"]);
     assertEquals(permissions.enabled(), []);
-    assertEquals(permissions.list(["s"]), []);
+    assertEquals(permissions.list(["s"], undefined, 101), []);
     assertEquals(prefs.get().thinking, "hide");
     assertEquals(events, []);
     assertEquals(requests.get(intent)?.state, "queued");
@@ -167,7 +167,10 @@ test("every local metadata writer joins one rollback and publishes only detached
     assertEquals(tasks.list()[0].sessions, ["s2"]);
     assertEquals(files.list("/p")[0].score, 1);
     assertEquals(seen.time("u", "s"), 9);
-    assertEquals(permissions.list(["parent"])[0].outcome, "confirmed");
+    assertEquals(
+      permissions.list(["parent"], undefined, 101)[0].outcome,
+      "confirmed",
+    );
     assertEquals(prefs.get().thinking, "show");
     assertEquals(requests.get(intent)?.state, "succeeded");
     assertEquals<unknown[]>(

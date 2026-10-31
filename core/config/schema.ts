@@ -21,6 +21,7 @@ export const SERVICE_SCHEMA: Schema = {
     cookiesamesite: "string",
   },
   state: { path: "string" },
+  storage: { busyms: "int" },
   harness: {
     type: "string",
     url: "string",
@@ -87,6 +88,7 @@ export interface ServiceConfig {
     cookiesamesite: string;
   };
   state: { path: string };
+  storage: { busyms: number };
   harness: {
     type: string;
     url: string;

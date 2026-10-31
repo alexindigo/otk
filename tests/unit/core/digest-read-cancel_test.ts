@@ -77,7 +77,9 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
       ready ||= value.delta.summary.state === "ready";
     },
   });
-  const db = new OtkDb(root, [prefsMigrations, requestsMigrations]);
+  const db = new OtkDb(root, [prefsMigrations, requestsMigrations], {
+    busyms: 5000,
+  });
   const harness = stub({
     usage: {
       getUsage: async (id: string, turnID: string, signal?: AbortSignal) => ({
@@ -187,7 +189,7 @@ test("RPC read cancellation is connection-scoped and ignores completed, duplicat
   const db = new OtkDb(await tempDir("rpc-read-cancel-"), [
     prefsMigrations,
     requestsMigrations,
-  ]);
+  ], { busyms: 5000 });
   const signals: AbortSignal[] = [];
   const harness = stub({
     usage: {

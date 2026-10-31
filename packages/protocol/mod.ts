@@ -12,6 +12,8 @@ export * from "./errors.ts";
 export * from "./frecency.ts";
 export * from "./history.ts";
 export * from "./policies/attachments.ts";
+export * from "./policies/titles.ts";
+export * from "./paths.ts";
 export * from "./index.ts";
 export * from "./inbox.ts";
 export * from "./messages.ts";

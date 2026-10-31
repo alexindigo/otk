@@ -27,7 +27,7 @@ export function registerPatchTool(tools: ToolRegistry): void {
       },
       target: call.files.map((file) =>
         file.path
-          ? relativeTarget(file.path, context.directory)
+          ? relativeTarget(file.path, context.directory, context.paths)
           : "Path not reported"
       ).join(", "),
       changes: changeCounts(call.files),

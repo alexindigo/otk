@@ -133,7 +133,7 @@ test("V3 models and agents expose connected public metadata over WS and preserve
       name: "Scripted with variants",
       variants: ["low", "high"],
       status: "active",
-      free: false,
+      free: true,
       cost: { input: 0, output: 0, cache: { read: 0, write: 0 } },
       releaseDate: "2026-10-17",
     });
@@ -151,7 +151,7 @@ test("V3 models and agents expose connected public metadata over WS and preserve
       "plain",
       "scripted",
     ]);
-    assert(second.models.every((model) => !model.free));
+    assert(second.models.every((model) => model.free === true));
     assert(catalog.providers.find((provider) => provider.id === "opencode")!
       .models.some((model) => model.free));
     const agents = await client.rpc<AgentOption[]>("agents.list", {

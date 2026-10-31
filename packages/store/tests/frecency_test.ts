@@ -6,14 +6,14 @@ import { fixture, frecencyOptions, migrations } from "./support.ts";
 
 test("frecency stores canonical project paths, increments and survives reopen", async () => {
   const root = await fixture(),
-    db = new OtkDb(root, migrations),
+    db = new OtkDb(root, migrations, { busyms: 5000 }),
     store = new Frecency(db, frecencyOptions);
   store.bump("/project", "README.md");
   store.bump("/project", "./README.md");
   assertEquals(store.list("/project")[0].score, 2);
   assertEquals(store.list("/project")[0].path, "/project/README.md");
   db.close();
-  const next = new OtkDb(root, migrations);
+  const next = new OtkDb(root, migrations, { busyms: 5000 });
   try {
     assertEquals(
       new Frecency(next, frecencyOptions).list("/project")[0].score,
@@ -27,7 +27,7 @@ test("frecency stores canonical project paths, increments and survives reopen", 
 
 test("frecency persists at most 1000 canonical entries across projects", async () => {
   const root = await fixture(),
-    db = new OtkDb(root, migrations),
+    db = new OtkDb(root, migrations, { busyms: 5000 }),
     store = new Frecency(db, frecencyOptions);
   try {
     for (let i = 0; i < 1005; i++) {
@@ -51,7 +51,7 @@ test("frecency persists at most 1000 canonical entries across projects", async (
 
 test("frecency rejects oversized keys before persisting them", async () => {
   const root = await fixture(),
-    db = new OtkDb(root, migrations),
+    db = new OtkDb(root, migrations, { busyms: 5000 }),
     store = new Frecency(db, frecencyOptions);
   try {
     for (const key of ["x".repeat(4097), "", "nul\0key"]) {

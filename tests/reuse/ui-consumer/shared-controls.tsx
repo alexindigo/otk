@@ -1,9 +1,19 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createEffect, createSignal, type Element, Show } from "solid-js";
+import {
+  createEffect,
+  createSignal,
+  type Element,
+  onCleanup,
+  Show,
+} from "solid-js";
 import {
   CommandHub,
   createInbox,
   createSessionSubmission,
+  duration,
+  exactCount,
+  NotificationHub,
+  relativeTime,
   type SidecarState,
 } from "@otk/client";
 import {
@@ -28,9 +38,11 @@ import {
   NotificationSettings,
   paintVisualPreferences,
   Palette,
+  PathProvider,
   ProjectInbox,
   Prompt,
   QuestionDock,
+  registerBadgeChannel,
   registerEditTool,
   registerGenericTool,
   registerPatchTool,
@@ -41,10 +53,56 @@ import {
   SessionProvider,
   Sidebar,
   ToolLine,
+  ToolOutput,
+  ToolPath,
   TranscriptContext,
   UiProvider,
   VisualSettings,
 } from "@otk/ui";
+
+export function MetadataPolicy(): Element {
+  const commands = new CommandHub();
+  const hub = new NotificationHub(
+    () => ({ channels: ["badge"] }),
+    async () => {},
+    () => {},
+  );
+  const release = registerBadgeChannel(hub);
+  hub.publish({
+    id: "attention",
+    kind: "permission",
+    title: "Needs attention",
+    sessionRef: { sidecar: "external", session: "tstv1-external" },
+    actions: [],
+  });
+  onCleanup(() => {
+    hub.stop();
+    release();
+  });
+  return (
+    <CommandProvider commands={commands}>
+      <main>
+        <h1>Independent metadata consumer</h1>
+        <output data-format>
+          {exactCount(1234567)} {duration(1234)} {relativeTime(0, 90_000_000)}
+        </output>
+        <PathProvider paths={{ style: "win32", separator: "\\" }}>
+          <div data-path>
+            <ToolPath
+              path="c:\\project\\src\\file.ts"
+              directory="C:\\Project"
+            />
+          </div>
+        </PathProvider>
+        <ToolOutput
+          text={Array.from({ length: 15 }, (_, i) => `Line ${i + 1}`).join(
+            "\n",
+          )}
+        />
+      </main>
+    </CommandProvider>
+  );
+}
 
 export function Indicators(props: { onTheme(id: string): void }): Element {
   const healthy: SidecarState = {

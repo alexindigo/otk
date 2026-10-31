@@ -15,12 +15,18 @@ export function registerBadgeChannel(hub: NotificationHub): () => void {
     const style = getComputedStyle(document.documentElement);
     const bg = style.getPropertyValue("--otk-bg").trim(),
       fg = style.getPropertyValue("--otk-fg").trim();
+    const escape = (value: string) =>
+      value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll(
+        "<",
+        "&lt;",
+      ).replaceAll(">", "&gt;");
+    const font = escape(style.getPropertyValue("--font-ui").trim());
     const attention = style.getPropertyValue("--otk-attention").trim();
     const count = ids.size;
     const svg =
-      `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="3" fill="${bg}"/><text x="16" y="22" text-anchor="middle" font-family="monospace" font-size="18" fill="${fg}">O</text>${
+      `<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32"><rect width="32" height="32" rx="3" fill="${bg}"/><text x="16" y="22" text-anchor="middle" font-family="${font}" font-size="18" fill="${fg}">O</text>${
         count
-          ? `<circle cx="23" cy="9" r="9" fill="${attention}"/><text x="23" y="12" text-anchor="middle" font-family="monospace" font-size="9" fill="${bg}">${
+          ? `<circle cx="23" cy="9" r="9" fill="${attention}"/><text x="23" y="12" text-anchor="middle" font-family="${font}" font-size="9" fill="${bg}">${
             count > 99 ? "99+" : count
           }</text>`
           : ""

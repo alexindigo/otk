@@ -31,7 +31,9 @@ const entry = (id: string, parentID?: string): IndexEntry => ({
 const tick = () => new Promise((resolve) => setTimeout(resolve, 10));
 
 test("automatic failure is attempted once across unrelated index changes; request and connection generations permit retry", async () => {
-  const db = new OtkDb(await fixture(), [permissionMigrations]);
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+    busyms: 5000,
+  });
   const store = new PermissionStore(db), index = new IndexStore();
   let request: PermissionRequest = {
     id: "ask",
@@ -64,14 +66,17 @@ test("automatic failure is attempted once across unrelated index changes; reques
     store.setAuto("tstv1-root", true);
     index.reset([entry("tstv1-root")]);
     await waitFor(
-      () => store.list(["tstv1-root"])[0]?.outcome,
+      () => store.list(["tstv1-root"], undefined, 101)[0]?.outcome,
       (s) => s === "failed",
     );
     for (let n = 0; n < 12; n++) {
       index.upsert({ ...entry("tstv1-other"), timeUpdated: n + 2 });
       await tick();
     }
-    assertEquals([attempts, store.list(["tstv1-root"]).length], [1, 1]);
+    assertEquals(
+      [attempts, store.list(["tstv1-root"], undefined, 101).length],
+      [1, 1],
+    );
     assertEquals(
       lists,
       1,
@@ -90,11 +95,17 @@ test("automatic failure is attempted once across unrelated index changes; reques
       detail: { kind: "bash", command: "printf changed" },
     };
     index.upsert(entry("tstv1-root"));
-    await waitFor(() => store.list(["tstv1-root"]).length, (n) => n === 2);
+    await waitFor(
+      () => store.list(["tstv1-root"], undefined, 101).length,
+      (n) => n === 2,
+    );
     await tick();
     assertEquals(attempts, 2);
     index.reset([entry("tstv1-root")]);
-    await waitFor(() => store.list(["tstv1-root"]).length, (n) => n === 3);
+    await waitFor(
+      () => store.list(["tstv1-root"], undefined, 101).length,
+      (n) => n === 3,
+    );
     await tick();
     assertEquals(attempts, 3);
   } finally {
@@ -104,7 +115,8 @@ test("automatic failure is attempted once across unrelated index changes; reques
 });
 
 test("server rejects helper policy and removes deleted session policy durably without journal-driven policy revisions", async () => {
-  const path = await fixture(), db = new OtkDb(path, [permissionMigrations]);
+  const path = await fixture(),
+    db = new OtkDb(path, [permissionMigrations], { busyms: 5000 });
   const store = new PermissionStore(db), index = new IndexStore();
   const capability = {
     listPermissions: () => Promise.resolve([]),
@@ -185,7 +197,7 @@ test("server rejects helper policy and removes deleted session policy durably wi
     feature.close();
     db.close();
   }
-  const reopened = new OtkDb(path, [permissionMigrations]);
+  const reopened = new OtkDb(path, [permissionMigrations], { busyms: 5000 });
   try {
     assertEquals(new PermissionStore(reopened).enabled(), []);
   } finally {

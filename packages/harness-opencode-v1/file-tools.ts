@@ -52,7 +52,10 @@ export function mapFileTool(
       tool: "edit",
       path,
       files: text(metadata.diff)
-        ? parseDiff(text(metadata.diff)).map((file) => ({ ...file, path }))
+        ? parseDiff(text(metadata.diff)).map((file) => ({
+          ...file,
+          path: path || file.path,
+        }))
         : [],
       diagnostics: mapDiagnostics(metadata.diagnostics, path),
     };
@@ -82,13 +85,17 @@ export function mapFileTool(
             ? "deleted"
             : file.type === "move"
             ? "moved"
-            : "modified";
+            : file.type === "update"
+            ? "modified"
+            : "unknown";
           return text(file.patch)
             ? parseDiff(text(file.patch)).map((diff) => ({
               ...diff,
-              path: destination,
-              oldPath: status === "moved" ? source : undefined,
-              status,
+              path: destination || diff.path,
+              oldPath: status === "moved"
+                ? source || diff.oldPath
+                : diff.oldPath,
+              status: status === "unknown" ? diff.status : status,
               diagnostics: mapDiagnostics(metadata.diagnostics, destination),
             }))
             : [];

@@ -23,6 +23,9 @@ cookiesamesite = "strict" # OTK_AUTH_COOKIESAMESITE — strict/none; none requir
 [state]
 path = "" # OTK_STATE_PATH — empty means XDG state home/otk/<port>
 
+[storage]
+busyms = 5000 # OTK_STORAGE_BUSYMS — user-data SQLite lock wait in milliseconds; nonnegative safe integer
+
 [harness]
 type = "opencode-v1" # OTK_HARNESS_TYPE — harness adapter (opencode1 is a deprecated alias)
 url = "http://127.0.0.1:4097" # OTK_HARNESS_URL — opencode server base URL

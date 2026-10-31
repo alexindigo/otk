@@ -3,6 +3,7 @@ import "./Reasoning.css" with { type: "text" };
 import { Show } from "solid-js";
 import { retainedDisclosure } from "../features/transcript-context.tsx";
 import type { Part } from "@otk/protocol";
+import { duration } from "@otk/client";
 import Blocks from "./Blocks.tsx";
 import ActivityIndicator from "./ActivityIndicator.tsx";
 import { ownedAction } from "../keyboard/context.tsx";
@@ -38,10 +39,7 @@ export default function Reasoning(
         </Show>
         {props.part.time.end === undefined ? "Thinking…" : "Thought for"}
         {props.part.time.end !== undefined
-          ? ` ${
-            Math.max(0, (props.part.time.end - props.part.time.start) / 1000)
-              .toFixed(1)
-          }s`
+          ? ` ${duration(props.part.time.end - props.part.time.start)}`
           : ""}
       </>
     );

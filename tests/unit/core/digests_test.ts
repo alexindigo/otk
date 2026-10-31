@@ -11,7 +11,7 @@ import {
 import { tempDir, test } from "../../support/resources.ts";
 
 test("visible scopes are validated, optional, connection-owned replacements and release only their own socket", async () => {
-  const db = new OtkDb(await tempDir("digest-scope-"), []);
+  const db = new OtkDb(await tempDir("digest-scope-"), [], { busyms: 5000 });
   const scopes: unknown[] = [], released: string[] = [];
   const backend: Harness = {
     core: {

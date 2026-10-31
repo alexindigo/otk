@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { RequestMetadata } from "./request-metadata.ts";
+export const ACTIVITY_PAGE_SIZE = 100;
 export const approvalsRequestMetadata: Readonly<
   Record<string, RequestMetadata>
 > = {

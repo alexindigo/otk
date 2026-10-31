@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { MAX_UPLOAD_BYTES, type PromptPart } from "@otk/protocol";
+import { RequestFailure } from "@otk/client";
 export async function upload(
   file: File,
 ): Promise<Extract<PromptPart, { source: "upload" }>> {
   if (file.size > MAX_UPLOAD_BYTES) {
-    throw new Error(`Upload exceeds ${MAX_UPLOAD_BYTES / 1024 / 1024} MiB`);
+    throw new RequestFailure({
+      code: "attachment.upload-size",
+      retry: "new-intent",
+      diagnosticID: crypto.randomUUID(),
+    });
   }
   const data = new Uint8Array(await file.arrayBuffer());
   let binary = "";

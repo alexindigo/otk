@@ -3,6 +3,7 @@ import { HarnessError } from "@otk/harness";
 import type { Client } from "./client.ts";
 import type { Info, RawPart } from "./types.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
+export const NATIVE_SCAN_ROWS = 100;
 
 export interface NativeMessage {
   info: Info;
@@ -55,7 +56,13 @@ export class Messages {
     let before: string | undefined;
     do {
       signal?.throwIfAborted();
-      const page = await this.page(id, 100, before, directory, signal);
+      const page = await this.page(
+        id,
+        NATIVE_SCAN_ROWS,
+        before,
+        directory,
+        signal,
+      );
       signal?.throwIfAborted();
       yield* page.items;
       before = page.next;

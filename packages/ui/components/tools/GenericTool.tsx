@@ -17,7 +17,7 @@ export default function GenericTool(
   return (
     <>
       <Show when={props.output}>
-        <ToolOutput text={props.call.output || ""} limit={3} />
+        <ToolOutput text={props.call.output || ""} />
         <Show
           when={props.call.tool === "external" && props.call.outputTruncated}
         >

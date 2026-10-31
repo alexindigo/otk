@@ -14,6 +14,8 @@ cookiename = ""
 cookiesamesite = "strict"
 [state]
 path = ""
+[storage]
+busyms = 5000
 [harness]
 type = "test"
 url = "http://127.0.0.1:4097"

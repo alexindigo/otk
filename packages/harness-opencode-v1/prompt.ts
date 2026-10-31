@@ -77,8 +77,14 @@ export async function mapPromptParts(
     for (const part of attachments) {
       if (part.source !== "upload") continue;
       const size = uploadSize(part.dataBase64);
+      if (size > MAX_UPLOAD_BYTES) {
+        throw new HarnessError(
+          "attachment.upload-size",
+          "Upload exceeds the per-file byte limit",
+        );
+      }
       if (
-        size > MAX_UPLOAD_BYTES || (policy && (bytes += size) > policy.maxbytes)
+        policy && (bytes += size) > policy.maxbytes
       ) {
         throw new HarnessError(
           "attachment",

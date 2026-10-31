@@ -31,7 +31,7 @@ export function mapTodos(value: unknown): Todo[] {
       return [{
         content: todo.content,
         status: todo.status as Todo["status"],
-        priority: string(todo.priority) || "medium",
+        priority: string(todo.priority),
       }];
     })
     : [];
@@ -70,6 +70,10 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
   if (fileTool) return fileTool;
   const number = (value: unknown) =>
     typeof value === "number" && Number.isFinite(value) ? value : undefined;
+  const count = (value: unknown) =>
+    Number.isSafeInteger(value) && Number(value) >= 0
+      ? Number(value)
+      : undefined;
   const display = record(metadata.display);
   if (part.tool === "read" && display.type !== "directory") {
     return {
@@ -92,16 +96,22 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
       ...base,
       tool: "search",
       mode,
-      pattern: string(input.pattern) || "*",
+      pattern: string(input.pattern),
       path: string(input.path) ||
         (mode === "list" ? string(input.filePath) : undefined),
-      matches: number(
+      matches: count(
         mode === "grep"
           ? metadata.matches
           : mode === "list" && display.type === "directory"
           ? display.totalEntries
           : metadata.count,
-      ) || 0,
+      ) ??
+        (base.outputContent?.kind === "matches" && !base.outputContent.truncated
+          ? base.outputContent.matches.length
+          : base.outputContent?.kind === "paths" &&
+              !base.outputContent.truncated
+          ? base.outputContent.total ?? base.outputContent.paths.length
+          : undefined),
     };
   }
   if (part.tool === "webfetch") {

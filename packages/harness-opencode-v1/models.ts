@@ -61,7 +61,7 @@ export function mapModels(
         name: model.name,
         variants: Object.keys(model.variants ?? {}),
         status: model.status,
-        free: provider.id === "opencode" && model.cost?.input === 0,
+        free: free(model.cost),
         ...([
             model.cost?.input,
             model.cost?.output,
@@ -104,4 +104,22 @@ export function mapModels(
     }
   }
   return catalog;
+}
+
+/** Unknown rates cannot establish free; any reported positive rate establishes paid. */
+function free(
+  cost: Providers["providers"][number]["models"][string]["cost"],
+): boolean | null {
+  const rates = [
+    cost?.input,
+    cost?.output,
+    cost?.cache?.read,
+    cost?.cache?.write,
+  ];
+  if (
+    rates.some((rate) =>
+      typeof rate === "number" && Number.isFinite(rate) && rate > 0
+    )
+  ) return false;
+  return rates.every((rate) => rate === 0) ? true : null;
 }

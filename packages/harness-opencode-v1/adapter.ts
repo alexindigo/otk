@@ -31,6 +31,7 @@ import {
   mapStreamingShell,
 } from "./map.ts";
 import { MessageClocks } from "./message-clocks.ts";
+import { SelectionIntents } from "./selection-intent.ts";
 import { messageOutput } from "./message-clock.ts";
 import { mapPermission } from "./map.ts";
 import type {
@@ -55,7 +56,12 @@ import { resources } from "./resources.ts";
 import { commands } from "./commands.ts";
 import { type Launch, shell } from "./shell.ts";
 import { type PendingPermission, permissions } from "./permissions.ts";
-import { restore, revert, revertPreview } from "./revert.ts";
+import {
+  restore,
+  revert,
+  REVERT_PROMPT_LIMIT,
+  revertPreview,
+} from "./revert.ts";
 import { historyEntry } from "./history.ts";
 import { sessionActions } from "./session-actions.ts";
 import { sessionDirectory } from "./directory.ts";
@@ -112,6 +118,7 @@ export class OpencodeV1Adapter implements Harness {
   #catalogExecutor?: CatalogExecutor;
   #catalogReads: import("@otk/harness").ProviderReadPort;
   #clocks: MessageClocks;
+  #selectionIntents = new SelectionIntents();
   #revertReads = new Map<string, AbortController>();
   get #stopped(): boolean {
     return !this.#run || this.#run.controller.signal.aborted;
@@ -333,6 +340,8 @@ export class OpencodeV1Adapter implements Harness {
         this.#tasks.release(id);
         this.#recovery.release(id);
         this.#clocks.release(id);
+        if (id === undefined) this.#selectionIntents.clear();
+        else this.#selectionIntents.release(ids.decode(id));
         this.#releaseRevert(id);
       },
       recovering: (id) => this.#recovery.snapshot(id),
@@ -656,6 +665,7 @@ export class OpencodeV1Adapter implements Harness {
     await this.#catalogExecutor?.stop();
     this.#permissions.clear();
     this.#questions.clear();
+    this.#selectionIntents.clear();
     this.#reverts.clear();
     this.#transcript.release();
     this.#retired.clear();
@@ -692,6 +702,7 @@ export class OpencodeV1Adapter implements Harness {
     if (!count) this.#reverts.delete(id);
     if (!count) this.#recovery.release(id);
     if (!count) this.#clocks.release(id);
+    if (!count) this.#selectionIntents.release(ids.decode(id));
     if (!count) this.#releaseRevert(id);
     if (!count) this.#transcript.release(id);
   }
@@ -726,7 +737,7 @@ export class OpencodeV1Adapter implements Harness {
     const projected = this.#db.revertedPrompts(
       id,
       session.revert.messageID,
-      50,
+      REVERT_PROMPT_LIMIT,
     );
     let prompt: import("@otk/protocol").HistoryEntry | undefined;
     try {
@@ -783,7 +794,7 @@ export class OpencodeV1Adapter implements Harness {
             preview: revertPreview(text),
           });
           bounded.sort((a, b) => a.messageID.localeCompare(b.messageID));
-          if (bounded.length > 50) bounded.pop();
+          if (bounded.length > REVERT_PROMPT_LIMIT) bounded.pop();
           if (message.info.id === session.revert.messageID) boundary = message;
         }
       }
@@ -905,6 +916,7 @@ export class OpencodeV1Adapter implements Harness {
       controller.signal.addEventListener("abort", () => {
         this.#recovery.release();
         this.#clocks.release();
+        this.#selectionIntents.clear();
         this.#releaseRevert();
         this.#tasks.release();
         this.buffers.reset();
@@ -1035,6 +1047,7 @@ export class OpencodeV1Adapter implements Harness {
     const sink = this.#sink;
     this.#recovery.release();
     this.#reverts.clear();
+    this.#selectionIntents.clear();
     this.#tasks.release();
     // Every authoritative resync starts a new content generation. Keep viewers,
     // but never carry raw streaming seeds or timers across a disposed instance.
@@ -1279,6 +1292,7 @@ export class OpencodeV1Adapter implements Harness {
     this.#clocks.release(id);
     this.#releaseRevert(id);
     this.buffers.removeSession(id);
+    this.#selectionIntents.release(ids.decode(id));
     this.#transcript.release(id);
   }
   /** Read the shared metadata identity for an accepted native authority fact. */
@@ -1344,6 +1358,7 @@ export class OpencodeV1Adapter implements Harness {
       const id = ids.encode(nativeID), revision = ++this.#digestRevision;
       if (type === "session.deleted") {
         this.#retired.add(id);
+        this.#selectionIntents.release(nativeID);
         this.#clocks.release(id);
         this.#releaseRevert(id);
         const metadata = this.#metadata(id) ?? mapIndex(p.info as Session);
@@ -1648,6 +1663,7 @@ export class OpencodeV1Adapter implements Harness {
     }
     if (type === "message.removed") {
       this.#clocks.release(sessionID, String(p.messageID));
+      this.#selectionIntents.release(ids.decode(sessionID));
       this.#recovery.message(String(p.messageID), sessionID);
       this.buffers.removeMessage(String(p.messageID));
     }
@@ -1731,6 +1747,7 @@ export class OpencodeV1Adapter implements Harness {
     switch (type) {
       case "message.updated":
         {
+          this.#selectionIntents.header(info!);
           const message = mapMessage(
               info!,
               [],
@@ -1785,6 +1802,8 @@ export class OpencodeV1Adapter implements Harness {
         const part = finishedPart ||
           this.buffers.snapshot(raw.id, sessionID, raw.messageID)?.part ||
           mapPart(raw, waiting);
+        const intent = this.#selectionIntents.part(raw);
+        if (part.kind === "tool" && intent) part.call.selectionIntent = intent;
         if (part.kind === "tool" && raw.tool === "task") {
           part.call = this.#tasks.shape(raw);
           if (!this.#current(controller)) return;

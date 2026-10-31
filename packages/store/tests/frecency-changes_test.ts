@@ -3,8 +3,11 @@ import { assertEquals, assertThrows } from "@std/assert";
 import { Frecency, frecencyMigrations, OtkDb } from "../mod.ts";
 Deno.test("global frecency pruning publishes removals in their original directory and rollback is silent", async () => {
   const root = await Deno.makeTempDir();
-  const db = new OtkDb(root, [frecencyMigrations]);
-  const store = new Frecency(db, { invalid: () => new Error("invalid path") });
+  const db = new OtkDb(root, [frecencyMigrations], { busyms: 5000 });
+  const store = new Frecency(db, {
+    maxLength: 4096,
+    invalid: () => new Error("invalid path"),
+  });
   const changes: unknown[] = [];
   const stop = store.listen((value) => changes.push(value));
   try {

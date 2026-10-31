@@ -61,7 +61,7 @@ test("message page registration preserves opaque cursors and per-call cancellati
     },
     capabilities: {},
   };
-  const store = new OtkDb(await fixture(), []);
+  const store = new OtkDb(await fixture(), [], { busyms: 5000 });
   const rpc = new RpcRegistry(backend, store);
   register(rpc, backend);
   try {

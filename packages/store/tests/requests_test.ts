@@ -17,7 +17,7 @@ import { prefsOptions } from "./support.ts";
 import { record } from "./request-fixture.ts";
 
 test("scope conflict witnesses outlive retention while an older native outcome is unknown", async () => {
-  const db = new OtkDb(await fixture(), [requestsMigrations]);
+  const db = new OtkDb(await fixture(), [requestsMigrations], { busyms: 5000 });
   const receipts = new Requests(db), window = receipts.window(0, 100);
   const old = {
     ...record(window.id, "old"),
@@ -49,8 +49,9 @@ test("scope conflict witnesses outlive retention while an older native outcome i
 });
 
 test("request admission, CAS, expiry and bounded recovery retain unknown effects", async () => {
-  const path = await fixture(), db = new OtkDb(path, [requestsMigrations]);
-  const other = new OtkDb(path, [requestsMigrations]);
+  const path = await fixture(),
+    db = new OtkDb(path, [requestsMigrations], { busyms: 5000 });
+  const other = new OtkDb(path, [requestsMigrations], { busyms: 5000 });
   try {
     const requests = new Requests(db), contender = new Requests(other);
     const window = requests.window(0, 100);
@@ -126,7 +127,9 @@ test("request admission, CAS, expiry and bounded recovery retain unknown effects
 
 test("effect and completion receipt commit together and survive reopen without a second task", async () => {
   const path = await fixture();
-  let db = new OtkDb(path, [requestsMigrations, tasksMigrations]);
+  let db = new OtkDb(path, [requestsMigrations, tasksMigrations], {
+    busyms: 5000,
+  });
   try {
     let requests = new Requests(db), tasks = new Tasks(db);
     const input = record(requests.window(0, 100).id);
@@ -143,7 +146,9 @@ test("effect and completion receipt commit together and survive reopen without a
       })
     );
     db.close();
-    db = new OtkDb(path, [requestsMigrations, tasksMigrations]);
+    db = new OtkDb(path, [requestsMigrations, tasksMigrations], {
+      busyms: 5000,
+    });
     requests = new Requests(db);
     tasks = new Tasks(db);
     assertEquals(tasks.list(), []);
@@ -157,7 +162,9 @@ test("effect and completion receipt commit together and survive reopen without a
       }, tx);
     });
     db.close();
-    db = new OtkDb(path, [requestsMigrations, tasksMigrations]);
+    db = new OtkDb(path, [requestsMigrations, tasksMigrations], {
+      busyms: 5000,
+    });
     requests = new Requests(db);
     tasks = new Tasks(db);
     assertEquals(requests.admit(input).inserted, false);
@@ -178,7 +185,7 @@ test("effect and completion receipt commit together and survive reopen without a
 test("request migration rolls back and retries without changing existing user metadata or upgrade markers", async () => {
   const path = await fixture();
   const before = [prefsMigrations, tasksMigrations, sessionReferenceMigrations];
-  let db = new OtkDb(path, before);
+  let db = new OtkDb(path, before, { busyms: 5000 });
   const task = new Tasks(db).create("/p", "retained", ["opcv1-ses_a"]);
   new Prefs(db, prefsOptions).set("timestamps", true);
   const markerSchema = db.connection.prepare(
@@ -195,9 +202,9 @@ test("request migration rolls back and retries without changing existing user me
         version: 1,
         sql: sql + "; INSERT INTO missing_table VALUES(1);",
       }],
-    }])
+    }], { busyms: 5000 })
   );
-  db = new OtkDb(path, before);
+  db = new OtkDb(path, before, { busyms: 5000 });
   try {
     assertEquals(
       db.connection.prepare(
@@ -210,7 +217,7 @@ test("request migration rolls back and retries without changing existing user me
   } finally {
     db.close();
   }
-  db = new OtkDb(path, [...before, requestsMigrations]);
+  db = new OtkDb(path, [...before, requestsMigrations], { busyms: 5000 });
   try {
     assertEquals(new Tasks(db).get(task.id), task);
     assertEquals(

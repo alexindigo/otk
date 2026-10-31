@@ -10,6 +10,11 @@ wire method is removed. Public native one-reference facades may still delegate
 to the batch port. Welcome advertises the injected attachment policy plus the
 immutable per-upload bound.
 
+`MAX_SESSION_TITLE` owns rename validation, native-input bounds and safe failure
+copy. `ACTIVITY_PAGE_SIZE` owns the application journal page, while the store
+accepts an explicit lookahead count. `PathSemantics` names the server's lexical
+POSIX/Windows flavor without consulting browser platform information.
+
 The additive request-service contracts export `RequestRef`, `RequestControl`,
 `RequestEvent`, progress/failure facts and injected request policies
 independently of the currently selected wire union. `RequestReceipts` is

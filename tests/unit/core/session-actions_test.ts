@@ -8,7 +8,7 @@ import { fixture } from "./support.ts";
 import { stub } from "./rpc_test.ts";
 
 test("session actions are capability-gated and validate before forwarding a trimmed title", async () => {
-  const db = new OtkDb(await fixture(), []);
+  const db = new OtkDb(await fixture(), [], { busyms: 5000 });
   const absent = stub(), unavailable = new RpcRegistry(absent, db);
   registerSessionActions(unavailable, absent);
   try {
@@ -69,7 +69,7 @@ test("session actions are capability-gated and validate before forwarding a trim
           () => rpc.dispatch("session.rename", params),
           HarnessError,
         )).code,
-        "params",
+        params.sessionID === "tstv1-s" ? "session.title" : "params",
       );
     }
     assertEquals(calls, []);
@@ -121,7 +121,7 @@ test("session actions are capability-gated and validate before forwarding a trim
 });
 
 test("compact validates model references and session identity and requires its advertised capability", async () => {
-  const db = new OtkDb(await fixture(), []);
+  const db = new OtkDb(await fixture(), [], { busyms: 5000 });
   try {
     const absent = stub(), unavailable = new RpcRegistry(absent, db);
     registerSessionActions(unavailable, absent);

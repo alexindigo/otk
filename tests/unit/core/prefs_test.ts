@@ -10,7 +10,8 @@ import { fixture } from "./support.ts";
 test("app storage retains every preference default, validator and params error", async () => {
   const root = await fixture(),
     migrations = [prefsMigrations, frecencyMigrations];
-  const db = new OtkDb(root, migrations), prefs = new Prefs(db, prefsOptions);
+  const db = new OtkDb(root, migrations, { busyms: 5000 }),
+    prefs = new Prefs(db, prefsOptions);
   const expected = {
     ...DEFAULT_PREFS,
     thinking: "show" as const,
@@ -39,7 +40,7 @@ test("app storage retains every preference default, validator and params error",
   } finally {
     db.close();
   }
-  const next = new OtkDb(root, migrations);
+  const next = new OtkDb(root, migrations, { busyms: 5000 });
   try {
     assertEquals(new Prefs(next, prefsOptions).get(), expected);
   } finally {

@@ -1,24 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { relativePath } from "@otk/client";
+import type { PathSemantics } from "@otk/protocol";
 /** Display-only project-relative paths; commands, search expressions and URLs never enter here. */
-export function relativeTarget(path: string, directory?: string): string {
-  if (!directory || !path.startsWith("/") || !directory.startsWith("/")) {
-    return path;
-  }
-  const segments = (value: string) => {
-    const result: string[] = [];
-    for (const part of value.split("/")) {
-      if (part === "..") result.pop();
-      else if (part && part !== ".") result.push(part);
-    }
-    return result;
-  };
-  const file = segments(path), root = segments(directory);
-  let common = 0;
-  while (
-    common < file.length && common < root.length &&
-    file[common] === root[common]
-  ) common++;
-  if (common < root.length) return path;
-  const relative = file.slice(common).join("/");
-  return relative ? relative + (path.endsWith("/") ? "/" : "") : ".";
+export function relativeTarget(
+  path: string,
+  directory?: string,
+  paths: PathSemantics = { style: "posix", separator: "/" },
+): string {
+  return relativePath(path, directory, paths);
 }

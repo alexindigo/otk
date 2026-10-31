@@ -289,7 +289,7 @@ test("U9 footer auto-approve, command, inherited marks and persisted activity re
     // tests, then observe their actual RPC/browser presentation after reload.
     const history = new OtkDb(join(f.oc.root, `otk-${server.port}`), [
       permissionMigrations,
-    ]);
+    ], { busyms: 5000 });
     try {
       const records = new PermissionStore(history);
       for (

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+export const REVERT_PROMPT_LIMIT = 50;
 import type { RevertCapability } from "@otk/harness";
 import type { ContentSession, RestoreCapability } from "@otk/protocol";
 import type { Client } from "./client.ts";

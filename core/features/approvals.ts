@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { HarnessError } from "@otk/harness";
-import { OperationFailure } from "@otk/protocol";
+import { ACTIVITY_PAGE_SIZE, OperationFailure } from "@otk/protocol";
 import {
   type ApprovalSnapshot,
   canAutoApprove,
@@ -445,8 +445,12 @@ export class PermissionFeature implements FrameSource {
         };
       },
       handler: (_ctx, input): PermissionActivityPage => {
-        const rows = this.store.list([input.sessionID], input.before);
-        const entries = rows.slice(0, 100).map((row) => ({
+        const rows = this.store.list(
+          [input.sessionID],
+          input.before,
+          ACTIVITY_PAGE_SIZE + 1,
+        );
+        const entries = rows.slice(0, ACTIVITY_PAGE_SIZE).map((row) => ({
           id: row.id,
           request: JSON.parse(row.request) as PermissionRequest,
           reply: row.reply,
@@ -459,7 +463,9 @@ export class PermissionFeature implements FrameSource {
         }));
         return {
           entries,
-          before: rows.length > 100 ? entries.at(-1)!.id : undefined,
+          before: rows.length > ACTIVITY_PAGE_SIZE
+            ? entries.at(-1)!.id
+            : undefined,
         };
       },
     });

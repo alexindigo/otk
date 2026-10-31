@@ -6,7 +6,7 @@ import { tempDir, test } from "../../../tests/support/resources.ts";
 
 test("digest storage is separate, private, metadata-only and independently durable", async () => {
   const root = await tempDir("digest-");
-  const user = new OtkDb(root, []);
+  const user = new OtkDb(root, [], { busyms: 5000 });
   user.connection.exec(
     "CREATE TABLE user_data(value TEXT); INSERT INTO user_data VALUES('keep')",
   );

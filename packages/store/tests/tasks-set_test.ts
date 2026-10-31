@@ -5,7 +5,7 @@ import { test } from "../../../tests/support/resources.ts";
 import { fixture } from "./support.ts";
 
 test("task reads use two set statements, retain empty groups and scope membership in SQL", async () => {
-  const db = new OtkDb(await fixture(), [tasksMigrations]);
+  const db = new OtkDb(await fixture(), [tasksMigrations], { busyms: 5000 });
   try {
     const tasks = new Tasks(db);
     const first = tasks.create("/p", "First", ["two", "one"]);
@@ -41,7 +41,7 @@ test("task reads use two set statements, retain empty groups and scope membershi
 });
 
 test("task narrow grouping edits coalesce final detached records and rollback without publication", async () => {
-  const db = new OtkDb(await fixture(), [tasksMigrations]);
+  const db = new OtkDb(await fixture(), [tasksMigrations], { busyms: 5000 });
   try {
     const tasks = new Tasks(db);
     const first = tasks.create("/p", "First", ["a", "b"]);

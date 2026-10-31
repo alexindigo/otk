@@ -42,7 +42,8 @@ function backend(get: (id: string) => never = () => {
 }
 
 test("permission reply validates original literals before capability or journal admission", async () => {
-  const db = new OtkDb(await fixture(), []), received: PermissionReply[] = [];
+  const db = new OtkDb(await fixture(), [], { busyms: 5000 }),
+    received: PermissionReply[] = [];
   const harness = backend(undefined, {
     permissions: {
       listPermissions: () => Promise.resolve([]),
@@ -127,7 +128,7 @@ test("unknown backend failures always reach the real WS caller with nonempty tex
   const db = new OtkDb(settings.state.path, [
       prefsMigrations,
       requestsMigrations,
-    ]),
+    ], { busyms: 5000 }),
     rpc = new RpcRegistry(harness, db);
   registerSessions(rpc, harness);
   const app = await startCore({

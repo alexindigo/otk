@@ -5,7 +5,7 @@ import { test } from "../../../tests/support/resources.ts";
 import { fixture } from "./support.ts";
 
 test("connection transaction commits values, rolls back errors and rejects nesting without retiring the outer transaction", async () => {
-  const db = new OtkDb(await fixture(), []);
+  const db = new OtkDb(await fixture(), [], { busyms: 5000 });
   try {
     db.connection.exec("CREATE TABLE sample(value TEXT)");
     const insert = db.connection.prepare("INSERT INTO sample VALUES(?)");
@@ -42,7 +42,7 @@ test("connection transaction commits values, rolls back errors and rejects nesti
 });
 
 test("connection transaction retains the original failure when rollback also fails", async () => {
-  const db = new OtkDb(await fixture(), []);
+  const db = new OtkDb(await fixture(), [], { busyms: 5000 });
   try {
     const failure = new Error("write failed after native rollback");
     const error = assertThrows(() =>

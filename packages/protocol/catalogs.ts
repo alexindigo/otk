@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PublicFailure } from "./requests.ts";
+import type { PathSemantics } from "./paths.ts";
 import type { RequestMetadata } from "./request-metadata.ts";
 import type { AgentCatalogKinds, AgentChunkKinds } from "./catalogs/agents.ts";
 import type {
@@ -72,7 +73,7 @@ export interface DirectoryCatalog {
   directory: string;
   generation: string;
   revision: number;
-  paths: { style: "posix" | "win32"; separator: "/" | "\\" };
+  paths: PathSemantics;
   values: CatalogValues;
 }
 export interface CatalogRpcMethods {

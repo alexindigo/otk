@@ -9,7 +9,8 @@ import type {
   FrecencyEntry,
   ResourceOption,
 } from "@otk/protocol";
-import type { CompletionOption } from "@otk/client";
+import { canonicalPath, type CompletionOption } from "@otk/client";
+import type { PathSemantics } from "@otk/protocol";
 export type { CompletionOption } from "@otk/client";
 export interface MentionSources {
   files: (FileMatch | CatalogFile)[];
@@ -18,6 +19,7 @@ export interface MentionSources {
   frecency: FrecencyEntry[];
   directory: string;
   scores?: ReadonlyMap<string, FrecencyEntry>;
+  paths?: PathSemantics;
 }
 export interface Completion {
   kind: "mention" | "slash";
@@ -97,15 +99,14 @@ export function rank(
   directory = "",
   descriptions = false,
   scores?: ReadonlyMap<string, FrecencyEntry>,
+  paths: PathSemantics = { style: "posix", separator: "/" },
 ): CompletionOption[] {
   const lookup = scores ?? new Map(entries.map((entry) => [entry.path, entry]));
   const score = (path?: string) =>
     path
       ? frecency(
         lookup.get(
-          path.startsWith("/")
-            ? path
-            : `${directory.replace(/\/$/, "")}/${path}`,
+          canonicalPath(path, directory, paths),
         ),
       )
       : 0;
@@ -176,6 +177,7 @@ export function mentionOptions(
     source.directory,
     false,
     source.scores,
+    source.paths,
   );
 }
 const COMPLETION_LIMIT = 10;

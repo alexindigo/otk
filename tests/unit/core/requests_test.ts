@@ -24,7 +24,9 @@ declare module "@otk/protocol" {
 }
 
 test("coordinator acknowledges before work, deduplicates and atomically replays original local result", async () => {
-  const db = new OtkDb(await fixture(), [requestsMigrations, tasksMigrations]);
+  const db = new OtkDb(await fixture(), [requestsMigrations, tasksMigrations], {
+    busyms: 5000,
+  });
   const receipts = new Requests(db), tasks = new Tasks(db);
   const registry = new RpcRegistry({} as Harness, db);
   let effects = 0;
@@ -114,7 +116,9 @@ test("coordinator acknowledges before work, deduplicates and atomically replays 
 
 for (const heldKind of ["effect", "read"] as const) {
   test(`session effect FIFO is independent of a held ${heldKind} observation lifetime`, async () => {
-    const db = new OtkDb(await fixture(), [requestsMigrations]);
+    const db = new OtkDb(await fixture(), [requestsMigrations], {
+      busyms: 5000,
+    });
     const receipts = new Requests(db),
       registry = new RpcRegistry({} as Harness, db);
     const held = Promise.withResolvers<void>(),

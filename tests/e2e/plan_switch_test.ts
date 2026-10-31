@@ -11,7 +11,7 @@ import {
 import { FakeLlm } from "../support/fake-llm.ts";
 import { waitFor } from "../support/opencode.ts";
 
-test("V7 completed plan_exit and plan_enter switch the footer and the next prompt agent, configured model and variant at the native consumer", async () => {
+test("V7 native plan approval switches the footer and next prompt while a coincidentally named plugin preserves selection", async () => {
   const provider = new FakeLlm();
   const f = await browserFixture({ "*": "allow" }, {
     env: { OPENCODE_CLIENT: "cli", OPENCODE_EXPERIMENTAL_PLAN_MODE: "true" },
@@ -36,8 +36,8 @@ test("V7 completed plan_exit and plan_enter switch the footer and the next promp
       },
     },
     async prepare(oc) {
-      // Stock 1.18.34 has no plan_enter. The approved test-local tool emits
-      // the same native completed part through the real provider/session path.
+      // Stock has no plan_enter. An external tool with that name is not a
+      // native transition and must not override the selected agent.
       await Deno.mkdir(join(oc.directory, ".opencode/tools"), {
         recursive: true,
       });
@@ -174,13 +174,30 @@ test("V7 completed plan_exit and plan_enter switch the footer and the next promp
     await send("P5 reconsider the implementation");
     await completed("plan_enter");
     await waitForReply(b, session.id, "Planning entered.");
-    await footer("plan", "low");
+    await footer("build", "high");
     await nativeUser("P5 reconsider the implementation", "build", "high");
+
+    await pickAgent("plan");
+    await footer("plan", "low");
 
     provider.queue({ chunks: ["Next plan prompt received."] });
     await send("P5 continue in plan");
     await waitForReply(b, session.id, "Next plan prompt received.");
     await nativeUser("P5 continue in plan", "plan", "low");
+    provider.queue({ tool: { name: "plan_exit", input: {} } });
+    await send("P5 keep refining the plan");
+    await b.poll(
+      "!!document.querySelector('.otk-question-dock .otk-question-options')",
+    );
+    await b.click(".otk-question-options [data-question-row]:nth-child(2)");
+    await b.click(".otk-question-actions .otk-primary");
+    await b.poll("!!document.querySelector('.otk-question-dock dl')");
+    await b.click(".otk-question-actions .otk-primary");
+    await b.poll(
+      `!!document.querySelector('[data-tool-status="denied"]') && document.querySelector('[data-session="${session.id}"]')?.dataset.status==='idle'`,
+    );
+    await footer("plan", "low");
+    await nativeUser("P5 keep refining the plan", "plan", "low");
     assertEquals(
       f.fake.requests.length,
       0,

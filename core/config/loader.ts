@@ -177,6 +177,16 @@ export function loadServiceConfig(
       envOverridden.push(p);
     }
   }
+  if (isObject(tree.storage)) {
+    const value = tree.storage.busyms;
+    if (
+      typeof value === "number" && (!Number.isSafeInteger(value) || value < 0)
+    ) {
+      errors.push(
+        "storage.busyms (OTK_STORAGE_BUSYMS): expected nonnegative safe integer",
+      );
+    }
+  }
   const digest = tree.digest;
   if (isObject(digest)) {
     for (const [key, value] of Object.entries(digest)) {

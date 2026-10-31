@@ -26,7 +26,7 @@ test("core records real status edges at the single index owner and clears persis
     seenMigrations,
     finishesMigrations,
     projectTemplatesMigrations,
-  ]);
+  ], { busyms: 5000 });
   let now = 100;
   const stores = {
     projects: new Projects(db, () => now),
@@ -139,7 +139,7 @@ test("metadata eviction preserves membership in every task, including out-of-win
     seenMigrations,
     finishesMigrations,
     projectTemplatesMigrations,
-  ]);
+  ], { busyms: 5000 });
   const stores = {
     projects: new Projects(db),
     tasks: new Tasks(db),

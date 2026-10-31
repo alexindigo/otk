@@ -96,7 +96,9 @@ const deferred = <T>() => {
 };
 
 test("server-owned auto-approve can be turned off and its activity read while the backend is offline", async () => {
-  const db = new OtkDb(await fixture(), [permissionMigrations]),
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+      busyms: 5000,
+    }),
     store = new PermissionStore(db),
     index = new IndexStore();
   const capability = {
@@ -157,7 +159,7 @@ test("server-owned auto-approve can be turned off and its activity read while th
 
 test("server session auto-approve rechecks off after held lists, isolates ancestry and serializes automatic/manual replies without browser subscriptions", async () => {
   const root = await fixture(),
-    db = new OtkDb(root, [permissionMigrations]),
+    db = new OtkDb(root, [permissionMigrations], { busyms: 5000 }),
     store = new PermissionStore(db),
     index = new IndexStore();
   let closed = false;
@@ -218,17 +220,20 @@ test("server session auto-approve rechecks off after held lists, isolates ancest
     held.resolve(requests);
     await new Promise((resolve) => setTimeout(resolve, 10));
     assertEquals(replies, [], "Off wins over a previously started list");
-    assertEquals(store.list(["tstv1-root", "tstv1-child"]), []);
+    assertEquals(store.list(["tstv1-root", "tstv1-child"], undefined, 101), []);
     hold = false;
     await rpc.dispatch("permission.auto", {
       sessionID: "tstv1-root",
       enabled: true,
     });
     await waitFor(
-      () => store.list(["tstv1-child"]),
+      () => store.list(["tstv1-child"], undefined, 101),
       (rows) => rows.length === 1,
     );
-    assertEquals(store.list(["tstv1-child"])[0].outcome, "started");
+    assertEquals(
+      store.list(["tstv1-child"], undefined, 101)[0].outcome,
+      "started",
+    );
     index.upsert(entry("tstv1-child", "tstv1-root"));
     await assertRejects(
       () =>
@@ -243,7 +248,7 @@ test("server session auto-approve rechecks off after held lists, isolates ancest
     );
     ack.resolve();
     await waitFor(
-      () => store.list(["tstv1-child"])[0].outcome,
+      () => store.list(["tstv1-child"], undefined, 101)[0].outcome,
       (outcome) => outcome === "confirmed",
     );
     index.upsert(entry("tstv1-root"));
@@ -255,17 +260,20 @@ test("server session auto-approve rechecks off after held lists, isolates ancest
     }]);
     assertEquals(feature.owner("tstv1-other"), undefined);
     assertEquals(feature.owner("tstv1-cycle-a"), undefined);
-    const rows = store.list(["tstv1-child"]);
+    const rows = store.list(["tstv1-child"], undefined, 101);
     assertEquals([rows[0].source, rows[0].owner], ["auto", "tstv1-root"]);
     feature.close();
     db.close();
     closed = true;
-    const reopened = new OtkDb(root, [permissionMigrations]);
+    const reopened = new OtkDb(root, [permissionMigrations], { busyms: 5000 });
     try {
       const persisted = new PermissionStore(reopened);
       assertEquals(persisted.enabled(), ["tstv1-root"]);
       assert(persisted.confirmed("tstv1-child", "one"));
-      assertEquals(persisted.list(["tstv1-child"])[0].outcome, "confirmed");
+      assertEquals(
+        persisted.list(["tstv1-child"], undefined, 101)[0].outcome,
+        "confirmed",
+      );
       const restoredIndex = new IndexStore();
       const restoredFeature = new PermissionFeature(
         persisted,
@@ -301,7 +309,7 @@ test("server session auto-approve rechecks off after held lists, isolates ancest
           "A known helper inherits even when its policy owner is outside the live index window",
         );
         assertEquals(
-          persisted.list(["tstv1-root"]).length,
+          persisted.list(["tstv1-root"], undefined, 101).length,
           2,
           "Historical family membership is persisted, not reconstructed from the current index",
         );
@@ -318,7 +326,9 @@ test("server session auto-approve rechecks off after held lists, isolates ancest
 });
 
 test("automatic Allow once is kind-agnostic for bash, edit and optional-metadata generic permissions", async () => {
-  const db = new OtkDb(await fixture(), [permissionMigrations]),
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+      busyms: 5000,
+    }),
     store = new PermissionStore(db),
     index = new IndexStore();
   const pending: PermissionRequest[] = [request("bash"), {
@@ -353,7 +363,9 @@ test("automatic Allow once is kind-agnostic for bash, edit and optional-metadata
     index.reset([entry("tstv1-root"), entry("tstv1-child", "tstv1-root")]);
     await waitFor(
       () =>
-        store.list(["tstv1-root"]).filter((row) => row.outcome === "confirmed")
+        store.list(["tstv1-root"], undefined, 101).filter((row) =>
+          row.outcome === "confirmed"
+        )
           .length,
       (count) => count === 3,
     );
@@ -372,7 +384,9 @@ test("automatic Allow once is kind-agnostic for bash, edit and optional-metadata
 });
 
 test("permission activity journals manual outcomes, errors and shutdown uncertainty, and pages complete family metadata", async () => {
-  const db = new OtkDb(await fixture(), [permissionMigrations]),
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+      busyms: 5000,
+    }),
     store = new PermissionStore(db, () => 123),
     index = new IndexStore();
   let pending = request("manual", "tstv1-root");
@@ -399,8 +413,14 @@ test("permission activity journals manual outcomes, errors and shutdown uncertai
       reply: "reject",
       message: "Keep exact feedback",
     });
-    assertEquals(store.list(["tstv1-root"])[0].message, "Keep exact feedback");
-    assertEquals(store.list(["tstv1-root"])[0].source, "manual");
+    assertEquals(
+      store.list(["tstv1-root"], undefined, 101)[0].message,
+      "Keep exact feedback",
+    );
+    assertEquals(
+      store.list(["tstv1-root"], undefined, 101)[0].source,
+      "manual",
+    );
     await assertRejects(
       () =>
         feature.reply({
@@ -424,8 +444,8 @@ test("permission activity journals manual outcomes, errors and shutdown uncertai
       "native failure",
     );
     assertEquals([
-      store.list(["tstv1-root"])[0].outcome,
-      store.list(["tstv1-root"])[0].error,
+      store.list(["tstv1-root"], undefined, 101)[0].outcome,
+      store.list(["tstv1-root"], undefined, 101)[0].error,
     ], ["failed", "native failure"]);
     for (
       const [id, rejection] of [["string-failure", "plain rejection"], [
@@ -444,7 +464,7 @@ test("permission activity journals manual outcomes, errors and shutdown uncertai
         (error) => assertEquals(error, rejection),
       );
       assertEquals(
-        store.list(["tstv1-root"])[0].outcome,
+        store.list(["tstv1-root"], undefined, 101)[0].outcome,
         "failed",
         "A non-Error rejection must never be recorded as a confirmed reply",
       );
@@ -486,14 +506,14 @@ test("permission activity journals manual outcomes, errors and shutdown uncertai
       reply: "once",
     });
     await waitFor(
-      () => store.list(["tstv1-root"])[0].requestID,
+      () => store.list(["tstv1-root"], undefined, 101)[0].requestID,
       (id) => id === "uncertain",
     );
     feature.close();
     hold.resolve();
     await reply;
     assertEquals(
-      store.list(["tstv1-root"])[0].outcome,
+      store.list(["tstv1-root"], undefined, 101)[0].outcome,
       "started",
       "Shutdown cannot claim an unobserved acknowledgement succeeded",
     );

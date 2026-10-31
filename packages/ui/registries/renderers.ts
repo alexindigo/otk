@@ -19,6 +19,7 @@ import type {
   ExternalPart,
   Part,
   PartKinds,
+  PathSemantics,
   PermissionRequest,
   Preferences,
   ToolCall,
@@ -48,6 +49,7 @@ export interface ToolPresentation {
 }
 export interface PresentationContext {
   directory?: string;
+  paths?: PathSemantics;
   prefs?: Preferences;
 }
 export type ToolRenderProps<K extends keyof ToolKinds> =

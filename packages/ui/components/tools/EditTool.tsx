@@ -21,7 +21,7 @@ export function registerEditTool(tools: ToolRegistry): void {
     (call, context) => ({
       icon: EditIcon,
       verb: "Edit",
-      target: relativeTarget(call.path, context.directory),
+      target: relativeTarget(call.path, context.directory, context.paths),
       copy: { path: call.path },
       changes: changeCounts(call.files),
       expanded: context.prefs?.collapseFileChanges === false,

@@ -10,12 +10,12 @@ test("store rejects the unresolved empty path before creating files in the curre
   try {
     Deno.chdir(root);
     assertThrows(
-      () => new OtkDb("", []),
+      () => new OtkDb("", [], { busyms: 5000 }),
       TypeError,
       "State path must not be empty",
     );
     assertEquals([...Deno.readDirSync(root)], []);
-    const db = new OtkDb("relative-state", []);
+    const db = new OtkDb("relative-state", [], { busyms: 5000 });
     db.close();
     assertEquals(
       Deno.statSync(join(root, "relative-state", "otk.db")).isFile,

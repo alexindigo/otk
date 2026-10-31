@@ -12,7 +12,7 @@ declare module "@otk/protocol" {
   }
 }
 test("HTTP service uses shared coordinator, receipt-scoped event delivery and no durable credential rows", async () => {
-  const db = new OtkDb(await fixture(), []);
+  const db = new OtkDb(await fixture(), [], { busyms: 5000 });
   const registry = new RpcRegistry({} as Harness, db);
   let calls = 0;
   registry.register("bootstrap.example", {
@@ -88,7 +88,7 @@ test("HTTP service uses shared coordinator, receipt-scoped event delivery and no
 });
 
 test("bootstrap admission remains available after its initial discovery window", async () => {
-  const db = new OtkDb(await fixture(), []),
+  const db = new OtkDb(await fixture(), [], { busyms: 5000 }),
     registry = new RpcRegistry({} as Harness, db);
   let now = 1;
   registry.register("bootstrap.example", {

@@ -7,6 +7,17 @@ imports and knows no native backend.
 
 ## Composition and API
 
+`ToolOutput` owns one ten-line collapsed plain-output policy; consumers supply
+content, not numeric limits. Structured file/match/skill results retain their
+semantic renderers. `PathProvider` accepts originating-server `PathSemantics` as
+data. SessionView supplies its borrowed directory catalog's flavor; ToolPath,
+Diff and tool-header presentations delegate lexical work to the shared client
+owner. Independent consumers can inject the same provider directly. The existing
+two-argument `relativeTarget` API retains POSIX semantics; its optional third
+argument supplies a different server flavor. Badge glyphs borrow the theme's UI
+font and escape it when serializing SVG. Exact usage counts and elapsed clocks
+delegate to the shared client formatters.
+
 `OperationFeedback`, `FieldFeedback` and `PaneState` consume client `Feedback`
 data and callbacks only. OperationFeedback supplies a row inside the caller's
 single joined ComposerNotice. FieldFeedback preserves its empty one-line field

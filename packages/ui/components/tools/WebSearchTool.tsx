@@ -19,7 +19,6 @@ export default function WebSearchTool(props: { call: WebSearchCall }) {
     <ToolOutput
       text={props.call.output ?? ""}
       result={props.call.outputContent}
-      limit={10}
     />
   );
 }

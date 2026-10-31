@@ -24,7 +24,7 @@ test("auto-approve commits its receipt before automatic work, and activity is a 
   const db = new OtkDb(await fixture(), [
     permissionMigrations,
     requestsMigrations,
-  ]);
+  ], { busyms: 5000 });
   const store = new PermissionStore(db), receipts = new Requests(db);
   const ref = { clientID: crypto.randomUUID(), key: crypto.randomUUID() };
   let automaticReads = 0;
@@ -107,7 +107,7 @@ test("auto-approve commits its receipt before automatic work, and activity is a 
 });
 
 test("digest request leases release their connection and are never reapplied during receipt recovery", async () => {
-  const db = new OtkDb(await fixture(), [requestsMigrations]);
+  const db = new OtkDb(await fixture(), [requestsMigrations], { busyms: 5000 });
   const scopes: string[] = [],
     releases: string[] = [],
     callbacks: (() => void)[] = [];
@@ -180,7 +180,9 @@ test("digest request leases release their connection and are never reapplied dur
 });
 
 test("unconfirmed permission replies survive feature replacement without automatic redispatch", async () => {
-  const db = new OtkDb(await fixture(), [permissionMigrations]);
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+    busyms: 5000,
+  });
   const store = new PermissionStore(db), index = new IndexStore();
   let calls = 0;
   const request = {
@@ -224,7 +226,10 @@ test("unconfirmed permission replies survive feature replacement without automat
         reply: "once",
       }, operation)
     );
-    assertEquals(store.list([request.sessionID])[0].outcome, "started");
+    assertEquals(
+      store.list([request.sessionID], undefined, 101)[0].outcome,
+      "started",
+    );
     feature.close();
     feature = new PermissionFeature(store, index, capability);
     const harness = {
@@ -242,7 +247,7 @@ test("unconfirmed permission replies survive feature replacement without automat
     });
     await new Promise((resolve) => setTimeout(resolve, 10));
     assertEquals(calls, 1);
-    assertEquals(store.list([request.sessionID]).length, 1);
+    assertEquals(store.list([request.sessionID], undefined, 101).length, 1);
   } finally {
     feature.close();
     db.close();

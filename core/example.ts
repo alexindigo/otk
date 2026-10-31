@@ -21,7 +21,7 @@ export function serveBackend(
   const store = new OtkDb(cfg.state.path, [
     prefsMigrations,
     requestsMigrations,
-  ]);
+  ], cfg.storage);
   try {
     const prefs = new Prefs(store, prefsOptions),
       rpc = new RpcRegistry(backend, store);

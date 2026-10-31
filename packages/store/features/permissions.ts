@@ -186,23 +186,28 @@ export class PermissionStore extends MetadataChanges<PermissionChange> {
   }
   list(
     sessions: string[],
-    before = Number.MAX_SAFE_INTEGER,
+    before: number | undefined,
+    limit: number,
   ): PermissionRecord[] {
+    if (!Number.isSafeInteger(limit) || limit <= 0) {
+      throw new TypeError("Expected positive activity limit");
+    }
     for (const session of sessions) key(session);
     return this.db.connection.prepare(
-      "SELECT a.* FROM permission_activity a WHERE a.id IN (SELECT activity FROM permission_activity_family WHERE session IN (SELECT value FROM json_each(?))) AND a.id<? ORDER BY a.id DESC LIMIT 101",
-    ).all(JSON.stringify(sessions), before).map((r) => ({
-      id: Number(r.id),
-      session: String(r.session),
-      requestID: String(r.request_id),
-      request: String(r.request),
-      reply: r.reply as PermissionRecord["reply"],
-      source: r.source as PermissionRecord["source"],
-      owner: r.owner === null ? undefined : String(r.owner),
-      message: r.message === null ? undefined : String(r.message),
-      time: Number(r.time),
-      outcome: r.outcome as PermissionRecord["outcome"],
-      error: r.error === null ? undefined : String(r.error),
-    }));
+      "SELECT a.* FROM permission_activity a WHERE a.id IN (SELECT activity FROM permission_activity_family WHERE session IN (SELECT value FROM json_each(?))) AND a.id<? ORDER BY a.id DESC LIMIT ?",
+    ).all(JSON.stringify(sessions), before ?? Number.MAX_SAFE_INTEGER, limit)
+      .map((r) => ({
+        id: Number(r.id),
+        session: String(r.session),
+        requestID: String(r.request_id),
+        request: String(r.request),
+        reply: r.reply as PermissionRecord["reply"],
+        source: r.source as PermissionRecord["source"],
+        owner: r.owner === null ? undefined : String(r.owner),
+        message: r.message === null ? undefined : String(r.message),
+        time: Number(r.time),
+        outcome: r.outcome as PermissionRecord["outcome"],
+        error: r.error === null ? undefined : String(r.error),
+      }));
   }
 }

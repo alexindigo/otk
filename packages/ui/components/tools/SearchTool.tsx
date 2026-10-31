@@ -14,7 +14,7 @@ export function registerSearchTool(tools: ToolRegistry): void {
       verb: call.mode === "list" ? "List" : "Search",
       copy: { path: call.path },
       target: call.path
-        ? relativeTarget(call.path, context.directory)
+        ? relativeTarget(call.path, context.directory, context.paths)
         : undefined,
       summary: [
         call.mode !== "list" ? call.pattern : "",
@@ -36,7 +36,6 @@ export default function SearchTool(
         text={props.call.output ?? ""}
         result={props.call.outputContent}
         directory={props.directory}
-        limit={10}
       />
     </div>
   );

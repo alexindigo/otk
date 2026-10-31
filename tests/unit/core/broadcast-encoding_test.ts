@@ -18,7 +18,9 @@ import { fixture } from "./support.ts";
 import { test } from "../../support/resources.ts";
 
 test("shared broadcasts and subscribed content encode once for sixteen consumers", async () => {
-  const db = new OtkDb(await fixture(), [prefsMigrations, requestsMigrations]);
+  const db = new OtkDb(await fixture(), [prefsMigrations, requestsMigrations], {
+    busyms: 5000,
+  });
   const backend: Harness = {
     core: {
       kind: "test",

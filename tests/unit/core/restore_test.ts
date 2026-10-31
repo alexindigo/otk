@@ -7,7 +7,7 @@ import { registerRevert, RpcRegistry } from "../../../core/mod.ts";
 import { fixture } from "./support.ts";
 import { stub } from "./rpc_test.ts";
 test("restore is independently capability gated and validates the session before forwarding", async () => {
-  const db = new OtkDb(await fixture(), []);
+  const db = new OtkDb(await fixture(), [], { busyms: 5000 });
   try {
     const absent = stub({
       revert: { revert: () => Promise.reject(new Error("Unexpected revert")) },

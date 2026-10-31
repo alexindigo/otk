@@ -19,6 +19,7 @@ import type {
   RevertInfo,
 } from "@otk/protocol";
 import Message, { type MessageControl } from "./Message.tsx";
+import { PathProvider } from "./PathProvider.tsx";
 import Prompt from "./Prompt.tsx";
 import ComposerTakeovers from "./ComposerTakeovers.tsx";
 import type { Preferences } from "@otk/protocol";
@@ -96,7 +97,8 @@ export default function SessionView(props: {
   onAbort(): Promise<void>;
 }): Element {
   const writeDraft = props.onDraft;
-  const feedbackOwner = useSessionPorts()?.feedback;
+  const sessionPorts = useSessionPorts();
+  const feedbackOwner = sessionPorts?.feedback;
   const feedback = bindFeedback(() => feedbackOwner);
   let noticeControl: { focus(): void } | undefined;
   const returnAnchor = props.transcript?.interaction.anchor();
@@ -263,309 +265,321 @@ export default function SessionView(props: {
         interaction={props.transcript?.interaction}
         visibility={attachSource}
       >
-        <section
-          class="otk-session-view"
-          aria-label="Session"
-          ref={(element) => {
-            view = element;
-          }}
+        <PathProvider
+          paths={sessionPorts?.directoryCatalog?.state.catalog?.paths}
         >
-          {props.displayMenu}
-          <Show when={props.info?.parentID}>
-            <SubagentBar
-              info={props.info!}
-              siblings={props.siblings}
-              onOpen={props.onOpenChild}
-            />
-          </Show>
-          <div
-            class={["otk-messages", {
-              "otk-scrollbar-hidden": !props.prefs.scrollbar,
-              "is-empty": !count(),
-            }]}
-            ref={[
-              (element) => {
-                list = element;
-              },
-              contextTarget(() => ({
-                kind: "session",
-                area: true,
-                data: props.info && {
-                  sidecarId: props.sidecarId,
-                  sessionID: props.info.id,
-                  directory: props.info.directory,
-                  title: props.info.title,
-                },
-              })),
-            ]}
+          <section
+            class="otk-session-view"
+            aria-label="Session"
+            ref={(element) => {
+              view = element;
+            }}
           >
-            <Show
-              when={!count() &&
-                (props.loading || props.error ||
-                  props.continuity === "missing")}
-            >
-              <PaneState
-                feedback={props.error
-                  ? {
-                    kind: "error",
-                    text: props.error,
-                    action: {
-                      label: "Retry messages",
-                      run: () => void retry(),
-                    },
-                  }
-                  : { kind: "pending", text: "Loading messages…" }}
+            {props.displayMenu}
+            <Show when={props.info?.parentID}>
+              <SubagentBar
+                info={props.info!}
+                siblings={props.siblings}
+                onOpen={props.onOpenChild}
               />
-            </Show>
-            <Show
-              when={!!count() &&
-                (props.loading || props.continuity === "missing")}
-            >
-              <p role="status">
-                {count() || props.continuity === "missing"
-                  ? "Refreshing messages…"
-                  : "Loading messages…"}
-              </p>
             </Show>
             <div
-              class="otk-message-flow"
-              data-message-count={count()}
-              ref={(element) => {
-                flow = element;
-              }}
+              class={["otk-messages", {
+                "otk-scrollbar-hidden": !props.prefs.scrollbar,
+                "is-empty": !count(),
+              }]}
+              ref={[
+                (element) => {
+                  list = element;
+                },
+                contextTarget(() => ({
+                  kind: "session",
+                  area: true,
+                  data: props.info && {
+                    sidecarId: props.sidecarId,
+                    sessionID: props.info.id,
+                    directory: props.info.directory,
+                    title: props.info.title,
+                  },
+                })),
+              ]}
             >
-              <Show when={props.paging}>
+              <Show
+                when={!count() &&
+                  (props.loading || props.error ||
+                    props.continuity === "missing")}
+              >
                 <PaneState
-                  feedback={{
-                    kind: "pending",
-                    text: "Loading earlier messages…",
-                  }}
+                  feedback={props.error
+                    ? {
+                      kind: "error",
+                      text: props.error,
+                      action: {
+                        label: "Retry messages",
+                        run: () => void retry(),
+                      },
+                    }
+                    : { kind: "pending", text: "Loading messages…" }}
                 />
               </Show>
               <Show
-                when={!props.exhausted && count() &&
-                  !props.paging && !props.loading &&
-                  props.continuity !== "missing"}
+                when={!!count() &&
+                  (props.loading || props.continuity === "missing")}
               >
-                <button
-                  type="button"
-                  class="otk-load-older"
-                  onClick={() => void older()}
+                <p role="status">
+                  {count() || props.continuity === "missing"
+                    ? "Refreshing messages…"
+                    : "Loading messages…"}
+                </p>
+              </Show>
+              <div
+                class="otk-message-flow"
+                data-message-count={count()}
+                ref={(element) => {
+                  flow = element;
+                }}
+              >
+                <Show when={props.paging}>
+                  <PaneState
+                    feedback={{
+                      kind: "pending",
+                      text: "Loading earlier messages…",
+                    }}
+                  />
+                </Show>
+                <Show
+                  when={!props.exhausted && count() &&
+                    !props.paging && !props.loading &&
+                    props.continuity !== "missing"}
                 >
-                  Load older messages
-                </button>
-              </Show>
-              <Show when={props.error && !!count()}>
-                <PaneState
-                  feedback={{
-                    kind: "error",
-                    text: props.error!,
-                    action: {
-                      label: "Retry messages",
-                      run: () => void retry(),
-                    },
-                  }}
+                  <button
+                    type="button"
+                    class="otk-load-older"
+                    onClick={() => void older()}
+                  >
+                    Load older messages
+                  </button>
+                </Show>
+                <Show when={props.error && !!count()}>
+                  <PaneState
+                    feedback={{
+                      kind: "error",
+                      text: props.error!,
+                      action: {
+                        label: "Retry messages",
+                        run: () => void retry(),
+                      },
+                    }}
+                  />
+                </Show>
+                <Show when={revealError()}>
+                  <p role="alert" class="otk-error">{revealError()}</p>
+                </Show>
+                <SessionError
+                  state={props.errorState}
+                  error={props.sessionError}
+                  operationKey={feedback()?.identity}
+                  diagnosticID={feedback()?.diagnosticID}
                 />
-              </Show>
-              <Show when={revealError()}>
-                <p role="alert" class="otk-error">{revealError()}</p>
-              </Show>
-              <SessionError
-                state={props.errorState}
-                error={props.sessionError}
-                operationKey={feedback()?.identity}
-                diagnosticID={feedback()?.diagnosticID}
-              />
-              <Show when={props.retryState}>
-                {(retry) => (
-                  <div class="otk-retry-banner" role="status">
-                    <strong>Retrying · attempt {retry().attempt}</strong>
-                    <p>Waiting for the agent to retry</p>
-                    <span>
-                      Next attempt in{" "}
-                      {Math.max(0, Math.ceil((retry().next - now()) / 1000))}s
-                    </span>
-                  </div>
-                )}
-              </Show>
-              <Show
-                when={!props.transcript ||
-                  props.transcript.state.temperature === "screen"}
-              >
-                {(_screen) => {
-                  const positionAnchor = props.transcript?.interaction.anchor();
-                  return (
-                    <VirtualList
-                      keys={projection().replyIDs}
-                      label="Transcript messages"
-                      viewport={() => list}
-                      samples={[{
-                        role: "reply",
-                        class: "otk-window-reply-estimate",
-                      }]}
-                      role={() => "reply"}
-                      overscan={0}
-                      retainExcluded={false}
-                      measurements={props.transcript?.interaction.measurements}
-                      control={(control) => {
-                        window = control;
-                      }}
-                      position={positionAnchor
-                        ? {
-                          scrollTop: 0,
-                          anchor: positionAnchor,
-                        }
-                        : undefined}
-                      onPosition={(position) => {
-                        followIntent = following?.following() ?? followIntent;
-                        if (followIntent) {
-                          props.transcript?.interaction.anchor(null);
-                          return;
-                        }
-                        if (position.anchor) {
-                          props.transcript?.interaction.anchor(
-                            {
-                              ...position.anchor,
-                              messageID: projection()
-                                .repliesByID[position.anchor.key]
-                                ?.messageIDs[0],
-                            },
-                          );
-                        }
-                      }}
-                      onPins={(keys) =>
-                        props.transcript?.pin(
-                          keys.flatMap((key) =>
-                            projection().repliesByID[key]?.messageIDs ?? []
-                          ),
-                        )}
-                      render={(key) => (
-                        <Show when={projection().repliesByID[key]}>
-                          {(reply) => {
-                            const message = () =>
-                              reply().message;
-                            const turnID = () =>
-                              message().role === "assistant"
-                                ? (message() as import("@otk/protocol").AssistantMessage)
-                                  .replyTo ?? message().id
-                                : message().id;
-                            const target = () => ({
-                              sidecarId: props.sidecarId!,
-                              sessionID: message().sessionID,
-                              turnID: turnID(),
-                            });
-                            return (
-                              <Message
-                                sidecarId={props.sidecarId}
-                                ownerID={reply().key}
-                                segments={reply().segments}
-                                message={message()}
-                                lastID={reply().lastID}
-                                pending={reply().pending}
-                                recovery={props.transcript?.state.content
-                                  .recovering
-                                  ?.find((
-                                    p,
-                                  ) => reply().messageIDs.includes(p.messageID))
-                                  ?.state ??
-                                  (props.transcript?.state.recovering.some((
+                <Show when={props.retryState}>
+                  {(retry) => (
+                    <div class="otk-retry-banner" role="status">
+                      <strong>Retrying · attempt {retry().attempt}</strong>
+                      <p>Waiting for the agent to retry</p>
+                      <span>
+                        Next attempt in{" "}
+                        {Math.max(0, Math.ceil((retry().next - now()) / 1000))}s
+                      </span>
+                    </div>
+                  )}
+                </Show>
+                <Show
+                  when={!props.transcript ||
+                    props.transcript.state.temperature === "screen"}
+                >
+                  {(_screen) => {
+                    const positionAnchor = props.transcript?.interaction
+                      .anchor();
+                    return (
+                      <VirtualList
+                        keys={projection().replyIDs}
+                        label="Transcript messages"
+                        viewport={() => list}
+                        samples={[{
+                          role: "reply",
+                          class: "otk-window-reply-estimate",
+                        }]}
+                        role={() => "reply"}
+                        overscan={0}
+                        retainExcluded={false}
+                        measurements={props.transcript?.interaction
+                          .measurements}
+                        control={(control) => {
+                          window = control;
+                        }}
+                        position={positionAnchor
+                          ? {
+                            scrollTop: 0,
+                            anchor: positionAnchor,
+                          }
+                          : undefined}
+                        onPosition={(position) => {
+                          followIntent = following?.following() ?? followIntent;
+                          if (followIntent) {
+                            props.transcript?.interaction.anchor(null);
+                            return;
+                          }
+                          if (position.anchor) {
+                            props.transcript?.interaction.anchor(
+                              {
+                                ...position.anchor,
+                                messageID: projection()
+                                  .repliesByID[position.anchor.key]
+                                  ?.messageIDs[0],
+                              },
+                            );
+                          }
+                        }}
+                        onPins={(keys) =>
+                          props.transcript?.pin(
+                            keys.flatMap((key) =>
+                              projection().repliesByID[key]?.messageIDs ?? []
+                            ),
+                          )}
+                        render={(key) => (
+                          <Show when={projection().repliesByID[key]}>
+                            {(reply) => {
+                              const message = () =>
+                                reply().message;
+                              const turnID = () =>
+                                message().role === "assistant"
+                                  ? (message() as import("@otk/protocol").AssistantMessage)
+                                    .replyTo ?? message().id
+                                  : message().id;
+                              const target = () => ({
+                                sidecarId: props.sidecarId!,
+                                sessionID: message().sessionID,
+                                turnID: turnID(),
+                              });
+                              return (
+                                <Message
+                                  sidecarId={props.sidecarId}
+                                  ownerID={reply().key}
+                                  segments={reply().segments}
+                                  message={message()}
+                                  lastID={reply().lastID}
+                                  pending={reply().pending}
+                                  recovery={props.transcript?.state.content
+                                    .recovering
+                                    ?.find((
                                       p,
                                     ) =>
                                       reply().messageIDs.includes(p.messageID)
                                     )
-                                    ? "recovering"
-                                    : undefined)}
-                                onRetryRecovery={() => void retry()}
-                                usage={props.usageOwner?.priced(
-                                  target(),
-                                  props.catalog,
-                                )}
-                                summary={sessionSummary(props.entry, message())}
-                                digestState={props.entry?.digest.state}
-                                openUsage={props.openUsage
-                                  ? () => props.openUsage!(turnID())
-                                  : undefined}
-                                usageError={() => props.usageError?.(turnID())}
-                                copySource={props.transcript
-                                  ? (id, text) =>
-                                    props.transcript!.source(id, text)
-                                  : undefined}
-                                copyIncomplete={message().role ===
-                                    "assistant" &&
-                                  !!props.transcript &&
-                                  (!props.exhausted &&
-                                    (!props.transcript.projection.boundary(
-                                      turnID(),
-                                    )
-                                      ?.firstID ||
-                                      !projection()
-                                        .messagesByID[reply().firstID]))}
-                                prefs={props.prefs}
-                                directory={props.info?.directory}
-                                permissions={props.permissions}
-                                paneWidth={paneWidth()}
-                                onOpenChild={props.onOpenChild}
-                                queued={projection().queuedIDs.has(
-                                  message().id,
-                                )}
-                                control={(control) => {
-                                  const id = message().id;
-                                  controls.set(id, control);
-                                  return () => {
-                                    if (controls.get(id) === control) {
-                                      controls
-                                        .delete(id);
-                                    }
-                                  };
-                                }}
-                              />
-                            );
-                          }}
-                        </Show>
-                      )}
-                    />
-                  );
-                }}
-              </Show>
-              <Show
-                when={!props.loading && !count() && !props.error &&
-                  !props.sessionError && props.continuity !== "missing"}
-              >
-                <EmptyState>Start a conversation below.</EmptyState>
-              </Show>
-            </div>
-          </div>
-          <Show when={!props.child}>
-            <ComposerTakeovers
-              focusNotice={() => noticeControl?.focus()}
-              notice={noticed() ? notice : undefined}
-            >
-              {(active) => (
-                <div
-                  class={["otk-composer-stack", {}]}
-                  hidden={active()}
-                  inert={active()}
+                                    ?.state ??
+                                    (props.transcript?.state.recovering.some((
+                                        p,
+                                      ) =>
+                                        reply().messageIDs.includes(p.messageID)
+                                      )
+                                      ? "recovering"
+                                      : undefined)}
+                                  onRetryRecovery={() => void retry()}
+                                  usage={props.usageOwner?.priced(
+                                    target(),
+                                    props.catalog,
+                                  )}
+                                  summary={sessionSummary(
+                                    props.entry,
+                                    message(),
+                                  )}
+                                  digestState={props.entry?.digest.state}
+                                  openUsage={props.openUsage
+                                    ? () => props.openUsage!(turnID())
+                                    : undefined}
+                                  usageError={() =>
+                                    props.usageError?.(turnID())}
+                                  copySource={props.transcript
+                                    ? (id, text) =>
+                                      props.transcript!.source(id, text)
+                                    : undefined}
+                                  copyIncomplete={message().role ===
+                                      "assistant" &&
+                                    !!props.transcript &&
+                                    (!props.exhausted &&
+                                      (!props.transcript.projection.boundary(
+                                        turnID(),
+                                      )
+                                        ?.firstID ||
+                                        !projection()
+                                          .messagesByID[reply().firstID]))}
+                                  prefs={props.prefs}
+                                  directory={props.info?.directory}
+                                  permissions={props.permissions}
+                                  paneWidth={paneWidth()}
+                                  onOpenChild={props.onOpenChild}
+                                  queued={projection().queuedIDs.has(
+                                    message().id,
+                                  )}
+                                  control={(control) => {
+                                    const id = message().id;
+                                    controls.set(id, control);
+                                    return () => {
+                                      if (controls.get(id) === control) {
+                                        controls
+                                          .delete(id);
+                                      }
+                                    };
+                                  }}
+                                />
+                              );
+                            }}
+                          </Show>
+                        )}
+                      />
+                    );
+                  }}
+                </Show>
+                <Show
+                  when={!props.loading && !count() && !props.error &&
+                    !props.sessionError && props.continuity !== "missing"}
                 >
+                  <EmptyState>Start a conversation below.</EmptyState>
+                </Show>
+              </div>
+            </div>
+            <Show when={!props.child}>
+              <ComposerTakeovers
+                focusNotice={() => noticeControl?.focus()}
+                notice={noticed() ? notice : undefined}
+              >
+                {(active) => (
                   <div
-                    class={["otk-composer-input", {}]}
+                    class={["otk-composer-stack", {}]}
+                    hidden={active()}
+                    inert={active()}
                   >
-                    <Prompt
-                      suspended={active()}
-                      context={props.latestPrompt}
-                      busy={props.busy}
-                      value={props.draft}
-                      connected={props.connected}
-                      onChange={writeDraft}
-                      onSubmit={(parts, mode, selection) =>
-                        props.onPrompt(parts, mode, selection)}
-                      onAbort={() => props.onAbort()}
-                    />
+                    <div
+                      class={["otk-composer-input", {}]}
+                    >
+                      <Prompt
+                        suspended={active()}
+                        context={props.latestPrompt}
+                        busy={props.busy}
+                        value={props.draft}
+                        connected={props.connected}
+                        onChange={writeDraft}
+                        onSubmit={(parts, mode, selection) =>
+                          props.onPrompt(parts, mode, selection)}
+                        onAbort={() => props.onAbort()}
+                      />
+                    </div>
                   </div>
-                </div>
-              )}
-            </ComposerTakeovers>
-          </Show>
-        </section>
+                )}
+              </ComposerTakeovers>
+            </Show>
+          </section>
+        </PathProvider>
       </TranscriptContext>
     </HighlightProvider>
   );

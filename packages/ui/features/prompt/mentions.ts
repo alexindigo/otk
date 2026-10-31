@@ -26,6 +26,7 @@ export function registerMentionsPrompt(prompt: PromptRegistry): void {
             frecency: ctx.frecencyCatalog?.entries ?? [],
             scores: ctx.frecencyCatalog?.scores,
             directory: catalog?.directory ?? "",
+            paths: catalog?.paths,
           }, token.query));
         },
         select(token, option, expand) {

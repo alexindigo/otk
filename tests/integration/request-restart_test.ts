@@ -63,7 +63,9 @@ function run(path: string, inputPath: string, mode: string) {
 
 test("independent processes contend on admission and execution CAS with exactly one winner", async () => {
   const path = await tempDir("request-contention-");
-  const db = new OtkDb(path, [requestsMigrations, tasksMigrations]);
+  const db = new OtkDb(path, [requestsMigrations, tasksMigrations], {
+    busyms: 5000,
+  });
   try {
     const requests = new Requests(db);
     const input = record(requests.window(0, 100).id);
@@ -91,13 +93,15 @@ test("independent processes contend on admission and execution CAS with exactly 
 
 test("real process death before and after COMMIT preserves the effect/receipt boundary", async () => {
   const path = await tempDir("request-crash-");
-  let db = new OtkDb(path, [requestsMigrations, tasksMigrations]);
+  let db = new OtkDb(path, [requestsMigrations, tasksMigrations], {
+    busyms: 5000,
+  });
   const input = record(new Requests(db).window(0, 100).id);
   const inputPath = join(path, "input.json");
   await Deno.writeTextFile(inputPath, JSON.stringify(input));
   db.close();
   assertEquals((await run(path, inputPath, "before-commit")).code, 77);
-  db = new OtkDb(path, [requestsMigrations, tasksMigrations]);
+  db = new OtkDb(path, [requestsMigrations, tasksMigrations], { busyms: 5000 });
   try {
     assertEquals(new Tasks(db).list(), []);
     assertEquals(new Requests(db).get(input)?.state, "queued");
@@ -105,7 +109,7 @@ test("real process death before and after COMMIT preserves the effect/receipt bo
     db.close();
   }
   assertEquals((await run(path, inputPath, "after-commit")).code, 78);
-  db = new OtkDb(path, [requestsMigrations, tasksMigrations]);
+  db = new OtkDb(path, [requestsMigrations, tasksMigrations], { busyms: 5000 });
   try {
     const requests = new Requests(db), tasks = new Tasks(db);
     assertEquals(requests.admit(input).inserted, false);

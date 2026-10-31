@@ -11,7 +11,9 @@ import {
 
 const [path, inputPath, mode] = Deno.args;
 const input: RequestRecord = JSON.parse(await Deno.readTextFile(inputPath));
-const db = new OtkDb(path, [requestsMigrations, tasksMigrations]);
+const db = new OtkDb(path, [requestsMigrations, tasksMigrations], {
+  busyms: 5000,
+});
 const requests = new Requests(db);
 if (mode === "admit") {
   const result = requests.admit(input);

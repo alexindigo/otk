@@ -23,7 +23,9 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
   const fake = new FakeLlm();
   const oc = await OpencodeTest.start(fake);
   const adapters: Opencode1Adapter[] = [];
-  const store = new OtkDb(join(oc.root, "otk"), [frecencyMigrations]);
+  const store = new OtkDb(join(oc.root, "otk"), [frecencyMigrations], {
+    busyms: 5000,
+  });
   try {
     const parent = await oc.session<Session>("/session", {
       method: "POST",

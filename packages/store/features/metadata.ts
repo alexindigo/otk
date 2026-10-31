@@ -2,14 +2,28 @@
 import { Changes } from "../changes.ts";
 import type { StoreWrite } from "../db.ts";
 /** Common metadata validation and notification mechanics, independent of policy. */
-export function key(value: string): string {
+export const MAX_METADATA_KEY = 4096;
+export interface KeyPolicy {
+  maxLength: number;
+  blank: boolean;
+  invalid(): Error;
+}
+export function validateKey(value: string, policy: KeyPolicy): string {
   if (
-    typeof value !== "string" || !value.trim() || value.length > 4096 ||
+    typeof value !== "string" || !value.length ||
+    (!policy.blank && !value.trim()) || value.length > policy.maxLength ||
     value.includes("\0")
   ) {
-    throw new Error("Invalid metadata key");
+    throw policy.invalid();
   }
   return value;
+}
+export function key(value: string): string {
+  return validateKey(value, {
+    maxLength: MAX_METADATA_KEY,
+    blank: false,
+    invalid: () => new Error("Invalid metadata key"),
+  });
 }
 export function ordered(values: string[]): string[] {
   if (!Array.isArray(values) || new Set(values).size !== values.length) {

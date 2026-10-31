@@ -32,7 +32,7 @@ export default function BashTool(
           <ToolPath path={props.call.cwd!} directory={props.directory} />
         </p>
       </Show>
-      <ToolOutput text={props.call.output} limit={10} />
+      <ToolOutput text={props.call.output} />
       <Show
         when={props.call.exitCode !== undefined && props.call.exitCode !== 0}
       >

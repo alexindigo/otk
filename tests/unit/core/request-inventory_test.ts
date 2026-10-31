@@ -58,7 +58,7 @@ async function composition() {
     prefsMigrations,
     frecencyMigrations,
     permissionMigrations,
-  ]);
+  ], { busyms: 5000 });
   let now = 100;
   const stores = {
     projects: new Projects(db, () => ++now),

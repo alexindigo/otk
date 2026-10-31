@@ -16,6 +16,7 @@ import { createState, type StateFactory } from "./state.ts";
 import type { TabSession } from "./tabs.ts";
 import { reportDiagnostic } from "./diagnostics.ts";
 import { projectName } from "./project-navigation.ts";
+import { relativeTime } from "./format.ts";
 import type { IntentGroups, RequestOptions } from "./requests.ts";
 /** Attention first. All aggregate lights use this one immutable priority order. */
 export const INBOX_STATUS_PRIORITY = Object.freeze(
@@ -69,13 +70,7 @@ export function rollup(
     "idle";
 }
 export function visitTime(lastVisit: number, now: number): string {
-  const minutes = Math.floor(Math.max(0, now - lastVisit) / 60_000);
-  if (minutes < 1) return "now";
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h`;
-  const days = Math.floor(hours / 24), rest = hours % 24;
-  return `${days}d${rest ? ` ${rest}h` : ""}`;
+  return relativeTime(lastVisit, now);
 }
 export function ageing(
   lastVisit: number,

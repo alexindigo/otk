@@ -4,7 +4,7 @@ import type { Frecency, FrecencyOptions } from "@otk/store";
 import type { Harness } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID, text } from "../ws/params.ts";
-import { projectPath } from "./project-scan.ts";
+import { MAX_NATIVE_PATH, projectPath } from "./project-scan.ts";
 import type { FrameSource } from "../ws/connections.ts";
 import type { ServerFrame } from "@otk/protocol";
 import {
@@ -23,6 +23,7 @@ const bumpReceipt = metadataReceipt("frecency-bumped", (value) => {
 });
 
 export const frecencyOptions: FrecencyOptions = {
+  maxLength: MAX_NATIVE_PATH,
   invalid: () =>
     new HarnessError("params", "Invalid frecency path length or value"),
 };

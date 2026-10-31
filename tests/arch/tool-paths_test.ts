@@ -207,6 +207,205 @@ export function presenterErrors(source: string): string[] {
     ? []
     : ["ToolPath must render its path through the shared presenter"];
 }
+
+/** The list mapper must return the canonical presenter, preserving both inputs
+ * and the accessor borrowed from the data-only server-path context. */
+function outputPathErrors(text: string): string[] {
+  const source = new Source(text);
+  return source.all.some((node) => {
+      if (
+        node.type !== "CallExpression" || !source.live(node) ||
+        !source.name(node.callee)?.endsWith(".paths.map")
+      ) return false;
+      const callback = source.value(node.arguments[0]);
+      if (
+        callback?.type !== "ArrowFunctionExpression" ||
+        callback.params[0]?.type !== "Identifier"
+      ) return false;
+      const binding = source.binding(
+        callback.params[0].name,
+        callback.params[0],
+      );
+      const values = callback.body.type === "BlockStatement"
+        ? callback.body.body.flatMap((statement) =>
+          statement.type === "ReturnStatement" && statement.argument
+            ? [statement.argument]
+            : []
+        )
+        : [callback.body];
+      return values.some((value) => {
+        const call = source.value(value);
+        if (
+          call?.type !== "CallExpression" ||
+          !sharedPresenter(source, call.callee)
+        ) return false;
+        const path = source.access(call.arguments[0]);
+        const directory = source.access(call.arguments[1]);
+        const map = source.access(node.callee);
+        const semantics = source.value(call.arguments[2]);
+        if (
+          !path || path.binding !== binding || path.fields.length ||
+          !directory || directory.fields.join(".") !== "directory" ||
+          !map || map.binding !== directory.binding ||
+          map.fields.join(".") !== "result.paths.map" ||
+          semantics?.type !== "CallExpression" || semantics.arguments.length
+        ) return false;
+        const accessor = source.value(semantics.callee);
+        if (accessor?.type !== "CallExpression" || accessor.arguments.length) {
+          return false;
+        }
+        const owner = source.imported(accessor.callee);
+        return owner?.name === "usePathSemantics" &&
+          owner.module === "../PathProvider.tsx";
+      });
+    })
+    ? []
+    : [
+      "ToolOutput must map paths through the shared presenter with borrowed server semantics",
+    ];
+}
+
+function serverPathErrors(text: string): string[] {
+  const source = new Source(text);
+  return source.all.some((node) => {
+      if (node.type !== "JSXOpeningElement" || !source.live(node)) return false;
+      const provider = source.imported(node.name);
+      if (
+        provider?.name !== "PathProvider" ||
+        provider.module !== "./PathProvider.tsx"
+      ) return false;
+      const paths = source.access(source.attr(node, "paths"));
+      if (
+        !paths ||
+        paths.fields.join(".") !== "directoryCatalog.state.catalog.paths"
+      ) return false;
+      const owner = source.value(paths.binding?.value);
+      if (owner?.type !== "CallExpression") return false;
+      const port = source.imported(owner.callee);
+      return port?.name === "useSessionPorts" &&
+        port.module === "../registries/session.tsx";
+    })
+    ? []
+    : [
+      "SessionView must supply path semantics from its borrowed server directory catalog",
+    ];
+}
+
+function pathContextErrors(text: string): string[] {
+  const source = new Source(text);
+  let context: ReturnType<Source["binding"]>;
+  const supplied = source.all.some((node) => {
+    if (node.type !== "JSXOpeningElement") return false;
+    const target = source.access(node.name),
+      initializer = source.value(target?.binding?.value);
+    if (!target || initializer?.type !== "CallExpression") return false;
+    const imported = source.imported(initializer.callee);
+    if (imported?.name !== "createContext" || imported.module !== "solid-js") {
+      return false;
+    }
+    const value = source.value(source.attr(node, "value"));
+    if (value?.type !== "ArrowFunctionExpression") return false;
+    const input = source.access(value.body), owner = source.function(node);
+    if (
+      owner?.type !== "FunctionDeclaration" ||
+      owner.id?.name !== "PathProvider" || !source.live(node)
+    ) return false;
+    const parameter = owner && "params" in owner ? owner.params[0] : undefined;
+    if (
+      !input || input.fields.join(".") !== "paths" ||
+      parameter?.type !== "Identifier" ||
+      source.binding(parameter.name, parameter) !== input.binding
+    ) return false;
+    context = target.binding;
+    return true;
+  });
+  const borrowed = source.all.some((node) => {
+    if (
+      node.type !== "ReturnStatement" ||
+      node.argument?.type !== "ArrowFunctionExpression"
+    ) return false;
+    const hook = source.function(node),
+      declaration = hook && source.parent.get(hook);
+    if (
+      declaration?.type !== "VariableDeclarator" ||
+      declaration.id.type !== "Identifier" ||
+      declaration.id.name !== "usePathSemantics" || !source.live(node)
+    ) return false;
+    const returned = source.value(node.argument.body);
+    if (
+      returned?.type !== "OptionalCallExpression" &&
+      returned?.type !== "CallExpression"
+    ) return false;
+    const read = source.value(returned.callee);
+    if (read?.type !== "CallExpression") return false;
+    const imported = source.imported(read.callee);
+    return imported?.name === "useContext" && imported.module === "solid-js" &&
+      source.access(read.arguments[0])?.binding === context;
+  });
+  return supplied && borrowed ? [] : [
+    "Path context must forward and borrow only its supplied server semantics",
+  ];
+}
+
+const outputFixture = (accessor: string, argument = "paths()") => `
+import { relativeTarget } from "./paths.ts";
+import { usePathSemantics } from "../PathProvider.tsx";
+export default function Output(props) { const paths=${accessor};
+  const result=props.result; return result.paths.map(path=>relativeTarget(path,props.directory,${argument})).join("\\n"); }`;
+Deno.test("path semantics guard rejects absent, browser-owned, counterfeit and discarded inputs", () => {
+  for (
+    const source of [
+      outputFixture("usePathSemantics()", "undefined"),
+      outputFixture("usePathSemantics()", "{style:'posix',separator:'/'}"),
+      outputFixture("()=>navigator.platform", "paths()"),
+      outputFixture("usePathSemantics()", "props.paths"),
+      outputFixture("usePathSemantics()").replace(
+        '"../PathProvider.tsx"',
+        '"./counterfeit.ts"',
+      ),
+      outputFixture("usePathSemantics()").replace(
+        "props.directory",
+        "other.directory",
+      ),
+      outputFixture("usePathSemantics()").replace(
+        "path=>relativeTarget(path,props.directory,paths())",
+        "path=>{relativeTarget(path,props.directory,paths());return path;}",
+      ),
+      outputFixture("usePathSemantics()").replace(
+        "function Output(props)",
+        "function Output(props,relativeTarget)",
+      ),
+    ]
+  ) assert(outputPathErrors(source).length > 0, source);
+  assertEquals(outputPathErrors(outputFixture("usePathSemantics()")), []);
+  const server =
+    `import {PathProvider} from "./PathProvider.tsx"; import {useSessionPorts} from "../registries/session.tsx";
+    function View(){const port=useSessionPorts();return <PathProvider paths={port.directoryCatalog.state.catalog.paths}>content</PathProvider>;}`;
+  assertEquals(serverPathErrors(server), []);
+  for (
+    const bad of [
+      server.replace(
+        "port.directoryCatalog.state.catalog.paths",
+        "navigator.platform",
+      ),
+      server.replace("port.directoryCatalog.state.catalog.paths", "port.paths"),
+      server.replace('"../registries/session.tsx"', '"./counterfeit.ts"'),
+    ]
+  ) assert(serverPathErrors(bad).length > 0);
+  const context = `import {createContext,useContext} from "solid-js";
+    const Context=createContext();function PathProvider(props){return <Context value={()=>props.paths}>content</Context>;}
+    const usePathSemantics=()=>{const paths=useContext(Context);return ()=>paths?.();};`;
+  assertEquals(pathContextErrors(context), []);
+  for (
+    const bad of [
+      context.replace("props.paths", "navigator.platform"),
+      context.replace("paths?.()", "navigator.platform"),
+      context.replace("useContext(Context)", "useContext(OtherContext)"),
+      context.replace("const usePathSemantics=", "const unusedHook=") +
+      "const usePathSemantics=()=>()=>navigator.platform;",
+    ]
+  ) assert(pathContextErrors(bad).length > 0);
+});
 Deno.test("tool bodies and their diff labels cannot bypass the shared path presenter", async () => {
   const tools = new URL("../../packages/ui/components/tools/", import.meta.url);
   for (const [path, source] of await uiSources()) {
@@ -215,9 +414,18 @@ Deno.test("tool bodies and their diff labels cannot bypass the shared path prese
   const owner = await Deno.readTextFile(new URL("ToolPath.tsx", tools));
   assertEquals(presenterErrors(owner), []);
   const output = await Deno.readTextFile(new URL("ToolOutput.tsx", tools));
-  assert(
-    /result\.paths\.map\(\(path\)\s*=>\s*relativeTarget\(path, props\.directory\)/
-      .test(output),
+  assertEquals(outputPathErrors(output), []);
+  assertEquals(
+    serverPathErrors(
+      await Deno.readTextFile(new URL("../SessionView.tsx", tools)),
+    ),
+    [],
+  );
+  assertEquals(
+    pathContextErrors(
+      await Deno.readTextFile(new URL("../PathProvider.tsx", tools)),
+    ),
+    [],
   );
 });
 Deno.test("path ownership rejects raw fields, aliases, duplicate paint and lost context", () => {

@@ -7,6 +7,7 @@ import { createSignal, For, onSettled, Show } from "solid-js";
 import {
   type MergedEntry,
   projectGroups,
+  relativeTime,
   sessionKey,
   type SidecarState,
 } from "@otk/client";
@@ -17,16 +18,6 @@ import { ownedAction } from "../keyboard/context.tsx";
 export function shortDirectory(directory: string): string {
   return directory.split(/[\\/]/).filter(Boolean).slice(-2).join("/") ||
     directory;
-}
-function relative(time: number, now: number): string {
-  const minutes = Math.max(0, Math.floor((now - time) / 60_000));
-  return minutes < 1
-    ? "now"
-    : minutes < 60
-    ? `${minutes}m`
-    : minutes < 1440
-    ? `${Math.floor(minutes / 60)}h`
-    : `${Math.floor(minutes / 1440)}d`;
 }
 export default function Sidebar(
   props: {
@@ -136,7 +127,7 @@ export default function Sidebar(
                               datetime={new Date(entry().timeUpdated)
                                 .toISOString()}
                             >
-                              {relative(entry().timeUpdated, now())}
+                              {relativeTime(entry().timeUpdated, now())}
                             </time>
                             <span class="otk-row-status">
                               <StatusLight
@@ -189,7 +180,7 @@ export default function Sidebar(
         </For>
         <Show when={!props.entries.some((entry) => !entry.parentID)}>
           <EmptyState>
-            No sessions yet. Create a session in opencode to start a project.
+            No sessions yet. Start a session from a project.
           </EmptyState>
         </Show>
       </div>

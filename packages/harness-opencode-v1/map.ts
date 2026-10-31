@@ -205,8 +205,8 @@ export function mapDiffs(diffs: RawDiff[]): FileDiff[] {
       }));
     }
     return [{
-      path: diff.file || "unknown",
-      status: diff.status || "modified",
+      path: diff.file || undefined,
+      status: diff.status || "unknown",
       additions: diff.additions,
       deletions: diff.deletions,
       hunks: [],

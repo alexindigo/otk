@@ -13,7 +13,7 @@ export function registerReadTool(tools: ToolRegistry): void {
     (call, context) => ({
       icon: FileIcon,
       verb: "Read",
-      target: relativeTarget(call.path, context.directory),
+      target: relativeTarget(call.path, context.directory, context.paths),
       copy: { path: call.path },
       summary: [
         call.offset !== undefined ? `offset ${call.offset}` : "",
@@ -38,7 +38,6 @@ export default function ReadTool(
         text={props.call.output ?? ""}
         result={props.call.outputContent}
         directory={props.directory}
-        limit={10}
       />
     </>
   );

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { FeatureMigrations } from "./migrations.ts";
-import { SqliteDb } from "./sqlite.ts";
+import { SqliteDb, type SqliteOptions } from "./sqlite.ts";
 declare const writeScope: unique symbol;
 /** Opaque capability valid only during one synchronous OtkDb.write callback. */
 export interface StoreWrite {
@@ -14,9 +14,9 @@ export class OtkDb extends SqliteDb {
   constructor(
     statePath: string,
     migrations: readonly FeatureMigrations[],
-    options: { observerError?: (error: unknown) => void } = {},
+    options: SqliteOptions,
   ) {
-    super(statePath, "otk.db", migrations, { ...options, busyms: 5000 });
+    super(statePath, "otk.db", migrations, options);
   }
   /** Join only an explicitly supplied scope; an omitted scope always starts a write. */
   write<T>(run: (tx: StoreWrite) => T, tx?: StoreWrite): T {

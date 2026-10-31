@@ -28,11 +28,13 @@ test("inbox features create independent fresh schemas and upgrade the previous s
   for (const upgrade of [false, true]) {
     const path = await fixture();
     if (upgrade) {
-      const previous = new OtkDb(path, migrations);
+      const previous = new OtkDb(path, migrations, { busyms: 5000 });
       new Prefs(previous, prefsOptions).set("timestamps", true);
       previous.close();
     }
-    let db = new OtkDb(path, [...migrations, ...inboxMigrations]);
+    let db = new OtkDb(path, [...migrations, ...inboxMigrations], {
+      busyms: 5000,
+    });
     const projects = new Projects(db, () => 100);
     projects.discover("/auto");
     projects.add("alice", "/empty");
@@ -48,7 +50,7 @@ test("inbox features create independent fresh schemas and upgrade the previous s
       7,
     );
     db.close();
-    db = new OtkDb(path, [...inboxMigrations, ...migrations]);
+    db = new OtkDb(path, [...inboxMigrations, ...migrations], { busyms: 5000 });
     try {
       assertEquals(new Prefs(db, prefsOptions).get().timestamps, upgrade);
       assertEquals(
@@ -69,7 +71,7 @@ test("inbox features create independent fresh schemas and upgrade the previous s
 });
 
 test("project visits and inactive clocks are user-scoped, pause while inactive and resume without counting the pause", async () => {
-  const db = new OtkDb(await fixture(), [projectsMigrations]);
+  const db = new OtkDb(await fixture(), [projectsMigrations], { busyms: 5000 });
   let now = 100;
   const projects = new Projects(db, () => now);
   try {
@@ -100,7 +102,9 @@ test("project visits and inactive clocks are user-scoped, pause while inactive a
 });
 
 test("tasks retain ordered sessions, reject duplicate memberships atomically, reorder and close only their grouping", async () => {
-  const db = new OtkDb(await fixture(), [tasksMigrations, finishesMigrations]);
+  const db = new OtkDb(await fixture(), [tasksMigrations, finishesMigrations], {
+    busyms: 5000,
+  });
   const tasks = new Tasks(db);
   try {
     const a = tasks.create("/p", "first"),
@@ -138,7 +142,7 @@ test("seen and finish clocks persist monotone timestamps and notify only after v
     seenMigrations,
     finishesMigrations,
     projectTemplatesMigrations,
-  ]);
+  ], { busyms: 5000 });
   let now = 100, changes = 0;
   const seen = new Seen(db, () => now),
     finishes = new Finishes(db, () => now),
@@ -166,7 +170,7 @@ test("seen and finish clocks persist monotone timestamps and notify only after v
 });
 
 test("composite preference defaults are detached on every read", async () => {
-  const db = new OtkDb(await fixture(), migrations);
+  const db = new OtkDb(await fixture(), migrations, { busyms: 5000 });
   const defaults = { thresholds: [2, 8, 24] };
   try {
     const prefs = new Prefs(db, {
@@ -184,7 +188,7 @@ test("composite preference defaults are detached on every read", async () => {
 });
 
 test("explicit project additions stay private to their user while automatic discovery appends in each user's stable order", async () => {
-  const db = new OtkDb(await fixture(), [projectsMigrations]);
+  const db = new OtkDb(await fixture(), [projectsMigrations], { busyms: 5000 });
   const projects = new Projects(db, () => 100);
   try {
     projects.add("alice", "/private");

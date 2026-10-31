@@ -265,7 +265,7 @@ import {
 } from "./mod.ts";
 
 async function run(backend: Harness, cfg: ServiceConfig, staticRoot: string) {
-  const store = new OtkDb(cfg.state.path, [prefsMigrations]);
+  const store = new OtkDb(cfg.state.path, [prefsMigrations], cfg.storage);
   const prefs = new Prefs(store, prefsOptions);
   const rpc = new RpcRegistry(backend, store);
   registerSessions(rpc, backend);
@@ -389,6 +389,13 @@ service test preserves alternate selected-registration HTTP/static/SPA/origin
 coverage.
 
 ## Directory acquisition
+
+The layered `storage.busyms` leaf supplies the user-data connection's lock wait,
+including standalone application examples. `digest.busyms` remains the
+independent worker-file policy. Shared protocol feature bounds own title
+validation and Activity page size; storage receives explicit lookahead limits
+without importing protocol. Feature failures carry semantic size/title codes to
+the one browser presenter, whose copy consumes those same immutable bounds.
 
 Native directory catalog reads share the existing worker's feature-contributed
 transient read channel, scheduler turns, native I/O permission and publication

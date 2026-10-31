@@ -64,7 +64,7 @@ const native = {
   ],
 };
 
-Deno.test("catalog allowlists connected metadata, variants, statuses and opencode-only free pricing", async () => {
+Deno.test("catalog allowlists connected metadata, variants, statuses and reported pricing", async () => {
   const calls: string[] = [];
   const client = new Client(settings, (input) => {
     const url = new URL(String(input));
@@ -105,7 +105,7 @@ Deno.test("catalog allowlists connected metadata, variants, statuses and opencod
           name: "Plain",
           variants: [],
           status: "active",
-          free: false,
+          free: null,
         }],
       },
     ],

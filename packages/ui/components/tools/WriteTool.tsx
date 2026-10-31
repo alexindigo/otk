@@ -12,7 +12,7 @@ export function registerWriteTool(tools: ToolRegistry): void {
     (call, context) => ({
       icon: EditIcon,
       verb: "Write",
-      target: relativeTarget(call.path, context.directory),
+      target: relativeTarget(call.path, context.directory, context.paths),
       copy: { path: call.path },
       expanded: context.prefs?.collapseFileChanges === false,
     }),

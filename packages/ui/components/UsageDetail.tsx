@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./TurnUsage.css" with { type: "text" };
 import { For, Show } from "solid-js";
-import { type TurnUsage as Usage, usageTokens } from "@otk/client";
+import { exactCount, type TurnUsage as Usage, usageTokens } from "@otk/client";
 import { elapsed } from "./work-log.ts";
 import UsageCost from "./UsageCost.tsx";
 
@@ -12,13 +12,13 @@ export default function UsageDetail(
   const duration = (time: Usage["time"]) =>
     time?.end === undefined ? "—" : elapsed(time.start, time.end);
   const count = (value: number | null) =>
-    value === null ? "Not reported" : value.toLocaleString("en-US");
+    value === null ? "Not reported" : exactCount(value);
   return (
     <div class="otk-usage-detail">
       <dl class="otk-usage-summary">
         <div data-usage-summary="calls">
           <dt>Model calls</dt>
-          <dd>{props.usage.calls.length.toLocaleString("en-US")}</dd>
+          <dd>{exactCount(props.usage.calls.length)}</dd>
         </div>
         <div
           data-usage-summary="context"

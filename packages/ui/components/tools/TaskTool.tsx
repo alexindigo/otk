@@ -2,6 +2,7 @@
 import "./TaskTool.css" with { type: "text" };
 import { Show } from "solid-js";
 import type { TaskCall } from "@otk/protocol";
+import { duration } from "@otk/client";
 import type { ToolRegistry } from "../../registries/renderers.ts";
 import { ownedAction } from "../../keyboard/context.tsx";
 import ToolOutput from "./ToolOutput.tsx";
@@ -34,9 +35,7 @@ export default function TaskTool(
     }
     const time = value.time;
     return `${countLabel(value.toolCount!, "tool call")}${
-      time?.end !== undefined
-        ? ` · ${(Math.max(0, time.end - time.start) / 1000).toFixed(1)}s`
-        : ""
+      time?.end !== undefined ? ` · ${duration(time.end - time.start)}` : ""
     }`;
   };
   return (
@@ -61,7 +60,6 @@ export default function TaskTool(
       <ToolOutput
         text={props.call.output ?? ""}
         result={props.call.outputContent}
-        limit={10}
       />
     </>
   );

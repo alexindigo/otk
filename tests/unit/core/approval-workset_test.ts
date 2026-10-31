@@ -9,7 +9,9 @@ import { test } from "../../support/resources.ts";
 
 const tick = () => new Promise((done) => setTimeout(done, 0));
 test("auto-approve unrelated title and digest updates perform zero scans or policy SQL", async () => {
-  const db = new OtkDb(await fixture(), [permissionMigrations]);
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+    busyms: 5000,
+  });
   const store = new PermissionStore(db), index = new IndexStore();
   let lists = 0, policies = 0, enumerations = 0;
   const enabled = store.enabled.bind(store), values = index.values.bind(index);
@@ -73,7 +75,9 @@ test("auto-approve unrelated title and digest updates perform zero scans or poli
 });
 
 test("pending journal keys hydrate in one batch and uncertain starts are never resent", async () => {
-  const db = new OtkDb(await fixture(), [permissionMigrations]);
+  const db = new OtkDb(await fixture(), [permissionMigrations], {
+    busyms: 5000,
+  });
   const store = new PermissionStore(db), index = new IndexStore();
   const requests: PermissionRequest[] = Array.from(
     { length: 5 },
@@ -153,7 +157,9 @@ test("pending journal keys hydrate in one batch and uncertain starts are never r
     );
     assertEquals(replies, ["ask-2", "ask-3", "ask-4"]);
     assertEquals(
-      store.list([row.id]).find((row) => row.requestID === "ask-1")!.outcome,
+      store.list([row.id], undefined, 101).find((row) =>
+        row.requestID === "ask-1"
+      )!.outcome,
       "started",
     );
   } finally {

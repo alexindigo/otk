@@ -13,7 +13,7 @@ test("bootstrap features acknowledge setup/login/discovery and replay cookies on
   settings.state.path = await fixture();
   settings.server.origins = ["http://other"];
   const auth = new AuthState(settings),
-    db = new OtkDb(settings.state.path, [requestsMigrations]);
+    db = new OtkDb(settings.state.path, [requestsMigrations], { busyms: 5000 });
   const windows = new Requests(db);
   const backend = { core: { kind: "external", version: "1" } } as Harness;
   const bootstrap = new BootstrapRequests({

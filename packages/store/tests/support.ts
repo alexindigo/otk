@@ -28,6 +28,7 @@ export const prefsOptions: PrefsOptions<TestPrefs> = {
   invalid: () => new Error("Invalid preference key or value"),
 };
 export const frecencyOptions = {
+  maxLength: 4096,
   invalid: () => new Error("Invalid frecency path length or value"),
 };
 

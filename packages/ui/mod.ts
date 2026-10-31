@@ -22,6 +22,7 @@ export { default as ToolFrame } from "./components/tools/ToolFrame.tsx";
 export { default as ToolOutput } from "./components/tools/ToolOutput.tsx";
 export { default as ToolPath } from "./components/tools/ToolPath.tsx";
 export { relativeTarget } from "./components/tools/paths.ts";
+export { PathProvider } from "./components/PathProvider.tsx";
 export { countLabel } from "./components/tools/count.ts";
 export {
   default as GenericTool,

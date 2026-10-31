@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Message, Part } from "@otk/protocol";
+import { duration } from "@otk/client";
 export { createMessageLayout } from "./message-layout.ts";
 
 import type { PartPresentation } from "../registries/renderers.ts";
@@ -73,5 +74,4 @@ export function partGroups(
   }
   return groups;
 }
-export const elapsed = (start: number, end: number) =>
-  `${Math.max(0, (end - start) / 1000).toFixed(1)}s`;
+export const elapsed = (start: number, end: number) => duration(end - start);

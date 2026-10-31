@@ -41,7 +41,8 @@ function contribute(registry: PreferenceRegistry): void {
 test("feature contribution owns default, validation, display metadata and executable preference commands", async () => {
   const registry = createPreferences();
   contribute(registry);
-  const root = await fixture(), db = new OtkDb(root, [prefsMigrations]);
+  const root = await fixture(),
+    db = new OtkDb(root, [prefsMigrations], { busyms: 5000 });
   const options = {
     ...prefsOptions,
     defaults: registry.defaults(),
@@ -115,7 +116,7 @@ test("feature contribution owns default, validation, display metadata and execut
     release();
     db.close();
   }
-  const reopened = new OtkDb(root, [prefsMigrations]);
+  const reopened = new OtkDb(root, [prefsMigrations], { busyms: 5000 });
   try {
     assertEquals(
       new Prefs(reopened, options).get()["extension.density"],

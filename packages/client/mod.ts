@@ -4,6 +4,8 @@ export * from "./attachment-batches.ts";
 export * from "./frecency-catalogs.ts";
 export { registerPreferenceCommands } from "./preference-commands.ts";
 export { countLabel } from "./count.ts";
+export * from "./format.ts";
+export * from "./paths.ts";
 export * from "./project-navigation.ts";
 export * from "./project-picker.ts";
 /** Framework-free OTK transport, observable state and navigation models. */

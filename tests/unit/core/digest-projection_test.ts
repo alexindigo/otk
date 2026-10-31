@@ -24,7 +24,7 @@ test("hydrated inbox observers perform zero SELECTs, preserve every finish edge 
     seenMigrations,
     finishesMigrations,
     projectTemplatesMigrations,
-  ]);
+  ], { busyms: 5000 });
   let clock = 1;
   const stores = {
     projects: new Projects(db, () => clock),

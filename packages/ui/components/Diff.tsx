@@ -6,6 +6,7 @@ import type { FileDiff, Hunk } from "@otk/protocol";
 import Diagnostics from "./tools/Diagnostics.tsx";
 import ToolPath from "./tools/ToolPath.tsx";
 import { relativeTarget } from "./tools/paths.ts";
+import { usePathSemantics } from "./PathProvider.tsx";
 import { contextTarget } from "./context-target.ts";
 import { useContentIdentity } from "../features/transcript-context.tsx";
 import { ContentWindow } from "./VirtualList.tsx";
@@ -62,6 +63,7 @@ export default function Diff(
   },
 ): import("solid-js").Element {
   const identity = useContentIdentity();
+  const paths = usePathSemantics();
   const source = (hunk: Hunk) =>
     hunk.lines.filter((line) =>
       props.file.status === "deleted"
@@ -87,11 +89,11 @@ export default function Diff(
       data-file-status={props.file.status}
       aria-label={`${label()} ${
         props.file.oldPath
-          ? `${relativeTarget(props.file.oldPath, props.directory)} → `
+          ? `${relativeTarget(props.file.oldPath, props.directory, paths())} → `
           : ""
       }${
         props.file.path
-          ? relativeTarget(props.file.path, props.directory)
+          ? relativeTarget(props.file.path, props.directory, paths())
           : "Path not reported"
       }`}
     >

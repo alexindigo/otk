@@ -53,7 +53,7 @@ test("template source rescans on startup and edits, rejects retired results and 
     seenMigrations,
     finishesMigrations,
     projectTemplatesMigrations,
-  ]);
+  ], { busyms: 5000 });
   const templates = new ProjectTemplates(db);
   const reads: {
     templates: readonly string[];

@@ -48,6 +48,7 @@ import SharedControls, {
   ErrorBoundaries,
   Indicators,
   InteractionFailures,
+  MetadataPolicy,
   SecondaryFailures,
 } from "./shared-controls.tsx";
 
@@ -77,7 +78,7 @@ function ExternalTool(props: ToolProps): Element {
       <div class="otk-tool-summary">
         External renderer: {(props.call as ExternalCall).summary}
       </div>
-      <ToolOutput text={(props.call as ExternalCall).output || ""} limit={3} />
+      <ToolOutput text={(props.call as ExternalCall).output || ""} />
       <button
         type="button"
         data-open
@@ -461,6 +462,8 @@ render(
     ? () => <ErrorBoundaries onTheme={(id) => theme.commit(id)} />
     : new URL(location.href).searchParams.has("shared-controls")
     ? () => <SharedControls onTheme={(id) => theme.commit(id)} />
+    : new URL(location.href).searchParams.has("metadata-policy")
+    ? MetadataPolicy
     : Consumer,
   document.getElementById("app")!,
 );

@@ -15,7 +15,9 @@ import {
 } from "@otk/store";
 
 const defaults = { compact: false };
-const db = new OtkDb("./state", [prefsMigrations, frecencyMigrations]);
+const db = new OtkDb("./state", [prefsMigrations, frecencyMigrations], {
+  busyms: 5000,
+});
 try {
   const prefs = new Prefs(db, {
     defaults,
@@ -27,7 +29,10 @@ try {
   prefs.set("compact", true);
   console.log(prefs.get());
   stop();
-  const files = new Frecency(db, { invalid: () => new Error("Invalid path") });
+  const files = new Frecency(db, {
+    maxLength: 4096,
+    invalid: () => new Error("Invalid path"),
+  });
   files.bump("/project", "README.md");
   console.log(files.list("/project"));
 } finally {
@@ -35,17 +40,18 @@ try {
 }
 ```
 
-`OtkDb(statePath, migrations)` creates a private state directory and opens
-`otk.db` with WAL and a 5000 ms busy timeout. An empty state path is rejected
-before filesystem access; configuration must resolve its default sentinel before
-constructing storage. Explicit relative directories remain supported. The caller
-composes feature contributions as `FeatureMigrations` objects: a stable
-`feature` name plus its own `migrations` list of `{ version, sql }`. Names are
-1–120 ASCII identifier characters (letters, digits, underscore, dot, colon,
-hyphen), starting with a letter or digit. Versions are contiguous within each
-feature, starting at 1; feature order is unrestricted. The runner never imports
-features. A frecency-only consumer supplies `[frecencyMigrations]`, without
-prefs.
+`OtkDb(statePath, migrations, {busyms, observerError?})` creates a private state
+directory and opens `otk.db` with WAL and the caller's nonnegative safe-integer
+busy timeout in milliseconds. There is no library timeout default. An empty
+state path is rejected before filesystem access; configuration must resolve its
+default sentinel before constructing storage. Explicit relative directories
+remain supported. The caller composes feature contributions as
+`FeatureMigrations` objects: a stable `feature` name plus its own `migrations`
+list of `{ version, sql }`. Names are 1–120 ASCII identifier characters
+(letters, digits, underscore, dot, colon, hyphen), starting with a letter or
+digit. Versions are contiguous within each feature, starting at 1; feature order
+is unrestricted. The runner never imports features. A frecency-only consumer
+supplies `[frecencyMigrations]`, without prefs.
 
 The `otk_migrations` table records each applied `(feature, version)`. Each
 feature's pending upgrades and their records commit together in an immediate
@@ -74,9 +80,12 @@ JSON retains the original parse-error behavior. `listen` returns an unsubscribe
 callback.
 
 `Frecency` resolves project/path keys exactly as the app did, rejects empty,
-NUL-containing or over-4096-character keys before writing, increments scores,
-and retains at most 1000 entries globally. Lists are project-scoped and ordered
-by last use. Decay/ranking are consumer concerns.
+NUL-containing or over-`maxLength` keys before writing, increments scores, and
+retains at most `FRECENCY_RETENTION` entries globally. Lists and pruning share
+deterministic last-use/row-identity ordering. Decay/ranking are consumer
+concerns. `validateKey(value,{maxLength,blank,invalid})` is the shared
+validation mechanism; metadata keys retain their independently named
+`MAX_METADATA_KEY` policy.
 
 Inbox features independently export `Projects` / `projectsMigrations`, `Tasks` /
 `tasksMigrations`, `Seen` / `seenMigrations`, `Finishes` / `finishesMigrations`
@@ -95,12 +104,11 @@ remains an intentional complete replacement, not an add/remove helper. Clocks
 can be injected for deterministic consumers. Feature listeners run after
 committed writes. All store features share one post-commit dispatcher: an
 observer failure is reported without rejecting the committed mutation or
-skipping other listeners. `OtkDb` accepts an optional third
-`{ observerError(error) }` argument for injected diagnostics; the default logs
-the original failure. If the reporter itself throws, a fallback diagnostic
-retains both failures. Payloads are detached for each observer and from the
-mutation's returned value. Composite preference defaults are detached on every
-read.
+skipping other listeners. `OtkDb` accepts `observerError(error)` alongside its
+required `busyms` for injected diagnostics; the default logs the original
+failure. If the reporter itself throws, a fallback diagnostic retains both
+failures. Payloads are detached for each observer and from the mutation's
+returned value. Composite preference defaults are detached on every read.
 
 `OtkDb.transaction(run)` returns a synchronous callback's result after commit or
 rolls back and rethrows its failure. If rollback also fails, an AggregateError
@@ -193,10 +201,10 @@ Use Deno read/write permissions for the state directory and packaged SQL.
 `DigestDb(path, contributions, { busyms })` opens the independent private
 `digest.db` file. Compose `digestMigrations` and any provider's structural
 migration contribution explicitly. The same connection/migration/transaction
-mechanics serve both files; the user-data `OtkDb` constructor remains
-compatible. The timeout is installed before WAL selection. Derived connections
-enable foreign keys and use feature-local migration versions, never a new legacy
-`user_version` mapping.
+mechanics serve both files, with independently supplied busy policies. The
+timeout is installed before WAL selection. Derived connections enable foreign
+keys and use feature-local migration versions, never a new legacy `user_version`
+mapping.
 
 `DigestStore` exposes scalar `catalog`, `summary`, `turn`, `turns`, `commit`,
 `markDeleted`, `resurrect` and `transaction` operations. `DigestCommit`
@@ -221,14 +229,15 @@ database. No message bodies, tool arguments or output are stored.
 session enablement and the permission reply journal. The application supplies
 request JSON; storage imports no protocol. Intents commit before remote I/O, and
 later outcome updates distinguish confirmation, failure and an interrupted
-unconfirmed attempt. Family queries accept session IDs and return at most101
-rows, allowing the application to expose100-row cursor pages. Journal intents
-and their indexed family membership commit together, so old helper activity
-remains visible after its live index entry expires. Confirmed request identity
-is indexed for duplicate-send suppression; no transcript is stored. Listeners
-distinguish actual policy changes from journal changes. Journal notifications
-carry their persisted family IDs, including for outcome updates; unrelated
-families need no refresh. Repeating an unchanged policy emits nothing.
+unconfirmed attempt. `list(sessions,before,limit)` takes an explicit positive
+lookahead bound; the application supplies `ACTIVITY_PAGE_SIZE + 1` and owns
+cursor page policy. Journal intents and their indexed family membership commit
+together, so old helper activity remains visible after its live index entry
+expires. Confirmed request identity is indexed for duplicate-send suppression;
+no transcript is stored. Listeners distinguish actual policy changes from
+journal changes. Journal notifications carry their persisted family IDs,
+including for outcome updates; unrelated families need no refresh. Repeating an
+unchanged policy emits nothing.
 
 License: LGPL-3.0-only. Validate with `deno task test:unit` and
 `deno task test:arch` from the workspace, or `deno task test` in this package.
