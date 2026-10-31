@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../../support/config.ts";
 import { fixtureMessagePolicy } from "../../support/message-pages.ts";
 import { assert, assertEquals } from "@std/assert";
 import { OtkDb, Prefs, prefsMigrations, requestsMigrations } from "@otk/store";
@@ -60,6 +61,7 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: cfg().attachments,
     },
     policy: {
       batch: 2,

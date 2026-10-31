@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../../support/config.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { DigestBatch } from "../../../core/digest/batch.ts";
 import type { DigestWorkerValue } from "../../../core/digest/protocol.ts";
@@ -105,6 +106,7 @@ test("bulk digest row credit reaches the index consumer as bounded multi-session
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: cfg().attachments,
     },
     policy: {
       batch: 2,

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../../support/config.ts";
 import { assertEquals } from "@std/assert";
 import { DigestBridge } from "../../../core/digest/bridge.ts";
 import type { FromWorker, ToWorker } from "../../../core/digest/protocol.ts";
@@ -68,6 +69,7 @@ test("accepted deletions survive a worker restart, coalesce in bounded batches a
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: cfg().attachments,
     },
     policy: {
       batch: 2,

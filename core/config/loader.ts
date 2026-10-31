@@ -217,7 +217,14 @@ export function loadServiceConfig(
       }
     }
   }
-  for (const section of ["requests", "connection", "catalogs"] as const) {
+  for (
+    const section of [
+      "requests",
+      "connection",
+      "catalogs",
+      "attachments",
+    ] as const
+  ) {
     const values = tree[section];
     if (!isObject(values)) continue;
     for (const [key, value] of Object.entries(values)) {

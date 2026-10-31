@@ -1,5 +1,12 @@
 # @otk/client
 
+Prompt recall uses the shared `PROMPT_HISTORY_LIMIT` window. `loadHistory`
+preserves originating sidecar IDs and valid partial histories when another
+source definitively rejects. If every requested source definitively rejects, it
+propagates that failure to the existing prompt feedback owner instead of
+reporting a successful empty history. A reconnecting request remains pending;
+there is no recall-specific failure timer.
+
 ## Request event consumers
 
 `createFormIntent({capture, presenter, diagnostic?})` owns a form's captured

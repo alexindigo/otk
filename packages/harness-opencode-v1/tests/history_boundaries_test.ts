@@ -4,7 +4,8 @@ import { assert, assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import { History } from "../history.ts";
-import { fixture } from "../../../tests/support/config.ts";
+import { NativeRequestFailure } from "../client.ts";
+import { cfg, fixture } from "../../../tests/support/config.ts";
 const captured = fromFileUrl(
   new URL(
     "../../../tests/fixtures/opencode1/history-1.18.34-v4.db",
@@ -12,7 +13,7 @@ const captured = fromFileUrl(
   ),
 );
 test("async history reads settle across close and unavailable attachments reject rather than throw", async () => {
-  const reader = new History(captured);
+  const reader = new History(captured, cfg().attachments);
   const listing = reader.listHistory();
   const attachment = reader.attachment({
     messageID: "missing",
@@ -22,16 +23,17 @@ test("async history reads settle across close and unavailable attachments reject
   assert(attachment instanceof Promise);
   reader.close();
   assert((await listing).some((row) => row.input === "history first"));
-  await assertRejects(
+  const failure = await assertRejects(
     () => attachment,
-    Error,
-    "Recalled attachment is no longer available",
+    NativeRequestFailure,
   );
+  assertEquals(failure.outcome, "rejected");
+  assertEquals(failure.failure.code, "attachment.unreadable");
 });
 test("actual history shell lookup uses the native message session/time index", async () => {
   const statements: string[] = [];
   const prepare = DatabaseSync.prototype.prepare;
-  const reader = new History(captured);
+  const reader = new History(captured, cfg().attachments);
   try {
     DatabaseSync.prototype.prepare = function (sql: string) {
       statements.push(sql);
@@ -47,10 +49,11 @@ test("actual history shell lookup uses the native message session/time index", a
   const db = new DatabaseSync(captured, { readOnly: true });
   try {
     const plan = db.prepare("EXPLAIN QUERY PLAN " + sql).all(
-      "session",
-      0,
-      Number.MAX_SAFE_INTEGER,
-      "message",
+      JSON.stringify([{
+        id: "message",
+        session_id: "session",
+        time_created: 0,
+      }]),
     ).map((row) => String(row.detail)).join("\n");
     console.info("History shell query plan:", plan);
     assert(
@@ -85,7 +88,7 @@ async function database() {
   return { path, db, message, part, session, time };
 }
 test("history list returns attachment metadata with no base64 or data URL bytes", async () => {
-  const reader = new History(captured);
+  const reader = new History(captured, cfg().attachments);
   try {
     const entries = await reader.listHistory();
     assert(
@@ -119,7 +122,7 @@ for (const malformed of ["url", "json"] as const) {
       f.db.prepare("UPDATE part SET data=? WHERE id=?").run("{bad", "prt_bad");
     }
     f.db.close();
-    const reader = new History(f.path);
+    const reader = new History(f.path, cfg().attachments);
     const warn = console.warn, warnings: string[] = [];
     try {
       console.warn = (...values: unknown[]) => {

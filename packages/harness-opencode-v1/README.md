@@ -60,6 +60,7 @@ const harness: Harness = new OpencodeV1Adapter({
     busyms: 100,
   },
   catalogs: { concurrency: 2, statconcurrency: 8, pending: 128 },
+  attachments: { concurrency: 4, maxrefs: 64, maxbytes: 33554432 },
   messages: {
     coolms: 300000,
     preloadms: 30000,
@@ -137,18 +138,48 @@ operations and reload snapshots carry the same projection.
 
 The adapter retains ownership of events, stream buffers, task watchers, admitted
 shell/command requests and reconciled HTTP/SSE errors. Stop aborts and joins
-owned requests and releases readers. History lists contain metadata, not upload
-bytes; `capabilities.history.attachment({ messageID, partID })` retrieves those
-bytes asynchronously. Missing/incompatible databases degrade to empty history
-without creating or writing them.
+owned requests and releases readers. History lists contain prompt text and
+attachment references, never upload bytes. The shipped facade uses the same
+worker/scheduler's transient `history.list`, `history.entries` and
+`history.attachments` contributions. No history result enters digest commits or
+durable receipts. Missing/incompatible provider databases reject as unavailable;
+they are neither created nor represented as a successful empty history.
+
+`History(providerReadPort, attachmentPolicy)` is independently composable.
+`History(existingFile, attachmentPolicy)` supplies a standalone read-only owner;
+the policy is explicit in either form. `listHistory(signal?)` selects the newest
+`PROMPT_HISTORY_LIMIT` global user candidates with bounded descending header
+chunks, then deduplicates adjacent equivalent prompts. Parts and synthetic shell
+commands use two set queries for the whole batch.
+`entry(sessionID, messageID, signal?)` is asynchronous and uses that same batch
+mapper. Malformed individual entries are diagnosed and omitted; an unavailable
+reader does not erase the failure as an empty result.
+
+`attachments(refs,signal?)` validates the entire unique, ordered batch using one
+scalar admission query before a second selected-body query. Results correlate
+each `ref` with its upload `part`. Count, combined decoded bytes and the shared
+immutable per-upload limit all apply before bytes leave SQLite. Byte-bounded
+fragments use the existing publication credits; contiguous offsets and exact
+final lengths are checked before exposing an attachment. The compatibility
+`attachment(ref,signal?)` delegates to a one-element batch. The existing point
+wire remains coherent until the separate protocol activation. No provider data
+is recoverable from an unlinked/replaced native file handle. Missing, wrong-kind
+or over-budget attachment references are definite native rejections, not
+provider-unavailability waits; the existing safe attachment failure presenter
+retains the draft and chips for correction.
 
 Explicit path attachments are required: normal prompts and slash commands
 resolve every selected path and check file-read or directory-list access before
 native admission. A missing or unreadable path rejects the whole send with an
 `attachment` error naming that path, so the caller retains its draft and chips.
 The mapper never omits a submitted part. Only best-effort file discovery may
-skip unavailable candidates. Paths remain native file references; these checks
-do not copy file contents or prevent subsequent external filesystem changes.
+skip unavailable candidates. Normal and slash sends share one bounded per-send
+path workset and attachment policy. Paths remain native file references; these
+checks do not copy whole file contents or prevent subsequent external filesystem
+changes. Bounded headers identify PNG/JPEG/GIF/WebP/PDF, UTF-8 text without NUL,
+or unknown binary. A line range requires text. Local `file://` references are
+converted with native path semantics (including percent decoding); empty and
+localhost authorities are accepted, remote authorities rejected.
 
 Native image file parts retain their original URL in the neutral transcript
 mapping, shared by snapshots and live updates. Uploaded image data URLs

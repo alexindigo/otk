@@ -10,7 +10,7 @@ import {
   emptyDraft,
   serialize,
 } from "../components/prompt/model.ts";
-import { fixture } from "../../../tests/support/config.ts";
+import { cfg, fixture } from "../../../tests/support/config.ts";
 
 const captured = fromFileUrl(
   new URL(
@@ -19,7 +19,7 @@ const captured = fromFileUrl(
   ),
 );
 test("prompt history consumer preserves captured attachments and refuses recall across changed drafts", async () => {
-  const reader = new History(captured);
+  const reader = new History(captured, cfg().attachments);
   try {
     const entries = await reader.listHistory();
     assertEquals(serialize(historyDraft(entries[2])), entries[2].parts);
@@ -66,7 +66,7 @@ test("history recall preserves stored relative mention labels without adding a d
     },
   });
   db.close();
-  const reader = new History(path);
+  const reader = new History(path, cfg().attachments);
   try {
     const entry = (await reader.listHistory()).find((row) =>
       row.input.startsWith("inspect @src")

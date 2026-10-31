@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../../support/config.ts";
 import { assertEquals } from "@std/assert";
 import type { HelperSummary } from "@otk/protocol";
 import { DigestBridge } from "../../../core/digest/bridge.ts";
@@ -96,6 +97,7 @@ test("live catalog discovery resumes helper demand admitted before its metadata 
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: cfg().attachments,
     },
     policy: {
       batch: 2,

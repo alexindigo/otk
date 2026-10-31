@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { catalogReaders } from "./catalog-reads.ts";
+import { HistoryReader } from "./history.ts";
 import { sessionDirectory } from "./directory.ts";
 import type { DatabaseSync } from "node:sqlite";
 import {
@@ -206,6 +207,18 @@ export class OpencodeV1DigestSink implements DigestSink {
     this.readers = {
       ...catalogReaders(this.#client),
       "identity.batch": (input, signal) => this.identities(input.ids, signal),
+      "history.list": (_input, signal) =>
+        this.#historyRead(signal, (reader) => reader.list(signal)),
+      "history.entries": (input, signal) =>
+        this.#historyRead(
+          signal,
+          (reader) => reader.entries(input.keys, signal),
+        ),
+      "history.attachments": (input, signal) =>
+        this.#historyRead(
+          signal,
+          (reader) => reader.attachments(input.refs, signal),
+        ),
     };
     this.#compute = new NativeReadiness(
       readiness.ioWait ?? this.wait,
@@ -301,6 +314,28 @@ export class OpencodeV1DigestSink implements DigestSink {
     return { prompt, boundaries: [...boundaries.values()], cutoffCreated };
   }
   /** Authority validation never borrows cached directory hints as evidence. */
+  async #historyRead<T>(
+    signal: AbortSignal,
+    run: (reader: HistoryReader) => T | Promise<T>,
+  ): Promise<T> {
+    const connection = this.#connection;
+    const native = await this.#metadataSource(signal);
+    signal.throwIfAborted();
+    if (!native) throw new Error("Provider history database is unavailable");
+    const reader = new HistoryReader(
+      () => {
+        signal.throwIfAborted();
+        if (
+          this.#closed || connection !== this.#connection ||
+          native.fileIdentity() !== native.identity
+        ) throw new Error("Provider history authority changed");
+        return native.db;
+      },
+      this.cfg.attachments,
+      () => this.wait(new Promise((resolve) => setTimeout(resolve, 0))),
+    );
+    return await run(reader);
+  }
   async identities(
     wanted: readonly string[],
     signal: AbortSignal,

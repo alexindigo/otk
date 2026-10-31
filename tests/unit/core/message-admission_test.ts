@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../../support/config.ts";
 import { assert } from "@std/assert";
 import type { FromWorker, ToWorker } from "../../../core/digest/protocol.ts";
 import { bounded, resources, tempDir, test } from "../../support/resources.ts";
@@ -65,6 +66,7 @@ test("essential transcript metadata is served while bulk catalog publication awa
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: cfg().attachments,
     },
     policy: {
       batch: 2,

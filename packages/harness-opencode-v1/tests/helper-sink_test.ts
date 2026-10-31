@@ -11,6 +11,7 @@ import {
   type RawPart,
 } from "@otk/harness-opencode-v1";
 import { tempDir, test } from "../../../tests/support/resources.ts";
+import { cfg } from "../../../tests/support/config.ts";
 const policy = {
   batch: 50,
   slicems: 8,
@@ -89,6 +90,7 @@ for (const api of [false, true]) {
           requestms: 60000,
         },
         index: { days: 30 },
+        attachments: cfg().attachments,
       },
       policy,
       {

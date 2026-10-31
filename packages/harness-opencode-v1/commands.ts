@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { CommandsCapability } from "@otk/harness";
-import type { CommandOption } from "@otk/protocol";
+import type { AttachmentPolicy, CommandOption } from "@otk/protocol";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
 import type { Launch } from "./shell.ts";
@@ -12,6 +12,7 @@ export function commands(
   directory: Directory,
   launch: Launch,
   catalogs?: DirectoryCatalogs,
+  policy?: AttachmentPolicy,
 ): CommandsCapability {
   return {
     async listCommands(sessionID, signal) {
@@ -77,7 +78,12 @@ export function commands(
             model: input.model
               ? `${input.model.provider}/${input.model.model}`
               : undefined,
-            parts: await mapPromptParts(input.parts || [], dir, operation),
+            parts: await mapPromptParts(
+              input.parts || [],
+              dir,
+              operation,
+              policy,
+            ),
           },
         },
       );

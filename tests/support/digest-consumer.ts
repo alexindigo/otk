@@ -16,6 +16,7 @@ const bridge = new DigestBridge({
       requestms: 60000,
     },
     index: { days: 30 },
+    attachments: { concurrency: 1, maxrefs: 10, maxbytes: 1024 },
   },
   policy: {
     batch: 2,

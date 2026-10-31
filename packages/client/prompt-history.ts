@@ -1,5 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { type HistoryEntry, sameHistory } from "@otk/protocol";
+import {
+  type HistoryEntry,
+  PROMPT_HISTORY_LIMIT,
+  sameHistory,
+} from "@otk/protocol";
 import type { PromptPart } from "@otk/protocol";
 import {
   type Draft,
@@ -92,7 +96,7 @@ export class PromptHistory {
         }));
   }
   replace(entries: HistoryEntry[]): void {
-    this.#entries = entries.slice(0, 50);
+    this.#entries = entries.slice(0, PROMPT_HISTORY_LIMIT);
     this.#index = -1;
     this.#last = undefined;
   }

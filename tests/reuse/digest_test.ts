@@ -126,6 +126,7 @@ test("independent public-entry consumer composes native sink, scheduler and deri
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: { concurrency: 1, maxrefs: 10, maxbytes: 1024 },
     },
     policy,
     {

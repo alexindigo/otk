@@ -84,6 +84,7 @@ test("identity owner release cancels actual worker I/O and releases admission fo
         db: root + "/absent.db",
       },
       index: settings.index,
+      attachments: settings.attachments,
     },
     policy: settings.digest,
     reads: { "identity.batch": identityReadCodec },

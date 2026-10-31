@@ -9,7 +9,8 @@ import {
   ReadAdmission,
 } from "@otk/harness";
 import { Client } from "./client.ts";
-import type { OpencodeV1Config } from "./config.ts";
+import { harnessDb, type OpencodeV1Config } from "./config.ts";
+import { HistoryDatabase } from "./history.ts";
 import { catalogReaders } from "./catalog-reads.ts";
 
 /** Standalone integrations inject the same scheduler policy; no derived DB is needed. */
@@ -65,6 +66,7 @@ export class CatalogExecutor implements ProviderReadPort {
   }
   #admission?: ReadAdmission;
   #metadata?: ReadAdmission;
+  #history?: HistoryDatabase;
   async read<K extends keyof ProviderReadKinds>(
     kind: K,
     input: ProviderReadKinds[K]["input"],
@@ -96,10 +98,22 @@ export class CatalogExecutor implements ProviderReadPort {
             undefined,
             this.statconcurrency,
           );
-          const readers: ProviderReaders = catalogReaders(
-            client,
-            (signal) => metadata.acquire(signal, options.priority === "user"),
+          const history = this.#history ??= new HistoryDatabase(
+            harnessDb(this.cfg),
           );
+          const readers: ProviderReaders = {
+            ...catalogReaders(
+              client,
+              (signal) => metadata.acquire(signal, options.priority === "user"),
+            ),
+            ...history.reader(
+              this.cfg.attachments,
+              () =>
+                execution.wait(
+                  new Promise((resolve) => setTimeout(resolve, 0)),
+                ),
+            ).readers(),
+          };
           const reader = readers[kind];
           if (!reader) throw new Error("Provider read not selected");
           return await reader(input, signal);
@@ -125,5 +139,7 @@ export class CatalogExecutor implements ProviderReadPort {
     this.#scheduler = undefined;
     this.#admission = undefined;
     this.#metadata = undefined;
+    this.#history?.close();
+    this.#history = undefined;
   }
 }

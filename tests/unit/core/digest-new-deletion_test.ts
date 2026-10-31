@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../../support/config.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { SessionIndex } from "@otk/harness";
@@ -36,6 +37,7 @@ test("accepted deletion before catalog seeds retained metadata and survives rest
           requestms: 60000,
         },
         index: { days: 30 },
+        attachments: cfg().attachments,
       },
       policy: {
         batch: 100,

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../../../tests/support/config.ts";
 import { assertAlmostEquals, assertEquals, assertRejects } from "@std/assert";
 import { DatabaseSync } from "node:sqlite";
 import { join } from "@std/path";
@@ -167,6 +168,7 @@ async function fixture(
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: cfg().attachments,
     },
     policy,
     {

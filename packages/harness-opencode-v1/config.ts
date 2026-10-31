@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { join } from "@std/path";
-import type { MessagePolicy } from "@otk/protocol";
+import type { AttachmentPolicy, MessagePolicy } from "@otk/protocol";
 import type { DigestPolicy } from "@otk/harness";
 
 /** Native adapter inputs, independent of sidecar configuration/auth/state. */
 export interface OpencodeV1Config {
+  attachments: AttachmentPolicy;
   harness: {
     url: string;
     username: string;

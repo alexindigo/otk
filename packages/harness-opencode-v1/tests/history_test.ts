@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../../../tests/support/resources.ts";
-import { assert, assertEquals } from "@std/assert";
+import { assert, assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import { History } from "../history.ts";
 import { mergeHistory } from "@otk/protocol";
-import { fixture } from "../../../tests/support/config.ts";
+import { cfg, fixture } from "../../../tests/support/config.ts";
 const file = fromFileUrl(
   new URL(
     "../../../tests/fixtures/opencode1/history-1.18.34-v4.db",
@@ -14,7 +14,7 @@ const file = fromFileUrl(
 );
 test("history reads captured 1.18.34 DB, restores shell/file/agent, drops adjacent duplicates and never writes it", async () => {
   const before = await Deno.readFile(file),
-    reader = new History(file),
+    reader = new History(file, cfg().attachments),
     entries = await reader.listHistory();
   reader.close();
   assertEquals(entries.map((entry) => [entry.input, entry.mode]), [
@@ -31,11 +31,11 @@ test("history reads captured 1.18.34 DB, restores shell/file/agent, drops adjace
   assertEquals(await Deno.readFile(file), before);
   assertEquals(mergeHistory([entries, entries]).length, 4);
 });
-test("history degrades missing schema without creation and enforces newest fifty user messages", async () => {
+test("history reports unavailable schema without creation and enforces newest fifty user messages", async () => {
   const root = await fixture(),
     missing = join(root, "missing.db"),
-    reader = new History(missing);
-  assertEquals(await reader.listHistory(), []);
+    reader = new History(missing, cfg().attachments);
+  await assertRejects(() => reader.listHistory());
   reader.close();
   let exists = true;
   try {
@@ -72,7 +72,8 @@ test("history degrades missing schema without creation and enforces newest fifty
     );
   }
   db.close();
-  const bounded = new History(path), entries = await bounded.listHistory();
+  const bounded = new History(path, cfg().attachments),
+    entries = await bounded.listHistory();
   bounded.close();
   assertEquals(entries.length, 50);
   assertEquals(entries[0].input, "limit 59");
@@ -80,8 +81,8 @@ test("history degrades missing schema without creation and enforces newest fifty
   const bad = join(root, "schema.db"), invalid = new DatabaseSync(bad);
   invalid.exec("CREATE TABLE message(id TEXT)");
   invalid.close();
-  const degraded = new History(bad);
-  assertEquals(await degraded.listHistory(), []);
+  const degraded = new History(bad, cfg().attachments);
+  await assertRejects(() => degraded.listHistory());
   degraded.close();
   assert(await Deno.stat(bad));
 });

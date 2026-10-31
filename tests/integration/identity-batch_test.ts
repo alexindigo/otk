@@ -25,6 +25,7 @@ test("stock native batch identity consumer, task grouping, tombstone seen and un
   const native = {
     harness: { ...settings.harness, url: oc.url, db: oc.db },
     index: settings.index,
+    attachments: settings.attachments,
   };
   const bridge = new DigestBridge({
     statePath: await tempDir("identity-port-"),

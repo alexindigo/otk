@@ -1,5 +1,13 @@
 # @otk/harness
 
+`HistoryReadKinds` contributes global recall, keyed recall entries and ordered
+attachment batches to `ProviderReadKinds`. These are volatile requested results,
+separate from metadata-only digest publications. `historyAttachmentCodec`
+fragments upload base64 into bounded pieces under ordinary publication credit,
+validates identity/offset/size continuity and exposes only complete uploads.
+Selected native readers and codecs are composed through the existing open maps;
+the scheduler/transport has no dispatch switch on history method names.
+
 Harness-neutral session and lifecycle contracts, `HarnessSink`, `HarnessError`,
 and typed optional capabilities. Depends only on `@otk/protocol`. Import the
 public entry `@otk/harness`; native schemas and endpoints belong to adapters.

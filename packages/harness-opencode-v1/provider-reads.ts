@@ -3,12 +3,16 @@ import {
   arrayReadCodec,
   catalogFileCodec,
   catalogModelCodec,
+  historyAttachmentCodec,
   identityReadCodec,
   type ProviderReadCodecs,
 } from "@otk/harness";
 /** Codecs matching this native sink's selected transient readers. */
 export const opencodeV1ReadCodecs: ProviderReadCodecs = {
   "identity.batch": identityReadCodec,
+  "history.list": arrayReadCodec(),
+  "history.entries": arrayReadCodec(),
+  "history.attachments": historyAttachmentCodec,
   "catalog.agents": arrayReadCodec(),
   "catalog.commands": arrayReadCodec(),
   "catalog.skills": arrayReadCodec(),

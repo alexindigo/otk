@@ -86,7 +86,11 @@ export type FromWorker =
   & (
     | { t: "accepted" }
     | ProviderReadResult
-    | { t: "read.failure"; failure: PublicFailure }
+    | {
+      t: "read.failure";
+      outcome: "rejected" | "unavailable";
+      failure: PublicFailure;
+    }
     | { t: "transcript"; sessionID: string; metadata: TranscriptMetadata }
     | {
       t: "catalog";

@@ -8,6 +8,7 @@ import { DatabaseSync } from "node:sqlite";
 import { fromFileUrl } from "@std/path";
 import { History } from "@otk/harness-opencode-v1";
 import { nativeVersion } from "./native.ts";
+import { cfg } from "./config.ts";
 const pixel =
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
 test("capture prompt history fixture from selected real opencode", async () => {
@@ -90,14 +91,14 @@ test("capture prompt history fixture from selected real opencode", async () => {
     }
     await oc.stop();
     stopped = true;
-    const newReader = new History(fresh),
+    const newReader = new History(fresh, cfg().attachments),
       projection = (await newReader.listHistory()).map((
         { time: _time, ...entry },
       ) => entry);
     newReader.close();
     try {
       await Deno.stat(destination);
-      const existing = new History(fromFileUrl(destination));
+      const existing = new History(fromFileUrl(destination), cfg().attachments);
       try {
         assertEquals(
           (await existing.listHistory()).map(({ time: _time, ...entry }) =>

@@ -8,6 +8,7 @@ import {
   OpencodeV1DigestSink,
 } from "@otk/harness-opencode-v1";
 import { tempDir, test } from "../../../tests/support/resources.ts";
+import { cfg } from "../../../tests/support/config.ts";
 
 test("a rejected first digest commit leaves scan generation and baseline together", async () => {
   const root = await tempDir("checkpoint-"), file = join(root, "native.db");
@@ -43,6 +44,7 @@ test("a rejected first digest commit leaves scan generation and baseline togethe
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: cfg().attachments,
     },
     {
       batch: 100,

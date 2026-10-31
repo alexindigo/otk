@@ -185,7 +185,7 @@ export class OpencodeV1Adapter implements Harness {
       diagnostic: (error) => console.warn("directory catalog:", error),
     });
     this.#db = new BootstrapDb(harnessDb(cfg));
-    this.#history = new History(harnessDb(cfg));
+    this.#history = new History(catalogReads, cfg.attachments);
     this.#messages = new Messages(this.client, (id) => this.#directory(id));
     this.#colors = new AgentColors(
       this.client,
@@ -379,12 +379,12 @@ export class OpencodeV1Adapter implements Harness {
       prompt(this.client, directory, (id) => {
         this.#abortCommands(id);
         this.#errors.cancel(id);
-      }),
+      }, cfg.attachments),
     );
     registry.register("shell", shell(this.client, directory, launch));
     registry.register(
       "commands",
-      commands(this.client, directory, launch, this.catalogs),
+      commands(this.client, directory, launch, this.catalogs, cfg.attachments),
     );
     registry.register("history", this.#history);
     registry.register("files", files(this.client, directory, this.catalogs));
@@ -651,7 +651,14 @@ export class OpencodeV1Adapter implements Harness {
       session.revert.messageID,
       50,
     );
-    let prompt = this.#history.entry(id, session.revert.messageID);
+    let prompt: import("@otk/protocol").HistoryEntry | undefined;
+    try {
+      prompt = await this.#history.entry(id, session.revert.messageID, signal);
+    } catch (error) {
+      signal?.throwIfAborted();
+      // An unavailable native DB retains the existing API fallback boundary.
+      if (messageCount !== undefined && projected) throw error;
+    }
     let prompts = projected?.map(({ text, ...row }) => ({
       ...row,
       preview: revertPreview(text),

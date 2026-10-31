@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../../support/config.ts";
 import { assertEquals } from "@std/assert";
 import { DigestBridge } from "../../../core/digest/bridge.ts";
 import { bounded, resources, tempDir, test } from "../../support/resources.ts";
@@ -65,6 +66,7 @@ test("interactive reads cannot pause an ordered publication needed by a newer de
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: cfg().attachments,
     },
     policy: {
       batch: 10,
@@ -159,6 +161,7 @@ test("fresh catalog replacement publishes tombstones left by a cancelled cached 
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: cfg().attachments,
     },
     policy: {
       batch: 10,

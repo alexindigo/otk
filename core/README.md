@@ -384,6 +384,22 @@ durable request receipts. The current compatibility RPCs borrow these services;
 directory wire leases and client-resource activation are a separate protocol
 change.
 
+Provider-backed prompt recall and attachment batches use that same transient
+read channel. Their feature-owned readers borrow the worker's existing native
+SQLite connection; no serving-isolate history connection is composed. Global
+header search yields between bounded chunks, and parts/synthetic shell commands
+materialize by set. Attachment scalar validation precedes byte retrieval for the
+whole batch. Typed byte fragments share publication credit and are assembled
+only with contiguous offsets and complete lengths. Neither transient results nor
+upload bytes become digest commits or durable read receipts. The layered
+`attachments` policy is injected from the complete defaults into native read and
+prompt/slash preparation; libraries do not read operator environment values or
+invent policy defaults. Wire/client batch activation is a separate protocol
+step. Transient read failures retain neutral certainty across the worker
+boundary: definite input/attachment rejection completes with safe failure
+metadata, while provider unavailability remains waiting under the existing
+request lifecycle.
+
 ## Worker-backed digest services
 
 `core/digest/worker.ts` is an application composition root over public store,

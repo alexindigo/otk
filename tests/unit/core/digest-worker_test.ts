@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../../support/config.ts";
 import { assertEquals, assertRejects } from "@std/assert";
 import { DigestBridge } from "../../../core/digest/bridge.ts";
 import { bounded, resources, tempDir, test } from "../../support/resources.ts";
@@ -41,6 +42,7 @@ test("public worker port publishes real native totals and recovers committed met
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: cfg().attachments,
     },
     policy: {
       batch: 2,
@@ -202,6 +204,7 @@ test("last bridge caller release aborts the worker's actual HTTP read and admits
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: cfg().attachments,
     },
     policy: {
       batch: 2,
@@ -259,6 +262,7 @@ test("worker startup failure closes acquired state and stop still acknowledges",
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: cfg().attachments,
     },
     policy: {
       batch: 2,
@@ -335,6 +339,7 @@ test("a malformed aggregate is scoped to its session and cannot starve another d
         requestms: 60000,
       },
       index: { days: 30 },
+      attachments: cfg().attachments,
     },
     policy: {
       batch: 2,

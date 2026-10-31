@@ -50,6 +50,7 @@ export async function start(
         requestms: cfg.harness.requestms,
       },
       index: cfg.index,
+      attachments: cfg.attachments,
     },
     policy: cfg.digest,
     section: diagnostics?.section,

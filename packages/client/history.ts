@@ -21,9 +21,12 @@ export async function loadHistory(
       )
     ),
   );
-  return mergeHistory(
-    results.flatMap((result) =>
-      result.status === "fulfilled" ? [result.value] : []
-    ),
+  const groups = results.flatMap((result) =>
+    result.status === "fulfilled" ? [result.value] : []
   );
+  if (!groups.length) {
+    const failure = results.find((result) => result.status === "rejected");
+    if (failure?.status === "rejected") throw failure.reason;
+  }
+  return mergeHistory(groups);
 }

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { SessionIdentity } from "./types.ts";
+import type { HistoryReadKinds } from "./history-reads.ts";
 import type {
   AgentReadKinds,
   CommandReadKinds,
@@ -20,6 +21,7 @@ export interface IdentityReadKinds {
 export interface ProviderReadKinds
   extends
     IdentityReadKinds,
+    HistoryReadKinds,
     AgentReadKinds,
     CommandReadKinds,
     SkillReadKinds,

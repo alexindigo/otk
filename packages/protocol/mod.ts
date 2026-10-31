@@ -8,6 +8,7 @@ export * from "./content.ts";
 export * from "./errors.ts";
 export * from "./frecency.ts";
 export * from "./history.ts";
+export * from "./policies/attachments.ts";
 export * from "./index.ts";
 export * from "./inbox.ts";
 export * from "./messages.ts";

@@ -41,6 +41,11 @@ statconcurrency = 8
 # Fine invalidation keys before full directory reconciliation. OTK_CATALOGS_PENDING
 pending = 128
 
+[attachments]
+concurrency = 4 # OTK_ATTACHMENTS_CONCURRENCY — aggregate origin/path preparation reads per send, positive count
+maxrefs = 64 # OTK_ATTACHMENTS_MAXREFS — maximum attachment references per send, positive count
+maxbytes = 33554432 # OTK_ATTACHMENTS_MAXBYTES — combined decoded upload bytes per send
+
 [index]
 days = 30 # OTK_INDEX_DAYS — recent-background priority horizon in days; older sessions remain indexed
 

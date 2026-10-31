@@ -1,5 +1,12 @@
 # @otk/protocol
 
+`PROMPT_HISTORY_LIMIT` owns the global recall candidate/retention window.
+`MAX_UPLOAD_BYTES` owns the immutable per-upload limit; `AttachmentPolicy`
+describes injected aggregate reference/byte/concurrency admission. Recall and
+upload preparation consumers share these feature bounds instead of copying
+numeric limits. These additions do not activate a new wire version by
+themselves.
+
 The additive request-service contracts export `RequestRef`, `RequestControl`,
 `RequestEvent`, progress/failure facts and injected request policies
 independently of the currently selected wire union. `RequestReceipts` is

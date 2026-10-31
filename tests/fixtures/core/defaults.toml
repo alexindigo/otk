@@ -29,6 +29,10 @@ days = 30
 concurrency = 2
 statconcurrency = 8
 pending = 128
+[attachments]
+concurrency = 4
+maxrefs = 64
+maxbytes = 33554432
 [digest]
 batch = 100
 slicems = 8

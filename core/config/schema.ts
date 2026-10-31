@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { DigestPolicy } from "@otk/harness";
 import type {
+  AttachmentPolicy,
   ClientRequestPolicy,
   MessagePolicy,
   RequestPolicy,
@@ -51,6 +52,7 @@ export const SERVICE_SCHEMA: Schema = {
   },
   index: { days: "int" },
   catalogs: { concurrency: "int", statconcurrency: "int", pending: "int" },
+  attachments: { concurrency: "int", maxrefs: "int", maxbytes: "int" },
   messages: {
     coolms: "int",
     preloadms: "int",
@@ -106,6 +108,7 @@ export interface ServiceConfig {
   };
   index: { days: number };
   catalogs: { concurrency: number; statconcurrency: number; pending: number };
+  attachments: AttachmentPolicy;
   digest: DigestPolicy;
   messages: MessagePolicy;
 }

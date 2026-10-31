@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PromptPart } from "./rpc.ts";
+/** Global intent-triggered recall window, before adjacent deduplication. */
+export const PROMPT_HISTORY_LIMIT = 50;
 export interface HistoryEntry {
   input: string;
   mode: "normal" | "shell";
@@ -46,5 +48,5 @@ export function mergeHistory(groups: HistoryEntry[][]): HistoryEntry[] {
   for (const entry of groups.flat().sort((a, b) => b.time - a.time)) {
     if (!sameHistory(result.at(-1), entry)) result.push(entry);
   }
-  return result.slice(0, 50);
+  return result.slice(0, PROMPT_HISTORY_LIMIT);
 }

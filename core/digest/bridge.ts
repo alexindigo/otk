@@ -495,7 +495,7 @@ export class DigestBridge implements DigestPort {
         (message) => {
           if (message.t === "read.failure") {
             throw new OperationFailure(
-              "unavailable",
+              message.outcome,
               message.failure.code,
               message.failure,
             );

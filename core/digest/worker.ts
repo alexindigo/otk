@@ -21,6 +21,7 @@ import {
 import {
   type DigestDelta,
   errorMessage,
+  OperationFailure,
   type SessionMetadata,
 } from "@otk/protocol";
 import type { FromWorker, ToWorker } from "./protocol.ts";
@@ -918,9 +919,19 @@ function handle(message: ToWorker): void {
                   t: "read.failure",
                   run: run!,
                   id: message.id,
+                  outcome: error instanceof OperationFailure &&
+                      error.outcome === "rejected"
+                    ? "rejected"
+                    : "unavailable",
                   failure: {
-                    code: "native.unavailable",
-                    retry: "same-intent",
+                    code: error instanceof OperationFailure &&
+                        error.outcome !== "unknown"
+                      ? error.code
+                      : "native.unavailable",
+                    retry: error instanceof OperationFailure &&
+                        error.outcome === "rejected"
+                      ? "new-intent"
+                      : "same-intent",
                     diagnosticID: crypto.randomUUID(),
                   },
                 });

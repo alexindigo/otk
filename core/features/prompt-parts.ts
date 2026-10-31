@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { PromptPart } from "@otk/protocol";
+import { MAX_UPLOAD_BYTES, type PromptPart } from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
 import { object, text } from "../ws/params.ts";
-export const MAX_UPLOAD_BYTES: number = 20 * 1024 * 1024;
+export { MAX_UPLOAD_BYTES } from "@otk/protocol";
 export function promptParts(value: unknown): PromptPart[] {
   if (!Array.isArray(value) || !value.length) {
     throw new HarnessError("params", "parts required");
@@ -23,7 +23,12 @@ export function promptParts(value: unknown): PromptPart[] {
         dataBase64.length / 4 * 3 -
             (dataBase64.endsWith("==") ? 2 : dataBase64.endsWith("=") ? 1 : 0) >
           MAX_UPLOAD_BYTES
-      ) throw new HarnessError("params", "Upload exceeds 20 MiB");
+      ) {
+        throw new HarnessError(
+          "params",
+          `Upload exceeds ${MAX_UPLOAD_BYTES / 1024 / 1024} MiB`,
+        );
+      }
       const mime = text(p, "mime")!;
       if (!/^[\w.+-]+\/[\w.+-]+$/.test(mime)) {
         throw new HarnessError("params", "Invalid upload MIME type");
