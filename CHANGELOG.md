@@ -59,6 +59,7 @@ server's bootstrap, avoiding redundant acquisition during navigation.
 - Keep permission and question targets current when returning to a warm session.
 - Associate failed project-menu actions with their in-row error for assistive
   technology.
+- Keep the composer footer steady when Send appears or disappears.
 
 #### Test
 

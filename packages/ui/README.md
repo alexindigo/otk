@@ -282,7 +282,9 @@ growing in 24px prose lines to the component's named 240px cap. It then scrolls
 internally with the caret; deleting text or clearing a sent draft shrinks it.
 The footer stays in flow beneath the input as the dock gives space back to the
 transcript above. Editor/history replacements use the same textarea value path,
-and automatic sizing has no manual resize grip or per-caller sizing logic.
+and automatic sizing has no manual resize grip or per-caller sizing logic. The
+Send slot retains its shared control geometry while an unavailable Send action
+is absent, so empty, pending and sendable drafts keep the same footer.
 
 Image uploads contribute independent chips: one contained thumbnail beside the
 label and explicit remove button, without inserting a textarea token. Shared

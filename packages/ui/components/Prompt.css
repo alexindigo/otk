@@ -46,3 +46,10 @@ textarea.otk-prompt-input:focus-visible {
 .otk-prompt-actions > button {
   flex: none;
 }
+.otk-prompt-send-slot {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: var(--send-button-size);
+  min-block-size: var(--send-button-size);
+}

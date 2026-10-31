@@ -58,6 +58,7 @@
   --chrome-header-height: 52px;
   --control-size: 28px;
   --form-control-size: 32px;
+  --send-button-size: 32px;
   --control-height: var(--control-size);
   --control-border: 0px;
   --control-inner-size: calc(var(--control-height) - 2 * var(--control-border));
@@ -303,8 +304,8 @@ small {
   flex: none;
 }
 .otk-send-button {
-  width: 32px;
-  height: 32px;
+  width: var(--send-button-size);
+  height: var(--send-button-size);
   display: inline-grid;
   place-items: center;
   padding: 0;

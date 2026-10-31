@@ -382,19 +382,21 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
             {submitTitle()}
           </span>
         </Show>
-        <Show
-          when={!pending() && canSubmit() && hasDraftContent(props.value) &&
-            !props.value.chips.some((chip) => chip.pending || chip.error)}
-        >
-          <button
-            type="submit"
-            class="otk-primary otk-send-button"
-            aria-label="Send"
-            title={submitTitle()}
+        <div class="otk-prompt-send-slot">
+          <Show
+            when={!pending() && canSubmit() && hasDraftContent(props.value) &&
+              !props.value.chips.some((chip) => chip.pending || chip.error)}
           >
-            <SendIcon />
-          </button>
-        </Show>
+            <button
+              type="submit"
+              class="otk-primary otk-send-button"
+              aria-label="Send"
+              title={submitTitle()}
+            >
+              <SendIcon />
+            </button>
+          </Show>
+        </div>
       </div>
       <Show when={!session?.feedback && (pending() || feedback())}>
         <ComposerNotice>
