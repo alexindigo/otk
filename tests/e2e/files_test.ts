@@ -5,7 +5,13 @@ import { fromFileUrl, join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { recordTools, runTool } from "../support/rendering.ts";
 import type { RawPart } from "@otk/harness-opencode-v1";
-test("R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/diagnostics and patch statuses", async () => {
+import { WsClient } from "../support/ws-client.ts";
+
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/diagnostics and patch statuses (${theme})`, () =>
+    fileTools(theme));
+}
+async function fileTools(theme: string) {
   const lsp = fromFileUrl(new URL("../support/fake-lsp.ts", import.meta.url));
   const f = await browserFixture({
     bash: "allow",
@@ -32,13 +38,21 @@ test("R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/dia
       await Deno.writeTextFile(join(oc.directory, "move.txt"), "move me\n");
     },
   });
+  let client: WsClient | undefined;
   try {
     const s = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "File tools" },
     });
-    const server = await f.sidecar(), browser = await f.browser(server.url);
+    const server = await f.sidecar();
+    client = new WsClient(server.url);
+    await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
+    const browser = await f.browser(server.url);
     await openSession(browser, s.id);
+    await browser.poll(
+      `document.documentElement.dataset.otkTheme==='${theme}'`,
+    );
     // Exercise file renderers in expanded display mode.
     await browser.click(".otk-display-menu > button");
     await browser.click("input[name=collapseFileChanges]");
@@ -97,8 +111,12 @@ test("R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/dia
     await browser.key("ArrowUp");
     await browser.key("ArrowUp");
     await browser.key("Enter");
+    await browser.poll(
+      "document.querySelector('select[name=diffStyle]').value==='auto'",
+    );
     await browser.click(".otk-display-menu > button");
-    // Auto diff style uses the transcript pane's width, excluding both side panels.
+    // Auto measures the diff's container, not the wider transcript pane. The
+    // normal reading lane stays unified even on a wide display.
     const wideViewport = await browser.evaluate<number>(
       "Math.ceil(innerWidth + 1280 - document.querySelector('.otk-session-view').getBoundingClientRect().width)",
     );
@@ -108,6 +126,20 @@ test("R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/dia
       deviceScaleFactor: 1,
       mobile: false,
     });
+    await browser.poll(
+      "document.querySelector('[data-tool=edit] .otk-diff').dataset.diffStyle==='unified' && document.querySelector('.otk-session-view').getBoundingClientRect().width>=1280",
+    );
+    assertEquals(
+      await browser.evaluate(
+        "(()=>{const d=document.querySelector('[data-tool=edit] .otk-diff');return d.getBoundingClientRect().width<parseFloat(getComputedStyle(d).getPropertyValue('--diff-split-min'))})()",
+      ),
+      true,
+    );
+    // Exercise the same reusable renderer in a consumer with a wider lane.
+    // Both automatic transitions still require actual container resizing.
+    await browser.evaluate(
+      "document.querySelector('.otk-session-view').style.setProperty('--lane-width','1600px')",
+    );
     await browser.poll(
       "document.querySelector('[data-tool=edit] .otk-diff').dataset.diffStyle==='split'",
     );
@@ -119,6 +151,9 @@ test("R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/dia
     });
     await browser.poll(
       "document.querySelector('[data-tool=edit] .otk-diff').dataset.diffStyle==='unified'",
+    );
+    await browser.evaluate(
+      "document.querySelector('.otk-session-view').style.removeProperty('--lane-width')",
     );
     parts.push(
       await runTool(f, browser, s.id, {
@@ -179,6 +214,7 @@ test("R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/dia
     await recordTools(f.oc.root, "recorded-file-tools", parts);
     await browser.screenshot(join(f.oc.root, "r3-write-patch.png"));
   } finally {
+    await client?.close();
     await f.stop();
   }
-});
+}
