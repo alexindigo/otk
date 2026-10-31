@@ -207,7 +207,7 @@ async function initialQuestion(theme: string) {
       );
       await browser.click(".otk-question-actions button:not(.otk-primary)");
       await browser.poll(
-        "!document.querySelector('.otk-question-dock') && !document.querySelector('.otk-prompt').closest('[hidden]') && !!document.querySelector('.otk-prompt button[type=submit]')",
+        "!document.querySelector('.otk-question-dock') && !document.querySelector('.otk-prompt').closest('[hidden]') && !!document.querySelector('.otk-prompt button[type=submit]:not(:disabled)')",
       );
       assertEquals(rejected.length, phase === "direct" ? 1 : 2);
       assertEquals(rejected.at(-1), "initial-question");

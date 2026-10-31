@@ -207,7 +207,7 @@ async function imageDraft(theme: string) {
     // Image-only drafts remain sendable, and editing text cannot delete them.
     await addImage("drop", "second.png");
     await b.poll(
-      "!!document.querySelector('.otk-prompt-chip img') && !!document.querySelector('.otk-prompt button[type=submit]')",
+      "!!document.querySelector('.otk-prompt-chip img') && !!document.querySelector('.otk-prompt button[type=submit]:not(:disabled)')",
     );
     assertEquals(
       await b.evaluate("document.querySelector('textarea[name=prompt]').value"),
@@ -276,7 +276,7 @@ async function imageDraft(theme: string) {
       "(()=>{const d=new DataTransfer();d.items.add(new File(['plain bytes'],'notes.txt',{type:'text/plain'}));document.querySelector('.otk-prompt').dispatchEvent(new DragEvent('drop',{bubbles:true,dataTransfer:d}));})()",
     );
     await b.poll(
-      "!!document.querySelector('.otk-prompt button[type=submit]')",
+      "!!document.querySelector('.otk-prompt button[type=submit]:not(:disabled)')",
     );
     f.fake.queue({ chunks: ["File received."] });
     await b.click(".otk-prompt button[type=submit]");
