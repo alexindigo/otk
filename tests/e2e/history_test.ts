@@ -202,7 +202,7 @@ test("recalled image metadata resolves exact bytes only on send through its orig
     await b.stop();
   }
 });
-test("history keeps valid local prompts when a connected sibling transport fails during recall", async () => {
+test("history keeps valid local prompts when a connected sibling read is definitively rejected", async () => {
   const f = await browserFixture();
   try {
     const source = await f.oc.session<{ id: string }>("/session", {
@@ -239,12 +239,31 @@ test("history keeps valid local prompts when a connected sibling transport fails
     await browser.evaluate(
       `(()=>{const original=WebSocket.prototype.send;WebSocket.prototype.send=function(data){const frame=JSON.parse(data);if(frame.method==='history.list'&&this.url.startsWith(${
         JSON.stringify(remote.url.replace("http:", "ws:"))
-      })){this.close();return;}return original.call(this,data);}})()`,
+      })){frame.method='fixture.history.unavailable';return original.call(this,JSON.stringify(frame));}return original.call(this,data);}})()`,
     );
     await browser.click("textarea[name=prompt]");
     await browser.key("ArrowUp");
     await browser.poll(
       "document.querySelector('textarea[name=prompt]').value==='valid local history'",
+    );
+    // Reconnect is pending under M3; this fixture must observe a terminal sibling
+    // rejection rather than assume socket loss rejects a resumable read.
+    const failed = sentFrames(browser).find(({ frame }) =>
+      frame.method === "fixture.history.unavailable"
+    );
+    const ref = failed?.frame.ref as { id: string };
+    assertEquals(typeof ref?.id, "string");
+    assertEquals(
+      browser.events.filter((event) =>
+        event.method === "Network.webSocketFrameReceived"
+      ).map((event) =>
+        JSON.parse(
+          (event.params.response as { payloadData: string }).payloadData,
+        )
+      ).some((frame) =>
+        frame.t === "request.rejected" && frame.ref.id === ref.id
+      ),
+      true,
     );
   } finally {
     await f.stop();
