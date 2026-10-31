@@ -9,7 +9,11 @@ import {
 } from "../support/browser-fixture.ts";
 import { test } from "../support/resources.ts";
 
-test("deleted recall attachment rejects definitively and preserves the complete draft without native send", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`deleted recall attachment rejects definitively and preserves the complete draft without native send in ${theme}`, () =>
+    deletedRecall(theme));
+}
+async function deletedRecall(theme: string) {
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
@@ -38,9 +42,15 @@ test("deleted recall attachment rejects definitively and preserves the complete 
       },
     });
     const server = await f.sidecar(), browser = await f.browser(server.url);
+    client = new WsClient(server.url);
+    await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
+    await browser.poll(
+      `document.documentElement.dataset.otkTheme==='${theme}'`,
+    );
     await openSession(browser, target.id);
     await browser.poll(
-      "document.querySelector('.otk-message-flow .otk-empty')?.textContent==='Start a conversation below.' && !document.querySelector('.otk-composer-notice')",
+      "document.querySelector('.otk-messages .otk-pane-state .otk-empty')?.textContent==='Start a conversation below.' && !document.querySelector('.otk-composer-notice')",
     );
     await browser.click("textarea[name=prompt]");
     await browser.key("ArrowUp");
@@ -90,8 +100,6 @@ test("deleted recall attachment rejects definitively and preserves the complete 
     );
     const shots = Deno.env.get("OTK_HISTORY_SCREENSHOTS");
     if (shots) {
-      client = new WsClient(server.url);
-      await client.connect();
       for (const theme of ["otk-dark", "otk-light"]) {
         await client.rpc("prefs.set", { key: "theme", value: theme });
         await browser.poll(
@@ -104,4 +112,4 @@ test("deleted recall attachment rejects definitively and preserves the complete 
     await client?.close();
     await f.stop();
   }
-});
+}

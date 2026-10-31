@@ -135,20 +135,28 @@ test("cold browser recalls image and PDF references and sends exact provider byt
   }
 });
 
-test("definitively rejected recall reaches one composer failure instead of successful empty history", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`definitively rejected recall reaches one composer failure instead of successful empty history in ${theme}`, () =>
+    rejectedRecall(theme));
+}
+async function rejectedRecall(theme: string) {
   const f = await browserFixture();
+  let client: WsClient | undefined;
   try {
     const target = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Unavailable recall" },
     });
     const server = await f.sidecar();
+    client = new WsClient(server.url);
+    await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
     const browser = await f.browser(server.url);
     await openSession(browser, target.id);
     // The prompt can mount before its first page installs the stable consumer.
     // Observe that page and settled bookkeeping before injecting a read failure.
     await browser.poll(
-      "document.querySelector('.otk-message-flow .otk-empty')?.textContent==='Start a conversation below.' && !document.querySelector('.otk-composer-notice')",
+      "document.querySelector('.otk-messages .otk-pane-state .otk-empty')?.textContent==='Start a conversation below.' && !document.querySelector('.otk-composer-notice')",
     );
     await browser.evaluate(
       "(()=>{const original=WebSocket.prototype.send;WebSocket.prototype.send=function(data){const frame=JSON.parse(data);if(frame.method==='history.list'){frame.method='fixture.history.unavailable';return original.call(this,JSON.stringify(frame));}return original.call(this,data);}})()",
@@ -184,6 +192,7 @@ test("definitively rejected recall reaches one composer failure instead of succe
       1,
     );
   } finally {
+    await client?.close();
     await f.stop();
   }
-});
+}
