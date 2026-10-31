@@ -759,6 +759,10 @@ test("agent colours are shared per directory across sessions, pages, events and 
     record.send("message.updated", { info: info("after-reconnect", "root") });
     await record.drain();
     // Native connection recovery revalidates each demanded directory once.
+    // Ordered event drainage does not join optional catalog acquisition.
+    await wait(() =>
+      lookups.get("/project") === 2 && lookups.get("/second") === 2
+    );
     assertEquals([...lookups], [["/project", 2], ["/second", 2]]);
     for (
       const [id, expected] of [["root", ["event-root", "after-reconnect"]], [
