@@ -28,6 +28,7 @@ test("I11 message paging retains opaque native continuation and exact-multiple t
     assert(welcome.sidecar.harness.capabilities);
     assertEquals([...welcome.sidecar.harness.capabilities].sort(), [
       "agents",
+      "catalogs",
       "commands",
       "digests",
       "files",
