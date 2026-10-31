@@ -28,15 +28,15 @@ const captureOrigins = new WeakMap<
   Cdp,
   { selector: string; theme: string; before: string }
 >();
-async function rightClick(b: Cdp, selector: string) {
+async function rightClick(b: Cdp, selector: string, viewport?: string) {
   if (
-    await b.evaluate(
+    viewport || await b.evaluate(
       `!!document.querySelector(${
         JSON.stringify(selector)
       })?.closest('.otk-messages')`,
     )
   ) {
-    await revealViewportElement(b, ".otk-messages", selector);
+    await revealViewportElement(b, viewport ?? ".otk-messages", selector);
   }
   const point = await waitFor(
     () =>
@@ -764,6 +764,10 @@ test("C2 content targets: prompt, whole reply, nested code/diff and feature-cont
     }),
     b = await Cdp.launch(root),
     client = new WsClient(f.url);
+  // Virtualized descendants can be absent until their owning viewport reveals
+  // them. Declare that scope before probing the target's native pointer bounds.
+  const contentClick = (selector: string) =>
+    rightClick(b, selector, ".otk-messages");
   await client.connect();
   try {
     await b.goto(f.url);
@@ -799,7 +803,7 @@ test("C2 content targets: prompt, whole reply, nested code/diff and feature-cont
           ],
         ] as const
       ) {
-        await rightClick(b, selector);
+        await contentClick(selector);
         assertEquals(await labels(b), [...expected, ...transcriptArea]);
         await capture(b, root, `${theme}-${name}`);
         await invoke(b, pick);
@@ -807,7 +811,7 @@ test("C2 content targets: prompt, whole reply, nested code/diff and feature-cont
       }
     }
     await b.poll(`!!document.querySelector('[data-tool="bash"]')`);
-    await rightClick(b, '[data-tool="bash"] .otk-tool-toggle');
+    await contentClick('[data-tool="bash"] .otk-tool-toggle');
     assertEquals(await labels(b), [
       "Copy command",
       "Copy output",
@@ -817,12 +821,12 @@ test("C2 content targets: prompt, whole reply, nested code/diff and feature-cont
     ]);
     await invoke(b, "Copy command");
     await clipboard(b, "printf context-output");
-    await rightClick(b, '[data-tool="bash"] .otk-tool-toggle');
+    await contentClick('[data-tool="bash"] .otk-tool-toggle');
     await invoke(b, "Expand");
     await b.poll(
       `document.querySelector('[data-tool="bash"] .otk-tool-toggle').getAttribute('aria-expanded')==='true'`,
     );
-    await rightClick(b, '[data-tool="bash"] .otk-tool-toggle');
+    await contentClick('[data-tool="bash"] .otk-tool-toggle');
     assertEquals(await labels(b), [
       "Copy command",
       "Copy output",
@@ -835,16 +839,16 @@ test("C2 content targets: prompt, whole reply, nested code/diff and feature-cont
     for (const theme of ["otk-dark", "otk-light"]) {
       await client.rpc("prefs.set", { key: "theme", value: theme });
       await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
-      await rightClick(b, '[data-tool="bash"] .otk-tool-toggle');
+      await contentClick('[data-tool="bash"] .otk-tool-toggle');
       await capture(b, root, `${theme}-tool`);
       await dismiss(b);
     }
-    await rightClick(b, '[data-tool="bash"] .otk-tool-toggle');
+    await contentClick('[data-tool="bash"] .otk-tool-toggle');
     await invoke(b, "Collapse");
     await b.poll(
       `document.querySelector('[data-tool="bash"] .otk-tool-toggle').getAttribute('aria-expanded')==='false'`,
     );
-    await rightClick(b, '[data-tool="read"] .otk-tool-toggle');
+    await contentClick('[data-tool="read"] .otk-tool-toggle');
     assertEquals(await labels(b), [
       "Copy path",
       "Copy output",
@@ -854,7 +858,7 @@ test("C2 content targets: prompt, whole reply, nested code/diff and feature-cont
     ]);
     await invoke(b, "Copy path");
     await clipboard(b, "/project/source.txt");
-    await rightClick(b, '[data-tool="edit"] .otk-tool-toggle');
+    await contentClick('[data-tool="edit"] .otk-tool-toggle');
     assertEquals(await labels(b), [
       "Copy path",
       "Expand",
@@ -868,7 +872,7 @@ test("C2 content targets: prompt, whole reply, nested code/diff and feature-cont
     for (const theme of ["otk-dark", "otk-light"]) {
       await client.rpc("prefs.set", { key: "theme", value: theme });
       await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
-      await rightClick(b, ".otk-diff .otk-diff-text");
+      await contentClick(".otk-diff .otk-diff-text");
       assertEquals(await labels(b), [
         "Copy code",
         "Copy path",
@@ -882,14 +886,13 @@ test("C2 content targets: prompt, whole reply, nested code/diff and feature-cont
     for (const theme of ["otk-dark", "otk-light"]) {
       await client.rpc("prefs.set", { key: "theme", value: theme });
       await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
-      await rightClick(
-        b,
+      await contentClick(
         '[data-tool="edit"] .otk-diff-content:nth-of-type(2) .otk-diff-text',
       );
       await capture(b, root, `${theme}-second-hunk`);
       await invoke(b, "Copy code");
       await clipboard(b, "const current = true;");
-      await rightClick(b, '[data-tool="patch"] .otk-tool-toggle');
+      await contentClick('[data-tool="patch"] .otk-tool-toggle');
       assertEquals(await labels(b), [
         "Copy paths",
         "Expand",
