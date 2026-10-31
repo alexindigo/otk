@@ -16,6 +16,7 @@ import {
 } from "../support/rendering.ts";
 import { waitFor } from "../support/opencode.ts";
 import type { RawPart } from "@otk/harness-opencode-v1";
+import { WsClient } from "../support/ws-client.ts";
 test("R1 bash output is ten lines, expands to thirty, and displays differing cwd", async () => {
   const f = await browserFixture({ bash: "allow" }, {
     prepare: async (oc) => {
@@ -58,7 +59,11 @@ test("R1 bash output is ten lines, expands to thirty, and displays differing cwd
     await f.stop();
   }
 });
-test("R4 real read, directory listing, glob, grep, local fetch, skill and generic output forms", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`R4 real read, directory listing, glob, grep, local fetch, skill and generic output forms (${theme})`, () =>
+    toolForms(theme));
+}
+async function toolForms(theme: string) {
   const http = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     () =>
@@ -96,7 +101,7 @@ test("R4 real read, directory listing, glob, grep, local fetch, skill and generi
       });
       await Deno.writeTextFile(
         join(oc.directory, ".opencode/tools/echo_fixture.ts"),
-        "export default {description:'Local generic output fixture',args:{},async execute(){return 'first\\nsecond\\nthird\\nfourth\\nfifth'}};",
+        "export default {description:'Local generic output fixture',args:{},async execute(){return Array.from({length:15},(_,i)=>'Generic line '+(i+1)).join('\\n')}};",
       );
     },
   });
@@ -105,7 +110,11 @@ test("R4 real read, directory listing, glob, grep, local fetch, skill and generi
       method: "POST",
       body: { title: "Tool forms" },
     });
-    const server = await f.sidecar(), browser = await f.browser(server.url);
+    const server = await f.sidecar(), client = new WsClient(server.url);
+    await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
+    await client.close();
+    const browser = await f.browser(server.url);
     await openSession(browser, s.id);
     const parts: RawPart[] = [];
     parts.push(
@@ -185,11 +194,23 @@ test("R4 real read, directory listing, glob, grep, local fetch, skill and generi
     await browser.click(".otk-display-menu > button");
     await expandTool(browser, toolRow(parts.at(-1)!));
     await browser.poll(
-      "document.querySelector('[data-tool=external] .otk-tool-output')?.textContent==='first\\nsecond\\nthird'",
+      `document.querySelector('[data-tool=external] .otk-tool-output')?.textContent===${
+        JSON.stringify(
+          Array.from({ length: 10 }, (_, i) => `Generic line ${i + 1}`).join(
+            "\n",
+          ),
+        )
+      }`,
     );
     await browser.click("[data-tool=external] .otk-output-toggle");
     await browser.poll(
-      "document.querySelector('[data-tool=external] .otk-tool-output')?.textContent.includes('fifth')",
+      `document.querySelector('[data-tool=external] .otk-tool-output')?.textContent===${
+        JSON.stringify(
+          Array.from({ length: 15 }, (_, i) => `Generic line ${i + 1}`).join(
+            "\n",
+          ),
+        )
+      }`,
     );
     await recordTools(f.oc.root, "recorded-form-tools", parts);
     await browser.screenshot(join(f.oc.root, "r4-tool-forms.png"));
@@ -197,7 +218,7 @@ test("R4 real read, directory listing, glob, grep, local fetch, skill and generi
     await http.shutdown();
     await f.stop();
   }
-});
+}
 test("tool permission warning, denied strikethrough and expandable errors use one state contract", async () => {
   const f = await browserFixture({ bash: "ask", websearch: "ask" }, {
     env: { OPENCODE_ENABLE_EXA: "1" },

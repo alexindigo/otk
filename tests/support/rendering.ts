@@ -50,6 +50,11 @@ export async function runTool(
     });
   } else {
     await browser.type("textarea[name=prompt]", `Run ${tool.name}`);
+    // Native idle can precede the browser's previous submission settlement.
+    // Exercise Send only once that actual composer action is available again.
+    await browser.poll(
+      "!!document.querySelector('.otk-send-button') && document.activeElement===document.querySelector('textarea[name=prompt]')",
+    );
     await browser.key("Enter");
   }
   const part = await waitFor(
