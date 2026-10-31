@@ -448,6 +448,21 @@ lease. Compatibility methods still borrow the same acquisition owner.
 
 ### Reusable digest sink
 
+Unfinished native text/reasoning uses `mapStreamingShell` for identity/time
+metadata and the event-owned parser checkpoint for its blocks. Active page parts
+borrow that checkpoint before mapping HTTP source. Recovery headers and optional
+completion clocks do not map or parse discarded bodies. Ordered events publish
+terminal headers immediately; an optional `message.clock` transient read refines
+only last-output time, using worker-native scalar SQL or scalar extraction from
+the existing point-read fallback. It shares the selected scheduler, connection,
+admission and publication credits and never becomes digest data. Per-message
+revision, epoch, subscription, deletion and connection fences retire late
+results. Fine pending keys use the existing configured recovery capacity with
+source-free scoped reconciliation on overflow. Revert cutoffs remain synchronous
+authority while optional boundary presentation resolves independently at visible
+priority. `History.entry` accepts an optional read priority after its signal;
+explicit recall and action reads retain user priority.
+
 `OpencodeV1DigestSink` is independently composable with a `DigestScheduler` and
 an injected `OpencodeV1DigestStorage`. Its private SQLite/query and transaction
 ports are supplied by the consumer; this package imports no OTK store. Compose

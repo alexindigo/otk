@@ -192,7 +192,8 @@ test("adapter maps legacy event chain while ignoring its captured durable sync c
     }
     assert(removed, "Event chain stalled on sync companion");
     assertEquals(reconnects, 0);
-    assertEquals(nativeReads, 1);
+    // Removal retires the optional clock before its scheduled read is admitted.
+    assertEquals(nativeReads, 0);
     const finished = ops.find((op) => op.op === "message.upsert");
     assert(
       finished?.op === "message.upsert" &&

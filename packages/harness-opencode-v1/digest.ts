@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { messageOutput, readMessageClock } from "./message-clock.ts";
 import { catalogReaders } from "./catalog-reads.ts";
 import { HistoryReader } from "./history.ts";
 import { sessionDirectory } from "./directory.ts";
@@ -206,6 +207,21 @@ export class OpencodeV1DigestSink implements DigestSink {
     );
     this.readers = {
       ...catalogReaders(this.#client),
+      "message.clock": async (input, signal) => {
+        const connection = this.#connection;
+        const native = await this.#metadataSource(signal);
+        signal.throwIfAborted();
+        if (this.#closed || connection !== this.#connection) {
+          throw new Error("Clock authority changed");
+        }
+        if (native && native.fileIdentity() === native.identity) {
+          return readMessageClock(native.db, input.sessionID, input.messageID);
+        }
+        return messageOutput(
+          (await this.#messages.get(input.sessionID, input.messageID, signal))
+            .parts,
+        );
+      },
       "identity.batch": (input, signal) => this.identities(input.ids, signal),
       "history.list": (_input, signal) =>
         this.#historyRead(signal, (reader) => reader.list(signal)),

@@ -315,7 +315,16 @@ for (const stage of ["event colour", "event message"] as const) {
       await wait(() =>
         record.published.filter((value) => value === "resync").length === 2
       );
-      assertEquals(record.published.slice(before.length), [
+      const after = record.published.slice(before.length);
+      const retired = after.indexOf("reconnecting");
+      // An independent color result may publish while this connection is live.
+      assert(
+        after.slice(0, retired).every((value) =>
+          value === "content:agent.colors"
+        ),
+      );
+      assertEquals(record.signals[0]?.aborted, true);
+      assertEquals(after.slice(retired), [
         "reconnecting",
         "reset:opcv1-root",
         "connected",

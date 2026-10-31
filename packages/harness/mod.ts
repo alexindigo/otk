@@ -5,6 +5,7 @@ export { arrayReadCodec } from "./provider-reads.ts";
 export type * from "./digest.ts";
 export * from "./provider-reads.ts";
 export * from "./history-reads.ts";
+export * from "./clock-reads.ts";
 export { DigestScheduler } from "./digest-scheduler.ts";
 export { ReadAdmission } from "./read-admission.ts";
 /** Harness-neutral lifecycle, session contracts and optional capabilities. */

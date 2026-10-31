@@ -233,6 +233,8 @@ test("adapter contains buffered and live poisoned events and failed follow-up re
       },
     });
     await record.drain();
+    // Ordered authority no longer waits for an optional completion-time read.
+    await wait(() => reads === 1 && warnings.length >= 5);
     assertEquals(reads, 1);
     assertEquals(record.streams(), 1);
     assertEquals(record.connections, ["connecting", "connected"]);

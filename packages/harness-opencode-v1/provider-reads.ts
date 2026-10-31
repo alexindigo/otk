@@ -3,6 +3,7 @@ import {
   arrayReadCodec,
   catalogFileCodec,
   catalogModelCodec,
+  clockReadCodec,
   historyAttachmentCodec,
   identityReadCodec,
   type ProviderReadCodecs,
@@ -10,6 +11,7 @@ import {
 /** Codecs matching this native sink's selected transient readers. */
 export const opencodeV1ReadCodecs: ProviderReadCodecs = {
   "identity.batch": identityReadCodec,
+  "message.clock": clockReadCodec,
   "history.list": arrayReadCodec(),
   "history.entries": arrayReadCodec(),
   "history.attachments": historyAttachmentCodec,

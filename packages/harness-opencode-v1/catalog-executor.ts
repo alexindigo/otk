@@ -12,6 +12,8 @@ import { Client } from "./client.ts";
 import { harnessDb, type OpencodeV1Config } from "./config.ts";
 import { HistoryDatabase } from "./history.ts";
 import { catalogReaders } from "./catalog-reads.ts";
+import { Messages } from "./messages.ts";
+import { messageOutput } from "./message-clock.ts";
 
 /** Standalone integrations inject the same scheduler policy; no derived DB is needed. */
 export class CatalogExecutor implements ProviderReadPort {
@@ -25,6 +27,7 @@ export class CatalogExecutor implements ProviderReadPort {
     readonly concurrency: number,
     readonly statconcurrency: number,
     readonly fetcher = fetch,
+    readonly directory: (id: string) => string | undefined = () => undefined,
   ) {}
   #start(): DigestScheduler {
     if (!this.#scheduler) {
@@ -102,6 +105,14 @@ export class CatalogExecutor implements ProviderReadPort {
             harnessDb(this.cfg),
           );
           const readers: ProviderReaders = {
+            "message.clock": async (input, signal) =>
+              messageOutput(
+                (await new Messages(client, this.directory).get(
+                  input.sessionID,
+                  input.messageID,
+                  signal,
+                )).parts,
+              ),
             ...catalogReaders(
               client,
               (signal) => metadata.acquire(signal, options.priority === "user"),

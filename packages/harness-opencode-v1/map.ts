@@ -67,11 +67,12 @@ export function mapMessage(
   info: Info,
   parts: RawPart[] = [],
   observed?: number,
+  partMapper: (part: RawPart) => Part = mapPart,
 ): Message {
   const common = {
     id: info.id,
     sessionID: ids.encode(info.sessionID),
-    parts: parts.map((p) => mapPart(p)),
+    parts: parts.map((part) => partMapper(part)),
   };
   if (info.role === "user") {
     return {
@@ -123,21 +124,10 @@ export function mapPart(part: RawPart, awaitingPermission = false): Part {
   const id = part.id;
   switch (part.type) {
     case "text":
-      return {
-        kind: "text",
-        id,
-        blocks: markdown(part.text || ""),
-        synthetic: part.synthetic ?? false,
-      };
     case "reasoning":
       return {
-        kind: "reasoning",
-        id,
+        ...mapStreamingShell(part),
         blocks: markdown(part.text || ""),
-        time: { start: part.time!.start, end: part.time?.end },
-        title: typeof part.metadata?.title === "string"
-          ? part.metadata.title
-          : undefined,
       };
     case "tool":
       return { kind: "tool", id, call: mapTool(part, awaitingPermission) };
@@ -181,6 +171,29 @@ export function mapPart(part: RawPart, awaitingPermission = false): Part {
         data: preview(part).text,
       };
   }
+}
+/** Identity/time metadata only; the stream producer owns text parsing. */
+export function mapStreamingShell(
+  part: RawPart,
+): Extract<Part, { kind: "text" | "reasoning" }> {
+  if (part.type === "text") {
+    return {
+      kind: "text",
+      id: part.id,
+      blocks: [],
+      synthetic: part.synthetic ?? false,
+    };
+  }
+  if (part.type !== "reasoning") throw new Error("Not a streaming text part");
+  return {
+    kind: "reasoning",
+    id: part.id,
+    blocks: [],
+    time: { start: part.time!.start, end: part.time?.end },
+    title: typeof part.metadata?.title === "string"
+      ? part.metadata.title
+      : undefined,
+  };
 }
 export function mapDiffs(diffs: RawDiff[]): FileDiff[] {
   return diffs.flatMap((diff) => {

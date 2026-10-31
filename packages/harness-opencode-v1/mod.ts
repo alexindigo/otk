@@ -45,6 +45,7 @@ export {
   mapPart,
   mapPermission,
   mapSession,
+  mapStreamingShell,
 } from "./map.ts";
 export { mapTool } from "./map-tools.ts";
 export { mapPromptParts } from "./prompt.ts";

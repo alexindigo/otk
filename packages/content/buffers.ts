@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ContentOp, Message, Part } from "@otk/protocol";
-import { markdown } from "./markdown.ts";
 import { StreamingMarkdown } from "./stream.ts";
 
 type StreamingPart = Extract<Part, { kind: "text" | "reasoning" }>;
@@ -174,29 +173,61 @@ export class StreamBuffers {
     }
     return true;
   }
+  finishPart(
+    sessionID: string,
+    messageID: string,
+    part: StreamingPart,
+    text: string,
+  ): StreamingPart | undefined {
+    const active = this.#parts.get(part.id);
+    if (
+      !active || active.sessionID !== sessionID ||
+      active.messageID !== messageID
+    ) return;
+    active.stream.replace(text);
+    const { stream: _stream, ...shell } = part;
+    const finished = { ...shell, blocks: active.stream.finish().blocks };
+    this.remove(part.id);
+    return finished;
+  }
   complete(messageID: string, emit: Emit): void {
-    for (const [id, active] of this.#parts) {
+    for (const active of this.#parts.values()) {
       if (active.messageID !== messageID) continue;
+      if (!this.subscribed(active.sessionID)) {
+        this.remove(active.shell.id);
+        continue;
+      }
       const event: ContentOp = {
         op: "part.upsert",
         messageID,
-        part: { ...active.shell, blocks: markdown(active.stream.text) },
+        part: this.finishPart(
+          active.sessionID,
+          messageID,
+          active.shell,
+          active.stream.text,
+        )!,
         lastOutput: this.outputTime(messageID),
       };
-      this.remove(id);
-      if (this.subscribed(active.sessionID)) emit(active.sessionID, event);
+      emit(active.sessionID, event);
     }
     this.#replies.delete(messageID);
   }
   snapshot(
     partID: string,
+    sessionID?: string,
+    messageID?: string,
   ): { part: StreamingPart; lastChunk: number } | undefined {
     const active = this.#parts.get(partID);
+    if (
+      active &&
+      ((sessionID !== undefined && active.sessionID !== sessionID) ||
+        (messageID !== undefined && active.messageID !== messageID))
+    ) return;
     return active
       ? {
         part: {
           ...active.shell,
-          blocks: markdown(active.stream.text),
+          blocks: active.stream.snapshot().blocks,
           stream: this.#stamp(active),
         },
         lastChunk: active.lastChunk,

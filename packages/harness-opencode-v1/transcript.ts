@@ -18,7 +18,7 @@ import {
 import type { StreamBuffers } from "@otk/content";
 import type { Messages, NativeMessage } from "./messages.ts";
 import type { Session } from "./types.ts";
-import { mapMessage } from "./map.ts";
+import { mapMessage, mapPart } from "./map.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 
 interface Cursor {
@@ -329,7 +329,12 @@ export class Transcript {
           raw,
         ) =>
           this.options.decorate(
-            mapMessage(raw.info, raw.parts),
+            mapMessage(raw.info, raw.parts, undefined, (part) =>
+              raw.info.role === "assistant" &&
+                raw.info.time.completed === undefined
+                ? buffers.snapshot(part.id, id, raw.info.id)?.part ??
+                  mapPart(part)
+                : mapPart(part)),
             raw,
             owner.raw.directory,
           )

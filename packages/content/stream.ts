@@ -4,31 +4,62 @@ import type { Block } from "@otk/protocol";
 import { blocks, lex } from "./markdown.ts";
 /** An unfinished part owns its raw source. Stable prefixes are never re-lexed. */
 export class StreamingMarkdown {
-  text: string = "";
+  #text = "";
+  get text(): string {
+    return this.#text;
+  }
   #offset = 0;
-  #stable = 0;
+  #stable: Block[] = [];
+  #published = 0;
   #links: Links = {};
+  #normalized = "";
+  #cr = false;
+  #revision = 0;
+  #parsed?: { revision: number; blocks: Block[] };
   constructor(text: string = "") {
-    this.text = text;
+    this.append(text);
   }
   append(delta: string): void {
-    this.text += delta;
+    if (!delta) return;
+    this.#text += delta;
+    // Normalize only the new raw source, carrying CR across native chunks.
+    this.#normalized +=
+      (this.#cr && delta.startsWith("\n") ? delta.slice(1) : delta).replace(
+        /\r\n|\r/g,
+        "\n",
+      );
+    this.#cr = delta.endsWith("\r");
+    this.#revision++;
+    this.#parsed = undefined;
   }
   replace(text: string): void {
     if (text.startsWith(this.text)) {
-      this.text = text;
+      this.append(text.slice(this.text.length));
       return;
     }
-    this.text = text;
-    this.#offset = this.#stable = 0;
+    this.#text = "";
+    this.#normalized = "";
+    this.#cr = false;
+    this.#offset = this.#published = 0;
+    this.#stable = [];
     this.#links = {};
+    this.#parsed = undefined;
+    this.#revision++;
+    this.append(text);
   }
   flush(): { from: number; blocks: Block[] } {
-    // Marked normalizes CRLF/CR before lexing, so offsets live in that same
-    // normalized coordinate space (including a CRLF split across deltas).
-    const tail = this.text.replace(/\r\n|\r/g, "\n").slice(this.#offset);
+    const parsed = this.snapshot();
+    const result = {
+      from: this.#published,
+      blocks: parsed.blocks.slice(this.#published),
+    };
+    this.#published = this.#stable.length;
+    return result;
+  }
+  snapshot(): { revision: number; blocks: Block[] } {
+    if (this.#parsed) return this.#parsed;
+    const tail = this.#normalized.slice(this.#offset);
     const { tokens } = lex(tail, this.#links);
-    const result = { from: this.#stable, blocks: blocks(tokens) };
     // A whitespace token cannot stabilize the preceding paragraph/list: further
     // input can extend it. Keep the final meaningful top-level token unstable.
     let end = tokens.findLastIndex((t) =>
@@ -40,8 +71,17 @@ export class StreamingMarkdown {
       /(?<!\\)\[[^\]\n]+\](?!\()/.test(t.raw) && t.type !== "code"
     );
     if (reference >= 0) end = Math.min(end, reference);
-    const stable = tokens.slice(0, Math.max(0, end));
-    this.#stable += blocks(stable).length;
+    const boundary = Math.max(0, end);
+    // Each token is converted once; stable objects belong to this producer.
+    const converted = tokens.map((token) => blocks([token]));
+    const result = {
+      revision: this.#revision,
+      blocks: [...this.#stable, ...converted.flat()],
+    };
+    const stable = tokens.slice(0, boundary);
+    for (let i = 0; i < boundary; i++) {
+      for (const block of converted[i]) this.#stable.push(block);
+    }
     this.#offset += stable.reduce((n, t) => n + t.raw.length, 0);
     for (const token of stable) {
       if (token.type === "def") {
@@ -52,6 +92,9 @@ export class StreamingMarkdown {
         };
       }
     }
-    return result;
+    return this.#parsed = result;
+  }
+  finish(): { revision: number; blocks: Block[] } {
+    return this.snapshot();
   }
 }

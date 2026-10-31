@@ -41,7 +41,24 @@ generation clock without installing source in a stream buffer. A subsequent full
 event seed therefore outranks the HTTP observation; only that event seed permits
 future suffix appends. Recovery receipt never advances the output clock.
 
+`StreamingMarkdown.snapshot()` and `finish()` borrow the same revisioned parsed
+result used by `flush()`. Repeated reads at one source revision perform no
+lexing or block conversion. Stable block objects survive appends; only the
+unstable token suffix is reparsed, including reference-bearing prefixes until
+late definitions can resolve them. CR/CRLF normalization processes each new raw
+delta once and carries a split trailing CR. `text` is read-only; change source
+through `append` or `replace`. A non-prefix replacement retires parser state.
+Treat returned blocks as borrowed immutable values. Buffers, page overlays,
+replay and completion consume that producer checkpoint rather than reparsing raw
+source. Long unstable paragraphs or fences can still require reparsing their
+growing suffix; the cache does not promise universal linear parsing.
+
 ## Example
+
+`StreamBuffers.finishPart(sessionID,messageID,shell,text)` accepts final native
+source/metadata only for its matching active owner, returns the cached final
+part without an appendable stamp, and retires its source/timer immediately. Both
+native part-end and message-end completion use this same operation.
 
 Within the OTK workspace, Deno resolves the package by its name:
 

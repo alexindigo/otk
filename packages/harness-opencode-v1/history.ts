@@ -14,6 +14,7 @@ import type {
   HistoryAttachment,
   HistoryCapability,
   ProviderReaders,
+  ProviderReadOptions,
   ProviderReadPort,
 } from "@otk/harness";
 import { historyEntry, type StoredPart } from "./history-mapping.ts";
@@ -285,6 +286,7 @@ export class History implements HistoryCapability {
     kind: K,
     input: import("@otk/harness").ProviderReadKinds[K]["input"],
     signal?: AbortSignal,
+    priority: ProviderReadOptions["priority"] = "user",
   ): Promise<import("@otk/harness").ProviderReadKinds[K]["result"]> {
     signal?.throwIfAborted();
     const owner = JSON.stringify(["history", crypto.randomUUID()]);
@@ -300,7 +302,7 @@ export class History implements HistoryCapability {
       }
       return await this.source.read(kind, input, {
         owner,
-        priority: "user",
+        priority,
         signal: owned,
       });
     } finally {
@@ -320,10 +322,16 @@ export class History implements HistoryCapability {
     sessionID: string,
     messageID: string,
     signal?: AbortSignal,
+    priority: ProviderReadOptions["priority"] = "user",
   ): Promise<HistoryEntry | undefined> {
-    return (await this.#read("history.entries", {
-      keys: [{ sessionID, messageID }],
-    }, signal))[0];
+    return (await this.#read(
+      "history.entries",
+      {
+        keys: [{ sessionID, messageID }],
+      },
+      signal,
+      priority,
+    ))[0];
   }
   async attachments(
     refs: HistoryAttachmentRef[],
