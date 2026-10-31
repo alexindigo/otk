@@ -7,81 +7,94 @@ import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { openSession, sentFrames } from "../support/browser-fixture.ts";
+import { WsClient } from "../support/ws-client.ts";
 
-test("core-only welcome loads a session without optional RPCs and preserves a draft while unavailable prompt features stay inactive", async () => {
-  const root = await fixture();
-  const { app, session, url } = await coreBackendFixture(root);
-  let browser: Cdp | undefined;
-  try {
-    browser = await Cdp.launch(root);
-    await browser.goto(url);
-    await openSession(browser, session.id);
-    await browser.poll(
-      "document.querySelector('.otk-messages')?.textContent.includes('Core transcript')",
-    );
-    await browser.type("textarea[name=prompt]", "Keep my draft");
-    await browser.poll(
-      "document.querySelector('.otk-prompt button[type=submit]').disabled",
-    );
-    await browser.key("Enter");
-    await browser.key("Escape");
-    await browser.key("Escape");
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector('textarea[name=prompt]').value",
-      ),
-      "Keep my draft",
-    );
-    await browser.fill("textarea[name=prompt]", "");
-    await browser.send("Input.dispatchKeyEvent", {
-      type: "keyDown",
-      key: "!",
-      code: "Digit1",
-      text: "!",
-      modifiers: 8,
-      windowsVirtualKeyCode: 49,
-    });
-    await browser.send("Input.dispatchKeyEvent", {
-      type: "keyUp",
-      key: "!",
-      code: "Digit1",
-      modifiers: 8,
-      windowsVirtualKeyCode: 49,
-    });
-    await browser.poll(
-      "document.querySelector('textarea[name=prompt]').value === '!'",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector('.otk-prompt label').textContent",
-      ),
-      "Prompt",
-    );
-    assertEquals(
-      sentFrames(browser).flatMap(({ frame }) =>
-        frame.t === "request" ? [frame.method] : []
-      ).filter((method) =>
-        ![
-          "session.get",
-          "session.messages",
-          "prefs.get",
-          "layout.patch",
-          "layout.location",
-          "frecency.list",
-          "projects.visit",
-          "sessions.seen",
-        ]
-          .includes(String(method))
-      ),
-      [],
-    );
-    assertEquals(browser.errors, []);
-    console.info("Capability consumer evidence:", root);
-  } finally {
-    await browser?.close();
-    await app.stop();
-  }
-});
+for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+  test(`core-only welcome loads a session without optional RPCs and preserves a draft while unavailable prompt features stay inactive (${theme})`, async () => {
+    const root = await fixture();
+    const { app, session, url } = await coreBackendFixture(root);
+    let browser: Cdp | undefined;
+    try {
+      const client = new WsClient(url);
+      await client.connect();
+      try {
+        await client.rpc("prefs.set", { key: "theme", value: theme });
+      } finally {
+        await client.close();
+      }
+      browser = await Cdp.launch(root);
+      await browser.goto(url);
+      await openSession(browser, session.id);
+      await browser.poll(
+        `document.documentElement.dataset.otkTheme==='${theme}'`,
+      );
+      await browser.poll(
+        "document.querySelector('.otk-messages')?.textContent.includes('Core transcript')",
+      );
+      await browser.type("textarea[name=prompt]", "Keep my draft");
+      await browser.poll(
+        "!document.querySelector('.otk-prompt button[type=submit]')",
+      );
+      await browser.key("Enter");
+      await browser.key("Escape");
+      await browser.key("Escape");
+      assertEquals(
+        await browser.evaluate(
+          "document.querySelector('textarea[name=prompt]').value",
+        ),
+        "Keep my draft",
+      );
+      await browser.fill("textarea[name=prompt]", "");
+      await browser.send("Input.dispatchKeyEvent", {
+        type: "keyDown",
+        key: "!",
+        code: "Digit1",
+        text: "!",
+        modifiers: 8,
+        windowsVirtualKeyCode: 49,
+      });
+      await browser.send("Input.dispatchKeyEvent", {
+        type: "keyUp",
+        key: "!",
+        code: "Digit1",
+        modifiers: 8,
+        windowsVirtualKeyCode: 49,
+      });
+      await browser.poll(
+        "document.querySelector('textarea[name=prompt]').value === '!'",
+      );
+      assertEquals(
+        await browser.evaluate(
+          "document.querySelector('.otk-prompt label').textContent",
+        ),
+        "Prompt",
+      );
+      assertEquals(
+        sentFrames(browser).flatMap(({ frame }) =>
+          frame.t === "request" ? [frame.method] : []
+        ).filter((method) =>
+          ![
+            "session.get",
+            "session.messages",
+            "prefs.get",
+            "layout.patch",
+            "layout.location",
+            "frecency.list",
+            "projects.visit",
+            "sessions.seen",
+          ]
+            .includes(String(method))
+        ),
+        [],
+      );
+      assertEquals(browser.errors, []);
+      console.info("Capability consumer evidence:", root);
+    } finally {
+      await browser?.close();
+      await app.stop();
+    }
+  });
+}
 
 test("transport reconnecting retains advertised features and unsent permission/question input", async () => {
   const root = await fixture();

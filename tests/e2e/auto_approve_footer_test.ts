@@ -34,6 +34,15 @@ test("U10 auto-approve leads the footer, uses the theme accent when on and prese
     await b.poll(
       "document.querySelector('.otk-composer-provider')?.textContent==='Polish fixture' && !!document.querySelector('.otk-variant-picker > button') && document.querySelector('.otk-auto-approve-toggle')?.getAttribute('aria-pressed')==='false'",
     );
+    assertEquals(
+      await b.evaluate(
+        "!!document.querySelector('.otk-prompt button[type=submit]')",
+      ),
+      false,
+      "An empty prompt has no unavailable Send control",
+    );
+    await b.type("textarea[name=prompt]", "Measure the sendable footer");
+    await b.poll("!!document.querySelector('.otk-prompt button[type=submit]')");
     await b.evaluate("document.fonts.ready.then(()=>true)");
     if (shots) await Deno.mkdir(shots, { recursive: true });
     const measure = () =>
@@ -78,7 +87,10 @@ test("U10 auto-approve leads the footer, uses the theme accent when on and prese
       })()`);
     const samples = [];
     for (
-      const [theme, suffix] of [["otk-dark", "dark"], ["otk-light", "light"]]
+      const [theme, suffix] of [["otk-dark", "dark"], ["otk-light", "light"], [
+        "otk-light-stone",
+        "stone",
+      ]]
     ) {
       await client.rpc("prefs.set", { key: "theme", value: theme });
       await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
