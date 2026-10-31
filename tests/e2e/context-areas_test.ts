@@ -211,221 +211,253 @@ test("C3 session menus omit current-place no-ops while background Open and task 
   }
 });
 
-test("C3 areas: empty regions, inner groups and shared control commands reach their consumers", async () => {
-  const root = await fixture(),
-    f = await inboxBrowserFixture(root),
-    b = await Cdp.launch(root),
-    client = new WsClient(f.url);
-  await client.connect();
-  try {
-    for (const entry of [f.entries[0], f.entries[3]]) {
-      await client.rpc("projects.visit", {
-        directory: entry.directory,
-        active: true,
-      });
-    }
-    await client.rpc("projects.inactive", {
-      directory: f.entries[3].directory,
-      inactive: true,
-    });
-    await b.goto(f.url);
-    await openSession(b, "tstv1-otk");
-    await b.send("Browser.grantPermissions", {
-      origin: f.url,
-      permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"],
-    });
-    const projects = [
-      "Add project",
-      "Show inactive projects",
-      "Collapse projects",
-    ];
-    await rightClick(b, areas.projects);
-    assertEquals(await groups(b), [projects, app]);
-    await pick(b, "Show inactive projects");
-    await b.poll(
-      `!!document.querySelector('.otk-inactive-projects [data-project-sessions~="tstv1-luch"]')`,
-    );
-    await rightClick(b, areas.projects);
-    assertEquals(await groups(b), [[
-      "Add project",
-      "Hide inactive projects",
-      "Collapse projects",
-    ], app]);
-    await pick(b, "Hide inactive projects");
-    await b.poll(`!document.querySelector('.otk-inactive-projects')`);
-    if (Deno.env.get("OTK_CONTEXT_SCREENSHOTS")) {
-      for (const theme of ["otk-dark", "otk-light"]) {
-        await client.rpc("prefs.set", { key: "theme", value: theme });
-        await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
-        await rightClick(
-          b,
-          areas.projects,
-          true,
-          join(root, `C3-${theme}-projects-inactive-closed`),
-        );
-        assertEquals(await groups(b), [projects, app]);
-        await pick(b, "Show inactive projects");
-        await b.poll(`!!document.querySelector('.otk-inactive-projects')`);
-        await rightClick(
-          b,
-          areas.projects,
-          true,
-          join(root, `C3-${theme}-projects-inactive-open`),
-        );
-        await pick(b, "Hide inactive projects");
-        await b.poll(`!document.querySelector('.otk-inactive-projects')`);
-        await rightClick(
-          b,
-          '[data-project-sessions~="tstv1-otk"] .otk-project-open',
-          false,
-          join(root, `C3-${theme}-project-row`),
-        );
-        assertEquals(await groups(b), [["Mark inactive"], projects]);
-        await dismiss(b);
-        await rightClick(
-          b,
-          ".otk-user-bubble",
-          false,
-          join(root, `C3-${theme}-message`),
-        );
-        assertEquals(await groups(b), [["Copy prompt"], session]);
-        await dismiss(b);
+for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+  test(`C3 areas: empty regions, inner groups and shared control commands reach their consumers (${theme})`, async () => {
+    const root = await fixture(),
+      f = await inboxBrowserFixture(root),
+      b = await Cdp.launch(root),
+      client = new WsClient(f.url);
+    await client.connect();
+    try {
+      await client.rpc("prefs.set", { key: "theme", value: theme });
+      for (const entry of [f.entries[0], f.entries[3]]) {
+        await client.rpc("projects.visit", {
+          directory: entry.directory,
+          active: true,
+        });
       }
+      await client.rpc("projects.inactive", {
+        directory: f.entries[3].directory,
+        inactive: true,
+      });
+      await b.goto(f.url);
+      await openSession(b, "tstv1-otk");
+      await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
+      await b.send("Browser.grantPermissions", {
+        origin: f.url,
+        permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"],
+      });
+      const projects = [
+        "Add project",
+        "Show inactive projects",
+        "Collapse projects",
+      ];
+      await rightClick(b, areas.projects);
+      assertEquals(await groups(b), [projects, app]);
+      await pick(b, "Show inactive projects");
+      await b.poll(
+        `!!document.querySelector('.otk-inactive-projects [data-project-sessions~="tstv1-luch"]')`,
+      );
+      await rightClick(b, areas.projects);
+      assertEquals(await groups(b), [[
+        "Add project",
+        "Hide inactive projects",
+        "Collapse projects",
+      ], app]);
+      await pick(b, "Hide inactive projects");
+      await b.poll(`!document.querySelector('.otk-inactive-projects')`);
+      if (Deno.env.get("OTK_CONTEXT_SCREENSHOTS")) {
+        for (const theme of ["otk-dark", "otk-light"]) {
+          await client.rpc("prefs.set", { key: "theme", value: theme });
+          await b.poll(
+            `document.documentElement.dataset.otkTheme==='${theme}'`,
+          );
+          await rightClick(
+            b,
+            areas.projects,
+            true,
+            join(root, `C3-${theme}-projects-inactive-closed`),
+          );
+          assertEquals(await groups(b), [projects, app]);
+          await pick(b, "Show inactive projects");
+          await b.poll(`!!document.querySelector('.otk-inactive-projects')`);
+          await rightClick(
+            b,
+            areas.projects,
+            true,
+            join(root, `C3-${theme}-projects-inactive-open`),
+          );
+          await pick(b, "Hide inactive projects");
+          await b.poll(`!document.querySelector('.otk-inactive-projects')`);
+          await rightClick(
+            b,
+            '[data-project-sessions~="tstv1-otk"] .otk-project-open',
+            false,
+            join(root, `C3-${theme}-project-row`),
+          );
+          assertEquals(await groups(b), [["Mark inactive"], projects]);
+          await dismiss(b);
+          await rightClick(
+            b,
+            ".otk-user-bubble",
+            false,
+            join(root, `C3-${theme}-message`),
+          );
+          assertEquals(await groups(b), [["Copy prompt"], session]);
+          await dismiss(b);
+        }
+      }
+      await rightClick(
+        b,
+        '[data-project-sessions~="tstv1-otk"] .otk-project-open',
+        false,
+      );
+      assertEquals(await groups(b), [["Mark inactive"], projects]);
+      await dismiss(b);
+      await rightClick(b, areas.projects);
+      await pick(b, "Add project");
+      await b.poll(
+        `!!document.querySelector('dialog[aria-label="Add project"][open] input[name=directory]')`,
+      );
+      await b.poll(
+        `!!document.querySelector('dialog [aria-label="Scanned projects"]')`,
+      );
+      await b.key("Escape");
+      await b.poll(`!document.querySelector('dialog[open]')`);
+      await rightClick(b, areas.projects);
+      await pick(b, "Collapse projects");
+      await b.poll(
+        `document.querySelector('.otk-project-inbox').dataset.collapsed==='true'`,
+      );
+      assertEquals(
+        (await client.rpc<Preferences>("prefs.get", {})).shellLayout
+          .leftCollapsed,
+        true,
+      );
+      await b.click(".otk-corner-left");
+      await b.poll(
+        `document.querySelector('.otk-project-inbox').dataset.collapsed==='false'`,
+      );
+      await rightClick(b, areas.panel);
+      assertEquals(await groups(b), [[
+        "New session",
+        "Find a session",
+        "Collapse right panel",
+      ], app.slice(1)]);
+      await pick(b, "Find a session");
+      await b.poll(
+        `document.activeElement===document.querySelector('input[aria-label="Search sessions by title"]')`,
+      );
+      // The command's consumer must keep focus after the pending menu unmounts.
+      await b.poll(`!document.querySelector('${menu}')`);
+      assertEquals(
+        await b.evaluate(
+          `document.activeElement===document.querySelector('input[aria-label="Search sessions by title"]')`,
+        ),
+        true,
+      );
+      // Invoking again starts with the destination already focused. Returning
+      // opening focus is still not permission for pending paint to take it back.
+      await rightClick(b, areas.panel);
+      await pick(b, "Find a session");
+      await b.poll(`!document.querySelector('${menu}')`);
+      assertEquals(
+        await b.evaluate(
+          `document.activeElement===document.querySelector('input[aria-label="Search sessions by title"]')`,
+        ),
+        true,
+      );
+      await b.type(
+        'input[aria-label="Search sessions by title"]',
+        "not-present",
+      );
+      await b.poll(`!document.querySelector('.otk-session-row')`);
+      await b.fill('input[aria-label="Search sessions by title"]', "");
+      await b.poll(`!!document.querySelector('.otk-session-row')`);
+      await rightClick(b, areas.panel);
+      await pick(b, "Collapse right panel");
+      await b.poll(
+        `document.querySelector('.otk-app').dataset.rightCollapsed==='true'`,
+      );
+      assertEquals(
+        (await client.rpc<Preferences>("prefs.get", {})).shellLayout
+          .rightCollapsed,
+        true,
+      );
+      await b.click(".otk-corner-right");
+      await b.poll(
+        `document.querySelector('.otk-app').dataset.rightCollapsed==='false'`,
+      );
+      const before = f.entries.length;
+      await rightClick(b, areas.panel);
+      await pick(b, "New session");
+      await b.poll(
+        `!location.hash.endsWith('/tstv1-otk') && !!document.querySelector('textarea[name=prompt]')`,
+      );
+      assertEquals(f.entries.length, before + 1);
+      await openSession(b, "tstv1-otk");
+      await rightClick(b, areas.transcript);
+      assertEquals(await groups(b), [session, app]);
+      await pick(b, "Copy session title");
+      await b.poll(
+        `navigator.clipboard.readText().then(text=>text==='Execution')`,
+      );
+      await rightClick(b, ".otk-user-bubble", false);
+      assertEquals(await groups(b), [["Copy prompt"], session]);
+      await pick(b, "Copy prompt");
+      await b.poll(
+        `navigator.clipboard.readText().then(text=>text==='Transcript for otk')`,
+      );
+      await b.fill("textarea[name=prompt]", "Keep this prompt");
+      await rightClick(b, areas.composer);
+      assertEquals(await groups(b), [["Edit prompt", "Attach files"], app]);
+      await pick(b, "Edit prompt");
+      await b.poll(
+        `!!document.querySelector('dialog[aria-label="Edit prompt"][open] textarea')`,
+      );
+      assertEquals(
+        await b.evaluate(`document.querySelector('dialog textarea').value`),
+        "Keep this prompt",
+      );
+      await b.key("Escape");
+      await b.poll(`!document.querySelector('dialog[open]')`);
+      assertEquals(
+        await b.evaluate(
+          `document.querySelector('textarea[name=prompt]').value`,
+        ),
+        "Keep this prompt",
+      );
+      const attachment = join(root, "area-attachment.txt");
+      await Deno.writeTextFile(attachment, "Area attachment bytes");
+      await b.send("Page.setInterceptFileChooserDialog", { enabled: true });
+      await rightClick(b, areas.composer);
+      await pick(b, "Attach files");
+      await b.poll(`!document.querySelector('${menu}')`);
+      assert(
+        b.events.some((event) => event.method === "Page.fileChooserOpened"),
+      );
+      await b.send("DOM.setFileInputFiles", {
+        files: [attachment],
+        backendNodeId: b.events.findLast((event) =>
+          event.method === "Page.fileChooserOpened"
+        )!.params.backendNodeId,
+      });
+      await b.poll(
+        `!!document.querySelector('.otk-prompt-chip button[title="area-attachment.txt"]') && !document.querySelector('.otk-prompt-chip').textContent.includes('reading')`,
+      );
+      await openSession(b, f.entries.at(-1)!.id);
+      await rightClick(b, '[data-session="tstv1-otk"]', false);
+      await pick(b, "Open");
+      await b.poll(
+        `location.hash.endsWith('/tstv1-otk') && !!document.querySelector('[data-message="otk-message"]')`,
+      );
+      await rightClick(b, areas.transcript);
+      await pick(b, "Pin as task");
+      await b.poll(`!!document.querySelector('.otk-tab[data-kind=task]')`);
+      assert(
+        (await client.rpc<TaskRecord[]>("tasks.list", {
+          directory: f.entries[0].directory,
+        })).some((task) => task.sessions.includes("tstv1-otk")),
+      );
+      assertEquals(b.errors, []);
+      console.info("C3 external screenshot root", root);
+    } finally {
+      await client.close();
+      await b.close();
+      await f.app.stop();
     }
-    await rightClick(
-      b,
-      '[data-project-sessions~="tstv1-otk"] .otk-project-open',
-      false,
-    );
-    assertEquals(await groups(b), [["Mark inactive"], projects]);
-    await dismiss(b);
-    await rightClick(b, areas.projects);
-    await pick(b, "Add project");
-    await b.poll(
-      `!!document.querySelector('dialog[aria-label="Add project"][open] input[name=directory]')`,
-    );
-    await b.poll(
-      `!!document.querySelector('dialog [aria-label="Scanned projects"]')`,
-    );
-    await b.key("Escape");
-    await b.poll(`!document.querySelector('dialog[open]')`);
-    await rightClick(b, areas.projects);
-    await pick(b, "Collapse projects");
-    await b.poll(
-      `document.querySelector('.otk-project-inbox').dataset.collapsed==='true'`,
-    );
-    assertEquals(
-      (await client.rpc<Preferences>("prefs.get", {})).shellLayout
-        .leftCollapsed,
-      true,
-    );
-    await b.click(".otk-corner-left");
-    await b.poll(
-      `document.querySelector('.otk-project-inbox').dataset.collapsed==='false'`,
-    );
-    await rightClick(b, areas.panel);
-    assertEquals(await groups(b), [[
-      "New session",
-      "Find a session",
-      "Collapse right panel",
-    ], app.slice(1)]);
-    await pick(b, "Find a session");
-    await b.poll(
-      `document.activeElement===document.querySelector('input[aria-label="Search sessions by title"]')`,
-    );
-    await b.type('input[aria-label="Search sessions by title"]', "not-present");
-    await b.poll(`!document.querySelector('.otk-session-row')`);
-    await b.fill('input[aria-label="Search sessions by title"]', "");
-    await b.poll(`!!document.querySelector('.otk-session-row')`);
-    await rightClick(b, areas.panel);
-    await pick(b, "Collapse right panel");
-    await b.poll(
-      `document.querySelector('.otk-app').dataset.rightCollapsed==='true'`,
-    );
-    assertEquals(
-      (await client.rpc<Preferences>("prefs.get", {})).shellLayout
-        .rightCollapsed,
-      true,
-    );
-    await b.click(".otk-corner-right");
-    await b.poll(
-      `document.querySelector('.otk-app').dataset.rightCollapsed==='false'`,
-    );
-    const before = f.entries.length;
-    await rightClick(b, areas.panel);
-    await pick(b, "New session");
-    await b.poll(
-      `!location.hash.endsWith('/tstv1-otk') && !!document.querySelector('textarea[name=prompt]')`,
-    );
-    assertEquals(f.entries.length, before + 1);
-    await openSession(b, "tstv1-otk");
-    await rightClick(b, areas.transcript);
-    assertEquals(await groups(b), [session, app]);
-    await pick(b, "Copy session title");
-    await b.poll(
-      `navigator.clipboard.readText().then(text=>text==='Execution')`,
-    );
-    await rightClick(b, ".otk-user-bubble", false);
-    assertEquals(await groups(b), [["Copy prompt"], session]);
-    await pick(b, "Copy prompt");
-    await b.poll(
-      `navigator.clipboard.readText().then(text=>text==='Transcript for otk')`,
-    );
-    await b.fill("textarea[name=prompt]", "Keep this prompt");
-    await rightClick(b, areas.composer);
-    assertEquals(await groups(b), [["Edit prompt", "Attach files"], app]);
-    await pick(b, "Edit prompt");
-    await b.poll(
-      `!!document.querySelector('dialog[aria-label="Edit prompt"][open] textarea')`,
-    );
-    assertEquals(
-      await b.evaluate(`document.querySelector('dialog textarea').value`),
-      "Keep this prompt",
-    );
-    await b.key("Escape");
-    await b.poll(`!document.querySelector('dialog[open]')`);
-    assertEquals(
-      await b.evaluate(`document.querySelector('textarea[name=prompt]').value`),
-      "Keep this prompt",
-    );
-    const attachment = join(root, "area-attachment.txt");
-    await Deno.writeTextFile(attachment, "Area attachment bytes");
-    await b.send("Page.setInterceptFileChooserDialog", { enabled: true });
-    await rightClick(b, areas.composer);
-    await pick(b, "Attach files");
-    await b.poll(`!document.querySelector('${menu}')`);
-    assert(b.events.some((event) => event.method === "Page.fileChooserOpened"));
-    await b.send("DOM.setFileInputFiles", {
-      files: [attachment],
-      backendNodeId: b.events.findLast((event) =>
-        event.method === "Page.fileChooserOpened"
-      )!.params.backendNodeId,
-    });
-    await b.poll(
-      `!!document.querySelector('.otk-prompt-chip button[title="area-attachment.txt"]') && !document.querySelector('.otk-prompt-chip').textContent.includes('reading')`,
-    );
-    await openSession(b, f.entries.at(-1)!.id);
-    await rightClick(b, '[data-session="tstv1-otk"]', false);
-    await pick(b, "Open");
-    await b.poll(
-      `location.hash.endsWith('/tstv1-otk') && !!document.querySelector('[data-message="otk-message"]')`,
-    );
-    await rightClick(b, areas.transcript);
-    await pick(b, "Pin as task");
-    await b.poll(`!!document.querySelector('.otk-tab[data-kind=task]')`);
-    assert(
-      (await client.rpc<TaskRecord[]>("tasks.list", {
-        directory: f.entries[0].directory,
-      })).some((task) => task.sessions.includes("tstv1-otk")),
-    );
-    assertEquals(b.errors, []);
-    console.info("C3 external screenshot root", root);
-  } finally {
-    await client.close();
-    await b.close();
-    await f.app.stop();
-  }
-});
+  });
+}
 
 test("C3 stock areas: picker and approval commands, Activity panel and Dark/Linen menu geometry", async () => {
   const f = await browserFixture({ bash: "allow" });

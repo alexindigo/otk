@@ -111,10 +111,17 @@ export default function CommandMenu(props: {
     }
     setArmed(undefined);
     setPending(item.key);
-    onSettled(() => {
-      if (current === generation && pending()) focusPending();
-    });
     props.beforeRun?.();
+    const origin = document.activeElement;
+    onSettled(() => {
+      // A command may hand focus to its consumer synchronously. Pending paint
+      // owns only the invocation's old focus, never that newly focused control.
+      if (
+        current === generation && pending() &&
+        (document.activeElement === origin ||
+          document.activeElement === document.body)
+      ) focusPending();
+    });
     try {
       await commands.runContext(action);
       if (current === generation) menu.close(() => {});
