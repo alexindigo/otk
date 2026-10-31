@@ -6,6 +6,7 @@ import {
   openSession,
   sentFrames,
 } from "../support/browser-fixture.ts";
+import { WsClient } from "../support/ws-client.ts";
 const palette = "dialog[aria-label=Commands][open]";
 const keys = "dialog[aria-label='Keyboard shortcuts'][open]";
 test("D1 palette, project button and slash create sessions through the same registered command", async () => {
@@ -180,15 +181,31 @@ test("D4 production rebind UI rejects conflicts, applies the new key, persists o
     await f.stop();
   }
 });
-test("essential Tab cycling selects primary agents in prompt, reverse cycles and sent messages carry selection", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`essential Tab cycling selects primary agents in prompt, reverse cycles and sent messages carry selection in ${theme}`, () =>
+    essentialAgentCycle(theme));
+}
+async function essentialAgentCycle(theme: string) {
   const f = await browserFixture();
+  let client: WsClient | undefined;
   try {
     const seed = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Agent keys" },
     });
     const server = await f.sidecar(), browser = await f.browser(server.url);
+    client = new WsClient(server.url);
+    await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
+    await browser.poll(
+      `document.documentElement.dataset.otkTheme==='${theme}'`,
+    );
     await openSession(browser, seed.id);
+    // Directory catalogs arrive independently of the first transcript page.
+    // Establish the native default before exercising the next-agent intent.
+    await browser.poll(
+      "document.querySelector('.otk-composer-agent')?.textContent==='Build'",
+    );
     await browser.click("textarea[name=prompt]");
     await browser.key("Tab");
     await browser.poll(
@@ -234,9 +251,10 @@ test("essential Tab cycling selects primary agents in prompt, reverse cycles and
       false,
     );
   } finally {
+    await client?.close();
     await f.stop();
   }
-});
+}
 test("agent cycling honors the native configured-default primary order without changing an unselected prompt", async () => {
   const f = await browserFixture(undefined, {
     config: { default_agent: "plan" },
