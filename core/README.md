@@ -1,5 +1,24 @@
 # OTK application core
 
+## Beta.2 startup and upgrade
+
+The release advertises `0.1.0-beta.2` with protocol 17. Before backend startup,
+feature migrations compose receipt storage and the tasks index, then the
+application-owned reference transaction upgrades beta.1 session references to
+derived `opcv1-` identities. Tasks/order, all users' marks, layout/preferences
+and approval history survive; no historical request receipt is invented.
+Operator config and generated auth bytes are not rewritten. The legacy
+`opencode1` config alias remains accepted with one deprecation message.
+
+User state belongs in `otk.db`; derived metadata belongs in the separate
+worker's rebuildable `digest.db`. Background backfill exposes digesting
+readiness without blocking the complete all-age catalog. `index.days` sets
+priority, not retention. Directory catalogs and explicit provider-backed
+recall/attachment reads remain volatile. Provider deletion retains
+metadata/tombstones, never recoverable body history in OTK. Downgrade after
+reference migration requires a consistent pre-upgrade state backup; see the root
+upgrade instructions.
+
 ## Resumable request services
 
 Native registrations use `nativeExecution` and `nativeEffect`: the core fences

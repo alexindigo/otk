@@ -72,14 +72,15 @@ not acceptance, and can be replayed during that live receipt lifetime. Following
 a server restart, interrupted login needs explicit sign-in; setup first rereads
 the committed configuration instead of submitting setup again.
 
-The beta.1 upgrade first performs the existing atomic
-qualified-session-reference migration, then composes the request schema.
-Existing tasks, preferences, seen/finish marks and approval data are retained.
-There is no invented historical request backfill: old calls did not have intent
-keys. Old browser protocol peers must reload. Downgrading to beta.1 after the
-reference migration is unsupported; restoring an older backup cannot reconstruct
-native evidence that was never checkpointed. Restore does not create a
-cross-database exactly-once guarantee.
+Startup composes the feature schemas, including request receipts and the tasks
+index, then runs the application-owned atomic beta.1 session-reference upgrade
+before constructing features or starting the backend. Existing tasks/order,
+preferences/layout, seen/finish marks and approval data are retained. There is
+no invented historical request backfill: old calls did not have intent keys. Old
+browser protocol peers must reload. Downgrading to beta.1 after the reference
+migration is unsupported; restoring an older backup cannot reconstruct native
+evidence that was never checkpointed. Restore does not create a cross-database
+exactly-once guarantee.
 
 Policy is layered through the tracked defaults: `[requests]`, `[connection]` and
 `harness.requestms`. Browser liveness never aborts an effect or fabricates a
@@ -89,11 +90,11 @@ single feedback surface; raw native exceptions stay diagnostic-only.
 
 ## Qualification
 
-Run workloads only in the assigned OTK VM through its pinned access route, with
-disk-backed `TMPDIR`. C5's assigned guest is `arch-niri-otk-devbase-otk-alpha`
-on `ark.home`, transfer profile `otk-alpha`, workspace
-`/home/tester/otk/c5/source`, `TMPDIR=/home/tester/otk/c5/t`. The following
-commands are **inside that guest workspace**:
+Run workloads only in virtual machine `arch-niri-otk-devbase-otk-m5a` on
+`ark.home`, transfer profile `otk-m5a`, through its pinned `otk-vm` access
+route. Use a frozen guest source below `/home/tester/otk` and disk-backed
+`TMPDIR=/home/tester/otk/tmp`; if unavailable, stop rather than use either host.
+The following commands are **inside that guest source workspace**:
 
 ```sh
 deno task test tests/integration/request-restart_test.ts tests/integration/native-request-events_test.ts tests/integration/compiled-requests_test.ts tests/integration/request-scale_test.ts

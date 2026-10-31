@@ -7,7 +7,7 @@ content into OTK shapes and owns history/database queries.
 
 ## Install: run OTK next to your opencode
 
-The **0.1.0-beta.1** Linux release ships one executable and a systemd user unit.
+The **0.1.0-beta.2** Linux release ships one executable and a systemd user unit.
 Connect it to an already-running opencode server on the same machine, under the
 same user. Tested with opencode **1.18.34, 1.18.35 and 1.19.3**; intermediate
 versions have not each been tested. OTK does not start opencode.
@@ -27,16 +27,16 @@ For example, `yay -S otk-bin`. All three install `/usr/bin/otk` and
 
 ### Release tarball
 
-Download the matching `otk-0.1.0-beta.1-<arch>-linux.tar.zst` and `SHA256SUMS`
+Download the matching `otk-0.1.0-beta.2-<arch>-linux.tar.zst` and `SHA256SUMS`
 from the
-[GitHub release](https://github.com/alexindigo/otk/releases/tag/v0.1.0-beta.1).
+[GitHub release](https://github.com/alexindigo/otk/releases/tag/v0.1.0-beta.2).
 Choose `x86_64` or `aarch64` on a glibc-based Linux system with systemd. Verify
 and extract the download (x86_64 example):
 
 ```sh
 sha256sum --check --ignore-missing SHA256SUMS
 mkdir otk-release
-tar -xf otk-0.1.0-beta.1-x86_64-linux.tar.zst -C otk-release
+tar -xf otk-0.1.0-beta.2-x86_64-linux.tar.zst -C otk-release
 cd otk-release
 sha256sum --check SHA256SUMS
 sudo install -m755 otk /usr/bin/otk
@@ -127,19 +127,40 @@ Config layers, operator-file precedence and all keys are documented in
 stop startup. Keep credential files private. The executable can also run in the
 foreground as `otk`.
 
-After upgrading the AUR package or replacing the tarball executable/unit, run:
+### Upgrade from beta.1
+
+Stop the old OTK process normally before replacing it. For the packaged service,
+run `systemctl --user stop otk.service`. Back up the entire OTK state directory
+and operator config while OTK is stopped, including `auth.toml`, `otk.db` and
+any remaining `otk.db-wal`/`otk.db-shm` as one consistent set. The default state
+directory is `~/.local/state/otk/1502`; honor your configured XDG/state path and
+port. Do not copy only a live database file and leave its WAL behind.
+
+Install beta.2 through your chosen channel, then run:
 
 ```sh
 systemctl --user daemon-reload
 systemctl --user restart otk.service
 ```
 
+Reload browser tabs for protocol 17. User-data session references migrate
+atomically to `opcv1-` ids, retaining task order, preferences/layout,
+seen/finish marks and approval history. New receipt storage and a tasks index
+are applied through feature migrations; there is no historical receipt backfill.
+The digest backfills in the background, showing **Digesting…** alongside usable
+metadata and live activity. New config leaves come from the complete defaults;
+explicit operator/environment overrides win and neither operator nor auth files
+are rewritten. Never delete `otk.db`, recreate tasks or edit ids by hand to
+upgrade. Downgrade after id migration is unsupported; restore the consistent
+pre-upgrade state/config backup together with beta.1 if you need to return to
+it.
+
 Before uninstalling, run `systemctl --user disable --now otk.service`. Removing
 the executable and unit preserves your user config and state.
 
 ## What OTK reads and writes
 
-### Session identity compatibility (next release)
+### Session identity and storage in beta.2
 
 The adapter/package is now `opencode-v1` / `@otk/harness-opencode-v1`.
 `harness.type = "opencode1"` remains a deprecated config alias and logs a
@@ -147,7 +168,7 @@ message asking you to use `opencode-v1`; OTK does not rewrite your operator
 file. Environment overrides retain precedence.
 
 Session IDs are now `opcv1-<native id>` throughout the API and browser, using
-wire protocol 16. An older browser is rejected with a protocol mismatch and must
+wire protocol 17. An older browser is rejected with a protocol mismatch and must
 reload. Old bare-ID bookmarks show a compatibility notice; choose the session
 again from Sessions or its task to obtain the canonical URL.
 
@@ -165,6 +186,24 @@ index; only opening a usage breakdown reads the call ledger. Incomplete
 reconciliation shows **Digesting…** and unreported usage stays unavailable
 rather than zero. The `[digest]` defaults document batching, scheduling and
 resource bounds.
+
+The catalog includes sessions of every age. `index.days` is a background
+digestion priority horizon, never a history filter. `otk.db` holds user state
+and metadata-only action receipts; `digest.db` holds rebuildable derived
+metadata. Neither is an archive of messages, prompt recall or attachment bytes.
+Rebuilding a removed digest file preserves user state; deleting provider history
+leaves no recoverable transcript, recall text or attachment data in OTK storage.
+
+Agents, connected models, commands, skills, resources and files share complete
+directory catalogs across session visits. Completion and agent cycling filter
+locally; opening a picker does not refresh it. Explicit Refresh and native
+invalidations replace complete values, retaining last-good values while
+preparing or unavailable. Configuration follows what opencode reports until its
+native instance reloads; OTK never forces disposal or watches configuration
+files. Only demanded file discovery watches the project tree. Recall loads on
+intent, reads provider data anew and resolves selected attachment bytes in
+batches by their originating server. The complete defaults document
+`[catalogs]`, `[attachments]` and `storage.busyms` admission policy.
 
 Transcripts open with the newest ten native messages and continue through opaque
 provider cursors, ten at a time. Each page includes session metadata and the
@@ -277,22 +316,26 @@ not track it; creating a session or interacting with one does. Add servers and
 path templates in Settings; Add project creates an initial session. The centre
 provides ordered task tabs, always-visible active-session phantom tabs and a
 single replaceable session preview. Pin, double-click or send in a phantom to
-make a task. Task breadcrumbs switch sessions and their helpers; the meter shows
-reported token usage and whole-session reported cost. The collapsible right
-panel hosts feature-registered views; its collapsed rail keeps their icons
-available and clicking an icon opens that view. Sessions shows the selected
-project's task-grouped parent/child tree with status lights and title search.
-Switching projects restores the last session and its task tab, including after
-reload; missing or closed sessions fall back to the default project session.
-Click to preview or double-click to make a task. Panel width (280–480px) and
-selected view persist with its collapsed state per user. Close session in the
-context menu or palette releases task membership and the view while keeping the
-session in Sessions and the backend. Closing a helper returns to its parent.
-Working, blocked and unseen-finished sessions retain a phantom tab until idle
-and seen, with an explanation before closing. Open a session to stream its
-transcript, send prompts, or press Esc twice to interrupt. Recently visited
-message bodies remain warm until their scope cools. Web assets and fonts are
-bundled locally; no dev server or CDN is used.
+make a task. Idle, unselected task tabs that do not fit enter one More menu;
+selected and working, blocked or unseen-finished tasks stay visible. If those
+required tasks alone need more space, only that set wraps. Task breadcrumbs
+switch sessions and their helpers in one measured row with their own More menu;
+the selected or editing chip stays in place. The meter shows reported token
+usage and whole-session reported cost. The collapsible right panel hosts
+feature-registered views; its collapsed rail keeps their icons available and
+clicking an icon opens that view. Sessions shows the selected project's
+task-grouped parent/child tree with status lights and title search. Switching
+projects restores the last session and its task tab, including after reload;
+missing or closed sessions fall back to the default project session. Click to
+preview or double-click to make a task. Panel width (280–480px) and selected
+view persist with its collapsed state per user. Close session in the context
+menu or palette releases task membership and the view while keeping the session
+in Sessions and the backend. Closing a helper returns to its parent. Working,
+blocked and unseen-finished sessions retain a phantom tab until idle and seen,
+with an explanation before closing. Open a session to stream its transcript,
+send prompts, or press Esc twice to interrupt. Recently visited message bodies
+remain warm until their scope cools. Web assets and fonts are bundled locally;
+no dev server or CDN is used.
 
 Text fields retain the browser's native context menu for spelling corrections
 and dictionary lookup, including ContextMenu and Shift+F10. Elsewhere right

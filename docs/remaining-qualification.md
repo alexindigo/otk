@@ -48,7 +48,7 @@ no-additional-change PA disposition requires completed measurements.
 ## Execution
 
 All builds, tests and experiments run inside the assigned virtual machine
-`arch-niri-otk-devbase-otk-alpha` on `ark.home`, profile `otk-alpha`, with a
+`arch-niri-otk-devbase-otk-m5a` on `ark.home`, profile `otk-m5a`, with a
 disk-backed workspace below `/home/tester/otk` and
 `TMPDIR=/home/tester/otk/tmp`. Use the strict access route documented by
 `otk-vm`/`virsh-vm-shell`; if unavailable, stop rather than use either host.

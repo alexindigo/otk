@@ -531,6 +531,11 @@ remaining original order, with cycle protection. These owners know no DOM,
 framework or item count folding threshold. The UI retains stable frames and
 supplies measured widths.
 
+The optional `wrapRequired` mode reports when mandatory identities alone need
+multiple rows. Task strips use it to keep selected and attention tasks visible;
+all optional tasks then enter More. Breadcrumbs retain their one-line shrinking
+contract, and More renders independent controls for omitted identities.
+
 `createInputGuard({drafts, key, confirm})` owns dirty-input marks and
 confirmation policy. Release reads the invocation-current draft through
 `Drafts.current(key)` (non-creating and independent of framework publication)
@@ -624,8 +629,8 @@ optimistically mutates session content. `dispose` releases its subscription. No
 file-overlap confirmation is added.
 
 Undo targets the last visible prompt, interrupts a working captured session,
-then waits at most ten seconds for authoritative idle before reverting. Its
-history refill preserves prompt choices and replaces only empty or identical
+then remains pending until authoritative idle before reverting. Its history
+refill preserves prompt choices and replaces only empty or identical
 owner-written content. Redo unreverts and clears only the identical
 owner-written draft; newer text, attachments and unsaved editors survive.
 Captured draft writers cannot resurrect a dropped lifetime, and
@@ -635,9 +640,9 @@ accepts a captured target for that same owner.
 Intent completion waits for authoritative transcript publication, including an
 in-flight resync. A rollback must remove its boundary prompt; restoring must
 publish restored message identities. Only then can another intent select its
-target and draft effects run. Publication has the ordinary 30-second RPC-sized
-bound; selection/disposal cancels it. RPC admission never substitutes for the
-consumer seeing the result.
+target and draft effects run. There is no browser failure deadline for that
+publication wait; selection/disposal retires the observation. RPC admission
+never substitutes for the consumer seeing the result.
 
 The hierarchy owner also exports `sessionFamily`, `familyTask` and
 `familySelection`. Shell's location projection intentionally matches only the

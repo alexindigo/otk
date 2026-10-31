@@ -15,7 +15,7 @@ copy. `ACTIVITY_PAGE_SIZE` owns the application journal page, while the store
 accepts an explicit lookahead count. `PathSemantics` names the server's lexical
 POSIX/Windows flavor without consulting browser platform information.
 
-The additive request-service contracts export `RequestRef`, `RequestControl`,
+The request-service contracts export `RequestRef`, `RequestControl`,
 `RequestEvent`, progress/failure facts and injected request policies
 independently of the currently selected wire union. `RequestReceipts` is
 declaration-mergeable: features contribute exact allowlisted metadata rather
@@ -65,7 +65,8 @@ Import only `@otk/protocol`; `mod.ts` is the single public entry point.
 | `PROTOCOL_VERSION`, `SIDECAR_VERSION`                          | Existing wire and sidecar versions      |
 | `MAX_CLIENT_FRAME_BYTES`, `checkClientFrameSize`               | Combined UTF-8 client frame budget      |
 
-The package version is `0.1.0`; the wire protocol version is `17`, including
+The library package version is `0.1.0`, independently of OTK's
+`SIDECAR_VERSION = "0.1.0-beta.2"`. The wire protocol version is `17`, including
 host-persisted keymap, Dark/Light/System theme and four notification channel
 preferences. The canonical hello version field remains `protocol`.
 
@@ -73,8 +74,8 @@ Protocol17 retains provider-qualified session identities, validated by the
 dependency-free `isSessionID` helper
 (`<three-letter code>v<major>-<native id>`). Both session and root references
 use this grammar; message, part, task, request and model identities remain
-separate. A protocol-13 client must reload rather than send bare session
-identities to a newer server.
+separate. Older protocol peers must reload the bundled browser rather than send
+incompatible frames or bare session identities to a newer server.
 
 Inbox baselines carry `{generation,revision,inbox}` in `inbox.snapshot` and
 `inbox.get`. Live `inbox.patch` frames contain only keyed changes, with

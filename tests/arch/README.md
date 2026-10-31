@@ -88,8 +88,9 @@ mode-aware shell output, post-readiness snapshots, repeated arrows, leading-edge
 anchoring, label/icon centrelines and the action's inclusion in the selected
 row. The session supplies one framework-free model-catalog owner to both the
 composer and context meter; consumers borrow its loading/error/last-good state
-and in-flight work. Browser tests count exactly one catalog request per session
-open and preserve the existing composer loading/error/retry test unchanged.
+and in-flight work. Browser tests count one catalog watch and frecency load per
+accepted directory/connection generation, with no per-session discovery reads,
+and preserve the composer loading/error/retry outcomes.
 
 Task tabs use the same measured overflow owner as breadcrumbs. One More slot
 contains omitted idle tasks; selected and attention tasks stay visible, wrapping

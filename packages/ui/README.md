@@ -316,16 +316,16 @@ in the client owner. The `connectionKey` port uses the sidecar welcome version.
 The common `modelCatalog` session port supplies the single client resource
 shared with the meter; initial loading is joined even when a composer mounts
 after the request finishes. The session binding follows connection identity and
-availability. Explicit picker opening refreshes that same resource; last
-successful data survives refresh/errors. Model search groups favourites, recent
-and connected providers; star actions and successful normal-prompt recent
-recording persist through the serving host's `prefs.set` command. Commands
-`model.choose` (Mod+'), `variant.cycle` (Alt+T) and `agent.choose` are
-discoverable in the command hub. Without the models capability the model stays
-plain text. Shell displays only agent/model, matching its wire projection.
-Unknown catalog metadata preserves and displays a restored variant rather than
-silently dropping it. Palette-native slash execution shares the same readiness
-and projection.
+availability. Picker opening borrows its current directory value; explicit
+Refresh and native invalidations reacquire it. Last successful data survives
+refresh/errors. Model search groups favourites, recent and connected providers;
+star actions and successful normal-prompt recent recording persist through the
+serving host's `prefs.set` command. Commands `model.choose` (Mod+'),
+`variant.cycle` (Alt+T) and `agent.choose` are discoverable in the command hub.
+Without the models capability the model stays plain text. Shell displays only
+agent/model, matching its wire projection. Unknown catalog metadata preserves
+and displays a restored variant rather than silently dropping it. Palette-native
+slash execution shares the same readiness and projection.
 
 `ListPicker` is the shared, data-injected interaction component inside
 `Popover`: typed groups/items/values, selected key, optional

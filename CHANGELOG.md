@@ -1,76 +1,306 @@
 # Changelog
 
-## Unreleased
+## [0.1.0-beta.2] — 2026-10-31
 
-**Feature.** Session and turn usage now comes from a worker-owned, rebuildable
-metadata digest. Session rows, context and reply footers no longer request a
-usage ledger per item; opening a breakdown acquires cancellable detail
-explicitly. Authoritative native deletion retains session details and task
-membership, retires approval policy and preserves unsent browser input. A
-reappearing identity resumes its existing view.
+**Highlights.** Session lists now include all ages of history and carry their
+displayed usage and readiness from a background server digest, with no
+per-session summary requests. Messages open in pages of ten, preload ahead of
+scrolling and stay warm after navigation until their scope cools; cooling keeps
+drafts and activity lights. Actions show accepted and pending progress instead
+of false timeouts, and reconnects resume the same intent without duplicating its
+effect. Deleted sessions keep a struck-through record with their last details
+and task membership, rather than vanishing. Shared directory catalogs make
+completion local, recall batches attachment reads, and the UI fixes setup,
+dropdown spacing, task forms, empty-pane placement and crowded task/breadcrumb
+rows while keeping work that needs attention visible (`ea50bf2`, `428f27a`,
+`fc871b2`, `a5e9eeb`, `4d68a32`, `d7f229b`, `cc7f2b5`).
 
-Transcripts now use ten-message pages with opaque native continuation and
-event-aligned snapshot clocks. The composer and Undo retain the latest prompt's
-context independently of the loaded page. Bounded replay recovers through a new
-provider snapshot and shows refreshing state instead of applying unaligned
-changes; replay operation/byte budgets and retry backoff use layered
-configuration.
+**Known gaps.** Whole-transcript copy/export, MCP/LSP/formatter/provider/plugin
+dialogs, prompt stash management, a full changes viewer and a quick session
+switcher remain missing. Inline diffs, selection/reply Copy, retained browser
+drafts and Sessions remain available. There is no automatic continue,
+retry-limit or fallback-provider recovery. An uncertain native dispatch stays
+pending for reconciliation and is not blindly resent. Stock opencode 1.18.34 can
+reject `GET /permission` for a websearch permission missing optional `livecrawl`
+metadata; resolve that request in opencode. That specific upstream case has not
+been requalified on newer versions. All ten security scanner findings remain
+open and unverified; keep OTK bound to localhost (`659704a`, `e171604`;
+pre-existing gaps recorded in `91d27da`, `d93f3db`).
 
-Message bodies now share one resource per server/session across the active
-scope, recent navigation and attention preloads. A bounded per-server queue
-warms ten messages plus the next ten, and inactive scopes unload after their
-configured interaction deadline. Attention preloads do not navigate or mark
-sessions seen; drafts and supervision metadata survive cooling.
+**Upgrade.** Stop OTK normally and make a consistent backup of its state and
+config, including `otk.db` and any remaining WAL, before installing beta.2.
+Beta.1 session references migrate atomically to derived `opcv1-` ids, preserving
+tasks/order, preferences/layout, seen/finish marks and approval history. The
+separate, rebuildable metadata digest backfills in the background;
+**Digesting…** means preparation, not failure. Existing
+`harness.type = "opencode1"` still loads with a deprecation message; new
+configuration uses `opencode-v1`. Reload the bundled browser for wire protocol
+17 and choose legacy bare-ID bookmarks again from Sessions. Downgrading after
+migration is unsupported: restore a consistent pre-upgrade backup rather than
+editing ids or deleting user state (`6579db9`, `ea50bf2`, `4d68a32`, `f478289`).
 
-Transcript updates now address keyed messages, parts and stable logical replies.
-Opened usage breakdowns acquire only their complete turn and update changed
-calls incrementally; unreported categories remain unknown through live
-replacements. Copy reply lazily acquires missing steps before copying its
-complete source.
+See the [install and upgrade instructions](./README.md),
+[security findings](./docs/security-findings.md),
+[request lifecycle](./docs/request-events.md) and
+[packaging recipe](./packaging/README.md).
 
-Helper progress now comes from the shared metadata digest instead of blocking
-parent pages on child scans. Progress patches address existing parent links
-without parent message reads or polling. Unready and unavailable progress remain
-explicit, and helper metadata upgrades only the derived database.
+### 2026-10-31
 
-**Performance.** Sessions renders a measured window of the active project's
-hierarchy. Search, scroll anchors, focused rows and in-place edits retain their
-identities while panels unmount or lists change. Project and required session
-activity indicators remain visible independently of list rendering.
+#### Fix
 
-Transcripts, long reply segments, source blocks, diff lines and Timeline now use
-the same measured window owner. Native selection, acquired-range Select all,
-focus and surface origins retain their identities across recycling; Timeline
-reveals mount and measure before focusing the prompt. Folded tools and work logs
-construct bodies only while open, retain source-free disclosure choices, and
-release source-bearing highlighting caches when their transcript cools.
+Crowded projects put only idle, unselected tasks in More; selected and working,
+blocked or unseen-finished tasks stay visible, wrapping when necessary. Metadata
+bootstrap no longer refreshes a borrowed directory catalog or reacts to another
+server's bootstrap, avoiding redundant acquisition during navigation.
 
-**Compatibility.** The native adapter/package is now `opencode-v1` /
-`@otk/harness-opencode-v1`. The old `harness.type = "opencode1"` spelling still
-loads with a deprecation message; environment precedence is unchanged. Session
-identities are derived `opcv1-<native id>` values throughout protocol 15. Older
-browser clients must reload, and bare-ID bookmarks show a compatibility notice
-instead of reaching the native service. Existing task, seen, finish, approval
-and saved-location references migrate atomically in `otk.db`, preserving
-unrelated metadata. Conflicting task ownership stops the upgrade without losing
-membership. Downgrading to beta.1 after this migration is unsupported.
+- Keep task attention visible through shared measured overflow (`cc7f2b5`).
+- Leave borrowed catalog invalidation with its directory owner (`aab086f`).
 
-**Fix.** SQLite startup installs its busy timeout before selecting WAL mode, so
-concurrent openers can wait before the session-reference upgrade begins.
+#### Test
 
-Missing stream seeds now use bounded, generation-fenced replacement checkpoints
-instead of polling per delta. HTTP snapshots never seed appends or invent output
-clocks; replies remain visibly refreshing until a full event or terminal source
-checkpoint restores authority. Recovery admission shares layered message policy,
-and teardown cancels queued and active checkpoint work.
+Qualification adds full-population directory/task and two-origin attachment
+cases, genuine beta.1 upgrade fault boundaries, public reuse and off-source
+compiled outcomes. Streaming scale fixtures join native event readiness before
+stepping the producer, preserving the original 1,000-frame, source and clipboard
+assertions instead of timing out during bootstrap.
 
-Digest readiness and publication-credit waits now release execution and resume
-at their priority. Catalog reconciliation/admission uses bounded committed
-batches and real worker yields, while metadata-only project/activity views no
-longer rebuild for digest-only revisions. Bootstrap completion is separate from
-versioned transcript invalidation: already-current pages and turn detail survive
-duplicate or delayed notices, while actual reconnect/disposal/revert boundaries
-still retire stale authority.
+- Qualify remaining projections, upgrades, compiled outcomes and PA observations
+  at scale (`f478289`).
+- Await native readiness before stepped browser streaming (`3535c4c`).
+
+### 2026-10-30
+
+#### Fix
+
+Action failures take precedence over bookkeeping feedback, hidden controls
+remain hidden, and pending menus preserve focus deliberately moved by a command.
+Urgent reads can preempt optional native acquisition; missing native metadata
+stays unknown instead of becoming invented prices, paths or counts. Password
+setup signs its browser in, and shared controls, forms, empty panes and overflow
+use structural geometry while retaining editors, drafts and visible feedback.
+
+- Keep action feedback ahead of bookkeeping (`e7db764`).
+- Respect native hidden controls in shared theme paint (`ffd9bc0`).
+- Preserve compact prose edges through transcript windowing (`211cbdb`).
+- Use shared operation-notice icons (`096a5f9`).
+- Size attention cards to visible content (`9ba09c5`).
+- Let urgent reads preempt and join transient native I/O (`b96c276`).
+- Preserve command-directed focus through pending feedback (`32adc90`).
+- Preserve native metadata, server path semantics and shared feature policy
+  (`b634aee`).
+- Authenticate the setup browser after password configuration (`ef69f48`).
+- Share control slots, auth/form/dialog geometry, pane centring and stable
+  breadcrumb overflow (`d7f229b`).
+
+#### Feature
+
+All shipped actions and reads use the accepted/pending/result lifecycle,
+including bootstrap HTTP operations and uncertain native effects. Shared
+directory catalogs publish complete values and keyed inbox changes, so typing
+and agent cycling filter locally rather than making discovery calls. Global
+recall and attachment batches read provider data on demand without persisting
+their content in OTK.
+
+- Activate request events for every action and read (`a5e9eeb`).
+- Add shared directory-owned catalog services and live pending questions
+  (`27fb44d`).
+- Batch provider-backed global recall and attachment preparation (`803735d`).
+- Publish keyed inbox/frecency updates, complete catalog chunks and
+  origin-batched attachment requests under protocol 17 (`4d68a32`).
+
+#### Refactor
+
+Task and identity validation use set-oriented reads, and committed metadata
+changes update only their affected keys. Attention, notification comparisons and
+Activity share identity-based projections; hidden Activity releases its reads.
+Pending and failure surfaces share presentation and lifetime owners instead of
+reconstructing forms or duplicating feedback.
+
+- Share pending, failure and operation-attention surfaces (`28c66b5`).
+- Query tasks and authoritative identities by set (`cd2c18f`).
+- Maintain attention, notifications, Activity and retained tabs by identity;
+  serialize common broadcasts once (`05bb27d`).
+
+#### Performance
+
+Streaming Markdown retains one producer-owned parsed revision across flush,
+snapshot, replay and completion. Optional clock and preview enrichment no longer
+holds ordered essential delivery; correctness for unstable suffixes and late
+references is retained without claiming universal linear parsing.
+
+- Retain producer parse state and isolate optional enrichment (`35d11b5`).
+
+#### Test
+
+Request-recovery coverage observes real native effects, restart/reconnect and
+pending state at scale. Existing fixtures follow accepted-result contracts,
+actual available controls, virtualized targets and current owner lifetimes;
+their source, persistence, payload and accessibility assertions remain in place.
+
+- Track retained source across viewport changes (`b881bfb`).
+- Hit-test virtualized context targets (`3c44dd9`).
+- Align timestamp expectations with composed schemas (`1a1f694`).
+- Keep consumer-held scripted provider streams alive (`fb1b813`).
+- Follow request-feedback and surface lifetimes (`7291760`).
+- Qualify request recovery, restart and native effects at scale (`e171604`).
+- Follow inbox accepted/result and structured-failure contracts (`c97d7b1`).
+- Measure empty and sendable composer controls and safe feedback (`f923ee6`).
+- Distinguish definite recall failure from reconnecting work (`4853684`).
+- Align integration fixtures with resumable request lifetimes (`338ebe4`).
+- Observe visible Activity feedback and safe failure copy (`2777124`).
+- Account for the tasks index migration (`4db7c3d`).
+- Exercise available composer actions with genuine sendable input (`414e9e3`).
+- Join the local accessible approval-policy paint (`6c9768b`).
+- Acquire reloaded tool-path history through its cursor owner (`6486c48`).
+- Join optional directory colour revalidation before exact assertions
+  (`81898c0`).
+- Expect Send to be absent while attachments load (`07a5edc`).
+
+### 2026-10-29
+
+#### Fix
+
+Digest work yields execution during readiness, credit and I/O waits, allowing
+urgent reads between bounded chunks. Metadata bootstrap completion is separate
+from transcript invalidation, preserving current pages while actual reconnect,
+disposal and revert boundaries still replace stale authority. Initial pages,
+helper demand and publication progress survive intervening metadata changes.
+
+- Yield digest execution while waiting for readiness (`482c734`).
+- Separate bootstrap completion from versioned transcript invalidation
+  (`ea02621`).
+- Preserve initial pages across metadata updates (`913c1b8`).
+- Resume helper demand after catalog discovery (`db65234`).
+- Preserve digest publication liveness under priority pressure (`31ff85a`).
+
+#### Feature
+
+Durable metadata receipts give local mutations an atomic completion record and
+prevent same-intent retries from duplicating effects. Resumable execution adds
+acceptance, correlated progress/results, read release and native-dispatch
+fences; unconfirmed effects remain reconciling rather than being dispatched
+again.
+
+- Add durable request receipts and composable store writes (`5f1999c`).
+- Add resumable request execution and client tracking (`659704a`).
+
+#### Test
+
+Scale qualification measures message paging, cooling, serving lag and real
+browser outcomes with synthetic populations and off-source binaries. Browser
+drivers follow native scrolling, measured windows, progressing backfill and
+terminal ledgers rather than stale whole-history or timing assumptions; these
+changes strengthen verification without adding product features.
+
+- Qualify message paging and cooling at scale (`5b55f23`).
+- Exercise lazy tool bodies through their disclosures (`89d67ad`).
+- Qualify transcript release at scope cooling (`d91571f`).
+- Isolate usage proofs from viewport hydration (`9de5611`).
+- Hold message pages in creation-readiness probes (`f99186e`).
+- Follow transcript windows in browser probes (`45a7da8`).
+- Distinguish cancelled reads in scale observations (`fbd8f16`).
+- Drive list probes through native scrolling (`1e0cd3c`).
+- Await progressing scale backfill (`2e45f5f`).
+- Qualify bounded scope warming in scale probes (`7c73aee`).
+- Reveal rollback targets through native scrolling (`48833e4`).
+- Stabilize complete-turn ledger probes (`24c7966`).
+- Await terminal ledgers in compiled probes (`d66c31e`).
+- Retain owned Timeline reveals in browser probes (`88c0954`).
+- Wait for progressing scale digestion (`9b70b7c`).
+- Recognize atomic layout write scopes in architecture checks (`afbe89e`).
+
+### 2026-10-28
+
+#### Fix
+
+Lost stream seeds recover through bounded, generation-fenced replacement
+checkpoints instead of polling on each delta; unaligned source stays visibly
+refreshing until authoritative completion. Provider contexts expose ports rather
+than render props, project observation is idempotent, and connected catalog
+reads follow their actual owners.
+
+- Recover missing stream seeds with versioned snapshots (`9e31ca4`).
+- Isolate provider ports from render props (`7702af7`).
+- Make project observation idempotent and single-owned (`ce56f6f`).
+- Scope connected catalog reads to their owners (`2610cc2`).
+
+#### Feature
+
+Message bodies share scope-temperature lifetimes: recent navigation stays warm,
+attention preloads without marking seen, and cooling releases source while
+retaining drafts and supervision metadata. Helper progress comes from the shared
+digest without blocking parent pages. Transcripts, long reply/code/diff content
+and Timeline render measured windows, while collapsed bodies release expensive
+rendering and highlight state.
+
+- Retain message bodies by scope temperature (`fc871b2`).
+- Digest helper progress without blocking pages (`8f06b1b`).
+- Window transcripts and deactivate folded bodies (`49f7008`).
+
+#### Refactor
+
+Live transcript and usage changes address keyed messages, parts, replies and
+calls instead of regrouping acquired history. Opened breakdowns acquire only
+their complete turn, preserve unknown categories, and Copy reply lazily acquires
+missing source through the canonical body owner.
+
+- Update transcript and usage projections incrementally (`8728c5a`).
+
+#### Test
+
+Pointer drivers distinguish browser-native input from application viewport
+ownership and observe their actual target before interaction. This preserves
+native input behavior without adding product scrolling shortcuts.
+
+- Respect viewport ownership during pointer input (`d096f4d`).
+
+### 2026-10-27
+
+#### Feature
+
+A worker-backed digest supplies rebuildable session/turn summaries, explicit
+readiness and retained deletion details without copying transcripts into OTK.
+The complete session index carries the values rows and footers display, removing
+per-session usage fetches. Active-project lists are windowed, and transcript
+bodies begin with ten-message native cursor pages carrying the latest prompt's
+context independently of the loaded page.
+
+- Add worker-backed session digest services (`ea50bf2`).
+- Serve complete session summaries and deleted-session details (`428f27a`).
+- Window active session lists while retaining interaction identities
+  (`39f06ed`).
+- Page transcripts with opaque native cursors and aligned clocks (`a67291e`).
+
+#### Test
+
+Synthetic native-scale qualification covers complete indexes, nullable usage,
+retained tombstones, responsive consumers and off-source compiled startup.
+Independent expected manifests and serving/browser observations establish
+outcomes rather than inferring them from a successful launch.
+
+- Qualify session digests at scale (`aff644b`).
+
+### 2026-10-26
+
+#### Breaking
+
+The adapter and package are renamed to `opencode-v1` and
+`@otk/harness-opencode-v1`, and session references become derived
+`opcv1-<native id>` values across native boundaries, storage and browser routes.
+The atomic reference upgrade preserves user metadata; the old configuration
+spelling remains accepted with deprecation, but old bare-ID links require a new
+selection and post-migration downgrade requires a pre-upgrade backup.
+
+- Qualify opencode-v1 session identities and migrate beta.1 references
+  (`6579db9`).
+
+#### Fix
+
+Concurrent OTK openers install their SQLite busy wait before selecting WAL mode.
+This lets startup contenders wait for the shared database instead of failing
+before the atomic session-reference upgrade can begin.
+
+- Install the busy timeout before WAL selection (`6579db9`).
 
 ## [0.1.0-beta.1] — 2026-10-26
 

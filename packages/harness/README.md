@@ -62,6 +62,7 @@ import {
 const registry = new CapabilityRegistry();
 registry.register("history", {
   listHistory: () => Promise.resolve([]),
+  attachments: () => Promise.resolve([]),
   attachment: () => Promise.reject(new Error("No attachment")),
 });
 console.log(

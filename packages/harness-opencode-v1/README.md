@@ -23,7 +23,8 @@ await readiness directly. A yielded scan checks connection, deletion and private
 checkpoint authority before committing either data or an error. It cannot
 overwrite a newer essential read's committed baseline or revive a deleted row.
 
-Stock opencode 1.x implementation of `@otk/harness`, verified against 1.18.34.
+Stock opencode 1.x implementation of `@otk/harness`. Qualification targets are
+1.18.34, 1.18.35 and 1.19.3; intermediate versions are not individually implied.
 All neutral session references are derived `opcv1-<native>` identities. The
 public `opencodeV1SessionID` codec is the only native boundary owner: native
 rows/envelopes remain native, while core/capability inputs and mapped outputs
@@ -113,10 +114,12 @@ one scalar, with bounded Messages pages as fallback. Both whole-session and
 response forks cap the native boundary at an authoritative pending revert.
 
 `sessionActions.compact` launches native `POST /session/{id}/summarize` with
-`{providerID, modelID}` through the existing owned request lifetime and
-`timeout: null`. Admission returns immediately; progress, completion and HTTP
-failures reconcile through ordinary session events/errors. Native summarization
-joins current work and commits a pending rollback, as the next prompt does.
+`{providerID, modelID}` through the existing owned request lifetime. An
+operation-scoped call joins native HTTP settlement without a failure deadline;
+uncertain dispatch remains reconciling under the request owner. Progress and
+native event errors retain their ordinary session provenance. Native
+summarization joins current work and commits a pending rollback, as the next
+prompt does.
 
 The shared HTTP failure mapper reads both legacy `{name,data}` errors and native
 `_tag` errors with top-level reasons/references (`_tag` takes precedence over
@@ -161,12 +164,12 @@ each `ref` with its upload `part`. Count, combined decoded bytes and the shared
 immutable per-upload limit all apply before bytes leave SQLite. Byte-bounded
 fragments use the existing publication credits; contiguous offsets and exact
 final lengths are checked before exposing an attachment. The compatibility
-`attachment(ref,signal?)` delegates to a one-element batch. The existing point
-wire remains coherent until the separate protocol activation. No provider data
-is recoverable from an unlinked/replaced native file handle. Missing, wrong-kind
-or over-budget attachment references are definite native rejections, not
-provider-unavailability waits; the existing safe attachment failure presenter
-retains the draft and chips for correction.
+`attachment(ref,signal?)` delegates to a one-element batch. Protocol 17 uses
+`history.attachments`; there is no point-per-item browser wire path. No provider
+data is recoverable from an unlinked/replaced native file handle. Missing,
+wrong-kind or over-budget attachment references are definite native rejections,
+not provider-unavailability waits; the existing safe attachment failure
+presenter retains the draft and chips for correction.
 
 Explicit path attachments are required: normal prompts and slash commands
 resolve every selected path and check file-read or directory-list access before
