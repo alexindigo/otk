@@ -13,7 +13,6 @@ export function registerPatchTool(tools: ToolRegistry): void {
       <PatchTool
         call={props.call}
         prefs={props.prefs}
-        paneWidth={props.paneWidth}
         directory={props.directory}
       />
     ),
@@ -39,7 +38,7 @@ export default function PatchTool(
   props: {
     call: PatchCall;
     prefs: Preferences;
-    paneWidth: number;
+    paneWidth?: number;
     directory?: string;
   },
 ) {
@@ -47,7 +46,6 @@ export default function PatchTool(
     <FileChanges
       files={props.call.files}
       prefs={props.prefs}
-      paneWidth={props.paneWidth}
       directory={props.directory}
       inline={() => props.call.files.length === 1}
     />

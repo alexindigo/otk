@@ -59,7 +59,7 @@ export default function RightPanel(props: {
         aria-label="Right panel views"
         aria-orientation={input.rail ? "vertical" : "horizontal"}
       >
-        <For each={views()} keyed={(v) => v.id}>
+        <For each={props.ready ? views() : []} keyed={(v) => v.id}>
           {(view) => (
             <button
               type="button"
@@ -73,7 +73,6 @@ export default function RightPanel(props: {
               title={view().title}
               aria-label={view().title}
               aria-controls="otk-panel-content"
-              disabled={!props.ready}
               data-panel-view={view().id}
               onClick={() =>
                 void save({ rightView: view().id, rightCollapsed: false })}

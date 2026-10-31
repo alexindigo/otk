@@ -10,6 +10,7 @@ import {
 } from "@otk/protocol";
 import { ownedAction } from "../keyboard/context.tsx";
 import FieldFeedback from "./FieldFeedback.tsx";
+import Select from "./Select.tsx";
 
 export interface PreferenceControlsProps {
   prefs: Preferences;
@@ -71,7 +72,8 @@ export default function PreferenceControls(
                   fallback={
                     <>
                       {row().label}
-                      <select
+                      <Select
+                        containerClass="otk-preference-select"
                         name={row().key}
                         value={String(props.prefs[row().key])}
                         onChange={(event) => {
@@ -87,7 +89,7 @@ export default function PreferenceControls(
                             <option value={option.value}>{option.label}</option>
                           )}
                         </For>
-                      </select>
+                      </Select>
                     </>
                   }
                 >

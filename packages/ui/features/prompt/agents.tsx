@@ -9,7 +9,7 @@ import { ownedCommand } from "../../keyboard/context.tsx";
 import ListPicker, {
   type ListPickerControl,
 } from "../../components/ListPicker.tsx";
-import { ChevronDownIcon, StarIcon } from "../../components/ChromeIcons.tsx";
+import { StarIcon } from "../../components/ChromeIcons.tsx";
 import { bindComposerSelection } from "./catalog.ts";
 import {
   ModelLabel,
@@ -161,7 +161,6 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                         "Default agent",
                       )}
                     </span>
-                    <ChevronDownIcon class="otk-picker-chevron" />
                   </>
                 }
                 groups={[{
@@ -215,7 +214,6 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                       provider={selection().model.providerName}
                       name={selection().model.name}
                     />
-                    <ChevronDownIcon class="otk-picker-chevron" />
                   </>
                 }
                 groups={owner.groups().map((group) => ({
@@ -281,7 +279,6 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                       <span class="otk-picker-label">
                         {selectionLabel(selection().variant.value, "Default")}
                       </span>
-                      <ChevronDownIcon class="otk-picker-chevron" />
                     </>
                   }
                   groups={[{

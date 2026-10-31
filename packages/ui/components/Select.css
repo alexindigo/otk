@@ -1,0 +1,22 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-select {
+  --control-height: var(--form-control-size);
+  --control-border: 1px;
+  --control-inner-size: calc(var(--control-height) - 2 * var(--control-border));
+  display: grid;
+  min-inline-size: 0;
+}
+.otk-select > * {
+  grid-area: 1 / 1;
+  min-inline-size: 0;
+}
+.otk-select > select {
+  appearance: none;
+  block-size: var(--control-height);
+  padding-block: 0;
+  padding-inline-end: calc(var(--control-inner-size) + var(--control-border));
+}
+.otk-select-decoration {
+  margin: var(--control-border);
+  pointer-events: none;
+}

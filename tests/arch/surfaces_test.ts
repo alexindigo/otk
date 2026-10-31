@@ -46,6 +46,14 @@ Deno.test("overlay owners enforce an internal Surface and normal-flow registered
       ["components/surface/Dialog.css", ".otk-surface-body { top: 8px; }"],
       [
         "components/surface/Dialog.css",
+        ".otk-dialog .child { position: fixed; }",
+      ],
+      [
+        "components/surface/Dialog.css",
+        ".otk-dialog[data-size=form] { position: fixed; }",
+      ],
+      [
+        "components/surface/Dialog.css",
         ".otk-dialog[data-dialog=feature] { width: 90vw; }",
       ],
     ]
@@ -61,6 +69,15 @@ Deno.test("overlay owners enforce an internal Surface and normal-flow registered
       [],
     );
   }
+  assertEquals(
+    surfaceErrors(
+      new Map([[
+        "components/surface/Dialog.css",
+        ".otk-dialog {position: fixed; inset: 0;}",
+      ]]),
+    ),
+    [],
+  );
   for (const owner of ["Popover", "Menu", "Toast", "ListPicker"]) {
     assert(
       surfaceErrors(

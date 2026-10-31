@@ -138,7 +138,7 @@ export default function ThemePicker(props: {
               theme.id === props.systemLightTheme
             )}
           >
-            <option value={props.systemLightTheme}>
+            <option value={props.systemLightTheme} hidden>
               Unavailable ({props.systemLightTheme}); uses default light
             </option>
           </Show>

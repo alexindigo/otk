@@ -15,6 +15,7 @@ import { useCommandPorts } from "../keyboard/context.tsx";
 export function registerProjectDialogs(dialogs: DialogRegistry): void {
   dialogs.register({
     id: "add-project",
+    size: "form",
     title: "Add project",
     commandId: "project.add",
     component: AddProject,

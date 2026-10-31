@@ -45,6 +45,7 @@ export default function DialogHost(
         const owner = value(), definition = dialogs.resolve(owner.id)!;
         return (
           <Dialog
+            size={definition.size}
             id={definition.commandId ?? definition.id}
             title={typeof definition.title === "function"
               ? definition.title(owner.input)

@@ -12,7 +12,6 @@ export function registerToolPart(parts: PartRegistry): void {
           <ToolLine
             call={call()}
             prefs={props.prefs}
-            paneWidth={props.paneWidth}
             onOpenChild={props.onOpenChild}
             genericOutput={props.prefs.genericToolOutput}
             directory={props.directory}

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createSignal } from "solid-js";
-import Form, { Credentials, FormSelect } from "./Form.tsx";
+import { createSignal, Show } from "solid-js";
+import Form, { FormInput, FormSelect } from "./Form.tsx";
+import AuthColumn from "./AuthColumn.tsx";
 export default function Setup(
   props: {
     onSetup(
@@ -9,12 +10,16 @@ export default function Setup(
   },
 ): import("solid-js").Element {
   const [type, setType] = createSignal("password");
+  const [username, setUsername] = createSignal(""),
+    [password, setPassword] = createSignal("");
   return (
-    <>
-      <h2>Configure this sidecar</h2>
+    <AuthColumn
+      title="Set up OTK"
+      description="Choose how to sign in to this OTK server."
+    >
       <Form
-        title="Configure this sidecar"
-        submitLabel="Configure sidecar"
+        title="Set up OTK"
+        submitLabel="Set up OTK"
         pendingLabel="Configuring server…"
         onSubmit={(data) =>
           props.onSetup({
@@ -24,7 +29,7 @@ export default function Setup(
           })}
       >
         <label>
-          Authentication<FormSelect
+          Sign-in method<FormSelect
             name="type"
             value={type()}
             onChange={(event) => setType(event.currentTarget.value)}
@@ -33,8 +38,28 @@ export default function Setup(
             <option value="none">None</option>
           </FormSelect>
         </label>
-        <Credentials required={type() === "password"} newPassword />
+        <Show when={type() === "password"}>
+          <label>
+            Username<FormInput
+              name="username"
+              autocomplete="username"
+              required
+              value={username()}
+              onInput={(e) => setUsername(e.currentTarget.value)}
+            />
+          </label>
+          <label>
+            Password<FormInput
+              name="password"
+              type="password"
+              autocomplete="new-password"
+              required
+              value={password()}
+              onInput={(e) => setPassword(e.currentTarget.value)}
+            />
+          </label>
+        </Show>
       </Form>
-    </>
+    </AuthColumn>
   );
 }

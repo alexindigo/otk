@@ -10,17 +10,17 @@
 }
 .otk-picker-trigger {
   --control-color: var(--otk-fg);
-  display: inline-grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  display: inline-flex;
   align-items: center;
-  gap: 4px;
   min-width: min-content;
-  padding: 4px 8px;
+  height: var(--control-size);
+  padding: 0;
   color: var(--control-color, var(--otk-fg));
   font-size: var(--text-meta);
   line-height: var(--line-ui);
 }
 .otk-picker-label {
+  max-inline-size: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

@@ -19,7 +19,8 @@
   margin-bottom: 24px;
 }
 .otk-project-settings h2 {
-  font-size: 15px;
+  font-size: var(--text-heading);
+  line-height: var(--line-heading);
 }
 .otk-ageing-fields {
   display: flex;

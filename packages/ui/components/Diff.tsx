@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import ChangeCounts from "./ChangeCounts.tsx";
 import "./Diff.css" with { type: "text" };
-import { For, Show } from "solid-js";
+import { createSignal, For, onSettled, Show } from "solid-js";
 import type { FileDiff, Hunk } from "@otk/protocol";
 import Diagnostics from "./tools/Diagnostics.tsx";
 import ToolPath from "./tools/ToolPath.tsx";
@@ -56,7 +56,8 @@ export default function Diff(
     file: FileDiff;
     style: "auto" | "split" | "unified";
     wrap: boolean;
-    paneWidth: number;
+    /** Compatibility input; automatic mode measures this Diff's own container. */
+    paneWidth?: number;
     /** The tool row already names this file; retain the accessible identity. */
     inline?: boolean;
     directory?: string;
@@ -64,6 +65,21 @@ export default function Diff(
 ): import("solid-js").Element {
   const identity = useContentIdentity();
   const paths = usePathSemantics();
+  let root!: HTMLElement;
+  const [split, setSplit] = createSignal(false);
+  onSettled(() => {
+    const measure = () =>
+      setSplit(
+        root.getBoundingClientRect().width >=
+          parseFloat(
+            getComputedStyle(root).getPropertyValue("--diff-split-min"),
+          ),
+      );
+    const observer = new ResizeObserver(measure);
+    observer.observe(root);
+    measure();
+    return () => observer.disconnect();
+  });
   const source = (hunk: Hunk) =>
     hunk.lines.filter((line) =>
       props.file.status === "deleted"
@@ -71,9 +87,7 @@ export default function Diff(
         : line.kind !== "del"
     ).map((line) => line.text).join("\n");
   const style = () =>
-    props.style === "auto"
-      ? (props.paneWidth >= 1200 ? "split" : "unified")
-      : props.style;
+    props.style === "auto" ? (split() ? "split" : "unified") : props.style;
   const label = () =>
     ({
       added: "Created",
@@ -84,6 +98,7 @@ export default function Diff(
     })[props.file.status];
   return (
     <section
+      ref={(element) => root = element}
       class={["otk-diff", { "otk-diff-wrap": props.wrap }]}
       data-diff-style={style()}
       data-file-status={props.file.status}

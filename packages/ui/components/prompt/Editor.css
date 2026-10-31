@@ -4,8 +4,7 @@
   flex-direction: column;
   gap: 12px;
   flex: 1 1 auto;
-  width: min(90vw, 100rem);
-  height: 100vh;
+  width: 100%;
   min-height: 0;
 }
 .otk-editor footer {

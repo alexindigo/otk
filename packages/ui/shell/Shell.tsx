@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import PaneState from "../components/PaneState.tsx";
 import "./Shell.css" with { type: "text" };
 import {
   createEffect,
@@ -461,37 +462,38 @@ export default function Shell(
           }}
           data-right-collapsed={String(layout().rightCollapsed)}
         >
-          <button
-            type="button"
-            class="otk-icon-button otk-corner otk-corner-left"
-            aria-label={layout().leftCollapsed
-              ? "Expand projects"
-              : "Collapse projects"}
-            aria-expanded={layout().leftCollapsed ? "false" : "true"}
-            title={layout().leftCollapsed
-              ? "Expand projects"
-              : "Collapse projects"}
-            disabled={!toggles.state.ready}
-            onClick={() =>
-              void commands.run("layout.projects.toggle").catch(fail)}
-          >
-            <PanelLeftIcon />
-          </button>
-          <button
-            type="button"
-            class="otk-icon-button otk-corner otk-corner-right otk-panel-collapse"
-            aria-label={layout().rightCollapsed
-              ? "Open right panel"
-              : "Collapse right panel"}
-            aria-expanded={layout().rightCollapsed ? "false" : "true"}
-            title={layout().rightCollapsed
-              ? "Open right panel"
-              : "Collapse right panel"}
-            disabled={!toggles.state.ready}
-            onClick={() => void commands.run("layout.panel.toggle").catch(fail)}
-          >
-            <PanelRightIcon />
-          </button>
+          <Show when={toggles.state.ready}>
+            <button
+              type="button"
+              class="otk-icon-button otk-corner otk-corner-left"
+              aria-label={layout().leftCollapsed
+                ? "Expand projects"
+                : "Collapse projects"}
+              aria-expanded={layout().leftCollapsed ? "false" : "true"}
+              title={layout().leftCollapsed
+                ? "Expand projects"
+                : "Collapse projects"}
+              onClick={() =>
+                void commands.run("layout.projects.toggle").catch(fail)}
+            >
+              <PanelLeftIcon />
+            </button>
+            <button
+              type="button"
+              class="otk-icon-button otk-corner otk-corner-right otk-panel-collapse"
+              aria-label={layout().rightCollapsed
+                ? "Open right panel"
+                : "Collapse right panel"}
+              aria-expanded={layout().rightCollapsed ? "false" : "true"}
+              title={layout().rightCollapsed
+                ? "Open right panel"
+                : "Collapse right panel"}
+              onClick={() =>
+                void commands.run("layout.panel.toggle").catch(fail)}
+            >
+              <PanelRightIcon />
+            </button>
+          </Show>
           <ProjectInbox
             projects={projects()}
             entries={resources.metadataEntries()}
@@ -582,16 +584,18 @@ export default function Shell(
                       keyed
                       fallback={
                         <div class="otk-welcome">
-                          <h1>
-                            {project()
-                              ? "Choose a session"
-                              : "Open Terminal Kit"}
-                          </h1>
-                          <p>
-                            {project()
-                              ? "Open Sessions in the right panel, or start a new session."
-                              : "Choose a project to supervise its sessions."}
-                          </p>
+                          <PaneState>
+                            <h1>
+                              {project()
+                                ? "Choose a session"
+                                : "Open Terminal Kit"}
+                            </h1>
+                            <p>
+                              {project()
+                                ? "Open Sessions in the right panel, or start a new session."
+                                : "Choose a project to supervise its sessions."}
+                            </p>
+                          </PaneState>
                         </div>
                       }
                     >
@@ -709,10 +713,11 @@ export default function Shell(
                                 return release;
                               }
                               : undefined}
-                            usageError={(turnID) => session.usage.error({
-                              ...session.state.selection!,
-                              turnID,
-                            })}
+                            usageError={(turnID) =>
+                              session.usage.error({
+                                ...session.state.selection!,
+                                turnID,
+                              })}
                             catalog={session.models?.state.available
                               ? session.models.state.value
                               : undefined}

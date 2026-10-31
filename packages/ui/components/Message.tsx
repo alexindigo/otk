@@ -33,7 +33,7 @@ function PartView(
     streaming: boolean;
     directory?: string;
     permissions: PermissionRequest[];
-    paneWidth: number;
+    paneWidth?: number;
     onOpenChild(id: string): void;
     user: boolean;
     pending?: boolean;
@@ -80,7 +80,6 @@ function PartsView(
           prefs={props.prefs}
           directory={props.directory}
           permissions={props.permissions}
-          paneWidth={props.paneWidth}
           onOpenChild={props.onOpenChild}
           user={props.user}
           streaming={props.streaming}
@@ -113,7 +112,7 @@ export default function Message(
     prefs: Preferences;
     directory?: string;
     permissions: PermissionRequest[];
-    paneWidth: number;
+    paneWidth?: number;
     onOpenChild(id: string): void;
     queued: boolean;
     control?(control: MessageControl): (() => void) | void;
@@ -263,7 +262,6 @@ export default function Message(
                         prefs={props.prefs}
                         directory={props.directory}
                         permissions={props.permissions}
-                        paneWidth={props.paneWidth}
                         onOpenChild={props.onOpenChild}
                         user={props.message.role === "user"}
                         streaming={streaming()}
@@ -281,7 +279,6 @@ export default function Message(
                           prefs={props.prefs}
                           directory={props.directory}
                           permissions={props.permissions}
-                          paneWidth={props.paneWidth}
                           onOpenChild={props.onOpenChild}
                           user={props.message.role === "user"}
                           streaming={streaming()}

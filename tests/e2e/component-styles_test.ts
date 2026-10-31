@@ -5,6 +5,7 @@ import { resources, test } from "../support/resources.ts";
 import { serve } from "../support/http.ts";
 import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
+import { menuReady } from "../support/menu.ts";
 
 async function consumer(
   scene: string,
@@ -516,21 +517,72 @@ test("keyed breadcrumbs and menu rows retain identity through folding, replaceme
     await browser.poll(
       "document.querySelector('[data-crumb=\"session-7\"] input')?.value==='session-7'",
     );
-    assertEquals(
-      await browser.evaluate(
-        "[...document.querySelectorAll('[data-crumb]')].map(el=>el.dataset.crumb)",
-      ),
-      [
-        "session-0",
-        "session-1",
-        "session-3",
-        "session-4",
-        "session-5",
-        "session-7",
-        "session-8",
-        "session-9",
-      ],
+    await browser.evaluate(
+      "globalThis.c8Rows=new Map([...document.querySelectorAll('[data-crumb]')].map(node=>[node.dataset.crumb,node]))",
     );
+    await browser.send("Emulation.setDeviceMetricsOverride", {
+      width: 600,
+      height: 800,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await browser.evaluate(
+      "new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))",
+    );
+    const visible = await browser.evaluate<string[]>(
+      "[...document.querySelectorAll('[data-crumb]')].filter(el=>!el.closest('[hidden]')).map(el=>el.dataset.crumb)",
+    );
+    assert(visible.includes("session-4") && visible.includes("session-7"));
+    assertEquals(
+      visible,
+      ids.filter((id) => visible.includes(id)),
+      "Stable source order",
+    );
+    assert(visible.length < ids.length, "Narrow measurements cause overflow");
+    assert(
+      await browser.evaluate(
+        "['session-1','session-4'].every(id=>c8Rows.get(id)===document.querySelector('[data-crumb=\"'+id+'\"]'))",
+      ),
+      "Overflow preserves keyed row nodes",
+    );
+    const moreBounds = () =>
+      browser.evaluate<number[]>(
+        "(()=>{const r=document.querySelector('.otk-folded-crumbs > button').getBoundingClientRect();return [r.x,r.y,r.width,r.height]})()",
+      );
+    const beforeMore = await moreBounds();
+    await browser.click(".otk-folded-crumbs > button");
+    await browser.poll(
+      "document.querySelectorAll('.otk-folded-crumbs [role=menuitem]').length>0",
+    );
+    await menuReady(
+      browser,
+      ".otk-folded-crumbs [role=menu]",
+      ".otk-folded-crumbs",
+    );
+    assert(
+      (await moreBounds()).every((value, i) =>
+        Math.abs(value - beforeMore[i]) <= 1
+      ),
+      "More's trailing track stays fixed while native editor blur changes chip width",
+    );
+    const currentVisible = await browser.evaluate<string[]>(
+      "[...document.querySelectorAll('[data-crumb]')].filter(el=>!el.closest('[hidden]')).map(el=>el.dataset.crumb)",
+    );
+    const omitted = await browser.evaluate<string[]>(
+      "[...document.querySelectorAll('.otk-folded-crumbs [data-overflow-target]')].map(el=>el.dataset.overflowTarget)",
+    );
+    assertEquals(
+      omitted,
+      ids.filter((id) => !currentVisible.includes(id)),
+      "One complete ordered overflow partition after ordinary editor blur",
+    );
+    assert(
+      await browser.evaluate(
+        "[...document.querySelectorAll('[data-overflow-target]')].every(item=>item!==c8Rows.get(item.dataset.overflowTarget)&&!item.closest('[data-overflow-key]'))",
+      ),
+      "More renders independent items without adopting chips",
+    );
+    await browser.key("Escape");
     await browser.evaluate("styleTest.lists(['replacement'],'replacement')");
     await browser.poll(
       "document.querySelectorAll('[data-crumb]').length===1 && !!document.querySelector('[data-crumb=\"replacement\"]')",
@@ -569,6 +621,7 @@ test("keyed breadcrumbs and menu rows retain identity through folding, replaceme
     );
     await browser.key("Escape");
     await browser.evaluate("styleTest.lists([])");
+    await browser.send("Emulation.clearDeviceMetricsOverride");
   }));
 
 test("Blocks owns prose and concealment equally standalone, in reasoning and as a text part", () =>

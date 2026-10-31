@@ -11,6 +11,13 @@ test("real setup password, cookie and fresh login reach the connected applicatio
       b = await f.browser(server.url);
     await b.poll("!!document.querySelector('select[name=type]')");
     assertEquals(
+      await b.evaluate(
+        "document.querySelectorAll('.otk-app [disabled]').length",
+      ),
+      0,
+      "Unavailable shell controls are absent during setup",
+    );
+    assertEquals(
       await b.evaluate("document.querySelector('select[name=type]').value"),
       "password",
     );

@@ -9,7 +9,7 @@
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 24px;
+  padding: 24px var(--lane-gutter);
   overflow-anchor: none;
 }
 .otk-message-flow {

@@ -18,10 +18,10 @@
   border: 0;
   background: transparent;
   color: var(--otk-fg);
-  width: min(28rem, calc(100vw - 16px));
-  min-width: min(200px, calc(100vw - 16px));
-  max-width: min(28rem, calc(100vw - 16px));
-  max-height: min(65vh, calc(100dvh - 16px));
+  width: min(28rem, calc(100vw - 2 * var(--popover-gutter)));
+  min-width: min(200px, calc(100vw - 2 * var(--popover-gutter)));
+  max-width: min(28rem, calc(100vw - 2 * var(--popover-gutter)));
+  max-height: min(65vh, calc(100dvh - 2 * var(--popover-gutter)));
   overflow: visible;
   z-index: var(--layer-popover);
 }
@@ -36,8 +36,8 @@
 .otk-popover-wide {
   position-area: top span-all;
   justify-self: center;
-  width: min(80rem, calc(100vw - 16px));
-  max-width: min(80rem, calc(100vw - 16px));
+  width: min(80rem, calc(100vw - 2 * var(--popover-gutter)));
+  max-width: min(80rem, calc(100vw - 2 * var(--popover-gutter)));
 }
 .otk-popover-content {
   width: max-content;
@@ -49,5 +49,6 @@
 /* Try the Surface's natural size before clipping to an available side. An empty
    side must cause native fallback, not make an empty positioning box fit. */
 @position-try --otk-popover-bounded {
-  max-height: min(65vh, calc(100% - 8px), calc(100dvh - 16px));
+  max-height: min(65vh, calc(100% - var(--popover-gutter)), calc(100dvh - 2 *
+    var(--popover-gutter)));
 }

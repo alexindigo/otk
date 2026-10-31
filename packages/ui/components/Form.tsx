@@ -18,6 +18,7 @@ import { nativeAttributes } from "./native-attributes.ts";
 import { ownedAction } from "../keyboard/context.tsx";
 import FieldFeedback from "./FieldFeedback.tsx";
 import ActionSlot from "./ActionSlot.tsx";
+import Select from "./Select.tsx";
 const FormContext = createContext<
   { pending(): boolean; feedback(): Feedback | undefined } | null
 >(null);
@@ -78,6 +79,7 @@ export default function Form(
         />
         <ActionSlot
           class="otk-form-action"
+          align="end"
           pending={pending()}
           control={(control) => status = control}
           focusAction={() => {
@@ -87,7 +89,11 @@ export default function Form(
             ? { kind: "pending", text: props.pendingLabel ?? "Working…" }
             : undefined}
         >
-          <button ref={(element) => button = element} type="submit">
+          <button
+            class="otk-primary"
+            ref={(element) => button = element}
+            type="submit"
+          >
             {props.submitLabel}
           </button>
         </ActionSlot>
@@ -166,14 +172,15 @@ export function FormSelect(
   return (
     <>
       <span class={["otk-form-choice", { "is-pending": pending() }]}>
-        <select
+        <Select
           {...native.attributes}
+          containerClass="otk-form-choice-input"
           ref={[props.ref, native.ref, (element) => select = element]}
           aria-describedby={field.description}
           aria-invalid={field.invalid}
         >
           {props.children}
-        </select>
+        </Select>
         <input
           class="otk-form-choice-value"
           value={label()}

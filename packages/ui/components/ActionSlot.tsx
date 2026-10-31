@@ -9,6 +9,7 @@ export default function ActionSlot(props: {
   pending: boolean;
   feedback?: Feedback;
   class?: string;
+  align?: "end";
   children: Element;
   control?(control: { focus(): void }): void;
   focusAction?(): void;
@@ -22,6 +23,7 @@ export default function ActionSlot(props: {
   return (
     <div
       class={["otk-action-slot", props.class, { "is-pending": props.pending }]}
+      data-align={props.align}
     >
       <div class="otk-action-slot-control">{props.children}</div>
       <FeedbackStatus

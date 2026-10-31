@@ -160,8 +160,6 @@ export default function SessionView(props: {
     setRevealError(undefined);
     return props.onRetry();
   });
-  const [paneWidth, setPaneWidth] = createSignal(0);
-  let view!: HTMLElement;
   let list!: HTMLDivElement, flow!: HTMLDivElement;
   let following: ReturnType<typeof followViewport> | undefined;
   let followIntent = true;
@@ -220,10 +218,6 @@ export default function SessionView(props: {
     const clock = setInterval(() => {
       if (props.retryState) setNow(Date.now());
     }, 1000);
-    const observer = new ResizeObserver((entries) =>
-      setPaneWidth(entries[0].contentRect.width)
-    );
-    observer.observe(view);
     following = followViewport(list, flow);
     source = sourceViewport(
       list,
@@ -249,7 +243,6 @@ export default function SessionView(props: {
     }
     return () => {
       clearInterval(clock);
-      observer.disconnect();
       following?.dispose();
       source?.dispose();
       source = undefined;
@@ -271,9 +264,6 @@ export default function SessionView(props: {
           <section
             class="otk-session-view"
             aria-label="Session"
-            ref={(element) => {
-              view = element;
-            }}
           >
             {props.displayMenu}
             <Show when={props.info?.parentID}>
@@ -321,6 +311,14 @@ export default function SessionView(props: {
                     }
                     : { kind: "pending", text: "Loading messages…" }}
                 />
+              </Show>
+              <Show
+                when={!props.loading && !count() && !props.error &&
+                  !props.sessionError && props.continuity !== "missing"}
+              >
+                <PaneState>
+                  <EmptyState>Start a conversation below.</EmptyState>
+                </PaneState>
               </Show>
               <Show
                 when={!!count() &&
@@ -516,7 +514,6 @@ export default function SessionView(props: {
                                   prefs={props.prefs}
                                   directory={props.info?.directory}
                                   permissions={props.permissions}
-                                  paneWidth={paneWidth()}
                                   onOpenChild={props.onOpenChild}
                                   queued={projection().queuedIDs.has(
                                     message().id,
@@ -539,12 +536,6 @@ export default function SessionView(props: {
                       />
                     );
                   }}
-                </Show>
-                <Show
-                  when={!props.loading && !count() && !props.error &&
-                    !props.sessionError && props.continuity !== "missing"}
-                >
-                  <EmptyState>Start a conversation below.</EmptyState>
                 </Show>
               </div>
             </div>

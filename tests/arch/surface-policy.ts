@@ -119,6 +119,7 @@ export function surfaceErrors(files: ReadonlyMap<string, string>): string[] {
     }
   }
   const positions = new Set([
+    "components/surface/Dialog.css:.otk-dialog",
     "components/surface/Popover.css:.otk-popover-panel",
     "components/surface/Popover.css:.otk-popover-anchor",
     "components/ProjectInbox.css:.otk-inbox-resizer",

@@ -22,7 +22,7 @@
   gap: 12px;
 }
 .otk-sidecar-card h2 {
-  font: 600 15px/22px var(--font-ui);
+  font: 600 var(--text-heading)/var(--line-heading) var(--font-ui);
   margin: 0;
 }
 .otk-sidecar-card > p {

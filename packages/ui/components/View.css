@@ -8,7 +8,7 @@
   border-bottom: 1px solid var(--muted);
 }
 .otk-view-header h1 {
-  font: 600 15px/22px var(--font-ui);
+  font: 600 var(--text-heading)/var(--line-heading) var(--font-ui);
   margin: 0;
   overflow-wrap: anywhere;
 }

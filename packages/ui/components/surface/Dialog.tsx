@@ -7,6 +7,7 @@ import Surface from "./Surface.tsx";
 export default function Dialog(props: {
   id: string;
   title: string;
+  size?: "form" | "standard" | "editor";
   onClose(): void;
   children: Element;
 }): Element {
@@ -32,6 +33,7 @@ export default function Dialog(props: {
   return (
     <dialog
       class="otk-dialog"
+      data-size={props.size ?? "standard"}
       data-dialog={props.id}
       aria-label={props.title}
       ref={(el) => {

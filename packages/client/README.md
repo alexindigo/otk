@@ -518,6 +518,14 @@ checks in the assigned OTK VM.
 
 ## Inbox metadata and tabs
 
+`fitOverflow({keys,widths,available,required,preferred?,moreWidth,gap})`
+projects one measured snapshot into ordered visible/overflow identities.
+Required values never enter overflow, even if their labels must shrink.
+`overflowPreference` prioritizes the root, then nearest selected ancestors, then
+remaining original order, with cycle protection. These owners know no DOM,
+framework or item count folding threshold. The UI retains stable frames and
+supplies measured widths.
+
 `createInputGuard({drafts, key, confirm})` owns dirty-input marks and
 confirmation policy. Release reads the invocation-current draft through
 `Drafts.current(key)` (non-creating and independent of framework publication)

@@ -15,3 +15,9 @@
 .otk-action-slot.is-pending > .otk-action-slot-control {
   visibility: hidden;
 }
+.otk-action-slot[data-align=end] > .otk-action-slot-control {
+  justify-content: flex-end;
+}
+.otk-action-slot[data-align=end] > .otk-feedback-status {
+  justify-content: flex-end;
+}

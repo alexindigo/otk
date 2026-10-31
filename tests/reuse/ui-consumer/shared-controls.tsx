@@ -9,9 +9,13 @@ import {
 import {
   CommandHub,
   createInbox,
+  createSessionRename,
   createSessionSubmission,
+  createTabs,
+  createTaskActions,
   duration,
   exactCount,
+  type MergedEntry,
   NotificationHub,
   relativeTime,
   type SidecarState,
@@ -21,6 +25,7 @@ import {
   createPreferences,
   DEFAULT_PREFS,
   errorMessage,
+  type InboxSnapshot,
   type PreferenceKey,
   type Preferences,
   type ShellLayout,
@@ -31,27 +36,37 @@ import {
   CommandProvider,
   ConnectionLight,
   createUiRegistries,
+  DialogHost,
+  Diff,
   DisplayMenu,
   emptyDraft,
+  Form,
+  FormInput,
+  ListPicker,
   Login,
   Message,
   NotificationSettings,
   paintVisualPreferences,
   Palette,
+  PaneState,
   PathProvider,
   ProjectInbox,
+  ProjectTabs,
   Prompt,
   QuestionDock,
   registerBadgeChannel,
   registerEditTool,
   registerGenericTool,
   registerPatchTool,
+  registerTaskDialogs,
   registerTextPart,
   registerToolPart,
   registerUnknownPart,
   RightPanel,
   SessionProvider,
+  Setup,
   Sidebar,
+  solidState,
   ToolLine,
   ToolOutput,
   ToolPath,
@@ -59,6 +74,258 @@ import {
   UiProvider,
   VisualSettings,
 } from "@otk/ui";
+
+export function LayoutTabs(props: { onTheme(id: string): void }): Element {
+  const commands = new CommandHub();
+  const entries: MergedEntry[] = Array.from({ length: 12 }, (_, i) => ({
+    id: `tstv1-independent-${i}`,
+    sidecarId: "independent",
+    directory: "/independent",
+    projectID: "independent",
+    title: `Independent session ${i} with a long title`,
+    timeCreated: 1,
+    timeUpdated: 1,
+    archived: false,
+    status: "idle",
+    digest: { state: "digesting", revision: 0, turns: {} },
+    attention: {
+      permissions: 0,
+      questions: 0,
+      childPermissions: 0,
+      childQuestions: 0,
+    },
+  }));
+  const task = {
+    id: "independent-task",
+    directory: "/independent",
+    name: "Independent task",
+    order: 0,
+    sessions: entries.map((entry) => entry.id),
+  };
+  const inbox: InboxSnapshot = {
+    projects: [],
+    tasks: [task],
+    seen: {},
+    finishes: {},
+    pathTemplates: [],
+  };
+  const model = createTabs(() => Promise.resolve(task), solidState);
+  model.update({ directory: "/independent", entries, inbox });
+  model.select({ kind: "task", id: task.id }, entries[6].id);
+  let settle: ReturnType<typeof Promise.withResolvers<void>> | undefined;
+  const rename = createSessionRename({
+    factory: solidState,
+    rename: () => {
+      settle = Promise.withResolvers<void>();
+      return settle.promise;
+    },
+  });
+  onCleanup(() => model.stop());
+  const actions = createTaskActions({
+    call: () => Promise.reject(new Error("Unexpected task mutation")),
+  }, "/independent");
+  return (
+    <CommandProvider commands={commands}>
+      <button
+        type="button"
+        data-theme-dark
+        onClick={() => props.onTheme("otk-dark")}
+      >
+        Dark
+      </button>
+      <button
+        type="button"
+        data-theme-light
+        onClick={() => props.onTheme("otk-light")}
+      >
+        Linen
+      </button>
+      <button
+        type="button"
+        data-edit-chip
+        onClick={() =>
+          rename.start({
+            sidecarId: "independent",
+            sessionID: entries[4].id,
+            title: entries[4].title,
+          }, "chip")}
+      >
+        Edit another chip
+      </button>
+      <button
+        type="button"
+        data-reject-chip
+        onClick={() => settle?.reject(new Error("Refused rename"))}
+      >
+        Reject rename
+      </button>
+      <ProjectTabs
+        project={{ sidecarId: "independent", directory: "/independent" }}
+        model={model}
+        entries={entries}
+        inbox={inbox}
+        rename={rename}
+        ready
+        onOpen={() => true}
+        onEmpty={() => true}
+        onCreateSession={() => Promise.resolve()}
+        actions={actions}
+      />
+    </CommandProvider>
+  );
+}
+
+/** Deliberately independent composition: only public content/callback ports. */
+export function LayoutControls(props: { onTheme(id: string): void }): Element {
+  const commands = new CommandHub(), ui = createUiRegistries();
+  registerTaskDialogs(ui.dialogs);
+  const [diffWidth, setDiffWidth] = createSignal(800);
+  const [mode, setMode] = createSignal("setup"),
+    [payload, setPayload] = createSignal(""),
+    [choice, setChoice] = createSignal("First choice");
+  let settle: ReturnType<typeof Promise.withResolvers<void>> | undefined;
+  const save = async (value: unknown) => {
+    setPayload(JSON.stringify(value));
+    settle = Promise.withResolvers<void>();
+    await settle.promise;
+  };
+  const open = () =>
+    commands.run("dialog.open", {
+      id: "task-name",
+      input: { save: (name: string) => save({ name }) },
+    });
+  return (
+    <CommandProvider commands={commands}>
+      <UiProvider registries={ui}>
+        <header class="otk-control-row">
+          <button
+            type="button"
+            data-dark
+            onClick={() => props.onTheme("otk-dark")}
+          >
+            Dark
+          </button>
+          <button
+            type="button"
+            data-light
+            onClick={() => props.onTheme("otk-light")}
+          >
+            Linen
+          </button>
+          <button type="button" data-setup onClick={() => setMode("setup")}>
+            Setup
+          </button>
+          <button type="button" data-login onClick={() => setMode("login")}>
+            Login
+          </button>
+          <button type="button" data-task onClick={() => void open()}>
+            New task
+          </button>
+          <button
+            type="button"
+            data-reject
+            onClick={() => settle?.reject(new Error("Private failure"))}
+          >
+            Reject
+          </button>
+          <button type="button" data-accept onClick={() => settle?.resolve()}>
+            Accept
+          </button>
+          <output data-payload>{payload()}</output>
+          <button
+            type="button"
+            data-wide-diff
+            onClick={() => setDiffWidth(diffWidth() === 800 ? 1300 : 800)}
+          >
+            Resize independent diff
+          </button>
+        </header>
+        <main
+          data-auth-pane
+          style={{
+            display: "flex",
+            "align-items": "center",
+            "justify-content": "center",
+            height: "650px",
+            padding: "24px",
+          }}
+        >
+          <Show
+            when={mode() === "setup"}
+            fallback={<Login label="Independent OTK server" onLogin={save} />}
+          >
+            <Setup onSetup={save} />
+          </Show>
+        </main>
+        <section data-picker style={{ width: "220px" }}>
+          <ListPicker
+            label="Independent choice"
+            triggerLabel={`Independent choice: ${choice()}`}
+            trigger={choice()}
+            groups={[{
+              key: "choices",
+              items: [{
+                key: "first",
+                value: "First choice",
+                label: "First choice",
+              }, {
+                key: "second",
+                value: "A longer second choice",
+                label: "A longer second choice",
+              }],
+            }]}
+            onPick={setChoice}
+            focusAfterPick={() => {}}
+          />
+        </section>
+        <section data-independent-form>
+          <Form
+            title="Independent form"
+            submitLabel="Save independent value"
+            onSubmit={(data) => save({ value: data.get("value") })}
+          >
+            <label>
+              Value<FormInput name="value" value="Original value" />
+            </label>
+          </Form>
+        </section>
+        <section
+          data-independent-pane
+          style={{ display: "grid", height: "180px" }}
+        >
+          <PaneState
+            feedback={{ kind: "info", text: "Independent empty state" }}
+          />
+        </section>
+        <DialogHost />
+        <section data-independent-diff style={{ width: `${diffWidth()}px` }}>
+          <Diff
+            file={{
+              path: "/independent/file.ts",
+              status: "modified",
+              additions: 1,
+              deletions: 1,
+              hunks: [{
+                oldStart: 1,
+                oldLines: 1,
+                newStart: 1,
+                newLines: 1,
+                lines: [{ kind: "del", text: "old", oldNo: 1 }, {
+                  kind: "add",
+                  text: "new",
+                  newNo: 1,
+                }],
+              }],
+            }}
+            style="auto"
+            wrap={false}
+            paneWidth={1920}
+          />
+        </section>
+      </UiProvider>
+    </CommandProvider>
+  );
+}
 
 export function MetadataPolicy(): Element {
   const commands = new CommandHub();

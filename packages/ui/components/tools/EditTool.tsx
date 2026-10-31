@@ -14,7 +14,6 @@ export function registerEditTool(tools: ToolRegistry): void {
       <EditTool
         call={props.call}
         prefs={props.prefs}
-        paneWidth={props.paneWidth}
         directory={props.directory}
       />
     ),
@@ -32,7 +31,7 @@ export default function EditTool(
   props: {
     call: EditCall;
     prefs: Preferences;
-    paneWidth: number;
+    paneWidth?: number;
     directory?: string;
   },
 ) {
@@ -40,7 +39,6 @@ export default function EditTool(
     <FileChanges
       files={props.call.files}
       prefs={props.prefs}
-      paneWidth={props.paneWidth}
       directory={props.directory}
       inline={(file) =>
         props.call.files.length === 1 && file.path === props.call.path}

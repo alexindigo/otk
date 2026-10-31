@@ -18,16 +18,13 @@
   background: var(--panel);
 }
 .otk-welcome {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
+  display: grid;
   flex: 1;
-  padding: 48px;
+  min-height: 0;
+  padding: var(--lane-gutter);
 }
 .otk-welcome h1 {
-  font-size: 1.3rem;
-  margin-top: 12px;
+  font: 600 var(--text-display)/var(--line-display) var(--font-ui);
 }
 .otk-welcome p {
   color: var(--secondary);
@@ -51,6 +48,6 @@
 .otk-corner-right {
   right: var(--corner);
 }
-.otk-main > :is(.otk-settings, .otk-auth-view, .otk-welcome) {
+.otk-main > .otk-settings {
   padding-top: var(--corner-zone);
 }

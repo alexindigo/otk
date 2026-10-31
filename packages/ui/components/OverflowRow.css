@@ -1,0 +1,54 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-overflow-row {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 0;
+  overflow: clip;
+  block-size: var(--row-compact);
+}
+.otk-overflow-row.has-overflow {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+.otk-overflow-items {
+  display: flex;
+  align-items: center;
+  gap: inherit;
+  min-inline-size: 0;
+  overflow: clip;
+}
+.otk-overflow-more {
+  display: flex;
+  align-items: center;
+}
+.otk-overflow-item {
+  display: flex;
+  align-items: center;
+  flex: 0 0 auto;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+.otk-overflow-item[hidden] {
+  display: none;
+}
+.otk-overflow-item[data-pinned=true] {
+  flex-shrink: 1;
+}
+.otk-overflow-measure {
+  position: absolute;
+  visibility: hidden;
+  pointer-events: none;
+  display: flex;
+  inline-size: max-content;
+  block-size: var(--row-compact);
+}
+.otk-overflow-measure > span {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+.otk-overflow-measure > span:last-child {
+  inline-size: var(--control-size);
+}

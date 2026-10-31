@@ -1,6 +1,6 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-list-row {
-  --list-row-height: 30px;
+  --list-row-height: var(--row-compact);
   min-width: 0;
   max-width: 100%;
   width: 100%;

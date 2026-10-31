@@ -1,9 +1,11 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-dialog {
-  width: max-content;
-  min-width: min(46rem, calc(100vw - 32px));
-  max-width: calc(100vw - 32px);
-  max-height: calc(100vh - 32px);
+  position: fixed;
+  inset: 0;
+  width: min(var(--dialog-width, 46rem), calc(100% - 2 *
+    var(--overlay-gutter)));
+  max-width: calc(100% - 2 * var(--overlay-gutter));
+  max-height: calc(100% - 2 * var(--overlay-gutter));
   padding: 0;
   border: 0;
   background: transparent;
@@ -14,6 +16,28 @@
 .otk-dialog::backdrop {
   background: var(--otk-overlay);
 }
+.otk-dialog[open] {
+  display: flex;
+  flex-direction: column;
+}
+.otk-dialog > .otk-surface {
+  flex: 1;
+  min-height: 0;
+  max-height: none;
+}
+.otk-dialog[data-size=form] {
+  --dialog-width: var(--form-width);
+}
+.otk-dialog[data-size=editor] {
+  --dialog-width: 100rem;
+  height: calc(100% - 2 * var(--overlay-gutter));
+}
+.otk-dialog[data-size=editor] > .otk-surface {
+  height: 100%;
+}
+.otk-dialog[data-size=editor] .otk-surface-body {
+  flex: 1;
+}
 .otk-dialog [role=alert] {
-  color: var(--otk-attention);
+  color: var(--danger);
 }

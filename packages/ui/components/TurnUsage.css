@@ -128,8 +128,9 @@
   width: 144px;
 }
 .otk-usage-context {
+  --usage-context-bar-width: 48px;
   display: grid;
-  grid-template-columns: 48px minmax(0, 1fr);
+  grid-template-columns: var(--usage-context-bar-width) minmax(0, 1fr);
   align-items: center;
   gap: 8px;
 }
@@ -140,7 +141,7 @@
 .otk-usage-context-bar {
   grid-column: 1;
   grid-row: 1;
-  width: 48px;
+  width: 100%;
   height: 4px;
   flex: none;
   background: var(--otk-border);

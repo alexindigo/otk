@@ -9,6 +9,7 @@ export interface TaskNameInput {
 export function registerTaskDialogs(dialogs: DialogRegistry): void {
   dialogs.register<TaskNameInput>({
     id: "task-name",
+    size: "form",
     commandId: "task.name",
     title: (input) => input.name === undefined ? "New task" : "Rename task",
     component: TaskName,

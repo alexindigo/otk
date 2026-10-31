@@ -59,16 +59,16 @@
   flex: none;
 }
 .otk-breadcrumb-row {
-  justify-content: space-between;
-  flex-wrap: wrap;
-  min-height: 30px;
-  padding: 0 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  min-height: var(--row-compact);
+  padding: 0 var(--lane-gutter);
   color: var(--otk-fg-3);
-  font-size: 12.5px;
+  font-size: var(--text-ui);
 }
 .otk-task-crumbs {
-  flex: 1;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px;
 }
 .otk-crumb-link {
@@ -82,8 +82,8 @@
   color: var(--otk-fg-3);
 }
 .otk-crumb-chevron {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-compact);
+  height: var(--icon-compact);
 }
 .otk-session-crumb {
   --selection-padding: 4px;
@@ -105,7 +105,9 @@
 }
 .otk-folded-crumbs-trigger {
   cursor: pointer;
-  padding: 4px 8px;
+  width: var(--control-size);
+  height: var(--control-size);
+  padding: 0;
 }
 .otk-context-meter {
   color: var(--otk-fg-3);
@@ -141,4 +143,30 @@
 .otk-tab-open.is-deleted .otk-control-label {
   color: var(--deleted-fg);
   text-decoration: line-through;
+}
+.otk-crumb-link,
+.otk-session-crumb {
+  max-width: 100%;
+}
+.otk-session-crumb {
+  flex-shrink: 1;
+  height: var(--control-size);
+}
+.otk-crumb-measure {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+.otk-crumb-measure-content {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 4px;
+}
+.otk-session-crumb.is-editing {
+  --selection-padding: 0 4px;
+  height: var(--row-compact);
+}
+.otk-crumb-feedback {
+  padding-inline: var(--lane-gutter);
 }

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+export { fitOverflow, overflowPreference } from "./overflow.ts";
 export * from "./directory-catalogs.ts";
 export * from "./attachment-batches.ts";
 export * from "./frecency-catalogs.ts";

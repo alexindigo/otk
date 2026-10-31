@@ -1,14 +1,36 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./TitleEditor.css" with { type: "text" };
-import { createSignal, createUniqueId, onSettled } from "solid-js";
+import {
+  createSignal,
+  createUniqueId,
+  type Element,
+  onSettled,
+  Show,
+} from "solid-js";
 import type { SessionRename } from "@otk/client";
 import { MAX_SESSION_TITLE } from "@otk/protocol";
 import FieldFeedback from "./FieldFeedback.tsx";
 
 /** Native input only. The injected owner owns editing, admission and failures. */
-export default function TitleEditor(props: { owner: SessionRename }) {
+export function TitleFeedback(
+  props: { owner: SessionRename; id: string },
+): Element {
+  return (
+    <FieldFeedback
+      id={props.id}
+      feedback={props.owner.state.pending
+        ? { kind: "pending", text: "Renaming session…" }
+        : props.owner.state.error
+        ? { kind: "error", text: props.owner.state.error }
+        : undefined}
+    />
+  );
+}
+export default function TitleEditor(
+  props: { owner: SessionRename; feedbackID?: string },
+) {
   const [title, setTitle] = createSignal(props.owner.state.editing!.title);
-  const errorID = createUniqueId();
+  const errorID = props.feedbackID ?? createUniqueId();
   let input!: HTMLInputElement;
   onSettled(() => {
     input.focus();
@@ -44,14 +66,9 @@ export default function TitleEditor(props: { owner: SessionRename }) {
           }
         }}
       />
-      <FieldFeedback
-        id={errorID}
-        feedback={props.owner.state.pending
-          ? { kind: "pending", text: "Renaming session…" }
-          : props.owner.state.error
-          ? { kind: "error", text: props.owner.state.error }
-          : undefined}
-      />
+      <Show when={!props.feedbackID}>
+        <TitleFeedback owner={props.owner} id={errorID} />
+      </Show>
     </span>
   );
 }

@@ -1,15 +1,15 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-toasts {
   position: fixed;
-  right: 16px;
-  bottom: 16px;
+  right: var(--overlay-gutter);
+  bottom: var(--overlay-gutter);
   z-index: var(--layer-toast);
   display: flex;
   flex-direction: column;
   align-items: stretch;
   gap: 8px;
-  width: min(25rem, calc(100vw - 2rem));
-  max-height: 50vh;
+  width: min(25rem, calc(100vw - 2 * var(--overlay-gutter)));
+  max-height: min(50vh, calc(100dvh - 2 * var(--overlay-gutter)));
   overflow: auto;
   pointer-events: none;
 }

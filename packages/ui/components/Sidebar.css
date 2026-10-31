@@ -20,7 +20,8 @@
     border-bottom: 1px solid var(--muted);
   }
   .otk-brand strong {
-    font-size: 2rem;
+    font-size: var(--text-display);
+    line-height: var(--line-display);
     color: var(--fg);
   }
   .otk-brand span {
@@ -37,8 +38,8 @@
     padding: 16px 12px;
   }
   .otk-sidecar-group > h2 {
-    font-size: 15px;
-    line-height: 22px;
+    font-size: var(--text-heading);
+    line-height: var(--line-heading);
     margin-bottom: 8px;
   }
   .otk-project {

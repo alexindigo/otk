@@ -317,12 +317,19 @@ test("long task chains fold in the middle, reveal a chosen session and preserve 
     });
     await b.goto(f.url + "/#/local/tstv1-otk");
     await b.poll(
-      "!!document.querySelector('.otk-folded-crumbs') && document.querySelectorAll('[data-crumb]').length<10",
+      "!!document.querySelector('.otk-folded-crumbs') && [...document.querySelectorAll('[data-crumb]')].filter(el=>!el.closest('[hidden]')).length<10",
     );
     await b.click(".otk-folded-crumbs > button");
-    await b.click(".otk-folded-crumbs .otk-menu-items button:nth-child(2)");
     await b.poll(
-      "document.querySelector('[data-crumb=tstv1-chain-2]')?.getAttribute('aria-current')==='page' && location.hash.endsWith('/tstv1-chain-2')",
+      "!!document.querySelector('.otk-folded-crumbs .otk-menu-items button:nth-child(2)')",
+    );
+    const chosen = await b.evaluate<string>(
+      "document.querySelector('.otk-folded-crumbs .otk-menu-items button:nth-child(2)').dataset.overflowTarget",
+    );
+    assert(ids.includes(chosen));
+    await b.click(`.otk-folded-crumbs [data-overflow-target="${chosen}"]`);
+    await b.poll(
+      `document.querySelector('[data-crumb="${chosen}"]')?.getAttribute('aria-current')==='page' && location.hash.endsWith('/${chosen}')`,
     );
     assertEquals(
       await b.evaluate(
@@ -338,7 +345,7 @@ test("long task chains fold in the middle, reveal a chosen session and preserve 
     );
     assertEquals(
       await b.evaluate(
-        "getComputedStyle(document.querySelector('[data-crumb=tstv1-chain-2] .otk-lamp-shape')).display",
+        `getComputedStyle(document.querySelector('[data-crumb="${chosen}"] .otk-lamp-shape')).display`,
       ),
       "block",
     );

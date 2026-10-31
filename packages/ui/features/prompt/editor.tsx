@@ -9,6 +9,7 @@ import { PencilIcon } from "../../components/ChromeIcons.tsx";
 export function registerEditorDialog(dialogs: DialogRegistry): void {
   dialogs.register<Parameters<typeof Editor>[0]>({
     id: "editor",
+    size: "editor",
     title: (input) => input.title,
     commandId: "editor",
     dismiss: (input) => input.onCancel(),

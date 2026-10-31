@@ -57,6 +57,20 @@
   --rail-width: 48px;
   --chrome-header-height: 52px;
   --control-size: 28px;
+  --form-control-size: 32px;
+  --control-height: var(--control-size);
+  --control-border: 0px;
+  --control-inner-size: calc(var(--control-height) - 2 * var(--control-border));
+  --form-width: 32rem;
+  --text-display: 24px;
+  --line-display: 32px;
+  --lane-gutter: 24px;
+  --overlay-gutter: 16px;
+  --popover-gutter: 8px;
+  --icon-compact: 13px;
+  --row-compact: 30px;
+  --row-project: 32px;
+  --diff-split-min: 1200px;
   --corner: 12px;
   --corner-zone: calc(var(--corner) + var(--control-size) + 8px);
   --chrome-gap: 4px;
@@ -258,7 +272,7 @@ small {
   flex-basis: 0;
 }
 .otk-pill {
-  height: 30px;
+  height: var(--row-compact);
   display: inline-flex;
   align-items: center;
   justify-content: center;

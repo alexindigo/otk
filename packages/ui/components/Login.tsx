@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { Show } from "solid-js";
 import Form, { Credentials } from "./Form.tsx";
+import AuthColumn from "./AuthColumn.tsx";
 export default function Login(
   props: {
     label: string;
@@ -9,8 +10,7 @@ export default function Login(
   },
 ): import("solid-js").Element {
   return (
-    <>
-      <h2>Log in · {props.label}</h2>
+    <AuthColumn title={`Log in · ${props.label}`}>
       <Form
         title={`Log in · ${props.label}`}
         submitLabel="Log in"
@@ -28,6 +28,6 @@ export default function Login(
           </p>
         </Show>
       </Form>
-    </>
+    </AuthColumn>
   );
 }

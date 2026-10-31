@@ -7,7 +7,7 @@ import Diff from "../Diff.tsx";
 export default function FileChanges(props: {
   files: FileDiff[];
   prefs: Preferences;
-  paneWidth: number;
+  paneWidth?: number;
   directory?: string;
   inline(file: FileDiff): boolean;
   children?: Element;
@@ -21,7 +21,6 @@ export default function FileChanges(props: {
             inline={props.inline(file())}
             style={props.prefs.diffStyle}
             wrap={props.prefs.diffWrap}
-            paneWidth={props.paneWidth}
             directory={props.directory}
           />
         )}

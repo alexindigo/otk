@@ -1,4 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+export { default as ControlValue } from "./components/ControlValue.tsx";
+export { default as Select } from "./components/Select.tsx";
+export { default as OverflowRow } from "./components/OverflowRow.tsx";
+export { default as AuthColumn } from "./components/AuthColumn.tsx";
 export { default as OperationFeedback } from "./components/OperationFeedback.tsx";
 export { default as FieldFeedback } from "./components/FieldFeedback.tsx";
 export { default as PaneState } from "./components/PaneState.tsx";

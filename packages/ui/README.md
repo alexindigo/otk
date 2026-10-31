@@ -7,6 +7,39 @@ imports and knows no native backend.
 
 ## Composition and API
 
+`ControlValue` owns the flexible label and square trailing accessory slot. Its
+size follows the control's height/border role; icons have equal inner-edge gaps.
+`Select` retains one native value/focus target under a noninteractive decorative
+slot. FormSelect, preferences and ListPicker borrow these owners, including the
+composer's injected trigger content. Callers supply content/classes, never arrow
+offsets. Select's `containerClass` styles the whole control through a
+caller-owned slot; ordinary native attributes still address the native select.
+Form fills its owning body; AuthColumn and Dialog's `form` role share
+`--form-width`. Dialog registrations forward `form`, `standard` or `editor` size
+without dispatching IDs. Editor content flexes inside that viewport-bounded
+frame.
+
+`OverflowRow` receives keyed data, required/preferred identities, noninteractive
+measurement content, live content and one overflow-menu callback. Its ordered
+item frames and controls stay mounted in source order; omitted rows are hidden
+and inert. More renders independent controls rather than adopting row nodes.
+Fitting cannot move or replace a focused required frame. Required frames use
+their current measured width; other values use their inert measurement frames.
+More occupies a separate trailing grid track, so editor blur cannot move its
+pointer target between press and release as the live chip width changes.
+ResizeObserver and font completion belong to this component. The client owns
+`fitOverflow` and ancestry preference; mandatory task/phantom tabs remain
+outside this breadcrumb overflow. TitleEditor can receive an external
+`feedbackID`, with the same shared TitleFeedback rendered in the owner's in-flow
+track, so a compact editing field and its feedback do not compete for one
+control-height lane.
+
+PaneState also accepts injected content for empty panes, centring one
+left-aligned content group in the region left below chrome. Diff's automatic
+style measures its own content container against `--diff-split-min`; the old
+optional pane-width input remains accepted for compatibility but does not
+control automatic layout.
+
 `ToolOutput` owns one ten-line collapsed plain-output policy; consumers supply
 content, not numeric limits. Structured file/match/skill results retain their
 semantic renderers. `PathProvider` accepts originating-server `PathSemantics` as
@@ -390,26 +423,26 @@ injected toast content; the generic hub and toast host know no permission
 schema. Permission and question owners preserve dirty state through reconnects.
 The legacy `Docks` API remains independently reusable for existing consumers.
 
-`dialogs.register({ id, title, component })` installs feature-owned dialog
-content. A single `DialogHost` handles `dialog.open({ id, input? })` through the
-command hub. Every invocation owns its mounted content, input, dismissal and
-close callbacks, even when opening the same dialog ID again. It returns an
-identity-bound close handle, so a stale completion or feature teardown cannot
-close a replacement dialog. Command, keymap, theme, editor and add-project
-features own their registrations. `DialogHost` wraps every registration in the
-native `Dialog` owner; optional `commandId` preserves feature close IDs and
-`dismiss(input, close)` routes dismissal through feature state when needed; its
-close callback is bound to that invocation and remains safe after asynchronous
-confirmation or replacement. Palette likewise invokes its injected `onClose`
-after a successful action rather than requiring a host-generated command.
-Content never creates a second dialog, title or card. The internal `Surface`
-owns boundary, paint, padding and title/body/action flow; only `Dialog`,
-`Popover`, `Menu`, `Toast` and `Takeover` specialisations may consume it.
-`Popover` owns native top-layer anchoring and outside-click/Escape dismissal,
-`Menu` supplies a normal-flow item column and `Toast` supplies the card in the
-fixed notification stack. Overlay tokens and the content/popover/dialog/toast
-layer scale live in `theme.css`. Fieldsets and legends are layout-neutral
-grouping, never cards.
+`dialogs.register({ id, title, size?, component })` installs feature-owned
+dialog content. A single `DialogHost` handles `dialog.open({ id, input? })`
+through the command hub. Every invocation owns its mounted content, input,
+dismissal and close callbacks, even when opening the same dialog ID again. It
+returns an identity-bound close handle, so a stale completion or feature
+teardown cannot close a replacement dialog. Command, keymap, theme, editor and
+add-project features own their registrations. `DialogHost` wraps every
+registration in the native `Dialog` owner; optional `commandId` preserves
+feature close IDs and `dismiss(input, close)` routes dismissal through feature
+state when needed; its close callback is bound to that invocation and remains
+safe after asynchronous confirmation or replacement. Palette likewise invokes
+its injected `onClose` after a successful action rather than requiring a
+host-generated command. Content never creates a second dialog, title or card.
+The internal `Surface` owns boundary, paint, padding and title/body/action flow;
+only `Dialog`, `Popover`, `Menu`, `Toast` and `Takeover` specialisations may
+consume it. `Popover` owns native top-layer anchoring and outside-click/Escape
+dismissal, `Menu` supplies a normal-flow item column and `Toast` supplies the
+card in the fixed notification stack. Overlay tokens and the
+content/popover/dialog/toast layer scale live in `theme.css`. Fieldsets and
+legends are layout-neutral grouping, never cards.
 `panels.register({ id, title, icon, capability?,
 component })` contributes
 right-panel views. Icons may be strings or feature-owned render functions; the

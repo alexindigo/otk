@@ -33,7 +33,8 @@ export interface ToolProps {
   directory?: string;
   waiting: boolean;
   prefs: Preferences;
-  paneWidth: number;
+  /** Legacy input; renderers measure their own available content width. */
+  paneWidth?: number;
   onOpenChild(id: string): void;
 }
 export type ToolRenderer = (props: ToolProps) => Element;
@@ -139,7 +140,8 @@ export interface PartProps {
   streaming: boolean;
   directory?: string;
   permissions: PermissionRequest[];
-  paneWidth: number;
+  /** Legacy input; renderers measure their own available content width. */
+  paneWidth?: number;
   onOpenChild(id: string): void;
   user: boolean;
   pending?: boolean;

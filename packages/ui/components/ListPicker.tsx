@@ -11,6 +11,8 @@ import {
 import Popover, { type PopoverControl } from "./surface/Popover.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
+import ControlValue from "./ControlValue.tsx";
+import { ChevronDownIcon } from "./ChromeIcons.tsx";
 
 export interface PickerItem<T = string> {
   key: string;
@@ -110,8 +112,12 @@ export default function ListPicker<T = string>(props: {
       triggerLabel={props.triggerLabel}
       applied={props.applied}
       triggerColor={props.triggerColor}
-      trigger={props.trigger}
-      triggerClass={props.triggerClass}
+      trigger={
+        <ControlValue accessory={<ChevronDownIcon />}>
+          {props.trigger}
+        </ControlValue>
+      }
+      triggerClass={`otk-control-trigger ${props.triggerClass ?? ""}`}
       class={`otk-list-picker ${props.class ?? ""}`}
       control={(control) => {
         popover = control;

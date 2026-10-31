@@ -11,8 +11,8 @@
   text-align: left;
 }
 .otk-work-chevron {
-  width: 13px;
-  height: 13px;
+  width: var(--icon-compact);
+  height: var(--icon-compact);
 }
 .otk-work-fold[aria-expanded=true] .otk-work-chevron {
   rotate: 90deg;

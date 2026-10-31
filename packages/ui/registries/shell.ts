@@ -9,6 +9,7 @@ export interface DialogProps<T = unknown> {
 }
 export interface DialogDefinition {
   id: string;
+  size?: "form" | "standard" | "editor";
   title?: string | ((input: unknown) => string);
   commandId?: string;
   dismiss?(input: unknown, close: () => void): void;
@@ -19,6 +20,7 @@ export class DialogRegistry {
   register<T = unknown>(
     definition: {
       id: string;
+      size?: "form" | "standard" | "editor";
       title?: string | ((input: T) => string);
       commandId?: string;
       dismiss?(input: T, close: () => void): void;

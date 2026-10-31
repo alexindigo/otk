@@ -1,11 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { exactCount, failureText } from "@otk/client";
+import { exactCount, failureText, overflowPreference } from "@otk/client";
 import "./ProjectTabs.css" with { type: "text" };
 import { selection, sessionState } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
-import { createMemo, createSignal, type Element, For, Show } from "solid-js";
+import {
+  createMemo,
+  createSignal,
+  createUniqueId,
+  type Element,
+  For,
+  Show,
+} from "solid-js";
 import { dynamic } from "@solidjs/web";
-import TitleEditor from "./TitleEditor.tsx";
+import TitleEditor, { TitleFeedback } from "./TitleEditor.tsx";
 import type {
   ContentSession,
   InboxSnapshot,
@@ -40,6 +47,7 @@ import { createTaskControls } from "../features/task-controls.ts";
 import { countLabel } from "./tools/count.ts";
 import { contextTarget } from "./context-target.ts";
 import type { SessionContextTarget } from "../features/session-context.ts";
+import OverflowRow from "./OverflowRow.tsx";
 import { breadcrumbRows } from "./list-presentation.ts";
 import { nativeAttributes } from "./native-attributes.ts";
 interface TaskContextTarget extends ProjectSelection {
@@ -71,6 +79,7 @@ export default function ProjectTabs(props: {
 }): import("solid-js").Element {
   const { commands } = useCommandPorts();
   const [error, setError] = createSignal("");
+  const crumbFeedbackID = createUniqueId();
   const tasks = () =>
     props.inbox.tasks.filter((t) => t.directory === props.project.directory)
       .sort((a, b) => a.order - b.order);
@@ -186,17 +195,18 @@ export default function ProjectTabs(props: {
       props.model.state.closed,
     );
   });
-  const crumbRows = createMemo(() =>
-    breadcrumbRows(
-      crumbs(),
-      props.model.state.sessionID,
-      (id) =>
-        !!props.rename?.matches({
-          sidecarId: props.project.sidecarId,
-          sessionID: id,
-        }, "chip"),
-    )
-  );
+  const required = () =>
+    crumbs().filter((c) =>
+      c.id === props.model.state.sessionID ||
+      props.rename?.matches({
+        sidecarId: props.project.sidecarId,
+        sessionID: c.id,
+      }, "chip")
+    ).map((c) => c.id);
+  const title = (id: string) =>
+    props.session?.id === id
+      ? props.session.title
+      : entry(id)?.title ?? "Session unavailable";
   const openCrumb = ownedAction("task.session.open", (id: string) => {
     const task = active();
     if (props.onOpen(id)) {
@@ -246,9 +256,11 @@ export default function ProjectTabs(props: {
                 }, "tab");
               const Control = dynamic(() => editing() ? "div" : "button");
               const native = nativeAttributes(() => ({
-                onClick: () => run(select(tab())),
+                onClick: () => {
+                  if (!editing()) run(select(tab()));
+                },
                 onDblClick: () =>
-                  tab().kind === "phantom" && run(pin(tab().id)),
+                  !editing() && tab().kind === "phantom" && run(pin(tab().id)),
               }));
               return (
                 <div
@@ -318,21 +330,71 @@ export default function ProjectTabs(props: {
             }}
           </For>
         </div>
-        <button
-          type="button"
-          class="otk-icon-button otk-task-new"
-          aria-label="New task"
-          title="New task"
-          disabled={!props.ready}
-          onClick={() => run(rename(undefined))}
-        >
-          <PlusIcon />
-        </button>
+        <Show when={props.ready}>
+          <button
+            type="button"
+            class="otk-icon-button otk-task-new"
+            aria-label="New task"
+            title="New task"
+            onClick={() => run(rename(undefined))}
+          >
+            <PlusIcon />
+          </button>
+        </Show>
         <div class="otk-topbar-end">{props.displayMenu}</div>
       </div>
       <div class="otk-breadcrumb-row">
         <nav class="otk-task-crumbs" aria-label="Task sessions">
-          <For each={crumbRows()} keyed={(c) => c.id}>
+          <OverflowRow
+            items={breadcrumbRows(crumbs())}
+            required={required()}
+            preferred={overflowPreference(
+              crumbs().map((c) => c.id),
+              props.model.state.sessionID,
+              (id) => entry(id)?.parentID,
+            )}
+            measure={(item) => (
+              <span class="otk-crumb-measure">
+                <Show when={!item.first}>
+                  <ChevronIcon class="otk-crumb-chevron" />
+                </Show>
+                <span class="otk-crumb-measure-content">
+                  <StatusLight small state="idle" />
+                  {title(item.id)}
+                  <AutoMark active={!!props.auto?.(item.id)} />
+                </span>
+              </span>
+            )}
+            more={(ids) => (
+              <Menu
+                class="otk-folded-crumbs"
+                triggerClass="otk-folded-crumbs-trigger"
+                label="More task sessions"
+                trigger="…"
+              >
+                <For each={ids()} keyed={(id) => id}>
+                  {(id) => (
+                    <button
+                      type="button"
+                      data-overflow-target={id()}
+                      ref={contextTarget(() => sessionTarget(id()))}
+                      data-otk-selection="vertical"
+                      {...selection({
+                        kind: "current",
+                        selected: props.model.state.sessionID === id(),
+                      })}
+                      onClick={() => run(openCrumb(id()))}
+                    >
+                      <SelectionContent>
+                        {title(id())}
+                        <AutoMark active={!!props.auto?.(id())} />
+                      </SelectionContent>
+                    </button>
+                  )}
+                </For>
+              </Menu>
+            )}
+          >
             {(crumb) => {
               const editing = () =>
                 props.rename?.matches({
@@ -341,49 +403,12 @@ export default function ProjectTabs(props: {
                 }, "chip");
               const Control = dynamic(() => editing() ? "div" : "button");
               return (
-                <Show
-                  when={crumb().visible}
-                  fallback={
-                    <Show when={crumb().foldStart}>
-                      <Menu
-                        class="otk-folded-crumbs"
-                        triggerClass="otk-folded-crumbs-trigger"
-                        label="More task sessions"
-                        trigger="…"
-                      >
-                        <For
-                          each={crumbRows().filter((row) => !row.visible)}
-                          keyed={(c) => c.id}
-                        >
-                          {(c) => (
-                            <button
-                              type="button"
-                              ref={contextTarget(() => sessionTarget(c().id))}
-                              data-otk-selection="vertical"
-                              {...selection({
-                                kind: "current",
-                                selected:
-                                  props.model.state.sessionID === c().id,
-                              })}
-                              onClick={() => run(openCrumb(c().id))}
-                              aria-label={`${entry(c().id)?.title ?? c().id}${
-                                props.auto?.(c().id) ? ", Auto-approve on" : ""
-                              }`}
-                            >
-                              <SelectionContent>
-                                {entry(c().id)?.title ?? c().id}
-                                <AutoMark active={!!props.auto?.(c().id)} />
-                              </SelectionContent>
-                            </button>
-                          )}
-                        </For>
-                      </Menu>
-                    </Show>
-                  }
-                >
-                  {(_visible) => {
+                <>
+                  {(() => {
                     const native = nativeAttributes(() => ({
-                      onClick: () => run(openCrumb(crumb().id)),
+                      onClick: () => {
+                        if (!editing()) run(openCrumb(crumb().id));
+                      },
                     }));
                     return (
                       <span class="otk-crumb-link">
@@ -407,7 +432,9 @@ export default function ProjectTabs(props: {
                               props.model.state.sessionID === crumb().id,
                           })}
                           data-otk-selection="horizontal"
-                          title={props.project.directory}
+                          title={`${
+                            title(crumb().id)
+                          } · ${props.project.directory}`}
                           data-helper={String(crumb().helper)}
                           data-depth={crumb().depth}
                           data-crumb={crumb().id}
@@ -436,7 +463,10 @@ export default function ProjectTabs(props: {
                                   : entry(crumb().id)?.title ??
                                     "Session unavailable"}
                               >
-                                <TitleEditor owner={props.rename!} />
+                                <TitleEditor
+                                  owner={props.rename!}
+                                  feedbackID={crumbFeedbackID}
+                                />
                               </Show>
                             </span>
                             <AutoMark active={!!props.auto?.(crumb().id)} />
@@ -444,19 +474,20 @@ export default function ProjectTabs(props: {
                         </Control>
                       </span>
                     );
-                  }}
-                </Show>
+                  })()}
+                </>
               );
             }}
-          </For>
-          <button
-            type="button"
-            class="otk-new-session"
-            disabled={!props.ready}
-            onClick={() => run(createSession())}
-          >
-            <PlusIcon /> Session
-          </button>
+          </OverflowRow>
+          <Show when={props.ready}>
+            <button
+              type="button"
+              class="otk-new-session"
+              onClick={() => run(createSession())}
+            >
+              <PlusIcon /> Session
+            </button>
+          </Show>
         </nav>
         <output
           class="otk-context-meter"
@@ -508,6 +539,18 @@ export default function ProjectTabs(props: {
           </Show>
         </output>
       </div>
+      <Show
+        when={crumbs().some((crumb) =>
+          props.rename?.matches({
+            sidecarId: props.project.sidecarId,
+            sessionID: crumb.id,
+          }, "chip")
+        )}
+      >
+        <div class="otk-crumb-feedback">
+          <TitleFeedback owner={props.rename!} id={crumbFeedbackID} />
+        </div>
+      </Show>
     </section>
   );
 }
