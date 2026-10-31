@@ -10,12 +10,15 @@ import {
 } from "../support/browser-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 import { WsClient } from "../support/ws-client.ts";
-import {
-  revealViewportElement,
-  wheelViewport,
-} from "../support/message-viewport.ts";
+import { wheelViewport } from "../support/message-viewport.ts";
 
-test("U8 pasted and dropped images have one independent chip, persist as loaded message thumbnails and open the original in Dialog", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`U8 pasted and dropped images have one independent chip, persist as loaded message thumbnails and open the original in Dialog in ${theme}`, () =>
+    imageDraft(theme));
+  test(`U8 a pending image stays with its session draft and explicit removal cannot be undone by a late upload in ${theme}`, () =>
+    pendingImage(theme));
+}
+async function imageDraft(theme: string) {
   const f = await browserFixture();
   let client: WsClient | undefined;
   try {
@@ -30,19 +33,15 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
     const server = await f.sidecar(), b = await f.browser(server.url);
     client = new WsClient(server.url);
     await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
+    await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
     await client.rpc("prefs.set", { key: "animationsOff", value: true });
     await openSession(b, session.id);
     const shots = Deno.env.get("OTK_IMAGE_SHOTS");
     const capture = async (state: string) => {
       if (!shots) return;
       await Deno.mkdir(shots, { recursive: true });
-      for (
-        const [theme, name] of [["otk-dark", "dark"], ["otk-light", "light"]]
-      ) {
-        await client!.rpc("prefs.set", { key: "theme", value: theme });
-        await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
-        await b.screenshot(join(shots, `${state}-${name}.png`));
-      }
+      await b.screenshot(join(shots, `${state}-${theme}.png`));
     };
     const image = await b.evaluate<string>(
       `(()=>{const c=document.createElement('canvas');c.width=640;c.height=400;const x=c.getContext('2d');x.fillStyle='#234651';x.fillRect(0,0,640,400);x.fillStyle='#7fc8b8';x.fillRect(40,40,240,240);x.fillStyle='#f2c16d';x.beginPath();x.arc(440,160,100,0,Math.PI*2);x.fill();x.fillStyle='#ffffff';x.font='24px sans-serif';x.fillText('Image review · 640 × 400',40,350);return c.toDataURL('image/png')})()`,
@@ -61,6 +60,17 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
             : "new DragEvent('drop',{bubbles:true,dataTransfer:d})"
         });})()`,
       );
+    // Timeline reveals the source identity through the owning measured window
+    // and focuses its bubble, retaining it while its image/text is inspected.
+    const revealImage = async (id: string) => {
+      await b.click("[data-panel-view=timeline]");
+      const row = `[data-timeline-prompt="${id}"] .otk-timeline-reveal`;
+      await b.poll(`!!document.querySelector('${row}')`);
+      await b.click(row);
+      await b.poll(
+        `(()=>{const bubble=document.querySelector('[data-message="${id}"] .otk-user-bubble'),viewport=document.querySelector('.otk-messages');if(!bubble)return false;const r=bubble.getBoundingClientRect(),v=viewport.getBoundingClientRect();return document.activeElement===bubble && r.top>=v.top-.5 && r.bottom<=v.bottom+.5})()`,
+      );
+    };
     const imageMessages = async (count: number) => {
       const rows = await waitFor(
         () =>
@@ -81,7 +91,7 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
           [image],
         );
         const selector = `[data-message="${row.info.id}"] .otk-file-image img`;
-        await revealViewportElement(b, ".otk-messages", selector);
+        await revealImage(row.info.id);
         await b.poll(
           `(()=>{const images=document.querySelectorAll(${
             JSON.stringify(selector)
@@ -90,6 +100,10 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
           }})()`,
         );
       }
+      await b.click("[data-panel-view=sessions]");
+      // Explicit reveal intentionally pauses tail following. Resume through the
+      // reader's real downward-wheel intent before the next prompt/reply.
+      await wheelViewport(b, ".otk-messages", 100000);
     };
     await b.fill("textarea[name=prompt]", "What is in this image?");
     await addImage("paste");
@@ -129,6 +143,23 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
     );
     f.fake.queue({ chunks: ["The image contains a square and a circle."] });
     await b.click(".otk-prompt button[type=submit]");
+    await waitForReply(
+      b,
+      session.id,
+      "The image contains a square and a circle.",
+    );
+    const rows = await waitFor(
+      () =>
+        f.oc.request<
+          {
+            info: { id: string; role: string };
+            parts: { type: string; url?: string; text?: string }[];
+          }[]
+        >(`/session/${session.id}/message`),
+      (rows) => rows.some((row) => row.info.role === "user"),
+    );
+    const user = rows.find((row) => row.info.role === "user")!;
+    await revealImage(user.info.id);
     await b.poll(
       "(()=>{const i=document.querySelector('[data-role=user] .otk-file-image img');return i?.complete && i.naturalWidth===640})()",
     );
@@ -138,17 +169,7 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
       ),
       "Describe these shapes.",
     );
-    const rows = await waitFor(
-      () =>
-        f.oc.request<
-          {
-            info: { role: string };
-            parts: { type: string; url?: string; text?: string }[];
-          }[]
-        >(`/session/${session.id}/message`),
-      (rows) => rows.some((row) => row.info.role === "user"),
-    );
-    const parts = rows.find((row) => row.info.role === "user")!.parts;
+    const parts = user.parts;
     assertEquals(parts.filter((p) => p.type === "file").map((p) => p.url), [
       image,
     ]);
@@ -159,11 +180,6 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
       false,
     );
     await b.poll("!document.querySelector('.otk-prompt-chip')");
-    await waitForReply(
-      b,
-      session.id,
-      "The image contains a square and a circle.",
-    );
     await capture("message");
     await b.click(".otk-file-image");
     await b.poll(
@@ -183,6 +199,7 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
     await b.poll(
       "!document.querySelector('dialog[open]') && document.activeElement===document.querySelector('.otk-file-image')",
     );
+    await b.click("[data-panel-view=sessions]");
     await b.reload();
     await b.poll(
       "(()=>{const i=document.querySelector('[data-role=user] .otk-file-image img');return i?.complete && i.naturalWidth===640})()",
@@ -190,7 +207,7 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
     // Image-only drafts remain sendable, and editing text cannot delete them.
     await addImage("drop", "second.png");
     await b.poll(
-      "!!document.querySelector('.otk-prompt-chip img') && !document.querySelector('.otk-prompt button[type=submit]').disabled",
+      "!!document.querySelector('.otk-prompt-chip img') && !!document.querySelector('.otk-prompt button[type=submit]')",
     );
     assertEquals(
       await b.evaluate("document.querySelector('textarea[name=prompt]').value"),
@@ -252,14 +269,14 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
     await b.poll("!!document.querySelector('.otk-prompt-chip img')");
     await b.click('.otk-prompt-chip button[aria-label^="Remove"]');
     await b.poll(
-      "!document.querySelector('.otk-prompt-chip') && document.querySelector('.otk-prompt button[type=submit]').disabled",
+      "!document.querySelector('.otk-prompt-chip') && !document.querySelector('.otk-prompt button[type=submit]')",
     );
     // Ordinary file uploads retain the existing chip rendering.
     await b.evaluate(
       "(()=>{const d=new DataTransfer();d.items.add(new File(['plain bytes'],'notes.txt',{type:'text/plain'}));document.querySelector('.otk-prompt').dispatchEvent(new DragEvent('drop',{bubbles:true,dataTransfer:d}));})()",
     );
     await b.poll(
-      "!document.querySelector('.otk-prompt button[type=submit]').disabled",
+      "!!document.querySelector('.otk-prompt button[type=submit]')",
     );
     f.fake.queue({ chunks: ["File received."] });
     await b.click(".otk-prompt button[type=submit]");
@@ -272,12 +289,8 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
     await client?.close();
     await f.stop();
   }
-});
-
-for (const theme of ["otk-dark", "otk-light"]) {
-  test(`U8 a pending image stays with its session draft and explicit removal cannot be undone by a late upload in ${theme}`, () =>
-    pendingImage(theme));
 }
+
 async function pendingImage(theme: string) {
   const f = await browserFixture();
   let client: WsClient | undefined;
