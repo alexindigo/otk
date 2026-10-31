@@ -155,8 +155,34 @@ test("tool headers, bodies and path-list results share project context, includin
       ),
       "src",
     );
+    const nativeCount =
+      (await f.oc.request<unknown[]>(`/session/${s.id}/message`)).length;
     await browser.reload();
     await openSession(browser, s.id);
+    // Reload acquires newest ten first. Viewport reveal addresses acquired rows;
+    // join that baseline and acquire earlier native pages through the UI before
+    // checking the original complete set of path cases.
+    await browser.poll(
+      "Number(document.querySelector('.otk-message-flow')?.dataset.messageCount)>0",
+    );
+    while (
+      await browser.evaluate<number>(
+        "Number(document.querySelector('.otk-message-flow').dataset.messageCount)",
+      ) < nativeCount
+    ) {
+      const before = await browser.evaluate<number>(
+        "Number(document.querySelector('.otk-message-flow').dataset.messageCount)",
+      );
+      await browser.poll(
+        `Number(document.querySelector('.otk-message-flow').dataset.messageCount)>${before} || !!document.querySelector('.otk-load-older')`,
+      );
+      await browser.evaluate(
+        "document.querySelector('.otk-load-older')?.click()",
+      );
+      await browser.poll(
+        `Number(document.querySelector('.otk-message-flow').dataset.messageCount)>${before}`,
+      );
+    }
     for (const check of checks) {
       const selector = check.selector;
       await revealViewportElement(browser, ".otk-messages", selector);
