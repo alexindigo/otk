@@ -257,6 +257,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
             { feature: "seen", version: 1 },
             { feature: "session-reference-upgrade", version: 1 },
             { feature: "tasks", version: 1 },
+            { feature: "tasks", version: 2 },
           ],
         );
       } finally {
