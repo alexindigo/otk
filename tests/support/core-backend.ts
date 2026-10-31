@@ -11,6 +11,10 @@ export async function coreBackendFixture(
   root: string,
   capabilities: Capabilities = {},
   identity = "tstv1-core",
+  options: Pick<
+    NonNullable<Parameters<typeof startApplication>[3]>,
+    "diagnostics"
+  > = {},
 ) {
   const scope = resources();
   const settings = cfg();
@@ -88,6 +92,7 @@ export async function coreBackendFixture(
     settings,
     backend,
     fromFileUrl(new URL("../../web/dist/", import.meta.url)),
+    options,
   );
   const stop = app.stop.bind(app);
   const emit = app.connections.content.bind(app.connections);

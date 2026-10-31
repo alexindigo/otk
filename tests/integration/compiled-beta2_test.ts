@@ -1,0 +1,323 @@
+// SPDX-License-Identifier: LGPL-3.0-only
+import { assert, assertEquals } from "@std/assert";
+import { fromFileUrl, join } from "@std/path";
+import { createDirectoryCatalogs } from "@otk/client";
+import {
+  createCatalogCodecs,
+  type DirectoryCatalog,
+  type MessagePage,
+  PROTOCOL_VERSION,
+  type RequestRef,
+  type RpcParams,
+  SIDECAR_VERSION,
+} from "@otk/protocol";
+import {
+  beta1State,
+  upgradedManifest,
+  userSnapshot,
+} from "../support/beta1-state.ts";
+import { DatabaseSync } from "node:sqlite";
+import { FakeLlm } from "../support/fake-llm.ts";
+import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
+import { ownedProcess } from "../support/process.ts";
+import { resources, tempDir, test } from "../support/resources.ts";
+import { cfg } from "../support/config.ts";
+import { AuthState } from "../../core/auth/state.ts";
+import { WsClient } from "../support/ws-client.ts";
+import { RemainingMeasurements } from "../support/remaining-measurements.ts";
+
+test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catalogs, keyed tasks and prompt outcomes", async () => {
+  const root = await tempDir("compiled-beta2-");
+  const report = new RemainingMeasurements(root, "compiled-beta2-contracts");
+  const binary = Deno.env.get("OTK_TEST_BINARY") ?? join(root, "otk");
+  if (!Deno.env.get("OTK_TEST_BINARY")) {
+    const build = await new Deno.Command("bash", {
+      cwd: fromFileUrl(new URL("../../", import.meta.url)),
+      args: ["scripts/compile.sh", "x86_64-unknown-linux-gnu", binary],
+      stdout: "piped",
+      stderr: "piped",
+    }).output();
+    await Deno.writeFile(
+      join(root, "build.log"),
+      new Uint8Array([...build.stdout, ...build.stderr]),
+    );
+    assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
+  }
+  const fake = new FakeLlm(), native = await OpencodeTest.start(fake);
+  const session = await native.session<{ id: string; nativeID: string }>(
+    "/session",
+    { method: "POST", body: { title: "Compiled upgraded session" } },
+  );
+  const unknown = await native.session<{ id: string; nativeID: string }>(
+    "/session",
+    {
+      method: "POST",
+      body: { title: "Historical unreported cost" },
+    },
+  );
+  fake.queue({ chunks: ["Historical summary fixture"] });
+  await native.request(`/session/${unknown.id}/message`, {
+    method: "POST",
+    body: {
+      model: { providerID: "fake", modelID: "scripted" },
+      parts: [{ type: "text", text: "Historical summary input" }],
+    },
+  });
+  // Fixture-only historical metadata, following SessionScale's unreported-cost
+  // case. The owned stock process is joined before touching its synthetic DB.
+  await native.stop();
+  const historical = new DatabaseSync(native.db);
+  try {
+    assertEquals(
+      historical.prepare(
+        "UPDATE message SET data=json_remove(data,'$.cost') WHERE session_id=? AND json_extract(data,'$.role')='assistant'",
+      ).run(unknown.nativeID).changes,
+      1,
+    );
+  } finally {
+    historical.close();
+  }
+  await native.restart();
+  const state = join(root, "state");
+  const original = await beta1State(state, session.nativeID);
+  const authPath = join(state, "auth.toml"), authConfig = cfg();
+  authConfig.state.path = state;
+  authConfig.auth.type = "";
+  await new AuthState(authConfig).setup({ type: "none" });
+  const authText = await Deno.readTextFile(authPath);
+  const port = freePort(), url = `http://127.0.0.1:${port}`;
+  const overlay = join(root, "otk.toml");
+  await Deno.writeTextFile(
+    overlay,
+    `[server]\nport=${port}\n[auth]\ntype="none"\n[state]\npath=${
+      JSON.stringify(state)
+    }\n[harness]\ntype="opencode1"\nurl=${JSON.stringify(native.url)}\ndb=${
+      JSON.stringify(native.db)
+    }\n[digest]\ncpu=1\nmemoryreserve=1\nretryms=10\n`,
+  );
+  const operatorText = await Deno.readTextFile(overlay);
+  const run = async () => {
+    const env = Object.fromEntries(
+      Object.entries(Deno.env.toObject()).filter(([key]) =>
+        !key.startsWith("OTK_")
+      ),
+    );
+    Object.assign(env, {
+      OTK_CONFIG: overlay,
+      DENO_DIR: join(root, `empty-${crypto.randomUUID()}`),
+      DENO_NO_REMOTE: "1",
+      TMPDIR: Deno.env.get("TMPDIR")!,
+    });
+    let log = "";
+    const logPath = join(root, `runtime-${crypto.randomUUID()}.log`);
+    resources().evidence(
+      "compiled runtime output",
+      () => Deno.writeTextFile(logPath, log),
+    );
+    const process = ownedProcess(binary, [], {
+      cwd: root,
+      env,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    process.child.stdout!.on("data", (chunk) => {
+      log += chunk.toString();
+    });
+    process.child.stderr!.on("data", (chunk) => {
+      log += chunk.toString();
+    });
+    await waitFor(async () => (await fetch(url + "/api/health")).ok, Boolean);
+    const client = new WsClient(url);
+    await client.connect();
+    return {
+      client,
+      stop: async () => {
+        await client.close();
+        await process.stop();
+        await Deno.writeTextFile(
+          logPath,
+          log,
+        );
+        assertEquals(
+          /Download|Module not found|Cannot find/.test(log),
+          false,
+          log,
+        );
+      },
+    };
+  };
+  const first = await run();
+  try {
+    const welcome = first.client.frames.find((frame) => frame.t === "welcome");
+    assert(welcome?.t === "welcome");
+    // C9 qualifies the incoming release candidate. C10 changes this exported
+    // constant, so the same proof then requires the actual beta.2 version.
+    assertEquals(welcome.sidecar.version, SIDECAR_VERSION);
+    assertEquals(welcome.protocol, PROTOCOL_VERSION);
+    assertEquals(welcome.sidecar.harness.kind, "opencode-v1");
+    const readOnly = new DatabaseSync(join(state, "otk.db"), {
+      readOnly: true,
+    });
+    try {
+      const current = userSnapshot({ connection: readOnly });
+      // Native discovery may add current-user projects during ordinary startup;
+      // every historical row must still match the independent upgrade manifest.
+      for (
+        const [table, rows] of Object.entries(upgradedManifest(original.before))
+      ) {
+        for (const row of rows) {
+          assert(
+            current[table].some((value) =>
+              JSON.stringify(value) === JSON.stringify(row)
+            ),
+            table,
+          );
+        }
+      }
+    } finally {
+      readOnly.close();
+    }
+    await waitFor(
+      () => first.client.entry(session.id)?.digest.state,
+      (value) => value === "ready",
+    );
+    await waitFor(
+      () => first.client.entry(unknown.id)?.digest,
+      (value) => value?.state === "ready" && value.total?.cost === null,
+    );
+    const catalog = createDirectoryCatalogs({
+      codecs: createCatalogCodecs(),
+      watch: (directory) => {
+        let ref: RequestRef | undefined;
+        return {
+          result: first.client.rpc<DirectoryCatalog>("catalogs.watch", {
+            directory,
+          }).then((value) => {
+            const result = first.client.frames.find((frame) =>
+              frame.t === "request.result" && frame.outcome.ok &&
+              frame.outcome.result === value
+            );
+            assert(result?.t === "request.result");
+            ref = result.ref;
+            return value;
+          }),
+          release() {
+            if (ref) first.client.send({ t: "request.release", refs: [ref] });
+          },
+        };
+      },
+      refresh: (directory) =>
+        first.client.rpc("catalogs.refresh", { directory }).then(() => {}),
+    });
+    const lease = catalog.acquire(native.directory);
+    let seen = 0;
+    const pump = () => {
+      for (const frame of first.client.frames.slice(seen)) {
+        catalog.receive(frame);
+      }
+      seen = first.client.frames.length;
+      return lease.state.catalog;
+    };
+    try {
+      await lease.ready();
+      await waitFor(
+        pump,
+        (value) =>
+          value?.values.files?.value?.some((file) =>
+            file.path === "README.md"
+          ) === true,
+      );
+      await Deno.writeTextFile(
+        join(native.directory, "compiled-new.txt"),
+        "Compiled file update",
+      );
+      await lease.refresh();
+      await waitFor(
+        pump,
+        (value) =>
+          value?.values.files?.value?.some((file) =>
+            file.path === "compiled-new.txt"
+          ) === true,
+      );
+    } finally {
+      lease.release();
+      catalog.stop();
+    }
+    await first.client.rpc("tasks.rename", {
+      id: "task-main",
+      name: "Compiled keyed outcome",
+    });
+    const baselineCount = first.client.frames.filter((frame) =>
+      frame.t === "inbox.snapshot"
+    ).length;
+    await first.client.wait((frame) =>
+      frame.t === "inbox.patch" &&
+      frame.ops.some((op) =>
+        op.op === "task.upsert" && op.task.name === "Compiled keyed outcome"
+      )
+    );
+    assertEquals(
+      first.client.frames.filter((frame) => frame.t === "inbox.snapshot")
+        .length,
+      baselineCount,
+    );
+    fake.queue({ chunks: ["Compiled beta2 consumer outcome"] });
+    await first.client.rpc(
+      "session.prompt",
+      {
+        sessionID: session.id,
+        mode: "normal",
+        parts: [{ kind: "text", text: "Compiled provider-only prompt" }],
+      } satisfies RpcParams<"session.prompt">,
+    );
+    await waitFor(
+      () => first.client.entry(session.id)?.digest.messageCount,
+      (count) => (count ?? 0) >= 2,
+    );
+    const page = await first.client.rpc<MessagePage>("session.messages", {
+      sessionID: session.id,
+    });
+    assert(JSON.stringify(page).includes("Compiled beta2 consumer outcome"));
+    assertEquals(await Deno.readTextFile(authPath), authText);
+    assertEquals(await Deno.readTextFile(overlay), operatorText);
+    for (const name of ["otk.db", "otk.db-wal", "digest.db", "digest.db-wal"]) {
+      try {
+        const bytes = new TextDecoder().decode(
+          await Deno.readFile(join(state, name)),
+        );
+        assert(!bytes.includes("Compiled provider-only prompt"), name);
+        assert(!bytes.includes("Compiled beta2 consumer outcome"), name);
+      } catch (error) {
+        if (!(error instanceof Deno.errors.NotFound)) throw error;
+      }
+    }
+    await report.write({
+      version: welcome.sidecar.version,
+      protocol: welcome.protocol,
+      upgradePreserved: true,
+      actualCatalogRefresh: true,
+      taskPatch: true,
+      promptResult: true,
+      noRuntimeDownloads: true,
+    });
+  } finally {
+    await first.stop();
+  }
+  const second = await run();
+  try {
+    const tasks = await second.client.rpc<
+      { name: string; sessions: string[] }[]
+    >("tasks.list", {});
+    assertEquals(tasks[0].name, "Compiled keyed outcome");
+    assertEquals(tasks[0].sessions, [session.id, "opcv1-ses_other"]);
+    assertEquals(await Deno.readTextFile(authPath), authText);
+    assertEquals(await Deno.readTextFile(overlay), operatorText);
+    const page = await second.client.rpc<MessagePage>("session.messages", {
+      sessionID: session.id,
+    });
+    assert(JSON.stringify(page).includes("Compiled beta2 consumer outcome"));
+  } finally {
+    await second.stop();
+    await native.stop();
+    await fake.stop();
+  }
+});
