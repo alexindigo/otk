@@ -2,7 +2,12 @@
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { browserFixture, openSession } from "../support/browser-fixture.ts";
+import {
+  browserFixture,
+  openSession,
+  sentFrames,
+} from "../support/browser-fixture.ts";
+import type { RequestEvent } from "@otk/protocol";
 import { Cdp } from "../support/cdp.ts";
 import { waitFor } from "../support/opencode.ts";
 import { wheelViewport } from "../support/message-viewport.ts";
@@ -497,10 +502,24 @@ test("completed worker batches preserve multiline grammar and recalled unfinishe
   }
 });
 
-test("real downward wheel retains follow intent when transcript growth precedes its scroll notification", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  for (const cpuRate of [1, 8]) {
+    test(`real downward wheel retains follow intent when transcript growth precedes its scroll notification (${theme}, CPU ${cpuRate}x)`, () =>
+      wheelOrdering(theme, cpuRate));
+  }
+}
+async function wheelOrdering(theme: string, cpuRate: number) {
   const f = await browserFixture();
+  let client: WsClient | undefined;
   try {
     const server = await f.sidecar(), browser = await f.browser(server.url);
+    client = new WsClient(server.url);
+    await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
+    await browser.poll(
+      `document.documentElement.dataset.otkTheme==='${theme}'`,
+    );
+    await browser.send("Emulation.setCPUThrottlingRate", { rate: cpuRate });
     for (const numbered of [false, true]) {
       const session = await f.oc.session<{ id: string }>("/session", {
         method: "POST",
@@ -530,6 +549,27 @@ test("real downward wheel retains follow intent when transcript growth precedes 
       );
       await openSession(browser, session.id);
       if (numbered) await showFileChanges(browser);
+      // An absent notice can precede request acceptance. Join the captured
+      // location save's terminal result before checking its rendered completion;
+      // its notice must not resize the viewport during the eight-pixel setup.
+      await waitFor(() => {
+        const location = sentFrames(browser).map(({ frame }) => frame).find((
+          frame,
+        ) =>
+          frame.t === "request" && frame.method === "layout.location" &&
+          (frame.params as { sessionID?: string })?.sessionID === session.id
+        );
+        if (!location) return false;
+        const ref = location.ref as { key: string };
+        return browser.events.some((event) => {
+          if (event.method !== "Network.webSocketFrameReceived") return false;
+          const frame = JSON.parse(
+            (event.params.response as { payloadData: string }).payloadData,
+          ) as RequestEvent;
+          return frame.t === "request.result" && frame.ref.key === ref.key &&
+            frame.outcome.ok;
+        });
+      }, (saved) => saved);
       await browser.poll(
         `document.querySelector('.otk-code code')?.textContent===${
           JSON.stringify(source)
@@ -537,14 +577,14 @@ test("real downward wheel retains follow intent when transcript growth precedes 
           numbered
             ? "[...document.querySelectorAll('.otk-text p')].some(el=>el.textContent==='Written.')"
             : "true"
-        } && (()=>{const p=document.querySelector('.otk-messages');return p.scrollHeight-p.clientHeight-p.scrollTop<2})()`,
+        } && !document.querySelector('.otk-composer-notice') && (()=>{const p=document.querySelector('.otk-messages');return p.scrollHeight-p.clientHeight-p.scrollTop<2})()`,
       );
       await wheelViewport(browser, ".otk-messages", -8);
       const point = await browser.evaluate<{ x: number; y: number }>(
         `(async()=>{
           const pane=document.querySelector('.otk-messages');
           await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
-          if(Math.abs(pane.scrollHeight-pane.clientHeight-pane.scrollTop-8)>.5)throw new Error('Wheel setup did not retain its reader position');
+          if(Math.abs(pane.scrollHeight-pane.clientHeight-pane.scrollTop-8)>.5)throw new Error('Wheel setup did not retain its reader position: '+JSON.stringify({top:pane.scrollTop,height:pane.scrollHeight,client:pane.clientHeight,gap:pane.scrollHeight-pane.clientHeight-pane.scrollTop}));
           globalThis.wheelLayoutEvidence=null;
           let armed=false;
           pane.addEventListener('wheel',()=>armed=true,{once:true,passive:true});
@@ -623,9 +663,10 @@ test("real downward wheel retains follow intent when transcript growth precedes 
       );
     }
   } finally {
+    await client?.close();
     await f.stop();
   }
-});
+}
 
 async function scroll(browser: Cdp, bottom: boolean) {
   const point = await browser.evaluate<
