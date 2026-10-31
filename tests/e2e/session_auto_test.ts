@@ -126,7 +126,7 @@ test("U9 footer auto-approve, command, inherited marks and persisted activity re
       "One selected Activity consumer makes one initial resource read",
     );
     await b.poll(
-      "!document.querySelector('.otk-permission-activity [role=status]')",
+      "!document.querySelector('.otk-permission-activity [role=status]:not([aria-hidden=true])')",
     );
     await capture("activity");
     assertEquals(
@@ -144,7 +144,7 @@ test("U9 footer auto-approve, command, inherited marks and persisted activity re
     await capture("helper-activity");
     await b.click(`[data-crumb="${root.id}"]`);
     await b.poll(
-      `location.hash.endsWith('/${root.id}') && document.querySelector('.otk-permission-activity')?.textContent.includes('browser-auto.txt') && !document.querySelector('.otk-permission-activity [role=status]')`,
+      `location.hash.endsWith('/${root.id}') && document.querySelector('.otk-permission-activity')?.textContent.includes('browser-auto.txt') && !document.querySelector('.otk-permission-activity [role=status]:not([aria-hidden=true])')`,
     );
     await b.reload();
     await b.poll(on);
@@ -226,7 +226,7 @@ test("U9 footer auto-approve, command, inherited marks and persisted activity re
       "[...document.querySelectorAll('[data-role=assistant] .otk-text')].some(e=>e.textContent==='Guarded auto reply finished') && [...document.querySelectorAll('.otk-message-footer')].every(e=>!e.textContent.includes('streaming'))",
     );
     await b.poll(
-      "!document.querySelector('.otk-permission-activity [role=status]')",
+      "!document.querySelector('.otk-permission-activity [role=status]:not([aria-hidden=true])')",
     );
     await capture("activity-two");
     const disconnectedAt = client.frames.length;
@@ -244,7 +244,7 @@ test("U9 footer auto-approve, command, inherited marks and persisted activity re
       "document.querySelector('.otk-auto-approve-toggle')?.getAttribute('aria-pressed')==='false'",
     );
     await b.poll(
-      "document.querySelectorAll('.otk-permission-activity [data-activity]').length===2 && !document.querySelector('.otk-permission-activity [role=alert]') && !document.querySelector('.otk-permission-activity [role=status]')",
+      "document.querySelectorAll('.otk-permission-activity [data-activity]').length===2 && !document.querySelector('.otk-permission-activity [role=alert]') && !document.querySelector('.otk-permission-activity [role=status]:not([aria-hidden=true])')",
     );
     await capture("offline-off");
     const reconnectedAt = client.frames.length;
@@ -282,7 +282,7 @@ test("U9 footer auto-approve, command, inherited marks and persisted activity re
       (state) => !state[root.nativeID],
     );
     await b.poll(
-      "document.querySelectorAll('.otk-permission-activity [data-activity]').length===3 && document.querySelector('.otk-permission-activity').textContent.includes('Manual') && !document.querySelector('.otk-permission-activity [role=status]')",
+      "document.querySelectorAll('.otk-permission-activity [data-activity]').length===3 && document.querySelector('.otk-permission-activity').textContent.includes('Manual') && !document.querySelector('.otk-permission-activity [role=status]:not([aria-hidden=true])')",
     );
     await capture("activity-manual");
     // Persist the same failed/interrupted states proven by the held-ack core
@@ -323,7 +323,7 @@ test("U9 footer auto-approve, command, inherited marks and persisted activity re
     }
     await b.reload();
     await b.poll(
-      "document.querySelectorAll('.otk-permission-activity [data-activity]').length===5 && document.querySelector('.otk-permission-activity .otk-error')?.textContent.includes('Stored failure fixture') && document.querySelector('.otk-permission-activity')?.textContent.includes('Reply started; outcome not confirmed') && !document.querySelector('.otk-permission-activity [role=status]')",
+      "document.querySelectorAll('.otk-permission-activity [data-activity]').length===5 && document.querySelector('.otk-permission-activity .otk-error')?.textContent.includes('The response could not be sent. Review this request before trying again') && !document.querySelector('.otk-permission-activity .otk-error')?.textContent.includes('Stored failure fixture') && document.querySelector('.otk-permission-activity')?.textContent.includes('Reply started; outcome not confirmed') && !document.querySelector('.otk-permission-activity [role=status]:not([aria-hidden=true])')",
     );
     assert(
       await b.evaluate(
