@@ -249,6 +249,20 @@ for (const theme of ["otk-dark", "otk-light"]) {
     );
     assertScopedWarming(coldCalls, selected.id, taskMembers);
     await capture("cold-digesting");
+    // A cold index is published before native bootstrap has finished. Interactive
+    // work needs the event bridge, not completion of the background digest.
+    const bridgeStarted = performance.now();
+    await c.wait(
+      (frame) => frame.t === "harness" && frame.state === "connected",
+      120000,
+    );
+    await b.poll(
+      "document.querySelector('[data-connection=local]')?.getAttribute('aria-label').includes('agent service connected')",
+    );
+    console.info(
+      "Scale native bridge readiness (ms)",
+      performance.now() - bridgeStarted,
+    );
     const actionsStart = performance.now();
     await b.click(".otk-task-new");
     await b.poll("!!document.querySelector('input[name=taskName]')");
