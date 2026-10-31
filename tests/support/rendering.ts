@@ -4,7 +4,7 @@ import type { RawPart } from "@otk/harness-opencode-v1";
 import type { Cdp } from "./cdp.ts";
 import type { Script } from "./fake-llm.ts";
 import { waitFor } from "./opencode.ts";
-import type { browserFixture } from "./browser-fixture.ts";
+import { type browserFixture, submitPrompt } from "./browser-fixture.ts";
 export type RenderingFixture = Awaited<ReturnType<typeof browserFixture>>;
 export function toolRow(part: RawPart): string {
   return `[data-message="${part.messageID}"] .otk-tool-line`;
@@ -50,12 +50,7 @@ export async function runTool(
     });
   } else {
     await browser.type("textarea[name=prompt]", `Run ${tool.name}`);
-    // Native idle can precede the browser's previous submission settlement.
-    // Exercise Send only once that actual composer action is available again.
-    await browser.poll(
-      "!!document.querySelector('.otk-send-button') && document.activeElement===document.querySelector('textarea[name=prompt]')",
-    );
-    await browser.key("Enter");
+    await submitPrompt(browser);
   }
   const part = await waitFor(
     () => f.oc.request<{ parts: RawPart[] }[]>(`/session/${id}/message`),

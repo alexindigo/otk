@@ -141,6 +141,13 @@ export async function waitForReply(
     }) && [...document.querySelectorAll('.otk-message-footer')].every(el=>!el.textContent.includes('streaming'))`,
   );
 }
+/** Native idle can precede settlement of the previous composer submission. */
+export async function submitPrompt(browser: Cdp): Promise<void> {
+  await browser.poll(
+    "!!document.querySelector('.otk-send-button:not(:disabled)') && document.activeElement===document.querySelector('textarea[name=prompt]')",
+  );
+  await browser.key("Enter");
+}
 export function sentFrames(
   browser: Cdp,
 ): { time: number; frame: Record<string, unknown> }[] {

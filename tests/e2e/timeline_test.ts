@@ -5,13 +5,14 @@ import { test } from "../support/resources.ts";
 import {
   browserFixture,
   openSession,
+  submitPrompt,
   waitForReply,
 } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { sentFrames } from "../support/browser-fixture.ts";
 import { wheelViewport } from "../support/message-viewport.ts";
 
-for (const theme of ["otk-dark", "otk-light"]) {
+for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
   test(`Timeline reveals and focuses prompts, shares hover/context actions and follows rollback (${theme})`, async () => {
     const f = await browserFixture();
     let client: WsClient | undefined;
@@ -35,7 +36,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
         const reply = Array(18).fill(`Response to ${text}.`).join(" ");
         f.fake.queue({ chunks: [reply] });
         await b.fill("textarea[name=prompt]", text);
-        await b.key("Enter");
+        await submitPrompt(b);
         await waitForReply(b, s.id, reply);
       }
       f.fake.queue({ chunks: ["Timeline compaction summary."] });
