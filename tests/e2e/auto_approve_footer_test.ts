@@ -5,6 +5,7 @@ import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { promptFooterControls } from "../support/prompt-footer.ts";
 
 test("U10 auto-approve leads the footer, uses the theme accent when on and preserves picker geometry", async () => {
   const f = await browserFixture(undefined, {
@@ -63,7 +64,7 @@ test("U10 auto-approve leads the footer, uses the theme accent when on and prese
         await new Promise(requestAnimationFrame);
         const footer=document.querySelector('.otk-prompt-actions'),
           toggle=footer.querySelector('.otk-auto-approve-toggle'),
-          controls=[...footer.querySelectorAll(':scope > button,.otk-prompt-context > button,.otk-prompt-context > .otk-popover > button')],
+           controls=[...document.querySelectorAll('${promptFooterControls}')],
           pickers=['agent','model','variant'].map(kind=>footer.querySelector('.otk-'+kind+'-picker > button')),
           bounds=footer.getBoundingClientRect(),rect=toggle.getBoundingClientRect(),
           probe=document.createElement('span');

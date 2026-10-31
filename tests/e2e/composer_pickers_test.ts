@@ -22,6 +22,7 @@ import {
   OpencodeV1Adapter as Opencode1Adapter,
 } from "@otk/harness-opencode-v1";
 import { cfg } from "../support/config.ts";
+import { promptFooterControls } from "../support/prompt-footer.ts";
 
 const input = "textarea[name=prompt]";
 const modelSearch = ".otk-model-picker input[type=search]";
@@ -77,10 +78,10 @@ const open = async (b: Cdp, kind: string) => {
 async function footerGeometry(b: Cdp, hasDraft = false) {
   await b.poll(`!!document.querySelector('.otk-send-button')===${hasDraft}`);
   const centres = await b.evaluate<number[]>(
-    `[...document.querySelectorAll('.otk-prompt-actions > button, .otk-prompt-context > .otk-popover > button')].map(el=>{const r=el.getBoundingClientRect();return r.y+r.height/2})`,
+    `[...document.querySelectorAll('${promptFooterControls}')].map(el=>{const r=el.getBoundingClientRect();return r.y+r.height/2})`,
   );
   // Send is available only with a draft; measure every visible control in both states.
-  assertEquals(centres.length, hasDraft ? 6 : 5);
+  assertEquals(centres.length, hasDraft ? 7 : 6);
   assert(
     Math.max(...centres) - Math.min(...centres) < .5,
     JSON.stringify(centres),
@@ -143,7 +144,7 @@ async function footerPressure(b: Cdp, shots?: string, theme = "dark") {
         inside: boolean;
         overflow: boolean;
       }>(
-        `(async()=>{await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);const footer=document.querySelector('.otk-prompt-actions'),r=footer.getBoundingClientRect(),p=document.querySelector('.otk-composer-provider'),m=document.querySelector('.otk-composer-model-name'),buttons=[...footer.querySelectorAll(':scope > button,.otk-prompt-context > .otk-popover > button')],rects=buttons.map(el=>el.getBoundingClientRect());return {providerTruncated:p.scrollWidth>p.clientWidth,modelTruncated:m.scrollWidth>m.clientWidth,centres:rects.map(b=>b.y+b.height/2),inside:rects.every(b=>b.left>=r.left-.5&&b.right<=r.right+.5),overflow:footer.scrollWidth>footer.clientWidth}})()`,
+        `(async()=>{await new Promise(requestAnimationFrame);await new Promise(requestAnimationFrame);const footer=document.querySelector('.otk-prompt-actions'),r=footer.getBoundingClientRect(),p=document.querySelector('.otk-composer-provider'),m=document.querySelector('.otk-composer-model-name'),buttons=[...document.querySelectorAll('${promptFooterControls}')],rects=buttons.map(el=>el.getBoundingClientRect());return {providerTruncated:p.scrollWidth>p.clientWidth,modelTruncated:m.scrollWidth>m.clientWidth,centres:rects.map(b=>b.y+b.height/2),inside:rects.every(b=>b.left>=r.left-.5&&b.right<=r.right+.5),overflow:footer.scrollWidth>footer.clientWidth}})()`,
       );
       assertEquals(
         geometry.providerTruncated,
@@ -155,7 +156,7 @@ async function footerPressure(b: Cdp, shots?: string, theme = "dark") {
         state === "model",
         JSON.stringify({ width, geometry }),
       );
-      assertEquals(geometry.centres.length, 6);
+      assertEquals(geometry.centres.length, 7);
       assert(
         Math.max(...geometry.centres) - Math.min(...geometry.centres) < .5 &&
           geometry.inside && !geometry.overflow,
@@ -216,7 +217,7 @@ async function pointer(b: Cdp, selector: string) {
   );
 }
 
-test("V5 composer picks reach native messages and the selected provider; restore, favourites, keyboard, slash and shell keep the same selection", async () => {
+async function composerPicks(theme: string) {
   const fake2 = new FakeLlm();
   const f = await browserFixture({ bash: "allow" }, {
     providers: {
@@ -268,6 +269,8 @@ test("V5 composer picks reach native messages and the selected provider; restore
     const server = await f.sidecar(), b = await f.browser(server.url);
     client = new WsClient(server.url);
     await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
+    await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
     await openSession(b, session.id);
     assertEquals(
       await b.evaluate(
@@ -629,7 +632,12 @@ test("V5 composer picks reach native messages and the selected provider; restore
     await client?.close();
     await f.stop();
   }
-});
+}
+
+for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+  test(`V5 composer picks reach native messages and the selected provider; restore, favourites, keyboard, slash and shell keep the same selection (${theme})`, () =>
+    composerPicks(theme));
+}
 
 test("V5 restored missing model remains sendable; catalog loading and errors are unknown, Retry establishes unavailability", async () => {
   const root = await fixture();

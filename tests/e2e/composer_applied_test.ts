@@ -12,6 +12,7 @@ import {
 import { FakeLlm } from "../support/fake-llm.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { selectionGeometry } from "../support/selection-geometry.ts";
+import { promptFooterControls } from "../support/prompt-footer.ts";
 
 const trigger = ".otk-variant-picker > button";
 const row = (key: string) =>
@@ -112,7 +113,7 @@ for (const nativeTheme of ["otk-dark", "otk-light", "otk-light-stone"]) {
             text: string;
             centres: number[];
           }
-        >(`(()=>{const buttons=[...document.querySelectorAll('.otk-prompt-actions > button, .otk-prompt-context > .otk-popover > button')],t=document.querySelector('${trigger}'),s=getComputedStyle(t),probe=document.createElement('span');probe.style.color='var(--applied-fg)';document.body.append(probe);const muted=getComputedStyle(probe).color;probe.remove();return {rects:buttons.map(el=>el.getBoundingClientRect().toJSON()),centres:buttons.map(el=>{const r=el.getBoundingClientRect();return r.y+r.height/2}),color:s.color,muted,font:s.font,text:t.textContent}})()`);
+        >(`(()=>{const buttons=[...document.querySelectorAll('${promptFooterControls}')],t=document.querySelector('${trigger}'),s=getComputedStyle(t),probe=document.createElement('span');probe.style.color='var(--applied-fg)';document.body.append(probe);const muted=getComputedStyle(probe).color;probe.remove();return {rects:buttons.map(el=>el.getBoundingClientRect().toJSON()),centres:buttons.map(el=>{const r=el.getBoundingClientRect();return r.y+r.height/2}),color:s.color,muted,font:s.font,text:t.textContent}})()`);
       const shots = Deno.env.get("OTK_APPLIED_SHOTS");
       if (shots) await Deno.mkdir(shots, { recursive: true });
       const modelLabel = async (applied: boolean) => {
@@ -171,7 +172,7 @@ for (const nativeTheme of ["otk-dark", "otk-light", "otk-light-stone"]) {
           JSON.stringify({ explicit, muted }),
         );
         assertEquals(muted.color, muted.muted);
-        assertEquals(muted.centres.length, 6);
+        assertEquals(muted.centres.length, 7);
         assert(Math.max(...muted.centres) - Math.min(...muted.centres) < .5);
         if (shots) await b.screenshot(join(shots, `p6-muted-${name}.png`));
         await b.click(trigger);

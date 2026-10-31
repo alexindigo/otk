@@ -7,6 +7,7 @@ import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
+import { promptFooterActions } from "../support/prompt-footer.ts";
 
 // Count fragments of each text node, rather than control height: a picker may
 // intentionally have a separate subtitle, and icons are not lines of its label.
@@ -306,7 +307,7 @@ test("control labels stay single-line across transcript, chrome, menus, pickers 
           const controls=[...document.querySelectorAll('.otk-prompt-actions button')].filter(el=>el.checkVisibility());
           const name=el=>el.getAttribute('aria-label')||el.textContent;
           const footer=document.querySelector('.otk-prompt-actions').getBoundingClientRect();
-          return {actionCentres:[...document.querySelectorAll('.otk-prompt-actions > button')].map(el=>{const r=el.getBoundingClientRect();return r.top+r.height/2}),outside:controls.filter(el=>{const r=el.getBoundingClientRect(),p=el.parentElement.getBoundingClientRect();return r.left<Math.max(footer.left,p.left)-.5||r.right>Math.min(footer.right,p.right)+.5}).map(name),overflow:controls.filter(el=>el.scrollWidth>el.clientWidth+1).map(name),overlaps:controls.flatMap((el,i)=>controls.slice(i+1).flatMap(other=>{
+          return {actionCentres:[...document.querySelectorAll('${promptFooterActions}')].map(el=>{const r=el.getBoundingClientRect();return r.top+r.height/2}),outside:controls.filter(el=>{const r=el.getBoundingClientRect(),p=el.parentElement.getBoundingClientRect();return r.left<Math.max(footer.left,p.left)-.5||r.right>Math.min(footer.right,p.right)+.5}).map(name),overflow:controls.filter(el=>el.scrollWidth>el.clientWidth+1).map(name),overlaps:controls.flatMap((el,i)=>controls.slice(i+1).flatMap(other=>{
             const a=el.getBoundingClientRect(),b=other.getBoundingClientRect();
             return Math.min(a.right,b.right)-Math.max(a.left,b.left)>1 && Math.min(a.bottom,b.bottom)-Math.max(a.top,b.top)>1 ? [[name(el),name(other)]]:[];
           }))};
