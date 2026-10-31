@@ -46,8 +46,20 @@ const harness: Harness = new OpencodeV1Adapter({
     db: "/home/tester/.local/share/opencode/opencode.db",
     heartbeattimeout: 25,
     reconnectmax: 30,
+    requestms: 60000,
   },
   index: { days: 30 },
+  digest: {
+    batch: 100,
+    slicems: 8,
+    cpu: 0.25,
+    memoryreserve: 134217728,
+    maxpending: 512,
+    publishrows: 64,
+    retryms: 1000,
+    busyms: 100,
+  },
+  catalogs: { concurrency: 2, statconcurrency: 8, pending: 128 },
   messages: {
     coolms: 300000,
     preloadms: 30000,
@@ -76,15 +88,16 @@ try {
 }
 ```
 
-Run a consumer with Deno's network/read/environment permissions. No OTK sidecar
-is required; start a stock server separately. Empty `db` resolves through
-`XDG_DATA_HOME`/`HOME` using the native default. There are no sidecar auth/state
-inputs. Optional capabilities are implemented in feature-owned modules and share
-one session-directory resolver. Use `core` for lifecycle/session queries and
-`capabilities.<name>` for optional operations. The adapter exposes the same
-honest optional capability map as `Harness`; consumers check or
-`requireCapability` at their operation boundary. Augmenting the open protocol
-contract never promises that this stock adapter installs that port.
+Run a consumer with Deno's network/read/environment permissions and
+`--allow-sys=systemMemoryInfo` for standalone scheduled catalog admission. No
+OTK sidecar is required; start a stock server separately. Empty `db` resolves
+through `XDG_DATA_HOME`/`HOME` using the native default. There are no sidecar
+auth/state inputs. Optional capabilities are implemented in feature-owned
+modules and share one session-directory resolver. Use `core` for
+lifecycle/session queries and `capabilities.<name>` for optional operations. The
+adapter exposes the same honest optional capability map as `Harness`; consumers
+check or `requireCapability` at their operation boundary. Augmenting the open
+protocol contract never promises that this stock adapter installs that port.
 
 `sessionActions.rename` resolves the target's directory and sends native
 `PATCH /session/{id}` with `{title}`, returning the neutral mapped session. The
@@ -150,8 +163,9 @@ sessions. Transport, watchdog and authoritative bootstrap failures retain
 reconnect behavior. Request attention changes touch only the owning session and
 ancestor path; reparenting updates the affected subtree, including late-arriving
 parents. Agent colours share one in-flight/cache entry per directory until
-native instance disposal or stop. Reconnecting alone does not invalidate
-directory configuration.
+native instance disposal or stop. Native connection recovery revalidates
+demanded directory catalogs once and rebinds active color subscribers; it never
+reloads native configuration itself.
 
 Selected-digest bootstrap uses the injected publication row budget for catalog
 preparation as well as final writes. Attention reconciliation yields one step
@@ -229,12 +243,13 @@ HTTP tokens remain invalid after that barrier. Reconciliation releases unowned
 observations rather than retaining busy/cleared keys and old-generation deletion
 metadata forever.
 
-`capabilities.models.listModels(sessionID, signal?)` reads native
-`GET /config/providers` and `GET /config` in that session's directory,
-forwarding the request cancellation signal to both reads. It allowlists
-connected provider and model display metadata, including finite positive native
-`limit.context` as `contextLimit`, and all four finite nonnegative native cost
-rates as `cost` (USD per million tokens), never
+`capabilities.models.listModels(sessionID, signal?)` borrows the directory's
+connected model catalog. Initial acquisition reads native
+`GET /config/providers` and `GET /config`; other sessions share it, with
+per-caller cancellation and last-demand cancellation of acquisition. It
+allowlists connected provider and model display metadata, including finite
+positive native `limit.context` as `contextLimit`, and all four finite
+nonnegative native cost rates as `cost` (USD per million tokens), never
 credentials/options/headers/environment fields. Missing/incomplete/invalid
 prices stay absent; known zero rates remain zero. Variant names come from the
 model's variant keys; `free` means the `opencode` provider with zero input cost.
@@ -350,6 +365,51 @@ pages.
 
 The standalone sessions consumer and stock-server test are in `tests/reuse/` at
 the workspace root. Run `deno task test:reuse` in the dedicated OTK guest.
+
+### Directory catalog services
+
+`adapter.catalogs` is a public `DirectoryCatalogs` service. `acquire(directory)`
+returns a borrowed lease with `get(kind)`, `snapshot()`, `subscribe(listener)`,
+`refresh()` and idempotent `release()`. Agents, commands, skills, connected
+models, resources and complete files share one acquisition per demanded
+directory/kind generation. Compatibility capability methods borrow these same
+values across session visits; primary/mention/color views share `/agent`. The
+native agent `color` survives mapping and transient publication. Color
+decoration borrows the shared last-complete value during refresh; preparing a
+replacement cannot erase an already reported color. Hidden agents retain color
+metadata while both selection flags stay false. An unresolved directory does not
+trigger a default-directory color acquisition. Commands merge shared command and
+skill inventories without exposing their bodies. Catalog acquisition never
+copies credentials or file content.
+
+Configuration catalogs reflect **what the native instance reports**. External
+configuration edits do not force a reload. Native lifecycle/catalog events
+invalidate current demand; OTK never disposes an instance to refresh metadata
+and never installs configuration-file watches. The file catalog alone watches
+its opened project tree. It walks typed `/file` children, honors the endpoint's
+reported ignore semantics, normalizes directory identities and never treats the
+capped `/find/file` search as a complete inventory. Changed parents reconcile
+without rereading unchanged subtrees. A failed subtree retains the last-good
+complete value as unavailable. Explicit prompt references still validate through
+the attachment owner independently of ordinary discovery.
+
+Final lease release aborts volatile work, closes the file watcher and releases
+complete values. Native generation changes fence late results while preserving
+live leases. `stop()` joins retirement. `PendingQuestions` holds full normalized
+pending requests with their asking directory/generation independently of browser
+demand; event updates precede publication, inventory capture cannot resurrect a
+replied request, and answers validate current constraints without a fresh
+inventory read while continuity is known.
+
+Shipped acquisition uses the existing digest worker's transient provider-read
+contributions and bounded publication credits. These values never enter digest
+commits or request receipts. Standalone adapters use `CatalogExecutor` with the
+same `DigestScheduler`, explicit `digest`/`catalogs` policy and no OTK database.
+An independent consumer can inject a `ProviderReadPort` into
+`DirectoryCatalogs`, plus feature-owned `contributions`; external kinds need no
+machinery edit. Application policy comes from the complete defaults. Catalog
+wire leases/browser activation are a separate protocol change; current
+compatibility methods remain coherent.
 
 ### Reusable digest sink
 

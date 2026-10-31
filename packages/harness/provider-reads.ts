@@ -1,5 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { SessionIdentity } from "./types.ts";
+import type {
+  AgentReadKinds,
+  CommandReadKinds,
+  FileReadKinds,
+  ModelReadKinds,
+  QuestionReadKinds,
+  ResourceReadKinds,
+  SkillReadKinds,
+} from "./catalog-reads.ts";
 export interface IdentityReadKinds {
   "identity.batch": {
     input: { ids: string[] };
@@ -8,7 +17,16 @@ export interface IdentityReadKinds {
   };
 }
 /** Feature contributions share the digest sink's executor and volatile transport. */
-export interface ProviderReadKinds extends IdentityReadKinds {}
+export interface ProviderReadKinds
+  extends
+    IdentityReadKinds,
+    AgentReadKinds,
+    CommandReadKinds,
+    SkillReadKinds,
+    ModelReadKinds,
+    ResourceReadKinds,
+    FileReadKinds,
+    QuestionReadKinds {}
 export interface ProviderReadOptions {
   owner: string;
   priority: "user" | "attention" | "visible" | "background";
@@ -41,6 +59,30 @@ export interface ProviderReadCodec<K extends keyof ProviderReadKinds> {
 export type ProviderReadCodecs = {
   [K in keyof ProviderReadKinds]?: ProviderReadCodec<K>;
 };
+/** Shared array framing; each feature selects its own typed contribution. */
+export function arrayReadCodec<T>(): {
+  chunks(value: T[], rows: number): Iterable<T[]>;
+  create(): { append(chunk: T[]): void; finish(): T[] };
+} {
+  return {
+    *chunks(value, rows) {
+      for (
+        let offset = 0;
+        offset < value.length || offset === 0;
+        offset += rows
+      ) yield value.slice(offset, offset + rows);
+    },
+    create() {
+      const values: T[] = [];
+      return {
+        append: (chunk) => {
+          for (const item of chunk) values.push(item);
+        },
+        finish: () => values,
+      };
+    },
+  };
+}
 /** Identity's array codec is selected by composition, never by transport dispatch. */
 export const identityReadCodec: ProviderReadCodec<"identity.batch"> = {
   *chunks(value, rows) {

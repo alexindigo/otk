@@ -3,6 +3,7 @@ import {
   type DigestExecution,
   type DigestPublication,
   DigestScheduler,
+  type ProviderReadKinds,
 } from "@otk/harness";
 import { AsyncLocalStorage } from "node:async_hooks";
 import {
@@ -146,6 +147,34 @@ async function sendRaw(
   post(value);
   // A completed publication is one bounded chunk, even when more credit is ready.
   await yieldChunk(signal);
+}
+/** Preserve the contribution's correlated input/result type across dynamic dispatch. */
+async function publishRead<K extends keyof ProviderReadKinds>(
+  message: { kind: K; input: ProviderReadKinds[K]["input"]; id: number },
+  signal: AbortSignal,
+): Promise<void> {
+  const reader = sink!.readers[message.kind], codec = readCodecs[message.kind];
+  if (!reader || !codec) throw new Error("Provider read not selected");
+  const value = await reader(message.input, signal);
+  const chunks = codec.chunks(value, policy.publishrows)[Symbol.iterator]();
+  let current = chunks.next(), part = 0;
+  while (!current.done) {
+    const next = chunks.next();
+    // K correlates kind/value; the mapped wire union erases that generic witness.
+    await send(
+      {
+        t: "read.result",
+        run: run!,
+        id: message.id,
+        kind: message.kind,
+        part: part++,
+        last: !!next.done,
+        value: current.value,
+      } as FromWorker,
+      signal,
+    );
+    current = next;
+  }
 }
 async function publish(value: DigestPublication): Promise<void> {
   const context = execution.getStore();
@@ -881,29 +910,8 @@ function handle(message: ToWorker): void {
               }
             } else if (message.t === "read") {
               // The selected contribution owns its reader/codec; dispatch has no kind switch.
-              const reader = sink!.readers[message.kind],
-                codec = readCodecs[message.kind];
               try {
-                if (!reader || !codec) {
-                  throw new Error("Provider read not selected");
-                }
-                const value = await reader(message.input, signal);
-                const chunks = codec.chunks(value, policy.publishrows)
-                  [Symbol.iterator]();
-                let current = chunks.next(), part = 0;
-                while (!current.done) {
-                  const next = chunks.next();
-                  await send({
-                    t: "read.result",
-                    run: run!,
-                    id: message.id,
-                    kind: message.kind,
-                    part: part++,
-                    last: !!next.done,
-                    value: current.value,
-                  }, signal);
-                  current = next;
-                }
+                await publishRead(message, signal);
               } catch (error) {
                 signal.throwIfAborted();
                 post({

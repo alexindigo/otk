@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../../../tests/support/config.ts";
 import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
@@ -78,6 +79,7 @@ for (const sql of [true, false]) {
     let pages = 0;
     const adapter = new Opencode1Adapter(
       {
+        ...cfg(),
         harness: {
           url: "http://fixture",
           username: "",

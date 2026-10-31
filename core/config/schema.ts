@@ -50,6 +50,7 @@ export const SERVICE_SCHEMA: Schema = {
     retrymax: "int",
   },
   index: { days: "int" },
+  catalogs: { concurrency: "int", statconcurrency: "int", pending: "int" },
   messages: {
     coolms: "int",
     preloadms: "int",
@@ -104,6 +105,7 @@ export interface ServiceConfig {
     retrymax: number;
   };
   index: { days: number };
+  catalogs: { concurrency: number; statconcurrency: number; pending: number };
   digest: DigestPolicy;
   messages: MessagePolicy;
 }

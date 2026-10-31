@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../../../tests/support/config.ts";
 import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assertEquals } from "@std/assert";
 import { OpencodeV1Adapter as Opencode1Adapter } from "../adapter.ts";
@@ -8,6 +9,7 @@ test("restore resolves its directory and posts unrevert before returning authori
   const calls: unknown[] = [];
   const adapter = new Opencode1Adapter(
     {
+      ...cfg(),
       harness: {
         url: "http://fixture",
         username: "",

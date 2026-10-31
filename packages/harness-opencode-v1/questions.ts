@@ -1,60 +1,72 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import {
-  belongsToSession,
-  type QuestionRequest,
-  type SessionLookup,
-} from "@otk/protocol";
+import type { QuestionRequest, SessionLookup } from "@otk/protocol";
 import { HarnessError, type QuestionsCapability } from "@otk/harness";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
 import type { RawQuestion } from "./types.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
+import type { PendingQuestions } from "./pending-questions.ts";
+
 export function questions(
   client: Client,
   directory: Directory,
   entry: SessionLookup,
-  owners: Map<string, string>,
-  observed: (id: string, session: string) => void = (id, session) =>
-    owners.set(id, session),
+  pending: PendingQuestions,
+  inventory?: (directory: string, signal?: AbortSignal) => Promise<unknown>,
 ): QuestionsCapability {
+  const ensure = async (dir: string, signal?: AbortSignal) => {
+    if (pending.known(dir)) return;
+    if (inventory) {
+      await inventory(dir, signal);
+      return;
+    }
+    for (;;) {
+      const capture = pending.capture(dir);
+      try {
+        const values = (await client.json<RawQuestion[]>("/question", {
+          query: { directory: dir },
+          signal,
+        })).map(mapQuestion);
+        signal?.throwIfAborted();
+        if (capture.commit(values)) return;
+      } finally {
+        capture.release();
+      }
+    }
+  };
   return {
     async listQuestions(sessionID, signal) {
-      const pending = await client.json<RawQuestion[]>("/question", {
-        query: { directory: await directory.resolve(sessionID, signal) },
-        signal,
-      });
-      const mapped = pending.map(mapQuestion);
-      for (const request of mapped) observed(request.id, request.sessionID);
-      return mapped.filter((request) =>
-        belongsToSession(request.sessionID, sessionID, entry)
-      ).sort((a, b) => a.id.localeCompare(b.id));
+      const dir = await directory.resolve(sessionID, signal);
+      await ensure(dir, signal);
+      return pending.list(sessionID, entry);
     },
     async answerQuestion(requestID, answers, operation) {
-      const owner = owners.get(requestID);
-      if (!owner) {
+      const original = pending.get(requestID);
+      if (!original) {
         throw new HarnessError("question", "Question is no longer pending");
       }
-      const dir = await directory.resolve(owner);
-      if (answers) {
-        const request = (await client.json<RawQuestion[]>("/question", {
-          query: { directory: dir },
-        })).find((q) => q.id === requestID);
-        if (!request) {
-          throw new HarnessError("question", "Question is no longer pending");
-        }
-        if (
-          answers.length !== request.questions.length ||
+      const askingDirectory = original.directory ??
+        await directory.resolve(original.request.sessionID, operation?.signal);
+      await ensure(askingDirectory, operation?.signal);
+      const current = pending.get(requestID);
+      if (
+        !current || current.generation !== original.generation ||
+        current.directory !== askingDirectory
+      ) throw new HarnessError("question", "Question is no longer pending");
+      const request = current.request;
+      if (
+        answers &&
+        (answers.length !== request.questions.length ||
           answers.some((values, i) =>
             (!request.questions[i].multiple && values.length > 1) ||
-            (request.questions[i].custom === false &&
+            (!request.questions[i].custom &&
               values.some((value) =>
                 !request.questions[i].options.some((option) =>
                   option.label === value
                 )
               ))
-          )
-        ) throw new HarnessError("params", "Invalid question answers");
-      }
+          ))
+      ) throw new HarnessError("params", "Invalid question answers");
       await client.json(
         `/question/${encodeURIComponent(requestID)}/${
           answers ? "reply" : "reject"
@@ -64,7 +76,7 @@ export function questions(
           ...(operation
             ? { classification: "effect" as const, operation }
             : {}),
-          query: { directory: dir },
+          query: { directory: current.directory },
           ...(answers ? { body: { answers } } : {}),
         },
       );

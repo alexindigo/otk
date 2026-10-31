@@ -4,10 +4,33 @@ import type { FilesCapability } from "@otk/harness";
 import type { FileMatch } from "@otk/protocol";
 import type { Client } from "./client.ts";
 import type { Directory } from "./directory.ts";
-export function files(client: Client, directory: Directory): FilesCapability {
+import type { DirectoryCatalogs } from "./catalogs.ts";
+export function files(
+  client: Client,
+  directory: Directory,
+  catalogs?: DirectoryCatalogs,
+): FilesCapability {
   return {
     async findFiles(sessionID, query, signal) {
       const dir = await directory.resolve(sessionID, signal);
+      if (catalogs) {
+        const values = await catalogs.get(dir, "files", signal);
+        const search = (isAbsolute(query) ? relative(dir, query) : query)
+          .toLowerCase();
+        const exact = query
+          ? values.find((item) => item.canonicalPath === resolve(dir, query))
+          : undefined;
+        if (exact) {
+          return [
+            { path: query, directory: exact.directory },
+            ...values.filter((item) =>
+              item !== exact && item.path.toLowerCase().includes(search)
+            ).map(({ path, directory }) => ({ path, directory })),
+          ];
+        }
+        return values.filter((item) => item.path.toLowerCase().includes(search))
+          .map(({ path, directory }) => ({ path, directory }));
+      }
       const search = isAbsolute(query) ? relative(dir, query) : query;
       const paths = await Promise.all(
         ["file", "directory"].map((type) =>

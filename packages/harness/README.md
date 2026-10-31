@@ -101,6 +101,15 @@ publish bounded ordered chunks, and assemble one complete result. Releasing the
 owner cancels its pending reads. These results are not digest commits or durable
 request receipts.
 
+Directory catalog features contribute typed native reads and codecs through that
+same open surface. Array values use bounded row slices; model framing preserves
+provider identity, connected-model metadata and configured defaults, rejecting
+duplicate or undeclared identities. Typed file listings preserve their physical
+directory identity across chunks. The executor imports no concrete catalog-kind
+dispatch. `ReadAdmission` is the shared I/O-permission owner used by worker and
+standalone scheduling: waiting for permission does not occupy an executing turn,
+and cancellation joins the actual native exchange before permission is reused.
+
 `DigestPort` separates catalog/detail reads and their cancellation from metadata
 invalidations, visible-scope priority, deletion intents and lifecycle. Libraries
 receive `DigestPolicy`; they do not read application environment variables or

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../../../tests/support/config.ts";
 import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import { OpencodeV1Adapter, opencodeV1SessionID as ids } from "../mod.ts";
@@ -106,7 +107,7 @@ test("public adapter qualifies every capability boundary, including externally c
   const root = {
     id: "ses_root",
     projectID: "p",
-    directory: "/project",
+    directory: await tempDir("ids-project-"),
     title: "Root",
     time: { created: 1, updated: 2 },
   };
@@ -129,6 +130,7 @@ test("public adapter qualifies every capability boundary, including externally c
     [];
   const adapter = new OpencodeV1Adapter(
     {
+      ...cfg(),
       harness: {
         url: "http://native.invalid",
         db: (await tempDir("ids-")) + "/missing.db",
@@ -198,7 +200,7 @@ test("public adapter qualifies every capability boundary, including externally c
       }
       if (path === "/config") return Promise.resolve(Response.json({}));
       if (
-        ["/agent", "/command", "/skill", "/mcp/resource", "/find/file"]
+        ["/agent", "/command", "/skill", "/experimental/resource", "/file"]
           .includes(path)
       ) return Promise.resolve(Response.json([]));
       if (path.endsWith("/children")) {

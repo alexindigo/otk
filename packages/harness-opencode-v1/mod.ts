@@ -9,6 +9,14 @@ export {
 export { opencodeV1SessionID } from "./ids.ts";
 export { opencodeV1DigestMigrations } from "./digest-migrations.ts";
 export { opencodeV1ReadCodecs } from "./provider-reads.ts";
+export { DirectoryCatalogs } from "./catalogs.ts";
+export type {
+  CatalogContributions,
+  CatalogLease,
+  DirectoryCatalogOptions,
+} from "./catalogs.ts";
+export { CatalogExecutor } from "./catalog-executor.ts";
+export { PendingQuestions } from "./pending-questions.ts";
 export { OpencodeV1DigestSink } from "./digest.ts";
 export type {
   DigestCheckpoint,

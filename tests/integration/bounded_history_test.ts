@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../support/config.ts";
 import { fixtureMessagePolicy } from "../support/message-pages.ts";
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
@@ -97,6 +98,7 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
     for (const mode of ["SQL", "API"]) {
       const adapter = new Opencode1Adapter(
         {
+          ...cfg(),
           harness: {
             url: oc.url,
             username: "opencode",

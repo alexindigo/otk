@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../support/config.ts";
 import { fixtureMessagePolicy } from "../support/message-pages.ts";
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
@@ -14,6 +15,7 @@ test("standalone harness consumer lists stock-server sessions without a sidecar"
   const fake = new FakeLlm();
   const oc = await OpencodeTest.start(fake);
   const config: Opencode1Config = {
+    ...cfg(),
     harness: {
       url: oc.url,
       username: "opencode",

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { SessionIndex } from "@otk/harness";
+import { type DigestPort, SessionIndex } from "@otk/harness";
 import type { SessionMetadata } from "@otk/protocol";
 import { OpencodeV1Adapter } from "../adapter.ts";
 import { cfg } from "../../../tests/support/config.ts";
@@ -63,7 +63,14 @@ test("selected digest bootstrap prepares attention and publishes metadata within
     deleted: () => Promise.resolve(),
     detail: () => Promise.reject(new Error("Not requested")),
     transcriptMetadata: () => Promise.reject(new Error("Not requested")),
-    read: () => Promise.reject(new Error("Not requested")),
+    read: ((kind: string) => {
+      assertEquals(kind, "catalog.questions");
+      return Promise.resolve([{
+        id: "q",
+        sessionID: "opcv1-ses_7",
+        questions: [],
+      }]);
+    }) as DigestPort["read"],
     deleteIntent: () => Promise.resolve(),
     scope() {},
     release() {},
@@ -77,7 +84,9 @@ test("selected digest bootstrap prepares attention and publishes metadata within
     if (path === "/session/status") return Promise.resolve(Response.json({}));
     if (path === "/permission") return Promise.resolve(Response.json([]));
     if (path === "/question") {
-      return Promise.resolve(Response.json([{ id: "q", sessionID: "ses_7" }]));
+      return Promise.resolve(
+        Response.json([{ id: "q", sessionID: "ses_7", questions: [] }]),
+      );
     }
     assertEquals(path, "/global/event");
     return Promise.resolve(

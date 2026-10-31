@@ -11,7 +11,12 @@ import type {
 import type { SessionMetadata, TurnUsageSnapshot } from "@otk/protocol";
 import { OperationFailure } from "@otk/protocol";
 import type { OpencodeV1Config } from "@otk/harness-opencode-v1";
-import type { DigestPressure, FromWorker, ToWorker } from "./protocol.ts";
+import type {
+  DigestPressure,
+  FromWorker,
+  ProviderReadCommand,
+  ToWorker,
+} from "./protocol.ts";
 import type { SectionObserver } from "../diagnostics.ts";
 
 export interface DigestBridgeOptions {
@@ -485,7 +490,7 @@ export class DigestBridge implements DigestPort {
           kind,
           input,
           priority: options.priority,
-        },
+        } as ProviderReadCommand,
         signal,
         (message) => {
           if (message.t === "read.failure") {

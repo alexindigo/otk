@@ -6,14 +6,23 @@ import type { Directory } from "./directory.ts";
 import type { Launch } from "./shell.ts";
 import { mapPromptParts } from "./prompt.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
+import type { DirectoryCatalogs } from "./catalogs.ts";
 export function commands(
   client: Client,
   directory: Directory,
   launch: Launch,
+  catalogs?: DirectoryCatalogs,
 ): CommandsCapability {
   return {
     async listCommands(sessionID, signal) {
       const dir = await directory.resolve(sessionID, signal);
+      if (catalogs) {
+        const [commands, skills] = await Promise.all([
+          catalogs.get(dir, "commands", signal),
+          catalogs.get(dir, "skills", signal),
+        ]);
+        return mergeCommands(commands, skills);
+      }
       const [commands, skills] = await Promise.all([
         client.json<{ name: string; description?: string; source?: string }[]>(
           "/command",
@@ -75,4 +84,30 @@ export function commands(
       if (operation && launched) await launched.settled;
     },
   };
+}
+export function mapCommands(
+  commands: { name: string; description?: string; source?: string }[],
+): CommandOption[] {
+  return commands.map((command) => ({
+    name: command.name,
+    description: command.description,
+    aliases: [],
+    source: command.source === "mcp"
+      ? "mcp"
+      : command.source === "skill"
+      ? "skill"
+      : "server",
+  }));
+}
+export function mergeCommands(
+  commands: CommandOption[],
+  skills: { name: string; description?: string }[],
+): CommandOption[] {
+  const result = new Map(commands.map((command) => [command.name, command]));
+  for (const skill of skills) {
+    if (!result.has(skill.name)) {
+      result.set(skill.name, { ...skill, aliases: [], source: "skill" });
+    }
+  }
+  return [...result.values()];
 }

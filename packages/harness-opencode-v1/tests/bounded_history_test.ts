@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { cfg } from "../../../tests/support/config.ts";
 import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { tempDir, test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
@@ -182,6 +183,7 @@ for (const mode of ["SQL", "API"] as const) {
     };
     const adapter = new Opencode1Adapter(
       {
+        ...cfg(),
         harness: {
           url: "http://fixture",
           username: "opencode",

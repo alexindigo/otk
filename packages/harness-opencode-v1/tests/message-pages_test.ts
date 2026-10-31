@@ -113,6 +113,8 @@ Deno.test("transcript pages retain exact native continuation and reuse initial s
 Deno.test("transcript cursors reject malformed, foreign-session and retired-epoch tokens before I/O", async () => {
   const f = fixture();
   const page = await f.adapter.core.listMessages("opcv1-s", {});
+  // Settle the independent initial directory read before counting invalid-cursor I/O.
+  await f.adapter.capabilities.agents!.listAgents("opcv1-s");
   let count = f.reads.length;
   for (const before of ["m10", "x".repeat(4097)]) {
     await assertRejects(() =>

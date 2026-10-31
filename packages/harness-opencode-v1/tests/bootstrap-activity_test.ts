@@ -104,7 +104,7 @@ for (
           : url.pathname === "/permission"
           ? directory === "/second" ? [request] : []
           : directory === "/third"
-          ? [{ id: "pending-question", sessionID: "question" }]
+          ? [{ id: "pending-question", sessionID: "question", questions: [] }]
           : [];
         return Promise.resolve(Response.json(value));
       }
@@ -290,7 +290,9 @@ for (const failed of ["/session/status", "/permission", "/question"]) {
       }
       assertEquals(path, "/question");
       return Response.json(
-        i === 0 && round === 1 ? [{ id: "question", sessionID: "s0" }] : [],
+        i === 0 && round === 1
+          ? [{ id: "question", sessionID: "s0", questions: [] }]
+          : [],
       );
     };
     const adapter = new Opencode1Adapter(settings, undefined, fetcher);

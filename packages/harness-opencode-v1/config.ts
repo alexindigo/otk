@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { join } from "@std/path";
 import type { MessagePolicy } from "@otk/protocol";
+import type { DigestPolicy } from "@otk/harness";
 
 /** Native adapter inputs, independent of sidecar configuration/auth/state. */
 export interface OpencodeV1Config {
@@ -18,6 +19,8 @@ export interface OpencodeV1Config {
 }
 export type OpencodeV1AdapterConfig = OpencodeV1Config & {
   messages: MessagePolicy;
+  digest: DigestPolicy;
+  catalogs: { concurrency: number; statconcurrency: number; pending: number };
 };
 export function harnessDb(
   cfg: Pick<OpencodeV1Config, "harness">,

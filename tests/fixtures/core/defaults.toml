@@ -25,6 +25,10 @@ reconnectmax = 30
 requestms = 60000
 [index]
 days = 30
+[catalogs]
+concurrency = 2
+statconcurrency = 8
+pending = 128
 [digest]
 batch = 100
 slicems = 8

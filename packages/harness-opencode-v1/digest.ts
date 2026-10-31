@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { catalogReaders } from "./catalog-reads.ts";
 import { sessionDirectory } from "./directory.ts";
 import type { DatabaseSync } from "node:sqlite";
 import {
@@ -160,9 +161,7 @@ function emptyDelta(revision = 0): DigestDelta {
 
 /** Provider-owned, restartable scalar sink; never parses Markdown or stores bodies. */
 export class OpencodeV1DigestSink implements DigestSink {
-  readonly readers: import("@otk/harness").ProviderReaders = {
-    "identity.batch": (input, signal) => this.identities(input.ids, signal),
-  };
+  readonly readers: import("@otk/harness").ProviderReaders;
   readonly identity = "opencode-v1";
   #client: Client;
   #messages: Messages;
@@ -204,6 +203,10 @@ export class OpencodeV1DigestSink implements DigestSink {
       readiness.ioWait ?? this.wait,
       readiness.admission,
     );
+    this.readers = {
+      ...catalogReaders(this.#client),
+      "identity.batch": (input, signal) => this.identities(input.ids, signal),
+    };
     this.#compute = new NativeReadiness(
       readiness.ioWait ?? this.wait,
       readiness.admission,

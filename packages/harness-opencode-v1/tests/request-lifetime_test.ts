@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { PendingQuestions } from "../pending-questions.ts";
 import { assertEquals, assertRejects } from "@std/assert";
 import { Client, NativeRequestFailure } from "../client.ts";
 import type { OperationContext } from "@otk/protocol";
@@ -186,10 +187,11 @@ Deno.test("native catalog readers propagate cancellation through directory prepa
     "opcv1-s",
     controller.signal,
   );
-  await questions(client, directory, () => undefined, new Map()).listQuestions(
-    "opcv1-s",
-    controller.signal,
-  );
+  await questions(client, directory, () => undefined, new PendingQuestions(128))
+    .listQuestions(
+      "opcv1-s",
+      controller.signal,
+    );
   controller.abort();
   assertEquals(observed.length, 6);
   assertEquals(observed.map((signal) => signal?.aborted), Array(6).fill(true));

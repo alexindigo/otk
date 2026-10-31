@@ -227,11 +227,12 @@ test("adapter maps legacy event chain while ignoring its captured durable sync c
         "session.error",
       ],
     );
-    assertEquals(ops.find((op) => op.op === "agent.colors"), {
-      op: "agent.colors",
-      colors: {},
-    });
-    assertEquals(ops.filter((op) => op.op === "agent.colors").length, 1);
+    // A native deletion can retire the optional scheduled read before delivery.
+    const decorations = ops.filter((op) => op.op === "agent.colors");
+    assert(decorations.length <= 1);
+    for (const decoration of decorations) {
+      assertEquals(decoration, { op: "agent.colors", colors: {} });
+    }
     assertEquals(ops.slice(0, 2), [
       {
         op: "session.error",

@@ -23,12 +23,25 @@ function adapterFor(root: string) {
     if (url.pathname === "/session/ses_files") {
       return Promise.resolve(Response.json(session));
     }
-    assertEquals(url.pathname, "/find/file");
-    return Promise.resolve(Response.json(["src/file.ts", "blocked/file.ts"]));
+    assertEquals(url.pathname, "/file");
+    return (async () => {
+      const path = url.searchParams.get("path") ?? "";
+      const values = [];
+      for await (const item of Deno.readDir(join(root, path))) {
+        values.push({
+          name: item.name,
+          path: join(path, item.name),
+          absolute: join(root, path, item.name),
+          type: item.isDirectory ? "directory" : "file",
+          ignored: false,
+        });
+      }
+      return Response.json(values);
+    })();
   });
 }
 
-test("permission-denied discovery candidates are skipped but explicit prompt files reject", async () => {
+test("unreadable discovery subtrees make the catalog unavailable and explicit prompt files reject", async () => {
   const root = await fixture();
   await Deno.mkdir(join(root, "src"));
   await Deno.mkdir(join(root, "blocked"));
@@ -37,6 +50,23 @@ test("permission-denied discovery candidates are skipped but explicit prompt fil
   await Deno.chmod(join(root, "blocked"), 0);
   const adapter = adapterFor(root);
   try {
+    await assertRejects(() =>
+      requireCapability(adapter.capabilities, "files").findFiles(
+        "opcv1-ses_files",
+        "src/file.ts",
+      )
+    );
+    await assertRejects(
+      () =>
+        mapPromptParts([{
+          kind: "file",
+          source: "path",
+          path: "blocked/file.ts",
+        }], root),
+      HarnessError,
+      'Cannot read attachment "blocked/file.ts"',
+    );
+    await Deno.chmod(join(root, "blocked"), 0o700);
     for (
       const query of [
         "src/file.ts",
@@ -50,18 +80,7 @@ test("permission-denied discovery candidates are skipped but explicit prompt fil
           query,
         );
       assert(files.some((file) => file.path === query && !file.directory));
-      assert(!files.some((file) => file.path === "blocked/file.ts"));
     }
-    await assertRejects(
-      () =>
-        mapPromptParts([{ kind: "text", text: "keep text" }, {
-          kind: "file",
-          source: "path",
-          path: "blocked/file.ts",
-        }], root),
-      HarnessError,
-      'Cannot read attachment "blocked/file.ts"',
-    );
   } finally {
     await Deno.chmod(join(root, "blocked"), 0o700);
     await adapter.core.stop();

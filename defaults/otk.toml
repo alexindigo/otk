@@ -33,6 +33,14 @@ heartbeattimeout = 25 # OTK_HARNESS_HEARTBEATTIMEOUT — seconds without SSE byt
 reconnectmax = 30 # OTK_HARNESS_RECONNECTMAX — maximum reconnect backoff seconds
 requestms = 60000 # OTK_HARNESS_REQUESTMS — classified native read I/O deadline in milliseconds
 
+[catalogs]
+# Aggregate native catalog reads; positive count. OTK_CATALOGS_CONCURRENCY
+concurrency = 2
+# Catalog metadata/access admission; positive count. OTK_CATALOGS_STATCONCURRENCY
+statconcurrency = 8
+# Fine invalidation keys before full directory reconciliation. OTK_CATALOGS_PENDING
+pending = 128
+
 [index]
 days = 30 # OTK_INDEX_DAYS — recent-background priority horizon in days; older sessions remain indexed
 

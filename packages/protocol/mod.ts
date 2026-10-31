@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+export type * from "./catalogs.ts";
 export type * from "./digest.ts";
 /** Harness-neutral OTK wire types, versions and shared protocol helpers. */
 export * from "./capabilities.ts";

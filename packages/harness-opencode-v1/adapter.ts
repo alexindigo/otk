@@ -55,9 +55,13 @@ import { Attention } from "./attention.ts";
 import { MessageRecovery } from "./recovery.ts";
 import { connectionPublication } from "./publication.ts";
 import { Transcript } from "./transcript.ts";
+import { catalogEventTypes, DirectoryCatalogs } from "./catalogs.ts";
+import { CatalogExecutor } from "./catalog-executor.ts";
+import { type PendingQuestion, PendingQuestions } from "./pending-questions.ts";
 const BOOTSTRAP_EVENT_LIMIT = 128;
 const BOOTSTRAP_TEXT_BUDGET = 4 * 1024 * 1024;
 const contentEvents = new Set([
+  ...catalogEventTypes,
   "session.created",
   "session.updated",
   "session.deleted",
@@ -94,7 +98,10 @@ export class OpencodeV1Adapter implements Harness {
     (id) => this.#index.descendants(id),
   );
   #permissions = new Map<string, PendingPermission>();
-  #questions = new Map<string, string>();
+  #questions: PendingQuestions;
+  readonly catalogs: DirectoryCatalogs;
+  #catalogExecutor?: CatalogExecutor;
+  #catalogReads: import("@otk/harness").ProviderReadPort;
   get #stopped(): boolean {
     return !this.#run || this.#run.controller.signal.aborted;
   }
@@ -141,21 +148,62 @@ export class OpencodeV1Adapter implements Harness {
       emit: (id, event, clock) => this.#target?.content(id, event, clock),
     });
     this.client = new Client(cfg.harness, fetcher);
+    this.#questions = new PendingQuestions(
+      cfg.catalogs.pending,
+      (before, after) => {
+        const old = before?.request.sessionID, next = after?.request.sessionID;
+        if (old !== next) {
+          if (old) this.#attention.change(old, "questions", -1);
+          if (next) this.#attention.change(next, "questions", 1);
+        }
+        for (
+          const directory of new Set([before?.directory, after?.directory])
+        ) {
+          if (directory) {
+            this.catalogs.update(
+              directory,
+              "questions",
+              this.#questions.directory(directory),
+            );
+          }
+        }
+      },
+    );
+    const catalogReads = digest ??
+      (this.#catalogExecutor = new CatalogExecutor(
+        cfg,
+        cfg.digest,
+        cfg.catalogs.concurrency,
+        cfg.catalogs.statconcurrency,
+        fetcher,
+      ));
+    this.#catalogReads = catalogReads;
+    this.catalogs = new DirectoryCatalogs(catalogReads, {
+      pending: cfg.catalogs.pending,
+      questions: this.#questions,
+      watchFiles: true,
+      diagnostic: (error) => console.warn("directory catalog:", error),
+    });
     this.#db = new BootstrapDb(harnessDb(cfg));
     this.#history = new History(harnessDb(cfg));
     this.#messages = new Messages(this.client, (id) => this.#directory(id));
-    this.#colors = new AgentColors(this.client, (colors, sessions) => {
-      const controller = this.#controller;
-      if (!controller || !this.#current(controller)) return;
-      for (const [id, owner] of sessions) {
-        if (owner === controller && this.buffers.subscribed(id)) {
-          this.#sink.content(id, {
-            op: "agent.colors",
-            colors: Object.fromEntries(colors),
-          });
+    this.#colors = new AgentColors(
+      this.client,
+      (colors, sessions) => {
+        const controller = this.#controller;
+        if (!controller || !this.#current(controller)) return;
+        for (const [id, owner] of sessions) {
+          if (owner === controller && this.buffers.subscribed(id)) {
+            this.#sink.content(id, {
+              op: "agent.colors",
+              colors: Object.fromEntries(colors),
+            });
+          }
         }
-      }
-    }, () => this.#controller);
+      },
+      () => this.#controller,
+      this.catalogs,
+    );
     this.#recovery = new MessageRecovery({
       concurrency: cfg.messages.recoveryconcurrency,
       pending: cfg.messages.recoverypending,
@@ -334,11 +382,14 @@ export class OpencodeV1Adapter implements Harness {
       }),
     );
     registry.register("shell", shell(this.client, directory, launch));
-    registry.register("commands", commands(this.client, directory, launch));
+    registry.register(
+      "commands",
+      commands(this.client, directory, launch, this.catalogs),
+    );
     registry.register("history", this.#history);
-    registry.register("files", files(this.client, directory));
-    registry.register("agents", agents(this.client, directory));
-    registry.register("models", models(this.client, directory));
+    registry.register("files", files(this.client, directory, this.catalogs));
+    registry.register("agents", agents(this.client, directory, this.catalogs));
+    registry.register("models", models(this.client, directory, this.catalogs));
     registry.register(
       "usage",
       digest
@@ -376,7 +427,10 @@ export class OpencodeV1Adapter implements Harness {
         release: (owner) => digest.release(owner),
       });
     }
-    registry.register("resources", resources(this.client, directory));
+    registry.register(
+      "resources",
+      resources(this.client, directory, this.catalogs),
+    );
     const nativeActions = sessionActions(
       this.client,
       directory,
@@ -447,7 +501,8 @@ export class OpencodeV1Adapter implements Harness {
         directory,
         (id) => this.#index.getMetadata(id),
         this.#questions,
-        (id, session) => this.#question(id, session),
+        (directory, signal) =>
+          this.catalogs.get(directory, "questions", signal),
       ),
     );
     registry.register(
@@ -530,6 +585,8 @@ export class OpencodeV1Adapter implements Harness {
     await this.#tasks.stop();
     await this.#recovery.stop();
     this.#colors.clear();
+    await this.catalogs.stop();
+    await this.#catalogExecutor?.stop();
     this.#permissions.clear();
     this.#questions.clear();
     this.#reverts.clear();
@@ -792,6 +849,9 @@ export class OpencodeV1Adapter implements Harness {
             if (event.payload.type === "server.connected") {
               if (bootstrapping) return;
               bootstrapping = true;
+              this.#questions.uncertain();
+              this.catalogs.reset();
+              this.#colors.reset();
               backoff.connected();
               chain = this.#bootstrap(controller).then(async () => {
                 if (!this.#current(controller)) return;
@@ -938,7 +998,8 @@ export class OpencodeV1Adapter implements Harness {
     }
     const previousPermissions = new Map(this.#permissions);
     const nextPermissions = new Map<string, PendingPermission>();
-    const nextQuestions = new Map<string, string>();
+    const nextQuestions = new Map<string, PendingQuestion>();
+    const knownQuestionDirectories = new Set<string>();
     // Native directory reads create retained instances and touch project clocks.
     // Only unavailable hints require the bounded session-window API fallback.
     const hints = catalog
@@ -970,8 +1031,9 @@ export class OpencodeV1Adapter implements Harness {
           query: { directory },
           signal,
         }),
-        this.client.json<{ id: string; sessionID: string }[]>("/question", {
-          query: { directory },
+        this.#catalogReads.read("catalog.questions", { directory }, {
+          owner: JSON.stringify(["questions", directory, this.#connection]),
+          priority: "attention",
           signal,
         }),
       ] as const;
@@ -1008,8 +1070,13 @@ export class OpencodeV1Adapter implements Harness {
           );
         });
         await each(questions, (request) => {
-          nextQuestions.set(request.id, ids.encode(request.sessionID));
+          nextQuestions.set(request.id, {
+            request,
+            directory,
+            generation: this.#connection,
+          });
         });
+        knownQuestionDirectories.add(directory);
       } catch (error) {
         if (!this.#current(controller)) return;
         console.warn(
@@ -1028,12 +1095,9 @@ export class OpencodeV1Adapter implements Harness {
         await each(previousPermissions, ([id, pending]) => {
           if (pending.directory === directory) nextPermissions.set(id, pending);
         });
-        await each(this.#questions, ([id, sessionID]) => {
-          if (
-            (entries.get(sessionID) ?? this.#index.getMetadata(sessionID))
-              ?.directory === directory
-          ) {
-            nextQuestions.set(id, sessionID);
+        await each(this.#questions.values(), (pending) => {
+          if (pending.directory === directory) {
+            nextQuestions.set(pending.request.id, pending);
           }
         });
       }
@@ -1055,10 +1119,7 @@ export class OpencodeV1Adapter implements Harness {
     });
     if (!this.#current(controller)) return;
     this.#permissions = nextPermissions;
-    this.#questions.clear();
-    await each(nextQuestions, ([id, sessionID]) => {
-      this.#questions.set(id, sessionID);
-    });
+    this.#questions.reset(nextQuestions.values(), knownQuestionDirectories);
     const permissions = function* () {
       for (const { request } of nextPermissions.values()) {
         yield request.sessionID;
@@ -1068,7 +1129,9 @@ export class OpencodeV1Adapter implements Harness {
       this.#attention.reconcile(
         entries,
         permissions(),
-        this.#questions.values(),
+        [...this.#questions.values()].map((pending) =>
+          pending.request.sessionID
+        ),
       ),
       () => {},
     );
@@ -1077,14 +1140,17 @@ export class OpencodeV1Adapter implements Harness {
       await each(entries.values(), (entry) => sink.indexUpsert(entry));
     } else sink.indexReset([...entries.values()]);
   }
-  #question(id: string, session?: string): void {
-    const previous = this.#questions.get(id);
-    if (previous === session) return;
-    if (previous) this.#attention.change(previous, "questions", -1);
-    if (session) {
-      this.#questions.set(id, session);
-      this.#attention.change(session, "questions", 1);
-    } else this.#questions.delete(id);
+  #question(
+    id: string,
+    request?: import("@otk/protocol").QuestionRequest,
+    directory?: string,
+  ): void {
+    if (request) {
+      this.#questions.upsert(
+        request,
+        directory ?? this.#directory(request.sessionID),
+      );
+    } else this.#questions.remove(id);
   }
   #disposeSession(id: string): void {
     const sink = this.#sink;
@@ -1102,8 +1168,9 @@ export class OpencodeV1Adapter implements Harness {
         });
       }
     }
-    for (const [key, session] of this.#questions) {
-      if (session !== id) continue;
+    for (const { request } of this.#questions.values()) {
+      if (request.sessionID !== id) continue;
+      const key = request.id;
       this.#question(key);
       if (!this.digest) {
         sink.content(id, {
@@ -1165,6 +1232,11 @@ export class OpencodeV1Adapter implements Harness {
     // companion. The latter has syncEvent, not properties; do not apply twice.
     if (!contentEvents.has(type)) {
       console.debug(`harness event ignored: ${type}`);
+      return;
+    }
+    const catalogKinds = this.catalogs.event(event);
+    if (catalogKinds) {
+      if (catalogKinds.includes("agents")) this.#colors.reset();
       return;
     }
     if (!p) throw new Error(`Malformed ${type} event: properties missing`);
@@ -1238,7 +1310,9 @@ export class OpencodeV1Adapter implements Harness {
       this.#transcript.invalidate();
       this.#abortCommands();
       this.#errors.reset();
-      this.#colors.clear();
+      this.#questions.uncertain();
+      this.catalogs.reset(event.directory);
+      this.#colors.reset();
       try {
         await this.#bootstrap(controller);
       } catch (error) {
@@ -1387,7 +1461,7 @@ export class OpencodeV1Adapter implements Harness {
         throw new Error("Malformed question.asked: request id missing");
       }
       const request = mapQuestion(p as unknown as RawQuestion);
-      this.#question(String(p.id), sessionID);
+      this.#question(String(p.id), request, event.directory);
       sink.content(sessionID, {
         op: "question.upsert",
         request,

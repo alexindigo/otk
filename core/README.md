@@ -372,6 +372,18 @@ persisted prefs/frecency after an application restart. The separate minimal-core
 service test preserves alternate selected-registration HTTP/static/SPA/origin
 coverage.
 
+## Directory acquisition
+
+Native directory catalog reads share the existing worker's feature-contributed
+transient read channel, scheduler turns, native I/O permission and publication
+credits. No second worker or durable catalog database is composed. Native
+configuration remains authoritative for its instance lifetime; native lifecycle
+and relevant catalog events invalidate demanded values. Only file discovery has
+a project filesystem watch. Catalog results never become digest commits or
+durable request receipts. The current compatibility RPCs borrow these services;
+directory wire leases and client-resource activation are a separate protocol
+change.
+
 ## Worker-backed digest services
 
 `core/digest/worker.ts` is an application composition root over public store,
