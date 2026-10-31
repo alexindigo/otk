@@ -433,11 +433,12 @@ configuration edits do not force a reload. Native lifecycle/catalog events
 invalidate current demand; OTK never disposes an instance to refresh metadata
 and never installs configuration-file watches. The file catalog alone watches
 its opened project tree. It walks typed `/file` children, honors the endpoint's
-reported ignore semantics, normalizes directory identities and never treats the
-capped `/find/file` search as a complete inventory. Changed parents reconcile
-without rereading unchanged subtrees. A failed subtree retains the last-good
-complete value as unavailable. Explicit prompt references still validate through
-the attachment owner independently of ordinary discovery.
+reported ignore semantics, excludes `.git` entries even when native reports them
+as unignored, normalizes directory identities and never treats the capped
+`/find/file` search as a complete inventory. Changed parents reconcile without
+rereading unchanged subtrees. A failed subtree retains the last-good complete
+value as unavailable. Explicit prompt references still validate through the
+attachment owner independently of ordinary discovery.
 
 The last file-demand lease closes the file watcher and releases its complete
 file value even when an agent/color borrower retains the directory. Final

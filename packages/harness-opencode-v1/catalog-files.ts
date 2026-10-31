@@ -31,21 +31,24 @@ export async function readCatalogFiles(
   });
   return {
     physical,
-    items: items.filter((item) => !item.ignored).map((item) => {
-      if (
-        !item.path || !isAbsolute(item.absolute) ||
-        !["file", "directory"].includes(item.type)
-      ) throw new Error("Malformed native file listing");
-      const path = relative(directory, item.absolute);
-      if (path === ".." || path.startsWith("../") || isAbsolute(path)) {
-        throw new Error("Native file listing escaped its directory");
-      }
-      return {
-        path,
-        canonicalPath: item.absolute,
-        directory: item.type === "directory",
-      };
-    }),
+    // Stock 1.x reports .git as unignored; prune it before traversal can schedule it.
+    items: items.filter((item) => !item.ignored && item.name !== ".git").map(
+      (item) => {
+        if (
+          !item.path || !isAbsolute(item.absolute) ||
+          !["file", "directory"].includes(item.type)
+        ) throw new Error("Malformed native file listing");
+        const path = relative(directory, item.absolute);
+        if (path === ".." || path.startsWith("../") || isAbsolute(path)) {
+          throw new Error("Native file listing escaped its directory");
+        }
+        return {
+          path,
+          canonicalPath: item.absolute,
+          directory: item.type === "directory",
+        };
+      },
+    ),
   };
 }
 
