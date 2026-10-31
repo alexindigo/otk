@@ -60,6 +60,7 @@ Deno.test("approval resource follows authoritative policy, coalesces activity an
   });
   assertEquals(model.owner("child"), "root");
   assertEquals(model.owner("outside"), undefined);
+  model.retainActivity("root");
   const first = model.loadActivity("root"), joined = model.loadActivity("root");
   assertEquals(first, joined);
   await tick();
@@ -143,6 +144,7 @@ Deno.test("activity invalidation is family-scoped and independent of policy revi
     }) as InboxRpc["call"],
   }, () => undefined);
   model.receive({ t: "approvals", approvals: { enabled: [], revision: 0 } });
+  model.retainActivity("selected");
   await model.selectActivity("selected");
   model.receive({
     t: "approval.activity",
@@ -177,8 +179,10 @@ Deno.test("approval activity paging uses strict server cursors and session repla
     }) as InboxRpc["call"],
   }, () => undefined);
   model.receive({ t: "approvals", approvals: { enabled: [], revision: 1 } });
+  model.retainActivity("old");
   const old = model.loadActivity("old");
   await tick();
+  model.retainActivity("new");
   const next = model.loadActivity("new");
   await tick();
   const entry = (id: number, sessionID: string): PermissionActivity => ({

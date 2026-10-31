@@ -360,6 +360,22 @@ another connection generation. Unrelated index updates cannot repeat a failed
 attempt or journal row. Policy revisions and affected-family activity
 invalidations are separate feature-owned frames.
 
+Policy IDs hydrate once into an enabled set and typed committed policy changes
+maintain it. The existing MetadataChanges owner coalesces final policy keys and
+journal outcomes within one write scope; rollback publishes neither.
+Identity-bound dirty owners replace full-index scheduling: title, status and
+digest-only changes perform no policy/journal reads or family scan. New pending
+keys use one scalar batch journal-state read; committed journal outcomes
+maintain those facts. The final synchronous current-policy and durable
+confirmed/started checks remain at actual dispatch, preserving manual/automatic
+serialization and uncertain-outcome fences. An equal native metadata publication
+still signals changed pending-request metadata without inventing a new count.
+
+Connections serialize each shared immutable broadcast/content frame once per
+publication, then send that string only to matching live recipients. Scoped
+request results retain their recipient-owned delivery. This changes encoding
+ownership, not transport buffering or recovery policy.
+
 Core tests live in `tests/unit/core/`; application integration/e2e tests stay at
 root. They cover config, auth/index, RPC validation/capability absence and
 actual HTTP/WS/browser behavior. Library units stay in their packages. Core is

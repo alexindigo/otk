@@ -7,26 +7,34 @@ import {
   type IndexChanges,
   sessionKey,
 } from "./index.ts";
+import type { EntryChanges } from "./approval-attention.ts";
 import type { Note } from "./notifications.ts";
 type IndexFrame = Extract<ServerFrame, { t: "index.snapshot" | "index.patch" }>;
-function errors(entry: IndexEntry): string {
-  return JSON.stringify(
-    entry.attention.errorState?.observations.filter((o) => !o.cleared) ??
-      entry.attention.error ?? "",
-  );
+interface Facts {
+  status: IndexEntry["status"];
+  permissions: number;
+  questions: number;
+  errorIdentity: string;
+  error?: string;
+  title: string;
 }
-const permissions = (e: IndexEntry) =>
-  e.attention.permissions + e.attention.childPermissions;
-const questions = (e: IndexEntry) =>
-  e.attention.questions + e.attention.childQuestions;
-/** Uses authoritative root roll-ups; does not double-count descendants. */
+const facts = (entry?: IndexEntry): Facts | undefined =>
+  !entry || entry.parentID || entry.deleted || entry.archived ? undefined : {
+    status: entry.status,
+    permissions: entry.attention.permissions + entry.attention.childPermissions,
+    questions: entry.attention.questions + entry.attention.childQuestions,
+    error: entry.attention.error,
+    errorIdentity: JSON.stringify(
+      entry.attention.errorState?.observations.filter((o) => !o.cleared) ??
+        entry.attention.error ?? "",
+    ),
+    title: entry.title,
+  };
+/** Root comparison facts only; application delivery borrows accepted projected deltas. */
 export class NotificationTriggers {
   #connections = new Map<
     string,
-    {
-      rev: number;
-      entries: Map<string, IndexEntry>;
-    }
+    { rev: number; generation?: string; roots: Map<string, Facts> }
   >();
   #kinds = new Map<string, Note["kind"]>();
   #index?: ClientIndex;
@@ -35,13 +43,9 @@ export class NotificationTriggers {
     readonly retract: (id: string) => void,
     readonly project: (sidecar: string, entries: IndexEntry[]) => IndexEntry[] =
       (_sidecar, entries) => entries,
-    /** Application callers borrow their already-reduced authoritative index. */
     readonly read?: (sidecar: string) => readonly IndexEntry[],
     readonly changes?: (sidecar: string) => IndexChanges | undefined,
   ) {}
-  #entries(sidecar: string): IndexEntry[] {
-    return [...(this.read?.(sidecar) ?? this.#index?.partition(sidecar) ?? [])];
-  }
   reset(sidecar: string): void {
     this.#index?.remove(sidecar);
     this.#connections.delete(sidecar);
@@ -52,102 +56,125 @@ export class NotificationTriggers {
       }
     }
   }
-  refresh(sidecar: string): void {
-    const state = this.#connections.get(sidecar);
-    if (state) this.#update(sidecar, state.rev);
+  /** Accepts immutable borrowed values for this turn; retains no IndexEntry. */
+  entriesChanged(sidecar: string, change: EntryChanges): void {
+    let state = this.#connections.get(sidecar);
+    const baseline = !state ||
+      state.generation !== change.generation;
+    if (!state || baseline) {
+      state = {
+        rev: change.revision,
+        generation: change.generation,
+        roots: new Map(),
+      };
+      this.#connections.set(sidecar, state);
+    } else if (change.revision <= state.rev) return;
+    state.rev = change.revision;
+    for (const entry of change.changes) {
+      this.#compare(sidecar, entry.id, facts(entry.after), baseline);
+    }
   }
+  // Standalone frame consumers borrow the ordinary canonical reducer as before.
+  // Shipped consumers use entriesChanged and never call this compatibility path.
   receive(sidecar: string, frame: IndexFrame): boolean {
-    const previous = this.#connections.get(sidecar);
+    const state = this.#connections.get(sidecar);
     if (this.read) {
-      if (!acceptsPatch(previous?.rev, frame)) return false;
+      if (!acceptsPatch(state?.rev, frame)) return false;
     } else if (!(this.#index ??= createIndex()).receive(sidecar, frame)) {
       return false;
     }
-    const reduced = this.read
+    const changed = this.read
       ? this.changes?.(sidecar)
       : this.#index?.changes(sidecar);
-    if (
-      previous && reduced?.revision === frame.rev &&
-      reduced.metadata.length === 0
-    ) {
-      previous.rev = frame.rev;
+    if (state && changed?.revision === frame.rev && !changed.metadata.length) {
+      state.rev = frame.rev;
       return true;
     }
-    return this.#update(sidecar, frame.rev);
-  }
-  #update(sidecar: string, rev: number): boolean {
-    const previous = this.#connections.get(sidecar);
-    const entries = new Map(
-      this.project(sidecar, this.#entries(sidecar)).map((
-        entry,
-      ) => [entry.id, entry]),
-    );
-    this.#connections.set(sidecar, { rev, entries });
-    if (!previous) return true; // first snapshot after every welcome is baseline
-    for (const old of previous.entries.values()) {
-      const entry = entries.get(old.id), id = sessionKey(sidecar, old.id);
-      if (!entry || entry.deleted || entry.parentID || entry.archived) {
-        if (this.#kinds.delete(id)) this.retract(id);
-        continue;
-      }
-      if (old.parentID || old.archived) continue;
-      const pending = this.#kinds.get(id);
-      const resolved = (pending === "permission" && !permissions(entry)) ||
-        (pending === "question" && !questions(entry)) ||
-        (pending === "error" && !entry.attention.error) ||
-        (pending === "done" && entry.status !== "idle");
-      // A root owns all family attention. Resolving one kind must expose any
-      // remaining kind rather than clearing that root's channels and badge.
-      const remaining = resolved
-        ? entry.attention.error
-          ? "error"
-          : permissions(entry)
-          ? "permission"
-          : questions(entry)
-          ? "question"
-          : undefined
-        : undefined;
-      const kind: Note["kind"] | undefined =
-        entry.attention.error && errors(entry) !== errors(old)
-          ? "error"
-          : permissions(entry) > permissions(old)
-          ? "permission"
-          : questions(entry) > questions(old)
-          ? "question"
-          : old.status !== "idle" && entry.status === "idle" &&
-              !entry.attention.error && !permissions(entry) && !questions(entry)
-          ? "done"
-          : remaining;
-      if (kind) {
-        this.#kinds.set(id, kind);
-        this.emit({
-          id,
-          kind,
-          sessionRef: { sidecar, session: entry.id },
-          title: ({
-            done: "Session done",
-            permission: "Permission needed",
-            question: "Question needs input",
-            error: "Session error",
-            info: "Information",
-          })[kind],
-          body: kind === "error"
-            ? `${entry.title}: ${entry.attention.error}`
-            : entry.title,
-          actions: [{
-            label: "Open",
-            command: "session.open",
-            args: { sidecarId: sidecar, sessionID: entry.id },
-            default: true,
-          }],
-        });
-      } else {
-        if (resolved) {
-          this.#kinds.delete(id);
-          this.retract(id);
-        }
-      }
-    }
+    this.#refresh(sidecar, frame.rev);
     return true;
+  }
+  refresh(sidecar: string): void {
+    const state = this.#connections.get(sidecar);
+    if (state) this.#refresh(sidecar, state.rev);
+  }
+  #refresh(sidecar: string, rev: number): void {
+    const previous = this.#connections.get(sidecar);
+    if (!previous) this.#connections.set(sidecar, { rev, roots: new Map() });
+    const rows = this.project(sidecar, [
+      ...(this.read?.(sidecar) ?? this.#index?.partition(sidecar) ?? []),
+    ]);
+    const pending = new Set(previous?.roots.keys());
+    for (const entry of rows) {
+      pending.delete(entry.id);
+      this.#compare(sidecar, entry.id, facts(entry), !previous);
+    }
+    for (const id of pending) this.#compare(sidecar, id, undefined, false);
+    this.#connections.get(sidecar)!.rev = rev;
+  }
+  #compare(
+    sidecar: string,
+    session: string,
+    entry: Facts | undefined,
+    baseline: boolean,
+  ): void {
+    const state = this.#connections.get(sidecar)!;
+    const old = state.roots.get(session), id = sessionKey(sidecar, session);
+    if (entry) state.roots.set(session, entry);
+    else state.roots.delete(session);
+    if (!entry) {
+      if (this.#kinds.delete(id)) this.retract(id);
+      return;
+    }
+    if (baseline || !old) return;
+    const pending = this.#kinds.get(id);
+    const resolved = (pending === "permission" && !entry.permissions) ||
+      (pending === "question" && !entry.questions) ||
+      (pending === "error" && !entry.error) ||
+      (pending === "done" && entry.status !== "idle");
+    const remaining = resolved
+      ? entry.error
+        ? "error"
+        : entry.permissions
+        ? "permission"
+        : entry.questions
+        ? "question"
+        : undefined
+      : undefined;
+    const kind: Note["kind"] | undefined =
+      entry.error && entry.errorIdentity !== old.errorIdentity
+        ? "error"
+        : entry.permissions > old.permissions
+        ? "permission"
+        : entry.questions > old.questions
+        ? "question"
+        : old.status !== "idle" && entry.status === "idle" && !entry.error &&
+            !entry.permissions && !entry.questions
+        ? "done"
+        : remaining;
+    if (kind) {
+      this.#kinds.set(id, kind);
+      this.emit({
+        id,
+        kind,
+        sessionRef: { sidecar, session },
+        title: ({
+          done: "Session done",
+          permission: "Permission needed",
+          question: "Question needs input",
+          error: "Session error",
+          info: "Information",
+        })[kind],
+        body: kind === "error" ? `${entry.title}: ${entry.error}` : entry.title,
+        actions: [{
+          label: "Open",
+          command: "session.open",
+          args: { sidecarId: sidecar, sessionID: session },
+          default: true,
+        }],
+      });
+    } else if (resolved) {
+      this.#kinds.delete(id);
+      this.retract(id);
+    }
   }
 }

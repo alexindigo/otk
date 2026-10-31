@@ -2,7 +2,7 @@
 import {
   type ApprovalModel,
   type CommandHub,
-  type IndexChanges,
+  type EntryChanges,
   type Note,
   NotificationHub,
   notificationPolicy,
@@ -30,8 +30,10 @@ export function applicationNotifications(input: {
   viewing(): boolean;
   connection(sidecar: string): SidecarConnection;
   entry(sidecar: string, session: string): IndexEntry | undefined;
-  entries(sidecar: string): readonly IndexEntry[];
-  changes?(sidecar: string): IndexChanges | undefined;
+  observeEntries(
+    sidecar: string,
+    listener: (changes: EntryChanges) => void,
+  ): () => void;
   attention(sidecar: string): ReturnType<ApprovalModel["attention"]>;
 }) {
   const context = () => {
@@ -134,12 +136,8 @@ export function applicationNotifications(input: {
       });
     },
     retract,
-    (sidecar, entries) => input.attention(sidecar).entries(entries),
-    input.entries,
-    input.changes,
   );
   const update = () => {
-    for (const sidecar of observed) triggers.refresh(sidecar);
     os.refresh();
     const ctx = context();
     if (ctx.focused && ctx.visible) {
@@ -156,7 +154,7 @@ export function applicationNotifications(input: {
     }
     hub.refresh();
   };
-  const observed = new Set<string>();
+  const observed = new Map<string, () => void>();
   return {
     hub,
     toast: toast.model,
@@ -165,21 +163,23 @@ export function applicationNotifications(input: {
     info: (text: string) => message("info", text),
     error: (error: unknown) => message("error", errorMessage(error)),
     receive(sidecar: string, frame: ServerFrame) {
-      observed.add(sidecar);
+      if (!observed.has(sidecar)) {
+        observed.set(
+          sidecar,
+          input.observeEntries(
+            sidecar,
+            (changes) => triggers.entriesChanged(sidecar, changes),
+          ),
+        );
+      }
       if (frame.t === "welcome") {
         triggers.reset(sidecar);
         hub.removeSidecar(sidecar);
       }
-      if (frame.t === "index.snapshot" || frame.t === "index.patch") {
-        triggers
-          .receive(sidecar, frame);
-      }
-      if (frame.t === "approvals" || frame.t === "harness") {
-        triggers.refresh(sidecar);
-      }
       if (frame.t === "error") message("error", frame.message || frame.code);
     },
     remove(sidecar: string) {
+      observed.get(sidecar)?.();
       observed.delete(sidecar);
       triggers.reset(sidecar);
       hub.removeSidecar(sidecar);
@@ -198,6 +198,8 @@ export function applicationNotifications(input: {
       };
     },
     stop() {
+      for (const stop of observed.values()) stop();
+      observed.clear();
       candidates.clear();
       hub.stop();
       toast.stop();

@@ -8,7 +8,12 @@ import type {
   ShellLayout,
 } from "@otk/protocol";
 import { type ApprovalModel, createApprovals } from "./approvals.ts";
-import type { ApprovalAttention } from "./approval-attention.ts";
+import {
+  type ApprovalAttention,
+  type AttentionProjection,
+  createAttentionProjection,
+  type EntryChanges,
+} from "./approval-attention.ts";
 import type { SidecarConnection } from "./connection.ts";
 import type {
   ClientIndex,
@@ -67,6 +72,12 @@ export interface ServerResources {
   anyAdvertised(capability: CapabilityName): boolean;
   connectionKey(id: string): number | undefined;
   attention(id: string): ApprovalAttention;
+  projected(id: string, sessionID: string): IndexEntry | undefined;
+  projectedProject(id: string, directory: string): readonly IndexEntry[];
+  observeEntries(
+    id: string,
+    listener: (changes: EntryChanges) => void,
+  ): () => void;
   entries(): MergedEntry[];
   metadataEntries(): MergedMetadata[];
   /** Unprojected metadata borrowed from the shared keyed-index owner. */
@@ -156,6 +167,7 @@ export function createServerResources(o: {
     }
   };
   const approvalModels = new Map<string, ApprovalModel>();
+  const projections = new Map<string, AttentionProjection>();
   const tabModels = new Map<string, ClientTabs>();
   const requestObservers = new Map<string, () => void>();
   const requestClock = factory({ revision: 0 });
@@ -199,8 +211,38 @@ export function createServerResources(o: {
     }
     return model;
   };
-  const attention = (id: string): ApprovalAttention =>
-    approvals(id).attention(linked(id));
+  const projection = (id: string): AttentionProjection => {
+    let owner = projections.get(id);
+    if (!owner) {
+      owner = createAttentionProjection({
+        entry: (sessionID) => entry(id, sessionID),
+        ids: () => o.index.ids(id),
+        children: (sessionID) => o.index.children(id, sessionID),
+        factory,
+      });
+      projections.set(id, owner);
+    }
+    const model = approvals(id);
+    owner.configure(
+      model.state.snapshot.enabled,
+      linked(id) && model.state.ready,
+    );
+    return owner;
+  };
+  const attention = (id: string): ApprovalAttention => {
+    const current = approvals(id).attention(linked(id));
+    const owner = projection(id);
+    return {
+      ...current,
+      entries: (entries) =>
+        entries.map((entry) => {
+          const projected = owner.get(entry.id);
+          return projected && projected.attention !== entry.attention
+            ? { ...entry, attention: projected.attention }
+            : entry;
+        }),
+    };
+  };
   const operationAttention = (id: string) => {
     const rpc = sidecars.connection(id).rpc;
     if (!requestObservers.has(id) && !stopped) {
@@ -238,13 +280,19 @@ export function createServerResources(o: {
   };
   const tabInput = (p: ProjectSelection): TabInput => ({
     directory: p.directory,
-    taskActivity: operationAttention(p.sidecarId).tasks,
-    entries: operationAttention(p.sidecarId).entries(
-      attention(p.sidecarId).entries(
-        o.index.catalog(p.sidecarId, p.directory),
-      ),
-    ),
-    inbox: inbox(p.sidecarId).state.inbox,
+    get taskActivity() {
+      return operationAttention(p.sidecarId).tasks;
+    },
+    get entries() {
+      return operationAttention(p.sidecarId).entries(
+        attention(p.sidecarId).entries(
+          o.index.catalog(p.sidecarId, p.directory),
+        ),
+      );
+    },
+    get inbox() {
+      return inbox(p.sidecarId).state.inbox;
+    },
   });
   const tabs = (p: ProjectSelection): ClientTabs => {
     live();
@@ -270,7 +318,13 @@ export function createServerResources(o: {
     if (frame.t === "index.snapshot" || frame.t === "index.patch") {
       accepted = o.index.receive(id, frame);
       if (!accepted) sidecars.connection(id).send({ t: "resnapshot" });
+      else {projection(id).update(
+          o.index.changes(id)!.ids,
+          frame.t === "index.snapshot",
+        );}
     }
+    if (frame.t === "welcome") projections.get(id)?.reset();
+    if (frame.t === "approvals" || frame.t === "harness") projection(id);
     inbox(id).receive(frame);
     catalogs.get(id)?.receive(frame);
     frecencies.get(id)?.receive(frame);
@@ -284,6 +338,9 @@ export function createServerResources(o: {
     for (const observer of observers) observer.frame?.(id, frame, accepted);
   };
   const sidecars = o.sidecars(receive);
+  const stopLinks = sidecars.subscribe(() => {
+    for (const id of projections.keys()) projection(id);
+  });
   return {
     ownsFailure: (cause) =>
       sidecars.state.list.some((server) =>
@@ -326,6 +383,14 @@ export function createServerResources(o: {
     declares,
     advertised,
     attention,
+    projected: (id, sessionID) => projection(id).get(sessionID),
+    projectedProject: (id, directory) => {
+      const owner = projection(id);
+      return o.index.ids(id, directory).map((sessionID) =>
+        owner.get(sessionID)!
+      ).filter(Boolean);
+    },
+    observeEntries: (id, listener) => projection(id).subscribe(listener),
     entries,
     metadataEntries: () =>
       sidecars.state.list.flatMap((s) =>
@@ -366,24 +431,11 @@ export function createServerResources(o: {
           a.label.localeCompare(b.label);
       }),
     tabSnapshot(p) {
-      const input = tabInput(p), metadata = input.inbox;
-      return {
-        directory: input.directory,
-        entries: input.entries.map((e) => ({
-          ...e,
-          attention: { ...e.attention },
-        })),
-        taskActivity: input.taskActivity,
-        inbox: {
-          ...metadata,
-          tasks: metadata.tasks.map((t) => ({
-            ...t,
-            sessions: [...t.sessions],
-          })),
-          seen: { ...metadata.seen },
-          finishes: { ...metadata.finishes },
-        },
-      };
+      const input = tabInput(p);
+      void input.entries;
+      void input.taskActivity;
+      void input.inbox;
+      return input;
     },
     syncTabs(p, input, selected) {
       const model = tabs(p);
@@ -418,6 +470,8 @@ export function createServerResources(o: {
       inboxes.delete(id);
       approvalModels.get(id)?.stop();
       approvalModels.delete(id);
+      projections.get(id)?.stop();
+      projections.delete(id);
       for (const [key, model] of tabModels) {
         if (!key.startsWith(`${id}/`)) continue;
         model.stop();
@@ -449,6 +503,7 @@ export function createServerResources(o: {
     stop() {
       if (stopped) return;
       stopped = true;
+      stopLinks();
       visibleCatalog?.directory.release();
       visibleCatalog?.frecency.release();
       visibleCatalog = undefined;
@@ -461,6 +516,8 @@ export function createServerResources(o: {
       for (const model of approvalModels.values()) model.stop();
       for (const model of tabModels.values()) model.stop();
       approvalModels.clear();
+      for (const projection of projections.values()) projection.stop();
+      projections.clear();
       tabModels.clear();
       for (const inbox of inboxes.values()) inbox.stop();
       inboxes.clear();

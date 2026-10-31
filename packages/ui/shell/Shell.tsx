@@ -110,8 +110,7 @@ export default function Shell(
     connection: (id) => sidecars.connection(id),
     entry,
     attention,
-    entries: resources.indexEntries,
-    changes: resources.indexChanges,
+    observeEntries: resources.observeEntries,
   });
   onCleanup(resources.observe({
     frame: (id, frame, accepted) => {

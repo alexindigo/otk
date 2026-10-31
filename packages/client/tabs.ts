@@ -331,7 +331,7 @@ export function createTabs(
       promotions.clear();
       remembered.clear();
       input = {
-        ...input,
+        directory: "",
         entries: [],
         inbox: {
           projects: [],

@@ -31,6 +31,7 @@ export interface ApprovalModel {
   activityFor(sessionID: string): ApprovalState["activity"];
   setAuto(sessionID: string, enabled: boolean): Promise<void>;
   selectActivity(sessionID: string): Promise<void>;
+  retainActivity(sessionID: string): { release(): void };
   loadActivity(sessionID: string, more?: boolean): Promise<void>;
   stop(): void;
 }
@@ -47,8 +48,15 @@ export function createApprovals(
     activity: { entries: [], loading: false },
   };
   let epoch = 0, activityRevision = 0, stopped = false;
+  const leases = new Map<string, Set<object>>();
+  const demanded = (id: string) => !!leases.get(id)?.size;
   let running:
-    | { id: string; again: boolean; promise: Promise<void> }
+    | {
+      id: string;
+      again: boolean;
+      promise: Promise<void>;
+      controller: AbortController;
+    }
     | undefined;
   const publish = (patch: Partial<ApprovalState>) => {
     value = { ...value, ...patch };
@@ -61,7 +69,7 @@ export function createApprovals(
     const initial = !value.ready;
     publish({ ready: true, snapshot });
     const id = value.activity.sessionID;
-    if (initial && id) {
+    if (initial && id && demanded(id)) {
       if (running?.id === id) running.again = true;
       else void model.loadActivity(id);
     }
@@ -92,6 +100,7 @@ export function createApprovals(
       if (stopped) return;
       if (frame.t === "welcome") {
         epoch++;
+        running?.controller.abort();
         running = undefined;
         publish({
           ready: false,
@@ -104,8 +113,10 @@ export function createApprovals(
         frame.sessions.includes(value.activity.sessionID)
       ) {
         activityRevision++;
-        if (running) running.again = true;
-        else void model.loadActivity(value.activity.sessionID);
+        if (demanded(value.activity.sessionID)) {
+          if (running) running.again = true;
+          else void model.loadActivity(value.activity.sessionID);
+        }
       }
     },
     async setAuto(sessionID, enabled) {
@@ -117,13 +128,53 @@ export function createApprovals(
       if (!stopped && generation === epoch) apply(result);
     },
     selectActivity(id) {
+      if (stopped) return Promise.resolve();
+      if (value.activity.sessionID !== id) {
+        running?.controller.abort();
+        running = undefined;
+        activityRevision++;
+        publish({ activity: { sessionID: id, entries: [], loading: false } });
+        return model.loadActivity(id);
+      }
       return value.activity.sessionID === id
         ? running?.promise ?? Promise.resolve()
         : model.loadActivity(id);
     },
+    retainActivity(id) {
+      if (stopped) return { release() {} };
+      const token = {};
+      let current = leases.get(id);
+      if (!current) leases.set(id, current = new Set());
+      current.add(token);
+      if (!stopped) {
+        if (value.activity.sessionID !== id) void model.selectActivity(id);
+        else if (current.size === 1) void model.loadActivity(id);
+      }
+      return {
+        release() {
+          if (stopped) return;
+          if (!current.delete(token)) return;
+          if (current.size) return;
+          leases.delete(id);
+          if (value.activity.sessionID !== id) return;
+          activityRevision++;
+          running?.controller.abort();
+          running = undefined;
+          publish({
+            activity: {
+              sessionID: id,
+              before: value.activity.before,
+              entries: [],
+              loading: false,
+            },
+          });
+        },
+      };
+    },
     loadActivity(id, more = false) {
-      if (stopped || !value.ready) return Promise.resolve();
+      if (stopped || !value.ready || !demanded(id)) return Promise.resolve();
       if (running?.id === id) return running.promise;
+      running?.controller.abort();
       const generation = epoch, snapshot = activityRevision;
       const before = more && value.activity.sessionID === id
         ? value.activity.before
@@ -131,14 +182,20 @@ export function createApprovals(
       const previous = value.activity.sessionID === id
         ? value.activity.entries
         : [];
-      const flight = { id, again: false, promise: Promise.resolve() };
+      const flight = {
+        id,
+        again: false,
+        promise: Promise.resolve(),
+        controller: new AbortController(),
+      };
       running = flight;
       flight.promise = Promise.resolve().then(async () => {
         try {
+          if (flight.controller.signal.aborted) return;
           const result = await rpc.call("permission.activity", {
             sessionID: id,
             ...(before ? { before } : {}),
-          });
+          }, flight.controller.signal);
           if (stopped || epoch !== generation || running !== flight) return;
           if (snapshot !== activityRevision) {
             flight.again = true;
@@ -185,9 +242,13 @@ export function createApprovals(
       return flight.promise;
     },
     stop() {
+      if (stopped) return;
       stopped = true;
       epoch++;
+      running?.controller.abort();
       running = undefined;
+      leases.clear();
+      publish({ activity: { entries: [], loading: false } });
     },
   };
   return model;

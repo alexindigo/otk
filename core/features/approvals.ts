@@ -3,7 +3,6 @@ import { HarnessError } from "@otk/harness";
 import { OperationFailure } from "@otk/protocol";
 import {
   type ApprovalSnapshot,
-  autoApproveOwner,
   canAutoApprove,
   isSessionID,
   type OperationContext,
@@ -47,6 +46,10 @@ export class PermissionFeature implements FrameSource {
   #failed = new Map<string, string>();
   #generation = 0;
   #scans = new Map<string, { again: boolean }>();
+  #enabled: Set<string>;
+  #dirty = new Set<string>();
+  #journal = new Map<string, "started" | "confirmed" | undefined>();
+  #pending = new Map<string, Set<string>>();
   #closed = false;
   #scheduled = false;
   #revision = 0;
@@ -58,20 +61,67 @@ export class PermissionFeature implements FrameSource {
     readonly index: IndexStore,
     readonly capability: PermissionsCapability,
   ) {
+    this.#enabled = new Set(store.enabled());
     this.#stops = [
-      index.observe((entry) => {
+      index.observe((entry, previous, delta) => {
         if (entry.deleted) this.store.setAuto(entry.id, false);
-        this.#schedule();
+        const topology = !previous || entry.parentID !== previous.parentID ||
+          !!entry.deleted !== !!previous.deleted;
+        if (delta && !topology) return;
+        const attention = !previous ||
+          entry.attention.permissions !== previous.attention.permissions ||
+          entry.attention.childPermissions !==
+            previous.attention.childPermissions;
+        // An equal metadata publication is the native pending-inventory signal;
+        // title/status/clock/digest-only publications cannot schedule a pass.
+        const repeated = previous &&
+          JSON.stringify({ ...entry, digest: undefined }) ===
+            JSON.stringify({ ...previous, digest: undefined });
+        if (!topology && !attention && !repeated) return;
+        if (previous) {
+          this.#enqueue(
+            this.#owner(
+              previous.id,
+              (id) => id === previous.id ? previous : index.getMetadata(id),
+            ),
+          );
+        }
+        for (const id of topology ? index.descendants(entry.id) : [entry.id]) {
+          this.#enqueue(this.owner(id));
+        }
       }),
       index.listen((frame) => {
         if (frame.t === "index.snapshot") {
           this.#generation++;
           this.#failed.clear();
+          this.#journal.clear();
+          this.#pending.clear();
+          for (const id of this.#enabled) this.#enqueue(id);
         }
       }),
-      index.observeRemoval((id) => this.store.setAuto(id, false)),
+      index.observeRemoval((id) => {
+        this.#enqueue(this.owner(id));
+        this.store.setAuto(id, false);
+        for (const child of index.descendants(id)) {
+          this.#enqueue(this.owner(child));
+        }
+      }),
       store.listen((change) => {
-        if (change.kind === "policy") this.#revision++;
+        if (change.kind === "policy") {
+          this.#revision++;
+          if (change.enabled) this.#enabled.add(change.session);
+          else this.#enabled.delete(change.session);
+          this.#enqueue(change.session);
+        } else {
+          for (const request of change.requests) {
+            const key = JSON.stringify([request.session, request.requestID]);
+            if (!this.#journal.has(key)) continue;
+            this.#journal.set(
+              key,
+              request.outcome === "failed" ? undefined : request.outcome,
+            );
+          }
+        }
         const frame: ServerFrame = change.kind === "policy"
           ? this.snapshot()
           : { t: "approval.activity", sessions: change.sessions };
@@ -80,7 +130,7 @@ export class PermissionFeature implements FrameSource {
     ];
   }
   get(): ApprovalSnapshot {
-    return { enabled: this.store.enabled(), revision: this.#revision };
+    return { enabled: [...this.#enabled].sort(), revision: this.#revision };
   }
   snapshot(): ServerFrame {
     return { t: "approvals", approvals: this.get() };
@@ -95,34 +145,37 @@ export class PermissionFeature implements FrameSource {
     for (const stop of this.#stops) stop();
     this.#listeners.clear();
     this.#failed.clear();
+    this.#dirty.clear();
+    this.#journal.clear();
+    this.#pending.clear();
   }
   owner(id: string): string | undefined {
-    if (this.index.get(id)?.deleted) return;
-    return autoApproveOwner(
-      id,
-      this.store.enabled(),
-      (id) => this.index.get(id),
-    );
+    if (this.index.getMetadata(id)?.deleted) return;
+    return this.#owner(id, (id) => this.index.getMetadata(id));
   }
-  #schedule(): void {
+  #owner(
+    id: string,
+    lookup: (id: string) => { parentID?: string } | undefined,
+  ): string | undefined {
+    const seen = new Set<string>();
+    while (!seen.has(id)) {
+      seen.add(id);
+      if (this.#enabled.has(id)) return id;
+      const parent = lookup(id)?.parentID;
+      if (!parent) return;
+      id = parent;
+    }
+  }
+  #enqueue(owner?: string): void {
+    if (!owner || !this.#enabled.has(owner)) return;
+    this.#dirty.add(owner);
     if (this.#closed || this.#scheduled) return;
     this.#scheduled = true;
     queueMicrotask(() => {
       this.#scheduled = false;
       if (this.#closed) return;
-      const enabled = this.store.enabled(), owners = new Set<string>();
-      if (!enabled.length) return;
-      for (const entry of this.index.values()) {
-        if (!entry.attention.permissions && !entry.attention.childPermissions) {
-          continue;
-        }
-        const owner = autoApproveOwner(
-          entry.id,
-          enabled,
-          (id) => this.index.get(id),
-        );
-        if (owner) owners.add(owner);
-      }
+      const owners = [...this.#dirty];
+      this.#dirty.clear();
       for (const owner of owners) this.#scan(owner);
     });
   }
@@ -140,12 +193,42 @@ export class PermissionFeature implements FrameSource {
           state.again = false;
           const generation = this.#generation;
           const requests = await this.capability.listPermissions(root);
+          if (this.#closed || generation !== this.#generation) {
+            state.again = !this.#closed;
+            continue;
+          }
+          const keys = new Set(
+            requests.map((request) =>
+              JSON.stringify([request.sessionID, request.id])
+            ),
+          );
+          const previous = this.#pending.get(root);
+          this.#pending.set(root, keys);
+          for (const key of previous ?? []) {
+            if (
+              keys.has(key) || this.#flights.has(key) ||
+              [...this.#pending.values()].some((set) => set.has(key))
+            ) continue;
+            this.#journal.delete(key);
+            this.#failed.delete(key);
+          }
+          const unknown = requests.filter((request) =>
+            !this.#journal.has(JSON.stringify([request.sessionID, request.id]))
+          ).map((request) => ({
+            session: request.sessionID,
+            requestID: request.id,
+          }));
+          const states = this.store.states(unknown);
+          for (const request of unknown) {
+            const key = JSON.stringify([request.session, request.requestID]);
+            this.#journal.set(key, states[key]);
+          }
           for (const request of requests) {
             if (this.#closed) return;
             const owner = this.owner(request.sessionID);
             if (
-              !owner || this.store.confirmed(request.sessionID, request.id) ||
-              this.store.unconfirmed(request.sessionID, request.id)
+              !owner ||
+              this.#journal.get(JSON.stringify([request.sessionID, request.id]))
             ) {
               continue;
             }
@@ -332,15 +415,18 @@ export class PermissionFeature implements FrameSource {
               "Session is no longer available",
             );
           }
-          const changed =
-            this.store.enabled().includes(input.sessionID) !== input.enabled;
+          const changed = this.#enabled.has(input.sessionID) !== input.enabled;
           this.store.setAuto(input.sessionID, input.enabled, tx);
           return {
-            enabled: this.store.enabled(),
+            enabled: [
+              ...new Set(
+                [...this.#enabled].filter((id) => id !== input.sessionID)
+                  .concat(input.enabled ? [input.sessionID] : []),
+              ),
+            ].sort(),
             revision: this.#revision + (changed ? 1 : 0),
           };
         }, policyReceipt);
-        if (input.enabled) this.#scan(input.sessionID);
         return result;
       },
     });

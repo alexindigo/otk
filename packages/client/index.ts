@@ -51,6 +51,7 @@ export interface IndexChanges {
 export interface ClientIndex {
   state: IndexState;
   get(sidecarId: string, sessionID: string): MergedEntry | undefined;
+  children(sidecarId: string, sessionID: string): readonly string[];
   ids(sidecarId: string, directory?: string): readonly string[];
   partition(sidecarId: string, directory?: string): MergedEntry[];
   catalog(sidecarId: string, directory?: string): readonly MergedMetadata[];
@@ -64,6 +65,7 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
   // Data is synchronous and framework-free. The binding publishes only keyed
   // clocks, so deferred painting can never govern action admission.
   const entries: Record<string, MergedEntry> = {};
+  const children = new Map<string, Set<string>>();
   const clock = factory({ revision: 0, keys: {} as Record<string, number> });
   const partitions = new Map<
     string,
@@ -95,6 +97,19 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
   const changes = new Map<string, IndexChanges>();
   const put = (key: string, next?: MergedEntry) => {
     const previous = entries[key];
+    if (previous?.parentID !== next?.parentID) {
+      if (previous?.parentID) {
+        const parent = sessionKey(previous.sidecarId, previous.parentID);
+        children.get(parent)?.delete(previous.id);
+        if (!children.get(parent)?.size) children.delete(parent);
+      }
+      if (next?.parentID) {
+        const parent = sessionKey(next.sidecarId, next.parentID);
+        let values = children.get(parent);
+        if (!values) children.set(parent, values = new Set());
+        values.add(next.id);
+      }
+    }
     const changedMetadata = !previous || !next ||
       Object.keys({ ...previous, ...next }).some((field) =>
         field !== "digest" &&
@@ -195,6 +210,7 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
   return {
     state,
     ids,
+    children: (server, id) => [...(children.get(sessionKey(server, id)) ?? [])],
     changes: (server) => changes.get(server),
     partition: (server, directory) => {
       void partitionClock.state.keys[partitionKey(server, directory)];

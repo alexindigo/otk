@@ -143,6 +143,54 @@ test("store observer diagnostics preserve committed outcomes when the injected r
   }
 });
 
+test("permission changes publish final keys once per committed write scope and nothing on rollback", async () => {
+  const db = new OtkDb(await fixture(), [permissionMigrations]);
+  const store = new PermissionStore(db), changes: unknown[] = [];
+  store.listen((change) => changes.push(change));
+  try {
+    db.write((tx) => {
+      store.setAuto("root", true, tx);
+      store.setAuto("root", false, tx);
+      const id = store.start(
+        {
+          session: "root",
+          requestID: "ask",
+          request: "{}",
+          reply: "once",
+          source: "manual",
+        },
+        [],
+        tx,
+      );
+      store.finish(id, { outcome: "confirmed" }, tx);
+      assertEquals(
+        changes,
+        [],
+        "uncommitted policy and journal facts remain private",
+      );
+    });
+    assertEquals(changes, [
+      { kind: "policy", session: "root", enabled: false },
+      {
+        kind: "activity",
+        sessions: ["root"],
+        requests: [{ session: "root", requestID: "ask", outcome: "confirmed" }],
+      },
+    ]);
+    changes.length = 0;
+    assertThrows(() =>
+      db.write((tx) => {
+        store.setAuto("root", true, tx);
+        throw new Error("rollback");
+      })
+    );
+    assertEquals(changes, []);
+    assertEquals(store.enabled(), []);
+  } finally {
+    db.close();
+  }
+});
+
 test("permission journal returns committed intent identity despite observer failure", async () => {
   const db = new OtkDb(await fixture(), [permissionMigrations]);
   const logged: unknown[][] = [], previous = console.error;
@@ -170,9 +218,17 @@ test("permission journal returns committed intent identity despite observer fail
     permissions.finish(id, { outcome: "confirmed" });
     assertEquals(permissions.list(["s"])[0].outcome, "confirmed");
     assertEquals(changes, [
-      { kind: "policy" },
-      { kind: "activity", sessions: ["s", "parent"] },
-      { kind: "activity", sessions: ["parent", "s"] },
+      { kind: "policy", session: "s", enabled: true },
+      {
+        kind: "activity",
+        sessions: ["s", "parent"],
+        requests: [{ session: "s", requestID: "r", outcome: "started" }],
+      },
+      {
+        kind: "activity",
+        sessions: ["parent", "s"],
+        requests: [{ session: "s", requestID: "r", outcome: "confirmed" }],
+      },
     ]);
     assertEquals(logged.length, 3);
     assert(logged.every((args) => args.includes(failure)));

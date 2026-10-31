@@ -11,6 +11,7 @@ import {
   createIndex,
   createServerResources,
   createState,
+  NotificationTriggers,
   SidecarConnection,
   type SidecarState,
 } from "@otk/client";
@@ -284,7 +285,7 @@ Deno.test("server resources project per-server attention and labelled projects f
   f.resources.stop();
 });
 
-Deno.test("server resource tab snapshots detach nested tracking reads and sync only project selections", () => {
+Deno.test("server resource tab inputs borrow current metadata and sync only project selections", () => {
   const f = fixture(), p = { sidecarId: "local", directory: "/p" };
   f.receive("local", {
     t: "index.snapshot",
@@ -299,21 +300,17 @@ Deno.test("server resource tab snapshots detach nested tracking reads and sync o
   });
   const snapshot = f.resources.tabSnapshot(p);
   const live = f.resources.inbox("local").state.inbox;
-  assertNotStrictEquals(
-    snapshot.entries[0],
-    f.resources.entry("local", "session"),
-  );
-  assertNotStrictEquals(
+  assertStrictEquals(
     snapshot.entries[0].attention,
     f.resources.entry("local", "session")!.attention,
   );
-  assertNotStrictEquals(snapshot.inbox.tasks[0], live.tasks[0]);
-  assertNotStrictEquals(
+  assertStrictEquals(snapshot.inbox.tasks[0], live.tasks[0]);
+  assertStrictEquals(
     snapshot.inbox.tasks[0].sessions,
     live.tasks[0].sessions,
   );
-  assertNotStrictEquals(snapshot.inbox.seen, live.seen);
-  assertNotStrictEquals(snapshot.inbox.finishes, live.finishes);
+  assertStrictEquals(snapshot.inbox.seen, live.seen);
+  assertStrictEquals(snapshot.inbox.finishes, live.finishes);
   f.receive("local", {
     t: "index.patch",
     rev: 1,
@@ -331,10 +328,10 @@ Deno.test("server resource tab snapshots detach nested tracking reads and sync o
     revision: 0,
     inbox: { ...metadata(), tasks: [], seen: {}, finishes: {} },
   });
-  assertEquals(snapshot.entries[0].attention.permissions, 1);
-  assertEquals(snapshot.inbox.tasks[0].sessions, ["session"]);
-  assertEquals(snapshot.inbox.seen, { session: 1 });
-  assertEquals(snapshot.inbox.finishes, { session: 2 });
+  assertEquals(snapshot.entries[0].attention.permissions, 9);
+  assertEquals(snapshot.inbox.tasks, []);
+  assertEquals(snapshot.inbox.seen, {});
+  assertEquals(snapshot.inbox.finishes, {});
   f.resources.syncTabs(p, snapshot, { sidecarId: "local", sessionID: "other" });
   const tabs = f.resources.tabs(p);
   assertEquals(tabs.state.selected, undefined);
@@ -353,6 +350,104 @@ Deno.test("server resource tab snapshots detach nested tracking reads and sync o
     revision + 1,
     "already-selected preview is not repeated",
   );
+  f.resources.stop();
+});
+
+Deno.test("shared projected deltas preserve manual sibling notes and fence rejected index gaps", () => {
+  const f = fixture(), notes: string[] = [], changes: string[][] = [];
+  const trigger = new NotificationTriggers(
+    (note) => notes.push(note.kind),
+    () => {},
+  );
+  const stop = f.resources.observeEntries("local", (change) => {
+    changes.push(change.changes.map((entry) => entry.id));
+    trigger.entriesChanged("local", change);
+  });
+  const root = {
+    ...entry("root"),
+    attention: { ...entry().attention, permissions: 0, childPermissions: 0 },
+  };
+  const auto = {
+    ...entry("auto"),
+    parentID: "root",
+    attention: { ...entry().attention, permissions: 0 },
+  };
+  const manual = {
+    ...entry("manual"),
+    parentID: "root",
+    attention: { ...entry().attention, permissions: 0 },
+  };
+  f.receive("local", {
+    t: "index.snapshot",
+    rev: 0,
+    entries: [root, auto, manual],
+  });
+  f.receive("local", {
+    t: "approvals",
+    approvals: { enabled: ["auto"], revision: 0 },
+  });
+  notes.length = changes.length = 0;
+  f.receive("local", {
+    t: "index.patch",
+    rev: 3,
+    ops: [
+      {
+        op: "upsert",
+        entry: {
+          ...root,
+          attention: { ...root.attention, childPermissions: 2 },
+        },
+      },
+      {
+        op: "upsert",
+        entry: { ...auto, attention: { ...auto.attention, permissions: 1 } },
+      },
+      {
+        op: "upsert",
+        entry: {
+          ...manual,
+          attention: { ...manual.attention, permissions: 1 },
+        },
+      },
+    ],
+  });
+  assertEquals(
+    f.resources.projected("local", "root")!.attention.childPermissions,
+    1,
+  );
+  assertEquals(notes, ["permission"]);
+  const count = changes.length;
+  f.receive("local", {
+    t: "index.patch",
+    rev: 99,
+    ops: [{ op: "upsert", entry: { ...root, status: "idle" } }],
+  });
+  assertEquals(
+    changes.length,
+    count,
+    "a rejected gap cannot reach the projection or notifications",
+  );
+  f.store.update((state) => {
+    state.list[0].harness = "reconnecting";
+  });
+  assertEquals(
+    f.resources.projected("local", "root")!.attention.childPermissions,
+    2,
+  );
+  assertEquals(notes, ["permission", "permission"]);
+  f.store.update((state) => {
+    state.list[0].harness = "connected";
+  });
+  assertEquals(
+    f.resources.projected("local", "root")!.attention.childPermissions,
+    1,
+  );
+  assertEquals(
+    notes,
+    ["permission", "permission"],
+    "restoring auto coverage does not clear manual sibling attention",
+  );
+  stop();
   f.resources.stop();
 });
 

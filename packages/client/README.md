@@ -634,10 +634,12 @@ idle phantom or replace the viewed identity with its root.
 `createServerResources({sidecars, index, factory?})` constructs its sidecar
 collection through the injected receiver factory and owns lazily cached inbox,
 approval and project-tab models. Its getters read live state; callers keep
-framework memoisation at their binding boundary. `tabSnapshot(project)` supplies
-the detached nested reads for a tracking scope; `syncTabs` applies them and
-previews the selected project session only when needed. Tabs retain both
-owner-current inputs and authoritative session lookup for readiness.
+framework memoisation at their binding boundary. `tabSnapshot(project)` tracks
+current project inputs and returns source-free live accessors; `syncTabs`
+invalidates the model and previews the selected session only when needed.
+Retained tabs borrow current project partitions and inbox metadata, never
+detached whole-server entry/mark copies. Independent `createTabs` callers can
+still supply their own canonical references through `update`.
 
 Frames reduce approvals, index and inbox before ordered observers run. An index
 gap requests a resnapshot and reaches observers with `accepted=false`, so
@@ -867,14 +869,16 @@ registration identity, including after an item was armed.
 and activity resource. Welcome invalidates older operations; `approvals` frames
 own explicit enabled IDs and revisions. `owner(sessionID)` uses the shared
 ancestor projection, and `setAuto` never applies an optimistic browser policy or
-lets a stale RPC result replace a newer broadcast. `selectActivity` is an
-idempotent selection intent, distinct from explicit `loadActivity` refresh and
-earlier-page loading: reactive render delivery cannot refetch itself. Metadata
-invalidation frames name the stored affected families and coalesce only the
-selected family's activity. Policy revisions never invalidate journal reads.
-Reconnect refreshes the selection and rejects previous-generation reads. Old
-session and connection reads cannot publish into replacements. The owner retains
-reply metadata only, never transcript parts.
+lets a stale RPC result replace a newer broadcast. `retainActivity(sessionID)`
+returns an idempotent identity-bound release. At least one matching lease is
+required for selection, refresh or earlier-page reads. Last release aborts the
+read, fences its result/trailing refresh and releases journal rows, retaining
+only source-free selection/cursor state. Hidden invalidations and reconnects
+issue no Activity reads; reacquisition joins one latest first page. Metadata
+invalidations affect only their selected family; policy revisions do not refetch
+the journal. Old cleanup cannot retire a replacement family. The registered
+Activity adapter borrows this lease only while mounted and resolves row titles
+through the shell's keyed `entry` port.
 
 `approvalAttention(enabled, lookup, linked)` is the shared waiting-for-user
 projection for permission requests and index attention.
@@ -882,9 +886,15 @@ projection for permission requests and index attention.
 are automatic only while both serving transport and native link are live;
 disconnected requests wait again. Index projection subtracts covered subtrees
 without losing manual sibling attention or changing native metadata.
-NotificationTriggers accepts this same projection and `refresh` compares
-policy/link changes against the current shared index. Shell, rows, tabs, badges,
-toasts and takeovers consume that projection.
+`createAttentionProjection({entry,ids,children,factory?})` maintains the shared
+incremental index projection, borrowing canonical keyed entries and adjacency.
+Covered-subtree boundary contributions retract old ancestor paths before
+topology/policy changes add new paths. Ordinary updates visit affected paths or
+subtrees; global link/reset changes may visit the population once. Server
+resources own one projection per sidecar and expose `projected` and
+`observeEntries` with borrowed generation/revisioned `EntryChanges`. Shell,
+rows, tabs, badges, toasts and takeovers consume this same projection. The pure
+`approvalAttention` helper remains available for independent snapshot consumers.
 
 `NotificationHub(policy, run, error)` is an empty framework-free registry.
 Owners register a `NotificationChannel` through `registerChannel`, returning an
@@ -901,16 +911,15 @@ cannot consume a newer note. Invocation never assumes that a resolved command
 actually selected the session. Consumers call `viewed` after real guarded
 selection and focus.
 
-`NotificationTriggers(emit, retract, project?, read?, changes?)` observes
-accepted index frames. The application supplies `read(server)` from its shared
-keyed owner; standalone compositions lazily use that same reduction
-implementation. Only the previous notification projection is retained for edge
-detection. Digest updates preserve live notes and delivery identity; real
-eviction or tombstones retract them. Detail usage likewise compares reduced
-metadata revisions and deletion state rather than decoding wire operations. The
-optional `changes(server)` port borrows the canonical reducer's change set;
-digest-only receipt advances transport revision without rebuilding activity
-projections or replaying notification decisions.
+`NotificationTriggers.entriesChanged(server,changes)` consumes accepted shared
+projected deltas. It retains only per-root comparison facts and current note
+identity, never another map of full raw/projected entries. Digest-only changes
+perform no historical notification comparison. Policy/link changes arrive as
+real affected projection deltas; focus/view/preference changes only refresh hub
+delivery. Real eviction, reparenting, archival and tombstones retract the
+appropriate notes. The legacy frame constructor/read/project ports remain
+independently usable through the ordinary canonical reducer and the same compact
+comparison owner.
 
 NotificationTriggers uses the first snapshot after each connection's `reset` as
 a silent baseline. Root attention roll-ups already include children; roots

@@ -21,12 +21,13 @@ export function registerActivityPanel(
         return selected && shell.approvals(selected.sidecarId);
       };
       createEffect(
-        () => ({ target: target(), ready: owner()?.state.ready }),
-        ({ target, ready }) => {
-          if (target && ready) {
-            void shell.approvals(target.sidecarId).selectActivity(
+        () => target(),
+        (target) => {
+          if (target) {
+            const lease = shell.approvals(target.sidecarId).retainActivity(
               target.sessionID,
             );
+            return lease.release;
           }
         },
       );
@@ -39,10 +40,7 @@ export function registerActivityPanel(
         >
           <PermissionActivity
             value={owner()!.activityFor(target()!.sessionID)}
-            title={(id) =>
-              shell.entries().find((entry) =>
-                entry.sidecarId === target()!.sidecarId && entry.id === id
-              )?.title ?? id}
+            title={(id) => shell.entry(target()!.sidecarId, id)?.title ?? id}
             onMore={() => owner()!.loadActivity(target()!.sessionID, true)}
             onRetry={() => owner()!.loadActivity(target()!.sessionID)}
           />

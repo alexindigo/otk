@@ -103,7 +103,24 @@ export class Connections {
     }
   }
   broadcast(frame: ServerFrame): void {
-    for (const c of this.#connections) if (c.welcomed) this.#send(c, frame);
+    this.#fanout(frame, (c) => c.welcomed);
+  }
+  #fanout(
+    frame: ServerFrame,
+    accepts: (connection: Connection) => boolean,
+  ): void {
+    let serialized: string | undefined;
+    for (const connection of this.#connections) {
+      if (!accepts(connection) || connection.ws.readyState !== WebSocket.OPEN) {
+        continue;
+      }
+      if (serialized === undefined) {
+        const start = performance.now();
+        serialized = JSON.stringify(frame);
+        this.diagnostics?.(`serialize:${frame.t}`, performance.now() - start);
+      }
+      connection.ws.send(serialized);
+    }
   }
   connection(state: HarnessState): void {
     this.harnessState = state;
@@ -113,16 +130,12 @@ export class Connections {
     const recipients = isAttentionOp(event)
       ? [sessionID, ...this.index.ancestors(sessionID)]
       : [sessionID];
-    for (const c of this.#connections) {
-      if (c.welcomed && recipients.some((id) => c.sessions.has(id))) {
-        this.#send(c, {
-          t: "content",
-          sessionID,
-          event,
-          ...(clock ? { clock } : {}),
-        });
-      }
-    }
+    this.#fanout({
+      t: "content",
+      sessionID,
+      event,
+      ...(clock ? { clock } : {}),
+    }, (c) => c.welcomed && recipients.some((id) => c.sessions.has(id)));
   }
   #subscribe(c: Connection, id: string, enabled: boolean): void {
     if (enabled === c.sessions.has(id)) return;

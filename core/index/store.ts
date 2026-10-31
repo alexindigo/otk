@@ -7,7 +7,9 @@ export class IndexStore extends SessionIndex {
   constructor(readonly diagnostics?: SectionObserver) {
     super();
   }
-  #observers = new Set<(entry: IndexEntry, previous?: IndexEntry) => void>();
+  #observers = new Set<
+    (entry: IndexEntry, previous?: IndexEntry, delta?: DigestIndexDelta) => void
+  >();
   #removals = new Set<(id: string) => void>();
   /** Explicit evictions are observed at their owner before wire publication. */
   observeRemoval(listener: (id: string) => void): () => void {
@@ -18,7 +20,11 @@ export class IndexStore extends SessionIndex {
   }
   /** Synchronous observations preserve transitions even within one wire batch. */
   observe(
-    listener: (entry: IndexEntry, previous?: IndexEntry) => void,
+    listener: (
+      entry: IndexEntry,
+      previous?: IndexEntry,
+      delta?: DigestIndexDelta,
+    ) => void,
   ): () => void {
     this.#observers.add(listener);
     return () => this.#observers.delete(listener);
@@ -72,7 +78,11 @@ export class IndexStore extends SessionIndex {
     const start = performance.now();
     const copy = structuredClone(entry);
     for (const listener of this.#observers) {
-      listener(structuredClone(copy), previous && structuredClone(previous));
+      listener(
+        structuredClone(copy),
+        previous && structuredClone(previous),
+        delta,
+      );
     }
     this.#queue(
       delta ? { op: "digest", ...delta } : { op: "upsert", entry: copy },

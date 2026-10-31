@@ -338,8 +338,10 @@ notifications and chrome counts.
 
 `registerActivityPanel` contributes the session Activity view through the open
 panel registry. Its thin adapter forwards idempotent selection to the client
-owner. PermissionActivity receives data/actions, shows manual and automatic
-reply outcomes with the same PermissionSummary as approval surfaces, and offers
+owner through an identity-bound mounted Activity lease; unmount releases it. Row
+titles borrow `ShellPorts.entry(server,id)`, never a full-index search.
+PermissionActivity receives data/actions, shows manual and automatic reply
+outcomes with the same PermissionSummary as approval surfaces, and offers
 earlier-page loading. The panel host knows no permission implementation.
 
 The add-project adapter binds the client `createProjectPicker` owner to selected

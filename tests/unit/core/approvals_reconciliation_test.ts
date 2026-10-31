@@ -73,10 +73,18 @@ test("automatic failure is attempted once across unrelated index changes; reques
     }
     assertEquals([attempts, store.list(["tstv1-root"]).length], [1, 1]);
     assertEquals(
-      lists > 1,
-      true,
-      "the failed request was actually rediscovered",
+      lists,
+      1,
+      "unrelated updates do not rediscover the failed request",
     );
+    index.upsert(entry("tstv1-root"));
+    await tick();
+    assertEquals(
+      lists,
+      2,
+      "a relevant inventory signal rediscovers it without another reply",
+    );
+    assertEquals(attempts, 1);
     request = {
       ...request,
       detail: { kind: "bash", command: "printf changed" },
