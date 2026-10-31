@@ -13,6 +13,7 @@ import { menuReady } from "../support/menu.ts";
 import { waitFor } from "../support/opencode.ts";
 import {
   type AssistantMessage,
+  type RequestEvent,
   type TurnUsageDetail,
   usageHeader,
   UsageLedger,
@@ -57,9 +58,19 @@ for (const theme of ["otk-dark", "otk-light"]) {
       });
       // Admission is a bounded request; completing 102 native calls is a job.
       // Require both the complete scripted turn and terminal native status.
-      await waitFor(
-        () => f.fake.requests.length,
-        (count) => count === markers.length,
+      const turnStarted = performance.now();
+      while (f.fake.requests.length < markers.length) {
+        const previous = f.fake.requests.length;
+        await waitFor(
+          () => f.fake.requests.length,
+          (count) => count > previous,
+        );
+      }
+      assertEquals(f.fake.requests.length, markers.length);
+      console.info(
+        "Native 102-step completion (ms)",
+        theme,
+        performance.now() - turnStarted,
       );
       await waitFor(
         () => f.oc.request<Record<string, unknown>>("/session/status"),
@@ -96,6 +107,31 @@ for (const theme of ["otk-dark", "otk-light"]) {
           .length,
         0,
         "closed breakdown does no detail work",
+      );
+      // First viewing persists location and seen state after source publication.
+      // Their joined notice can resize the viewport and recycle a measured footer.
+      for (const method of ["layout.location", "sessions.seen"]) {
+        await waitFor(() => {
+          const operation = sentFrames(b).map(({ frame }) => frame).find((
+            frame,
+          ) =>
+            frame.t === "request" && frame.method === method &&
+            (frame.params as { sessionID?: string })?.sessionID === session.id
+          );
+          if (!operation) return false;
+          const ref = operation.ref as { key: string };
+          return b.events.some((event) => {
+            if (event.method !== "Network.webSocketFrameReceived") return false;
+            const frame = JSON.parse(
+              (event.params.response as { payloadData: string }).payloadData,
+            ) as RequestEvent;
+            return frame.t === "request.result" && frame.ref.key === ref.key &&
+              frame.outcome.ok;
+          });
+        }, Boolean);
+      }
+      await b.poll(
+        "!document.querySelector('.otk-composer-notice') && (()=>{const pane=document.querySelector('.otk-messages');return pane.scrollHeight-pane.clientHeight-pane.scrollTop<=1})()",
       );
       // Reserve-page measurement may replace the footer while fonts/layout
       // settle. A detached trigger has a stable zero rect, not a hover point.
