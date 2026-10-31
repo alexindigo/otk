@@ -1,15 +1,21 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Cdp } from "./cdp.ts";
 
-/** Wait for the consumer's measured window and its acquired range to settle. */
+/** Wait for a partial transcript's measured window and acquired range to settle. */
 export async function settledTranscriptCount(browser: Cdp): Promise<number> {
+  await browser.evaluate("document.fonts.ready.then(()=>true)");
   return await browser.poll(`(async()=>{
     const pane=document.querySelector('.otk-messages');
     const flow=pane?.querySelector('.otk-message-flow');
     if(!flow || Number(flow.dataset.messageCount)<20)return false;
+    // A pending page can leave the same range painted for many frames. The
+    // consumer restores Load older only after that page has been installed.
+    const ready=()=>!!flow.querySelector('.otk-load-older');
+    if(!ready())return false;
     let previous='',stable=0;
     while(stable<5){
       await new Promise(requestAnimationFrame);
+      if(!ready())return false;
       const next=JSON.stringify([flow.dataset.messageCount,pane.scrollTop,pane.scrollHeight,pane.clientHeight]);
       stable=next===previous?stable+1:0;previous=next;
     }

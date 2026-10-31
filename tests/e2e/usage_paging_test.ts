@@ -15,7 +15,7 @@ import { WsClient } from "../support/ws-client.ts";
 import { publishUsage, turnDetail } from "../support/usage-summary.ts";
 import { settledTranscriptCount } from "../support/message-viewport.ts";
 
-test("U4 complete102-step turn and session totals survive paging, duplicate live updates, held snapshots and reload", async () => {
+async function usagePaging(theme: string) {
   const root = await fixture();
   const messages: Message[] = [
     {
@@ -72,11 +72,21 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
       },
     },
   });
-  f.app.backend.core.listMessages = (_id, opts) => {
+  let pendingPages = 0;
+  f.app.backend.core.listMessages = async (_id, opts) => {
     calls.push(opts);
-    return Promise.resolve(f.page(messages, opts.before));
+    const page = f.page(messages, opts.before);
+    pendingPages++;
+    // An unchanged painted range is not a settled provider page. Keep the read
+    // pending beyond the driver's animation-frame stability observation.
+    try {
+      await new Promise((resolve) => setTimeout(resolve, 250));
+      return page;
+    } finally {
+      pendingPages--;
+    }
   };
-  const b = await Cdp.launch(root);
+  const b = await Cdp.launch(root), themeClient = new WsClient(f.url);
   publishUsage(f.app.index, ledger.snapshot());
   const visible =
     "document.querySelector('.otk-turn-usage > button')?.textContent";
@@ -130,6 +140,11 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
   let hydrationEnd = 0;
   const hydration = async () => {
     const acquired = await settledTranscriptCount(b);
+    assertEquals(
+      pendingPages,
+      0,
+      "The measured cursor chain has no pending pages",
+    );
     assert(
       acquired < messages.length,
       "Usage must remain complete beyond acquired bodies",
@@ -149,7 +164,10 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     return hydrationEnd;
   };
   try {
+    await themeClient.connect();
+    await themeClient.rpc("prefs.set", { key: "theme", value: theme });
     await b.goto(`${f.url}/#/local/tstv1-core`);
+    await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
     await b.poll(
       `${visible}==='102 model calls · 102 tokens · $1.02' && Math.abs(Number(${cost})-1.02)<.000001`,
     );
@@ -312,7 +330,13 @@ test("U4 complete102-step turn and session totals survive paging, duplicate live
     assertEquals(b.errors, []);
   } finally {
     hold?.resolve(ledger.snapshot());
+    await themeClient.close();
     await b.close();
     await f.app.stop();
   }
-});
+}
+
+for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+  test(`U4 complete102-step turn and session totals survive paging, duplicate live updates, held snapshots and reload (${theme})`, () =>
+    usagePaging(theme));
+}

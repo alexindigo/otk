@@ -22,7 +22,7 @@ const row = (id: string) => `.otk-session-row[data-session="${id}"]`;
 const cost = (id: string) =>
   `document.querySelector('${row(id)} .otk-session-cost')?.textContent`;
 
-test("U5 Sessions rows present whole-session usage for unopened sessions and helpers, refresh live and respect persisted Show cost", async () => {
+async function sessionCost(theme: string) {
   const root = await fixture();
   const step = (
     sessionID: string,
@@ -190,7 +190,9 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
   try {
     await c.connect();
     await c.rpc("prefs.set", { key: "animationsOff", value: true });
+    await c.rpc("prefs.set", { key: "theme", value: theme });
     await b.goto(`${f.url}/#/local/tstv1-core`);
+    await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
     await b.poll(
       "document.querySelector('.otk-turn-usage > button')?.textContent==='102 model calls · 102 tokens · $1.02'",
     );
@@ -364,4 +366,9 @@ test("U5 Sessions rows present whole-session usage for unopened sessions and hel
     await b.close();
     await f.app.stop();
   }
-});
+}
+
+for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+  test(`U5 Sessions rows present whole-session usage for unopened sessions and helpers, refresh live and respect persisted Show cost (${theme})`, () =>
+    sessionCost(theme));
+}
