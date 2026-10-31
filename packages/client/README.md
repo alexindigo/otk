@@ -14,6 +14,11 @@ demand and fences old results. External compositions inject equivalent leases
 through the ordinary session/composer ports. Standalone `createModelCatalog` and
 load-port composers remain independently usable.
 
+Session bootstrap/reconnect facts are scoped to the selected server. A borrowed
+directory model view keeps its own native invalidation lifetime; the selected
+facade does not refresh the directory when metadata bootstrap completes. Its
+standalone owned model catalog retains that bootstrap refresh contract.
+
 Prompt mention/slash sources filter complete current lists locally. Directory
 revision changes reconcile command registrations and recompute completion;
 typing, range edits, agent cycling and picker opening do not refresh

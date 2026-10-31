@@ -337,7 +337,7 @@ export function createSession(
       usage.receive(server, frame);
       if (frame.t === "welcome") {
         indexed.delete(server);
-        version++;
+        if (selected?.sidecarId === server) version++;
       }
       if (frame.t === "index.snapshot") indexed.add(server);
       transcripts.receive(server, frame, true);
@@ -351,9 +351,16 @@ export function createSession(
           changes.ids.includes(selected.sessionID)
         ) sync();
       }
-      if (frame.t === "welcome" || frame.t === "bootstrap.complete") {
+      if (
+        selected?.sidecarId === server &&
+        (frame.t === "welcome" || frame.t === "bootstrap.complete")
+      ) {
         models?.connect();
-        if (frame.t === "bootstrap.complete") void models?.refresh();
+        // Borrowed directory views own their native invalidations. Only the
+        // standalone catalog created here is refreshed by this facade.
+        if (frame.t === "bootstrap.complete" && !catalog) {
+          void models?.refresh();
+        }
       }
     },
     removeServer(server) {
