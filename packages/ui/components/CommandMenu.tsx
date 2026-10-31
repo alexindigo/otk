@@ -34,6 +34,8 @@ export default function CommandMenu(props: {
   beforeRun?(): void;
   onClose?(): void;
   onError?(text: string): void;
+  /** Description owned by an injected error sink instead of the menu's track. */
+  feedbackID?: string;
 }): Element {
   const ports = useCommandPorts(), { commands } = ports;
   const [captured, setCaptured] = createSignal<readonly ContextTarget[]>();
@@ -132,8 +134,8 @@ export default function CommandMenu(props: {
         return;
       }
       const text = failureText(cause);
-      if (props.onError) props.onError(text);
-      else setError({ key: action.key, text });
+      setError({ key: action.key, text });
+      props.onError?.(text);
     } finally {
       if (current === generation) {
         setPending(undefined);
@@ -173,7 +175,7 @@ export default function CommandMenu(props: {
         <FieldFeedback
           id={errorId}
           action
-          feedback={error()
+          feedback={error() && !props.onError
             ? { kind: "error", text: error()!.text }
             : undefined}
         />
@@ -213,7 +215,8 @@ export default function CommandMenu(props: {
                           role="menuitem"
                           data-context-command={action().id}
                           aria-describedby={error()?.key === action().key
-                            ? errorId
+                            ? props.feedbackID ??
+                              (props.onError ? undefined : errorId)
                             : undefined}
                           aria-busy={pending() === action().key
                             ? "true"
@@ -224,8 +227,7 @@ export default function CommandMenu(props: {
                             armed()?.key === action().key ? "is-armed" : "",
                           ].filter(Boolean).join(" ")}
                           onClick={() =>
-                            void run(action(), () =>
-                              status?.focus(), () =>
+                            void run(action(), () => status?.focus(), () =>
                               button.focus())}
                         >
                           <span

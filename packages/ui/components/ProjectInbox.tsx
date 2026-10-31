@@ -4,7 +4,7 @@ import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
-import { createSignal, For, Show } from "solid-js";
+import { createSignal, createUniqueId, For, Show } from "solid-js";
 import {
   type InboxProject,
   type MergedMetadata,
@@ -126,6 +126,7 @@ export default function ProjectInbox(props: {
   });
   function Row(row: { project: ProjectRow }) {
     const [rowError, setRowError] = createSignal("");
+    const rowErrorID = `project-error-${createUniqueId()}`;
     const project = () => row.project;
     const target = () => ({
       kind: "project",
@@ -209,11 +210,16 @@ export default function ProjectInbox(props: {
                 targets={() => [target()]}
                 beforeRun={() => setRowError("")}
                 onError={setRowError}
+                feedbackID={rowErrorID}
               />
             </div>
           </Show>
           <Show when={rowError()}>
-            <span class="otk-error otk-project-error" role="alert">
+            <span
+              id={rowErrorID}
+              class="otk-error otk-project-error"
+              role="alert"
+            >
               {rowError()}
             </span>
           </Show>

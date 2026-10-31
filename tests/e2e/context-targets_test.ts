@@ -611,7 +611,11 @@ test("C2 stale task and phantom menus follow captured identities across session 
   }
 });
 
-test("C2 project dots share the row projection and report failures without rejected event handlers", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`C2 project dots share the row projection and report failures without rejected event handlers (${theme})`, () =>
+    projectDots(theme));
+}
+async function projectDots(theme: string) {
   const root = await fixture(), assets = join(root, "context-dist");
   const build = await new Deno.Command(Deno.execPath(), {
     args: [
@@ -680,12 +684,18 @@ test("C2 project dots share the row projection and report failures without rejec
       await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
       await capture(b, root, `${theme}-project-dots`);
     }
+    await b.evaluate(
+      `document.querySelector('#${
+        theme === "otk-dark" ? "dark" : "light"
+      }').click()`,
+    );
+    await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
     await b.click(`${dots} button`);
     await b.poll(
-      `document.querySelector('#project-probe .otk-project-error')?.textContent==='Project update failed'`,
+      `document.querySelector('#project-probe .otk-project-error')?.textContent==='Could not finish this action. Try again'`,
     );
     await b.poll(
-      `document.querySelector('${dots} button').hasAttribute('aria-describedby')`,
+      `(()=>{const button=document.querySelector('${dots} button'),alert=document.querySelector('#project-probe .otk-project-error');return !!alert && document.getElementById(button?.getAttribute('aria-describedby'))===alert})()`,
     );
     assertEquals(
       await b.evaluate(`!!document.querySelector('${dots} [role="alert"]')`),
@@ -716,7 +726,7 @@ test("C2 project dots share the row projection and report failures without rejec
     await b.close();
     await f.app.stop();
   }
-});
+}
 
 test("C2 content targets: prompt, whole reply, nested code/diff and feature-contributed tool sources", async () => {
   const root = await fixture();

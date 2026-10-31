@@ -817,7 +817,8 @@ focus; Popover alone owns Escape and its focus return. `CommandMenu` shares hub
 projection, registration-change subscription, invocation-time reprojection and
 owner-bound execution between pointer and visible-trigger menus. Failed actions
 use a sibling alert described by the corresponding item, outside `role=menu`,
-with an optional injected error callback for row feedback. Pointer opening
+with an optional injected error callback for row feedback. The supplied
+`feedbackID` associates that row-owned error with its action. Pointer opening
 focuses the programmatic-only menu container, without a ring; the first arrow
 moves focus to an item. Keyboard opening focuses the first item with the shared
 focus paint. Popover carries that opening reason for both native triggers and
