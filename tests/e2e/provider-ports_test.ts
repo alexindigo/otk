@@ -5,7 +5,11 @@ import { staticResponse } from "../../core/mod.ts";
 import { Cdp } from "../support/cdp.ts";
 import { resources, tempDir, test } from "../support/resources.ts";
 
-test("public provider ports exclude render props, remain live and copy without constructing children", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`public provider ports exclude render props, remain live and copy without constructing children in ${theme}`, () =>
+    providerPorts(theme));
+}
+async function providerPorts(theme: string) {
   const root = await tempDir("pp-"), dist = join(root, "dist");
   const built = await new Deno.Command(Deno.execPath(), {
     args: [
@@ -31,19 +35,21 @@ test("public provider ports exclude render props, remain live and copy without c
   );
   resources().defer("provider consumer server", () => server.shutdown());
   const browser = await Cdp.launch(root);
-  await browser.goto(`http://127.0.0.1:${server.addr.port}`);
+  await browser.goto(`http://127.0.0.1:${server.addr.port}/?theme=${theme}`);
+  await browser.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
   await browser.poll("document.querySelector('#mounts')?.textContent==='1'");
   const text = (id: string) =>
     browser.evaluate(`document.querySelector('#${id}').textContent`);
-  assertEquals(await text("port-keys"), "commands,keyboard");
+  assertEquals(await text("port-keys"), "commands,failureOwned,keyboard");
   assertEquals(await text("identity"), "true");
   assertEquals(await text("keyboard"), "true");
+  assertEquals(await text("failure-owned"), "true");
   await browser.click("#copy-ports");
   await browser.poll("document.querySelector('#copied').textContent==='0'");
   assertEquals(await text("mounts"), "1");
   await browser.click("#replace-ports");
   await browser.poll(
-    "document.querySelector('#identity').textContent==='true' && document.querySelector('#keyboard').textContent==='true'",
+    "document.querySelector('#identity').textContent==='true' && document.querySelector('#keyboard').textContent==='true' && document.querySelector('#failure-owned').textContent==='true'",
   );
   await browser.click("#copy-ports");
   await browser.poll("document.querySelector('#copied').textContent==='1'");
@@ -62,4 +68,4 @@ test("public provider ports exclude render props, remain live and copy without c
   );
   assertEquals(await text("releases"), "1");
   assertEquals(browser.errors, []);
-});
+}
