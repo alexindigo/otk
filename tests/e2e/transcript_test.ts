@@ -463,8 +463,13 @@ async function readingColumn(theme: string) {
   }
 }
 
-test("composer takeovers retain a browser draft through permissions, questions and session switches while actions reach stock backend", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`composer takeovers retain a browser draft through permissions, questions and session switches while actions reach stock backend in ${theme}`, () =>
+    composerTakeovers(theme));
+}
+async function composerTakeovers(theme: string) {
   const f = await browserFixture({ bash: "ask" });
+  let client: WsClient | undefined;
   try {
     const a = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
@@ -475,6 +480,10 @@ test("composer takeovers retain a browser draft through permissions, questions a
       body: { title: "Other draft" },
     });
     const server = await f.sidecar(), b = await f.browser(server.url);
+    client = new WsClient(server.url);
+    await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
+    await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
     await openSession(b, a.id);
     await b.type("textarea[name=prompt]", "Keep this session's unsent work");
     f.fake.queue({
@@ -491,7 +500,7 @@ test("composer takeovers retain a browser draft through permissions, questions a
       body: { parts: [{ type: "text", text: "Run a separate backend turn" }] },
     });
     await b.poll(
-      "!!document.querySelector('.otk-permission-dock') && document.querySelector('.otk-composer').dataset.takeover==='true' && getComputedStyle(document.querySelector('.otk-permission-dock .otk-surface')).borderTopWidth==='1px' && !!document.querySelector('.otk-prompt').closest('[hidden]') && document.querySelector('.otk-prompt button[type=submit]').disabled",
+      "!!document.querySelector('.otk-permission-dock') && document.querySelector('.otk-composer').dataset.takeover==='true' && getComputedStyle(document.querySelector('.otk-permission-dock .otk-surface')).borderTopWidth==='1px' && !!document.querySelector('.otk-prompt').closest('[hidden]') && !document.querySelector('.otk-prompt button[type=submit]')",
     );
     await openSession(b, other.id);
     await b.type("textarea[name=prompt]", "Other session's draft");
@@ -578,6 +587,7 @@ test("composer takeovers retain a browser draft through permissions, questions a
       "document.querySelector('textarea[name=prompt]').value===\"Other session's draft\"",
     );
   } finally {
+    await client?.close();
     await f.stop();
   }
-});
+}

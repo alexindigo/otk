@@ -6,6 +6,7 @@ import { coreBackendFixture } from "../support/core-backend.ts";
 import { browserFixture } from "../support/browser-fixture.ts";
 import { Cdp } from "../support/cdp.ts";
 import { waitFor } from "../support/opencode.ts";
+import { WsClient } from "../support/ws-client.ts";
 
 // Hold the real handshake until the direct-route consumer has mounted. Replay
 // every received frame in order, without changing capabilities or RPC content.
@@ -132,7 +133,11 @@ test("initial direct route and reload render an already pending native permissio
   }
 });
 
-test("initial advertised session capabilities activate question and prompt consumers after welcome and reload", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`initial advertised session capabilities activate question and prompt consumers after welcome and reload in ${theme}`, () =>
+    initialQuestion(theme));
+}
+async function initialQuestion(theme: string) {
   const root = await fixture();
   const rejected: string[] = [];
   const { app, url } = await coreBackendFixture(root, {
@@ -164,7 +169,10 @@ test("initial advertised session capabilities activate question and prompt consu
     },
   });
   const browser = await Cdp.launch(root);
+  const client = new WsClient(url);
   try {
+    await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
     await holdHandshake(browser, true);
     await browser.goto(`${url}/#/local/tstv1-core`);
     for (const phase of ["direct", "reload"]) {
@@ -185,7 +193,7 @@ test("initial advertised session capabilities activate question and prompt consu
         "document.querySelector('.otk-messages')?.textContent.includes('Core transcript')",
       );
       await browser.poll(
-        "document.querySelector('.otk-question-dock')?.getBoundingClientRect().height > 0 && !!document.querySelector('.otk-prompt').closest('[hidden]') && document.querySelector('.otk-prompt button[type=submit]').disabled",
+        "document.querySelector('.otk-question-dock')?.getBoundingClientRect().height > 0 && !!document.querySelector('.otk-prompt').closest('[hidden]') && !document.querySelector('.otk-prompt button[type=submit]')",
       );
       assertEquals(
         await browser.evaluate(
@@ -199,7 +207,7 @@ test("initial advertised session capabilities activate question and prompt consu
       );
       await browser.click(".otk-question-actions button:not(.otk-primary)");
       await browser.poll(
-        "!document.querySelector('.otk-question-dock') && !document.querySelector('.otk-prompt').closest('[hidden]') && !document.querySelector('.otk-prompt button[type=submit]').disabled",
+        "!document.querySelector('.otk-question-dock') && !document.querySelector('.otk-prompt').closest('[hidden]') && !!document.querySelector('.otk-prompt button[type=submit]')",
       );
       assertEquals(rejected.length, phase === "direct" ? 1 : 2);
       assertEquals(rejected.at(-1), "initial-question");
@@ -217,7 +225,8 @@ test("initial advertised session capabilities activate question and prompt consu
     }
     assertEquals(browser.errors, []);
   } finally {
+    await client.close();
     await browser.close();
     await app.stop();
   }
-});
+}

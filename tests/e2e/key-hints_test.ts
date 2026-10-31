@@ -9,7 +9,11 @@ import { WsClient } from "../support/ws-client.ts";
 import { waitFor } from "../support/opencode.ts";
 import type { PermissionReply, PromptInput } from "@otk/protocol";
 
-test("command hints follow mounted hidden bindings, saved overrides, unbinding and reset", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`command hints follow mounted hidden bindings, saved overrides, unbinding and reset in ${theme}`, () =>
+    commandHints(theme));
+}
+async function commandHints(theme: string) {
   const root = await fixture(), sends: PromptInput[] = [];
   let aborts = 0;
   const f = await coreBackendFixture(root, {
@@ -34,8 +38,15 @@ test("command hints follow mounted hidden bindings, saved overrides, unbinding a
     b.evaluate<string>(`document.querySelector('${button}').title`);
   try {
     await c.connect();
+    await c.rpc("prefs.set", { key: "theme", value: theme });
     await b.goto(`${f.url}/#/local/${f.session.id}`);
     await b.poll("!!document.querySelector('.otk-prompt textarea')");
+    assertEquals(
+      await b.evaluate(`!!document.querySelector('${button}')`),
+      false,
+    );
+    await b.fill("textarea[name=prompt]", "Inspect current shortcut hints");
+    await b.poll(`!!document.querySelector('${button}')`);
     await b.click(".otk-keys-entry");
     await b.poll(
       "document.querySelector('[data-binding=\"prompt.submit\"] kbd')?.textContent==='Enter'",
@@ -66,6 +77,7 @@ test("command hints follow mounted hidden bindings, saved overrides, unbinding a
     await b.key("Escape");
     await b.reload();
     await b.poll("!!document.querySelector('.otk-prompt textarea')");
+    await b.fill("textarea[name=prompt]", "Inspect saved shortcut hints");
     await b.click(".otk-keys-entry");
     await b.poll(
       "document.querySelector('[data-binding=\"prompt.submit\"] kbd')?.textContent==='Ctrl+Enter'",
@@ -88,17 +100,21 @@ test("command hints follow mounted hidden bindings, saved overrides, unbinding a
     );
     await b.key("q", 2);
     await b.poll(
-      `document.querySelector('${button}').title==='Ctrl+q again to interrupt'`,
+      "document.querySelector('[data-interrupt-confirmation]')?.textContent==='Ctrl+q again to interrupt'",
     );
     assertEquals(aborts, 0);
     await b.key("q", 2);
     await b.poll(
-      `document.querySelector('${button}').title===${
-        JSON.stringify(reboundTitle)
-      }`,
+      "!document.querySelector('[data-interrupt-confirmation]')",
     );
     await waitFor(() => Promise.resolve(aborts), (count) => count === 1);
     assertEquals(aborts, 1);
+    await b.fill("textarea[name=prompt]", "Inspect reset shortcut hints");
+    await b.poll(
+      `document.querySelector('${button}')?.title===${
+        JSON.stringify(reboundTitle)
+      }`,
+    );
     await c.rpc("prefs.set", {
       key: "keymap",
       value: {
@@ -126,7 +142,7 @@ test("command hints follow mounted hidden bindings, saved overrides, unbinding a
     await c.close();
     await f.app.stop();
   }
-});
+}
 
 test("Dialog and Editor omit surface key hints while retaining save, cancel and native focus return", async () => {
   const workspace = await fixture(), root = join(workspace, "key-hints");

@@ -274,8 +274,13 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
   }
 });
 
-test("U8 a pending image stays with its session draft and explicit removal cannot be undone by a late upload", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`U8 a pending image stays with its session draft and explicit removal cannot be undone by a late upload in ${theme}`, () =>
+    pendingImage(theme));
+}
+async function pendingImage(theme: string) {
   const f = await browserFixture();
+  let client: WsClient | undefined;
   try {
     const a = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
@@ -286,6 +291,10 @@ test("U8 a pending image stays with its session draft and explicit removal canno
       body: { title: "Independent draft" },
     });
     const server = await f.sidecar(), b = await f.browser(server.url);
+    client = new WsClient(server.url);
+    await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
+    await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
     await openSession(b, a.id);
     await b.evaluate(
       `(()=>{const read=File.prototype.arrayBuffer;globalThis.imageReads=[];File.prototype.arrayBuffer=function(){return new Promise(resolve=>imageReads.push(async()=>resolve(await read.call(this))))};globalThis.pasteImage=()=>{const d=new DataTransfer();d.items.add(new File([Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aF9sAAAAASUVORK5CYII='),c=>c.charCodeAt(0))],'pending.png',{type:'image/png'}));document.querySelector('textarea[name=prompt]').dispatchEvent(new ClipboardEvent('paste',{bubbles:true,clipboardData:d}));};pasteImage()})()`,
@@ -315,7 +324,7 @@ test("U8 a pending image stays with its session draft and explicit removal canno
     await b.click('.otk-prompt-chip button[aria-label^="Remove"]');
     await b.evaluate("imageReads[1]()");
     await b.poll(
-      "!document.querySelector('.otk-prompt-chip') && document.querySelector('textarea[name=prompt]').value==='' && document.querySelector('.otk-prompt button[type=submit]').disabled",
+      "!document.querySelector('.otk-prompt-chip') && document.querySelector('textarea[name=prompt]').value==='' && !document.querySelector('.otk-prompt button[type=submit]')",
     );
     assertEquals(
       sentFrames(b).filter(({ frame }) => frame.method === "session.prompt")
@@ -323,6 +332,7 @@ test("U8 a pending image stays with its session draft and explicit removal canno
       0,
     );
   } finally {
+    await client?.close();
     await f.stop();
   }
-});
+}
