@@ -101,6 +101,12 @@ export async function messageScaleBrowser(
     Boolean,
     120000,
   );
+  // Catalog metadata is published before native bootstrap finishes. Join live
+  // event readiness before a stepped producer can wait on its consumer frame.
+  await client.wait(
+    (frame) => frame.t === "harness" && frame.state === "connected",
+    120000,
+  );
   await client.rpc("prefs.set", { key: "theme", value: options.theme });
   const browser = await Cdp.launch(root);
   await browser.send("Emulation.setDeviceMetricsOverride", {
