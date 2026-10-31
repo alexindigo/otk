@@ -74,12 +74,13 @@ const open = async (b: Cdp, kind: string) => {
     "Popover aligns to the leading edge, or trailing edge only for overflow",
   );
 };
-async function footerGeometry(b: Cdp) {
+async function footerGeometry(b: Cdp, hasDraft = false) {
+  await b.poll(`!!document.querySelector('.otk-send-button')===${hasDraft}`);
   const centres = await b.evaluate<number[]>(
     `[...document.querySelectorAll('.otk-prompt-actions > button, .otk-prompt-context > .otk-popover > button')].map(el=>{const r=el.getBoundingClientRect();return r.y+r.height/2})`,
   );
-  // Three settings plus the existing Attach, Edit and Send controls.
-  assertEquals(centres.length, 6);
+  // Send is available only with a draft; measure every visible control in both states.
+  assertEquals(centres.length, hasDraft ? 6 : 5);
   assert(
     Math.max(...centres) - Math.min(...centres) < .5,
     JSON.stringify(centres),
@@ -118,6 +119,12 @@ async function footerGeometry(b: Cdp) {
 }
 
 async function footerPressure(b: Cdp, shots?: string, theme = "dark") {
+  assertEquals(
+    await b.evaluate("document.querySelector('textarea[name=prompt]').value"),
+    "",
+  );
+  await b.fill(input, "Measure all available footer controls");
+  await b.poll("!!document.querySelector('.otk-send-button')");
   try {
     for (
       const [width, state] of [[1180, "provider"], [1060, "model"]] as const
@@ -161,6 +168,8 @@ async function footerPressure(b: Cdp, shots?: string, theme = "dark") {
   } finally {
     await b.send("Emulation.clearDeviceMetricsOverride");
     await b.poll("innerWidth===1280");
+    await b.fill(input, "");
+    await b.poll("!document.querySelector('.otk-send-button')");
   }
 }
 
@@ -175,7 +184,7 @@ async function actionGeometry(b: Cdp) {
     }
   >(`(()=>{const row=document.querySelector(${
     JSON.stringify(modelOption("scripted"))
-  }),action=row.querySelector('.otk-picker-action'),icon=action.querySelector('svg'),r=row.getBoundingClientRect(),a=action.getBoundingClientRect();return {inside:a.left>=r.left&&a.right<=r.right&&a.top>=r.top&&a.bottom<=r.bottom,sharedBox:action.closest('[data-otk-selection]')===row,centre:Math.abs(a.y+a.height/2-r.y-r.height/2),icon:icon.getBoundingClientRect().width,sharedIcon:document.querySelector('.otk-send-button svg').getBoundingClientRect().width}})()`);
+  }),action=row.querySelector('.otk-picker-action'),icon=action.querySelector('svg'),r=row.getBoundingClientRect(),a=action.getBoundingClientRect();return {inside:a.left>=r.left&&a.right<=r.right&&a.top>=r.top&&a.bottom<=r.bottom,sharedBox:action.closest('[data-otk-selection]')===row,centre:Math.abs(a.y+a.height/2-r.y-r.height/2),icon:icon.getBoundingClientRect().width,sharedIcon:document.querySelector('.otk-prompt-actions > button svg').getBoundingClientRect().width}})()`);
   assert(
     measured.inside && measured.sharedBox && measured.centre < .5,
     JSON.stringify(measured),
@@ -438,6 +447,7 @@ test("V5 composer picks reach native messages and the selected provider; restore
     );
     fake2.queue({ chunks: ["Selected provider replied."] });
     await b.type(input, "PICKER-NORMAL selected model");
+    await footerGeometry(b, true);
     await b.key("Enter");
     await waitForReply(b, session.id, "Selected provider replied.");
     const selected = {
@@ -689,7 +699,13 @@ test("V5 restored missing model remains sendable; catalog loading and errors are
     );
     reject(new Error("Catalog temporarily unreachable"));
     await b.poll(
-      "document.querySelector('.otk-model-picker [role=alert]')?.textContent.includes('Catalog temporarily unreachable')",
+      "document.querySelector('.otk-model-picker [role=alert] > span')?.textContent==='Could not finish this action. Try again'",
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('.otk-model-picker').textContent.includes('Catalog temporarily unreachable')",
+      ),
+      false,
     );
     assertEquals(
       await b.evaluate(
@@ -712,7 +728,13 @@ test("V5 restored missing model remains sendable; catalog loading and errors are
     assertEquals(sent[0].agent, "build");
     await open(b, "model");
     await b.poll(
-      "document.querySelector('.otk-model-picker [role=alert]')?.textContent.includes('Refresh failed')",
+      "document.querySelector('.otk-model-picker [role=alert] > span')?.textContent==='Could not finish this action. Try again'",
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('.otk-model-picker').textContent.includes('Refresh failed')",
+      ),
+      false,
     );
     assertEquals(
       await b.evaluate(
@@ -865,7 +887,13 @@ test("failed unknown catalog preserves the restored variant in the footer and at
     );
     await open(b, "model");
     await b.poll(
-      "document.querySelector('.otk-model-picker [role=alert]')?.textContent.includes('Catalog offline')",
+      "document.querySelector('.otk-model-picker [role=alert] > span')?.textContent==='Could not finish this action. Try again'",
+    );
+    assertEquals(
+      await b.evaluate(
+        "document.querySelector('.otk-model-picker').textContent.includes('Catalog offline')",
+      ),
+      false,
     );
     assertEquals(
       await b.evaluate(
