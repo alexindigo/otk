@@ -645,7 +645,11 @@ test("E10 75-second idle browser stays connected and sends JSON pongs at 20-seco
     await f.stop();
   }
 });
-test("web setup persists auth choice and routes back/forward select the correct session", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`web setup persists auth choice and routes back/forward select the correct session in ${theme}`, () =>
+    setupRoutes(theme));
+}
+async function setupRoutes(theme: string) {
   const f = await browserFixture();
   try {
     const a = await f.oc.session<{ id: string }>("/session", {
@@ -666,11 +670,22 @@ test("web setup persists auth choice and routes back/forward select the correct 
     await browser.type("input[name=password]", "secret");
     await browser.click(".otk-auth-view button[type=submit]");
     await browser.poll(
-      "!!document.querySelector('.otk-auth-view input[name=username]') && !document.querySelector('select[name=type]')",
+      "!document.querySelector('.otk-auth-view') && !!document.querySelector('.otk-corner-right')",
     );
-    await browser.type("input[name=username]", "tester");
-    await browser.type("input[name=password]", "secret");
-    await browser.click(".otk-auth-view button[type=submit]");
+    await browser.evaluate(
+      `fetch('api/session').then(r=>r.json()).then(()=>true)`,
+    );
+    const cookies = await browser.send("Network.getCookies");
+    const token = (cookies.cookies as { name: string; value: string }[]).map((
+      { name, value },
+    ) => `${name}=${value}`).join("; ");
+    const client = new WsClient(server.url, token);
+    await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
+    await client.close();
+    await browser.poll(
+      `document.documentElement.dataset.otkTheme==='${theme}'`,
+    );
     await openSession(browser, a.id);
     await openSession(browser, b.id);
     await browser.evaluate("history.back()");
@@ -692,7 +707,7 @@ test("web setup persists auth choice and routes back/forward select the correct 
   } finally {
     await f.stop();
   }
-});
+}
 
 test("web history paging preserves viewport and autoscroll follows only the bottom", async () => {
   const f = await browserFixture();
