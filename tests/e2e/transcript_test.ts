@@ -40,7 +40,11 @@ const reply = (id: string): AssistantMessage => ({
   parts: [],
 });
 
-test("reading column, renderer disclosures, reply metadata, reported composer settings, retry and tab title", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`reading column, renderer disclosures, reply metadata, reported composer settings, retry and tab title (${theme})`, () =>
+    readingColumn(theme));
+}
+async function readingColumn(theme: string) {
   const root = await fixture();
   const base = {
     callID: "call",
@@ -189,6 +193,10 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
     ).snapshot(),
   );
   try {
+    const initial = new WsClient(f.url);
+    await initial.connect();
+    await initial.rpc("prefs.set", { key: "theme", value: theme });
+    await initial.close();
     await b.send("Emulation.setDeviceMetricsOverride", {
       width: 2000,
       height: 1100,
@@ -370,6 +378,8 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
           "Work-fold hairline retains the subtle divider contract",
         );
       }
+      await client.rpc("prefs.set", { key: "theme", value: theme });
+      await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
     } finally {
       await client.close();
     }
@@ -433,7 +443,7 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
       },
     });
     await b.poll(
-      "document.querySelector('.otk-retry-banner')?.textContent.includes('Provider is temporarily unavailable')",
+      "document.querySelector('.otk-retry-banner strong')?.textContent==='Retrying · attempt 2' && document.querySelector('.otk-retry-banner p')?.textContent==='Waiting for the agent to retry'",
     );
     const before = await b.evaluate<string>(
       "document.querySelector('.otk-retry-banner').textContent",
@@ -451,7 +461,7 @@ test("reading column, renderer disclosures, reply metadata, reported composer se
     await b.close();
     await f.app.stop();
   }
-});
+}
 
 test("composer takeovers retain a browser draft through permissions, questions and session switches while actions reach stock backend", async () => {
   const f = await browserFixture({ bash: "ask" });

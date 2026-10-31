@@ -288,7 +288,11 @@ test("external deletion retains dirty permission input and closing still uses th
   }
 });
 
-test("unknown summaries and rejected detail never render a fictitious zero ledger", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`unknown summaries and rejected detail never render a fictitious zero ledger (${theme})`, () =>
+    unknownDetail(theme));
+}
+async function unknownDetail(theme: string) {
   const root = await tempDir("du-");
   const f = await coreBackendFixture(root, {
     usage: {
@@ -335,8 +339,10 @@ test("unknown summaries and rejected detail never render a fictitious zero ledge
     turns: { upsert: { turn: summary }, remove: [] },
     deleted: null,
   });
-  const b = await Cdp.launch(root);
+  const b = await Cdp.launch(root), client = new WsClient(f.url);
   try {
+    await client.connect();
+    await client.rpc("prefs.set", { key: "theme", value: theme });
     await b.goto(`${f.url}/#/local/${f.session.id}`);
     await b.poll(
       "document.querySelector('.otk-turn-usage-trigger')?.textContent.includes('Tokens unavailable') && document.querySelector('.otk-turn-usage-trigger').textContent.includes('Cost unavailable')",
@@ -346,7 +352,7 @@ test("unknown summaries and rejected detail never render a fictitious zero ledge
     );
     await b.send("Input.dispatchMouseEvent", { type: "mouseMoved", ...point });
     await b.poll(
-      "document.querySelector('.otk-turn-usage :popover-open')?.textContent.includes('Detailed usage is unavailable for unreported headers')",
+      "document.querySelector('.otk-turn-usage :popover-open [role=status]')?.textContent==='Could not finish this action. Try again'",
     );
     assertEquals(
       await b.evaluate(
@@ -356,10 +362,11 @@ test("unknown summaries and rejected detail never render a fictitious zero ledge
     );
     assertEquals(b.errors, []);
   } finally {
+    await client.close();
     await b.close();
     await f.app.stop();
   }
-});
+}
 test("summary-only backends show facts without a dead usage control or context action", async () => {
   const root = await tempDir("sf-");
   const f = await coreBackendFixture(root);
