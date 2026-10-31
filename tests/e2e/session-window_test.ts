@@ -41,7 +41,11 @@ async function scroll(b: Cdp, top: string) {
 const anchorProbe =
   `(()=>{const v=document.querySelector('${viewport}'),r=v.getBoundingClientRect();const row=[...v.querySelectorAll('[data-virtual-key]')].find(e=>e.getBoundingClientRect().bottom>r.top+.5);return row&&{key:row.dataset.virtualKey,offset:row.getBoundingClientRect().top-r.top,top:v.scrollTop}})()`;
 
-test("direct-route Sessions waits for task metadata and paints while the selected transcript is held", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`direct-route Sessions waits for task metadata and paints while the selected transcript is held (${theme})`, () =>
+    directRoute(theme));
+}
+async function directRoute(theme: string) {
   const root = await fixture(), f = await coreBackendFixture(root);
   const held = Promise.withResolvers<void>(),
     read = f.app.backend.core.listMessages;
@@ -54,6 +58,7 @@ test("direct-route Sessions waits for task metadata and paints while the selecte
   const b = await Cdp.launch(root), c = new WsClient(f.url);
   try {
     await c.connect();
+    await c.rpc("prefs.set", { key: "theme", value: theme });
     await c.rpc("layout.patch", {
       rightCollapsed: false,
       rightView: "sessions",
@@ -66,7 +71,7 @@ test("direct-route Sessions waits for task metadata and paints while the selecte
     await b.send("Page.addScriptToEvaluateOnNewDocument", {
       source: `(()=>{
         const Native=WebSocket;globalThis.inboxGate={pending:[],release(){this.open=true;for(const [socket,data]of this.pending.splice(0))socket.dispatchEvent(new MessageEvent('message',{data}))}};
-        globalThis.WebSocket=class extends Native{constructor(...args){super(...args);this.addEventListener('message',event=>{if(!inboxGate.open&&JSON.parse(event.data).t==='inbox'){inboxGate.pending.push([this,event.data]);event.stopImmediatePropagation()}})}};
+        globalThis.WebSocket=class extends Native{constructor(...args){super(...args);this.addEventListener('message',event=>{if(!inboxGate.open&&['inbox.snapshot','inbox.patch'].includes(JSON.parse(event.data).t)){inboxGate.pending.push([this,event.data]);event.stopImmediatePropagation()}})}};
       })()`,
     });
     await b.goto(`${f.url}/#/local/${f.session.id}`);
@@ -104,7 +109,7 @@ test("direct-route Sessions waits for task metadata and paints while the selecte
     await b.close();
     await f.app.stop();
   }
-});
+}
 
 test("active Sessions windows its DOM and releases it on collapse", async () => {
   const root = await fixture(),

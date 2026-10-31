@@ -7,7 +7,11 @@ import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-test("create-in-task preserves membership changes made while session creation is pending", async () => {
+for (const theme of ["otk-dark", "otk-light"]) {
+  test(`create-in-task preserves membership changes made while session creation is pending (${theme})`, () =>
+    createInTask(theme));
+}
+async function createInTask(theme: string) {
   const root = await fixture(), f = await inboxBrowserFixture(root);
   const b = await Cdp.launch(root), c = new WsClient(f.url);
   const entered = Promise.withResolvers<void>(),
@@ -20,6 +24,7 @@ test("create-in-task preserves membership changes made while session creation is
   };
   try {
     await c.connect();
+    await c.rpc("prefs.set", { key: "theme", value: theme });
     // Hold metadata delivery, not RPC results: an unacknowledged broadcast
     // cannot be a prerequisite for preserving authoritative membership.
     await b.send("Page.addScriptToEvaluateOnNewDocument", {
@@ -30,7 +35,7 @@ test("create-in-task preserves membership changes made while session creation is
           constructor(...args) {
             super(...args);
             this.addEventListener('message', event => {
-              if (window.holdInbox && JSON.parse(event.data).t === 'inbox') {
+              if (window.holdInbox && ['inbox.snapshot', 'inbox.patch'].includes(JSON.parse(event.data).t)) {
                 event.stopImmediatePropagation();
                 window.heldInbox.push(() => this.dispatchEvent(new MessageEvent('message', {data:event.data})));
               }
@@ -115,4 +120,4 @@ test("create-in-task preserves membership changes made while session creation is
     await b.close();
     await f.app.stop();
   }
-});
+}
