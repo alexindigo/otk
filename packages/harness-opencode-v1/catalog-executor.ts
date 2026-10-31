@@ -81,7 +81,7 @@ export class CatalogExecutor implements ProviderReadPort {
     if (!owned) this.#owners.set(options.owner, owned = new Set());
     owned.add(controller);
     const admission = this.#admission ??= new ReadAdmission(
-      undefined,
+      () => scheduler.interruptIO(),
       this.concurrency,
     );
     try {
@@ -120,6 +120,7 @@ export class CatalogExecutor implements ProviderReadPort {
         },
         signal,
         options.priority === "user" ? "interactive" : options.priority,
+        true,
       );
     } finally {
       owned.delete(controller);

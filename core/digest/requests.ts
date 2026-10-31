@@ -21,6 +21,7 @@ export class DigestRequests {
     id: number,
     read: (signal: AbortSignal, execution: DigestExecution) => Promise<T>,
     priority: DigestPriority = "interactive",
+    interruptible = false,
   ): Promise<T> {
     if (
       this.#closed || generation !== this.generation ||
@@ -28,7 +29,12 @@ export class DigestRequests {
     ) return Promise.reject(new Error("Invalid digest request lifetime"));
     this.#last = id;
     const controller = new AbortController();
-    const task = this.scheduler.execute(read, controller.signal, priority)
+    const task = this.scheduler.execute(
+      read,
+      controller.signal,
+      priority,
+      interruptible,
+    )
       .finally(() => {
         this.#active.delete(id);
       });

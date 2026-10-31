@@ -31,7 +31,10 @@ export class ReadAdmission {
       };
       signal.addEventListener("abort", request.cancel, { once: true });
       this.#waiting.push(request);
-      if (essential && [...this.#active].some((value) => !value.essential)) {
+      if (
+        essential && this.#active.size >= this.maximum &&
+        [...this.#active].some((value) => !value.essential)
+      ) {
         this.preempt?.();
       }
       this.#pump();

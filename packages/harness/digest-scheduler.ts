@@ -173,6 +173,7 @@ export class DigestScheduler {
     run: (signal: AbortSignal, execution: DigestExecution) => Promise<T>,
     signal: AbortSignal,
     priority: DigestPriority = "interactive",
+    interruptible = false,
   ): Promise<T> {
     if (signal.aborted || this.#controller.signal.aborted) {
       return Promise.reject(signal.reason ?? this.#controller.signal.reason);
@@ -180,7 +181,38 @@ export class DigestScheduler {
     if (priority === "interactive") {
       this.#dutyWait?.abort();
     }
-    return this.#job(run, signal, () => rank[priority]);
+    return interruptible && priority !== "interactive"
+      ? this.#read(run, signal, priority)
+      : this.#job(run, signal, () => rank[priority]);
+  }
+  /** Only explicitly revocable read callbacks may restart after I/O preemption. */
+  async #read<T>(
+    run: (signal: AbortSignal, execution: DigestExecution) => Promise<T>,
+    signal: AbortSignal,
+    priority: DigestPriority,
+  ): Promise<T> {
+    while (true) {
+      signal.throwIfAborted();
+      this.#controller.signal.throwIfAborted();
+      const slice = new AbortController();
+      try {
+        return await this.#job(
+          async (signal, execution) => {
+            const value = await run(signal, execution);
+            signal.throwIfAborted();
+            return value;
+          },
+          AbortSignal.any([signal, slice.signal]),
+          () => rank[priority],
+          slice,
+        );
+      } catch (error) {
+        if (
+          !slice.signal.aborted || signal.aborted ||
+          this.#controller.signal.aborted
+        ) throw error;
+      }
+    }
   }
   /** The I/O-permission owner requests preemption only when a read needs it. */
   interruptIO(): void {

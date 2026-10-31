@@ -1010,6 +1010,7 @@ function handle(message: ToWorker): void {
     message.t === "read" && message.priority !== "user"
       ? message.priority
       : "interactive",
+    message.t === "read",
   );
   observeTask(task, message);
   kick();

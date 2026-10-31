@@ -152,8 +152,9 @@ Essential reads interrupt the actual duty wait. Its remaining quota still gates
 the next background slice, so yielding cannot turn a slow background read into a
 long admission stall or discard the configured duty limit.
 
-Waiting is not work. `execute((signal, execution) => ..., signal, priority?)`
-and the sink's fourth `step` argument supply one `DigestExecution` per lifetime.
+Waiting is not work.
+`execute((signal, execution) => ..., signal, priority?, interruptible?)` and the
+sink's fourth `step` argument supply one `DigestExecution` per lifetime.
 `execution.wait(readiness)` releases its turn, then queues the ready
 continuation at that job's priority; publication credit, locks and other
 readiness cannot hold execution. `wait(readiness, 'io')` also identifies
@@ -163,6 +164,15 @@ I/O slice while retaining its durable reconciliation cursor. Cleanup uses
 permission. No SQLite transaction crosses a wait. Duty accounting excludes
 waiting time; its timer is outside the executing slot. Producers must use these
 ports for asynchronous readiness.
+
+Explicit transient read callbacks can opt into `interruptible: true`. Urgent
+native I/O then cancels their lower-priority acquisition, joins settlement and
+requeues the same caller lifetime at its original priority. The callback may run
+again: it must be read-only and must finish acquisition before publishing a
+result. Ordinary callbacks and interactive peers are not replayed. Caller
+cancellation or shutdown retires the lifetime instead of retrying it. Worker
+provider-read contributions and the standalone native catalog executor select
+this option at their existing read-only composition boundaries.
 
 Worker compositions also yield the actual event loop between bounded turns so
 incoming cross-isolate messages can enter the priority queue. Catalog writes and
