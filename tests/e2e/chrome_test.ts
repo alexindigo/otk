@@ -155,7 +155,7 @@ test("quiet chrome keeps corner geometry and non-colour selection across themes,
       await b.evaluate(
         "document.querySelector('.otk-session-crumb[aria-current]').title",
       ),
-      base.directory,
+      `${child.title} · ${base.directory}`,
     );
     const grab = await b.evaluate<{ x: number; y: number }>(
       `(()=>{const r=document.querySelector('.otk-inbox-resizer').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
