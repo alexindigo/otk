@@ -17,6 +17,8 @@ export type RequestRecovery<R> =
 export interface RpcExecutionPolicy<P, R> {
   priority?: "ordinary" | "interrupt";
   kind: "read" | "local" | "native" | "lease";
+  /** A settled watch can retain an explicitly releasable operation lifetime. */
+  lifetime?: "request";
   scope(
     params: P,
   ): { sessionID?: string; directory?: string; resource?: string };

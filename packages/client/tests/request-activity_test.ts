@@ -67,7 +67,12 @@ Deno.test("request activity keeps original project and phantom visible without c
     finishes: {},
     pathTemplates: [],
   };
-  resources.receive("local", { t: "inbox", inbox });
+  resources.receive("local", {
+    t: "inbox.snapshot",
+    generation: "fixture",
+    revision: 0,
+    inbox,
+  });
   const window = { id: crypto.randomUUID(), expiresAt: Date.now() + 60000 };
   connection.rpc.requests.connect(window, 64);
   const operation = connection.rpc.start("session.rename", {
@@ -146,7 +151,9 @@ Deno.test("a project-owned creation has activity before a task or session ID exi
   };
   const resources = createServerResources({ index, sidecars: () => sidecars });
   resources.receive("local", {
-    t: "inbox",
+    t: "inbox.snapshot",
+    generation: "fixture",
+    revision: 0,
     inbox: {
       projects: [{
         directory: "/empty",

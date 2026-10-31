@@ -139,7 +139,9 @@ test("stock WAL metadata and bounded API fallback reach revert, task cards and a
         path: "README.md",
       });
       assertEquals(
-        await rpc.dispatch("frecency.list", { sessionID: parent.id }),
+        (await rpc.dispatch("frecency.list", { sessionID: parent.id }) as {
+          entries: ReturnType<typeof frecency.list>;
+        }).entries,
         frecency.list(oc.directory),
       );
       assertEquals(

@@ -133,7 +133,8 @@ export function createTranscriptScopes(
       if (!accepted) return;
       if (
         frame.t === "index.snapshot" || frame.t === "index.patch" ||
-        frame.t === "inbox" || frame.t === "approvals"
+        frame.t === "inbox.snapshot" || frame.t === "inbox.patch" ||
+        frame.t === "approvals"
       ) {
         const indexed = frame.t === "index.snapshot" ||
           frame.t === "index.patch";

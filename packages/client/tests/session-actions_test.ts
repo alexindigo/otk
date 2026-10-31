@@ -193,10 +193,19 @@ Deno.test("session actions prompt captures invocation target and enters submissi
   await admitted.promise;
   f.session.state.selection = { sidecarId: "remote", sessionID: "newer" };
   f.reply((_id, method, params) =>
-    method === "history.attachment"
+    method === "history.attachments"
       ? Promise.resolve({
-        kind: "text",
-        text: `bytes:${(params as { partID: string }).partID}`,
+        items: (params as { refs: { messageID: string; partID: string }[] })
+          .refs.map((ref) => ({
+            ref,
+            part: {
+              kind: "file",
+              source: "upload",
+              name: ref.partID,
+              mime: "text/plain",
+              dataBase64: btoa(`bytes:${ref.partID}`),
+            },
+          })),
       })
       : Promise.resolve(null)
   );
@@ -208,14 +217,30 @@ Deno.test("session actions prompt captures invocation target and enters submissi
       name: "selected",
       sessions: ["selected"],
     }],
-    ["remote", "history.attachment", { messageID: "m", partID: "foreign" }],
-    ["local", "history.attachment", { messageID: "m", partID: "own" }],
+    ["remote", "history.attachments", {
+      refs: [{ messageID: "m", partID: "foreign" }],
+    }],
+    ["local", "history.attachments", {
+      refs: [{ messageID: "m", partID: "own" }],
+    }],
     ["local", "session.prompt", {
       sessionID: "selected",
       mode: "normal",
       parts: [
-        { kind: "text", text: "bytes:foreign" },
-        { kind: "text", text: "bytes:own" },
+        {
+          kind: "file",
+          source: "upload",
+          name: "foreign",
+          mime: "text/plain",
+          dataBase64: btoa("bytes:foreign"),
+        },
+        {
+          kind: "file",
+          source: "upload",
+          name: "own",
+          mime: "text/plain",
+          dataBase64: btoa("bytes:own"),
+        },
         { kind: "text", text: "keep" },
       ],
       agent: "plan",

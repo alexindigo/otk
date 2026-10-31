@@ -2,6 +2,7 @@
 import type {
   CatalogAgent,
   CatalogFile,
+  CatalogModelItem,
   CommandOption,
   ModelCatalog,
   QuestionRequest,
@@ -9,6 +10,7 @@ import type {
   SkillOption,
 } from "@otk/protocol";
 import type { ProviderReadCodec } from "./provider-reads.ts";
+import { modelCatalogCodec } from "@otk/protocol";
 
 export interface CatalogFileListing {
   physical: string;
@@ -49,14 +51,7 @@ export interface QuestionReadKinds {
     chunk: QuestionRequest[];
   };
 }
-export type CatalogModelItem =
-  | { kind: "catalog"; default?: ModelCatalog["default"] }
-  | { kind: "provider"; id: string; name: string }
-  | {
-    kind: "model";
-    providerID: string;
-    model: ModelCatalog["providers"][number]["models"][number];
-  };
+export type { CatalogModelItem } from "@otk/protocol";
 export interface ModelReadKinds {
   "catalog.models": {
     input: { directory: string };
@@ -73,62 +68,8 @@ export interface FileReadKinds {
 }
 
 /** Feature-selected codecs keep complete models/provider metadata across row credits. */
-export const catalogModelCodec: ProviderReadCodec<"catalog.models"> = {
-  *chunks(value, rows) {
-    function* entries(): Generator<CatalogModelItem> {
-      yield { kind: "catalog", default: value.default };
-      for (const provider of value.providers) {
-        yield { kind: "provider", id: provider.id, name: provider.name };
-        for (const model of provider.models) {
-          yield { kind: "model", providerID: provider.id, model };
-        }
-      }
-    }
-    let items: CatalogModelItem[] = [];
-    for (const item of entries()) {
-      items.push(item);
-      if (items.length === rows) {
-        yield items;
-        items = [];
-      }
-    }
-    if (items.length) yield items;
-  },
-  create() {
-    const value: ModelCatalog = { providers: [] };
-    const providers = new Map<string, ModelCatalog["providers"][number]>();
-    let header = false;
-    return {
-      append(items) {
-        for (const item of items) {
-          if (item.kind === "catalog") {
-            if (header) throw new Error("Duplicate catalog header");
-            header = true;
-            if (item.default) value.default = item.default;
-          } else if (item.kind === "provider") {
-            if (providers.has(item.id)) {
-              throw new Error("Duplicate catalog provider");
-            }
-            const provider = { id: item.id, name: item.name, models: [] };
-            providers.set(item.id, provider);
-            value.providers.push(provider);
-          } else {
-            const provider = providers.get(item.providerID);
-            if (
-              !provider ||
-              provider.models.some((model) => model.id === item.model.id)
-            ) throw new Error("Invalid catalog model identity");
-            provider.models.push(item.model);
-          }
-        }
-      },
-      finish() {
-        if (!header) throw new Error("Missing catalog header");
-        return value;
-      },
-    };
-  },
-};
+export const catalogModelCodec: ProviderReadCodec<"catalog.models"> =
+  modelCatalogCodec;
 export const catalogFileCodec: ProviderReadCodec<"catalog.files"> = {
   *chunks(value, rows) {
     for (

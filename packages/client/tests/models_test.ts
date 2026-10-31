@@ -179,7 +179,7 @@ Deno.test("selected catalog discovery yields to the first body attempt and never
     const catalogs = frames.filter((frame) => frame.method === "models.list");
     assertEquals(catalogs.length, 1);
     assertEquals(Reflect.get(catalogs[0].params as object, "sessionID"), "new");
-    answer("models.list", { providers: [] });
+    answer("models.list", { providers: [], defaultState: "unknown" });
     await session.models?.ready();
   } finally {
     session.stop();
@@ -201,9 +201,12 @@ Deno.test("catalog discovery remains available after a failed initial body attem
     await settle();
     assertEquals(session.state.loading, false);
     assert(frames.some((frame) => frame.method === "models.list"));
-    answer("models.list", { providers: [] });
+    answer("models.list", { providers: [], defaultState: "unknown" });
     await session.models?.ready();
-    assertEquals(session.models?.state.value, { providers: [] });
+    assertEquals(session.models?.state.value, {
+      providers: [],
+      defaultState: "unknown",
+    });
   } finally {
     session.stop();
     connection.stop();
@@ -212,8 +215,16 @@ Deno.test("catalog discovery remains available after a failed initial body attem
 
 Deno.test("session catalog is optional, nonblocking and generation-bound across selection and reconnect", async () => {
   const { connection, session, answer, frames } = fixture();
-  const old = { providers: [], default: { provider: "old", model: "old" } };
-  const fresh = { providers: [], default: { provider: "new", model: "new" } };
+  const old = {
+    providers: [],
+    defaultState: "configured" as const,
+    default: { provider: "old", model: "old" },
+  };
+  const fresh = {
+    providers: [],
+    defaultState: "configured" as const,
+    default: { provider: "new", model: "new" },
+  };
   connection.supports = (name) => name === "models";
   try {
     session.open({ sidecarId: "core", sessionID: "old" });

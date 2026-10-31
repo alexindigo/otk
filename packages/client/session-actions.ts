@@ -19,6 +19,7 @@ import {
 import { familySelection, familyTask, sessionFamily } from "./session-tree.ts";
 import { IntentGroup, type RequestOptions } from "./requests.ts";
 import type { InboxRpc } from "./inbox.ts";
+import { prepareAttachments } from "./attachment-batches.ts";
 
 export interface SessionActions {
   rpc(target: Selection): InboxRpc["call"];
@@ -132,20 +133,24 @@ export function createSessionActions(o: {
         return o.submitted ? o.submitted(target, admit) : admit();
       },
     });
-  const attachments = (
+  const attachments = async (
     parts: PromptPart[],
     sidecarId: string,
-  ): Promise<PromptPart[]> =>
-    Promise.all(
-      parts.map((part) =>
-        part.kind === "file" && part.source === "history"
-          ? resources.sidecars.connection(part.sidecarID || sidecarId).rpc.call(
-            "history.attachment",
-            { messageID: part.messageID, partID: part.partID },
-          )
-          : part
-      ),
+  ): Promise<PromptPart[]> => {
+    if (!parts.some((part) => part.kind === "file")) return parts;
+    const policy = resources.sidecars.connection(sidecarId).attachments;
+    if (!policy) throw new Error("Attachment policy is not available yet");
+    return await prepareAttachments(
+      parts,
+      sidecarId,
+      policy,
+      async (origin, refs) =>
+        (await resources.sidecars.connection(origin).rpc.call(
+          "history.attachments",
+          { refs },
+        )).items,
     );
+  };
   const working = (target: Selection) => {
     const status = resources.entry(target.sidecarId, target.sessionID)?.status;
     return !!status && status !== "idle";

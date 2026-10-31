@@ -37,6 +37,8 @@ export interface PromptContext extends SessionPorts {
   commands: CommandHub;
   keyboard: Keyboard;
   own(release: () => void): void;
+  /** Register effects only after prior component owners have released them. */
+  mount(setup: () => void | (() => void)): void;
   props: PromptProps;
   active(): boolean;
   change(update: DraftChange, caret?: number): Draft;

@@ -24,7 +24,10 @@ for (const theme of ["otk-dark", "otk-light"]) {
       `.otk-project-row[data-project=${JSON.stringify(directory)}]`;
     const find = (directory: string) =>
       `document.querySelector(${JSON.stringify(row(directory))})`;
-    const snap = () => client.rpc<InboxSnapshot>("inbox.get", {});
+    const snap = () =>
+      client.rpc<{ inbox: InboxSnapshot }>("inbox.get", {}).then((value) =>
+        value.inbox
+      );
     try {
       await Deno.mkdir(empty);
       const finishedDirectory = join(projects, "finished-discovery");

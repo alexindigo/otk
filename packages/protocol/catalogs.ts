@@ -1,46 +1,54 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type {
-  AgentOption,
-  CommandOption,
-  FileMatch,
-  ResourceOption,
-} from "./rpc.ts";
-import type { ModelCatalog } from "./models.ts";
-import type { QuestionRequest } from "./content.ts";
 import type { PublicFailure } from "./requests.ts";
-
-export interface CatalogAgent extends AgentOption {
-  primary: boolean;
-  mention: boolean;
-}
-export interface CatalogFile extends FileMatch {
-  canonicalPath: string;
-}
-export interface SkillOption {
-  name: string;
-  description?: string;
-}
-export interface AgentCatalogKinds {
-  agents: CatalogAgent[];
-}
-export interface CommandCatalogKinds {
-  commands: CommandOption[];
-}
-export interface SkillCatalogKinds {
-  skills: SkillOption[];
-}
-export interface ModelCatalogKinds {
-  models: ModelCatalog;
-}
-export interface ResourceCatalogKinds {
-  resources: ResourceOption[];
-}
-export interface FileCatalogKinds {
-  files: CatalogFile[];
-}
-export interface QuestionCatalogKinds {
-  questions: QuestionRequest[];
-}
+import type { RequestMetadata } from "./request-metadata.ts";
+import type { AgentCatalogKinds, AgentChunkKinds } from "./catalogs/agents.ts";
+import type {
+  CommandCatalogKinds,
+  CommandChunkKinds,
+} from "./catalogs/commands.ts";
+import type { SkillCatalogKinds, SkillChunkKinds } from "./catalogs/skills.ts";
+import type { ModelCatalogKinds, ModelChunkKinds } from "./catalogs/models.ts";
+import type {
+  ResourceCatalogKinds,
+  ResourceChunkKinds,
+} from "./catalogs/resources.ts";
+import type { FileCatalogKinds, FileChunkKinds } from "./catalogs/files.ts";
+import type {
+  QuestionCatalogKinds,
+  QuestionChunkKinds,
+} from "./catalogs/questions.ts";
+export type {
+  AgentCatalogKinds,
+  AgentChunkKinds,
+  CatalogAgent,
+} from "./catalogs/agents.ts";
+export type {
+  CommandCatalogKinds,
+  CommandChunkKinds,
+} from "./catalogs/commands.ts";
+export type {
+  CatalogFile,
+  FileCatalogKinds,
+  FileChunkKinds,
+} from "./catalogs/files.ts";
+export type {
+  SkillCatalogKinds,
+  SkillChunkKinds,
+  SkillOption,
+} from "./catalogs/skills.ts";
+export type {
+  CatalogModelItem,
+  ModelCatalogKinds,
+  ModelChunkKinds,
+} from "./catalogs/models.ts";
+export type {
+  ResourceCatalogKinds,
+  ResourceChunkKinds,
+} from "./catalogs/resources.ts";
+export type {
+  QuestionCatalogKinds,
+  QuestionChunkKinds,
+} from "./catalogs/questions.ts";
 /** Open feature contributions. Acquisition/transport machinery knows no kind names. */
 export interface DirectoryCatalogKinds
   extends
@@ -67,3 +75,63 @@ export interface DirectoryCatalog {
   paths: { style: "posix" | "win32"; separator: "/" | "\\" };
   values: CatalogValues;
 }
+export interface CatalogRpcMethods {
+  "catalogs.watch": { params: { directory: string }; result: DirectoryCatalog };
+  "catalogs.refresh": { params: { directory: string }; result: null };
+}
+export interface CatalogsCapability {
+  watch(
+    directory: string,
+    listener: (value: DirectoryCatalog) => void,
+    signal: AbortSignal,
+  ): Promise<DirectoryCatalog>;
+  refresh(directory: string, signal?: AbortSignal): Promise<void>;
+}
+export interface CatalogsCapabilities {
+  catalogs: CatalogsCapability;
+}
+export const catalogRequestMetadata: Readonly<Record<string, RequestMetadata>> =
+  {
+    "catalogs.watch": { kind: "lease", pending: "Preparing project choices" },
+    "catalogs.refresh": { kind: "read", pending: "Refreshing project choices" },
+  };
+/** Each selected feature contributes its own item contract and codec. */
+export interface CatalogChunkKinds
+  extends
+    AgentChunkKinds,
+    CommandChunkKinds,
+    SkillChunkKinds,
+    ModelChunkKinds,
+    ResourceChunkKinds,
+    FileChunkKinds,
+    QuestionChunkKinds {}
+export type CatalogChunk = {
+  [K in keyof CatalogChunkKinds]: {
+    t: "catalog.chunk";
+    directory: string;
+    generation: string;
+    revision: number;
+    transfer: string;
+    part: number;
+    last: boolean;
+    kind: K;
+    items: CatalogChunkKinds[K][];
+  };
+}[keyof CatalogChunkKinds];
+export interface CatalogCodec<
+  K extends keyof DirectoryCatalogKinds & keyof CatalogChunkKinds,
+> {
+  chunks(
+    value: DirectoryCatalogKinds[K],
+    rows: number,
+  ): Iterable<CatalogChunkKinds[K][]>;
+  create(): {
+    append(items: CatalogChunkKinds[K][]): void;
+    finish(): DirectoryCatalogKinds[K];
+  };
+}
+export type CatalogCodecs = {
+  [K in keyof DirectoryCatalogKinds & keyof CatalogChunkKinds]?: CatalogCodec<
+    K
+  >;
+};

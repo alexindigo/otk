@@ -21,6 +21,7 @@ export function createCompletion(
   ctx.own(() => owner.dispose());
   createEffect(() => ({
     input: ctx.props.value.input,
+    revisions: features.map((feature) => feature.source?.revision?.()),
     mode: ctx.props.value.mode,
     caret: ctx.caret(),
     connected: ctx.props.connected && ctx.supports("prompt"),

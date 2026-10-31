@@ -65,6 +65,7 @@ Deno.test("the meter uses the latest reported context and model, with no invente
     },
   };
   const catalog: ModelCatalog = {
+    defaultState: "unknown",
     providers: [{
       id: "p",
       name: "Provider",

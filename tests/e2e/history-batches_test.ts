@@ -58,7 +58,7 @@ test("cold browser recalls image and PDF references and sends exact provider byt
     );
     assertEquals(
       sentFrames(browser).filter(({ frame }) =>
-        frame.method === "history.attachment"
+        frame.method === "history.attachments"
       ).length,
       0,
     );
@@ -99,6 +99,14 @@ test("cold browser recalls image and PDF references and sends exact provider byt
       ],
     );
     await waitForReply(browser, target.id, "Recalled files received.");
+    const batches = sentFrames(browser).filter(({ frame }) =>
+      frame.method === "history.attachments"
+    );
+    assertEquals(batches.length, 1);
+    assertEquals(
+      (batches[0].frame.params as { refs: unknown[] }).refs.length,
+      2,
+    );
     await browser.poll(
       "!document.querySelector('.otk-prompt-chip') && document.querySelector('textarea[name=prompt]').value===''",
     );

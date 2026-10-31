@@ -12,6 +12,7 @@ import {
 const first = { provider: "one", model: "first" },
   second = { provider: "two", model: "second" };
 const catalog: ModelCatalog = {
+  defaultState: "configured",
   default: first,
   providers: [
     {
@@ -226,10 +227,13 @@ Deno.test("composer owns initial readiness, refresh coalescing, errors and last 
   assertEquals(calls, 2, "Readiness does not repeatedly retry a known failure");
   pending = deferred<ModelCatalog>();
   const retry = f.owner.refreshModels();
-  pending.resolve({ providers: [] });
+  pending.resolve({ providers: [], defaultState: "unknown" });
   await retry;
   assertEquals(f.owner.state.models.error, "");
-  assertEquals(f.owner.state.models.value, { providers: [] });
+  assertEquals(f.owner.state.models.value, {
+    providers: [],
+    defaultState: "unknown",
+  });
   f.owner.dispose();
 });
 
@@ -313,7 +317,7 @@ Deno.test("composer reconnect never joins or applies old connection work, even w
   assertEquals(calls, 2);
   requests[1].resolve(catalog);
   await Promise.all([beforeReconnect, afterReconnect]);
-  requests[0].resolve({ providers: [] });
+  requests[0].resolve({ providers: [], defaultState: "unknown" });
   await Promise.resolve();
   await Promise.resolve();
   assertEquals(f.owner.state.models.value, catalog);

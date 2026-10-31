@@ -9,6 +9,7 @@ import type { Draft, DraftChange } from "./drafts.ts";
 import type { ToolCompletionSource } from "./session.ts";
 import { createState, type StateFactory } from "./state.ts";
 import { createCatalogResource } from "./catalog-resource.ts";
+import type { DirectoryCatalogLease } from "./directory-catalogs.ts";
 import {
   type CatalogState,
   createModelCatalog,
@@ -66,6 +67,7 @@ export interface ComposerSelectionOptions {
   onToolCompleted?: ToolCompletionSource;
   /** Borrow the session's catalog; only standalone consumers create their own. */
   modelCatalog?: ModelCatalogOwner;
+  directoryCatalog?: DirectoryCatalogLease;
 }
 export interface ComposerSelection {
   state: ComposerSelectionState;
@@ -103,7 +105,10 @@ export function createComposerSelection(
     },
     load: options.load.models,
   });
-  const agents = createCatalogResource({
+  const agents = options.directoryCatalog?.view(
+    "agents",
+    (agents) => agents.filter((agent) => agent.primary),
+  ) ?? createCatalogResource({
     connection: () => {
       const c = options.connection();
       return { key: c.key, connected: c.connected, available: c.agents };
@@ -258,7 +263,7 @@ export function createComposerSelection(
           return;
         }
         const before = currentDraft(), at = generation;
-        await agents.refresh();
+        await agents.ready();
         connect();
         if (!alive || at !== generation) return;
         options.change((draft) => {
@@ -323,14 +328,15 @@ export function createComposerSelection(
   };
   const switched = new Set<string>();
   const stopTools = options.onToolCompleted?.((part) => {
-    if (part.call.tool !== "external" || part.call.status !== "completed") {
+    if (part.call.status !== "completed") {
       return;
     }
-    const name = part.call.name === "plan_exit"
-      ? "build"
-      : part.call.name === "plan_enter"
-      ? "plan"
-      : undefined;
+    const name = part.call.selectionIntent?.agent ??
+      (part.call.tool === "external" && part.call.name === "plan_exit"
+        ? "build"
+        : part.call.tool === "external" && part.call.name === "plan_enter"
+        ? "plan"
+        : undefined);
     if (!name || switched.has(part.id)) return;
     switched.add(part.id);
     // Use exactly the manual intent, including the agent's configured choices.

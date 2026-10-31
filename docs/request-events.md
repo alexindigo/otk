@@ -1,6 +1,6 @@
 # Request events and recovery
 
-OTK protocol **16** gives actions and reads the same observable lifetime:
+OTK protocol **17** gives actions and reads the same observable lifetime:
 admission, pending progress and a correlated result. Connection state is
 separate from operation state. A slow or disconnected operation is not reported
 failed merely because a liveness interval elapsed.

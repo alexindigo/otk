@@ -36,7 +36,7 @@ async function taskControls(
   f: Awaited<ReturnType<typeof inboxBrowserFixture>>,
 ) {
   const directory = f.entries[0].directory;
-  const inbox = await c.rpc<InboxSnapshot>("inbox.get", {});
+  const inbox = (await c.rpc<{ inbox: InboxSnapshot }>("inbox.get", {})).inbox;
   const actions = createTaskActions({
     call: (method, params) => c.rpc(method, params),
   }, directory);
@@ -502,7 +502,8 @@ test("axiom 1: working blocked and unseen-finished ungrouped tabs and rail light
         ),
       );
     }
-    const inbox = await c.rpc<InboxSnapshot>("inbox.get", {});
+    const inbox =
+      (await c.rpc<{ inbox: InboxSnapshot }>("inbox.get", {})).inbox;
     assertEquals(
       inbox.projects.find((p) => p.directory === base.directory)!.inactive,
       false,

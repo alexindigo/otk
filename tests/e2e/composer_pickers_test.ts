@@ -499,15 +499,23 @@ test("V5 composer picks reach native messages and the selected provider; restore
       "document.querySelector('.otk-model-picker section:first-child h3')?.textContent==='Favourites' && !!document.querySelector('[aria-label=\"Remove Scripted with variants from favourites\"]')",
     );
     await b.poll("!document.querySelector('.otk-model-picker [role=status]')");
-    const before = sentFrames(b).filter(({ frame }) =>
-      frame.method === "models.list"
-    ).length;
+    const catalogReads = () =>
+      sentFrames(b).filter(({ frame }) =>
+        ["models.list", "catalogs.watch", "catalogs.refresh"].includes(
+          String(frame.method),
+        )
+      ).length;
+    const before = catalogReads();
     await b.key("Escape");
     await open(b, "model");
+    assertEquals(
+      catalogReads(),
+      before,
+      "Opening a ready picker borrows its current directory value",
+    );
+    await b.click(".otk-model-picker .otk-picker-status button");
     await waitFor(
-      () =>
-        sentFrames(b).filter(({ frame }) => frame.method === "models.list")
-          .length,
+      () => catalogReads(),
       (count) => count > before,
     );
     // Highlight is not selection: moving to the last row preserves the pointer.
@@ -628,6 +636,7 @@ test("V5 restored missing model remains sendable; catalog loading and errors are
   let reject!: (error: Error) => void, calls = 0;
   const sent: PromptInput[] = [];
   const catalog: ModelCatalog = {
+    defaultState: "unknown",
     providers: [{
       id: "connected",
       name: "Connected provider",
@@ -727,6 +736,7 @@ test("V5 restored missing model remains sendable; catalog loading and errors are
     });
     assertEquals(sent[0].agent, "build");
     await open(b, "model");
+    await b.click(".otk-model-picker .otk-picker-status > button");
     await b.poll(
       "document.querySelector('.otk-model-picker [role=alert] > span')?.textContent==='Could not finish this action. Try again'",
     );
@@ -816,6 +826,7 @@ test("prompt snapshots the agent/model/variant picked while first catalog readin
     );
     assertEquals(sent.length, 0);
     resolve({
+      defaultState: "unknown",
       providers: [{
         id: "later",
         name: "Later",
@@ -980,6 +991,7 @@ test("U2 native null selection metadata stays absent while the model catalog is 
     assertEquals(b.errors, []);
     await b.key("Escape");
     pending.resolve({
+      defaultState: "configured",
       default: { provider: "fixture", model: "plain" },
       providers: [{
         id: "fixture",
@@ -1007,7 +1019,7 @@ test("U2 native null selection metadata stays absent while the model catalog is 
     );
     assertEquals(b.errors, []);
   } finally {
-    pending.resolve({ providers: [] });
+    pending.resolve({ providers: [], defaultState: "unknown" });
     await b.close();
     await app.stop();
     await native.core.stop();

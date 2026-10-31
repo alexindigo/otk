@@ -140,7 +140,9 @@ test("digest request leases release their connection and are never reapplied dur
     lease: {
       id: "first",
       signal: new AbortController().signal,
-      defer: (release: () => void) => callbacks.push(release),
+      defer: (release: () => void) => {
+        callbacks.push(release);
+      },
     },
   };
   try {

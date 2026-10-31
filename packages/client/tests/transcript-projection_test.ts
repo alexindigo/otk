@@ -22,6 +22,27 @@ const step = (id: string, turn = "prompt", created = 1): AssistantMessage => ({
   time: { created, completed: created + 1 },
   parts: [{ id: `part-${id}`, kind: "text", synthetic: false, blocks: [] }],
 });
+Deno.test("message clock refinement preserves terminal authority and body identity without reviving removals", () => {
+  const projection = createTranscriptProjection();
+  const message = {
+    ...step("clock"),
+    time: { created: 1, completed: 10, lastOutput: 10 },
+  };
+  projection.replace([message, step("unrelated", "other", 20)]);
+  const unrelated = projection.state.messagesByID.unrelated;
+  const parts = projection.state.messagesByID.clock.parts;
+  projection.apply({ op: "message.clock", messageID: "clock", lastOutput: 8 });
+  assertEquals(projection.state.messagesByID.clock.time, {
+    created: 1,
+    completed: 10,
+    lastOutput: 8,
+  });
+  assertStrictEquals(projection.state.messagesByID.clock.parts, parts);
+  assertStrictEquals(projection.state.messagesByID.unrelated, unrelated);
+  projection.apply({ op: "message.remove", messageID: "clock" });
+  projection.apply({ op: "message.clock", messageID: "clock", lastOutput: 9 });
+  assertEquals(projection.state.messagesByID.clock, undefined);
+});
 Deno.test("transcript projection keeps logical reply identity across earlier pages and visits no history on part replacement", () => {
   const projection = createTranscriptProjection();
   const history = Array.from(

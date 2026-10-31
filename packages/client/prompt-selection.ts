@@ -89,7 +89,7 @@ export function effectiveSelection(
     draft.model,
     context?.model,
     option?.model,
-    catalog?.default,
+    catalog?.defaultState === "configured" ? catalog.default : undefined,
   );
   const { provider, info } = modelInfo(model.value, catalog);
   const valid = (value: string | undefined) =>
@@ -128,7 +128,10 @@ export function effectiveSelection(
     agent: { ...agent, color: option?.color },
     model: {
       ...model,
-      name: info?.name || model.value?.model,
+      name: info?.name || model.value?.model ||
+        (catalog?.defaultState === "unknown"
+          ? "Backend default (not reported)"
+          : undefined),
       providerName: provider?.name ?? model.value?.provider,
       variants: info?.variants ?? [],
       unavailable: catalog !== undefined && model.value !== undefined && !info,

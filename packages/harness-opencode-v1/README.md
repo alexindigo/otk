@@ -424,13 +424,15 @@ without rereading unchanged subtrees. A failed subtree retains the last-good
 complete value as unavailable. Explicit prompt references still validate through
 the attachment owner independently of ordinary discovery.
 
-Final lease release aborts volatile work, closes the file watcher and releases
-complete values. Native generation changes fence late results while preserving
-live leases. `stop()` joins retirement. `PendingQuestions` holds full normalized
-pending requests with their asking directory/generation independently of browser
-demand; event updates precede publication, inventory capture cannot resurrect a
-replied request, and answers validate current constraints without a fresh
-inventory read while continuity is known.
+The last file-demand lease closes the file watcher and releases its complete
+file value even when an agent/color borrower retains the directory. Final
+directory lease release aborts volatile work and releases complete values.
+Native generation changes fence late results while preserving live leases.
+`stop()` joins retirement. `PendingQuestions` holds full normalized pending
+requests with their asking directory/generation independently of browser demand;
+event updates precede publication, inventory capture cannot resurrect a replied
+request, and answers validate current constraints without a fresh inventory read
+while continuity is known.
 
 Shipped acquisition uses the existing digest worker's transient provider-read
 contributions and bounded publication credits. These values never enter digest
@@ -439,8 +441,10 @@ same `DigestScheduler`, explicit `digest`/`catalogs` policy and no OTK database.
 An independent consumer can inject a `ProviderReadPort` into
 `DirectoryCatalogs`, plus feature-owned `contributions`; external kinds need no
 machinery edit. Application policy comes from the complete defaults. Catalog
-wire leases/browser activation are a separate protocol change; current
-compatibility methods remain coherent.
+wire leases are exposed by
+`capabilities.catalogs.watch(directory,listener,signal)` and
+`refresh(directory,signal?)`. Watch cancellation releases the exact borrowed
+lease. Compatibility methods still borrow the same acquisition owner.
 
 ### Reusable digest sink
 

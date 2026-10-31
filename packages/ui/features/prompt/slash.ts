@@ -31,9 +31,8 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
         string,
         { signature: string; release: () => void }
       >();
-      let generation = 0, server: CommandOption[] = [];
+      let server: CommandOption[] = [], mounted = false;
       ctx.own(() => {
-        generation++;
         for (const entry of registered.values()) entry.release();
         registered.clear();
       });
@@ -57,20 +56,19 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
           rows.findIndex((row) => row.name === option.name) === index
         );
       };
-      const catalog = async () => {
+      const catalog = () => {
+        if (!mounted) return options();
         if (!ctx.props.connected || !ctx.supports("commands")) {
           return options();
         }
-        const revision = ++generation;
-        let next: CommandOption[];
-        try {
-          next = await ctx.rpc("commands.list", { sessionID: ctx.sessionID() });
-        } catch (error) {
-          if (ctx.active() && revision === generation) throw error;
-          return options();
+        const values = ctx.directoryCatalog?.state.catalog?.values;
+        const next = [...values?.commands?.value ?? []];
+        for (const skill of values?.skills?.value ?? []) {
+          if (!next.some((command) => command.name === skill.name)) {
+            next.push({ ...skill, aliases: [], source: "skill" });
+          }
         }
         if (!ctx.active()) return [];
-        if (revision !== generation) return options();
         server = next.map((command) => ({
           ...command,
           aliases: command.aliases.slice(),
@@ -124,19 +122,33 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
         }
         return options();
       };
-      onSettled(() => {
-        void catalog().catch(ctx.fail);
+      ctx.mount(() => {
+        mounted = true;
+        catalog();
+        const stop = ctx.directoryCatalog?.subscribe(() => {
+          catalog();
+        });
+        return () => {
+          mounted = false;
+          stop?.();
+        };
       });
       return {
+        async ready() {
+          await ctx.directoryCatalog?.ready("commands");
+          await ctx.directoryCatalog?.ready("skills");
+          catalog();
+        },
         source: {
+          revision: () => ctx.directoryCatalog?.state.catalog?.revision,
           trigger(input, caret) {
             const before = input.slice(0, caret);
             return /^\/[^\s]*$/.test(before)
               ? { start: 0, end: caret, query: before.slice(1) }
               : undefined;
           },
-          options: async (token) =>
-            commandOptions(await catalog(), token.query),
+          options: (token) =>
+            Promise.resolve(commandOptions(options(), token.query)),
           select(token, option) {
             const command = option.command;
             if (!command) return;
@@ -185,7 +197,7 @@ export function registerSlashPrompt(prompt: PromptRegistry): void {
             ? parseCommand(draft.input)
             : undefined;
           const command = parsed &&
-            (await catalog()).find((command) =>
+            options().find((command) =>
               command.name === parsed.command ||
               command.aliases.includes(parsed.command)
             );

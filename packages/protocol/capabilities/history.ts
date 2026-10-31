@@ -5,8 +5,16 @@ export interface HistoryAttachmentRef {
   messageID: string;
   partID: string;
 }
+export interface HistoryAttachment {
+  ref: HistoryAttachmentRef;
+  part: Extract<PromptPart, { source: "upload" }>;
+}
 export interface HistoryCapability {
   listHistory(signal?: AbortSignal): Promise<HistoryEntry[]>;
+  attachments(
+    refs: HistoryAttachmentRef[],
+    signal?: AbortSignal,
+  ): Promise<HistoryAttachment[]>;
   attachment(
     ref: HistoryAttachmentRef,
     signal?: AbortSignal,

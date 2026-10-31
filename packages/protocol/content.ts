@@ -52,9 +52,9 @@ export interface Hunk {
   }[];
 }
 export interface FileDiff {
-  path: string;
+  path?: string;
   oldPath?: string;
-  status: "added" | "deleted" | "modified" | "moved";
+  status: "added" | "deleted" | "modified" | "moved" | "unknown";
   additions: number;
   deletions: number;
   hunks: Hunk[];
@@ -98,6 +98,7 @@ export interface ToolBase {
   /** Native result text, when supplied; structural tools also retain their typed result. */
   output?: string;
   outputContent?: ToolResult;
+  selectionIntent?: { agent: string };
 }
 export interface BashCall extends ToolBase {
   tool: "bash";
@@ -128,9 +129,9 @@ export interface ReadCall extends ToolBase {
 export interface SearchCall extends ToolBase {
   tool: "search";
   mode: "glob" | "grep" | "list";
-  pattern: string;
+  pattern?: string;
   path?: string;
-  matches: number;
+  matches?: number;
 }
 export interface FetchCall extends ToolBase {
   tool: "fetch";
@@ -302,7 +303,7 @@ export interface RevertedPrompt {
 export interface RevertInfo {
   messageID: string;
   messageCount: number;
-  files: { path: string; additions: number; deletions: number }[];
+  files: { path?: string; additions: number; deletions: number }[];
   /** Oldest first, at most 50, whitespace collapsed and at most 200 characters. */
   prompts?: RevertedPrompt[];
   /** Boundary prompt content; attachments retain metadata-only history refs. */
@@ -326,7 +327,7 @@ export type PermissionDetail =
 export interface Todo {
   content: string;
   status: "pending" | "in_progress" | "completed" | "cancelled";
-  priority: string;
+  priority?: string;
 }
 export type ContentOp =
   | { op: "stream.reconcile" }
@@ -358,6 +359,7 @@ export type ContentOp =
   }
   | { op: "message.upsert"; message: Message }
   | { op: "message.remove"; messageID: string }
+  | { op: "message.clock"; messageID: string; lastOutput: number }
   | { op: "part.upsert"; messageID: string; part: Part; lastOutput?: number }
   | {
     op: "part.blocks";

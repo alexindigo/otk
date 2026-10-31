@@ -2,7 +2,9 @@
 import type { ContentOp } from "./content.ts";
 import type { IndexEntry, IndexOp } from "./index.ts";
 import type { Preferences } from "./prefs.ts";
-import type { InboxSnapshot } from "./inbox.ts";
+import type { InboxBaseline, InboxOp } from "./inbox.ts";
+import type { CatalogChunk, DirectoryCatalog } from "./catalogs.ts";
+import type { AttachmentPolicy } from "./policies/attachments.ts";
 import type { ApprovalSnapshot } from "./approvals.ts";
 import type {
   ContentClock,
@@ -40,6 +42,7 @@ export type ServerFrame =
     t: "welcome";
     protocol: number;
     messages: MessagePolicy;
+    attachments?: AttachmentPolicy & { uploadbytes: number };
     requests: {
       window: RequestWindow;
       policy: ClientRequestPolicy;
@@ -58,7 +61,23 @@ export type ServerFrame =
   | { t: "harness"; state: HarnessState }
   | { t: "ping" }
   | { t: "prefs"; prefs: Preferences }
-  | { t: "inbox"; inbox: InboxSnapshot }
+  | ({ t: "inbox.snapshot" } & InboxBaseline)
+  | {
+    t: "inbox.patch";
+    generation: string;
+    from: number;
+    revision: number;
+    ops: InboxOp[];
+  }
+  | { t: "catalog.snapshot"; catalog: DirectoryCatalog }
+  | CatalogChunk
+  | {
+    t: "frecency.patch";
+    directory: string;
+    revision: number;
+    upsert: import("./rpc.ts").FrecencyEntry[];
+    remove: string[];
+  }
   | { t: "approvals"; approvals: ApprovalSnapshot }
   | { t: "approval.activity"; sessions: string[] }
   | { t: "index.snapshot"; rev: number; entries: IndexEntry[] }

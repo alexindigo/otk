@@ -62,7 +62,7 @@ test("frecency RPC uses authoritative session directory instead of a client-clai
         "frecency.list",
         { sessionID: "opcv1-ses_files", directory: "/forged-project" },
       ),
-      store.list(root),
+      { directory: root, revision: 1, entries: store.list(root) },
     );
   } finally {
     await adapter.core.stop();

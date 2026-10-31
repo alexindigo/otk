@@ -5,7 +5,8 @@ import { fixtureRequests } from "../../../tests/support/request-wire.ts";
 
 Deno.test("catalog failure publication normalizes unknown values and keeps last-good data", async () => {
   const failure = Promise.withResolvers<never>();
-  let read = () => Promise.resolve({ providers: [] });
+  let read = () =>
+    Promise.resolve({ providers: [], defaultState: "unknown" as const });
   const owner = createModelCatalog({
     connection: () => ({ key: "one", connected: true, available: true }),
     load: () => read(),
@@ -17,7 +18,7 @@ Deno.test("catalog failure publication normalizes unknown values and keeps last-
     failure.reject(null);
     await pending;
     assertEquals(owner.state.error, "Could not finish this action. Try again");
-    assertEquals(owner.state.value, { providers: [] });
+    assertEquals(owner.state.value, { providers: [], defaultState: "unknown" });
     assertEquals(owner.state.loading, false);
     read = () => Promise.reject("catalog offline");
     await owner.refresh();

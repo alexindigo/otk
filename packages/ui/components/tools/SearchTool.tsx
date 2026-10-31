@@ -18,7 +18,9 @@ export function registerSearchTool(tools: ToolRegistry): void {
         : undefined,
       summary: [
         call.mode !== "list" ? call.pattern : "",
-        call.mode === "list"
+        call.matches === undefined
+          ? ""
+          : call.mode === "list"
           ? countLabel(call.matches, "entry", "entries")
           : countLabel(call.matches, "match", "matches"),
       ].filter(Boolean).join(" · "),

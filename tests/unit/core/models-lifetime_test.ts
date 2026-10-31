@@ -33,7 +33,7 @@ Deno.test("model catalog dispatch carries its owning read signal across the capa
     request.abort();
     assertStrictEquals((received as AbortSignal).aborted, true);
   } finally {
-    result.resolve({ providers: [] });
+    result.resolve({ providers: [], defaultState: "unknown" });
     await pending;
   }
 });

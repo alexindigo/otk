@@ -17,6 +17,11 @@ import type { SessionActionsRpcMethods } from "./capabilities/session-actions.ts
 import type { RestoreRpcMethods } from "./capabilities/restore.ts";
 import type { DigestsRpcMethods } from "./capabilities/digests.ts";
 import type { RequestMetadata } from "./request-metadata.ts";
+import type { CatalogRpcMethods } from "./catalogs.ts";
+import type {
+  HistoryAttachment,
+  HistoryAttachmentRef,
+} from "./capabilities/history.ts";
 export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "session.get": { kind: "read", pending: "Loading conversation" },
   "session.children": { kind: "read", pending: "Loading sessions" },
@@ -29,7 +34,7 @@ export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "session.revert": { kind: "mutation", pending: "Rolling back" },
   "commands.list": { kind: "read", pending: "Loading commands" },
   "history.list": { kind: "read", pending: "Loading prompt history" },
-  "history.attachment": { kind: "read", pending: "Preparing attachments" },
+  "history.attachments": { kind: "read", pending: "Preparing attachments" },
   "find.files": { kind: "read", pending: "Finding files" },
   "agents.list": { kind: "read", pending: "Loading agents" },
   "resources.list": { kind: "read", pending: "Loading resources" },
@@ -151,7 +156,8 @@ export interface RpcMethods
     SessionActionsRpcMethods,
     RestoreRpcMethods,
     DigestsRpcMethods,
-    ApprovalRpcMethods {
+    ApprovalRpcMethods,
+    CatalogRpcMethods {
   "session.get": { params: { sessionID: string }; result: ContentSession };
   "session.children": {
     params: { sessionID: string };
@@ -173,9 +179,9 @@ export interface RpcMethods
   };
   "commands.list": { params: { sessionID: string }; result: CommandOption[] };
   "history.list": { params: Record<string, never>; result: HistoryEntry[] };
-  "history.attachment": {
-    params: { messageID: string; partID: string };
-    result: Extract<PromptPart, { source: "upload" }>;
+  "history.attachments": {
+    params: { refs: HistoryAttachmentRef[] };
+    result: { items: HistoryAttachment[] };
   };
   "find.files": {
     params: { sessionID: string; query?: string };
@@ -186,7 +192,10 @@ export interface RpcMethods
     result: AgentOption[];
   };
   "resources.list": { params: { sessionID: string }; result: ResourceOption[] };
-  "frecency.list": { params: { sessionID: string }; result: FrecencyEntry[] };
+  "frecency.list": {
+    params: { sessionID: string } | { directory: string };
+    result: { directory: string; revision: number; entries: FrecencyEntry[] };
+  };
   "frecency.bump": {
     params: { sessionID: string; path: string };
     result: null;

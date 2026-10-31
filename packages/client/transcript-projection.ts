@@ -471,13 +471,15 @@ export function createTranscriptProjection(): TranscriptProjection {
       if (
         op.op !== "message.upsert" && op.op !== "part.upsert" &&
         op.op !== "part.remove" && op.op !== "part.blocks" &&
-        op.op !== "task.progress"
+        op.op !== "task.progress" && op.op !== "message.clock"
       ) return false;
       const id = op.op === "message.upsert" ? op.message.id : op.messageID;
       const previous = read(id);
-      const slot = op.op === "message.upsert" ? undefined : parts.get(id)?.get(
-        op.op === "part.upsert" ? op.part.id : op.partID,
-      ) ?? -1;
+      const slot = op.op === "message.upsert" || op.op === "message.clock"
+        ? undefined
+        : parts.get(id)?.get(
+          op.op === "part.upsert" ? op.part.id : op.partID,
+        ) ?? -1;
       const next = reduceMessage(previous, op, slot);
       if (next && next !== previous) {
         if (op.op === "part.upsert") helperPart(id, op.part.id, op.part);

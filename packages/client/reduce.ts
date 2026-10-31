@@ -93,6 +93,11 @@ export function reduceMessage(
     return message;
   }
   if (!previous) return;
+  if (op.op === "message.clock") {
+    return previous.role === "assistant"
+      ? { ...previous, time: { ...previous.time, lastOutput: op.lastOutput } }
+      : previous;
+  }
   if (op.op === "task.progress") {
     const index = slot ??
       previous.parts.findIndex((part) => part.id === op.partID);

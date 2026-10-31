@@ -39,6 +39,8 @@ import {
 } from "../../../core/mod.ts";
 import { InboxFeature } from "../../../core/features/inbox.ts";
 import { test } from "../../support/resources.ts";
+import { registerCatalogs } from "../../../core/features/catalogs.ts";
+import { createCatalogCodecs } from "@otk/protocol";
 import * as Core from "../../../core/mod.ts";
 import { PermissionFeature } from "../../../core/features/approvals.ts";
 import { registerDigests } from "../../../core/features/digests.ts";
@@ -168,6 +170,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       "revert",
       "restore",
       "digests",
+      "catalogs",
     ].map((name) => [name, {}])),
   } as unknown as Harness;
   const rpc = new RpcRegistry(harness, f.db), index = new IndexStore();
@@ -177,6 +180,12 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     harness.capabilities.permissions!,
   );
   f.inbox.register(rpc);
+  registerCatalogs(
+    rpc,
+    harness,
+    createCatalogCodecs(),
+    cfg().digest.publishrows,
+  );
   Core.registerPrefs(rpc, harness, f.prefs);
   Core.registerLayout(rpc, f.prefs);
   Core.registerFrecency(rpc, harness, f.frecency);
@@ -237,7 +246,9 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "find.files",
     "usage.get",
     "history.list",
-    "history.attachment",
+    "history.attachments",
+    "catalogs.watch",
+    "catalogs.refresh",
     "frecency.list",
     "frecency.bump",
     "prefs.get",
@@ -276,7 +287,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
         method,
       );
     }
-    assertEquals(counts, { read: 21, native: 15, local: 16, lease: 1 });
+    assertEquals(counts, { read: 22, native: 15, local: 16, lease: 2 });
   } finally {
     approvals.close();
     f.inbox.close();

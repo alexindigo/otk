@@ -54,6 +54,7 @@ const step = (
   parts: [],
 });
 const catalog: ModelCatalog = {
+  defaultState: "unknown",
   providers: ["one", "two"].map((id, i) => ({
     id,
     name: id,

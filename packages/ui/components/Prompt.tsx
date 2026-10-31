@@ -92,6 +92,7 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
     commands: ports.commands,
     keyboard,
     own: (release) => releases.push(release),
+    mount: (setup) => onSettled(setup),
     props,
     change,
     caret,

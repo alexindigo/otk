@@ -21,7 +21,7 @@ Deno.test("shared model catalog coalesces consumers, follows connection identity
       return result.promise;
     },
   });
-  const catalog = { providers: [] };
+  const catalog = { providers: [], defaultState: "unknown" as const };
   let joined = false;
   const release = owner.subscribe((state) => {
     if (state.loading && !joined) {
@@ -47,6 +47,7 @@ Deno.test("shared model catalog coalesces consumers, follows connection identity
     assertStrictEquals(owner.state.value, catalog);
     requests[0].result.resolve({
       providers: [],
+      defaultState: "configured",
       default: { provider: "old", model: "old" },
     });
     await opening;
@@ -104,8 +105,8 @@ Deno.test("disposing one composer does not dispose its borrowed session catalog"
   composer.connect();
   assertStrictEquals(composer.state.models, catalog.state);
   composer.dispose();
-  pending.resolve({ providers: [] });
+  pending.resolve({ providers: [], defaultState: "unknown" });
   await catalog.ready();
-  assertEquals(catalog.state.value, { providers: [] });
+  assertEquals(catalog.state.value, { providers: [], defaultState: "unknown" });
   catalog.dispose();
 });

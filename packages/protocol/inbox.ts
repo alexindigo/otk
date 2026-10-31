@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { RequestMetadata } from "./request-metadata.ts";
+import type { PublicFailure } from "./requests.ts";
 export const inboxRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "inbox.get": { kind: "read", pending: "Loading projects" },
   "projects.list": { kind: "read", pending: "Loading projects" },
@@ -53,9 +54,25 @@ export interface InboxSnapshot {
   discovered?: string[];
   discoveryError?: string;
 }
+export interface InboxVersion {
+  generation: string;
+  revision: number;
+}
+export interface InboxBaseline extends InboxVersion {
+  inbox: InboxSnapshot;
+}
+export type InboxOp =
+  | { op: "project.upsert"; project: ProjectRecord }
+  | { op: "project.remove"; directory: string }
+  | { op: "task.upsert"; task: TaskRecord }
+  | { op: "task.remove"; id: string }
+  | { op: "seen"; sessionID: string; time: number }
+  | { op: "finish"; sessionID: string; time: number }
+  | { op: "templates"; values: string[] }
+  | { op: "discovery"; directories: string[]; failure?: PublicFailure };
 /** Feature-owned contracts, composed by the open RPC interface. */
 export interface InboxRpcMethods {
-  "inbox.get": { params: Record<string, never>; result: InboxSnapshot };
+  "inbox.get": { params: Record<string, never>; result: InboxBaseline };
   "projects.list": { params: Record<string, never>; result: ProjectRecord[] };
   "projects.add": {
     params: { directory: string };

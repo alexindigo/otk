@@ -63,6 +63,7 @@ Deno.test("context window matches the reported footprint's exact provider/model,
     interrupted: false,
   };
   const catalog: ModelCatalog = {
+    defaultState: "configured",
     default: { provider: "other", model: "beam-free" },
     providers: ["other", "opencode"].map((id) => ({
       id,

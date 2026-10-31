@@ -11,6 +11,7 @@ const model = { provider: "fixture", model: "reasoning" };
 const context: PromptSelectionContext = {
   agents: [{ name: "build", model, variant: "high" }],
   catalog: {
+    defaultState: "configured",
     default: model,
     providers: [{
       id: "fixture",

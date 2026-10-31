@@ -456,7 +456,7 @@ const reply: AssistantMessage = {
       call: {
         tool: "edit",
         callID: "edit",
-        path: file.path,
+        path: file.path!,
         files: [file],
         output: "",
         diagnostics: [],

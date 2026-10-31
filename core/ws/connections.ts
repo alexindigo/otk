@@ -3,6 +3,7 @@ import {
   capabilityNames,
   checkClientFrameSize,
   isAttentionOp,
+  MAX_UPLOAD_BYTES,
   PROTOCOL_VERSION,
   requestFingerprint,
   requestRef,
@@ -37,7 +38,7 @@ interface Connection {
   close(): void;
 }
 export interface FrameSource {
-  snapshot(): ServerFrame;
+  snapshot?(signal?: AbortSignal): ServerFrame | Promise<ServerFrame>;
   listen(listener: (frame: ServerFrame) => void): () => void;
   close?(): void;
 }
@@ -46,6 +47,7 @@ export interface ConnectionRequests {
   identity(): string;
   policy: ClientRequestPolicy;
   helloms: number;
+  attachments?: import("@otk/protocol").AttachmentPolicy;
 }
 /** Socket recipients own delivery and leases, never action execution. */
 export class Connections {
@@ -150,7 +152,11 @@ export class Connections {
       defer(release: () => void) {
         if (controller.signal.aborted) release();
         else releases.add(release);
+        return () => {
+          releases.delete(release);
+        };
       },
+      publish: (frame: ServerFrame) => this.#send(c, frame),
     };
     const recipient = {
       send: (event: RequestEvent) => this.#send(c, event),
@@ -235,6 +241,14 @@ export class Connections {
             t: "welcome",
             protocol: PROTOCOL_VERSION,
             messages: this.messages,
+            ...(this.requests.attachments
+              ? {
+                attachments: {
+                  ...this.requests.attachments,
+                  uploadbytes: MAX_UPLOAD_BYTES,
+                },
+              }
+              : {}),
             requests: {
               window: this.requests.coordinator.window(),
               policy,
@@ -253,7 +267,12 @@ export class Connections {
           this.#send(c, { t: "harness", state: this.harnessState });
           this.#send(c, snapshot);
           this.#send(c, { t: "prefs", prefs: this.prefs.get() });
-          for (const source of this.sources) this.#send(c, source.snapshot());
+          for (const source of this.sources) {
+            if (!source.snapshot) continue;
+            const frame = await source.snapshot(controller.signal);
+            if (controller.signal.aborted) return;
+            this.#send(c, frame);
+          }
           return;
         }
         if (frame.t === "pong") return;

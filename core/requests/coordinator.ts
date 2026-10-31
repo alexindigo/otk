@@ -75,6 +75,10 @@ const bytes = (value: unknown) =>
 /** One admission/execution owner, independent of socket and presentation lifetimes. */
 export class RequestCoordinator {
   #entries = new Map<string, Entry>();
+  #leases = new Map<
+    string,
+    Map<RequestRecipient, { lifetime: RequestLifetime; close(): void }>
+  >();
   #queues = new Map<string, Promise<void>>();
   #run = crypto.randomUUID();
   #started = false;
@@ -275,6 +279,10 @@ export class RequestCoordinator {
           "ref" in item ? item.ref : item,
           this.options.bootstrap,
         );
+        if (control.t === "request.release") {
+          this.#leases.get(identity(keyOf(principal, ref)))?.get(recipient)
+            ?.close();
+        }
         const record = this.options.receipts.get(keyOf(principal, ref));
         if (!record || record.window_id !== ref.window) {
           if (control.t !== "request.resume") continue;
@@ -584,7 +592,7 @@ export class RequestCoordinator {
           }
           const result = await entry.prepared.run(
             execution,
-            entry.recipients.keys().next().value?.lease,
+            this.#lifetime(entry),
           );
           if (this.#stopped || entry.record.state === "released") return;
           if (
@@ -686,11 +694,60 @@ export class RequestCoordinator {
       !entry.work
     ) this.#entries.delete(identity(entry.record));
   }
+  #lifetime(entry: Entry): RequestLifetime | undefined {
+    const recipient = entry.recipients.keys().next().value;
+    if (!recipient || entry.policy.lifetime !== "request") {
+      return recipient?.lease;
+    }
+    const key = identity(entry.record),
+      owners = this.#leases.get(key) ?? new Map();
+    const existing = owners.get(recipient);
+    if (existing) return existing.lifetime;
+    const controller = new AbortController(), releases = new Set<() => void>();
+    let detach = () => {};
+    const close = () => {
+      if (controller.signal.aborted) return;
+      controller.abort();
+      detach();
+      for (const release of releases) {
+        try {
+          release();
+        } catch (cause) {
+          this.options.diagnostic?.(crypto.randomUUID(), cause);
+        }
+      }
+      releases.clear();
+      owners.delete(recipient);
+      if (!owners.size) this.#leases.delete(key);
+    };
+    const lifetime: RequestLifetime = {
+      id: JSON.stringify([
+        recipient.lease.id,
+        entry.ref.clientID,
+        entry.ref.key,
+      ]),
+      signal: controller.signal,
+      publish: recipient.lease.publish,
+      defer(release) {
+        if (controller.signal.aborted) release();
+        else releases.add(release);
+        return () => {
+          releases.delete(release);
+        };
+      },
+    };
+    owners.set(recipient, { lifetime, close });
+    this.#leases.set(key, owners);
+    const detached = recipient.lease.defer(close);
+    if (typeof detached === "function") detach = detached;
+    return lifetime;
+  }
   #dropResult(entry: Entry): void {
     this.#resultBytes -= entry.result?.bytes ?? 0;
     entry.result = undefined;
   }
   detach(recipient: RequestRecipient): void {
+    for (const owners of this.#leases.values()) owners.get(recipient)?.close();
     for (const entry of this.#entries.values()) {
       entry.recipients.delete(recipient);
       this.#retire(entry);
@@ -719,6 +776,11 @@ export class RequestCoordinator {
   }
   async stop(): Promise<void> {
     this.#stopped = true;
+    for (const owners of this.#leases.values()) {
+      for (const lease of owners.values()) {
+        lease.close();
+      }
+    }
     for (const entry of this.#entries.values()) {
       clearTimeout(entry.timer);
       entry.recipients.clear();

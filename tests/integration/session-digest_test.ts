@@ -93,8 +93,8 @@ test("shipped source rebuilds only derived digests and serves cached deleted met
       [session.id],
     );
     assertEquals(
-      (await rebuilt.client.rpc<InboxSnapshot>("inbox.get", {}))
-        .seen[session.id],
+      (await rebuilt.client.rpc<{ inbox: InboxSnapshot }>("inbox.get", {}))
+        .inbox.seen[session.id],
       seenClock,
     );
     await oc.request(`/session/${session.id}`, { method: "DELETE" });

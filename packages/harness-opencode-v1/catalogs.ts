@@ -46,6 +46,9 @@ interface Resource {
   watcher?: { close(): void };
   watch?: Promise<void>;
   watchFailure?: unknown;
+  fileRefs: number;
+  fileEpoch: number;
+  fileController: AbortController;
 }
 export interface CatalogLease {
   snapshot(): DirectoryCatalog;
@@ -173,6 +176,9 @@ export class DirectoryCatalogs {
         generation: crypto.randomUUID(),
         revision: 0,
         refs: 0,
+        fileRefs: 0,
+        fileEpoch: 0,
+        fileController: new AbortController(),
         controller: new AbortController(),
         kinds: new Map(),
         listeners: new Set(),
@@ -188,6 +194,8 @@ export class DirectoryCatalogs {
     resource.refs++;
     const value = resource;
     let live = true;
+    let files = false;
+    const listeners = new Set<() => void>();
     const check = () => {
       if (!live || value.controller.signal.aborted) {
         throw new DOMException("Catalog lease released", "AbortError");
@@ -201,10 +209,20 @@ export class DirectoryCatalogs {
       subscribe: (listener) => {
         check();
         value.listeners.add(listener);
-        return () => value.listeners.delete(listener);
+        listeners.add(listener);
+        return () => {
+          value.listeners.delete(listener);
+          listeners.delete(listener);
+        };
       },
       get: async (kind, signal) => {
         check();
+        if (kind === "files" && !files) {
+          files = true;
+          if (value.fileRefs++ === 0) {
+            value.fileController = new AbortController();
+          }
+        }
         return await detached(this.#get(value, kind), signal);
       },
       refresh: async () => {
@@ -217,6 +235,23 @@ export class DirectoryCatalogs {
       release: () => {
         if (!live) return;
         live = false;
+        for (const listener of listeners) value.listeners.delete(listener);
+        listeners.clear();
+        if (files && --value.fileRefs === 0) {
+          value.fileEpoch++;
+          value.fileController.abort();
+          value.watcher?.close();
+          value.watcher = undefined;
+          value.watch = undefined;
+          value.watchFailure = undefined;
+          value.kinds.delete("files");
+          value.files = new CatalogFiles(
+            value.directory,
+            this.reads,
+            value.owner,
+            this.options.pending,
+          );
+        }
         if (--value.refs === 0) this.#retire(value);
       },
     };
@@ -311,9 +346,12 @@ export class DirectoryCatalogs {
     const current = item;
     if (!current.work) {
       const controller = resource.controller, owner = resource.owner;
+      const signal = kind === "files"
+        ? AbortSignal.any([controller.signal, resource.fileController.signal])
+        : controller.signal;
       const work = Promise.resolve().then(async () => {
         do {
-          controller.signal.throwIfAborted();
+          signal.throwIfAborted();
           current.dirty = false;
           current.state = {
             ...current.state,
@@ -324,10 +362,10 @@ export class DirectoryCatalogs {
           try {
             const value = await acquire(
               resource.directory,
-              controller.signal,
+              signal,
               owner,
             );
-            controller.signal.throwIfAborted();
+            signal.throwIfAborted();
             if (kind === "files" && resource.watchFailure) {
               throw resource.watchFailure;
             }
@@ -340,7 +378,7 @@ export class DirectoryCatalogs {
               this.#publish(resource);
             }
           } catch (error) {
-            controller.signal.throwIfAborted();
+            signal.throwIfAborted();
             current.state = {
               ...current.state,
               state: "unavailable",
@@ -446,8 +484,12 @@ export class DirectoryCatalogs {
   }
   async #watch(resource: Resource): Promise<void> {
     let reconcile = false;
+    const epoch = resource.fileEpoch;
+    const retired = () =>
+      resource.controller.signal.aborted || !resource.fileRefs ||
+      resource.fileEpoch !== epoch;
     for (;;) {
-      if (resource.controller.signal.aborted) return;
+      if (retired()) return;
       let watcher: Deno.FsWatcher;
       try {
         watcher = (this.options.watch ?? ((paths) =>
@@ -477,7 +519,7 @@ export class DirectoryCatalogs {
       if (reconcile) this.invalidate(resource.directory, ["files"]);
       try {
         for await (const event of watcher) {
-          if (resource.controller.signal.aborted) return;
+          if (retired()) return;
           const ignore = event.paths.some((path) =>
             /(?:^|[/\\])(?:\.gitignore|\.ignore)$/.test(path)
           );
@@ -487,10 +529,10 @@ export class DirectoryCatalogs {
             event.kind === "other" || ignore ? undefined : event.paths,
           );
         }
-        if (resource.controller.signal.aborted) return;
+        if (retired()) return;
         throw new Error("File watch ended before its demand lifetime");
       } catch (error) {
-        if (resource.controller.signal.aborted) return;
+        if (retired()) return;
         this.options.diagnostic?.(error);
         resource.files?.invalidate();
         reconcile = true;

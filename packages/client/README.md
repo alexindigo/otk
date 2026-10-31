@@ -1,5 +1,39 @@
 # @otk/client
 
+## Directory and keyed metadata resources (protocol17)
+
+`createDirectoryCatalogs({watch,refresh,codecs,factory?})` owns one demanded
+resource per canonical directory; `ServerResources` owns one such collection per
+sidecar. `acquire(directory)` returns an identity-bound borrower with `state`,
+`subscribe`, `ready(kind?)`, `refresh`, `view(kind)` and `release`. Kind views
+implement the existing catalog-owner contract without another read or cache. The
+shipped selected session, composer and meter borrow those views. Active-project
+demand keeps them across same-directory session visits. Last release retires the
+watch, incomplete transfers and volatile values; reconnect rebinds current
+demand and fences old results. External compositions inject equivalent leases
+through the ordinary session/composer ports. Standalone `createModelCatalog` and
+load-port composers remain independently usable.
+
+Prompt mention/slash sources filter complete current lists locally. Directory
+revision changes reconcile command registrations and recompute completion;
+typing, range edits, agent cycling and picker opening do not refresh
+inventories. Explicit Refresh and real native invalidation acquire replacements.
+Pending or unavailable replacements retain last-good choices and explicit
+drafts.
+
+`createFrecencyCatalogs` shares one revisioned directory baseline and keyed
+updates across borrowers, exposing one path-to-entry lookup per revision.
+`prepareAttachments(parts,origin,policy,load)` deduplicates original sidecar
+references, bounds origin concurrency and combined admission, preserves input
+order and rejects the whole preparation if an origin is incomplete. All
+submission surfaces borrow that same owner.
+
+The inbox receives complete `{generation,revision,inbox}` baselines followed by
+keyed patches. Unchanged project/task objects retain identity; revision gaps
+coalesce complete-baseline recovery and stale baselines cannot replace newer
+accepted state. Action receipts settle operations; only this stream owns current
+task membership.
+
 Prompt recall uses the shared `PROMPT_HISTORY_LIMIT` window. `loadHistory`
 preserves originating sidecar IDs and valid partial histories when another
 source definitively rejects. If every requested source definitively rejects, it
@@ -54,7 +88,7 @@ intents.
 
 `new Rpc(send, tracker?)` composes the typed facade over that owner; `start`
 supplies handles, `call` delegates to the result, and `receive` accepts protocol
-16 request events. Both `AbortSignal` and `RequestOptions` remain supported.
+17 request events. Both `AbortSignal` and `RequestOptions` remain supported.
 Without an injected tracker, Rpc constructs the same event owner. There is no
 legacy RPC completion path or failure deadline.
 
@@ -617,13 +651,14 @@ frames; stopped owners cannot create replacement resources. Server-scoped task
 actions, live capability and history-source projections, labelled projects and
 the local layout/preference RPC ports share this owner.
 
-`createInbox(rpc, factory?, report?)` receives connection-local `inbox` frames,
-including the snapshot sent on every hello. `openProject`, `openSession` and
-`act` reset the server-owned visit clock; opening a session also records its
-seen timestamp. Wrap sends, approvals, answers and interrupts in
-`act(directory, callback)`. Successful actions request activation through the
-same visit bookkeeping port; opening/viewing never requests activation. Session
-creation is tracked by the server's creation registration. For submissions,
+`createInbox(rpc, factory?, report?)` receives connection-local `inbox.snapshot`
+and `inbox.patch` frames, including the snapshot sent on every hello.
+`openProject`, `openSession` and `act` reset the server-owned visit clock;
+opening a session also records its seen timestamp. Wrap sends, approvals,
+answers and interrupts in `act(directory, callback)`. Successful actions request
+activation through the same visit bookkeeping port; opening/viewing never
+requests activation. Session creation is tracked by the server's creation
+registration. For submissions,
 `createSessionSubmission({sessionID, directory, inbox, tabs})` is the shared
 session-bound admission port: it resolves the captured project's directory,
 enters the existing tab `send` promotion, then runs the mode-specific callback

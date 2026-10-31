@@ -47,7 +47,9 @@ test("visible scopes are validated, optional, connection-owned replacements and 
   ): RequestLifetime => ({
     id,
     signal: control.signal,
-    defer: (release) => callbacks.push(release),
+    defer: (release) => {
+      callbacks.push(release);
+    },
   });
   const a = lifetime("one", one, first), b = lifetime("two", two, second);
   try {

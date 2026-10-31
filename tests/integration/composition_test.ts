@@ -141,8 +141,8 @@ test("application composition with an external core-only backend reaches client 
       "frecency.list",
       { sessionID: "tstv1-core" },
     );
-    assertEquals(entries.length, 1);
-    assertEquals(entries[0].path, join(root, "src/example.ts"));
+    assertEquals(entries.entries.length, 1);
+    assertEquals(entries.entries[0].path, join(root, "src/example.ts"));
   } finally {
     await client.stop();
     await app.app.stop();

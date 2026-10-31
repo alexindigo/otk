@@ -20,11 +20,15 @@ export function registerPatchTool(tools: ToolRegistry): void {
     (call, context) => ({
       icon: EditIcon,
       verb: "Patch",
-      copy: call.files.length === 1
-        ? { path: call.files[0].path }
-        : { paths: call.files.map((file) => file.path).join("\n") },
+      copy: call.files.length === 1 ? { path: call.files[0].path } : {
+        paths: call.files.flatMap((file) => file.path ? [file.path] : []).join(
+          "\n",
+        ) || undefined,
+      },
       target: call.files.map((file) =>
-        relativeTarget(file.path, context.directory)
+        file.path
+          ? relativeTarget(file.path, context.directory)
+          : "Path not reported"
       ).join(", "),
       changes: changeCounts(call.files),
       expanded: context.prefs?.collapseFileChanges === false,

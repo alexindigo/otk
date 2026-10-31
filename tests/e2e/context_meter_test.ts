@@ -23,6 +23,7 @@ import { waitFor } from "../support/opencode.ts";
 test("U1 composer and meter share exactly one models.list per session open", async () => {
   const root = await fixture(), pending = Promise.withResolvers<ModelCatalog>();
   const catalog: ModelCatalog = {
+    defaultState: "configured",
     default: { provider: "opencode", model: "beam-free" },
     providers: [{
       id: "opencode",

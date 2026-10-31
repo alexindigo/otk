@@ -78,6 +78,7 @@ export default function Diff(
       deleted: "Deleted",
       moved: "Moved",
       modified: "Modified",
+      unknown: "Change",
     })[props.file.status];
   return (
     <section
@@ -88,7 +89,11 @@ export default function Diff(
         props.file.oldPath
           ? `${relativeTarget(props.file.oldPath, props.directory)} → `
           : ""
-      }${relativeTarget(props.file.path, props.directory)}`}
+      }${
+        props.file.path
+          ? relativeTarget(props.file.path, props.directory)
+          : "Path not reported"
+      }`}
     >
       <Show when={!props.inline || props.file.oldPath}>
         <header>
@@ -103,7 +108,9 @@ export default function Diff(
               {props.inline ? "" : " → "}
             </Show>
             <Show when={!props.inline}>
-              <ToolPath path={props.file.path} directory={props.directory} />
+              <Show when={props.file.path} fallback="Path not reported">
+                <ToolPath path={props.file.path!} directory={props.directory} />
+              </Show>
             </Show>
           </span>
           <Show when={!props.inline}>

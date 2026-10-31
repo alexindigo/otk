@@ -32,6 +32,7 @@ export interface ConnectionSink {
   frame(frame: ServerFrame): void;
 }
 export interface ConnectionOptions {
+  attachments?: import("@otk/protocol").AttachmentPolicy;
   messages?: MessagePolicy;
   api?: URL;
   socket?: (url: URL) => WebSocket;
@@ -68,6 +69,10 @@ export class SidecarConnection {
   #subscriptions = new Set<string>();
   #capabilities = new Set<CapabilityName>();
   #messages?: MessagePolicy;
+  #attachments?: import("@otk/protocol").AttachmentPolicy;
+  get attachments(): import("@otk/protocol").AttachmentPolicy | undefined {
+    return this.#attachments ?? this.options.attachments;
+  }
   get messages(): MessagePolicy | undefined {
     return this.#messages ?? this.options.messages;
   }
@@ -207,6 +212,7 @@ export class SidecarConnection {
           }
           try {
             this.#messages = messagePolicy(frame.messages);
+            this.#attachments = frame.attachments;
             this.#policy = clientRequestPolicyFrom(frame.requests.policy);
           } catch {
             this.#protocolMismatch();

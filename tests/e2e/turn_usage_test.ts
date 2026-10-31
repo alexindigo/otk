@@ -547,6 +547,7 @@ test("U4 unknown model prices show all five charged token categories without inv
 test("U4 queued prompts do not split a turn and category costs use each step's exact provider", async () => {
   const root = await fixture();
   const catalog: ModelCatalog = {
+    defaultState: "unknown",
     providers: ["first", "second"].map((id, i) => ({
       id,
       name: id,

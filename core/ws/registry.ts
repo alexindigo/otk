@@ -26,7 +26,8 @@ export interface RpcContext {
 export interface RequestLifetime {
   id: string;
   signal: AbortSignal;
-  defer(release: () => void): void;
+  defer(release: () => void): void | (() => void);
+  publish?(frame: import("@otk/protocol").ServerFrame): void;
 }
 export interface RpcDefinition<P, R> {
   // Validation owns P. Policy factories consume it without widening handlers.

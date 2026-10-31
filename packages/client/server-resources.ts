@@ -33,6 +33,16 @@ import { createState, type StateFactory } from "./state.ts";
 import { type ClientTabs, createTabs, type TabInput } from "./tabs.ts";
 import { createTaskActions, type TaskActions } from "./task-actions.ts";
 import { requestAttention } from "./request-attention.ts";
+import { createCatalogCodecs } from "@otk/protocol";
+import {
+  type ClientDirectoryCatalogs,
+  createDirectoryCatalogs,
+  type DirectoryCatalogLease,
+} from "./directory-catalogs.ts";
+import {
+  createFrecencyCatalogs,
+  type FrecencyCatalogLease,
+} from "./frecency-catalogs.ts";
 
 export interface FrameObserver {
   frame?(id: string, frame: ServerFrame, accepted: boolean): void;
@@ -43,6 +53,8 @@ export interface ServerResources {
   scope(project?: ProjectSelection, sessions?: string[]): void;
   sidecars: ClientSidecars;
   inbox(id: string): InboxModel;
+  directoryCatalog(id: string, directory: string): DirectoryCatalogLease;
+  frecencyCatalog(id: string, directory: string): FrecencyCatalogLease;
   approvals(id: string): ApprovalModel;
   tabs(project: ProjectSelection): ClientTabs;
   taskActions(project: ProjectSelection): TaskActions;
@@ -92,6 +104,57 @@ export function createServerResources(o: {
 }): ServerResources {
   const factory = o.factory ?? createState;
   const inboxes = new Map<string, InboxModel>();
+  const catalogs = new Map<string, ClientDirectoryCatalogs>();
+  const frecencies = new Map<
+    string,
+    ReturnType<typeof createFrecencyCatalogs>
+  >();
+  let visibleCatalog: {
+    key: string;
+    directory: DirectoryCatalogLease;
+    frecency: FrecencyCatalogLease;
+  } | undefined;
+  const directoryOwner = (id: string) => {
+    let owner = catalogs.get(id);
+    if (!owner) {
+      owner = createDirectoryCatalogs({
+        codecs: createCatalogCodecs(),
+        factory,
+        diagnostic: o.error,
+        watch: (directory) =>
+          sidecars.connection(id).rpc.start("catalogs.watch", { directory }),
+        refresh: (directory) =>
+          sidecars.connection(id).rpc.call("catalogs.refresh", { directory })
+            .then(() => {}),
+      });
+      catalogs.set(id, owner);
+    }
+    return owner;
+  };
+  const frecencyOwner = (id: string) => {
+    let owner = frecencies.get(id);
+    if (!owner) {
+      owner = createFrecencyCatalogs(sidecars.connection(id).rpc, factory);
+      frecencies.set(id, owner);
+    }
+    return owner;
+  };
+  const bindVisibleCatalog = () => {
+    const project = visible?.project;
+    const key = project &&
+      JSON.stringify([project.sidecarId, project.directory]);
+    if (visibleCatalog?.key === key) return;
+    visibleCatalog?.directory.release();
+    visibleCatalog?.frecency.release();
+    visibleCatalog = undefined;
+    if (project && declares(project.sidecarId, "catalogs")) {
+      visibleCatalog = {
+        key: key!,
+        directory: directoryOwner(project.sidecarId).acquire(project.directory),
+        frecency: frecencyOwner(project.sidecarId).acquire(project.directory),
+      };
+    }
+  };
   const approvalModels = new Map<string, ApprovalModel>();
   const tabModels = new Map<string, ClientTabs>();
   const requestObservers = new Map<string, () => void>();
@@ -209,6 +272,9 @@ export function createServerResources(o: {
       if (!accepted) sidecars.connection(id).send({ t: "resnapshot" });
     }
     inbox(id).receive(frame);
+    catalogs.get(id)?.receive(frame);
+    frecencies.get(id)?.receive(frame);
+    if (frame.t === "welcome") bindVisibleCatalog();
     if (frame.t === "welcome" && visible?.project.sidecarId === id) {
       sendScope(id, {
         directory: visible.project.directory,
@@ -234,6 +300,7 @@ export function createServerResources(o: {
         sendScope(visible.project.sidecarId, { sessions: [] });
       }
       visible = project && { project, sessions: [...new Set(sessions)] };
+      bindVisibleCatalog();
       if (visible) {
         sendScope(visible.project.sidecarId, {
           directory: visible.project.directory,
@@ -242,6 +309,14 @@ export function createServerResources(o: {
       }
     },
     inbox,
+    directoryCatalog: (id, directory) => {
+      live();
+      return directoryOwner(id).acquire(directory);
+    },
+    frecencyCatalog: (id, directory) => {
+      live();
+      return frecencyOwner(id).acquire(directory);
+    },
     approvals,
     tabs,
     entry,
@@ -331,10 +406,15 @@ export function createServerResources(o: {
     },
     add: (url, label) => sidecars.add(url, label),
     remove(id) {
+      catalogs.get(id)?.stop();
+      catalogs.delete(id);
+      frecencies.get(id)?.stop();
+      frecencies.delete(id);
       requestObservers.get(id)?.();
       requestObservers.delete(id);
       o.index.remove(id);
       for (const observer of observers) observer.removed?.(id);
+      inboxes.get(id)?.stop();
       inboxes.delete(id);
       approvalModels.get(id)?.stop();
       approvalModels.delete(id);
@@ -369,12 +449,20 @@ export function createServerResources(o: {
     stop() {
       if (stopped) return;
       stopped = true;
+      visibleCatalog?.directory.release();
+      visibleCatalog?.frecency.release();
+      visibleCatalog = undefined;
+      for (const owner of catalogs.values()) owner.stop();
+      for (const owner of frecencies.values()) owner.stop();
+      catalogs.clear();
+      frecencies.clear();
       for (const release of requestObservers.values()) release();
       requestObservers.clear();
       for (const model of approvalModels.values()) model.stop();
       for (const model of tabModels.values()) model.stop();
       approvalModels.clear();
       tabModels.clear();
+      for (const inbox of inboxes.values()) inbox.stop();
       inboxes.clear();
       observers.clear();
       sidecars.stop();

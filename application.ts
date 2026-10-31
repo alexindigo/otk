@@ -51,6 +51,10 @@ import {
 import { InboxFeature } from "./core/features/inbox.ts";
 import { PermissionFeature } from "./core/features/approvals.ts";
 import { registerDigests } from "./core/features/digests.ts";
+import {
+  createCatalogCodecs,
+  registerCatalogs,
+} from "./core/features/catalogs.ts";
 import type { SectionObserver } from "./core/diagnostics.ts";
 
 /** Shipped application features, independent of the selected native backend. */
@@ -101,12 +105,16 @@ export function startApplication(
       () => cfg.auth.username.toLowerCase() || "local",
       undefined,
       options.attention,
+      cfg.digest.publishrows,
+      cfg.digest.maxpending,
     );
     sources.push(inbox);
     inbox.register(rpc);
     registerPrefs(rpc, backend, prefs);
     registerLayout(rpc, prefs);
-    registerFrecency(rpc, backend, new Frecency(store, frecencyOptions));
+    sources.push(
+      registerFrecency(rpc, backend, new Frecency(store, frecencyOptions)),
+    );
     registerSessions(
       rpc,
       backend,
@@ -126,6 +134,12 @@ export function startApplication(
     registerModels(rpc, backend);
     registerUsage(rpc, backend);
     registerDigests(rpc, backend);
+    registerCatalogs(
+      rpc,
+      backend,
+      createCatalogCodecs(),
+      cfg.digest.publishrows,
+    );
     registerResources(rpc, backend);
     const approvals = backend.capabilities.permissions
       ? new PermissionFeature(

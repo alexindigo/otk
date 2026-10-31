@@ -84,7 +84,7 @@ Deno.test("recorded file tools map hunks, status, paths and one-based file-local
   ]);
   assert(
     patch.files[3].oldPath?.endsWith("move.txt") &&
-      patch.files[3].path.endsWith("moved.txt"),
+      patch.files[3].path?.endsWith("moved.txt"),
   );
   assertEquals(patch.files[0].diagnostics?.[0].col, 3);
   for (const call of [edit, write, patch]) {

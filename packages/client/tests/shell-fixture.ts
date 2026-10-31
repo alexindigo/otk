@@ -80,8 +80,20 @@ export function shellFixture(
     if (method === "tasks.create") {
       return Promise.resolve(shellTask("promoted", [ids.selected], "/p"));
     }
-    if (method === "history.attachment") {
-      return Promise.resolve({ kind: "text", text: `bytes:${p.partID}` });
+    if (method === "history.attachments") {
+      return Promise.resolve({
+        items: (params as { refs: { messageID: string; partID: string }[] })
+          .refs.map((ref) => ({
+            ref,
+            part: {
+              kind: "file",
+              source: "upload",
+              name: ref.partID,
+              mime: "text/plain",
+              dataBase64: btoa(`bytes:${ref.partID}`),
+            },
+          })),
+      });
     }
     return Promise.resolve(null);
   };
@@ -89,7 +101,7 @@ export function shellFixture(
     const connection = new client.SidecarConnection("http://127.0.0.1:1502", {
       status() {},
       frame() {},
-    });
+    }, { attachments: { concurrency: 4, maxrefs: 64, maxbytes: 33554432 } });
     connection.rpc.call = <M extends RpcMethod>(
       method: M,
       params: RpcParams<M>,

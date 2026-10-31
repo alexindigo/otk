@@ -268,7 +268,9 @@ export class RequestTracker {
         }
       },
       release: () => {
-        if (!active(item.state)) return;
+        const lease = this.options.kind?.(item.state.method) === "lease" &&
+          item.state.phase === "succeeded";
+        if (!active(item.state) && !lease) return;
         if (item.submitted) {
           this.#send({ t: "request.release", refs: [item.state.ref] });
         }

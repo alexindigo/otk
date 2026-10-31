@@ -7,6 +7,8 @@ import {
 } from "@otk/protocol";
 import type { SidecarConnection } from "./connection.ts";
 import type { IndexChanges } from "./index.ts";
+import type { DirectoryCatalogLease } from "./directory-catalogs.ts";
+import type { FrecencyCatalogLease } from "./frecency-catalogs.ts";
 import { createState, type StateFactory } from "./state.ts";
 import { emptyContent } from "./reduce.ts";
 import {
@@ -75,6 +77,8 @@ export type SessionState = Pick<
 export interface ClientSession {
   state: SessionState;
   readonly models: ModelCatalogOwner | undefined;
+  readonly directoryCatalog: DirectoryCatalogLease | undefined;
+  readonly frecencyCatalog: FrecencyCatalogLease | undefined;
   readonly usage: SessionUsageOwner;
   readonly transcripts: TranscriptsOwner;
   readonly transcript: TranscriptOwner | undefined;
@@ -100,6 +104,12 @@ export function createSession(
   catalogConnection?: (selection: Selection) => ModelCatalogConnection,
   waitForIndex = false,
   metadataChanges?: (server: string) => IndexChanges | undefined,
+  catalogs?: (
+    target: Selection,
+    directory: string,
+  ) =>
+    | { directory: DirectoryCatalogLease; frecency: FrecencyCatalogLease }
+    | undefined,
 ): ClientSession {
   const store = factory<SessionState>({
     content: emptyContent(),
@@ -123,6 +133,14 @@ export function createSession(
   });
   let selected: Selection | undefined, resource: TranscriptOwner | undefined;
   let release: (() => void) | undefined, models: ModelCatalogOwner | undefined;
+  let catalog: ReturnType<NonNullable<typeof catalogs>>,
+    catalogPath: string | undefined;
+  const releaseCatalog = () => {
+    catalog?.directory.release();
+    catalog?.frecency.release();
+    catalog = undefined;
+    catalogPath = undefined;
+  };
   let external: TranscriptDemand | undefined, version = 0, stopped = false;
   const indexed = new Set<string>();
   const sync = () => {
@@ -187,6 +205,7 @@ export function createSession(
     if (!ready) {
       models?.dispose();
       models = undefined;
+      releaseCatalog();
     }
     const value = external
       ? { ...external, selected: ready ? external.selected : undefined }
@@ -209,9 +228,14 @@ export function createSession(
       release = resource?.subscribe(sync);
     }
     resource?.selected(!!ready);
+    if (ready && data?.directory && data.directory !== catalogPath) {
+      releaseCatalog();
+      catalog = catalogs?.(selected!, data.directory);
+      catalogPath = data.directory;
+    }
     if (ready && !models) {
       const target = selected!, sidecar = connection(target.sidecarId);
-      models = createModelCatalog({
+      models = catalog?.directory.view("models") ?? createModelCatalog({
         connection: () =>
           catalogConnection?.(target) ??
             {
@@ -272,6 +296,7 @@ export function createSession(
     resource = undefined;
     models?.dispose();
     models = undefined;
+    releaseCatalog();
     selected = value;
     // The shell replaces scope demand through its binding; standalone consumers use a selected scope.
     if (external) external = { ...external, selected: value };
@@ -287,6 +312,14 @@ export function createSession(
     get models() {
       void store.state.selection;
       return models;
+    },
+    get directoryCatalog() {
+      void store.state.selection;
+      return catalog?.directory;
+    },
+    get frecencyCatalog() {
+      void store.state.selection;
+      return catalog?.frecency;
     },
     subscribe: store.subscribe,
     onToolCompleted: (target, listener) =>

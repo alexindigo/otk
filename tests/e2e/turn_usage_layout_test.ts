@@ -75,6 +75,7 @@ async function setup(count: number) {
     models: {
       listModels: () =>
         Promise.resolve({
+          defaultState: "unknown",
           providers: [{
             id: "test",
             name: "Test provider",

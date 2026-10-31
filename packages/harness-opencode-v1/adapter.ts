@@ -387,6 +387,42 @@ export class OpencodeV1Adapter implements Harness {
       commands(this.client, directory, launch, this.catalogs, cfg.attachments),
     );
     registry.register("history", this.#history);
+    registry.register("catalogs", {
+      watch: (directory, listener, signal) => {
+        signal.throwIfAborted();
+        const lease = this.catalogs.acquire(directory);
+        const stop = lease.subscribe(() => listener(lease.snapshot()));
+        const release = () => {
+          stop();
+          lease.release();
+        };
+        signal.addEventListener("abort", release, { once: true });
+        const value = lease.snapshot();
+        for (
+          const kind of Object.keys(
+            value.values,
+          ) as (keyof import("@otk/protocol").DirectoryCatalogKinds)[]
+        ) {
+          void lease.get(kind).catch(
+            () => {/* shared resource publishes unavailable */},
+          );
+        }
+        queueMicrotask(() => {
+          if (!signal.aborted) listener(lease.snapshot());
+        });
+        return Promise.resolve(value);
+      },
+      refresh: async (directory, signal) => {
+        signal?.throwIfAborted();
+        const lease = this.catalogs.acquire(directory);
+        try {
+          await lease.refresh();
+          signal?.throwIfAborted();
+        } finally {
+          lease.release();
+        }
+      },
+    });
     registry.register("files", files(this.client, directory, this.catalogs));
     registry.register("agents", agents(this.client, directory, this.catalogs));
     registry.register("models", models(this.client, directory, this.catalogs));

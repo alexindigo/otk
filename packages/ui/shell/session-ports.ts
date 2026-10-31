@@ -30,6 +30,8 @@ export function sessionPorts(o: {
     connected: () => resources.linked(target.sidecarId),
     onToolCompleted: (listener) => session.onToolCompleted(target, listener),
     modelCatalog: session.models,
+    directoryCatalog: session.directoryCatalog,
+    frecencyCatalog: session.frecencyCatalog,
     approvals: resources.approvals(target.sidecarId),
     feedback: connection.rpc.feedback(target.sessionID),
     sessionID: () => target.sessionID,

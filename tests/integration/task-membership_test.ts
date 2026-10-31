@@ -47,15 +47,14 @@ for (const change of ["add", "remove"]) {
       );
       for (const client of [a, b]) {
         const frame = await client.wait((frame) =>
-          frame.t === "inbox" &&
-          frame.inbox.tasks.some((t) =>
-            t.id === task.id &&
-            t.sessions.length === expected.length && expected.every((id) =>
-              t.sessions.includes(id)
-            )
+          frame.t === "inbox.patch" &&
+          frame.ops.some((op) =>
+            op.op === "task.upsert" && op.task.id === task.id &&
+            op.task.sessions.length === expected.length &&
+            expected.every((id) => op.task.sessions.includes(id))
           )
         );
-        assertEquals(frame.t, "inbox");
+        assertEquals(frame.t, "inbox.patch");
       }
     } finally {
       await a.close();

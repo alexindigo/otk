@@ -23,7 +23,9 @@ Deno.test("ordinary digest metadata does not rebuild active body demand or scan 
       entries: [shellEntry("a"), shellEntry("other", "/q")],
     });
     f.resources.receive("local", {
-      t: "inbox",
+      t: "inbox.snapshot",
+      generation: "fixture",
+      revision: 0,
       inbox: {
         projects: [],
         tasks: [],
@@ -104,7 +106,9 @@ Deno.test("body scope uses nearest task ancestry, preserves member order, and vi
       ],
     });
     f.resources.receive("local", {
-      t: "inbox",
+      t: "inbox.snapshot",
+      generation: "fixture",
+      revision: 0,
       inbox: {
         projects: [],
         tasks: [shellTask("task", ["sibling", "root"])],
@@ -165,7 +169,12 @@ Deno.test("initial attentive metadata waits for task ownership; repeated busy/di
       entries: [busy, shellEntry("b")],
     });
     assertEquals(preloads.length, 0);
-    f.resources.receive("local", { t: "inbox", inbox });
+    f.resources.receive("local", {
+      t: "inbox.snapshot",
+      generation: "fixture",
+      revision: 0,
+      inbox,
+    });
     assertEquals(preloads.length, 1);
     assertEquals(preloads[0][1], {
       sidecarId: "local",
@@ -180,7 +189,12 @@ Deno.test("initial attentive metadata waits for task ownership; repeated busy/di
         digest: { state: "digesting", revision: 2, turns: {} },
       }, shellEntry("b")],
     });
-    f.resources.receive("local", { t: "inbox", inbox });
+    f.resources.receive("local", {
+      t: "inbox.snapshot",
+      generation: "fixture",
+      revision: 0,
+      inbox,
+    });
     assertEquals(preloads.length, 1);
     f.resources.receive("local", {
       t: "index.snapshot",
@@ -188,17 +202,23 @@ Deno.test("initial attentive metadata waits for task ownership; repeated busy/di
       entries: [shellEntry("a"), shellEntry("b")],
     });
     f.resources.receive("local", {
-      t: "inbox",
+      t: "inbox.snapshot",
+      generation: "fixture",
+      revision: 0,
       inbox: { ...inbox, finishes: { a: 9 } },
     });
     assertEquals(preloads.length, 2);
     f.resources.receive("local", {
-      t: "inbox",
+      t: "inbox.snapshot",
+      generation: "fixture",
+      revision: 0,
       inbox: { ...inbox, finishes: { a: 9 } },
     });
     assertEquals(preloads.length, 2);
     f.resources.receive("local", {
-      t: "inbox",
+      t: "inbox.snapshot",
+      generation: "fixture",
+      revision: 0,
       inbox: { ...inbox, finishes: { a: 10 } },
     });
     assertEquals(preloads.length, 3);
@@ -229,7 +249,9 @@ Deno.test("distinct new attention renews a scope while another request remains b
   };
   try {
     f.resources.receive("local", {
-      t: "inbox",
+      t: "inbox.snapshot",
+      generation: "fixture",
+      revision: 0,
       inbox: {
         projects: [],
         tasks: [],

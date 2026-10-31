@@ -44,6 +44,7 @@ test("U14 r2 one money rule and exact title-free accessibility reach overlay, fo
     }],
   });
   const catalog: ModelCatalog = {
+    defaultState: "unknown",
     providers: [{
       id: "test",
       name: "Test",

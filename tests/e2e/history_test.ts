@@ -162,7 +162,7 @@ test("recalled image metadata resolves exact bytes only on send through its orig
     );
     assertEquals(
       sentFrames(browser).filter(({ frame }) =>
-        frame.method === "history.attachment"
+        frame.method === "history.attachments"
       ).length,
       0,
     );
@@ -186,7 +186,7 @@ test("recalled image metadata resolves exact bytes only on send through its orig
       `data:image/png;base64,${bytes}`,
     );
     const requests = sentFrames(browser).filter(({ frame }) =>
-      frame.method === "history.attachment"
+      frame.method === "history.attachments"
     );
     assertEquals(requests.length, 1);
     assertEquals(

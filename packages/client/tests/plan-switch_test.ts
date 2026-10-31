@@ -145,7 +145,8 @@ function fixture(loadAgents = () => Promise.resolve(agents)) {
       }),
       load: {
         agents: loadAgents,
-        models: () => Promise.resolve({ providers: [] }),
+        models: () =>
+          Promise.resolve({ providers: [], defaultState: "unknown" }),
       },
       prefs: {
         get: () => ({ "models.favourite": [], "models.recent": [] }),

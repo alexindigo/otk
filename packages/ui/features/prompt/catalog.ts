@@ -23,6 +23,7 @@ export function bindComposerSelection(ctx: PromptContext): ComposerSelection {
     connection,
     onToolCompleted: ctx.onToolCompleted,
     modelCatalog: ctx.modelCatalog,
+    directoryCatalog: ctx.directoryCatalog,
     load: {
       agents: (signal) =>
         ctx.rpc(

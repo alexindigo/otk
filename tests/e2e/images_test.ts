@@ -227,7 +227,9 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
       "",
     );
     assertEquals(
-      sentFrames(b).filter(({ frame }) => frame.method === "history.attachment")
+      sentFrames(b).filter(({ frame }) =>
+        frame.method === "history.attachments"
+      )
         .length,
       0,
     );
@@ -237,7 +239,9 @@ test("U8 pasted and dropped images have one independent chip, persist as loaded 
       "!!document.querySelector('[data-role=user] .otk-file-image img') && !document.querySelector('.otk-prompt-chip')",
     );
     assertEquals(
-      sentFrames(b).filter(({ frame }) => frame.method === "history.attachment")
+      sentFrames(b).filter(({ frame }) =>
+        frame.method === "history.attachments"
+      )
         .length,
       1,
     );

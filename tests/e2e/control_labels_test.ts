@@ -127,6 +127,7 @@ test("control labels stay single-line across transcript, chrome, menus, pickers 
     models: {
       listModels: () =>
         Promise.resolve({
+          defaultState: "unknown",
           providers: [{
             id: "external",
             name:

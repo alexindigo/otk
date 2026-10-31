@@ -104,6 +104,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
         identity: () => cfg.auth.username.toLowerCase() || "local",
         policy: clientRequestPolicy(cfg),
         helloms: cfg.connection.helloms,
+        attachments: cfg.attachments,
       },
       options.sources,
       options.diagnostics,

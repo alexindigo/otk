@@ -4,8 +4,11 @@
 `MAX_UPLOAD_BYTES` owns the immutable per-upload limit; `AttachmentPolicy`
 describes injected aggregate reference/byte/concurrency admission. Recall and
 upload preparation consumers share these feature bounds instead of copying
-numeric limits. These additions do not activate a new wire version by
-themselves.
+numeric limits. Protocol17 resolves recalled bytes through
+`history.attachments {refs}` and returns `{items:[{ref,part}]}`; the old point
+wire method is removed. Public native one-reference facades may still delegate
+to the batch port. Welcome advertises the injected attachment policy plus the
+immutable per-upload bound.
 
 The additive request-service contracts export `RequestRef`, `RequestControl`,
 `RequestEvent`, progress/failure facts and injected request policies
@@ -57,16 +60,45 @@ Import only `@otk/protocol`; `mod.ts` is the single public entry point.
 | `PROTOCOL_VERSION`, `SIDECAR_VERSION`                          | Existing wire and sidecar versions      |
 | `MAX_CLIENT_FRAME_BYTES`, `checkClientFrameSize`               | Combined UTF-8 client frame budget      |
 
-The package version is `0.1.0`; the wire protocol version is `15`, including
+The package version is `0.1.0`; the wire protocol version is `17`, including
 host-persisted keymap, Dark/Light/System theme and four notification channel
 preferences. The canonical hello version field remains `protocol`.
 
-Protocol 15 requires provider-qualified session identities, validated by the
+Protocol17 retains provider-qualified session identities, validated by the
 dependency-free `isSessionID` helper
 (`<three-letter code>v<major>-<native id>`). Both session and root references
 use this grammar; message, part, task, request and model identities remain
 separate. A protocol-13 client must reload rather than send bare session
 identities to a newer server.
+
+Inbox baselines carry `{generation,revision,inbox}` in `inbox.snapshot` and
+`inbox.get`. Live `inbox.patch` frames contain only keyed changes, with
+`revision=from+ops.length`. The inbox owner alone reduces `InboxOp`; the session
+index owner alone reduces `IndexOp`. Gaps retain last-good metadata and acquire
+a complete baseline rather than inventing missing state.
+
+The optional `catalogs` capability contributes `catalogs.watch {directory}` and
+`catalogs.refresh {directory}`. A watch is a connection-bound, explicitly
+releasable request lease. `DirectoryCatalogKinds` and `CatalogChunkKinds`
+compose open per-feature interfaces from `catalogs/`. `createCatalogCodecs()`
+selects the shipped codecs; independent consumers inject additional codecs
+without editing transport dispatch. Metadata snapshots expose
+preparing/ready/unavailable and last-good values. Contiguous `catalog.chunk`
+transfers stage one complete kind before publication; chunks never expose a
+partial usable list. Catalogs declare server path style and canonical file
+paths.
+
+`frecency.list` returns `{directory,revision,entries}`. Committed
+`frecency.patch` frames carry keyed upserts/removals, including removals grouped
+by the original directory when global retention prunes another directory.
+
+`ModelCatalog.defaultState` distinguishes a reported configured default from
+unknown, and `free` is `boolean|null`. Search pattern/count, diff path and todo
+priority may be absent; unknown diff status is explicit.
+`ToolBase.selectionIntent` can carry an adapter-reported neutral agent choice.
+`message.clock` refines an existing message's last-output clock through the
+ordinary ordered content channel; it cannot create a missing message or change
+terminal state.
 
 `session.messages` accepts `MessagePageInput` (`sessionID`, optional opaque
 `before`) and returns `MessagePage`, not an array. `MESSAGE_PAGE_SIZE` is ten;
@@ -197,12 +229,13 @@ feature-owned `models.list { sessionID }` RPC. `ModelCatalog` contains only
 connected providers' IDs/names and model IDs/names, variant names, status,
 `free`, optional release date, optional reported `contextLimit` and optional
 `cost` (input/output/cache read/cache write USD per million tokens); its
-optional `default: ModelRef` identifies the configured model only when it is in
-that catalog. Native credentials, options, headers and environment data never
-belong in this contract. This new capability is not inferred for legacy servers.
-`AgentOption` optionally carries neutral `color: AgentColor`, configured
-`model: ModelRef` and `variant`; `UserMessage` optionally carries the recorded
-`variant` alongside its `model` for restoration.
+`defaultState` is `configured` only when an optional `default: ModelRef`
+identifies the reported configured model in that catalog. Native credentials,
+options, headers and environment data never belong in this contract. This new
+capability is not inferred for legacy servers. `AgentOption` optionally carries
+neutral `color: AgentColor`, configured `model: ModelRef` and `variant`;
+`UserMessage` optionally carries the recorded `variant` alongside its `model`
+for restoration.
 
 `AgentColor` is a concrete hex colour or the semantic role `accent` /
 `secondary`; consumers resolve roles in their own presentation system.
@@ -267,7 +300,7 @@ import {
 const hello: ClientFrame = { t: "hello", protocol: PROTOCOL_VERSION };
 const serialized = JSON.stringify(hello);
 checkClientFrameSize(serialized);
-console.log(serialized); // {"t":"hello","protocol":15}
+console.log(serialized); // {"t":"hello","protocol":17}
 ```
 
 Outside this workspace, map `@otk/protocol` to a local checkout's `mod.ts` in

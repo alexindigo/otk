@@ -51,7 +51,12 @@ Deno.test("inbox distinguishes its initial unknown snapshot from accepted empty 
     call: () => Promise.reject(new Error("No request")),
   });
   assertEquals(Reflect.get(inbox.state, "ready"), false);
-  inbox.receive({ t: "inbox", inbox: { ...snapshot(), projects: [] } });
+  inbox.receive({
+    t: "inbox.snapshot",
+    generation: "fixture",
+    revision: 0,
+    inbox: { ...snapshot(), projects: [] },
+  });
   assertEquals(Reflect.get(inbox.state, "ready"), true);
   assertEquals(inbox.state.inbox.tasks, []);
   assertEquals(inbox.state.inbox.projects, []);

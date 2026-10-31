@@ -1,4 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+export * from "./directory-catalogs.ts";
+export * from "./attachment-batches.ts";
+export * from "./frecency-catalogs.ts";
 export { registerPreferenceCommands } from "./preference-commands.ts";
 export { countLabel } from "./count.ts";
 export * from "./project-navigation.ts";

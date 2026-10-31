@@ -268,7 +268,7 @@ test("each optional registration contributes only its present capability and cor
     ["session.prompt", "session.abort"],
     ["session.shell"],
     ["commands.list", "session.command"],
-    ["history.list", "history.attachment"],
+    ["history.list", "history.attachments"],
     ["find.files"],
     ["agents.list"],
     ["models.list"],
@@ -326,6 +326,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
     },
     history: {
       listHistory: () => Promise.resolve([]),
+      attachments: () => Promise.resolve([]),
       attachment: () =>
         Promise.resolve({
           kind: "file",
@@ -345,7 +346,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
     models: {
       listModels: (id) => {
         calls.push(["models", id]);
-        return Promise.resolve({ providers: [] });
+        return Promise.resolve({ providers: [], defaultState: "unknown" });
       },
     },
     resources: { listResources: () => Promise.resolve([]) },
@@ -415,7 +416,11 @@ test("feature validators retain limits, optional strings, model/attachment, ques
         "Expected question answer arrays",
       ],
       ["permission.reply", { reply: "invalid" }, "Invalid permission reply"],
-      ["history.attachment", { messageID: "x" }, "Expected partID string"],
+      [
+        "history.attachments",
+        { refs: [{ messageID: "x" }] },
+        "Expected partID string",
+      ],
       [
         "prefs.set",
         { key: "unknown", value: true },
@@ -477,6 +482,7 @@ test("feature validators retain limits, optional strings, model/attachment, ques
       [],
     );
     assertEquals(await rpc.dispatch("models.list", { sessionID: "tstv1-s" }), {
+      defaultState: "unknown",
       providers: [],
     });
     assertEquals(

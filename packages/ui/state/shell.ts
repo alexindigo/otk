@@ -67,6 +67,13 @@ export function createShellState(o: { api: URL }): ShellState {
       available: resources.declares(target.sidecarId, "models"),
     }),
     (id) => resources.indexChanges(id),
+    (target, directory) =>
+      resources.declares(target.sidecarId, "catalogs")
+        ? {
+          directory: resources.directoryCatalog(target.sidecarId, directory),
+          frecency: resources.frecencyCatalog(target.sidecarId, directory),
+        }
+        : undefined,
   );
   const drafts = createDrafts(solidState);
   const current = createCurrentClient(

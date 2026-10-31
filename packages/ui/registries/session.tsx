@@ -2,7 +2,9 @@
 import { createContext, type Element, useContext } from "solid-js";
 import type {
   ApprovalModel,
+  DirectoryCatalogLease,
   FeedbackOwner,
+  FrecencyCatalogLease,
   InboxRpc,
   ModelCatalogOwner,
   SessionSubmission,
@@ -30,6 +32,8 @@ export interface SessionPorts {
   connected?(): boolean;
   onToolCompleted?: ToolCompletionSource;
   modelCatalog?: ModelCatalogOwner;
+  directoryCatalog?: DirectoryCatalogLease;
+  frecencyCatalog?: FrecencyCatalogLease;
   approvals?: ApprovalModel;
   feedback?: FeedbackOwner;
   sessionID(): string;

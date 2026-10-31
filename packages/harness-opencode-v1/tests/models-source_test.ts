@@ -53,6 +53,7 @@ Deno.test("model catalog acquires connected providers only and keeps the explici
   const value = await models(client, directory).listModels("opcv1-session");
   assertEquals(calls.sort(), ["/config", "/config/providers"]);
   assertEquals(value, {
+    defaultState: "configured",
     providers: [{
       id: "fake",
       name: "Connected",

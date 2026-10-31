@@ -8,6 +8,7 @@ export interface CompletionOption {
   label: string;
   description?: string;
   path?: string;
+  canonicalPath?: string;
   directory?: boolean;
   part?: PromptPart;
   aliases?: string[];
@@ -19,8 +20,12 @@ export interface PromptCompletion {
   query: string;
 }
 export interface PromptSource {
+  revision?(): unknown;
   trigger(input: string, caret: number): PromptCompletion | undefined;
-  options(token: PromptCompletion): Promise<CompletionOption[]>;
+  options(
+    token: PromptCompletion,
+    signal?: AbortSignal,
+  ): Promise<CompletionOption[]>;
   select(
     token: PromptCompletion,
     option: CompletionOption,
@@ -28,6 +33,7 @@ export interface PromptSource {
   ): void;
 }
 export interface CompletionInput {
+  revisions?: unknown[];
   input: string;
   mode: Draft["mode"];
   caret: number;
@@ -58,6 +64,7 @@ export function createPromptCompletion(config: {
 }): PromptCompletionOwner {
   const store = (config.factory ?? createState)({ revision: 0 });
   let alive = true, generation = 0, choice = 0;
+  let controller: AbortController | undefined;
   let completion: { token: PromptCompletion; source: PromptSource } | undefined;
   let options: CompletionOption[] = [];
   const state: PromptCompletionState = {
@@ -83,6 +90,8 @@ export function createPromptCompletion(config: {
       value.revision++;
     });
   const reset = () => {
+    controller?.abort();
+    controller = undefined;
     generation++;
     completion = undefined;
     options = [];
@@ -111,13 +120,18 @@ export function createPromptCompletion(config: {
         }
       }
       const revision = ++generation;
+      controller?.abort();
+      controller = new AbortController();
       completion = found;
       options = [];
       choice = 0;
       publish();
       if (!found || !alive || revision !== generation) return;
       try {
-        const result = await found.source.options(found.token);
+        const result = await found.source.options(
+          found.token,
+          controller.signal,
+        );
         if (!alive || revision !== generation) return;
         options = result;
         publish();

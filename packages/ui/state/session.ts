@@ -15,6 +15,7 @@ export function createSession(
   entry: (sidecarId: string, id: string) => IndexEntry | undefined,
   catalogConnection?: (selection: Selection) => ModelCatalogConnection,
   changes?: (server: string) => IndexChanges | undefined,
+  catalogs?: Parameters<typeof clientSession>[6],
 ): ClientSession {
   const session = clientSession(
     connection,
@@ -23,6 +24,7 @@ export function createSession(
     catalogConnection,
     true,
     changes,
+    catalogs,
   );
   if (catalogConnection) {
     createEffect(() => {

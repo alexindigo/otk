@@ -120,6 +120,13 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
               <button type="button" onClick={() => void retry()}>Retry</button>
             </div>
           </Show>
+          <Show when={!catalog.loading && !catalog.error}>
+            <div class="otk-picker-status">
+              <button type="button" onClick={() => void retry()}>
+                Refresh
+              </button>
+            </div>
+          </Show>
         </>
       );
       return {
@@ -174,7 +181,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                 control={(control) => {
                   agentPicker = control;
                 }}
-                onOpen={() => void owner.refreshAgents()}
+                onOpen={() => void owner.ready()}
                 onPick={owner.chooseAgent}
                 focusAfterPick={ctx.focus}
               />
@@ -251,7 +258,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
                 control={(control) => {
                   modelPicker = control;
                 }}
-                onOpen={() => void owner.refreshModels()}
+                onOpen={() => void owner.ready()}
                 onPick={owner.chooseModel}
                 focusAfterPick={ctx.focus}
               />

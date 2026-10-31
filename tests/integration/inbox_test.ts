@@ -21,8 +21,8 @@ async function consumer(url: string) {
   const connection = new SidecarConnection(url, {
     status() {},
     frame(frame) {
-      if (frame.t === "inbox") latest = frame.inbox;
       model.receive(frame);
+      if (model.state.ready) latest = model.state.inbox;
     },
   }, {
     fetcher: originFetch(url),
@@ -187,7 +187,7 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
     assertEquals(a.inbox().pathTemplates, [join(root, "{project}")]);
     await waitFor(
       async () =>
-        JSON.stringify(await a.connection.rpc.call("inbox.get", {})) ===
+        JSON.stringify((await a.connection.rpc.call("inbox.get", {})).inbox) ===
           JSON.stringify(a.inbox()),
       Boolean,
     );
@@ -231,7 +231,7 @@ test("server path-template scanning reads only matching directories, supports su
         templates: [join(root, "{project}", "{project}")],
       })
     );
-    assertEquals((await rpc.call("inbox.get", {})).pathTemplates, [
+    assertEquals((await rpc.call("inbox.get", {})).inbox.pathTemplates, [
       join(projects, "{project}"),
     ]);
     await assertRejects(() =>
@@ -309,7 +309,8 @@ test("first-run setup and restart retain the same user's inbox metadata", async 
     );
     clients.push(second);
     await second.connect();
-    const inbox = await second.rpc<InboxSnapshot>("inbox.get", {});
+    const inbox =
+      (await second.rpc<{ inbox: InboxSnapshot }>("inbox.get", {})).inbox;
     assert(inbox.projects.some((p) => p.directory === empty && p.added));
     assertEquals(inbox.seen["tstv1-core"], seen);
   } finally {

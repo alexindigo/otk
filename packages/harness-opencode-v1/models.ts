@@ -52,6 +52,7 @@ export function mapModels(
   config: { model?: string },
 ): ModelCatalog {
   const catalog: ModelCatalog = {
+    defaultState: "unknown",
     providers: native.providers.map((provider) => ({
       id: provider.id,
       name: provider.name,
@@ -97,7 +98,10 @@ export function mapModels(
         entry.id === provider &&
         entry.models.some((entry) => entry.id === model)
       )
-    ) catalog.default = { provider, model };
+    ) {
+      catalog.default = { provider, model };
+      catalog.defaultState = "configured";
+    }
   }
   return catalog;
 }

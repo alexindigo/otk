@@ -6,7 +6,7 @@ export interface ModelPickerEntry {
   ref: ModelRef;
   name: string;
   providerName: string;
-  free: boolean;
+  free: boolean | null;
   favourite: boolean;
   subtitle?: string;
 }

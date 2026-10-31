@@ -21,13 +21,14 @@ export interface ModelCatalog {
       name: string;
       variants: string[];
       status: "alpha" | "beta" | "active" | "deprecated";
-      free: boolean;
+      free: boolean | null;
       /** Reported context window; absent when the backend does not know it. */
       contextLimit?: number;
       cost?: ModelCost;
       releaseDate?: string;
     }[];
   }[];
+  defaultState: "configured" | "unknown";
   default?: ModelRef;
 }
 

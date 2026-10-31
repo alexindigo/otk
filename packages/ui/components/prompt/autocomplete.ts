@@ -3,6 +3,7 @@ import fuzzysort from "fuzzysort";
 import { frecency } from "@otk/protocol";
 import type {
   AgentOption,
+  CatalogFile,
   CommandOption,
   FileMatch,
   FrecencyEntry,
@@ -11,11 +12,12 @@ import type {
 import type { CompletionOption } from "@otk/client";
 export type { CompletionOption } from "@otk/client";
 export interface MentionSources {
-  files: FileMatch[];
+  files: (FileMatch | CatalogFile)[];
   agents: AgentOption[];
   resources: ResourceOption[];
   frecency: FrecencyEntry[];
   directory: string;
+  scores?: ReadonlyMap<string, FrecencyEntry>;
 }
 export interface Completion {
   kind: "mention" | "slash";
@@ -94,21 +96,24 @@ export function rank(
   entries: FrecencyEntry[] = [],
   directory = "",
   descriptions = false,
+  scores?: ReadonlyMap<string, FrecencyEntry>,
 ): CompletionOption[] {
+  const lookup = scores ?? new Map(entries.map((entry) => [entry.path, entry]));
   const score = (path?: string) =>
     path
       ? frecency(
-        entries.find((entry) =>
-          entry.path === (path.startsWith("/")
+        lookup.get(
+          path.startsWith("/")
             ? path
-            : `${directory.replace(/\/$/, "")}/${path}`)
+            : `${directory.replace(/\/$/, "")}/${path}`,
         ),
       )
       : 0;
   if (!query) {
     return [...options].sort((a, b) =>
-      score(b.path) - score(a.path) || a.label.localeCompare(b.label)
-    ).slice(0, 10);
+      score(b.canonicalPath ?? b.path) - score(a.canonicalPath ?? a.path) ||
+      a.label.localeCompare(b.label)
+    ).slice(0, COMPLETION_LIMIT);
   }
   return fuzzysort.go(query, options, {
     keys: [
@@ -117,13 +122,13 @@ export function rank(
       (option) => option.aliases?.join(" ") || "",
     ],
     threshold: descriptions ? 0 : .5,
-    limit: 10,
+    limit: COMPLETION_LIMIT,
     scoreFn: (result) =>
       result.score *
       (result[0]?.target.startsWith(result.obj.command ? `/${query}` : query)
         ? 2
         : 1) *
-      (1 + score(result.obj.path)),
+      (1 + score(result.obj.canonicalPath ?? result.obj.path)),
   }).map((result) => result.obj);
 }
 export function mentionOptions(
@@ -140,6 +145,7 @@ export function mentionOptions(
             ? `#${range.start}${range.end === undefined ? "" : `-${range.end}`}`
             : ""),
         path: file.path,
+        canonicalPath: "canonicalPath" in file ? file.canonicalPath : undefined,
         directory: file.directory,
         part: {
           kind: "file" as const,
@@ -168,5 +174,8 @@ export function mentionOptions(
     query,
     source.frecency,
     source.directory,
+    false,
+    source.scores,
   );
 }
+const COMPLETION_LIMIT = 10;

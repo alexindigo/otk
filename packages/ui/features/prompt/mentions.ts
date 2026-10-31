@@ -4,7 +4,6 @@ import { editDraft, insertChip } from "../../components/prompt/model.ts";
 import {
   mention,
   mentionOptions,
-  mentionQuery,
 } from "../../components/prompt/autocomplete.ts";
 export function registerMentionsPrompt(prompt: PromptRegistry): void {
   prompt.register({
@@ -12,30 +11,22 @@ export function registerMentionsPrompt(prompt: PromptRegistry): void {
     create: (ctx) => ({
       source: {
         trigger: mention,
-        options: async (token) => {
-          const sessionID = ctx.sessionID(),
-            query = mentionQuery(token.query).query;
-          const [files, agents, resources, frecency, directory] = await Promise
-            .all([
-              ctx.supports("files")
-                ? ctx.rpc("find.files", { sessionID, query })
-                : [],
-              ctx.supports("agents")
-                ? ctx.rpc("agents.list", { sessionID })
-                : [],
-              ctx.supports("resources")
-                ? ctx.rpc("resources.list", { sessionID })
-                : [],
-              ctx.rpc("frecency.list", { sessionID }),
-              ctx.directory(),
-            ]);
-          return mentionOptions({
-            files,
-            agents,
-            resources,
-            frecency,
-            directory,
-          }, token.query);
+        revision: () => [
+          ctx.directoryCatalog?.state.catalog?.revision,
+          ctx.frecencyCatalog?.revision,
+        ],
+        options: (token) => {
+          const catalog = ctx.directoryCatalog?.state.catalog;
+          return Promise.resolve(mentionOptions({
+            files: catalog?.values.files?.value ?? [],
+            agents: catalog?.values.agents?.value?.filter((agent) =>
+              agent.mention
+            ) ?? [],
+            resources: catalog?.values.resources?.value ?? [],
+            frecency: ctx.frecencyCatalog?.entries ?? [],
+            scores: ctx.frecencyCatalog?.scores,
+            directory: catalog?.directory ?? "",
+          }, token.query));
         },
         select(token, option, expand) {
           if (expand && option.directory) {

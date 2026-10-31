@@ -17,6 +17,7 @@ Deno.test("model groups deduplicate favourites and recent, order providers newes
     free: id === "new",
   });
   const catalog: ModelCatalog = {
+    defaultState: "unknown",
     providers: [
       {
         id: "one",

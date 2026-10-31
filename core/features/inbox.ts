@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
   errorMessage,
+  type InboxBaseline,
+  type InboxOp,
   type InboxSnapshot,
   type IndexEntry,
   isSessionID,
+  type ProjectRecord,
   type ServerFrame,
+  type TaskRecord,
 } from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
 import type {
@@ -48,18 +52,35 @@ export interface InboxStores {
   finishes: Finishes;
   templates: ProjectTemplates;
 }
+interface InboxMaps {
+  projects: Map<string, ProjectRecord>;
+  tasks: Map<string, TaskRecord>;
+  seen: Map<string, number>;
+  finishes: Map<string, number>;
+}
+interface InboxAssembly {
+  dirty: Map<string, { kind: keyof InboxMaps; id: string }>;
+  overflow: boolean;
+}
 /** Application-owned metadata only; the index remains the sole session owner. */
 export class InboxFeature implements FrameSource {
   #listeners = new Set<(frame: ServerFrame) => void>();
   #stops: (() => void)[] = [];
   #scheduled = false;
+  #generation = crypto.randomUUID();
+  #revision = 0;
+  #pending = new Map<string, InboxOp>();
+  #projects = new Map<string, ProjectRecord>();
+  #tasks = new Map<string, TaskRecord>();
+  #templates: string[] = [];
   #closed = false;
   #discovered: string[] = [];
   #discoveryError = "";
   #scanVersion = 0;
   #policies: ReturnType<Projects["policies"]> = [];
   #seen = new Map<string, Map<string, number>>();
-  #finishes: Record<string, number> = {};
+  #finishes = new Map<string, number>();
+  #assemblies = new Set<InboxAssembly>();
   #user = "";
   constructor(
     readonly stores: InboxStores,
@@ -68,10 +89,14 @@ export class InboxFeature implements FrameSource {
     readonly scan: (templates: readonly string[]) => Promise<string[]> =
       scanProjects,
     readonly promote?: (sessionID: string) => void,
+    readonly snapshotRows?: number,
+    readonly snapshotPending?: number,
   ) {
     this.#identity();
+    this.#tasks = new Map(stores.tasks.list().map((task) => [task.id, task]));
+    this.#templates = stores.templates.list();
     this.#policies = stores.projects.policies();
-    this.#finishes = stores.finishes.list();
+    this.#finishes = new Map(Object.entries(stores.finishes.list()));
     for (const { user, session, time } of stores.seen.all()) {
       const marks = this.#seen.get(user) ?? new Map<string, number>();
       marks.set(session, time);
@@ -80,6 +105,7 @@ export class InboxFeature implements FrameSource {
     this.#stops.push(
       index.observe((entry, previous) => this.#observe(entry, previous)),
       stores.projects.listen((change) => {
+        this.#identity();
         for (const project of change.upsert) {
           const known = this.#policies.find((policy) =>
             policy.user === change.user &&
@@ -91,21 +117,70 @@ export class InboxFeature implements FrameSource {
               directory: project.directory,
               inactive: project.inactive,
             });}
+          if (change.user === this.#user) {
+            this.#projects.set(project.directory, project);
+            this.#capture("projects", project.directory);
+            this.#queue(`project:${project.directory}`, {
+              op: "project.upsert",
+              project,
+            });
+          }
+        }
+        for (const directory of change.remove) {
+          this.#policies = this.#policies.filter((p) =>
+            p.user !== change.user || p.directory !== directory
+          );
+          if (change.user === this.#user) {
+            this.#projects.delete(directory);
+            this.#capture("projects", directory);
+            this.#queue(`project:${directory}`, {
+              op: "project.remove",
+              directory,
+            });
+          }
         }
       }),
       stores.finishes.listen(({ session, time }) => {
-        this.#finishes[session] = time;
+        this.#finishes.set(session, time);
+        this.#capture("finishes", session);
+        this.#queue(`finish:${session}`, {
+          op: "finish",
+          sessionID: session,
+          time,
+        });
       }),
       stores.seen.listen(({ user, session, time }) => {
+        this.#identity();
         const marks = this.#seen.get(user) ?? new Map<string, number>();
         marks.set(session, time);
         this.#seen.set(user, marks);
+        if (user === this.user) {
+          this.#capture("seen", session);
+          this.#queue(`seen:${session}`, {
+            op: "seen",
+            sessionID: session,
+            time,
+          });
+        }
+      }),
+      stores.tasks.listen((change) => {
+        for (const task of change.upsert) {
+          this.#tasks.set(task.id, task);
+          this.#capture("tasks", task.id);
+          this.#queue(`task:${task.id}`, { op: "task.upsert", task });
+        }
+        for (const id of change.remove) {
+          this.#tasks.delete(id);
+          this.#capture("tasks", id);
+          this.#queue(`task:${id}`, { op: "task.remove", id });
+        }
+      }),
+      stores.templates.listen(({ templates }) => {
+        this.#templates = templates;
+        this.#queue("templates", { op: "templates", values: templates });
+        void this.#scan();
       }),
     );
-    for (const store of Object.values(stores)) {
-      this.#stops.push(store.listen(() => this.#emit()));
-    }
-    this.#stops.push(stores.templates.listen(() => void this.#scan()));
     void this.#scan();
   }
   get user(): string {
@@ -116,24 +191,128 @@ export class InboxFeature implements FrameSource {
     if (user === this.#user) return;
     this.stores.projects.materialize(user);
     this.#user = user;
+    this.#projects = new Map(
+      this.stores.projects.list(user).map((
+        project,
+      ) => [project.directory, project]),
+    );
+    this.#generation = crypto.randomUUID();
+    this.#revision = 0;
+    this.#pending.clear();
   }
   get(): InboxSnapshot {
     this.#identity();
-    const s = this.stores;
-    const projects = s.projects.list(this.user);
-    this.#policies = s.projects.policies();
     return {
-      projects,
-      tasks: s.tasks.list(),
-      seen: s.seen.list(this.user),
-      finishes: s.finishes.list(),
-      pathTemplates: s.templates.list(),
+      projects: [...this.#projects.values()].sort((a, b) =>
+        a.order - b.order || a.directory.localeCompare(b.directory)
+      ).map((p) => ({ ...p })),
+      tasks: [...this.#tasks.values()].sort((a, b) =>
+        a.order - b.order || a.id.localeCompare(b.id)
+      ).map((t) => ({ ...t, sessions: [...t.sessions] })),
+      seen: Object.fromEntries(this.#seen.get(this.user) ?? []),
+      finishes: Object.fromEntries(this.#finishes),
+      pathTemplates: [...this.#templates],
       discovered: [...this.#discovered],
       ...(this.#discoveryError ? { discoveryError: this.#discoveryError } : {}),
     };
   }
-  snapshot(): Extract<ServerFrame, { t: "inbox" }> {
-    return { t: "inbox", inbox: this.get() };
+  async baseline(signal?: AbortSignal): Promise<InboxBaseline> {
+    // Copy in bounded turns and replay only keys changed during that copy.
+    // Ongoing mark traffic does not require a quiet serving isolate. Only a
+    // generation replacement or bounded-capture overflow restarts assembly.
+    for (;;) {
+      signal?.throwIfAborted();
+      if (this.#closed) throw new DOMException("Inbox closed", "AbortError");
+      this.#identity();
+      this.#flush();
+      const generation = this.#generation;
+      const assembly: InboxAssembly = { dirty: new Map(), overflow: false };
+      this.#assemblies.add(assembly);
+      const maps: InboxMaps = {
+        projects: new Map(),
+        tasks: new Map(),
+        seen: new Map(),
+        finishes: new Map(),
+      };
+      try {
+        let copied = 0;
+        const copy = async <T>(
+          source: Map<string, T>,
+          target: Map<string, T>,
+        ) => {
+          for (const [id, value] of source) {
+            if (assembly.overflow) return;
+            target.set(id, structuredClone(value));
+            if (this.snapshotRows && ++copied % this.snapshotRows === 0) {
+              await new Promise((resolve) => setTimeout(resolve, 0));
+              signal?.throwIfAborted();
+              if (this.#closed) {
+                throw new DOMException("Inbox closed", "AbortError");
+              }
+            }
+          }
+        };
+        const source = this.#maps();
+        await copy(source.projects, maps.projects);
+        await copy(source.tasks, maps.tasks);
+        await copy(source.seen, maps.seen);
+        await copy(source.finishes, maps.finishes);
+        this.#flush();
+        if (assembly.overflow || generation !== this.#generation) continue;
+        const current = this.#maps();
+        for (const { kind, id } of assembly.dirty.values()) {
+          const target = maps[kind] as Map<
+            string,
+            ProjectRecord | TaskRecord | number
+          >;
+          const value = current[kind].get(id);
+          if (value === undefined) target.delete(id);
+          else target.set(id, structuredClone(value));
+        }
+        const inbox: InboxSnapshot = {
+          projects: [...maps.projects.values()].sort((a, b) =>
+            a.order - b.order || a.directory.localeCompare(b.directory)
+          ),
+          tasks: [...maps.tasks.values()].sort((a, b) =>
+            a.order - b.order || a.id.localeCompare(b.id)
+          ),
+          seen: Object.fromEntries(maps.seen),
+          finishes: Object.fromEntries(maps.finishes),
+          pathTemplates: [...this.#templates],
+          discovered: [...this.#discovered],
+          ...(this.#discoveryError
+            ? { discoveryError: this.#discoveryError }
+            : {}),
+        };
+        return { generation, revision: this.#revision, inbox };
+      } finally {
+        this.#assemblies.delete(assembly);
+      }
+    }
+  }
+  #maps(): InboxMaps {
+    return {
+      projects: this.#projects,
+      tasks: this.#tasks,
+      seen: this.#seen.get(this.#user) ?? new Map(),
+      finishes: this.#finishes,
+    };
+  }
+  #capture(kind: keyof InboxMaps, id: string): void {
+    const key = JSON.stringify([kind, id]);
+    for (const assembly of this.#assemblies) {
+      if (assembly.overflow || assembly.dirty.has(key)) continue;
+      const limit = this.snapshotPending ?? this.snapshotRows;
+      if (limit !== undefined && assembly.dirty.size >= limit) {
+        assembly.overflow = true;
+        assembly.dirty.clear();
+      } else assembly.dirty.set(key, { kind, id });
+    }
+  }
+  async snapshot(
+    signal?: AbortSignal,
+  ): Promise<Extract<ServerFrame, { t: "inbox.snapshot" }>> {
+    return { t: "inbox.snapshot", ...await this.baseline(signal) };
   }
   listen(listener: (frame: ServerFrame) => void): () => void {
     this.#listeners.add(listener);
@@ -144,15 +323,30 @@ export class InboxFeature implements FrameSource {
     for (const stop of this.#stops.splice(0)) stop();
     this.#listeners.clear();
   }
-  #emit(): void {
-    if (this.#scheduled || !this.#listeners.size || this.#closed) return;
+  #queue(key: string, op: InboxOp): void {
+    this.#pending.set(key, op);
+    if (this.#scheduled || this.#closed) return;
     this.#scheduled = true;
     queueMicrotask(() => {
       this.#scheduled = false;
       if (this.#closed) return;
-      const frame = this.snapshot();
-      for (const listener of this.#listeners) listener(frame);
+      this.#flush();
     });
+  }
+  #flush(): void {
+    if (!this.#pending.size || this.#closed) return;
+    const ops = [...this.#pending.values()];
+    this.#pending.clear();
+    const from = this.#revision;
+    this.#revision += ops.length;
+    const frame: ServerFrame = {
+      t: "inbox.patch",
+      generation: this.#generation,
+      from,
+      revision: this.#revision,
+      ops,
+    };
+    for (const listener of this.#listeners) listener(structuredClone(frame));
   }
   #observe(entry: IndexEntry, previous?: IndexEntry, tx?: StoreWrite): void {
     const s = this.stores;
@@ -165,9 +359,9 @@ export class InboxFeature implements FrameSource {
       a.permissions + a.questions + a.childPermissions + a.childQuestions > 0;
     const unseen =
       [...this.#seen.values()].some((marks) =>
-        (this.#finishes[entry.id] ?? 0) > (marks.get(entry.id) ?? 0)
+        (this.#finishes.get(entry.id) ?? 0) > (marks.get(entry.id) ?? 0)
       ) ||
-      (this.#finishes[entry.id] ?? 0) >
+      (this.#finishes.get(entry.id) ?? 0) >
         (this.#seen.get(this.user)?.get(entry.id) ?? 0);
     if (
       !entry.deleted && (active || unseen) &&
@@ -184,7 +378,7 @@ export class InboxFeature implements FrameSource {
       if (
         project.directory === entry.directory && project.inactive &&
         (active ||
-          (this.#finishes[entry.id] ?? 0) >
+          (this.#finishes.get(entry.id) ?? 0) >
             (this.#seen.get(project.user)?.get(entry.id) ?? 0))
       ) {
         s.projects.reactivate(project.user, entry.directory, tx);
@@ -205,14 +399,26 @@ export class InboxFeature implements FrameSource {
     this.#discovered = [];
     this.#discoveryError = "";
     try {
-      const paths = await this.scan(this.stores.templates.list());
+      const paths = await this.scan(this.#templates);
       if (this.#closed || version !== this.#scanVersion) return;
       this.#discovered = paths;
     } catch (error) {
       if (this.#closed || version !== this.#scanVersion) return;
       this.#discoveryError = errorMessage(error);
     }
-    this.#emit();
+    this.#queue("discovery", {
+      op: "discovery",
+      directories: [...this.#discovered],
+      ...(this.#discoveryError
+        ? {
+          failure: {
+            code: "discovery.unavailable",
+            retry: "new-intent" as const,
+            diagnosticID: crypto.randomUUID(),
+          },
+        }
+        : {}),
+    });
   }
   register(rpc: RpcRegistry): void {
     const s = this.stores, user = () => this.user;
@@ -247,7 +453,7 @@ export class InboxFeature implements FrameSource {
     rpc.register("inbox.get", {
       execution: readExecution(() => ({ resource: "inbox" })),
       params: () => undefined,
-      handler: () => this.get(),
+      handler: (ctx) => this.baseline(ctx.execution?.signal),
     });
     rpc.register("projects.list", {
       execution: readExecution(() => ({ resource: "projects" })),

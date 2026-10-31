@@ -171,7 +171,8 @@ test("fork copies through a grouped reply, respects pending rollback and activat
       text(await f.oc.request(`/session/${visible.id}/message`)),
       text(messages.slice(0, 2)),
     );
-    const inbox = await client.rpc<InboxSnapshot>("inbox.get", {});
+    const inbox =
+      (await client.rpc<{ inbox: InboxSnapshot }>("inbox.get", {})).inbox;
     assertEquals(
       inbox.projects.find((p) => p.directory === f.oc.directory)?.inactive,
       false,
@@ -263,7 +264,8 @@ test("delete tombstones a real native family and retains task membership until e
     );
     assertEquals(client.entry(root.id)!.deleted!.how, "otk");
     assertEquals(client.entry(child.id)!.title, "Helper");
-    const inbox = await client.rpc<InboxSnapshot>("inbox.get", {});
+    const inbox =
+      (await client.rpc<{ inbox: InboxSnapshot }>("inbox.get", {})).inbox;
     assertEquals(inbox.tasks.find((item) => item.id === task.id)?.sessions, [
       root.id,
       child.id,
@@ -282,7 +284,8 @@ test("delete tombstones a real native family and retains task membership until e
         id: task.id,
         sessionID: root.id,
       });
-      const updated = await client.rpc<InboxSnapshot>("inbox.get", {});
+      const updated =
+        (await client.rpc<{ inbox: InboxSnapshot }>("inbox.get", {})).inbox;
       assertEquals(
         updated.tasks.find((item) => item.id === task.id)!.sessions,
         [child.id],

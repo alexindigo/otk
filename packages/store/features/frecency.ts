@@ -2,6 +2,7 @@
 import { resolve } from "@std/path";
 import type { OtkDb, StoreWrite } from "../db.ts";
 import type { FeatureMigrations } from "../migrations.ts";
+import { mergeRecords, MetadataChanges } from "./metadata.ts";
 
 /** The frecency feature owns its schema versions independently of preferences. */
 export const frecencyMigrations: FeatureMigrations = {
@@ -20,6 +21,11 @@ export interface FrecencyEntry {
   score: number;
   last: number;
 }
+export interface FrecencyChange {
+  directory: string;
+  upsert: FrecencyEntry[];
+  remove: string[];
+}
 
 /** Application-specific error construction for invalid path keys. */
 export interface FrecencyOptions {
@@ -33,8 +39,22 @@ function key(value: string, options: FrecencyOptions): string {
   return value;
 }
 /** Canonical path persistence with a global 1000-entry bound. */
-export class Frecency {
-  constructor(readonly db: OtkDb, readonly options: FrecencyOptions) {}
+export class Frecency extends MetadataChanges<FrecencyChange> {
+  constructor(readonly db: OtkDb, readonly options: FrecencyOptions) {
+    super(db);
+  }
+  protected override changeKey(value: FrecencyChange): string {
+    return value.directory;
+  }
+  protected override mergeChanges(
+    before: FrecencyChange,
+    after: FrecencyChange,
+  ): FrecencyChange {
+    return {
+      directory: after.directory,
+      ...mergeRecords(before, after, (entry) => entry.path),
+    };
+  }
   #key(value: string): string {
     return key(value, this.options);
   }
@@ -48,18 +68,37 @@ export class Frecency {
     }));
   }
   bump(directory: string, path: string, tx?: StoreWrite): number {
-    return this.db.write(() => {
+    return this.db.write((scope) => {
       const time = Date.now();
       const canonicalDirectory = this.#key(resolve(this.#key(directory)));
       const canonicalPath = this.#key(
         resolve(canonicalDirectory, this.#key(path)),
       );
-      this.db.connection.prepare(
-        "INSERT INTO frecency(directory,path,score,last) VALUES(?,?,1,?) ON CONFLICT(directory,path) DO UPDATE SET score=frecency.score+1,last=excluded.last",
-      ).run(canonicalDirectory, canonicalPath, time);
-      this.db.connection.prepare(
-        "DELETE FROM frecency WHERE rowid NOT IN (SELECT rowid FROM frecency ORDER BY last DESC,rowid DESC LIMIT 1000)",
-      ).run();
+      const row = this.db.connection.prepare(
+        "INSERT INTO frecency(directory,path,score,last) VALUES(?,?,1,?) ON CONFLICT(directory,path) DO UPDATE SET score=frecency.score+1,last=excluded.last RETURNING score,last",
+      ).get(canonicalDirectory, canonicalPath, time)!;
+      this.changed({
+        directory: canonicalDirectory,
+        upsert: [{
+          path: canonicalPath,
+          score: Number(row.score),
+          last: Number(row.last),
+        }],
+        remove: [],
+      }, scope);
+      const removed = this.db.connection.prepare(
+        "DELETE FROM frecency WHERE rowid NOT IN (SELECT rowid FROM frecency ORDER BY last DESC,rowid DESC LIMIT 1000) RETURNING directory,path",
+      ).all();
+      const directories = new Map<string, string[]>();
+      for (const row of removed) {
+        const directory = String(row.directory),
+          paths = directories.get(directory) ?? [];
+        paths.push(String(row.path));
+        directories.set(directory, paths);
+      }
+      for (const [directory, paths] of directories) {
+        this.changed({ directory, upsert: [], remove: paths }, scope);
+      }
       return time;
     }, tx);
   }

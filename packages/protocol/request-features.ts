@@ -9,6 +9,7 @@ import { usageRequestMetadata } from "./usage.ts";
 import { digestsRequestMetadata } from "./capabilities/digests.ts";
 import { approvalsRequestMetadata } from "./approvals.ts";
 import { layoutRequestMetadata } from "./preferences/layout.ts";
+import { catalogRequestMetadata } from "./catalogs.ts";
 /** Shipped composition; the registry itself imports no features. */
 export function createRequestMetadata(): RequestMetadataRegistry {
   const registry = new RequestMetadataRegistry();
@@ -23,6 +24,7 @@ export function createRequestMetadata(): RequestMetadataRegistry {
       digestsRequestMetadata,
       approvalsRequestMetadata,
       layoutRequestMetadata,
+      catalogRequestMetadata,
     ]
   ) {
     for (const [method, metadata] of Object.entries(feature)) {

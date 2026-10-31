@@ -7,9 +7,9 @@ function handRolled(
   source: string,
   path = "fixture.tsx",
   arrays = true,
+  kinds = new Set(["upsert", "remove", "digest"]),
 ): boolean {
   const ast = new Source(source, path);
-  const kinds = new Set(["upsert", "remove", "digest"]);
   return ast.all.some((node) => {
     if (
       arrays &&
@@ -42,6 +42,31 @@ function handRolled(
       node.cases.some((branch) => kinds.has(literal(branch.test) ?? ""));
   });
 }
+const indexKinds = new Set(["upsert", "remove", "digest"]);
+const inboxKinds = new Set([
+  "project.upsert",
+  "project.remove",
+  "task.upsert",
+  "task.remove",
+  "seen",
+  "finish",
+  "templates",
+  "discovery",
+]);
+function outsideOwner(path: string, source: string, arrays = true): boolean {
+  if (path === "packages/client/index.ts") {
+    return handRolled(source, path, false, inboxKinds);
+  }
+  if (path === "packages/client/inbox.ts") {
+    return handRolled(source, path, false, indexKinds);
+  }
+  return handRolled(
+    source,
+    path,
+    arrays,
+    new Set([...indexKinds, ...inboxKinds]),
+  );
+}
 
 Deno.test("index-op interpretation belongs only to the shared keyed-index owner", () => {
   const root = new URL("../../", import.meta.url);
@@ -57,15 +82,15 @@ Deno.test("index-op interpretation belongs only to the shared keyed-index owner"
           arrays,
         );
       } else if (
-        /\.tsx?$/.test(item.name) && path !== "packages/client/index.ts"
+        /\.tsx?$/.test(item.name)
       ) {
         try {
           if (
-            handRolled(
+            outsideOwner(
+              path,
               Deno.readTextFileSync(
                 new URL(encodeURIComponent(item.name), url),
               ),
-              path,
               arrays,
             )
           ) violations.push(path);
@@ -82,6 +107,31 @@ Deno.test("index-op interpretation belongs only to the shared keyed-index owner"
   // index-kind interpretation is forbidden there, just as in production.
   walk(new URL("tests/support/", root), "tests/support/", false);
   assertEquals(violations.sort(), []);
+});
+Deno.test("index and inbox patch families are reduced only by their respective owners", () => {
+  const inbox =
+    'for(const op of frame.ops){switch(op.op){case "seen": marks[op.sessionID]=op.time;break;case "task.upsert": put(op.task)}}';
+  const index =
+    'for(const op of frame.ops){switch(op.op){case "upsert":put(op.entry);break;case "digest":patch(op.id)}}';
+  assertEquals(outsideOwner("packages/client/inbox.ts", inbox), false);
+  assertEquals(outsideOwner("packages/client/index.ts", index), false);
+  assertEquals(outsideOwner("packages/client/duplicate-inbox.ts", inbox), true);
+  assertEquals(outsideOwner("packages/client/index.ts", inbox), true);
+  assertEquals(outsideOwner("packages/client/inbox.ts", index), true);
+  for (
+    const source of [
+      'const changes=frame["ops"]; changes.forEach(apply)',
+      "const {ops: changes}=frame; changes.forEach(apply)",
+      'Reflect.get(frame,"ops").forEach(apply)',
+      'if(op.op==="task.remove")drop(op.id)',
+    ]
+  ) {
+    assertEquals(
+      outsideOwner("packages/client/duplicate-inbox.ts", source),
+      true,
+      source,
+    );
+  }
 });
 Deno.test("index reduction guard rejects aliases, destructuring, computed reads and kind switches without matching comments or content ops", () => {
   for (

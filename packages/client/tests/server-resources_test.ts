@@ -168,7 +168,12 @@ Deno.test("server resources stage frames and expose acceptance after approvals, 
   f.order.length = 0;
   release();
   release();
-  f.receive("local", { t: "inbox", inbox: metadata() });
+  f.receive("local", {
+    t: "inbox.snapshot",
+    generation: "fixture",
+    revision: 0,
+    inbox: metadata(),
+  });
   assertEquals(f.order, ["inbox", "observer1"]);
   assertEquals(f.resources.inbox("local").state.inbox, metadata());
   f.resources.stop();
@@ -244,7 +249,12 @@ Deno.test("server resources project per-server attention and labelled projects f
   const f = fixture();
   for (const id of ["local", "remote"]) {
     f.receive(id, { t: "index.snapshot", rev: 0, entries: [entry()] });
-    f.receive(id, { t: "inbox", inbox: metadata() });
+    f.receive(id, {
+      t: "inbox.snapshot",
+      generation: "fixture",
+      revision: 0,
+      inbox: metadata(),
+    });
   }
   f.receive("local", {
     t: "approvals",
@@ -281,7 +291,12 @@ Deno.test("server resource tab snapshots detach nested tracking reads and sync o
     rev: 0,
     entries: [entry(), entry("other", "/other")],
   });
-  f.receive("local", { t: "inbox", inbox: metadata() });
+  f.receive("local", {
+    t: "inbox.snapshot",
+    generation: "fixture",
+    revision: 0,
+    inbox: metadata(),
+  });
   const snapshot = f.resources.tabSnapshot(p);
   const live = f.resources.inbox("local").state.inbox;
   assertNotStrictEquals(
@@ -311,7 +326,9 @@ Deno.test("server resource tab snapshots detach nested tracking reads and sync o
     }],
   });
   f.receive("local", {
-    t: "inbox",
+    t: "inbox.snapshot",
+    generation: "fixture",
+    revision: 0,
     inbox: { ...metadata(), tasks: [], seen: {}, finishes: {} },
   });
   assertEquals(snapshot.entries[0].attention.permissions, 1);

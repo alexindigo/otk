@@ -77,6 +77,7 @@ Deno.test("catalog allowlists connected metadata, variants, statuses and opencod
   const catalog = await models(client, directory).listModels("opcv1-session");
   assertEquals(calls.sort(), ["/config", "/config/providers"]);
   assertEquals(catalog, {
+    defaultState: "unknown",
     providers: [
       {
         id: "opencode",

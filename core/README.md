@@ -381,8 +381,12 @@ configuration remains authoritative for its instance lifetime; native lifecycle
 and relevant catalog events invalidate demanded values. Only file discovery has
 a project filesystem watch. Catalog results never become digest commits or
 durable request receipts. The current compatibility RPCs borrow these services;
-directory wire leases and client-resource activation are a separate protocol
-change.
+protocol17 directory leases and client resources borrow those same services. The
+catalog feature selects open per-kind codecs through its local composition entry
+and publishes metadata plus bounded complete-kind chunks, never a concrete kind
+switch in transport. Generic request-owned leases remain releasable after their
+initial result is received; socket disposal releases them too. Connection scope
+hints retain their distinct connection-owned lifetime.
 
 Provider-backed prompt recall and attachment batches use that same transient
 read channel. Their feature-owned readers borrow the worker's existing native
@@ -394,11 +398,19 @@ only with contiguous offsets and complete lengths. Neither transient results nor
 upload bytes become digest commits or durable read receipts. The layered
 `attachments` policy is injected from the complete defaults into native read and
 prompt/slash preparation; libraries do not read operator environment values or
-invent policy defaults. Wire/client batch activation is a separate protocol
-step. Transient read failures retain neutral certainty across the worker
-boundary: definite input/attachment rejection completes with safe failure
-metadata, while provider unavailability remains waiting under the existing
-request lifecycle.
+invent policy defaults. The shipped `history.attachments` wire/client path
+batches by original sidecar and preserves all-or-fail send preparation.
+Transient read failures retain neutral certainty across the worker boundary:
+definite input/attachment rejection completes with safe failure metadata, while
+provider unavailability remains waiting under the existing request lifecycle.
+
+Inbox hydration keeps one project/task/template/mark projection. Committed store
+deltas update its keys; ordinary visits and seen/finish writes publish only
+their changed facts. Complete baselines use a bounded asynchronous copy
+operation, replay bounded dirty keys and perform no baseline SQL after
+hydration. Connections subscribe before awaiting generic source snapshots;
+closed sockets cancel assembly. The browser's inbox owner fences stale/gapped
+baselines and patches independently of the session-index owner.
 
 ## Worker-backed digest services
 

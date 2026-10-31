@@ -103,12 +103,14 @@ for (const theme of ["otk-dark", "otk-light"]) {
           JSON.stringify(directory)
         }][data-source="tracked"]')`,
       );
-      const inbox = await client.rpc<{ projects: { directory: string }[] }>(
+      const baseline = await client.rpc<
+        { inbox: { projects: { directory: string }[] } }
+      >(
         "inbox.get",
         {},
       );
       assertEquals(
-        inbox.projects.some((row) => row.directory === directory),
+        baseline.inbox.projects.some((row) => row.directory === directory),
         true,
       );
       await client.close();

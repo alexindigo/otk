@@ -78,7 +78,8 @@ test("inbox activity returns inactive projects and all three required lights rem
         })?.dataset.rollup===${JSON.stringify(expected[i])}`,
       );
     }
-    const persisted = await client.rpc<InboxSnapshot>("inbox.get", {});
+    const persisted =
+      (await client.rpc<{ inbox: InboxSnapshot }>("inbox.get", {})).inbox;
     assert(persisted.projects.every((p) => !p.inactive));
     await browser.click('[aria-label="Collapse projects"]');
     await browser.poll(
@@ -160,7 +161,8 @@ test("inbox mocked-clock ageing, reduced-colour underlines, visit resets on open
     );
     const entry = f.entries[0],
       selector = row(entry.directory),
-      project = (await client.rpc<InboxSnapshot>("inbox.get", {})).projects
+      project = (await client.rpc<{ inbox: InboxSnapshot }>("inbox.get", {}))
+        .inbox.projects
         .find((p) => p.directory === entry.directory)!;
     for (const [hours, level] of [[0, 0], [2, 1], [8, 2], [24, 3]]) {
       await browser.evaluate(
@@ -195,9 +197,8 @@ test("inbox mocked-clock ageing, reduced-colour underlines, visit resets on open
       })?.textContent==='now'`,
     );
     const opened =
-      (await client.rpc<InboxSnapshot>("inbox.get", {})).projects.find((p) =>
-        p.directory === entry.directory
-      )!.lastVisit;
+      (await client.rpc<{ inbox: InboxSnapshot }>("inbox.get", {})).inbox
+        .projects.find((p) => p.directory === entry.directory)!.lastVisit;
     assert(opened >= project.lastVisit);
     await openSession(browser, "tstv1-otk");
     await browser.poll(
@@ -206,7 +207,10 @@ test("inbox mocked-clock ageing, reduced-colour underlines, visit resets on open
       })?.textContent==='now'`,
     );
     const sessionInbox = await waitFor(
-      () => client.rpc<InboxSnapshot>("inbox.get", {}),
+      () =>
+        client.rpc<{ inbox: InboxSnapshot }>("inbox.get", {}).then((value) =>
+          value.inbox
+        ),
       (value) => !!value.seen["tstv1-otk"],
     );
     const sessionVisit = sessionInbox.projects.find((p) =>
@@ -224,9 +228,8 @@ test("inbox mocked-clock ageing, reduced-colour underlines, visit resets on open
       "document.querySelector('textarea[name=prompt]').value===''",
     );
     const acted =
-      (await client.rpc<InboxSnapshot>("inbox.get", {})).projects.find((p) =>
-        p.directory === entry.directory
-      )!.lastVisit;
+      (await client.rpc<{ inbox: InboxSnapshot }>("inbox.get", {})).inbox
+        .projects.find((p) => p.directory === entry.directory)!.lastVisit;
     assert(acted > opened);
     await browser.evaluate(
       "inboxNow=performance.timeOrigin+performance.now();inboxTick()",
@@ -298,9 +301,8 @@ test("inbox adds empty and scanned projects, persists layout bounds and keeps ce
       }) && !!document.querySelector('.otk-new-session')`,
     );
     assertEquals(
-      (await client.rpc<InboxSnapshot>("inbox.get", {})).projects.find((p) =>
-        p.directory === empty
-      )?.added,
+      (await client.rpc<{ inbox: InboxSnapshot }>("inbox.get", {})).inbox
+        .projects.find((p) => p.directory === empty)?.added,
       true,
     );
     const created = f.entries.find((entry) => entry.directory === empty)!;
@@ -439,7 +441,10 @@ test("opening the already-selected session resets its visit without replacing th
     await browser.goto(f.url);
     await openSession(browser, "tstv1-otk");
     const snapshot = await waitFor(
-      () => client.rpc<InboxSnapshot>("inbox.get", {}),
+      () =>
+        client.rpc<{ inbox: InboxSnapshot }>("inbox.get", {}).then((value) =>
+          value.inbox
+        ),
       (value) => !!value.seen["tstv1-otk"],
     );
     const before = snapshot.projects.find((p) =>
@@ -452,7 +457,10 @@ test("opening the already-selected session resets its visit without replacing th
     const hash = await browser.evaluate("location.hash");
     await browser.click('[data-session="tstv1-otk"]');
     await waitFor(
-      () => client.rpc<InboxSnapshot>("inbox.get", {}),
+      () =>
+        client.rpc<{ inbox: InboxSnapshot }>("inbox.get", {}).then((value) =>
+          value.inbox
+        ),
       (value) =>
         value.projects.find((p) => p.directory === f.entries[0].directory)!
           .lastVisit > before,

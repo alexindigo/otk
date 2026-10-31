@@ -72,7 +72,7 @@ test("deleted recall attachment rejects definitively and preserves the complete 
     );
     assertEquals(f.fake.requests.length, 0);
     const sent = sentFrames(browser).find(({ frame }) =>
-      frame.method === "history.attachment"
+      frame.method === "history.attachments"
     )!;
     const ref = sent.frame.ref as { id: string };
     assertEquals(

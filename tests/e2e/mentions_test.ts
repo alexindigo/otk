@@ -20,14 +20,6 @@ test("empty completion results leave Enter, native ArrowUp and normal Escape own
     await openSession(browser, session.id);
     const query = "otk_no_matching_file_927431";
     const ready = async () => {
-      const request = await waitFor(
-        () =>
-          sentFrames(browser).findLast((item) =>
-            item.frame.method === "find.files" &&
-            (item.frame.params as { query?: string })?.query === query
-          ),
-        (item) => !!item,
-      );
       await waitFor(
         () =>
           browser.events.some((event) =>
@@ -35,13 +27,18 @@ test("empty completion results leave Enter, native ArrowUp and normal Escape own
               const frame = JSON.parse(
                 (event.params.response as { payloadData: string }).payloadData,
               );
-              return frame.t === "request.result" &&
-                frame.ref.key === (request!.frame.ref as { key: string }).key;
+              return frame.t === "catalog.chunk" && frame.kind === "files" &&
+                frame.last;
             })()
           ),
         (value) => value,
       );
       await browser.poll("!document.querySelector('.otk-autocomplete')");
+      assertEquals(
+        sentFrames(browser).filter(({ frame }) => frame.method === "find.files")
+          .length,
+        0,
+      );
     };
     const reply = f.fake.queueHeld({ chunks: ["No-match prompt submitted."] });
     await browser.type("textarea[name=prompt]", "@" + query);
@@ -115,6 +112,9 @@ test("P3/P4 file ranges, persisted frecency, directories, agent and MCP resource
     await browser.poll(
       "document.querySelector('.otk-prompt-chip')?.textContent.includes('@README.md')",
     );
+    await browser.poll(
+      "!!document.querySelector('.otk-prompt button[type=submit]')",
+    );
     await browser.key("Enter");
     await browser.poll(
       "document.querySelector('[data-role=user] .otk-chip')?.textContent.includes('README.md') && document.querySelector('textarea[name=prompt]').value===''",
@@ -129,6 +129,9 @@ test("P3/P4 file ranges, persisted frecency, directories, agent and MCP resource
       "document.querySelector('.otk-autocomplete')?.textContent.includes('#10-20')",
     );
     await browser.key("Enter");
+    await browser.poll(
+      "document.querySelector('.otk-prompt-chip')?.textContent.includes('#10-20') && !!document.querySelector('.otk-prompt button[type=submit]')",
+    );
     await browser.key("Enter");
     await browser.poll(
       "document.querySelector('[data-role=user] .otk-chip')?.textContent.includes('#10-20') && document.querySelector('textarea[name=prompt]').value===''",
@@ -147,6 +150,11 @@ test("P3/P4 file ranges, persisted frecency, directories, agent and MCP resource
       "document.querySelector('.otk-autocomplete')?.textContent.includes('explore')",
     );
     await browser.key("Enter");
+    // Input clearing precedes post-submit bookkeeping. Locally ready catalogs
+    // let this driver reach the next choice before that prior send settles.
+    await browser.poll(
+      "document.querySelector('.otk-prompt-chip')?.textContent.includes('@explore') && !!document.querySelector('.otk-prompt button[type=submit]')",
+    );
     await browser.key("Enter");
     await browser.poll(
       "[...document.querySelectorAll('[data-role=user] .otk-chip')].some(el=>el.textContent.includes('Agent: explore'))",
@@ -157,6 +165,9 @@ test("P3/P4 file ranges, persisted frecency, directories, agent and MCP resource
     );
     await browser.screenshot(join(f.oc.root, "p3-mentions.png"));
     await browser.key("Enter");
+    await browser.poll(
+      "document.querySelector('.otk-prompt-chip')?.textContent.includes('@specification') && !!document.querySelector('.otk-prompt button[type=submit]')",
+    );
     await browser.key("Enter");
     await browser.poll(
       "[...document.querySelectorAll('[data-role=user] .otk-text')].some(el=>el.textContent.includes('@specification')) && document.querySelector('textarea[name=prompt]').value===''",

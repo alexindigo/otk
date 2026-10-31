@@ -16,6 +16,7 @@ const first: ModelRef = { provider: "one", model: "shared" };
 const second: ModelRef = { provider: "two", model: "shared" };
 const plain: ModelRef = { provider: "two", model: "plain" };
 const catalog: ModelCatalog = {
+  defaultState: "configured",
   providers: [
     {
       id: "one",
@@ -85,6 +86,7 @@ Deno.test("provider display identity comes from one catalog projection across ev
         ...input,
         catalog: {
           default: first,
+          defaultState: "configured",
           providers: [{ ...catalog.providers[0], name }],
         },
       });
@@ -95,13 +97,14 @@ Deno.test("provider display identity comes from one catalog projection across ev
     }
     const missing = effectiveSelection(draft, {
       ...input,
-      catalog: { default: first, providers: [] },
+      catalog: { default: first, providers: [], defaultState: "configured" },
     });
     assertEquals(missing.model.providerName, first.provider, source);
     const missingModel = effectiveSelection(draft, {
       ...input,
       catalog: {
         default: first,
+        defaultState: "configured",
         providers: [{
           id: first.provider,
           name: "Human provider name",
@@ -299,7 +302,12 @@ Deno.test("model availability is unknown without a catalog and unavailable only 
       agents: [],
       context: explicit ? undefined : { model: first },
     };
-    for (const catalog of [undefined, { providers: [] }]) {
+    for (
+      const catalog of [undefined, {
+        providers: [],
+        defaultState: "unknown" as const,
+      }]
+    ) {
       const result = effectiveSelection(draft, { ...input, catalog });
       assertEquals(result.model.value, first);
       assertEquals(result.model.unavailable, catalog !== undefined);
@@ -383,7 +391,10 @@ Deno.test("unknown catalog preserves explicit and restored variants until loaded
     assertEquals(selection.variant.value, "high");
     assertEquals(selection.input.variant, "high");
     assertEquals(
-      effectiveSelection(draft, { ...unknown, catalog: { providers: [] } })
+      effectiveSelection(draft, {
+        ...unknown,
+        catalog: { providers: [], defaultState: "unknown" },
+      })
         .variant,
       { source: "absent", userChosen: false },
     );

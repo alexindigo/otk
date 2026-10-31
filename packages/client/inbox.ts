@@ -1,6 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { DEFAULT_PROJECT_AGEING } from "@otk/protocol";
 import type {
+  InboxBaseline,
+  InboxOp,
   InboxSnapshot,
   IndexMetadata,
   ProjectRecord,
@@ -176,6 +178,7 @@ export interface InboxState {
   inbox: InboxSnapshot;
 }
 export interface InboxModel {
+  stop(): void;
   state: InboxState;
   subscribe(listener: (state: InboxState) => void): () => void;
   receive(frame: ServerFrame): void;
@@ -205,7 +208,111 @@ export function createInbox(
       pathTemplates: [],
     },
   });
+  let generation: string | undefined, revision = -1, epoch = 0, alive = true;
+  let recoveryController: AbortController | undefined;
+  let recovering: Promise<void> | undefined;
+  let observed: { generation: string; revision: number } | undefined;
+  const baseline = (value: InboxBaseline) => {
+    if (generation !== undefined && value.generation !== generation) return;
+    if (value.generation === generation && value.revision < revision) return;
+    generation = value.generation;
+    revision = value.revision;
+    store.update((draft) => {
+      store.reconcile(draft.inbox, value.inbox);
+      draft.ready = true;
+    });
+  };
+  const recover = () => {
+    if (recovering) return;
+    const at = epoch;
+    const controller = new AbortController();
+    recoveryController = controller;
+    const work = (async () => {
+      for (;;) {
+        const value = await rpc.call("inbox.get", {}, controller.signal);
+        if (!alive || at !== epoch || controller.signal.aborted) return;
+        if (
+          observed && generation === observed.generation &&
+          revision >= observed.revision
+        ) {
+          observed = undefined;
+          return;
+        }
+        // An asynchronous baseline cannot cover a later observed patch. Reacquire
+        // instead of retaining an unbounded replay log or dropping a mark.
+        if (
+          observed?.generation === value.generation &&
+          observed.revision > value.revision
+        ) continue;
+        if (generation !== value.generation) generation = undefined;
+        baseline(value);
+        observed = undefined;
+        return;
+      }
+    })().catch((error) => {
+      if (alive && at === epoch && !controller.signal.aborted) {
+        reportDiagnostic(report, error);
+      }
+    }).finally(() => {
+      if (recovering === work) recovering = undefined;
+    });
+    recovering = work;
+  };
+  const apply = (draft: InboxSnapshot, op: InboxOp) => {
+    switch (op.op) {
+      case "project.upsert": {
+        const at = draft.projects.findIndex((p) =>
+          p.directory === op.project.directory
+        );
+        if (at < 0) draft.projects.push(op.project);
+        else draft.projects[at] = op.project;
+        draft.projects.sort((a, b) =>
+          a.order - b.order || a.directory.localeCompare(b.directory)
+        );
+        break;
+      }
+      case "project.remove":
+        draft.projects = draft.projects.filter((p) =>
+          p.directory !== op.directory
+        );
+        break;
+      case "task.upsert": {
+        const at = draft.tasks.findIndex((t) => t.id === op.task.id);
+        if (at < 0) draft.tasks.push(op.task);
+        else draft.tasks[at] = op.task;
+        draft.tasks.sort((a, b) =>
+          a.order - b.order || a.id.localeCompare(b.id)
+        );
+        break;
+      }
+      case "task.remove":
+        draft.tasks = draft.tasks.filter((t) => t.id !== op.id);
+        break;
+      case "seen":
+        draft.seen[op.sessionID] = op.time;
+        break;
+      case "finish":
+        draft.finishes[op.sessionID] = op.time;
+        break;
+      case "templates":
+        draft.pathTemplates = op.values;
+        break;
+      case "discovery":
+        draft.discovered = op.directories;
+        draft.discoveryError = op.failure
+          ? "Project discovery is unavailable. Try again."
+          : undefined;
+        break;
+    }
+  };
   return {
+    stop() {
+      alive = false;
+      epoch++;
+      recoveryController?.abort();
+      recoveryController = undefined;
+      recovering = undefined;
+    },
     state: store.state,
     subscribe: store.subscribe,
     /** Atomic server-side promotion, suitable as createTabs' injected port. */
@@ -217,10 +324,39 @@ export function createInbox(
       }, options);
     },
     receive(frame: ServerFrame): void {
-      if (frame.t === "inbox") {
+      if (!alive) return;
+      if (frame.t === "welcome") {
+        epoch++;
+        recoveryController?.abort();
+        recoveryController = undefined;
+        generation = undefined;
+        revision = -1;
+        recovering = undefined;
+        observed = undefined;
+      } else if (frame.t === "inbox.snapshot") {
+        baseline(frame);
+        if (
+          observed && observed.generation === generation &&
+          revision >= observed.revision
+        ) {
+          observed = undefined;
+          recoveryController?.abort();
+        }
+      } else if (frame.t === "inbox.patch") {
+        if (frame.generation === generation && frame.revision <= revision) {
+          return;
+        }
+        if (
+          frame.generation !== generation || frame.from !== revision ||
+          frame.revision !== frame.from + frame.ops.length
+        ) {
+          observed = { generation: frame.generation, revision: frame.revision };
+          recover();
+          return;
+        }
+        revision = frame.revision;
         store.update((draft) => {
-          store.reconcile(draft.inbox, frame.inbox);
-          draft.ready = true;
+          for (const op of frame.ops) apply(draft.inbox, op);
         });
       }
     },

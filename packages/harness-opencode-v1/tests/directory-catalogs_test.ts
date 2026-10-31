@@ -242,6 +242,7 @@ Deno.test("pending question capture cannot resurrect replies, and answering uses
 Deno.test("model catalog codecs preserve complete metadata in one-row chunks and reject invalid identities", () => {
   const value = {
     default: { provider: "p", model: "m" },
+    defaultState: "configured" as const,
     providers: [{
       id: "p",
       name: "Provider",
