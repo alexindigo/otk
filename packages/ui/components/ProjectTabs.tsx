@@ -203,6 +203,18 @@ export default function ProjectTabs(props: {
         sessionID: c.id,
       }, "chip")
     ).map((c) => c.id);
+  const tabRows = createMemo(() =>
+    props.model.tabs().map((tab) => ({ ...tab, key: `${tab.kind}/${tab.id}` }))
+  );
+  const requiredTabs = () =>
+    tabRows().filter((tab) =>
+      tab.status !== "idle" ||
+      tab.id === props.model.state.selected?.id || tab.kind === "phantom" &&
+        props.rename?.matches({
+          sidecarId: props.project.sidecarId,
+          sessionID: tab.id,
+        }, "tab")
+    ).map((tab) => tab.key);
   const title = (id: string) =>
     props.session?.id === id
       ? props.session.title
@@ -246,7 +258,73 @@ export default function ProjectTabs(props: {
           role="tablist"
           aria-label="Tasks and active sessions"
         >
-          <For each={props.model.tabs()} keyed={(t) => `${t.kind}/${t.id}`}>
+          <OverflowRow
+            items={tabRows()}
+            required={requiredTabs()}
+            wrapRequired
+            measure={(tab) => (
+              <span class="otk-tab-measure">
+                <SelectionContent>
+                  <StatusLight small state={tab.status} />
+                  <span class="otk-control-label">
+                    {tab.title || "Session"}
+                  </span>
+                  <AutoMark
+                    active={tab.sessions.some((id) => !!props.auto?.(id))}
+                  />
+                  <Show when={tab.preview}>
+                    <span class="otk-preview-label">Preview</span>
+                  </Show>
+                </SelectionContent>
+              </span>
+            )}
+            more={(keys) => (
+              <Menu
+                class="otk-folded-tasks"
+                triggerClass="otk-overflow-trigger"
+                label="More tasks"
+                trigger="…"
+              >
+                <For
+                  each={tabRows().filter((tab) => keys().includes(tab.key))}
+                  keyed={(tab) => tab.key}
+                >
+                  {(tab) => (
+                    <button
+                      type="button"
+                      data-overflow-tab={tab().id}
+                      ref={contextTarget<
+                        SessionContextTarget | TaskContextTarget
+                      >(() => {
+                        const value = tab();
+                        return value.kind === "task"
+                          ? {
+                            kind: "task",
+                            data: { ...props.project, taskID: value.id },
+                          }
+                          : sessionTarget(value.id, "tab");
+                      })}
+                      data-otk-selection="vertical"
+                      {...selection({
+                        kind: "selected",
+                        selected: props.model.state.selected?.id === tab().id,
+                      })}
+                      onClick={() => run(select(tab()))}
+                    >
+                      <SelectionContent>
+                        {tab().title || "Session"}
+                        <AutoMark
+                          active={tab().sessions.some((id) =>
+                            !!props.auto?.(id)
+                          )}
+                        />
+                      </SelectionContent>
+                    </button>
+                  )}
+                </For>
+              </Menu>
+            )}
+          >
             {(tab) => {
               const editing = () =>
                 tab().kind === "phantom" &&
@@ -328,7 +406,7 @@ export default function ProjectTabs(props: {
                 </div>
               );
             }}
-          </For>
+          </OverflowRow>
         </div>
         <Show when={props.ready}>
           <button
@@ -368,7 +446,7 @@ export default function ProjectTabs(props: {
             more={(ids) => (
               <Menu
                 class="otk-folded-crumbs"
-                triggerClass="otk-folded-crumbs-trigger"
+                triggerClass="otk-overflow-trigger otk-folded-crumbs-trigger"
                 label="More task sessions"
                 trigger="…"
               >
@@ -540,12 +618,10 @@ export default function ProjectTabs(props: {
         </output>
       </div>
       <Show
-        when={crumbs().some((crumb) =>
-          props.rename?.matches({
-            sidecarId: props.project.sidecarId,
-            sessionID: crumb.id,
-          }, "chip")
-        )}
+        when={crumbs().some((crumb) => props.rename?.matches({
+          sidecarId: props.project.sidecarId,
+          sessionID: crumb.id,
+        }, "chip"))}
       >
         <div class="otk-crumb-feedback">
           <TitleFeedback owner={props.rename!} id={crumbFeedbackID} />

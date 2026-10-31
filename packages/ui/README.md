@@ -28,8 +28,12 @@ their current measured width; other values use their inert measurement frames.
 More occupies a separate trailing grid track, so editor blur cannot move its
 pointer target between press and release as the live chip width changes.
 ResizeObserver and font completion belong to this component. The client owns
-`fitOverflow` and ancestry preference; mandatory task/phantom tabs remain
-outside this breadcrumb overflow. TitleEditor can receive an external
+`fitOverflow` and ancestry preference. Task tabs reuse this owner with
+`wrapRequired`: selected and working/blocked/unseen-finished tabs remain pinned;
+idle overflow enters one More menu. When pins alone exceed the lane, only those
+pins wrap and all optional tabs stay in More. This mode uses intrinsic sizing
+frames rather than shrink-to-fit live widths. Breadcrumbs retain their default
+single-line required-frame shrinking. TitleEditor can receive an external
 `feedbackID`, with the same shared TitleFeedback rendered in the owner's in-flow
 track, so a compact editing field and its feedback do not compete for one
 control-height lane.

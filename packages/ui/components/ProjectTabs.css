@@ -6,6 +6,7 @@
 .otk-task-list,
 .otk-tab,
 .otk-tab-open,
+.otk-tab-measure,
 .otk-breadcrumb-row,
 .otk-task-crumbs,
 .otk-session-crumb,
@@ -29,8 +30,8 @@
   white-space: nowrap;
 }
 .otk-task-list {
-  flex: 0 1 auto;
-  flex-wrap: wrap;
+  flex: 1 1 auto;
+  display: block;
   gap: var(--chrome-gap);
 }
 .otk-tab {
@@ -38,7 +39,8 @@
   max-width: 100%;
   border-radius: var(--radius-row);
 }
-.otk-tab-open {
+.otk-tab-open,
+.otk-tab-measure {
   --selection-padding: 0 var(--chrome-inset);
   height: var(--control-size);
   max-width: 100%;
@@ -102,12 +104,6 @@
   align-items: center;
   gap: 4px;
   color: var(--otk-fg-3);
-}
-.otk-folded-crumbs-trigger {
-  cursor: pointer;
-  width: var(--control-size);
-  height: var(--control-size);
-  padding: 0;
 }
 .otk-context-meter {
   color: var(--otk-fg-3);

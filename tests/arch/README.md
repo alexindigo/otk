@@ -91,10 +91,13 @@ composer and context meter; consumers borrow its loading/error/last-good state
 and in-flight work. Browser tests count exactly one catalog request per session
 open and preserve the existing composer loading/error/retry test unchanged.
 
-Tabs have no menu presentation; task handlers and scoped commands remain
-independent of presentation. Project rows reserve visit time and their menu
-trigger in a shared flowing trailing cell. Negative fixtures reject tab menus
-and positioning or offsets in row content; overlay content has no project-menu
+Task tabs use the same measured overflow owner as breadcrumbs. One More slot
+contains omitted idle tasks; selected and attention tasks stay visible, wrapping
+only that pinned set when necessary. Per-tab action menus remain absent; task
+handlers and scoped commands remain independent of presentation. Project rows
+reserve visit time and their menu trigger in a shared flowing trailing cell.
+Negative fixtures reject per-tab menus and counterfeit overflow owners and
+positioning or offsets in row content; overlay content has no project-menu
 exception. Browser tests measure stable row/cell geometry on hover/focus and
 keyboard menu access. Task outcome tests use the public client owners while the
 tab menu is absent; package-local units cover the UI handlers and their captured
