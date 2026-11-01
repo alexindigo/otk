@@ -2,9 +2,9 @@
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import type { RequestEvent } from "@otk/protocol";
-import { FakeLlm } from "./fake-llm.ts";
 import { OpencodeTest, waitFor } from "./opencode.ts";
 import { SidecarTest } from "./sidecar.ts";
+import { nativeFixture } from "./native-fixture.ts";
 import { Cdp } from "./cdp.ts";
 import { acquire, resources } from "./resources.ts";
 export async function browserFixture(
@@ -13,25 +13,10 @@ export async function browserFixture(
 ) {
   return await acquire("browser fixture", async () => {
     const scope = resources();
-    const fake = new FakeLlm(),
-      oc = await OpencodeTest.start(fake, permission, options);
-    const servers: SidecarTest[] = [], browsers: Cdp[] = [];
+    const native = await nativeFixture(permission, options);
+    const { fake, oc } = native;
+    const browsers: Cdp[] = [];
     let stopping: Promise<void> | undefined;
-    scope.evidence(
-      "provider evidence",
-      () =>
-        Deno.writeTextFile(
-          join(oc.root, "provider-requests.json"),
-          JSON.stringify(fake.requests, null, 2),
-        ),
-    );
-    for (const [id, provider] of Object.entries(options?.providers ?? {})) {
-      scope.evidence(`provider ${id} evidence`, () =>
-        Deno.writeTextFile(
-          join(oc.root, `provider-${encodeURIComponent(id)}-requests.json`),
-          JSON.stringify(provider.fake.requests, null, 2),
-        ));
-    }
     scope.evidence("browser exceptions", () => {
       assertEquals(
         browsers.flatMap((browser) => browser.errors),
@@ -43,9 +28,7 @@ export async function browserFixture(
       fake,
       oc,
       async sidecar(overrides: Parameters<typeof SidecarTest.start>[1] = {}) {
-        const sidecar = await SidecarTest.start(oc, overrides);
-        servers.push(sidecar);
-        return sidecar;
+        return await native.sidecar(overrides);
       },
       async browser(url: string) {
         const browser = await Cdp.launch(oc.root);
@@ -78,17 +61,7 @@ export async function browserFixture(
           for (const browser of browsers.toReversed()) {
             await scope.observe("browser close", () => browser.close());
           }
-          for (const server of servers.toReversed()) {
-            await scope.observe("sidecar stop", () => server.stop());
-          }
-          await scope.observe("native stop", () => oc.stop());
-          await scope.observe("provider stop", () => fake.stop());
-          for (const provider of Object.values(options?.providers ?? {})) {
-            await scope.observe(
-              "extra provider stop",
-              () => provider.fake.stop(),
-            );
-          }
+          await scope.observe("native stack stop", () => native.stop());
         })());
       },
     };

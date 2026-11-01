@@ -81,7 +81,8 @@ export class SidecarTest {
       }
       env.OTK_CONFIG = file;
       env.TMPDIR = join(oc.root, "tmp");
-      const owner = ownedProcess(Deno.execPath(), [
+      const binary = Deno.env.get("OTK_TEST_BINARY");
+      const args = [
         "run",
         "--allow-net",
         "--allow-read",
@@ -89,15 +90,31 @@ export class SidecarTest {
         "--allow-env",
         "--allow-sys=systemMemoryInfo",
         "main.ts",
-      ], { cwd: root, env, detached: true, stdio: ["ignore", "pipe", "pipe"] });
+      ];
+      const owner = ownedProcess(
+        binary ?? Deno.execPath(),
+        binary ? [] : args,
+        {
+          cwd: root,
+          env,
+          detached: true,
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
       instance.process = owner.child;
       instance.#stop = owner.stop;
-      instance.process.stdout!.on("data", (chunk) => {
-        instance.log += chunk.toString();
-      });
-      instance.process.stderr!.on("data", (chunk) => {
-        instance.log += chunk.toString();
-      });
+      const logPath = join(
+        Deno.env.get("OTK_TEST_LOG_ROOT") ?? oc.root,
+        `sidecar-${instance.port}.log`,
+      );
+      Deno.writeTextFileSync(logPath, "", { append: true });
+      const log = (chunk: Uint8Array) => {
+        const text = new TextDecoder().decode(chunk);
+        instance.log += text;
+        Deno.writeTextFileSync(logPath, text, { append: true });
+      };
+      instance.process.stdout!.on("data", log);
+      instance.process.stderr!.on("data", log);
       try {
         await waitFor(
           async () =>

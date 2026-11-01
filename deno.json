@@ -14,12 +14,14 @@
       "command": "deno test --allow-net --allow-read --allow-write --allow-env --allow-run --allow-sys=systemMemoryInfo",
       "dependencies": ["prepare:test"]
     },
-    "check": "deno check main.ts application.ts core/ packages/ tests/arch/ tests/e2e/ tests/fixtures/ tests/integration/ tests/reuse/ tests/support/ tests/unit/ web/src/ web/vite.config.ts && npm --prefix tests/browser run check",
+    "check": "deno check main.ts application.ts core/ packages/ scripts/tests/ tests/arch/ tests/e2e/ tests/fixtures/ tests/integration/ tests/reuse/ tests/support/ tests/unit/ web/src/ web/vite.config.ts && npm --prefix tests/browser run check",
     "build:web": "deno run -A npm:vite@8.2.0 build --config web/vite.config.ts",
     "compile": "bash scripts/compile.sh",
     "build:web:watch": "deno run -A npm:vite@8.2.0 build --config web/vite.config.ts --watch",
-    "test:e2e": {
-      "command": "deno test --allow-net --allow-read --allow-write --allow-env --allow-run --allow-sys=systemMemoryInfo tests/e2e/",
+    "test:prepare": "deno run -A scripts/tests/prepare.ts",
+    "test:e2e": "deno run -A scripts/tests/browser.ts",
+    "test:e2e:legacy": {
+      "command": "deno run --allow-run --allow-env scripts/tests/legacy.ts",
       "dependencies": ["prepare:test"]
     },
     "test:unit": "deno task test tests/unit/ packages/*/tests/",

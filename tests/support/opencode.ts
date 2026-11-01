@@ -2,7 +2,7 @@
 import type { ChildProcess } from "node:child_process";
 import { join } from "@std/path";
 import type { FakeLlm } from "./fake-llm.ts";
-import { acquire, tempDir } from "./resources.ts";
+import { acquire, resources, tempDir } from "./resources.ts";
 import { ownedProcess } from "./process.ts";
 import { nativeVersion, seedProviderPackages } from "./provider-cache.ts";
 import { nativeBinary } from "./native.ts";
@@ -22,10 +22,39 @@ function sessionFixture<T extends { id: string }>(
   };
 }
 export function freePort(): number {
-  const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
-  const port = (listener.addr as Deno.NetAddr).port;
-  listener.close();
-  return port;
+  const root = Deno.env.get("OTK_TEST_PORTS_ROOT");
+  if (root) Deno.mkdirSync(root, { recursive: true });
+  for (let attempt = 0; attempt < 64; attempt++) {
+    const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
+    const port = (listener.addr as Deno.NetAddr).port;
+    try {
+      if (root) {
+        const record = join(root, `${port}.json`);
+        const owner = crypto.randomUUID();
+        try {
+          Deno.writeTextFileSync(
+            record,
+            JSON.stringify({ owner, pid: Deno.pid, port }),
+            { createNew: true },
+          );
+        } catch (error) {
+          if (error instanceof Deno.errors.AlreadyExists) continue;
+          throw error;
+        }
+        resources().defer(`port lease ${port}`, async () => {
+          const current = JSON.parse(await Deno.readTextFile(record));
+          if (current.owner !== owner) {
+            throw new Error("Port lease ownership changed");
+          }
+          await Deno.remove(record);
+        });
+      }
+      return port;
+    } finally {
+      listener.close();
+    }
+  }
+  throw new Error("Run port allocator exhausted its admission attempts");
 }
 export async function waitFor<T>(
   read: () => T | Promise<T>,
@@ -55,6 +84,12 @@ export class OpencodeTest {
   process!: ChildProcess;
   log = "";
   #env: Record<string, string> = {};
+  #logPath = "";
+  #record(chunk: Uint8Array): void {
+    const text = new TextDecoder().decode(chunk);
+    this.log += text;
+    Deno.writeTextFileSync(this.#logPath, text, { append: true });
+  }
   #stop: () => Promise<void> = () => Promise.resolve();
   static async start(
     provider: FakeLlm,
@@ -84,7 +119,15 @@ export class OpencodeTest {
         instances.add(entry.fake);
       }
       const test = new OpencodeTest();
-      test.root = await tempDir("oc-");
+      const identity = Deno.env.get("OTK_TEST_STACK_ID")?.replace(
+        /[^a-zA-Z0-9.-]/g,
+        "-",
+      ).slice(0, 190);
+      test.root = await tempDir(identity ? `oc-${identity}-` : "oc-");
+      test.#logPath = Deno.env.get("OTK_TEST_LOG_ROOT")
+        ? join(Deno.env.get("OTK_TEST_LOG_ROOT")!, "native.log")
+        : join(test.root, "process.log");
+      Deno.writeTextFileSync(test.#logPath, "", { append: true });
       test.directory = join(test.root, "project");
       await Deno.mkdir(test.directory);
       const git = await new Deno.Command("git", {
@@ -176,11 +219,7 @@ export class OpencodeTest {
       test.process = owner.child;
       test.#stop = owner.stop;
       const log = (chunk: Uint8Array) => {
-        const text = new TextDecoder().decode(chunk);
-        test.log += text;
-        Deno.writeTextFileSync(join(test.root, "process.log"), text, {
-          append: true,
-        });
+        test.#record(chunk);
       };
       test.process.stdout!.on("data", log);
       test.process.stderr!.on("data", log);
@@ -206,8 +245,9 @@ export class OpencodeTest {
   /** OTK-facing metadata collection; use request() when observing native rows. */
   async sessionList<T extends { id: string }>(
     path: string,
+    directory?: string,
   ): Promise<(T & { nativeID: string })[]> {
-    return (await this.request<T[]>(path)).map(sessionFixture);
+    return (await this.request<T[]>(path, { directory })).map(sessionFixture);
   }
   /** Native reads/seeds keep raw responses. Qualified fixture references decode
    * only in typed session paths and session-create parent inputs. */
@@ -259,10 +299,10 @@ export class OpencodeTest {
     this.process = owner.child;
     this.#stop = owner.stop;
     this.process.stdout!.on("data", (chunk) => {
-      this.log += chunk.toString();
+      this.#record(chunk);
     });
     this.process.stderr!.on("data", (chunk) => {
-      this.log += chunk.toString();
+      this.#record(chunk);
     });
     try {
       await this.#ready();

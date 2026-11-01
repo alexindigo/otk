@@ -13,6 +13,29 @@ export class FakeLlm {
     beforeChunk?: (index: number) => Promise<void>;
   })[] = [];
   #holds = new Set<() => void>();
+  #active = 0;
+  #strict = false;
+  #unexpected = 0;
+  #requestLog?: string;
+  recordRequests(path: string): void {
+    this.#requestLog = path;
+    Deno.writeTextFileSync(path, JSON.stringify(this.requests, null, 2));
+  }
+  get pending(): number {
+    return this.#queue.length;
+  }
+  get active(): number {
+    return this.#active;
+  }
+  get unexpected(): number {
+    return this.#unexpected;
+  }
+  strict(): void {
+    this.#strict = true;
+  }
+  releaseAll(): void {
+    for (const release of [...this.#holds]) release();
+  }
   readonly server: Deno.HttpServer;
   readonly port: number;
   #stop: () => Promise<void>;
@@ -29,6 +52,12 @@ export class FakeLlm {
         }
         const body = await request.json();
         this.requests.push(body);
+        if (this.#requestLog) {
+          Deno.writeTextFileSync(
+            this.#requestLog,
+            JSON.stringify(this.requests, null, 2),
+          );
+        }
         // opencode's ensureTitle also streams, but owns a separate request.
         // Its explicit instruction identifies it without consuming a main reply.
         const titleRequest = body.messages?.some((
@@ -37,6 +66,11 @@ export class FakeLlm {
           message.role === "user" && typeof message.content === "string" &&
           message.content.startsWith("Generate a title for this conversation:")
         );
+        if (
+          this.#strict && body.stream && !titleRequest && !this.#queue.length
+        ) {
+          this.#unexpected++;
+        }
         const script: Script & {
           finish?: Promise<void>;
           beforeChunk?: (index: number) => Promise<void>;
@@ -60,81 +94,96 @@ export class FakeLlm {
           });
         }
         let cancelled = false;
+        this.#active++;
+        let settled = false;
+        const settle = () => {
+          if (!settled) {
+            settled = true;
+            this.#active--;
+          }
+        };
         let heartbeat: ReturnType<typeof setInterval> | undefined;
         const stream = new ReadableStream<Uint8Array>({
           async start(controller) {
-            // A consumer-owned gate is not a stalled provider. SSE comments
-            // preserve that lifetime without generating model content/events.
-            const waitForConsumer = async (gate?: Promise<void>) => {
-              if (!gate) return;
-              heartbeat = setInterval(() => {
-                if (!cancelled) {
-                  controller.enqueue(new TextEncoder().encode(": held\n\n"));
+            try {
+              // A consumer-owned gate is not a stalled provider. SSE comments
+              // preserve that lifetime without generating model content/events.
+              const waitForConsumer = async (gate?: Promise<void>) => {
+                if (!gate) return;
+                heartbeat = setInterval(() => {
+                  if (!cancelled) {
+                    controller.enqueue(new TextEncoder().encode(": held\n\n"));
+                  }
+                }, 1000);
+                try {
+                  await gate;
+                } finally {
+                  clearInterval(heartbeat);
+                  heartbeat = undefined;
                 }
-              }, 1000);
-              try {
-                await gate;
-              } finally {
-                clearInterval(heartbeat);
-                heartbeat = undefined;
+              };
+              const send = (
+                delta: unknown,
+                finish_reason: string | null = null,
+              ) => {
+                if (!cancelled) {
+                  controller.enqueue(
+                    new TextEncoder().encode(
+                      `data: ${
+                        JSON.stringify({
+                          id,
+                          object: "chat.completion.chunk",
+                          created: Math.floor(Date.now() / 1000),
+                          model: "scripted",
+                          choices: [{ index: 0, delta, finish_reason }],
+                        })
+                      }\n\n`,
+                    ),
+                  );
+                }
+              };
+              send({ role: "assistant" });
+              for (const chunk of script.reasoning ?? []) {
+                await new Promise((r) => setTimeout(r, script.delay ?? 5));
+                if (cancelled) return;
+                send({ reasoning_content: chunk });
               }
-            };
-            const send = (
-              delta: unknown,
-              finish_reason: string | null = null,
-            ) => {
+              if (script.tool) {
+                send({
+                  tool_calls: [{
+                    index: 0,
+                    id: `call_${crypto.randomUUID()}`,
+                    type: "function",
+                    function: {
+                      name: script.tool.name,
+                      arguments: JSON.stringify(script.tool.input),
+                    },
+                  }],
+                });
+              }
+              for (const [index, chunk] of (script.chunks ?? []).entries()) {
+                await waitForConsumer(script.beforeChunk?.(index));
+                await new Promise((r) => setTimeout(r, script.delay ?? 5));
+                if (cancelled) return;
+                send({ content: chunk });
+              }
+              await waitForConsumer(script.finish);
+              if (cancelled) return;
+              send({}, script.tool ? "tool_calls" : "stop");
               if (!cancelled) {
                 controller.enqueue(
-                  new TextEncoder().encode(
-                    `data: ${
-                      JSON.stringify({
-                        id,
-                        object: "chat.completion.chunk",
-                        created: Math.floor(Date.now() / 1000),
-                        model: "scripted",
-                        choices: [{ index: 0, delta, finish_reason }],
-                      })
-                    }\n\n`,
-                  ),
+                  new TextEncoder().encode("data: [DONE]\n\n"),
                 );
+                controller.close();
               }
-            };
-            send({ role: "assistant" });
-            for (const chunk of script.reasoning ?? []) {
-              await new Promise((r) => setTimeout(r, script.delay ?? 5));
-              if (cancelled) return;
-              send({ reasoning_content: chunk });
-            }
-            if (script.tool) {
-              send({
-                tool_calls: [{
-                  index: 0,
-                  id: `call_${crypto.randomUUID()}`,
-                  type: "function",
-                  function: {
-                    name: script.tool.name,
-                    arguments: JSON.stringify(script.tool.input),
-                  },
-                }],
-              });
-            }
-            for (const [index, chunk] of (script.chunks ?? []).entries()) {
-              await waitForConsumer(script.beforeChunk?.(index));
-              await new Promise((r) => setTimeout(r, script.delay ?? 5));
-              if (cancelled) return;
-              send({ content: chunk });
-            }
-            await waitForConsumer(script.finish);
-            if (cancelled) return;
-            send({}, script.tool ? "tool_calls" : "stop");
-            if (!cancelled) {
-              controller.enqueue(new TextEncoder().encode("data: [DONE]\n\n"));
-              controller.close();
+            } finally {
+              settle();
             }
           },
           cancel() {
             cancelled = true;
             clearInterval(heartbeat);
+            settle();
           },
         });
         return new Response(stream, {

@@ -1,14 +1,23 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
     "lib": ["ES2022", "DOM"],
     "types": ["node"],
     "strict": true,
     "noEmit": true,
     "verbatimModuleSyntax": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "allowImportingTsExtensions": true,
+    "paths": { "@otk/protocol": ["../../packages/protocol/mod.ts"] }
   },
-  "include": ["*.config.ts", "tooling/**/*.ts"]
+  "include": [
+    "*.config.ts",
+    "tooling/**/*.ts",
+    "fixtures/**/*.ts",
+    "behavior/**/*.ts",
+    "contracts/**/*.ts",
+    "harness/**/*.ts"
+  ]
 }

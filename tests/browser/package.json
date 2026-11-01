@@ -7,6 +7,7 @@
     "npm": "11.19.1"
   },
   "scripts": {
+    "test": "playwright test --config playwright.config.ts",
     "check": "tsc --noEmit",
     "acceptance:tooling": "playwright test --config playwright.tooling.config.ts --workers=1 --retries=0"
   },

@@ -32,6 +32,7 @@ export class WsClient {
   #index?: ClientIndex;
   #indexed = 0;
   #close: () => Promise<void>;
+  #welcome?: Extract<ServerFrame, { t: "welcome" }>;
   constructor(readonly base: string, cookie?: string, origin = base) {
     resources();
     this.ws = new WebSocket(base.replace(/^http/, "ws") + "/api/ws", {
@@ -39,6 +40,7 @@ export class WsClient {
     });
     this.ws.on("message", (data) => {
       const frame: ServerFrame = JSON.parse(data.toString());
+      if (frame.t === "welcome") this.#welcome = frame;
       this.frames.push(frame);
       this.#reduceIndex();
       if (frame.t === "ping") this.send({ t: "pong" });
@@ -105,7 +107,7 @@ export class WsClient {
     ) as Promise<ServerFrame>;
   }
   async rpc<T = unknown>(method: string, params: unknown): Promise<T> {
-    const welcome = this.frames.findLast((frame) => frame.t === "welcome");
+    const welcome = this.#welcome;
     if (!welcome || welcome.t !== "welcome") {
       throw new Error("Request needs a welcome");
     }
