@@ -250,7 +250,10 @@ export default function ProjectTabs(props: {
         <p role="alert" class="otk-error">{error()}</p>
       </Show>
       <div class="otk-task-strip">
-        <span class="otk-tabs-project" title={props.project.directory}>
+        <span
+          class="otk-tabs-project otk-control-label"
+          title={props.project.directory}
+        >
           {projectName(props.project.directory)}
         </span>
         <div

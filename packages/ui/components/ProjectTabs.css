@@ -25,9 +25,9 @@
   padding-right: var(--corner-zone);
 }
 .otk-tabs-project {
+  flex: 0 1 auto;
   font-weight: 600;
   margin-right: 8px;
-  white-space: nowrap;
 }
 .otk-task-list {
   flex: 1 1 auto;
