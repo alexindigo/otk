@@ -34,6 +34,8 @@ export interface PointAnchor {
 export default function Popover(props: {
   label: string;
   triggerLabel?: string;
+  busy?: boolean;
+  description?: string;
   applied?: string;
   triggerColor?: string;
   trigger?: Element;
@@ -221,6 +223,8 @@ export default function Popover(props: {
               .join(" "),
           })}
           aria-label={triggerLabel()}
+          aria-busy={props.busy ? "true" : "false"}
+          aria-description={props.description}
           title={props.preview ? undefined : triggerLabel()}
           aria-describedby={props.preview ? anchor : undefined}
           aria-expanded={open() ? "true" : "false"}

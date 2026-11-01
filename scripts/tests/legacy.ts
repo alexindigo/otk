@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { legacyFiles } from "./migration-audit.ts";
 // Required-value options in the pinned Deno 2.9.6 test CLI. Optional values use
 // --option=value, except --lock, which also accepts a separate path.
 const values = new Set([
@@ -46,7 +47,12 @@ for (let i = 0; i < Deno.args.length; i++) {
   }
   explicitPath = true;
 }
-const files = explicitPath ? Deno.args : ["tests/e2e/", ...Deno.args];
+const active = await legacyFiles();
+const files = explicitPath ? Deno.args : [...active, ...Deno.args];
+if (!active.length) {
+  console.info("No active legacy assertions");
+  Deno.exit(0);
+}
 const status = await new Deno.Command(Deno.execPath(), {
   args: ["task", "test", ...files],
   stdin: "inherit",

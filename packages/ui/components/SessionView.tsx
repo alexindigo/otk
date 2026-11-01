@@ -116,6 +116,9 @@ export default function SessionView(props: {
   });
   const projection = () => props.transcript?.state ?? fallback()!;
   const count = () => projection().messageIDs.length;
+  const transcriptBusy = () =>
+    props.loading || props.paging ||
+    props.continuity === "loading" || props.continuity === "missing";
   const rollbackNotice = () =>
     !!props.strip || !!props.rollback?.state.pending ||
     !!props.rollback?.state.error;
@@ -264,6 +267,7 @@ export default function SessionView(props: {
           <section
             class="otk-session-view"
             aria-label="Session"
+            aria-busy={transcriptBusy() ? "true" : "false"}
           >
             {props.displayMenu}
             <Show when={props.info?.parentID}>
@@ -274,6 +278,9 @@ export default function SessionView(props: {
               />
             </Show>
             <div
+              role="region"
+              aria-label="Transcript"
+              aria-busy={transcriptBusy() ? "true" : "false"}
               class={["otk-messages", {
                 "otk-scrollbar-hidden": !props.prefs.scrollbar,
                 "is-empty": !count(),

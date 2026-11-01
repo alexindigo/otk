@@ -54,6 +54,8 @@ export interface PromptContext extends SessionPorts {
 /** Feature instances are per mounted prompt and retain their own async lifetime. */
 export interface PromptFeature {
   ready?(): Promise<void>;
+  /** Current resource work, borrowed from the feature's authoritative owner. */
+  pending?(): boolean;
   source?: PromptSource;
   key?(event: KeyboardEvent): boolean;
   paste?(event: ClipboardEvent): void | Promise<void>;

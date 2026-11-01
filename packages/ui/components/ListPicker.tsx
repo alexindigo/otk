@@ -110,6 +110,10 @@ export default function ListPicker<T = string>(props: {
     <Popover
       label={props.label}
       triggerLabel={props.triggerLabel}
+      busy={props.loading}
+      description={props.loading
+        ? `Loading ${props.label.toLowerCase()}…`
+        : props.error}
       applied={props.applied}
       triggerColor={props.triggerColor}
       trigger={
@@ -139,6 +143,7 @@ export default function ListPicker<T = string>(props: {
       <Show when={opened()}>
         <div
           class="otk-picker-content"
+          aria-busy={props.loading ? "true" : "false"}
           ref={(el) => {
             root = el;
           }}

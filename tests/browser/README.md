@@ -60,8 +60,8 @@ once, and records native/cache/binary/web hashes in
 `.test-state/builds/<tree>/receipt.json`. The compile recipe owns its frozen
 install and web build. A browser invocation validates that exact receipt before
 admitting workers; it neither installs dependencies nor builds in a test case.
-The legacy task defaults to all `tests/e2e/` files when no explicit files are
-given. It preserves their Deno runner and assertions.
+The legacy task defaults to the active legacy files in `migration.json` when no
+explicit files are given. It preserves their Deno runner and assertions.
 
 Import `test`/`expect` from `fixtures/evidence.ts` for ordinary journeys.
 Request `state` only when the test needs native services. Its worker owns the
@@ -121,3 +121,40 @@ compile-consumer invocation, set these inputs to the same receipt paths first.
 Compile consumers refuse missing or stale inputs instead of building in a case.
 Destination-refusal and timing-instrumentation controls remain standard;
 full-population snapshot and structural scale proofs run in the scale lane.
+
+## Readiness, coverage ownership and the mixed full lane
+
+Use `deno task test:e2e --project=oc-1.18.34 --grep @readiness --retries=0`
+inside A to observe held real page/catalog delivery, independently available
+trusted actions, and the correct route's final consumer state. The application
+exposes resource-local busy/status semantics; navigation admission or connection
+health never substitutes for the requested content or operation result.
+
+`deno task test:migration --audit` checks the 131 original file rows and the
+expanded assertion groups against actual legacy registration. The initial ledger
+keeps every original group owned by its unchanged legacy test, with stable IDs,
+source collection receipts and original scenario/theme coverage. Registration
+collection happens in a separate process without executing bodies. The audit
+also checks Playwright collection/area tags and rejects skipped, exclusive or
+serial proofs, retaining collected file/title/stable-ID records in its output. A
+migration must transfer ownership and verify its replacement before retiring the
+old proof; the ledger is the legacy selection source.
+
+`deno task test:full --version 1.18.34` runs A's complete mixed T1 lane:
+exact-tree preparation (including scale templates), static checks, unit,
+architecture, reuse, standard and scale integration, Playwright
+behavior/contracts/harness, legacy e2e and the ownership audit. Compiled/upgrade
+proofs are in standard integration; theme and browser-scale proofs remain in
+legacy until their later transfers. Each tier has an owned guest transient unit
+and retained output, exit, counts (null for non-test tiers or absent summaries),
+and elapsed timing in `.test-state/runs/full-<version>-<identity>/lane.json`.
+Tiers continue after a failure and the aggregate exits nonzero if any tier
+fails. Only this full lane sets one browser retry; failed-then-passed remains a
+nonzero flaky result. `tiers.jsonl` records exact unit ownership before each
+tier starts, preserving the in-flight identity if its supervisor is interrupted.
+
+For wiring inspection use `--dry-run`; for a short real lane control use
+`--tiers migration`. A selected-tier receipt says `complete: false`, so it
+cannot be mistaken for full qualification. B/C select their own native versions
+in their assigned guests. All these commands run in the named guest workspace
+with its disk-backed TMPDIR, never on Ark or the laptop.

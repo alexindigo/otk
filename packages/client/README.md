@@ -363,18 +363,20 @@ favourite/recent/current; unavailable references never invent catalog entries.
 IDs. Neither helper owns UI, networking or persistence.
 
 `createComposerSelection({draft, change, context, connection, load, prefs, factory})`
-owns composer catalogs and intents without a UI framework. Its StateFactory
-notification uses the same revision pattern as `createDrafts`: owner-current
-snapshots expose capability/loading/error/last-good data even before a framework
-publishes its revision. `connect()` keys in-flight work to the welcomed
-connection identity, never joining or applying older work; `ready()` follows
-invalidation and waits for current work. Refresh errors retain good data and do
-not repeatedly retry on submission. `choose*`, serialized `cycleAgent`,
-`cycleVariant`, serialized `toggleFavourite` and `recordSent` share the existing
-pure helpers. `groups()` returns refs, keys, favourite flags and subtitles (only
-favourite/recent groups). Dispose ends catalog publication and deferred draft
-intents. Captured successful normal sends can still record recency after view
-replacement.
+owns composer catalogs and intents without a UI framework. Its derived
+`state.pending` reports current catalog work, including an unknown initial
+directory catalog while connected; consumers borrow it without another readiness
+store. Its StateFactory notification uses the same revision pattern as
+`createDrafts`: owner-current snapshots expose
+capability/loading/error/last-good data even before a framework publishes its
+revision. `connect()` keys in-flight work to the welcomed connection identity,
+never joining or applying older work; `ready()` follows invalidation and waits
+for current work. Refresh errors retain good data and do not repeatedly retry on
+submission. `choose*`, serialized `cycleAgent`, `cycleVariant`, serialized
+`toggleFavourite` and `recordSent` share the existing pure helpers. `groups()`
+returns refs, keys, favourite flags and subtitles (only favourite/recent
+groups). Dispose ends catalog publication and deferred draft intents. Captured
+successful normal sends can still record recency after view replacement.
 
 `createModelCatalog({connection, load, factory?})` owns one session/directory's
 model metadata: one in-flight request, invocation-current

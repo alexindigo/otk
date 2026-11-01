@@ -34,34 +34,33 @@ export function registerSessionsPanel(
             ];
             const project = { sidecarId, directory };
             return (
-              <Show when={shell.inbox(sidecarId).state.ready}>
-                <ProjectSessions
-                  project={project}
-                  entries={shell.projectEntries(project)}
-                  entry={(id) => shell.entry(project.sidecarId, id)}
-                  interaction={shell.listInteraction(project)}
-                  selected={shell.selection()}
-                  rename={shell.rename}
-                  showCost={shell.toggles.state.prefs.showCost}
-                  auto={(id) => !!shell.approvals(project.sidecarId).owner(id)}
-                  inbox={(id) => shell.inbox(id).state.inbox}
-                  connected={(id) =>
-                    shell.servers().some((s) =>
-                      s.id === id && s.status === "connected"
-                    )}
-                  onOpen={(entry) =>
-                    commands.run("session.preview", {
-                      sidecarId: entry.sidecarId,
-                      sessionID: entry.id,
-                    })}
-                  onPin={(entry) =>
-                    commands.run("session.pin", {
-                      sidecarId: entry.sidecarId,
-                      sessionID: entry.id,
-                    })}
-                  onCreate={(project) => commands.run("session.new", project)}
-                />
-              </Show>
+              <ProjectSessions
+                project={project}
+                ready={shell.inbox(sidecarId).state.ready}
+                entries={shell.projectEntries(project)}
+                entry={(id) => shell.entry(project.sidecarId, id)}
+                interaction={shell.listInteraction(project)}
+                selected={shell.selection()}
+                rename={shell.rename}
+                showCost={shell.toggles.state.prefs.showCost}
+                auto={(id) => !!shell.approvals(project.sidecarId).owner(id)}
+                inbox={(id) => shell.inbox(id).state.inbox}
+                connected={(id) =>
+                  shell.servers().some((s) =>
+                    s.id === id && s.status === "connected"
+                  )}
+                onOpen={(entry) =>
+                  commands.run("session.preview", {
+                    sidecarId: entry.sidecarId,
+                    sessionID: entry.id,
+                  })}
+                onPin={(entry) =>
+                  commands.run("session.pin", {
+                    sidecarId: entry.sidecarId,
+                    sessionID: entry.id,
+                  })}
+                onCreate={(project) => commands.run("session.new", project)}
+              />
             );
           }}
         </Show>

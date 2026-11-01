@@ -44,6 +44,7 @@ export interface ComposerConnection {
 export type ComposerCatalog<T> = CatalogState<T>;
 export interface ComposerSelectionState {
   connected: boolean;
+  readonly pending: boolean;
   agents: ComposerCatalog<AgentOption[]>;
   models: ComposerCatalog<ModelCatalog>;
 }
@@ -120,6 +121,11 @@ export function createComposerSelection(
   // publishes its notification later. The factory stores only invalidation.
   const store = (options.factory ?? createState)({ revision: 0 });
   const state: ComposerSelectionState = {
+    get pending() {
+      return state.agents.loading || state.models.loading ||
+        (state.connected && !!options.directoryCatalog &&
+          !options.directoryCatalog.state.catalog);
+    },
     get connected() {
       void store.state.revision;
       return current.connected;

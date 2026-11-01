@@ -32,7 +32,7 @@ test.use({
 });
 test(
   `forced fixture ${scenario}`,
-  { tag: "@forced" },
+  { tag: ["@forced", "@harness"] },
   async ({ isolatedState, page }) => {
     await isolatedState.native("/session", "POST", {
       title: "Failure control",

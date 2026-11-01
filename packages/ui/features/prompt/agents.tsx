@@ -132,6 +132,7 @@ export function registerComposerPickers(prompt: PromptRegistry): void {
       return {
         selection,
         ready: owner.ready,
+        pending: () => owner.state.pending,
         submitted: (draft, sent, handled) =>
           owner.recordSent(sent, draft.mode, handled).catch(ctx.fail),
         settings: () => (

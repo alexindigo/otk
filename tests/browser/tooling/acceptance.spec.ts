@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "@playwright/test";
 
-test("managed Chromium accepts trusted input and renders geometry", async ({
+test("managed Chromium accepts trusted input and renders geometry", {
+  tag: "@harness",
+}, async ({
   page,
   browser,
 }, testInfo) => {

@@ -301,6 +301,15 @@ export default function Prompt(props: PromptProps): import("solid-js").Element {
         data: undefined,
       }))}
       class="otk-prompt"
+      aria-label="Composer"
+      aria-busy={pending() || features.some((feature) => feature.pending?.())
+        ? "true"
+        : "false"}
+      aria-description={pending()
+        ? "Preparing or sending prompt…"
+        : features.some((feature) => feature.pending?.())
+        ? "Loading message settings…"
+        : undefined}
       onDragOver={(event) => event.preventDefault()}
       onDrop={(event) => {
         event.preventDefault();
