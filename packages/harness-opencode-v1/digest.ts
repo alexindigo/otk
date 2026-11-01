@@ -180,6 +180,7 @@ export class OpencodeV1DigestSink implements DigestSink {
   #helperObserved = new Map<string, number>();
   #catalogWork?: {
     connection: number;
+    observation: number;
     signal: AbortSignal;
     reconcile: boolean;
     task: Promise<
@@ -485,6 +486,7 @@ export class OpencodeV1DigestSink implements DigestSink {
     { entries: SessionMetadata[]; authoritative: boolean; hints?: string[] }
   > {
     const connection = this.#connection;
+    const observation = this.#observation;
     for (;;) {
       signal.throwIfAborted();
       if (connection !== this.#connection) {
@@ -496,7 +498,10 @@ export class OpencodeV1DigestSink implements DigestSink {
           const result = await this.wait(active.task);
           signal.throwIfAborted();
           if (
-            active.connection === connection && (active.reconcile || !reconcile)
+            active.connection === connection &&
+            // Joining an enumeration cannot consume observations it predates.
+            active.observation >= observation &&
+            (active.reconcile || !reconcile)
           ) return result;
         } catch (error) {
           signal.throwIfAborted();
@@ -506,9 +511,11 @@ export class OpencodeV1DigestSink implements DigestSink {
         }
         continue;
       }
+      const admitted = this.#observation;
       const task = this.#catalog(signal, reconcile);
       const work = {
         connection,
+        observation: admitted,
         signal,
         reconcile,
         task: task.finally(() => {
@@ -1396,6 +1403,9 @@ export class OpencodeV1DigestSink implements DigestSink {
   }
   /** Provider-private admission. Repeated hints never restart an active sweep. */
   requestHelper(id: string, changed: boolean): boolean {
+    // An unknown helper also depends on fresh inventory admission, even when a
+    // repeated hint preserves its already-dirty helper scan.
+    if (!this.storage.read(id)) this.#observation++;
     const scan = this.storage.sql.prepare(
       "SELECT dirty FROM opcv1_helper_scan WHERE session_id=?",
     ).get(id);

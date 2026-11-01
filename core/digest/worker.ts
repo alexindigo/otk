@@ -78,7 +78,7 @@ function nativeWait<T>(readiness: Promise<T>, join = false): Promise<T> {
     ? (join ? turn.join(readiness) : turn.wait(readiness, "io"))
     : readiness;
 }
-let inventoryDirty = false;
+let inventoryRevision = 0, inventoryComplete = 0;
 let starting: Promise<void> | undefined;
 let batches: DigestBatch | undefined;
 let cachedReplay:
@@ -520,13 +520,16 @@ async function start(
           sqliteRetry(
             async () => {
               try {
-                if (inventoryDirty) {
-                  inventoryDirty = false;
+                if (inventoryRevision > inventoryComplete) {
+                  // Every dependent step joins admission. Only the revision
+                  // captured by this refresh is satisfied when it completes.
+                  const admitted = inventoryRevision;
                   const catalog = await sink!.catalog(signal, false);
                   await admitCatalog(catalog.entries, signal, {
                     invalidate: false,
                     helpers: false,
                   });
+                  inventoryComplete = Math.max(inventoryComplete, admitted);
                 }
                 const start = performance.now();
                 const cursor = await sink!.step(job, budget, signal);
@@ -761,7 +764,7 @@ function handle(message: ToWorker): void {
                         );
                       }
                     }
-                    if (!row) inventoryDirty = true;
+                    if (!row) inventoryRevision++;
                     continue;
                   }
                   if (dirty.reason === "attention") {
@@ -781,7 +784,7 @@ function handle(message: ToWorker): void {
                     !row || dirty.reason === "presence" ||
                     dirty.reason === "metadata"
                   ) {
-                    inventoryDirty = true;
+                    inventoryRevision++;
                   }
                   sink!.invalidate(dirty.sessionID, dirty.revision);
                   scheduler!.enqueue(

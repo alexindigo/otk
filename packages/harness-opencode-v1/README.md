@@ -511,9 +511,12 @@ Catalog reconciliation commits bounded identity batches and yields between them,
 rechecking its connection fence on continuation. Per-identity neutral/private
 writes stay transactional, and inventory completion is recorded after the full
 reconciliation. Concurrent callers share the owning catalog lifetime rather than
-interleave sweeps. Worker admission batches summary lookups and yields through
-the same priority executor instead of scanning the complete catalog
-synchronously.
+interleave sweeps. A joining caller requires an enumeration admitted after its
+observations; an older in-flight catalog cannot satisfy newer invalidations.
+Worker inventory demand remains outstanding until admission completes, so all
+dependent session steps join it and completion acknowledges only its captured
+revision. Worker admission batches summary lookups and yields through the same
+priority executor instead of scanning the complete catalog synchronously.
 
 The OTK application worker composition lives outside this package. Source and
 compiled independent-consumer checks exercise it before selection in the shipped

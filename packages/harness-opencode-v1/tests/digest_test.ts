@@ -86,6 +86,62 @@ test("catalog reconciliation yields committed bounded chunks before admitting th
     f.close();
   }
 });
+for (const admission of ["metadata", "helper", "helper-hint"] as const) {
+  for (const reconcile of [false, true]) {
+    test(`catalog join preserves ${admission} admitted after enumeration (reconcile=${reconcile})`, async () => {
+      const f = await fixture();
+      const entered = Promise.withResolvers<void>();
+      const release = Promise.withResolvers<void>();
+      try {
+        const signal = new AbortController().signal;
+        f.duringCatalog(async () => {
+          entered.resolve();
+          await release.promise;
+        });
+        const older = f.sink.catalog(signal, reconcile);
+        await entered.promise;
+        // Behind the enumeration cursor and absent from its newest API sample.
+        f.native.exec(
+          "INSERT INTO session VALUES('ses_before',NULL,'/p','p','New',0,2,NULL)",
+        );
+        if (admission === "metadata") f.sink.invalidate("opcv1-ses_before", 1);
+        else {
+          assertEquals(
+            f.sink.requestHelper("opcv1-ses_before", admission === "helper"),
+            true,
+          );
+          // A repeated hint must retain fresh inventory demand without restarting
+          // the helper's existing sweep.
+          assertEquals(f.sink.requestHelper("opcv1-ses_before", false), true);
+        }
+        const later = [
+          f.sink.catalog(signal, false),
+          f.sink.catalog(signal, false),
+        ];
+        release.resolve();
+        assertEquals((await older).entries.map((row) => row.id), [
+          "opcv1-ses_one",
+        ]);
+        for (const result of await Promise.all(later)) {
+          assertEquals(
+            result.entries.some((row) => row.id === "opcv1-ses_before"),
+            true,
+          );
+        }
+        assertEquals(f.values.get("opcv1-ses_before")?.deleted, null);
+        assertEquals(
+          f.derived.prepare("SELECT generation FROM opcv1_inventory").get()
+            ?.generation,
+          2,
+          "Later callers share one fresh enumeration, not one enumeration per waiter",
+        );
+      } finally {
+        release.resolve();
+        f.close();
+      }
+    });
+  }
+}
 test("accepted deletion is durable without inventory, idempotent, generation-fenced and resurrectable", async () => {
   const f = await fixture();
   try {
