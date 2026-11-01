@@ -14,7 +14,7 @@
       "command": "deno test --allow-net --allow-read --allow-write --allow-env --allow-run --allow-sys=systemMemoryInfo",
       "dependencies": ["prepare:test"]
     },
-    "check": "deno check main.ts application.ts core/ packages/ tests/ web/src/ web/vite.config.ts",
+    "check": "deno check main.ts application.ts core/ packages/ tests/arch/ tests/e2e/ tests/fixtures/ tests/integration/ tests/reuse/ tests/support/ tests/unit/ web/src/ web/vite.config.ts && npm --prefix tests/browser run check",
     "build:web": "deno run -A npm:vite@8.2.0 build --config web/vite.config.ts",
     "compile": "bash scripts/compile.sh",
     "build:web:watch": "deno run -A npm:vite@8.2.0 build --config web/vite.config.ts --watch",
@@ -58,9 +58,13 @@
     "@fontsource/ibm-plex-mono": "npm:@fontsource/ibm-plex-mono@5.3.0",
     "@fontsource/ibm-plex-sans": "npm:@fontsource/ibm-plex-sans@5.3.0"
   },
+  "test": { "exclude": ["tests/browser/"] },
   "fmt": {
     "exclude": [
       "node_modules",
+      "tests/browser/node_modules",
+      "tests/browser/test-results",
+      "tests/browser/playwright-report",
       "web/dist",
       ".test-state",
       "./config",
@@ -68,5 +72,15 @@
       "packages/*/LICENSE"
     ]
   },
-  "lint": { "exclude": ["node_modules", "web/dist", ".test-state", "./config"] }
+  "lint": {
+    "exclude": [
+      "node_modules",
+      "tests/browser/node_modules",
+      "tests/browser/test-results",
+      "tests/browser/playwright-report",
+      "web/dist",
+      ".test-state",
+      "./config"
+    ]
+  }
 }

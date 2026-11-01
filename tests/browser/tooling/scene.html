@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>OTK browser tooling acceptance</title>
+    <style>
+    * {
+      box-sizing: border-box;
+    }
+    body {
+      margin: 0;
+      font: 18px sans-serif;
+    }
+    main {
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+    }
+    section {
+      display: grid;
+      gap: 16px;
+      width: 480px;
+      padding: 32px;
+      border: 1px solid;
+    }
+    h1 {
+      margin: 0;
+      font-size: 24px;
+    }
+    button,
+    textarea {
+      font: inherit;
+      padding: 8px;
+    }
+    textarea {
+      resize: none;
+    }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section aria-label="Tooling scene">
+        <h1>Browser tooling acceptance</h1>
+        <button type="button">Increment counter</button>
+        <output role="status" aria-label="Counter">Count: 0</output>
+        <label for="text">Unicode text</label>
+        <textarea id="text" rows="3"></textarea>
+      </section>
+    </main>
+    <script>
+    let count = 0;
+    document.querySelector("button").addEventListener("click", (event) => {
+      document.querySelector("output").textContent =
+        `Count: ${++count}; trusted: ${event.isTrusted}`;
+    });
+    </script>
+  </body>
+</html>
