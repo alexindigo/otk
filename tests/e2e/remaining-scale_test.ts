@@ -27,7 +27,9 @@ test("remaining complete catalogs and keyed task outcomes reach Chromium during 
   // Chromium adds its singleton socket below this disk-backed temp tree.
   const root = await tempDir("rb-"), fake = new FakeLlm();
   const report = new RemainingMeasurements(root, "remaining-browser-scale");
-  const native = await SessionScale.create(join(root, "native"), root, fake);
+  const native = await SessionScale.create(join(root, "native"), root, fake, {
+    files: true,
+  });
   await Deno.writeTextFile(
     join(root, "scale-manifest.json"),
     JSON.stringify(native.manifest, null, 2),

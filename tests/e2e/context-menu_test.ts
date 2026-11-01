@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { consumerAssets } from "../support/consumer-builds.ts";
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { fixture } from "../support/config.ts";
@@ -6,7 +7,6 @@ import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { openSession } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
-import { join } from "@std/path";
 import { waitFor } from "../support/opencode.ts";
 import type { TaskRecord } from "@otk/protocol";
 import { menuReady } from "../support/menu.ts";
@@ -365,24 +365,7 @@ test("context menu: links, images and selection outside fields use the real clip
 });
 
 test("context binding: external command contributions, live target data, nested groups and destructive ordering", async () => {
-  const root = await fixture(), assets = join(root, "context-dist");
-  const build = await new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-A",
-      "npm:vite@8.2.0",
-      "build",
-      "--config",
-      "tests/support/context-consumer/vite.config.ts",
-      "--outDir",
-      assets,
-      "--logLevel",
-      "warn",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
+  const root = await fixture(), assets = await consumerAssets("context");
   const f = await inboxBrowserFixture(root, [], {}, assets),
     browser = await Cdp.launch(root);
   try {

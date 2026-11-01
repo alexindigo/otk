@@ -15,6 +15,7 @@ import {
 import { freePort, waitFor } from "../support/opencode.ts";
 import { resources, tempDir, test } from "../support/resources.ts";
 import { SessionScale } from "../support/session-scale.ts";
+import { consumerAssets } from "../support/consumer-builds.ts";
 import {
   MESSAGE_CASES,
   PAYLOAD_BYTES,
@@ -31,24 +32,7 @@ test("ten full native scale body cycles report retained heap with another sessio
     messages: true,
     payload: true,
   });
-  const assets = join(root, "consumer-dist");
-  const built = await new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-A",
-      "npm:vite@8.2.0",
-      "build",
-      "--config",
-      "tests/support/message-heap-consumer/vite.config.ts",
-      "--outDir",
-      assets,
-      "--logLevel",
-      "warn",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  assertEquals(built.code, 0, new TextDecoder().decode(built.stderr));
+  const assets = await consumerAssets("message-heap");
   const ui = Deno.serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     (request) =>

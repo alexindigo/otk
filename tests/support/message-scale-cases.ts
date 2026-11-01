@@ -11,6 +11,7 @@ export const PAYLOAD_BYTES = 16 * 1024 * 1024;
 export interface MessageScaleOptions {
   messages?: boolean;
   payload?: boolean;
+  files?: boolean;
 }
 export function scaleRole(session: number, rank: number, messages = false) {
   if (messages && session === MESSAGE_CASES.giant) {

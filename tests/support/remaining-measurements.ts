@@ -42,6 +42,25 @@ export class RemainingMeasurements {
 /** A complete, independently named 100 × 100 candidate universe. */
 export async function remainingFiles(directory: string): Promise<string[]> {
   const paths: string[] = [];
+  let prepared = false;
+  try {
+    prepared = (await Deno.stat(join(directory, "catalog"))).isDirectory;
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error;
+  }
+  if (prepared) {
+    for (let n = 0; n < 10000; n++) {
+      const path = `catalog/group-${
+        String(Math.floor(n / 100)).padStart(2, "0")
+      }/candidate-${String(n).padStart(5, "0")}.txt`;
+      if (
+        await Deno.readTextFile(join(directory, path)) !==
+          `Private candidate ${n} contents`
+      ) throw new Error(`Invalid prepared candidate: ${path}`);
+      paths.push(path);
+    }
+    return paths;
+  }
   await Deno.writeTextFile(join(directory, ".gitignore"), ".opencode/\n");
   await Deno.mkdir(join(directory, "catalog"));
   for (let group = 0; group < 100; group++) {

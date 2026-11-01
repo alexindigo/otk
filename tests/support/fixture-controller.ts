@@ -57,6 +57,7 @@ try {
     let lease: TestLease | undefined;
     let profile = "ordinary" as Profile;
     let poisoned = false;
+    let snapshotLease = false;
     const directories: string[] = [];
     const gates = new Map<string, () => void>();
     let stopped = false;
@@ -77,6 +78,18 @@ try {
       const f = fixture!;
       f.fake.releaseAll();
       gates.clear();
+      if (snapshotLease) {
+        await waitFor(() => f.fake.active, (n) => n === 0);
+        if (f.fake.pending || f.fake.unexpected) {
+          throw new Error("Snapshot provider lease unsettled");
+        }
+        // A full-population isolated owner is disposed, never reset for reuse.
+        await client!.close();
+        await f.stop();
+        lease = undefined;
+        poisoned = true;
+        return;
+      }
       const sessions = await f.oc.sessionList<
         { id: string; directory: string }
       >(
@@ -289,8 +302,59 @@ try {
           }
           await fixture!.oc.restart();
           return null;
-        case "materializeSnapshot":
-          throw new Error("Snapshot profiles are supplied by T1-C3");
+        case "materializeSnapshot": {
+          if (profile !== "isolated") {
+            throw new Error(
+              "Snapshot materialization requires isolated profile",
+            );
+          }
+          // Explicit profile transition, never a dirty-worker reset or DB replacement.
+          // Validate the key before stopping any currently owned service.
+          const { SessionScale } = await import("./session-scale.ts");
+          await SessionScale.template(frame.params.key);
+          if (
+            fixture!.fake.pending || fixture!.fake.active ||
+            fixture!.fake.requests.length
+          ) {
+            throw new Error(
+              "Snapshot requires an unused isolated provider lease",
+            );
+          }
+          await end();
+          await client!.close();
+          await fixture!.stop();
+          fixture = await nativeFixture(undefined, {
+            snapshot: frame.params.key,
+          });
+          fixture.fake.strict();
+          const server = await fixture.sidecar();
+          client = new WsClient(server.url);
+          await client.connect();
+          baseline = await client.rpc<Record<string, Json>>("prefs.get", {});
+          lease = {
+            lease: crypto.randomUUID(),
+            directory: fixture.oc.directory,
+            baseline,
+          };
+          snapshotLease = true;
+          const stack = {
+            root: fixture.oc.root,
+            url: server.url,
+            nativeUrl: fixture.oc.url,
+            binary: nativeBinary,
+            version: nativeVersion,
+            pids: [Deno.pid, fixture.oc.process.pid!, server.process.pid!],
+            ports: [fixture.fake.port, fixture.oc.port, server.port],
+          };
+          const record = Deno.env.get("OTK_TEST_CONTROLLER_RECORD");
+          if (record) {
+            await Deno.writeTextFile(
+              record,
+              JSON.stringify({ pids: stack.pids, ports: stack.ports }),
+            );
+          }
+          return { stack, lease };
+        }
         case "stop":
           stopped = true;
           return null;

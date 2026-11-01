@@ -1,20 +1,31 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { DatabaseSync } from "node:sqlite";
-import {
-  basename,
-  dirname,
-  isAbsolute,
-  join,
-  relative,
-  resolve,
-} from "@std/path";
+import { dirname, isAbsolute, join, resolve } from "@std/path";
 import { opencodeV1SessionID as ids } from "@otk/harness-opencode-v1";
 import { nativeBinary, nativeVersion } from "./native.ts";
 import { freePort, waitFor } from "./opencode.ts";
 import { ownedProcess } from "./process.ts";
 import { resources, withResources } from "./resources.ts";
-import { seedProviderPackages } from "./provider-cache.ts";
+import {
+  seedProviderPackages,
+  validateProviderCache,
+} from "./provider-cache.ts";
 import { FakeLlm } from "./fake-llm.ts";
+import {
+  checkpointDatabases,
+  copyTree,
+  destination,
+  digest,
+  exclusive,
+  exists,
+  fileHashes,
+  integrity,
+  revision,
+  stateRoot,
+  verifyFiles,
+} from "./snapshots.ts";
+import { relocateScale, validateScale } from "./scale-relocation.ts";
+import { remainingFiles } from "./remaining-measurements.ts";
 import {
   type MessageScaleOptions,
   scaleParts,
@@ -54,6 +65,34 @@ export interface ScaleManifest {
     expected: ExpectedUsage;
   }[];
 }
+export const SCALE_VARIANTS = [
+  "sessions",
+  "messages",
+  "messages-payload",
+  "remaining-files",
+] as const;
+export type ScaleVariant = typeof SCALE_VARIANTS[number];
+export function variantOptions(variant: ScaleVariant): MessageScaleOptions {
+  if (variant === "remaining-files") return { files: true };
+  return variant === "messages-payload"
+    ? { messages: true, payload: true }
+    : variant === "messages"
+    ? { messages: true }
+    : {};
+}
+export interface SnapshotManifest {
+  schema: 1;
+  version: string;
+  binary: string;
+  fixture: string;
+  variant: ScaleVariant;
+  options: MessageScaleOptions;
+  relocation: 1;
+  originalRoot: string;
+  dependencies: { providerCache: string; files: Record<string, string> };
+  files: Record<string, string>;
+  scale: ScaleManifest;
+}
 
 /** Own stock-server lifecycle and disk-backed XDG tree; never uses operator state. */
 export class SessionScale {
@@ -87,22 +126,207 @@ export class SessionScale {
     fake: FakeLlm,
     options: MessageScaleOptions = {},
   ): Promise<SessionScale> {
-    const parent = await Deno.realPath(fixtureRoot);
-    root = resolve(root);
-    root = join(await Deno.realPath(dirname(root)), basename(root));
-    const rel = relative(parent, root);
     if (
-      !isAbsolute(root) || !rel || rel.startsWith("..") || isAbsolute(rel) ||
-      ["/tmp", "/run", "/dev/shm"].some((p) =>
-        parent === p || parent.startsWith(p + "/")
-      )
+      (options.files && (options.messages || options.payload)) ||
+      (options.payload && !options.messages)
+    ) throw new Error("Unsupported scale variant options");
+    root = await destination(root, fixtureRoot);
+    const variant = options.files
+      ? "remaining-files"
+      : options.payload
+      ? "messages-payload"
+      : options.messages
+      ? "messages"
+      : "sessions";
+    const f = await SessionScale.#restore(
+      await SessionScale.generate(variant, fake),
+      root,
+      fake,
+    );
+    await f.start();
+    await f.compatibility();
+    return f;
+  }
+  static async identity(variant: ScaleVariant) {
+    if (!SCALE_VARIANTS.includes(variant)) {
+      throw new Error("Unknown scale variant");
+    }
+    const binary = await digest(nativeBinary);
+    const providerCache = await validateProviderCache();
+    const providerFiles = await fileHashes(providerCache);
+    const fixture = await revision([
+      "tests/support/session-scale.ts",
+      "tests/support/message-scale-cases.ts",
+      "tests/support/scale-relocation.ts",
+      "tests/support/snapshots.ts",
+      "tests/support/remaining-measurements.ts",
+      "tests/support/provider-cache.ts",
+      "tests/support/native.ts",
+      "scripts/tests/source.ts",
+      "packages/harness-opencode-v1/ids.ts",
+      "deno.json",
+      "deno.lock",
+    ], [JSON.stringify({ providerCache, files: providerFiles })]);
+    return {
+      binary,
+      fixture,
+      dependencies: { providerCache, files: providerFiles },
+      key: `${nativeVersion}-${binary}-${fixture}-${variant}`,
+    };
+  }
+  static async template(key: string): Promise<string> {
+    if (
+      !/^1\.\d+\.\d+-[a-f0-9]{64}-[a-f0-9]{64}-(sessions|messages|messages-payload|remaining-files)$/
+        .test(key)
+    ) throw new Error("Unknown snapshot key");
+    const template = join(stateRoot(), "snapshots", key);
+    const manifest = await SessionScale.validate(template);
+    if ((await SessionScale.identity(manifest.variant)).key !== key) {
+      throw new Error("Snapshot key/identity mismatch");
+    }
+    return template;
+  }
+  static async validate(template: string): Promise<SnapshotManifest> {
+    const start = performance.now();
+    const manifest: SnapshotManifest = JSON.parse(
+      await Deno.readTextFile(join(template, "snapshot.json")),
+    );
+    const identity = await SessionScale.identity(manifest.variant);
+    if (
+      manifest.schema !== 1 || manifest.relocation !== 1 ||
+      manifest.version !== nativeVersion ||
+      manifest.binary !== identity.binary ||
+      manifest.fixture !== identity.fixture ||
+      JSON.stringify(manifest.dependencies) !==
+        JSON.stringify(identity.dependencies) ||
+      JSON.stringify(manifest.options) !==
+        JSON.stringify(variantOptions(manifest.variant))
     ) {
       throw new Error(
-        "Scale destination must be inside the supplied disk-backed guest fixture root",
+        "Invalid snapshot identity/recipe; preserve the invalid key for diagnosis",
       );
     }
-    // mkdir without recursive deliberately refuses an existing destination.
-    await Deno.mkdir(root, { mode: 0o700 });
+    if (Object.keys(manifest.files).some((path) => /-(wal|shm)$/.test(path))) {
+      throw new Error("Snapshot must be stopped and checkpointed");
+    }
+    await verifyFiles(join(template, "tree"), manifest.files);
+    const db = join(template, "tree/data/opencode/opencode.db");
+    integrity(db);
+    validateScale(
+      db,
+      manifest.scale,
+      manifest.originalRoot,
+      manifest.variant,
+      join(template, "tree"),
+    );
+    console.info("Snapshot validation", {
+      variant: manifest.variant,
+      ms: performance.now() - start,
+    });
+    return manifest;
+  }
+  static async generate(variant: ScaleVariant, fake: FakeLlm): Promise<string> {
+    const identity = await SessionScale.identity(variant),
+      target = join(stateRoot(), "snapshots", identity.key);
+    return await exclusive(target, async () => {
+      if (await exists(target)) {
+        await SessionScale.validate(target);
+        console.info("Snapshot reused", { key: identity.key });
+        return target;
+      }
+      const start = performance.now();
+      const stage = await Deno.makeTempDir({
+        dir: dirname(target),
+        prefix: ".scale-stage-",
+      });
+      // Failed staging trees are evidence, not silently evicted caches.
+      const f = await SessionScale.build(
+        join(stage, "tree"),
+        stage,
+        fake,
+        variantOptions(variant),
+      );
+      await f.stop();
+      if (variant === "remaining-files") await remainingFiles(f.directory);
+      await checkpointDatabases(f.root);
+      validateScale(f.db, f.manifest, f.root, variant);
+      const manifest: SnapshotManifest = {
+        schema: 1,
+        version: nativeVersion,
+        binary: identity.binary,
+        fixture: identity.fixture,
+        variant,
+        options: variantOptions(variant),
+        relocation: 1,
+        originalRoot: f.root,
+        dependencies: identity.dependencies,
+        files: await fileHashes(f.root),
+        scale: f.manifest,
+      };
+      await Deno.writeTextFile(
+        join(stage, "snapshot.json"),
+        JSON.stringify(manifest, null, 2),
+      );
+      await SessionScale.validate(stage);
+      await Deno.rename(stage, target);
+      console.info("Snapshot generated", {
+        key: identity.key,
+        ms: performance.now() - start,
+      });
+      return target;
+    });
+  }
+  static async materialize(
+    template: string,
+    root: string,
+    fixtureRoot: string,
+    fake: FakeLlm,
+  ): Promise<SessionScale> {
+    const f = await SessionScale.restore(template, root, fixtureRoot, fake);
+    await f.start();
+    await f.compatibility();
+    return f;
+  }
+  /** A stopped writable clone, for the shared native owner to admit its process. */
+  static async restore(
+    template: string,
+    root: string,
+    fixtureRoot: string,
+    fake: FakeLlm,
+  ): Promise<SessionScale> {
+    root = await destination(root, fixtureRoot);
+    return await SessionScale.#restore(template, root, fake);
+  }
+  static async #restore(
+    template: string,
+    root: string,
+    fake: FakeLlm,
+  ): Promise<SessionScale> {
+    const start = performance.now(),
+      manifest = await SessionScale.validate(template);
+    await copyTree(join(template, "tree"), root);
+    const f = new SessionScale(root, fake);
+    resources().defer("scale native", () => f.stop());
+    f.manifest = relocateScale(f.db, manifest, root);
+    await f.configure(fake);
+    await Deno.writeTextFile(
+      join(root, "manifest.json"),
+      JSON.stringify(f.manifest, null, 2),
+    );
+    validateScale(f.db, f.manifest, root, manifest.variant);
+    console.info("Snapshot materialized", {
+      variant: manifest.variant,
+      ms: performance.now() - start,
+    });
+    return f;
+  }
+  static async build(
+    root: string,
+    fixtureRoot: string,
+    fake: FakeLlm,
+    options: MessageScaleOptions = {},
+  ): Promise<SessionScale> {
+    root = await destination(root, fixtureRoot);
     const f = new SessionScale(root, fake);
     resources().defer("scale native", () => f.stop());
     for (
@@ -126,8 +350,27 @@ export class SessionScale {
     if (!git.success) throw new Error(new TextDecoder().decode(git.stderr));
     await seedProviderPackages(join(root, "config/opencode"));
     await seedProviderPackages(join(f.directory, ".opencode"));
+    await f.configure(fake);
+    await f.start();
+    console.info("Scale bootstrap ready", nativeVersion);
+    const sample = await f.request<{ id: string }>("/session", {
+      method: "POST",
+      body: { title: "Scale bootstrap" },
+    });
+    await f.stop();
+    console.info("Scale bootstrap stopped; seeding characterized tables");
+    f.#seed(sample.id, options);
     await Deno.writeTextFile(
-      join(root, "config/opencode/opencode.json"),
+      join(root, "manifest.json"),
+      JSON.stringify(f.manifest, null, 2),
+    );
+    await f.start();
+    await f.compatibility();
+    return f;
+  }
+  async configure(fake: FakeLlm) {
+    await Deno.writeTextFile(
+      join(this.root, "config/opencode/opencode.json"),
       JSON.stringify({
         autoupdate: false,
         share: "disabled",
@@ -145,37 +388,23 @@ export class SessionScale {
         },
       }),
     );
-    await f.start();
-    console.info("Scale bootstrap ready", nativeVersion);
-    const sample = await f.request<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "Scale bootstrap" },
-    });
-    await f.stop();
-    console.info("Scale bootstrap stopped; seeding characterized tables");
-    f.#seed(sample.id, options);
-    await Deno.writeTextFile(
-      join(root, "manifest.json"),
-      JSON.stringify(f.manifest, null, 2),
-    );
-    await f.start();
-    console.info("Scale populated native restarted", SCALE);
-    const catalog = await f.request<{ id: string }[]>(
+  }
+  async compatibility() {
+    const catalog = await this.request<{ id: string }[]>(
       "/experimental/session?limit=200",
     );
     if (
       !catalog.length ||
       !catalog.every((row) =>
-        f.manifest.sessions.some((s) => s.nativeID === row.id)
+        this.manifest.sessions.some((s) => s.nativeID === row.id)
       )
     ) throw new Error("Stock catalog refused generated sessions");
-    const page = await f.request<{ info: { id: string } }[]>(
-      `/session/${f.manifest.sessions[0].nativeID}/message?limit=10`,
+    const page = await this.request<{ info: { id: string } }[]>(
+      `/session/${this.manifest.sessions[0].nativeID}/message?limit=10`,
     );
     if (
       page.length !== 10 || !page.every((row) => row.info.id.startsWith("msg_"))
     ) throw new Error("Stock message page refused generated records");
-    return f;
   }
   #seed(sampleID: string, options: MessageScaleOptions) {
     if (this.#process) throw new Error("Never seed a running native database");

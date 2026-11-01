@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { join } from "@std/path";
+import { consumerAssets } from "../support/consumer-builds.ts";
 import { staticResponse } from "../../core/mod.ts";
 import { Cdp } from "../support/cdp.ts";
 import { resources, tempDir, test } from "../support/resources.ts";
@@ -10,24 +10,8 @@ for (const theme of ["otk-dark", "otk-light"]) {
     providerPorts(theme));
 }
 async function providerPorts(theme: string) {
-  const root = await tempDir("pp-"), dist = join(root, "dist");
-  const built = await new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-A",
-      "npm:vite@8.2.0",
-      "build",
-      "--config",
-      "tests/support/provider-ports-consumer/vite.config.ts",
-      "--outDir",
-      dist,
-      "--logLevel",
-      "warn",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  assertEquals(built.code, 0, new TextDecoder().decode(built.stderr));
+  const root = await tempDir("pp-"),
+    dist = await consumerAssets("provider-ports");
   const server = Deno.serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     (request) =>

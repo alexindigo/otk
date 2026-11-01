@@ -8,26 +8,10 @@ import { Cdp } from "../support/cdp.ts";
 import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { openSession } from "../support/browser-fixture.ts";
+import { consumerAssets } from "../support/consumer-builds.ts";
 
 test("registered panel views, width and collapsed state persist in host preferences; unavailable capabilities stay hidden", async () => {
-  const root = await fixture(), assets = join(root, "panel-dist");
-  const build = await new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-A",
-      "npm:vite@8.2.0",
-      "build",
-      "--config",
-      "tests/support/panel-consumer/vite.config.ts",
-      "--outDir",
-      assets,
-      "--logLevel",
-      "warn",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
+  const root = await fixture(), assets = await consumerAssets("panel");
   const f = await inboxBrowserFixture(root, [], {}, assets),
     b = await Cdp.launch(root),
     c = new WsClient(f.url);

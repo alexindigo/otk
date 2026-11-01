@@ -1,55 +1,16 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { join, relative } from "@std/path";
+import { join } from "@std/path";
 import { nativeBinary, nativeVersion } from "../../tests/support/native.ts";
 import { validateProviderCache } from "../../tests/support/provider-cache.ts";
-
-export async function hash(path: string): Promise<string> {
-  const result = await new Deno.Command("sha256sum", {
-    args: [path],
-    signal: AbortSignal.timeout(30_000),
-  }).output();
-  if (!result.success) throw new Error(new TextDecoder().decode(result.stderr));
-  return new TextDecoder().decode(result.stdout).split(" ")[0];
-}
-export async function sourceTree(root = Deno.cwd()): Promise<string> {
-  const excluded = new Set([
-    ".git",
-    ".envrc",
-    "node_modules",
-    ".test-state",
-    "tmp",
-    "test-results",
-    "playwright-report",
-  ]);
-  const files: string[] = [];
-  async function walk(directory: string) {
-    for await (const entry of Deno.readDir(directory)) {
-      if (
-        excluded.has(entry.name) || entry.name === "token" ||
-        /\.(bak|local\.toml)$/.test(entry.name)
-      ) continue;
-      const path = join(directory, entry.name);
-      if ([join(root, "web/dist"), join(root, "config")].includes(path)) {
-        continue;
-      }
-      if (entry.isDirectory) await walk(path);
-      else if (entry.isFile || entry.isSymlink) files.push(path);
-    }
-  }
-  await walk(root);
-  const lines: string[] = [];
-  for (const file of files.sort()) {
-    lines.push(`${await hash(file)}  ${relative(root, file)}\n`);
-  }
-  const bytes = await crypto.subtle.digest(
-    "SHA-256",
-    new TextEncoder().encode(lines.join("")),
-  );
-  return Array.from(
-    new Uint8Array(bytes),
-    (b) => b.toString(16).padStart(2, "0"),
-  ).join("");
-}
+import { prepareConsumers } from "../../tests/support/consumer-builds.ts";
+import {
+  SCALE_VARIANTS,
+  SessionScale,
+} from "../../tests/support/session-scale.ts";
+import { withResources } from "../../tests/support/resources.ts";
+import { FakeLlm } from "../../tests/support/fake-llm.ts";
+import { hash, sourceTree } from "./source.ts";
+export { hash, sourceTree } from "./source.ts";
 export interface BuildReceipt {
   schema: 1;
   tree: string;
@@ -161,5 +122,23 @@ if (import.meta.main) {
       JSON.stringify(receipt, null, 2),
     );
     console.info(JSON.stringify(receipt));
+  }
+  await prepareConsumers(tree);
+  if (Deno.args.includes("--scale")) {
+    await withResources("prepare versioned native snapshots", async () => {
+      const fake = new FakeLlm();
+      const snapshots: Record<string, { path: string; sha256: string }> = {};
+      for (const variant of SCALE_VARIANTS) {
+        const path = await SessionScale.generate(variant, fake);
+        snapshots[variant] = {
+          path,
+          sha256: await hash(join(path, "snapshot.json")),
+        };
+      }
+      await Deno.writeTextFile(
+        join(directory, "snapshots.json"),
+        JSON.stringify({ schema: 1, tree, snapshots }, null, 2),
+      );
+    });
   }
 }

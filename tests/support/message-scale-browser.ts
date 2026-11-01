@@ -1,5 +1,4 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { start } from "../../main.ts";
 import { staticResponse } from "../../core/mod.ts";
@@ -12,6 +11,7 @@ import { resources } from "./resources.ts";
 import { servingProbe } from "./serving-probe.ts";
 import { SCALE, SessionScale } from "./session-scale.ts";
 import { WsClient } from "./ws-client.ts";
+import { consumerAssets } from "./consumer-builds.ts";
 
 /** Real stock population and an independent public UI consumer, not a debug RPC. */
 export async function messageScaleBrowser(
@@ -27,24 +27,7 @@ export async function messageScaleBrowser(
     (n, s) => n + s.expected.messages,
     0,
   );
-  const assets = join(root, "consumer-dist");
-  const built = await new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-A",
-      "npm:vite@8.2.0",
-      "build",
-      "--config",
-      "tests/support/message-heap-consumer/vite.config.ts",
-      "--outDir",
-      assets,
-      "--logLevel",
-      "warn",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  assertEquals(built.code, 0, new TextDecoder().decode(built.stderr));
+  const assets = await consumerAssets("message-heap");
   const ui = Deno.serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     (request) =>

@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { consumerAssets } from "../support/consumer-builds.ts";
 import { test } from "../support/resources.ts";
 import { serve } from "../support/http.ts";
 import { assert, assertEquals } from "@std/assert";
@@ -87,24 +88,7 @@ test("appearance settings persist, broadcast and paint real session status light
 });
 
 test("public lights render all states, themed gel colours, sizing, event blink, breathing and motion suppression; reduced colours shapes and ageing", async () => {
-  const root = await fixture(), dist = join(root, "dist");
-  const build = await new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-A",
-      "npm:vite@8.2.0",
-      "build",
-      "--config",
-      "tests/reuse/ui-consumer/vite.config.ts",
-      "--outDir",
-      dist,
-      "--logLevel",
-      "warn",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
+  const root = await fixture(), dist = await consumerAssets("ui");
   const server = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {

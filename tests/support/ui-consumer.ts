@@ -1,30 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { fixture } from "./config.ts";
 import { serve } from "./http.ts";
 import { Cdp } from "./cdp.ts";
+import { consumerAssets } from "./consumer-builds.ts";
 
 /** Build and serve the independent public-entry consumer, with owned teardown. */
 export async function uiConsumer(query = "") {
-  const root = await fixture(), dist = join(root, "dist");
-  const build = await new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-A",
-      "npm:vite@8.2.0",
-      "build",
-      "--config",
-      "tests/reuse/ui-consumer/vite.config.ts",
-      "--outDir",
-      dist,
-      "--logLevel",
-      "warn",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
+  const root = await fixture(), dist = await consumerAssets("ui");
   const server = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {

@@ -76,8 +76,11 @@ scripts without timing guesses.
 Use `isolatedTest`/`isolatedState` from `fixtures/isolated.ts` for global or
 restart contracts. Its lazy graph does not acquire the ordinary worker stack.
 Browser-only consumers likewise request a context/page without `state`.
-Snapshots and consumer build compositions are added by their separate plan
-items.
+Preparation also owns the existing independent consumer compositions; test cases
+serve their content-qualified assets through `consumerAssets`. Add `--scale` to
+preparation to generate or validate versioned native templates; see
+[`../support/snapshots.md`](../support/snapshots.md) for the stopped-copy,
+relocation, controller and acceptance contracts.
 
 The version-1 checked JSON-lines channel has correlation IDs and fixture leases.
 Control traffic is private stdin/stdout; diagnostic output stays on stderr.

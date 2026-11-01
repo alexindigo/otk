@@ -1,31 +1,15 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { join } from "@std/path";
+import { consumerAssets } from "../support/consumer-builds.ts";
 import { staticResponse } from "../../core/mod.ts";
 import { Cdp } from "../support/cdp.ts";
 import { measureSessionHeap } from "../support/heap.ts";
 import { resources, tempDir, test } from "../support/resources.ts";
 
 async function consumer() {
-  const root = await tempDir("ne-"), dist = join(root, "dist");
+  const root = await tempDir("ne-"),
+    dist = await consumerAssets("native-events");
   const marker = `OTK_NATIVE_EVENT_${crypto.randomUUID()}_`;
-  const built = await new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-A",
-      "npm:vite@8.2.0",
-      "build",
-      "--config",
-      "packages/ui/tests/native-events-consumer/vite.config.ts",
-      "--outDir",
-      dist,
-      "--logLevel",
-      "warn",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  assertEquals(built.code, 0, new TextDecoder().decode(built.stderr));
   const server = Deno.serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     (request) =>

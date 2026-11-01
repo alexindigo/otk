@@ -6,29 +6,13 @@ import { serve } from "../support/http.ts";
 import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
 import { menuReady } from "../support/menu.ts";
+import { consumerAssets } from "../support/consumer-builds.ts";
 
 async function consumer(
   scene: string,
   run: (browser: Cdp, root: string) => Promise<void>,
 ) {
-  const root = await fixture(), dist = join(root, "dist");
-  const build = await new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-A",
-      "npm:vite@8.2.0",
-      "build",
-      "--config",
-      "packages/ui/tests/style-consumer/vite.config.ts",
-      "--outDir",
-      dist,
-      "--logLevel",
-      "warn",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
+  const root = await fixture(), dist = await consumerAssets("styles");
   const server = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {

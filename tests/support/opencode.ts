@@ -100,6 +100,8 @@ export class OpencodeTest {
       config?: Record<string, unknown>;
       /** Only cache preparation and the deliberate uncached readiness control. */
       packageCache?: false;
+      /** Checked immutable native fixture key; copied before any process starts. */
+      snapshot?: string;
       providers?: Record<string, {
         fake: FakeLlm;
         name?: string;
@@ -123,23 +125,35 @@ export class OpencodeTest {
         /[^a-zA-Z0-9.-]/g,
         "-",
       ).slice(0, 190);
-      test.root = await tempDir(identity ? `oc-${identity}-` : "oc-");
+      const parent = await tempDir(identity ? `oc-${identity}-` : "oc-");
+      test.root = options.snapshot ? join(parent, "native") : parent;
+      if (options.snapshot) {
+        const { SessionScale } = await import("./session-scale.ts");
+        await SessionScale.restore(
+          await SessionScale.template(options.snapshot),
+          test.root,
+          parent,
+          provider,
+        );
+      }
       test.#logPath = Deno.env.get("OTK_TEST_LOG_ROOT")
         ? join(Deno.env.get("OTK_TEST_LOG_ROOT")!, "native.log")
         : join(test.root, "process.log");
       Deno.writeTextFileSync(test.#logPath, "", { append: true });
       test.directory = join(test.root, "project");
-      await Deno.mkdir(test.directory);
-      const git = await new Deno.Command("git", {
-        args: ["init", "-b", "master", test.directory],
-        stdout: "null",
-        stderr: "piped",
-      }).output();
-      if (!git.success) throw new Error(new TextDecoder().decode(git.stderr));
-      await Deno.writeTextFile(
-        join(test.directory, "README.md"),
-        "# OTK fixture\n",
-      );
+      if (!options.snapshot) {
+        await Deno.mkdir(test.directory);
+        const git = await new Deno.Command("git", {
+          args: ["init", "-b", "master", test.directory],
+          stdout: "null",
+          stderr: "piped",
+        }).output();
+        if (!git.success) throw new Error(new TextDecoder().decode(git.stderr));
+        await Deno.writeTextFile(
+          join(test.directory, "README.md"),
+          "# OTK fixture\n",
+        );
+      }
       await options.prepare?.(test);
       const env: Record<string, string> = {
         ...Deno.env.toObject(),
@@ -149,7 +163,7 @@ export class OpencodeTest {
         ...options.env,
         TMPDIR: join(test.root, "tmp"),
       };
-      await Deno.mkdir(env.TMPDIR);
+      await Deno.mkdir(env.TMPDIR, { recursive: !!options.snapshot });
       for (
         const [variable, directory] of Object.entries({
           XDG_CONFIG_HOME: "config",
@@ -159,10 +173,12 @@ export class OpencodeTest {
         })
       ) {
         env[variable] = join(test.root, directory);
-        await Deno.mkdir(env[variable]);
+        await Deno.mkdir(env[variable], { recursive: !!options.snapshot });
       }
-      await Deno.mkdir(join(env.XDG_CONFIG_HOME, "opencode"));
-      if (options.packageCache !== false) {
+      await Deno.mkdir(join(env.XDG_CONFIG_HOME, "opencode"), {
+        recursive: !!options.snapshot,
+      });
+      if (options.packageCache !== false && !options.snapshot) {
         await seedProviderPackages(join(env.XDG_CONFIG_HOME, "opencode"));
         await seedProviderPackages(join(test.directory, ".opencode"));
       }

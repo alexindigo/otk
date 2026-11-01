@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { consumerAssets } from "../support/consumer-builds.ts";
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
-import { join } from "@std/path";
 import type {
   AssistantMessage,
   FileDiff,
@@ -481,24 +481,7 @@ const reply: AssistantMessage = {
   ],
 };
 test("C2 shared reply contributions stay constant across N real messages and external features receive identity", async () => {
-  const root = await fixture(), assets = join(root, "context-dist");
-  const build = await new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-A",
-      "npm:vite@8.2.0",
-      "build",
-      "--config",
-      "tests/support/context-consumer/vite.config.ts",
-      "--outDir",
-      assets,
-      "--logLevel",
-      "warn",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
+  const root = await fixture(), assets = await consumerAssets("context");
   const f = await inboxBrowserFixture(root, [], {}, assets),
     b = await Cdp.launch(root);
   try {
@@ -616,24 +599,7 @@ for (const theme of ["otk-dark", "otk-light"]) {
     projectDots(theme));
 }
 async function projectDots(theme: string) {
-  const root = await fixture(), assets = join(root, "context-dist");
-  const build = await new Deno.Command(Deno.execPath(), {
-    args: [
-      "run",
-      "-A",
-      "npm:vite@8.2.0",
-      "build",
-      "--config",
-      "tests/support/context-consumer/vite.config.ts",
-      "--outDir",
-      assets,
-      "--logLevel",
-      "warn",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
+  const root = await fixture(), assets = await consumerAssets("context");
   const f = await inboxBrowserFixture(root, [], {}, assets),
     b = await Cdp.launch(root);
   try {
