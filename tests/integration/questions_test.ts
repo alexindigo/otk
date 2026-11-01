@@ -2,11 +2,11 @@
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import type { QuestionRequest } from "@otk/protocol";
-import { browserFixture } from "../support/browser-fixture.ts";
+import { nativeFixture } from "../support/native-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { waitFor } from "../support/opencode.ts";
 test("question snapshot, originating descendant events, reply and rejection use only the root family", async () => {
-  const f = await browserFixture();
+  const f = await nativeFixture();
   let rootClient: WsClient | undefined, otherClient: WsClient | undefined;
   try {
     const root = await f.oc.session<{ id: string }>("/session", {

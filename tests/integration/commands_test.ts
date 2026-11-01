@@ -3,12 +3,12 @@ import { readRpcMessages } from "../support/message-pages.ts";
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { browserFixture } from "../support/browser-fixture.ts";
+import { nativeFixture } from "../support/native-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import type { CommandOption } from "@otk/protocol";
 import { waitFor } from "../support/opencode.ts";
 test("custom command RPC returns normalized catalog and records expanded multiline content", async () => {
-  const f = await browserFixture(undefined, {
+  const f = await nativeFixture(undefined, {
     async prepare(oc) {
       await Deno.mkdir(join(oc.directory, ".opencode/command"), {
         recursive: true,

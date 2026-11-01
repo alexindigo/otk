@@ -103,3 +103,21 @@ first-failure trace/video/screenshots live under `.test-state/runs/<run>/`.
 Evidence capture precedes reset, and capture failure cannot skip teardown.
 Harness negative controls run as checked child invocations, preserving their
 expected failures without putting intentional failures in ordinary discovery.
+
+## Browserless integration lanes
+
+In the named test guest, run `deno task test:prepare --version 1.18.34` before
+integration. Its exact-tree receipt contains both the shipped executable and the
+independent digest-consumer executable. `deno task test:integration` admits only
+the standard top-level files with `DENO_JOBS=3`;
+`deno task test:integration:scale` admits only `tests/integration/scale/` with
+`DENO_JOBS=1`. Each invocation prints and retains its explicit selected-file
+list, actual job count, exit and elapsed time under `.test-state/runs/`. Keep
+these pools sequential with browser lanes.
+
+The runner supplies `OTK_TEST_BINARY` and `OTK_TEST_DIGEST_CONSUMER_BINARY` from
+the validated preparation receipt. For a raw explicit `deno task test FILE`
+compile-consumer invocation, set these inputs to the same receipt paths first.
+Compile consumers refuse missing or stale inputs instead of building in a case.
+Destination-refusal and timing-instrumentation controls remain standard;
+full-population snapshot and structural scale proofs run in the scale lane.

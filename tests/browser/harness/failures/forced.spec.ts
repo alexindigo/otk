@@ -18,12 +18,15 @@ const test = isolatedTest.extend<{ failureEvidence: void }>({
     if (scenario === "evidence") {
       throw new Error("Forced evidence capture failure");
     }
+    if (scenario === "body-evidence-teardown") {
+      throw new Error("Forced evidence capture failure after body failure");
+    }
   }, { auto: true }],
 });
 test.use({
   profile: scenario === "start"
     ? "fail-start"
-    : scenario === "teardown"
+    : scenario === "teardown" || scenario === "body-evidence-teardown"
     ? "fail-teardown"
     : "isolated",
 });
@@ -42,7 +45,9 @@ test(
       );
       process.kill(process.pid, "SIGKILL");
     }
-    if (scenario === "body") throw new Error("Forced test-body failure");
+    if (scenario === "body" || scenario === "body-evidence-teardown") {
+      throw new Error("Forced test-body failure");
+    }
     if (scenario === "crash") {
       process.kill(isolatedState.controller.info!.pids[0], "SIGKILL");
       await isolatedState.observe();

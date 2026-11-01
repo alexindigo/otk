@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals, assertRejects } from "@std/assert";
-import { browserFixture } from "../support/browser-fixture.ts";
+import { nativeFixture } from "../support/native-fixture.ts";
 import { resources, test, withResources } from "../support/resources.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
@@ -15,7 +15,7 @@ test("failed native preparation unwinds its provider and removes its TMPDIR work
   const failure = new Error("forced native preparation failure");
   assertEquals(
     await assertRejects(() =>
-      browserFixture(undefined, {
+      nativeFixture(undefined, {
         prepare(oc) {
           root = oc.root;
           throw failure;
@@ -25,38 +25,6 @@ test("failed native preparation unwinds its provider and removes its TMPDIR work
     failure,
   );
   await assertRejects(() => Deno.stat(root), Deno.errors.NotFound);
-});
-
-test("forced browser body and evidence failures retain the body error and close every service", async () => {
-  let root = "", provider = "", native = "", sidecar = "";
-  let disposed = false;
-  const failure = new Error("forced body failure after all acquisitions");
-  const result = await assertRejects(
-    () =>
-      withResources("forced full fixture failure", async () => {
-        const f = await browserFixture();
-        root = f.oc.root;
-        provider = `http://127.0.0.1:${f.fake.port}`;
-        native = f.oc.url;
-        const server = await f.sidecar();
-        sidecar = server.url;
-        const browser = await f.browser(server.url);
-        browser.evaluate = () =>
-          Promise.reject(new Error("forced evidence capture failure"));
-        resources().defer("later cleanup still runs", () => {
-          disposed = true;
-        });
-        resources().defer("forced disposer failure", () => {
-          throw new Error("forced disposer failure");
-        });
-        throw failure;
-      }),
-    AggregateError,
-  );
-  assertEquals(result.errors[0], failure);
-  assert(disposed);
-  await assertRejects(() => Deno.stat(root), Deno.errors.NotFound);
-  for (const url of [provider, native, sidecar]) await closed(url);
 });
 
 test("failed native restart terminates its newly acquired process before rejecting", async () => {
@@ -89,7 +57,7 @@ test("pre-populated packages serve independent native tools and complete provide
   const address = `http://127.0.0.1:${(registry.addr as Deno.NetAddr).port}`;
   for (let i = 0; i < 2; i++) {
     await withResources(`offline isolated native ${i}`, async () => {
-      const f = await browserFixture({}, {
+      const f = await nativeFixture({}, {
         env: { npm_config_registry: address, npm_config_offline: "true" },
         async prepare(oc) {
           const directory = `${oc.directory}/.opencode/tools`;

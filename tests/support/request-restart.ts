@@ -3,7 +3,8 @@ import { assert, assertEquals } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
 import { DatabaseSync } from "node:sqlite";
 import type { RequestEvent, RequestRef, TaskRecord } from "@otk/protocol";
-import { browserFixture } from "./browser-fixture.ts";
+import { nativeFixture } from "./native-fixture.ts";
+import { preparedBinary } from "./prepared-binaries.ts";
 import { serve } from "./http.ts";
 import { freePort, waitFor } from "./opencode.ts";
 import { ownedProcess } from "./process.ts";
@@ -14,21 +15,8 @@ import { WsClient } from "./ws-client.ts";
 export async function qualifyRequestRestart(compiled: boolean): Promise<void> {
   const root = await tempDir("rq-"),
     source = fromFileUrl(new URL("../../", import.meta.url));
-  const binary = Deno.env.get("OTK_TEST_BINARY") ?? join(root, "otk");
-  if (compiled && !Deno.env.get("OTK_TEST_BINARY")) {
-    const build = await new Deno.Command("bash", {
-      cwd: source,
-      args: ["scripts/compile.sh", "x86_64-unknown-linux-gnu", binary],
-      stdout: "piped",
-      stderr: "piped",
-    }).output();
-    await Deno.writeFile(
-      join(root, "build.log"),
-      new Uint8Array([...build.stdout, ...build.stderr]),
-    );
-    assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
-  }
-  const f = await browserFixture();
+  const binary = compiled ? await preparedBinary() : "";
+  const f = await nativeFixture();
   const remoteCommitted = Promise.withResolvers<void>(),
     deliver = Promise.withResolvers<void>();
   let creates = 0, lostNativeID = "";

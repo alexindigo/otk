@@ -3,14 +3,14 @@ import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
 import { createIndex, createTranscripts, SidecarConnection } from "@otk/client";
 import type { OpencodeV1Adapter } from "@otk/harness-opencode-v1";
-import { start } from "../../main.ts";
-import { cfg } from "../support/config.ts";
-import { FakeLlm } from "../support/fake-llm.ts";
-import { freePort, waitFor } from "../support/opencode.ts";
-import { resources, tempDir, test } from "../support/resources.ts";
-import { SCALE, SessionScale } from "../support/session-scale.ts";
-import { MESSAGE_CASES } from "../support/message-scale-cases.ts";
-import { originFetch } from "../support/request-wire.ts";
+import { start } from "../../../main.ts";
+import { cfg } from "../../support/config.ts";
+import { FakeLlm } from "../../support/fake-llm.ts";
+import { freePort, waitFor } from "../../support/opencode.ts";
+import { resources, tempDir, test } from "../../support/resources.ts";
+import { SCALE, SessionScale } from "../../support/session-scale.ts";
+import { MESSAGE_CASES } from "../../support/message-scale-cases.ts";
+import { originFetch } from "../../support/request-wire.ts";
 
 test("message scale fixture preserves population while supplying a 102-step reply and helper/code/diff cases", async () => {
   const root = await tempDir("mf-"), fake = new FakeLlm();

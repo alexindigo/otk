@@ -25,7 +25,14 @@
       "dependencies": ["prepare:test"]
     },
     "test:unit": "deno task test tests/unit/ packages/*/tests/",
-    "test:integration": "deno task test tests/integration/",
+    "test:integration": {
+      "command": "DENO_JOBS=3 deno run --allow-read --allow-write --allow-env --allow-run scripts/tests/integration.ts standard",
+      "dependencies": ["prepare:test"]
+    },
+    "test:integration:scale": {
+      "command": "DENO_JOBS=1 deno run --allow-read --allow-write --allow-env --allow-run scripts/tests/integration.ts scale",
+      "dependencies": ["prepare:test"]
+    },
     "test:arch": "deno test --allow-read tests/arch/",
     "test:reuse": "deno task test tests/reuse/",
     "lint": "deno lint",

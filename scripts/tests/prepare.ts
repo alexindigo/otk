@@ -16,6 +16,7 @@ export interface BuildReceipt {
   tree: string;
   binary: string;
   binarySha256: string;
+  digestConsumer: { path: string; sha256: string };
   native: { path: string; version: string; sha256: string };
   providerCache: { path: string; sha256: string };
   web: Record<string, string>;
@@ -29,7 +30,9 @@ export async function readBuild(tree: string): Promise<BuildReceipt> {
   );
   if (
     receipt.schema !== 1 || receipt.tree !== tree ||
-    receipt.binarySha256 !== await hash(receipt.binary)
+    receipt.binarySha256 !== await hash(receipt.binary) ||
+    !receipt.digestConsumer ||
+    receipt.digestConsumer.sha256 !== await hash(receipt.digestConsumer.path)
   ) {
     throw new Error(
       "Prepared binary identity mismatch; run deno task test:prepare",
@@ -88,6 +91,32 @@ if (import.meta.main) {
     }).spawn();
     const status = await child.status;
     if (!status.success) throw new Error(`Compile exited ${status.code}`);
+    const digestConsumer = join(directory, "digest-consumer");
+    const consumer = await new Deno.Command(Deno.execPath(), {
+      args: [
+        "compile",
+        "--allow-read",
+        "--allow-write",
+        "--allow-env",
+        "--allow-net=127.0.0.1",
+        "--allow-sys=systemMemoryInfo",
+        "--include",
+        "packages/store/features/migrations",
+        "--include",
+        "core/digest/worker.ts",
+        "--include",
+        "packages/harness-opencode-v1/digest-migrations",
+        "--output",
+        digestConsumer,
+        "tests/support/digest-consumer.ts",
+      ],
+      stdout: "inherit",
+      stderr: "inherit",
+      signal: AbortSignal.timeout(14 * 60_000),
+    }).spawn().status;
+    if (!consumer.success) {
+      throw new Error(`Digest consumer compile exited ${consumer.code}`);
+    }
     const cache = await validateProviderCache();
     const web: Record<string, string> = {};
     const assets = async (directory: string) => {
@@ -103,6 +132,10 @@ if (import.meta.main) {
       tree,
       binary,
       binarySha256: await hash(binary),
+      digestConsumer: {
+        path: digestConsumer,
+        sha256: await hash(digestConsumer),
+      },
       native: {
         path: nativeBinary,
         version: nativeVersion,

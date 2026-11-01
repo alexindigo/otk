@@ -4,10 +4,10 @@ import { RequestTracker } from "@otk/client";
 import type { Harness } from "@otk/harness";
 import type { RequestControl, RequestEvent } from "@otk/protocol";
 import { OtkDb, Requests, requestsMigrations } from "@otk/store";
-import { RequestCoordinator, RpcRegistry } from "../../core/mod.ts";
-import { cfg } from "../support/config.ts";
-import { tempDir, test } from "../support/resources.ts";
-import { servingProbe } from "../support/serving-probe.ts";
+import { RequestCoordinator, RpcRegistry } from "../../../core/mod.ts";
+import { cfg } from "../../support/config.ts";
+import { tempDir, test } from "../../support/resources.ts";
+import { servingProbe } from "../../support/serving-probe.ts";
 
 declare module "@otk/protocol" {
   interface RpcMethods {

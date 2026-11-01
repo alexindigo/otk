@@ -2,11 +2,11 @@
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { readRpcMessages } from "../support/message-pages.ts";
-import { browserFixture } from "../support/browser-fixture.ts";
+import { nativeFixture } from "../support/native-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { waitFor } from "../support/opencode.ts";
 test("shell RPC honors configured primary agent and bypasses model bash permission", async () => {
-  const f = await browserFixture({ bash: "deny" }, {
+  const f = await nativeFixture({ bash: "deny" }, {
     config: { default_agent: "plan" },
   });
   let client: WsClient | undefined;

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { readFile } from "node:fs/promises";
+import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "../fixtures/evidence.ts";
@@ -14,6 +14,7 @@ for (
     "body",
     "evidence",
     "teardown",
+    "body-evidence-teardown",
     "crash",
     "worker-crash",
   ]
@@ -72,7 +73,7 @@ for (
     expect(stdout + stderr).toContain(
       scenario === "start"
         ? "Forced controller-start failure"
-        : scenario === "body"
+        : scenario === "body" || scenario === "body-evidence-teardown"
         ? "Forced test-body failure"
         : scenario === "evidence"
         ? "Forced evidence capture failure"
@@ -85,6 +86,20 @@ for (
     const receiptPath = /Browser run receipt:\s*(\S+\/run\.json)/.exec(
       stdout + stderr,
     )?.[1];
+    if (scenario === "body-evidence-teardown") {
+      // The transferred Deno lifetime control failed body, evidence and a
+      // disposer together: preserve all causes, then prove later cleanup ran.
+      expect(stdout + stderr).toContain(
+        "Forced evidence capture failure after body failure",
+      );
+      expect(stdout + stderr).toContain("Forced controller teardown failure");
+      expect((stdout + stderr).indexOf("Forced test-body failure"))
+        .toBeLessThan(
+          (stdout + stderr).indexOf(
+            "Forced evidence capture failure after body failure",
+          ),
+        );
+    }
     expect(receiptPath, "child supervisor must finish and write its receipt")
       .toBeTruthy();
     const receipt = JSON.parse(await readFile(receiptPath!, "utf8"));
@@ -106,6 +121,16 @@ for (
       const ownership = JSON.parse(
         await readFile(join(owned.root, "owned.json"), "utf8"),
       );
+      if (scenario === "body-evidence-teardown") {
+        const stack = JSON.parse(
+          await readFile(join(owned.root, "stack.json"), "utf8"),
+        );
+        await expect(
+          access(stack.root),
+          "native TMPDIR root is removed despite all three failures",
+        )
+          .rejects.toMatchObject({ code: "ENOENT" });
+      }
       await readFile(join(owned.root, "native.log"), "utf8");
       expect(
         Array.isArray(

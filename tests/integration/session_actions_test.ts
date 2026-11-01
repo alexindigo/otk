@@ -3,14 +3,14 @@ import { readRpcMessages } from "../support/message-pages.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { RequestFailure } from "@otk/client";
 import { test } from "../support/resources.ts";
-import { browserFixture } from "../support/browser-fixture.ts";
+import { nativeFixture } from "../support/native-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import type { ContentSession } from "@otk/protocol";
 import type { InboxSnapshot, TaskRecord } from "@otk/protocol";
 import { waitFor } from "../support/opencode.ts";
 
 test("busy revert reports structured native rejection facts without native prose", async () => {
-  const f = await browserFixture();
+  const f = await nativeFixture();
   let client: WsClient | undefined;
   const held = f.fake.queueHeld({ chunks: ["Working until interrupted."] });
   try {
@@ -52,7 +52,7 @@ test("busy revert reports structured native rejection facts without native prose
 });
 
 test("restore returns rolled-back prompts to the real native conversation", async () => {
-  const f = await browserFixture();
+  const f = await nativeFixture();
   let client: WsClient | undefined;
   try {
     const session = await f.oc.session<{ id: string }>("/session", {
@@ -104,7 +104,7 @@ test("restore returns rolled-back prompts to the real native conversation", asyn
 });
 
 test("fork copies through a grouped reply, respects pending rollback and activates its project", async () => {
-  const f = await browserFixture();
+  const f = await nativeFixture();
   let client: WsClient | undefined;
   try {
     const original = await f.oc.session<{ id: string }>("/session", {
@@ -189,7 +189,7 @@ test("fork copies through a grouped reply, respects pending rollback and activat
 });
 
 test("session rename validates titles and persists through the real native API", async () => {
-  const f = await browserFixture();
+  const f = await nativeFixture();
   let client: WsClient | undefined;
   try {
     const session = await f.oc.session<{ id: string }>("/session", {
@@ -235,7 +235,7 @@ test("session rename validates titles and persists through the real native API",
 });
 
 test("delete tombstones a real native family and retains task membership until explicit removal", async () => {
-  const f = await browserFixture();
+  const f = await nativeFixture();
   let client: WsClient | undefined;
   try {
     const root = await f.oc.session<{ id: string }>("/session", {
@@ -298,7 +298,7 @@ test("delete tombstones a real native family and retains task membership until e
 });
 
 test("compact admits native summarization and publishes a terminal compaction message", async () => {
-  const f = await browserFixture();
+  const f = await nativeFixture();
   let client: WsClient | undefined;
   try {
     const session = await f.oc.session<{ id: string }>("/session", {

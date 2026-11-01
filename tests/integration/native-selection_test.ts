@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { browserFixture } from "../support/browser-fixture.ts";
+import { nativeFixture } from "../support/native-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
 import { test } from "../support/resources.ts";
 
 test("native plan transition characterization retains result provenance and agent-bearing messages", async () => {
-  const f = await browserFixture({ "*": "allow" }, {
+  const f = await nativeFixture({ "*": "allow" }, {
     env: { OPENCODE_CLIENT: "cli", OPENCODE_EXPERIMENTAL_PLAN_MODE: "true" },
     async prepare(oc) {
       await Deno.mkdir(join(oc.directory, ".opencode/tools"), {

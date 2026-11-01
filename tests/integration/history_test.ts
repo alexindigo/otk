@@ -1,12 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
-import { browserFixture } from "../support/browser-fixture.ts";
+import { nativeFixture } from "../support/native-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 import type { HistoryEntry } from "@otk/protocol";
 import { waitFor } from "../support/opencode.ts";
 test("history RPC includes prompts across sessions and user shell entries directly from the live WAL database", async () => {
-  const f = await browserFixture();
+  const f = await nativeFixture();
   let client: WsClient | undefined;
   try {
     const a = await f.oc.session<{ id: string }>("/session", {

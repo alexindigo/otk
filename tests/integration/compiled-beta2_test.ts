@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
-import { fromFileUrl, join } from "@std/path";
+import { join } from "@std/path";
+import { preparedBinary } from "../support/prepared-binaries.ts";
 import { createDirectoryCatalogs } from "@otk/client";
 import {
   createCatalogCodecs,
@@ -29,20 +30,7 @@ import { RemainingMeasurements } from "../support/remaining-measurements.ts";
 test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catalogs, keyed tasks and prompt outcomes", async () => {
   const root = await tempDir("compiled-beta2-");
   const report = new RemainingMeasurements(root, "compiled-beta2-contracts");
-  const binary = Deno.env.get("OTK_TEST_BINARY") ?? join(root, "otk");
-  if (!Deno.env.get("OTK_TEST_BINARY")) {
-    const build = await new Deno.Command("bash", {
-      cwd: fromFileUrl(new URL("../../", import.meta.url)),
-      args: ["scripts/compile.sh", "x86_64-unknown-linux-gnu", binary],
-      stdout: "piped",
-      stderr: "piped",
-    }).output();
-    await Deno.writeFile(
-      join(root, "build.log"),
-      new Uint8Array([...build.stdout, ...build.stderr]),
-    );
-    assertEquals(build.code, 0, new TextDecoder().decode(build.stderr));
-  }
+  const binary = await preparedBinary();
   const fake = new FakeLlm(), native = await OpencodeTest.start(fake);
   const session = await native.session<{ id: string; nativeID: string }>(
     "/session",

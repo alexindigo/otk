@@ -2,7 +2,7 @@
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { browserFixture } from "../support/browser-fixture.ts";
+import { nativeFixture } from "../support/native-fixture.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { waitFor } from "../support/opencode.ts";
 
@@ -16,7 +16,7 @@ interface Providers {
 }
 
 test("V2 default fixture preserves its config and exact connected providers", async () => {
-  const f = await browserFixture();
+  const f = await nativeFixture();
   try {
     const config = await Deno.readTextFile(
       join(f.oc.root, "config/opencode/opencode.json"),
@@ -62,7 +62,7 @@ test("V2 default fixture preserves its config and exact connected providers", as
 
 test("V4 extra provider advertises variants and exclusively receives its selected prompt", async () => {
   const fake2 = new FakeLlm();
-  const f = await browserFixture(undefined, {
+  const f = await nativeFixture(undefined, {
     providers: {
       fake2: {
         fake: fake2,

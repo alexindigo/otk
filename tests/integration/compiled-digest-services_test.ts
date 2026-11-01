@@ -1,37 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
-import { fromFileUrl, join } from "@std/path";
+import { join } from "@std/path";
+import { preparedBinary } from "../support/prepared-binaries.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { resources, tempDir, test } from "../support/resources.ts";
 
 test("compiled independent worker consumer digests off-source with empty runtime caches", async () => {
   const root = await tempDir("compiled-digest-");
-  const source = fromFileUrl(new URL("../../", import.meta.url));
-  const binary = join(root, "digest-consumer");
-  const build = await new Deno.Command(Deno.execPath(), {
-    cwd: source,
-    args: [
-      "compile",
-      "--allow-read",
-      "--allow-write",
-      "--allow-env",
-      "--allow-net=127.0.0.1",
-      "--allow-sys=systemMemoryInfo",
-      "--include",
-      "packages/store/features/migrations",
-      "--include",
-      "core/digest/worker.ts",
-      "--include",
-      "packages/harness-opencode-v1/digest-migrations",
-      "--output",
-      binary,
-      "tests/support/digest-consumer.ts",
-    ],
-    stdout: "piped",
-    stderr: "piped",
-  }).output();
-  if (!build.success) throw new Error(new TextDecoder().decode(build.stderr));
+  const binary = await preparedBinary("digest-consumer");
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
   const session = await oc.session<{ id: string }>("/session", {
     method: "POST",
@@ -44,6 +21,7 @@ test("compiled independent worker consumer digests off-source with empty runtime
       args: [state, oc.url, oc.db, session.id],
       env: {
         DENO_DIR: join(root, `empty-cache-${crypto.randomUUID()}`),
+        DENO_NO_REMOTE: "1",
         XDG_CACHE_HOME: join(root, "cache"),
         TMPDIR: Deno.env.get("TMPDIR")!,
       },
@@ -84,6 +62,11 @@ test("compiled independent worker consumer digests off-source with empty runtime
       const status = await process.status;
       await Promise.all([stdout, stderr]);
       assertEquals(status.code, 0, error);
+      assertEquals(
+        /Download|Module not found|Cannot find/.test(error),
+        false,
+        error,
+      );
     });
     return { rows, writer, stop };
   };

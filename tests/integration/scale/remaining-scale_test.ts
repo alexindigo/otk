@@ -22,14 +22,14 @@ import type {
   RpcParams,
   ServerFrame,
 } from "@otk/protocol";
-import { InboxFeature } from "../../core/features/inbox.ts";
-import { IndexStore } from "../../core/index/store.ts";
-import { FakeLlm } from "../support/fake-llm.ts";
-import { OpencodeTest } from "../support/opencode.ts";
-import { SidecarTest } from "../support/sidecar.ts";
-import { WsClient } from "../support/ws-client.ts";
-import { tempDir, test } from "../support/resources.ts";
-import { RemainingMeasurements } from "../support/remaining-measurements.ts";
+import { InboxFeature } from "../../../core/features/inbox.ts";
+import { IndexStore } from "../../../core/index/store.ts";
+import { FakeLlm } from "../../support/fake-llm.ts";
+import { OpencodeTest } from "../../support/opencode.ts";
+import { SidecarTest } from "../../support/sidecar.ts";
+import { WsClient } from "../../support/ws-client.ts";
+import { tempDir, test } from "../../support/resources.ts";
+import { RemainingMeasurements } from "../../support/remaining-measurements.ts";
 
 test("4615 tasks retain ordered memberships while seen and task changes publish only their keys", async () => {
   const root = await tempDir("remaining-inbox-");

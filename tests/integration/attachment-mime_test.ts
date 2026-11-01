@@ -2,12 +2,12 @@
 import { assertEquals, assertRejects } from "@std/assert";
 import { join, toFileUrl } from "@std/path";
 import { mapPromptParts } from "@otk/harness-opencode-v1";
-import { browserFixture } from "../support/browser-fixture.ts";
+import { nativeFixture } from "../support/native-fixture.ts";
 import { cfg } from "../support/config.ts";
 import { test } from "../support/resources.ts";
 
 test("stock stores truthful path MIME and exact local URI identity without copying file bodies into the prompt", async () => {
-  const f = await browserFixture();
+  const f = await nativeFixture();
   try {
     const session = await f.oc.session<{ id: string }>("/session", {
       method: "POST",
