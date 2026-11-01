@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals } from "@std/assert";
 import { join } from "@std/path";
+import type { RequestEvent } from "@otk/protocol";
 import { FakeLlm } from "./fake-llm.ts";
-import { OpencodeTest } from "./opencode.ts";
+import { OpencodeTest, waitFor } from "./opencode.ts";
 import { SidecarTest } from "./sidecar.ts";
 import { Cdp } from "./cdp.ts";
 import { acquire, resources } from "./resources.ts";
@@ -128,6 +129,29 @@ export async function waitForCollapsedPanels(browser: Cdp): Promise<void> {
   await browser.poll(
     "document.querySelector('.otk-project-inbox')?.dataset.collapsed==='true' && document.querySelector('.otk-right-panel')?.hidden===true",
   );
+}
+/** Viewing receipts can move the composer after the session itself is ready. */
+export async function waitForViewing(browser: Cdp, id: string): Promise<void> {
+  for (const method of ["layout.location", "sessions.seen"]) {
+    await waitFor(() => {
+      const operation = sentFrames(browser).map(({ frame }) => frame).find(
+        (frame) =>
+          frame.t === "request" && frame.method === method &&
+          (frame.params as { sessionID?: string })?.sessionID === id,
+      );
+      if (!operation) return false;
+      const ref = operation.ref as { key: string };
+      return browser.events.some((event) => {
+        if (event.method !== "Network.webSocketFrameReceived") return false;
+        const frame = JSON.parse(
+          (event.params.response as { payloadData: string }).payloadData,
+        ) as RequestEvent;
+        return frame.t === "request.result" && frame.ref.key === ref.key &&
+          frame.outcome.ok;
+      });
+    }, Boolean);
+  }
+  await browser.poll("!document.querySelector('.otk-composer-notice')");
 }
 /** A terminal part is not a terminal reply: content and idle must both arrive. */
 export async function waitForReply(

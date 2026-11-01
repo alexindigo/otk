@@ -6,12 +6,18 @@ import {
   browserFixture,
   openSession,
   sentFrames,
+  submitPrompt,
   waitForReply,
 } from "../support/browser-fixture.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
 import { waitFor } from "../support/opencode.ts";
+import { WsClient } from "../support/ws-client.ts";
 
-test("V7 native plan approval switches the footer and next prompt while a coincidentally named plugin preserves selection", async () => {
+for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
+  test(`V7 native plan approval switches the footer and next prompt while a coincidentally named plugin preserves selection (${theme})`, () =>
+    planSwitch(theme));
+}
+async function planSwitch(theme: string) {
   const provider = new FakeLlm();
   const f = await browserFixture({ "*": "allow" }, {
     env: { OPENCODE_CLIENT: "cli", OPENCODE_EXPERIMENTAL_PLAN_MODE: "true" },
@@ -57,6 +63,14 @@ test("V7 native plan approval switches the footer and next prompt while a coinci
       body: { title: "Other session" },
     });
     const server = await f.sidecar(), b = await f.browser(server.url);
+    const client = new WsClient(server.url);
+    await client.connect();
+    try {
+      await client.rpc("prefs.set", { key: "theme", value: theme });
+    } finally {
+      await client.close();
+    }
+    await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
     const footer = async (agent: string, variant: string) => {
       await b.poll(
         `document.querySelector('.otk-composer-agent')?.textContent===${
@@ -77,7 +91,7 @@ test("V7 native plan approval switches the footer and next prompt while a coinci
     };
     const send = async (text: string) => {
       await b.type("textarea[name=prompt]", text);
-      await b.key("Enter");
+      await submitPrompt(b);
     };
     const nativeUser = async (text: string, agent: string, variant: string) => {
       const messages = await waitFor(
@@ -225,4 +239,4 @@ test("V7 native plan approval switches the footer and next prompt while a coinci
   } finally {
     await f.stop();
   }
-});
+}

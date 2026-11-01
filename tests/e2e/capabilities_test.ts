@@ -6,7 +6,11 @@ import type { PermissionRequest, QuestionRequest } from "@otk/protocol";
 import { fixture } from "../support/config.ts";
 import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
-import { openSession, sentFrames } from "../support/browser-fixture.ts";
+import {
+  openSession,
+  sentFrames,
+  waitForViewing,
+} from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 
 for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
@@ -133,6 +137,7 @@ test("transport reconnecting retains advertised features and unsent permission/q
     browser = await Cdp.launch(root);
     await browser.goto(url);
     await openSession(browser, session.id);
+    await waitForViewing(browser, session.id);
     await browser.click(".otk-permission-actions button:nth-child(3)");
     await browser.type("textarea[name=rejection]", "Keep permission feedback");
     await browser.click(".otk-question-options [data-question-row]:last-child");

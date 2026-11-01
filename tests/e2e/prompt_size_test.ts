@@ -2,15 +2,13 @@
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import type { RequestEvent } from "@otk/protocol";
 import {
   browserFixture,
   openSession,
-  sentFrames,
   waitForReply,
+  waitForViewing,
 } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
-import { waitFor } from "../support/opencode.ts";
 
 const input = "textarea[name=prompt]";
 const lines = (count: number) =>
@@ -33,30 +31,7 @@ test("U13 prompt grows line by line up to its cap, keeps the caret and footer vi
     await b.poll(
       "document.querySelector('.otk-composer-model-name')?.textContent==='scripted'",
     );
-    // Viewing publishes location and seen receipts after the page/catalogs.
-    // Their joined notice is independent geometry: settle both actual requests
-    // before taking the empty baseline, then observe its rendered completion.
-    for (const method of ["layout.location", "sessions.seen"]) {
-      await waitFor(() => {
-        const operation = sentFrames(b).map(({ frame }) => frame).find((
-          frame,
-        ) =>
-          frame.t === "request" && frame.method === method &&
-          (frame.params as { sessionID?: string })?.sessionID === session.id
-        );
-        if (!operation) return false;
-        const ref = operation.ref as { key: string };
-        return b.events.some((event) => {
-          if (event.method !== "Network.webSocketFrameReceived") return false;
-          const frame = JSON.parse(
-            (event.params.response as { payloadData: string }).payloadData,
-          ) as RequestEvent;
-          return frame.t === "request.result" && frame.ref.key === ref.key &&
-            frame.outcome.ok;
-        });
-      }, Boolean);
-    }
-    await b.poll("!document.querySelector('.otk-composer-notice')");
+    await waitForViewing(b, session.id);
     await b.evaluate("document.fonts.ready.then(()=>true)");
     if (shots) await Deno.mkdir(shots, { recursive: true });
     const measure = () =>
