@@ -139,9 +139,12 @@ for (
           ),
         ),
       ).toBe(true);
-      if (ownership.ports.length === 3) {
+      if (scenario === "start") {
+        expect(ownership.sidecarPort).toBeUndefined();
+      } else {
+        expect(ownership.sidecarPort).toBeGreaterThan(0);
         await readFile(
-          join(owned.root, `sidecar-${ownership.ports[2]}.log`),
+          join(owned.root, `sidecar-${ownership.sidecarPort}.log`),
           "utf8",
         );
       }

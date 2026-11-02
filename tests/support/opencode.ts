@@ -2,8 +2,9 @@
 import type { ChildProcess } from "node:child_process";
 import { join } from "@std/path";
 import type { FakeLlm } from "./fake-llm.ts";
-import { acquire, resources, tempDir } from "./resources.ts";
+import { acquire, bounded, resources, tempDir } from "./resources.ts";
 import { ownedProcess } from "./process.ts";
+import { FreezeProxy } from "./freeze-proxy.ts";
 import { nativeVersion, seedProviderPackages } from "./provider-cache.ts";
 import { nativeBinary } from "./native.ts";
 import { opencodeV1SessionID } from "@otk/harness-opencode-v1";
@@ -80,6 +81,11 @@ export class OpencodeTest {
   directory!: string;
   port!: number;
   url!: string;
+  /** Private subprocess listener; public traffic uses the readiness-gated port. */
+  nativePort!: number;
+  get nativeURL(): string {
+    return `http://127.0.0.1:${this.nativePort}`;
+  }
   db!: string;
   process!: ChildProcess;
   log = "";
@@ -218,33 +224,10 @@ export class OpencodeTest {
       );
       test.port = await freePort();
       test.url = `http://127.0.0.1:${test.port}`;
+      test.nativePort = await freePort();
       test.db = join(env.XDG_DATA_HOME, "opencode/opencode.db");
       test.#env = env;
-      const owner = ownedProcess(nativeBinary, [
-        "serve",
-        "--hostname",
-        "127.0.0.1",
-        "--port",
-        String(test.port),
-      ], {
-        cwd: test.directory,
-        env,
-        detached: true,
-        stdio: ["ignore", "pipe", "pipe"],
-      });
-      test.process = owner.child;
-      test.#stop = owner.stop;
-      const log = (chunk: Uint8Array) => {
-        test.#record(chunk);
-      };
-      test.process.stdout!.on("data", log);
-      test.process.stderr!.on("data", log);
-      try {
-        await test.#ready();
-      } catch (error) {
-        await test.stop();
-        throw new Error(`${error}\n${test.log}`);
-      }
+      await test.#start();
       return test;
     });
   }
@@ -300,12 +283,20 @@ export class OpencodeTest {
   }
   async restart(): Promise<void> {
     await this.stop();
+    await this.#start();
+  }
+  async #start(): Promise<void> {
+    const ready = Promise.withResolvers<void>();
+    const endpoint = new FreezeProxy(this.nativePort, {
+      port: this.port,
+      ready: ready.promise,
+    });
     const owner = ownedProcess(nativeBinary, [
       "serve",
       "--hostname",
       "127.0.0.1",
       "--port",
-      String(this.port),
+      String(this.nativePort),
     ], {
       cwd: this.directory,
       env: this.#env,
@@ -313,18 +304,43 @@ export class OpencodeTest {
       stdio: ["ignore", "pipe", "pipe"],
     });
     this.process = owner.child;
-    this.#stop = owner.stop;
+    this.#stop = resources().defer("native generation", async () => {
+      try {
+        await endpoint.stop();
+      } finally {
+        await owner.stop();
+      }
+    });
+    const announced = Promise.withResolvers<void>();
+    let output = "";
     this.process.stdout!.on("data", (chunk) => {
       this.#record(chunk);
+      output = (output + new TextDecoder().decode(chunk)).slice(-4096);
+      if (
+        output.split(/\r?\n/).includes(
+          `opencode server listening on ${this.nativeURL}`,
+        )
+      ) {
+        announced.resolve();
+      }
     });
     this.process.stderr!.on("data", (chunk) => {
       this.#record(chunk);
     });
+    this.process.once("error", (error) => announced.reject(error));
+    this.process.once("exit", (code, signal) => {
+      announced.reject(
+        new Error(`Native exited before readiness: ${code}/${signal}`),
+      );
+    });
     try {
+      // Stock native can accept and lose requests before this announcement.
+      await bounded("native listener announcement", announced.promise, 60_000);
       await this.#ready();
+      ready.resolve();
     } catch (error) {
       await this.stop();
-      throw error;
+      throw new Error(`${error}\n${this.log}`, { cause: error });
     }
   }
   /** HTTP admission is earlier than native custom-tool dependency completion. */
@@ -332,7 +348,7 @@ export class OpencodeTest {
     const deadline = Date.now() + 60_000;
     const health = await waitFor(
       async () =>
-        (await fetch(this.url + "/global/health", {
+        (await fetch(this.nativeURL + "/global/health", {
           signal: AbortSignal.timeout(5000),
         })).json(),
       (health) => health.healthy === true,
@@ -343,7 +359,7 @@ export class OpencodeTest {
         `Native fixture requires opencode ${nativeVersion}, received ${health.version}`,
       );
     }
-    const url = new URL(this.url + "/experimental/tool/ids");
+    const url = new URL(this.nativeURL + "/experimental/tool/ids");
     url.searchParams.set("directory", this.directory);
     const response = await fetch(url, {
       signal: AbortSignal.timeout(Math.max(1, deadline - Date.now())),

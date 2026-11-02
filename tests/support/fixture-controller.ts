@@ -155,7 +155,11 @@ try {
               record,
               JSON.stringify({
                 pids: [Deno.pid, fixture.oc.process.pid!],
-                ports: [fixture.fake.port, fixture.oc.port],
+                ports: [
+                  fixture.fake.port,
+                  fixture.oc.port,
+                  fixture.oc.nativePort,
+                ],
               }),
             );
           }
@@ -168,7 +172,13 @@ try {
               record,
               JSON.stringify({
                 pids: [Deno.pid, fixture.oc.process.pid!, server.process.pid!],
-                ports: [fixture.fake.port, fixture.oc.port, server.port],
+                sidecarPort: server.port,
+                ports: [
+                  fixture.fake.port,
+                  fixture.oc.port,
+                  server.port,
+                  fixture.oc.nativePort,
+                ],
               }),
             );
           }
@@ -183,7 +193,12 @@ try {
             binary: nativeBinary,
             version: nativeVersion,
             pids: [Deno.pid, fixture.oc.process.pid!, server.process.pid!],
-            ports: [fixture.fake.port, fixture.oc.port, server.port],
+            ports: [
+              fixture.fake.port,
+              fixture.oc.port,
+              server.port,
+              fixture.oc.nativePort,
+            ],
           };
         }
         case "beginTest": {
@@ -344,13 +359,22 @@ try {
             binary: nativeBinary,
             version: nativeVersion,
             pids: [Deno.pid, fixture.oc.process.pid!, server.process.pid!],
-            ports: [fixture.fake.port, fixture.oc.port, server.port],
+            ports: [
+              fixture.fake.port,
+              fixture.oc.port,
+              server.port,
+              fixture.oc.nativePort,
+            ],
           };
           const record = Deno.env.get("OTK_TEST_CONTROLLER_RECORD");
           if (record) {
             await Deno.writeTextFile(
               record,
-              JSON.stringify({ pids: stack.pids, ports: stack.ports }),
+              JSON.stringify({
+                pids: stack.pids,
+                ports: stack.ports,
+                sidecarPort: server.port,
+              }),
             );
           }
           return { stack, lease };

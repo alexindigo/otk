@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { resources } from "./resources.ts";
-/** A byte-transparent TCP proxy: freezing stalls traffic without closing sockets. */
+/** Byte-transparent TCP admission; freezing stalls traffic without closing sockets. */
 export class FreezeProxy {
   #listener: Deno.TcpListener;
   #connections = new Set<Deno.TcpConn>();
@@ -10,11 +10,29 @@ export class FreezeProxy {
   #stopping = false;
   #failures: unknown[] = [];
   #waiters: (() => void)[] = [];
+  #admission: Promise<void>;
+  #cancelAdmission!: () => void;
   readonly port: number;
+  /** Owned sockets, including clients waiting for upstream admission. */
+  get connections(): number {
+    return this.#connections.size;
+  }
   #stop: () => Promise<void>;
-  constructor(readonly target: number) {
+  constructor(
+    readonly target: number,
+    options: { port?: number; ready?: Promise<void> } = {},
+  ) {
     const scope = resources();
-    this.#listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
+    this.#admission = options.ready
+      ? Promise.race([
+        options.ready,
+        new Promise<void>((resolve) => this.#cancelAdmission = resolve),
+      ])
+      : Promise.resolve();
+    this.#listener = Deno.listen({
+      hostname: "127.0.0.1",
+      port: options.port ?? 0,
+    });
     this.port = (this.#listener.addr as Deno.NetAddr).port;
     this.#accept = this.#run().catch((error) => {
       this.#failures.push(error);
@@ -47,6 +65,10 @@ export class FreezeProxy {
     this.#connections.add(incoming);
     let outgoing: Deno.TcpConn | undefined;
     try {
+      // A managed native generation may bind TCP before it can serve HTTP.
+      // Keep incoming bytes owned here until its readiness settles.
+      await this.#admission;
+      if (this.#stopping) return;
       outgoing = await Deno.connect({
         hostname: "127.0.0.1",
         port: this.target,
@@ -109,6 +131,7 @@ export class FreezeProxy {
   }
   async #shutdown(): Promise<void> {
     this.#stopping = true;
+    this.#cancelAdmission?.();
     this.thaw();
     this.#listener.close();
     for (const socket of this.#connections) {

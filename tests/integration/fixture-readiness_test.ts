@@ -36,7 +36,7 @@ test("native fixture admission joins custom-tool dependency readiness rather tha
         const body = await json();
         if (body.healthy && !probing) {
           probing = true;
-          const target = new URL("/experimental/tool/ids", instance!.url);
+          const target = new URL("/experimental/tool/ids", instance!.nativeURL);
           target.searchParams.set("directory", instance!.directory);
           catalog = fetchNative(target, { signal: AbortSignal.timeout(60_000) })
             .then((response) => response.json());
