@@ -344,11 +344,16 @@
               "runner": "legacy",
               "file": "tests/e2e/bootstrap-activity_test.ts",
               "testID": "legacy.bootstrap-activity.f66d5c753285b6b0"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/attention.spec.ts",
+              "testID": "transport.bootstrap-activity"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "native bootstrap without SQLite keeps already-working and blocked phantom tabs visible after reload with collapsed panels"
@@ -356,14 +361,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/bootstrap-activity_test.ts",
-            "testID": "legacy.bootstrap-activity.f66d5c753285b6b0"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/attention.spec.ts",
+            "testID": "transport.bootstrap-activity"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "048645bbcc758f317af3f82a293cebe2efb97ac02546750515959bfa62adc236",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -383,11 +388,16 @@
               "runner": "legacy",
               "file": "tests/e2e/capabilities_test.ts",
               "testID": "legacy.capabilities.d45118d02a2aaba4"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+              "testID": "transport.core-only"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "core-only welcome loads a session without optional RPCs and preserves a draft while unavailable prompt features stay inactive (otk-dark)"
@@ -395,14 +405,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/capabilities_test.ts",
-            "testID": "legacy.capabilities.d45118d02a2aaba4"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+            "testID": "transport.core-only"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "34ae69628f15d4710ce5a52a0d41e3b26461a18a199648c6046aa64c55695872",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -414,11 +424,16 @@
               "runner": "legacy",
               "file": "tests/e2e/capabilities_test.ts",
               "testID": "legacy.capabilities.c718f492211a7561"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+              "testID": "transport.core-only"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "core-only welcome loads a session without optional RPCs and preserves a draft while unavailable prompt features stay inactive (otk-light)"
@@ -426,14 +441,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/capabilities_test.ts",
-            "testID": "legacy.capabilities.c718f492211a7561"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+            "testID": "transport.core-only"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "34ae69628f15d4710ce5a52a0d41e3b26461a18a199648c6046aa64c55695872",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -445,11 +460,16 @@
               "runner": "legacy",
               "file": "tests/e2e/capabilities_test.ts",
               "testID": "legacy.capabilities.79ff8eea2c639f95"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+              "testID": "transport.core-only"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light-stone"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "core-only welcome loads a session without optional RPCs and preserves a draft while unavailable prompt features stay inactive (otk-light-stone)"
@@ -457,14 +477,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/capabilities_test.ts",
-            "testID": "legacy.capabilities.79ff8eea2c639f95"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+            "testID": "transport.core-only"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "34ae69628f15d4710ce5a52a0d41e3b26461a18a199648c6046aa64c55695872",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -476,11 +496,16 @@
               "runner": "legacy",
               "file": "tests/e2e/capabilities_test.ts",
               "testID": "legacy.capabilities.cc84f8623296b347"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+              "testID": "transport.reconnect-dirty-attention"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "transport reconnecting retains advertised features and unsent permission/question input"
@@ -488,14 +513,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/capabilities_test.ts",
-            "testID": "legacy.capabilities.cc84f8623296b347"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+            "testID": "transport.reconnect-dirty-attention"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "34ae69628f15d4710ce5a52a0d41e3b26461a18a199648c6046aa64c55695872",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -2878,11 +2903,16 @@
               "runner": "legacy",
               "file": "tests/e2e/created-session-readiness_test.ts",
               "testID": "legacy.created-session-readiness.eebdc38af5deb083"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/readiness.spec.ts",
+              "testID": "transport.created-before-index"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "created-session readiness: trusted send reaches the provider and transcript while index delivery is held"
@@ -2890,14 +2920,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/created-session-readiness_test.ts",
-            "testID": "legacy.created-session-readiness.eebdc38af5deb083"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/readiness.spec.ts",
+            "testID": "transport.created-before-index"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "ee2c752e4012318f3324c4fe31e0efc197d649252d2b1c26fb61546e87fa1be8",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -3212,11 +3242,16 @@
               "runner": "legacy",
               "file": "tests/e2e/enrichment-order_test.ts",
               "testID": "legacy.enrichment-order.d3457bb7765b76ab"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/attention.spec.ts",
+              "testID": "transport.optional-clock-independence"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "real native B status, text and permission paint during A's held optional clock"
@@ -3224,14 +3259,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/enrichment-order_test.ts",
-            "testID": "legacy.enrichment-order.d3457bb7765b76ab"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/attention.spec.ts",
+            "testID": "transport.optional-clock-independence"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b219165a0f466150adfff28a97b1980e7ba7f59d9b9e73ac1175baeb3f407bbd",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -3251,11 +3286,16 @@
               "runner": "legacy",
               "file": "tests/e2e/error_observations_test.ts",
               "testID": "legacy.error_observations.293a2e65a82305c1"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/errors.spec.ts",
+              "testID": "transport.error-http"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "HTTP-only failure is visible with real transport provenance, current draft and reload without requiring an event"
@@ -3263,14 +3303,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/error_observations_test.ts",
-            "testID": "legacy.error_observations.293a2e65a82305c1"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/errors.spec.ts",
+            "testID": "transport.error-http"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "5a728174a3a87e2cd67e53194dac62f93f2740d9352a4fbc3fd961e59e7f7c13",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -3282,11 +3322,16 @@
               "runner": "legacy",
               "file": "tests/e2e/error_observations_test.ts",
               "testID": "legacy.error_observations.e04e13d9db957d1f"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/errors.spec.ts",
+              "testID": "transport.error-event"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "native-only failure from an independently invoked stock operation reaches all same-state consumers without a fake HTTP request identity"
@@ -3294,14 +3339,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/error_observations_test.ts",
-            "testID": "legacy.error_observations.e04e13d9db957d1f"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/errors.spec.ts",
+            "testID": "transport.error-event"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "5a728174a3a87e2cd67e53194dac62f93f2740d9352a4fbc3fd961e59e7f7c13",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -3313,11 +3358,16 @@
               "runner": "legacy",
               "file": "tests/e2e/error_observations_test.ts",
               "testID": "legacy.error_observations.d7a1ceb47d60feab"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/errors.spec.ts",
+              "testID": "transport.error-late-http"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "native detail remains current when its independently delivered stock HTTP diagnostic arrives later, with both sources and draft preserved"
@@ -3325,14 +3375,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/error_observations_test.ts",
-            "testID": "legacy.error_observations.d7a1ceb47d60feab"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/errors.spec.ts",
+            "testID": "transport.error-late-http"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "5a728174a3a87e2cd67e53194dac62f93f2740d9352a4fbc3fd961e59e7f7c13",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -4417,11 +4467,16 @@
               "runner": "legacy",
               "file": "tests/e2e/initial-capability_test.ts",
               "testID": "legacy.initial-capability.279c426439932042"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/attention.spec.ts",
+              "testID": "transport.initial-native-permission"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "initial direct route and reload render an already pending native permission without switching sessions"
@@ -4429,14 +4484,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/initial-capability_test.ts",
-            "testID": "legacy.initial-capability.279c426439932042"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/attention.spec.ts",
+            "testID": "transport.initial-native-permission"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "bd6c024b7ec399ffcfff9808a60bfd4c3aa69968dd0d2f15d66726561a5dec42",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -4448,11 +4503,16 @@
               "runner": "legacy",
               "file": "tests/e2e/initial-capability_test.ts",
               "testID": "legacy.initial-capability.f033d85c755afdbe"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+              "testID": "transport.initial-question"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "initial advertised session capabilities activate question and prompt consumers after welcome and reload in otk-dark"
@@ -4460,14 +4520,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/initial-capability_test.ts",
-            "testID": "legacy.initial-capability.f033d85c755afdbe"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+            "testID": "transport.initial-question"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "bd6c024b7ec399ffcfff9808a60bfd4c3aa69968dd0d2f15d66726561a5dec42",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -4479,11 +4539,16 @@
               "runner": "legacy",
               "file": "tests/e2e/initial-capability_test.ts",
               "testID": "legacy.initial-capability.217213c297d20f5f"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+              "testID": "transport.initial-question"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "initial advertised session capabilities activate question and prompt consumers after welcome and reload in otk-light"
@@ -4491,14 +4556,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/initial-capability_test.ts",
-            "testID": "legacy.initial-capability.217213c297d20f5f"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+            "testID": "transport.initial-question"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "bd6c024b7ec399ffcfff9808a60bfd4c3aa69968dd0d2f15d66726561a5dec42",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -4883,11 +4948,16 @@
               "runner": "legacy",
               "file": "tests/e2e/live_reply_test.ts",
               "testID": "legacy.live_reply.5a9f0a26dcf68af1"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/recovery.spec.ts",
+              "testID": "transport.live-reply"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "reload, switching and an initially unwatched reply retain all current text and its future suffix"
@@ -4895,14 +4965,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/live_reply_test.ts",
-            "testID": "legacy.live_reply.5a9f0a26dcf68af1"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/recovery.spec.ts",
+            "testID": "transport.live-reply"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "20008199977ac71a64960c0436451f39369fc74ca61c8057777ea322c394427f",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -6697,11 +6767,16 @@
               "runner": "legacy",
               "file": "tests/e2e/native-request-events_test.ts",
               "testID": "legacy.native-request-events.447eada142bb74aa"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/native-pending.spec.ts",
+              "testID": "transport.native-shell-receipt"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "a completed native shell with held HTTP settlement stays pending across reconnect and preserves the next draft"
@@ -6709,14 +6784,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/native-request-events_test.ts",
-            "testID": "legacy.native-request-events.447eada142bb74aa"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/native-pending.spec.ts",
+            "testID": "transport.native-shell-receipt"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4cf1ef2568ef126a479b4def4821fae89f7f7dfb4420575f4198e7cb3376961d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -6930,11 +7005,16 @@
               "runner": "legacy",
               "file": "tests/e2e/ownership_test.ts",
               "testID": "legacy.ownership.d9b1487d6186c5e1"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/ownership.spec.ts",
+              "testID": "transport.creation-late-draft"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "web late creation reply retains a draft typed while RPC was pending"
@@ -6942,14 +7022,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/ownership_test.ts",
-            "testID": "legacy.ownership.d9b1487d6186c5e1"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/ownership.spec.ts",
+            "testID": "transport.creation-late-draft"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "9fe85768d46bbaa0496036877086bdd4b270b8ed68eea1377dccf6e1abf8bd9d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -6961,11 +7041,16 @@
               "runner": "legacy",
               "file": "tests/e2e/ownership_test.ts",
               "testID": "legacy.ownership.71df71745cdc5bc2"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/ownership.spec.ts",
+              "testID": "transport.removed-login"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "web removed sidecar cannot reconnect after an in-flight login returns"
@@ -6973,14 +7058,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/ownership_test.ts",
-            "testID": "legacy.ownership.71df71745cdc5bc2"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/ownership.spec.ts",
+            "testID": "transport.removed-login"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "9fe85768d46bbaa0496036877086bdd4b270b8ed68eea1377dccf6e1abf8bd9d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -6992,11 +7077,16 @@
               "runner": "legacy",
               "file": "tests/e2e/ownership_test.ts",
               "testID": "legacy.ownership.76ca4b73805c0aed"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/ownership.spec.ts",
+              "testID": "transport.creation-newer-selection"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "web newer selection supersedes a pending session creation without losing its draft"
@@ -7004,14 +7094,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/ownership_test.ts",
-            "testID": "legacy.ownership.76ca4b73805c0aed"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/ownership.spec.ts",
+            "testID": "transport.creation-newer-selection"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "9fe85768d46bbaa0496036877086bdd4b270b8ed68eea1377dccf6e1abf8bd9d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -8355,11 +8445,16 @@
               "runner": "legacy",
               "file": "tests/e2e/request-activation_test.ts",
               "testID": "legacy.request-activation.603a793e50241651"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/native-pending.spec.ts",
+              "testID": "transport.forty-second-page"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "protocol 16 browser keeps a forty-second native page pending while events arrive and renders the final page once"
@@ -8367,14 +8462,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/request-activation_test.ts",
-            "testID": "legacy.request-activation.603a793e50241651"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/native-pending.spec.ts",
+            "testID": "transport.forty-second-page"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "5897504147ca53a2c35f5bf7fe86fdc48002e395e92a25384296a2012509ada1",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -8394,14 +8489,21 @@
               "runner": "legacy",
               "file": "tests/e2e/request-feedback_test.ts",
               "testID": "legacy.request-feedback.983fa86d294e339e"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/feedback.spec.ts",
+              "testID": "transport.permission-feedback"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)",
+              "otk-dark / otk-light (legacy V remainder until T3)"
             ],
             "states": [
-              "shared permission notice survives takeover, keeps one pending/error sink and focuses the visible status"
+              "shared permission notice survives takeover, keeps one pending/error sink and focuses the visible status",
+              "B/C owner: transport.permission-feedback; retained legacy V only: takeover icon size/uniform spacing, empty tracks, question bottom inset and pending/error paint; T3 will retire the visual remainder"
             ]
           },
           "lowerTierWitness": null,
@@ -8411,9 +8513,9 @@
             "testID": "legacy.request-feedback.983fa86d294e339e"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "e6e31ed93cef7bf100f880c96be4912efdaa5108021b858feb96e2850af560ba",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "0379e0ca67ead7a37874f0e579610186ad30115220c12ab9aa283f949eccc515",
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -8425,14 +8527,21 @@
               "runner": "legacy",
               "file": "tests/e2e/request-feedback_test.ts",
               "testID": "legacy.request-feedback.eefb5152f3968c4f"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/feedback.spec.ts",
+              "testID": "transport.question-feedback"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)",
+              "otk-dark / otk-light (legacy V remainder until T3)"
             ],
             "states": [
-              "shared question notice survives takeover, keeps one pending/error sink and focuses the visible status"
+              "shared question notice survives takeover, keeps one pending/error sink and focuses the visible status",
+              "B/C owner: transport.question-feedback; retained legacy V only: takeover icon size/uniform spacing, empty tracks, question bottom inset and pending/error paint; T3 will retire the visual remainder"
             ]
           },
           "lowerTierWitness": null,
@@ -8442,9 +8551,9 @@
             "testID": "legacy.request-feedback.eefb5152f3968c4f"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "e6e31ed93cef7bf100f880c96be4912efdaa5108021b858feb96e2850af560ba",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "0379e0ca67ead7a37874f0e579610186ad30115220c12ab9aa283f949eccc515",
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -8456,11 +8565,16 @@
               "runner": "legacy",
               "file": "tests/e2e/request-feedback_test.ts",
               "testID": "legacy.request-feedback.61d1b0d8543398bf"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/feedback.spec.ts",
+              "testID": "transport.background-task"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "a dismissed task form keeps its original background project working through collapse and reload"
@@ -8468,14 +8582,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/request-feedback_test.ts",
-            "testID": "legacy.request-feedback.61d1b0d8543398bf"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/transport/feedback.spec.ts",
+            "testID": "transport.background-task"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "e6e31ed93cef7bf100f880c96be4912efdaa5108021b858feb96e2850af560ba",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -8487,14 +8601,21 @@
               "runner": "legacy",
               "file": "tests/e2e/request-feedback_test.ts",
               "testID": "legacy.request-feedback.2802e60c017d6301"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/feedback.spec.ts",
+              "testID": "transport.forty-second-task"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)",
+              "otk-dark / otk-light (legacy V remainder until T3)"
             ],
             "states": [
-              "a forty-second task remains pending through repeat submission and socket replacement and renders one selected perf task"
+              "a forty-second task remains pending through repeat submission and socket replacement and renders one selected perf task",
+              "B/C owner: transport.forty-second-task; retained legacy V only: held task form identical bounds across Dark/Linen; T3 will retire the visual remainder"
             ]
           },
           "lowerTierWitness": null,
@@ -8504,9 +8625,9 @@
             "testID": "legacy.request-feedback.2802e60c017d6301"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "e6e31ed93cef7bf100f880c96be4912efdaa5108021b858feb96e2850af560ba",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "0379e0ca67ead7a37874f0e579610186ad30115220c12ab9aa283f949eccc515",
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -8907,11 +9028,16 @@
               "runner": "legacy",
               "file": "tests/e2e/rpc-feedback_test.ts",
               "testID": "legacy.rpc-feedback.b3744814b1624df3"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/rpc-feedback.spec.ts",
+              "testID": "transport.rpc-feedback-ownership"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "request owners report RPC failures once while unsolicited errors still reach notifications"
@@ -8919,14 +9045,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/rpc-feedback_test.ts",
-            "testID": "legacy.rpc-feedback.b3744814b1624df3"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/transport/rpc-feedback.spec.ts",
+            "testID": "transport.rpc-feedback-ownership"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "a4f8fc524dc326aeb9e653c33e375ed2b26a9add93610fcf5f56a45567673ad9",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -8985,11 +9111,16 @@
               "runner": "legacy",
               "file": "tests/e2e/server-lifetime_test.ts",
               "testID": "legacy.server-lifetime.37047e250bd45898"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+              "testID": "transport.remove-loading-server"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "removing a loading direct-route server detaches its selection before closing transport in otk-dark"
@@ -8997,14 +9128,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/server-lifetime_test.ts",
-            "testID": "legacy.server-lifetime.37047e250bd45898"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+            "testID": "transport.remove-loading-server"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4832023c54aade4009c68398bf5bebc50b329737d38d66d24b43931cef466405",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -9016,11 +9147,16 @@
               "runner": "legacy",
               "file": "tests/e2e/server-lifetime_test.ts",
               "testID": "legacy.server-lifetime.0af3dd2f35ab4463"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+              "testID": "transport.remove-loading-server"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "removing a loading direct-route server detaches its selection before closing transport in otk-light"
@@ -9028,14 +9164,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/server-lifetime_test.ts",
-            "testID": "legacy.server-lifetime.0af3dd2f35ab4463"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/transport/capabilities.spec.ts",
+            "testID": "transport.remove-loading-server"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4832023c54aade4009c68398bf5bebc50b329737d38d66d24b43931cef466405",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -9195,11 +9331,16 @@
               "runner": "legacy",
               "file": "tests/e2e/session_new_readiness_test.ts",
               "testID": "legacy.session_new_readiness.07d3059da392dd3f"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/readiness.spec.ts",
+              "testID": "transport.new-session-held-loads"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "new-session slash and palette pointer/keyboard invocations resolve their directory while initial project loads are pending"
@@ -9207,14 +9348,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session_new_readiness_test.ts",
-            "testID": "legacy.session_new_readiness.07d3059da392dd3f"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/readiness.spec.ts",
+            "testID": "transport.new-session-held-loads"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f61ebce3a5fff2ad183b39caf0a41a1e09948dc819a574b139bb9a19cc2efa51",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -10212,11 +10353,16 @@
               "runner": "legacy",
               "file": "tests/e2e/setup_test.ts",
               "testID": "legacy.setup.f50459d425843fe6"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/auth.spec.ts",
+              "testID": "transport.setup-password-cookie"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "real setup password, cookie and fresh login reach the connected application"
@@ -10224,14 +10370,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/setup_test.ts",
-            "testID": "legacy.setup.f50459d425843fe6"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/auth.spec.ts",
+            "testID": "transport.setup-password-cookie"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "a517a3edaefddfc46af7dc7f8e9c58ff608ad7c0b1ea4abf1aa45323c3aeb85a",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]
@@ -12295,14 +12441,21 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.b01dbf0c44470730"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/workspace.spec.ts",
+              "testID": "transport.workspace-projects"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)",
+              "original default theme (legacy V remainder until T3)"
             ],
             "states": [
-              "E1 project inbox and Sessions tree scoped by directory, descendants nested, SPA assets and API boundary"
+              "E1 project inbox and Sessions tree scoped by directory, descendants nested, SPA assets and API boundary",
+              "B/C owner: transport.workspace-projects; retained legacy V only: project/main shared edge and viewport bottom; T3 will retire the visual remainder"
             ]
           },
           "lowerTierWitness": null,
@@ -12312,9 +12465,9 @@
             "testID": "legacy.workspace.b01dbf0c44470730"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "b99801b1f60b2d44cc17f71e04a8e509be13b896620baef150497fe2932f210f",
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -12326,11 +12479,16 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.f0e07f15e049e1fa"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/workspace.spec.ts",
+              "testID": "transport.incremental-markdown"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "E2 new session, trusted prompt, incremental structured markdown and idle outcome"
@@ -12338,14 +12496,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.f0e07f15e049e1fa"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/workspace.spec.ts",
+            "testID": "transport.incremental-markdown"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -12357,14 +12515,21 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.fc5e50ab313062af"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/workspace.spec.ts",
+              "testID": "transport.interrupt-confirmation"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)",
+              "original default theme (legacy V remainder until T3)"
             ],
             "states": [
-              "E5 Esc confirmation then abort yields interrupted footer and idle session"
+              "E5 Esc confirmation then abort yields interrupted footer and idle session",
+              "B/C owner: transport.interrupt-confirmation; retained legacy V only: shared circular interrupted marker dimensions/radius; T3 will retire the visual remainder"
             ]
           },
           "lowerTierWitness": null,
@@ -12374,9 +12539,9 @@
             "testID": "legacy.workspace.fc5e50ab313062af"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "b99801b1f60b2d44cc17f71e04a8e509be13b896620baef150497fe2932f210f",
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -12388,11 +12553,16 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.074de1d25708f0cb"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/workspace.spec.ts",
+              "testID": "transport.frozen-stream"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "E6 frozen harness stream resyncs complete reply and idle without reload"
@@ -12400,14 +12570,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.074de1d25708f0cb"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/workspace.spec.ts",
+            "testID": "transport.frozen-stream"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -12419,11 +12589,16 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.091710501893d444"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/auth.spec.ts",
+              "testID": "transport.authenticated-remote"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "E7 add authenticated second sidecar, merged groups, prompt and persistence"
@@ -12431,14 +12606,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.091710501893d444"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/auth.spec.ts",
+            "testID": "transport.authenticated-remote"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -12450,11 +12625,16 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.05d43098e633cd8c"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/transport/cooling.spec.ts",
+              "testID": "transport.scope-cooling"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "E8 leaving a scope cools >=2 MB session objects, unsubscribes and removes its DOM"
@@ -12462,14 +12642,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.05d43098e633cd8c"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/transport/cooling.spec.ts",
+            "testID": "transport.scope-cooling"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -12481,11 +12661,16 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.507bbcd9f62e4301"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/auth.spec.ts",
+              "testID": "transport.password-login"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "E9 serving-sidecar wrong password error then correct login"
@@ -12493,14 +12678,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.507bbcd9f62e4301"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/auth.spec.ts",
+            "testID": "transport.password-login"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -12512,11 +12697,16 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.f824ac3d1296389b"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/recovery.spec.ts",
+              "testID": "transport.heartbeat-75-seconds"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "E10 75-second idle browser stays connected and sends JSON pongs at 20-second intervals"
@@ -12524,14 +12714,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.f824ac3d1296389b"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/recovery.spec.ts",
+            "testID": "transport.heartbeat-75-seconds"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -12543,11 +12733,16 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.1b20da3be0e6bc78"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/workspace.spec.ts",
+              "testID": "transport.setup-history"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "web setup persists auth choice and routes back/forward select the correct session in otk-dark"
@@ -12555,14 +12750,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.1b20da3be0e6bc78"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/workspace.spec.ts",
+            "testID": "transport.setup-history"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -12574,11 +12769,16 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.2c7006aea4ce06af"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/workspace.spec.ts",
+              "testID": "transport.setup-history"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "web setup persists auth choice and routes back/forward select the correct session in otk-light"
@@ -12586,14 +12786,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.2c7006aea4ce06af"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/workspace.spec.ts",
+            "testID": "transport.setup-history"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -12605,11 +12805,16 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.0842d6e77634e3e2"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/workspace.spec.ts",
+              "testID": "transport.history-viewport"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "web history paging preserves viewport and autoscroll follows only the bottom"
@@ -12617,14 +12822,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.0842d6e77634e3e2"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/workspace.spec.ts",
+            "testID": "transport.history-viewport"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -12636,11 +12841,16 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.9c1daedd2117f6af"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/recovery.spec.ts",
+              "testID": "transport.history-drafts"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "web history navigation retains each session's draft and keeps URL and content together"
@@ -12648,14 +12858,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.9c1daedd2117f6af"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/recovery.spec.ts",
+            "testID": "transport.history-drafts"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -12667,11 +12877,16 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.c2da32789643ee16"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/recovery.spec.ts",
+              "testID": "transport.sidecar-restart"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "web sidecar restart resubscribes open session and refetches final content without reload"
@@ -12679,14 +12894,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.c2da32789643ee16"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/recovery.spec.ts",
+            "testID": "transport.sidecar-restart"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },
         {
@@ -12698,11 +12913,16 @@
               "runner": "legacy",
               "file": "tests/e2e/workspace_test.ts",
               "testID": "legacy.workspace.7ef29a883b439e71"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/transport/workspace.spec.ts",
+              "testID": "transport.typed-markdown"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark (behavior/contracts once)"
             ],
             "states": [
               "web renders all remaining markdown block and inline kinds from the real adapter"
@@ -12710,14 +12930,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.7ef29a883b439e71"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/transport/workspace.spec.ts",
+            "testID": "transport.typed-markdown"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "41cf050d742b14b1b4790324359308e8e013456bbac4efdb422face9fe9f825d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
       ]

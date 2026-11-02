@@ -6,6 +6,9 @@ import { withResources } from "./resources.ts";
 import { WsClient } from "./ws-client.ts";
 import { waitFor } from "./opencode.ts";
 import { seedProviderPackages } from "./provider-cache.ts";
+import { transportScenario } from "./transport-scenario.ts";
+import { contractScenario } from "./contract-scenario.ts";
+import { transcriptConsumer } from "../reuse/transcript-consumer.ts";
 import {
   type ControlRequest,
   type ControlResponse,
@@ -52,6 +55,7 @@ let shutdownFailure: unknown;
 try {
   await withResources("browser worker controller", async () => {
     let fixture: Awaited<ReturnType<typeof nativeFixture>> | undefined;
+    let remote: Awaited<ReturnType<typeof nativeFixture>> | undefined;
     let client: WsClient | undefined;
     let baseline: Record<string, Json> = {};
     let lease: TestLease | undefined;
@@ -59,9 +63,80 @@ try {
     let poisoned = false;
     let snapshotLease = false;
     const directories: string[] = [];
+    const createdIDs: string[] = [];
     const gates = new Map<string, () => void>();
+    const recordOwnership = async () => {
+      const record = Deno.env.get("OTK_TEST_CONTROLLER_RECORD");
+      if (!record || !fixture) return;
+      const owners = [fixture, ...(remote ? [remote] : [])];
+      await Deno.writeTextFile(
+        record,
+        JSON.stringify({
+          pids: [
+            Deno.pid,
+            ...owners.flatMap((
+              owner,
+            ) => [
+              owner.oc.process.pid!,
+              ...owner.servers.map((server) => server.process.pid!),
+            ]),
+          ],
+          ports: [
+            ...(transport?.port ? [transport.port] : []),
+            ...owners.flatMap((
+              owner,
+            ) => [
+              owner.fake.port,
+              owner.oc.port,
+              owner.oc.nativePort,
+              ...owner.servers.map((server) => server.port),
+            ]),
+          ],
+          sidecarPort: fixture.servers[0]?.port,
+        }),
+      );
+    };
     let stopped = false;
     let chunkTimeout: number | undefined;
+    let transport: ReturnType<typeof transportScenario> | undefined;
+    let contract: Awaited<ReturnType<typeof contractScenario>> | undefined;
+    let bootstrap: {
+      busy: { id: string };
+      blocked: { id: string };
+      directory: string;
+    } | undefined;
+    let operation: { settled: boolean; error?: string } | undefined;
+    let cooling:
+      | { a: { id: string }; b: { id: string }; directory: string }
+      | undefined;
+    let lifecycle: Awaited<ReturnType<typeof transcriptConsumer>> | undefined;
+    let secondaryDirectory: string | undefined;
+    const subscriptions = new Set<string>();
+    const coolingResources = () => {
+      if (!cooling || !lifecycle) return null;
+      const state = lifecycle.owner.get({
+        sidecarId: "consumer",
+        sessionID: cooling.a.id,
+      })?.state;
+      if (!state) return null;
+      return {
+        temperature: state.temperature,
+        messages: state.messageIDs.length,
+        messageRecords: Object.keys(state.messagesByID).length,
+        replies: state.replyIDs.length,
+        replyRecords: Object.keys(state.repliesByID).length,
+        content: state.content.messages.length,
+        recovering: state.recovering.length,
+        pageLoading: state.pageLoading,
+        subscribed: subscriptions.has(cooling.a.id),
+        readLeases:
+          lifecycle.connection.requests.operations(cooling.a.id).filter((
+            operation,
+          ) =>
+            !["succeeded", "failed", "released"].includes(operation.state.phase)
+          ).length,
+      };
+    };
     const resetPrefs = async () => {
       for (const [key, value] of Object.entries(baseline)) {
         const from = client!.frames.length;
@@ -77,6 +152,14 @@ try {
     const end = async () => {
       if (!lease) throw new Error("No active fixture lease");
       const f = fixture!;
+      transport?.release();
+      if (remote) {
+        remote.fake.releaseAll();
+        await waitFor(() => remote!.fake.active, (count) => count === 0);
+        if (remote.fake.pending || remote.fake.unexpected) {
+          throw new Error("Remote provider lease unsettled");
+        }
+      }
       f.fake.releaseAll();
       gates.clear();
       if (snapshotLease) {
@@ -132,8 +215,24 @@ try {
       f.fake.requests.length = 0;
       client!.frames.splice(0);
       lease = undefined;
+      secondaryDirectory = undefined;
     };
     const dispatch = async (frame: ControlRequest): Promise<unknown> => {
+      if (
+        frame.command === "start" &&
+        frame.params.profile.startsWith("contract-")
+      ) {
+        if (contract || fixture) throw new Error("Stack already started");
+        if (frame.params.version !== nativeVersion) {
+          throw new Error("Project/native version mismatch");
+        }
+        contract = await contractScenario(frame.params.profile);
+        return contract.info;
+      }
+      if (contract) {
+        if (frame.command === "stop") stopped = true;
+        return await contract.dispatch(frame);
+      }
       const p = frame.params;
       if ("lease" in p && p.lease !== undefined && p.lease !== lease?.lease) {
         throw new Error("Stale or foreign fixture lease");
@@ -148,7 +247,11 @@ try {
             throw new Error("Project/native version mismatch");
           }
           profile = frame.params.profile;
-          fixture = await bind(() => nativeFixture());
+          fixture = await bind(() =>
+            nativeFixture(
+              profile === "transport-shell" ? { bash: "deny" } : undefined,
+            )
+          );
           if (profile === "provider-hold") {
             const path = join(fixture.oc.root, "config/opencode/opencode.json");
             const input = JSON.parse(await Deno.readTextFile(path));
@@ -164,6 +267,89 @@ try {
             }
           }
           fixture.fake.strict();
+          if (profile === "transport-cooling") {
+            const a = await fixture.oc.session<{ id: string }>("/session", {
+              method: "POST",
+              body: { title: "Large session A" },
+            });
+            const b = await fixture.oc.session<{ id: string }>("/session", {
+              method: "POST",
+              body: { title: "Small session B" },
+            });
+            await fixture.oc.request(`/session/${b.id}/message`, {
+              method: "POST",
+              body: {
+                noReply: true,
+                parts: [{ type: "text", text: "Small session text" }],
+              },
+            });
+            fixture.fake.queue({
+              chunks: ["OTK_LARGE_SESSION_A_" + "x".repeat(2 * 1024 * 1024)],
+              delay: 10,
+            });
+            await fixture.oc.request(`/session/${a.id}/prompt_async`, {
+              method: "POST",
+              body: { parts: [{ type: "text", text: "Large reply" }] },
+            });
+            await waitFor(
+              () =>
+                fixture!.oc.request<
+                  { info: { role: string; time: { completed?: number } } }[]
+                >(`/session/${a.id}/message`),
+              (rows) =>
+                rows.some((row) =>
+                  row.info.role === "assistant" && !!row.info.time.completed
+                ),
+              60_000,
+            );
+            cooling = { a, b, directory: fixture.oc.directory };
+          }
+          if (profile === "transport-bootstrap") {
+            const busy = await fixture.oc.session<
+              { id: string; nativeID: string }
+            >("/session", {
+              method: "POST",
+              body: { title: "Already working" },
+            });
+            fixture.fake.queueHeld({ chunks: ["Working before OTK connects"] });
+            await fixture.oc.request(`/session/${busy.id}/prompt_async`, {
+              method: "POST",
+              body: { parts: [{ type: "text", text: "Keep working" }] },
+            });
+            await waitFor(
+              () => fixture!.fake.requests,
+              (requests) =>
+                requests.some((request) =>
+                  JSON.stringify(request).includes("Keep working")
+                ),
+            );
+            fixture.fake.queue({
+              tool: {
+                name: "bash",
+                input: {
+                  command: "pwd",
+                  description: "Pending before OTK connects",
+                },
+              },
+            });
+            const blocked = await fixture.oc.session<
+              { id: string; nativeID: string }
+            >("/session", {
+              method: "POST",
+              body: { title: "Already blocked" },
+            });
+            await fixture.oc.request(`/session/${blocked.id}/prompt_async`, {
+              method: "POST",
+              body: {
+                parts: [{ type: "text", text: "Ask before running pwd" }],
+              },
+            });
+            await waitFor(
+              () => fixture!.oc.request<{ sessionID: string }[]>("/permission"),
+              (rows) => rows.some((row) => row.sessionID === blocked.nativeID),
+            );
+            bootstrap = { busy, blocked, directory: fixture.oc.directory };
+          }
           const record = Deno.env.get("OTK_TEST_CONTROLLER_RECORD");
           if (record) {
             await Deno.writeTextFile(
@@ -181,7 +367,33 @@ try {
           if (profile === "fail-start") {
             throw new Error("Forced controller-start failure");
           }
-          const server = await bind(() => fixture!.sidecar());
+          if (profile.startsWith("transport-")) {
+            transport = transportScenario(fixture.oc, profile);
+          }
+          const server = await bind(() =>
+            fixture!.sidecar(
+              transport
+                ? {
+                  ...(profile === "transport-cooling"
+                    ? { messages: { coolms: 2500, preloadms: 1500 } }
+                    : {}),
+                  harness: {
+                    url: transport.url,
+                    ...(["transport-bootstrap", "transport-enrichment"]
+                        .includes(profile)
+                      ? {
+                        db: join(fixture!.oc.root, "unreadable.db"),
+                        requestms: 90000,
+                      }
+                      : {}),
+                    ...(profile === "transport-freeze"
+                      ? { heartbeattimeout: 2 }
+                      : {}),
+                  },
+                }
+                : {},
+            )
+          );
           if (record) {
             await Deno.writeTextFile(
               record,
@@ -201,6 +413,34 @@ try {
           await client.connect();
           await client.rpc("prefs.set", { key: "theme", value: "otk-dark" });
           baseline = await client.rpc<Record<string, Json>>("prefs.get", {});
+          if (cooling) {
+            for (const session of [cooling.a, cooling.b]) {
+              await client.rpc("tasks.create", {
+                directory: cooling.directory,
+                name: session.id,
+                sessions: [session.id],
+              });
+            }
+            lifecycle = await transcriptConsumer(server.url, {
+              now: Date.now,
+              set: (run, ms) => setTimeout(run, ms),
+              clear: (timer) =>
+                clearTimeout(timer as ReturnType<typeof setTimeout>),
+            });
+            const subscribe = lifecycle.connection.subscribe.bind(
+              lifecycle.connection,
+            );
+            lifecycle.connection.subscribe = (id, enabled) => {
+              if (enabled) subscriptions.add(id);
+              else subscriptions.delete(id);
+              subscribe(id, enabled);
+            };
+            await waitFor(
+              () => lifecycle!.index.get("consumer", cooling!.a.id),
+              Boolean,
+            );
+          }
+          await recordOwnership();
           return {
             root: fixture.oc.root,
             url: server.url,
@@ -254,18 +494,28 @@ try {
           }
           return null;
         case "queueScript": {
+          const provider = frame.params.target === "remote"
+            ? remote?.fake
+            : fixture!.fake;
+          if (!provider) throw new Error("Provider target not acquired");
           const id = crypto.randomUUID();
-          const script = { chunks: frame.params.chunks };
+          const script = {
+            chunks: frame.params.chunks,
+            ...(frame.params.delay === undefined
+              ? {}
+              : { delay: frame.params.delay }),
+            ...(frame.params.tool ? { tool: frame.params.tool } : {}),
+          };
           if (frame.params.gate === "held") {
-            const gate = fixture!.fake.queueHeld(script);
+            const gate = provider.queueHeld(script);
             gates.set(id, () => {
               gate.release();
               gates.delete(id);
             });
           } else if (frame.params.gate === "stepped") {
-            const gate = fixture!.fake.queueStepped(script);
+            const gate = provider.queueStepped(script);
             gates.set(id, () => gate.next());
-          } else fixture!.fake.queue(script);
+          } else provider.queue(script);
           return { gate: id };
         }
         case "releaseGate": {
@@ -277,6 +527,27 @@ try {
         case "observe":
           return {
             requests: fixture!.fake.requests,
+            transport: transport?.observe() ?? null,
+            bootstrap: bootstrap ?? null,
+            operation: operation ?? null,
+            cooling: cooling ?? null,
+            coolingResources: coolingResources(),
+            coolingSourceLoaded: cooling &&
+                lifecycle?.owner.get({
+                  sidecarId: "consumer",
+                  sessionID: cooling.a.id,
+                })?.state.content.messages.some((message) =>
+                  message.parts.some((part) =>
+                    part.kind === "text" &&
+                    part.blocks.some((block) =>
+                      block.b === "paragraph" && block.inline.some((inline) =>
+                        inline.i === "text" && inline.text.length >= 2097152
+                      )
+                    )
+                  )
+                ) || false,
+            frames: client!.frames,
+            entries: createdIDs.map((id) => client!.entry(id)),
             chunkTimeout: chunkTimeout ?? null,
             active: fixture!.fake.active,
             pending: fixture!.fake.pending,
@@ -287,20 +558,88 @@ try {
           };
         case "nativeRequest": {
           const params = frame.params;
+          if (params.project && profile === "ordinary") {
+            throw new Error("Multiple projects require isolated profile");
+          }
+          if (params.project === "secondary" && !secondaryDirectory) {
+            secondaryDirectory = join(lease!.directory, "second-project");
+            await Deno.mkdir(secondaryDirectory);
+            const git = await new Deno.Command("git", {
+              args: ["init", "-b", "master", secondaryDirectory],
+              stdout: "null",
+              stderr: "piped",
+              signal: AbortSignal.timeout(5000),
+            }).output();
+            if (!git.success) {
+              throw new Error(new TextDecoder().decode(git.stderr));
+            }
+            await seedProviderPackages(join(secondaryDirectory, ".opencode"));
+            await fixture!.oc.request("/experimental/tool/ids", {
+              directory: secondaryDirectory,
+            });
+            directories.push(secondaryDirectory);
+          }
           const options = {
             method: params.method,
             body: params.body,
-            directory: lease!.directory,
+            directory: params.project === "secondary"
+              ? secondaryDirectory!
+              : lease!.directory,
           };
-          return params.path === "/session" && params.method === "POST"
-            ? await fixture!.oc.session("/session", {
-              ...options,
-              method: "POST",
-            })
-            : await fixture!.oc.request(params.path, options);
+          if (params.path === "/session" && params.method === "POST") {
+            const session = await fixture!.oc.session<{ id: string }>(
+              "/session",
+              {
+                ...options,
+                method: "POST",
+              },
+            );
+            createdIDs.push(session.id);
+            return session;
+          }
+          return await fixture!.oc.request(params.path, options);
         }
         case "productRpc":
           return await client!.rpc(frame.params.method, frame.params.params);
+        case "auxiliary": {
+          if (profile === "ordinary") {
+            throw new Error("Auxiliary server requires isolated profile");
+          }
+          const kind = frame.params.kind;
+          let session: unknown;
+          if (kind === "remote-password") {
+            if (remote) throw new Error("Remote server already acquired");
+            const logs = Deno.env.get("OTK_TEST_LOG_ROOT");
+            const path = join(fixture!.oc.root, "remote-logs");
+            await Deno.mkdir(path);
+            Deno.env.set("OTK_TEST_LOG_ROOT", path);
+            try {
+              remote = await nativeFixture();
+            } finally {
+              if (logs) Deno.env.set("OTK_TEST_LOG_ROOT", logs);
+              else Deno.env.delete("OTK_TEST_LOG_ROOT");
+            }
+            remote.fake.strict();
+            session = await remote.oc.session("/session", {
+              method: "POST",
+              body: { title: "Second host" },
+            });
+          }
+          const owner = kind === "remote-password" ? remote! : fixture!;
+          const server = await owner.sidecar({
+            server: { origins: [fixture!.servers[0].url] },
+            auth: kind === "password" || kind === "remote-password"
+              ? {
+                type: "password",
+                username: "tester",
+                password: "secret",
+                secretkey: "01234567890123456789012345678901",
+              }
+              : { type: "" },
+          });
+          await recordOwnership();
+          return { url: server.url, session };
+        }
         case "writeProjectFiles":
           for (const [name, text] of Object.entries(frame.params.files)) {
             const target = resolve(lease!.directory, name);
@@ -331,7 +670,101 @@ try {
           if (profile === "ordinary") {
             throw new Error("Restart requires isolated profile");
           }
-          await fixture!.oc.restart();
+          if (frame.params.target === "native") await fixture!.oc.restart();
+          else {
+            const server = fixture!.servers.at(-1)!;
+            await client!.close();
+            await server.stop();
+            // The isolated restart journey proves missed terminal data, rather
+            // than relying on future chunks after a successful reconnection.
+            if (profile === "transport-restart") {
+              fixture!.fake.releaseAll();
+              gates.clear();
+              await waitFor(() => fixture!.fake.active, (count) => count === 0);
+              const sessions = await fixture!.oc.sessionList<
+                { id: string; nativeID: string }
+              >("/session", lease!.directory);
+              for (const session of sessions) {
+                await waitFor(
+                  () =>
+                    fixture!.oc.request<
+                      { info: { role: string; time: { completed?: number } } }[]
+                    >(`/session/${session.id}/message`, {
+                      directory: lease!.directory,
+                    }),
+                  (rows) =>
+                    rows.some((row) =>
+                      row.info.role === "assistant" &&
+                      row.info.time.completed !== undefined
+                    ),
+                );
+              }
+            }
+            const replacement = await fixture!.sidecar({
+              server: { port: server.port },
+              state: { path: join(fixture!.oc.root, `otk-${server.port}`) },
+            });
+            client = new WsClient(replacement.url);
+            await client.connect();
+            await recordOwnership();
+          }
+          return null;
+        case "scenario":
+          if (!transport) throw new Error("No native transport scenario");
+          if (
+            profile === "transport-cooling" && frame.params.action === "hold"
+          ) {
+            const id = `opcv1-${frame.params.sessionID}`;
+            if (![cooling!.a.id, cooling!.b.id].includes(id)) {
+              throw new Error("Foreign cooling session");
+            }
+            const target = { sidecarId: "consumer", sessionID: id };
+            lifecycle!.owner.setDemand({
+              scope: {
+                sidecarId: "consumer",
+                directory: cooling!.directory,
+                taskID: id,
+              },
+              sessions: [target],
+              selected: target,
+            });
+            return null;
+          }
+          if (
+            frame.params.action === "fail" &&
+            ["transport-errors-http", "transport-errors-late"].includes(profile)
+          ) {
+            if (operation) {
+              throw new Error("Diagnostic operation already started");
+            }
+            if (!frame.params.sessionID) {
+              throw new Error("Diagnostic session required");
+            }
+            const result = operation = { settled: false } as {
+              settled: boolean;
+              error?: string;
+            };
+            void client!.rpc("session.shell", {
+              sessionID: `opcv1-${frame.params.sessionID}`,
+              command: "echo never-forwarded",
+              ...(profile === "transport-errors-late"
+                ? { agent: "missing-late-http-agent" }
+                : {}),
+            }).then(() => {
+              result.settled = true;
+            }, (error) => {
+              result.settled = true;
+              result.error = String(error);
+            });
+            return null;
+          }
+          if (
+            !["hold", "release", "freeze", "thaw"].includes(frame.params.action)
+          ) throw new Error("Action outside native transport scenario");
+          transport.control(
+            frame.params.action as "hold" | "release" | "freeze" | "thaw",
+            frame.params.sessionID,
+          );
           return null;
         case "materializeSnapshot": {
           if (profile !== "isolated") {
@@ -443,6 +876,10 @@ try {
     } finally {
       Deno.removeSignalListener("SIGTERM", terminate);
       Deno.removeSignalListener("SIGINT", terminate);
+      transport?.release();
+      remote?.fake.releaseAll();
+      lifecycle?.stop();
+      await remote?.stop();
       fixture?.fake.releaseAll();
       await client?.close();
       await fixture?.stop();

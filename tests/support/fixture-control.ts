@@ -8,6 +8,23 @@ export type Profile =
   | "ordinary"
   | "isolated"
   | "provider-hold"
+  | "transport-page"
+  | "transport-shell"
+  | "transport-freeze"
+  | "transport-bootstrap"
+  | "transport-errors-http"
+  | "transport-errors-late"
+  | "transport-enrichment"
+  | "transport-cooling"
+  | "transport-restart"
+  | "contract-core"
+  | "contract-reconnect"
+  | "contract-initial-question"
+  | "contract-permission-feedback"
+  | "contract-question-feedback"
+  | "contract-task-pending"
+  | "contract-task-background"
+  | "contract-rpc"
   | "fail-start"
   | "fail-teardown";
 export interface Commands {
@@ -18,6 +35,9 @@ export interface Commands {
     lease: string;
     chunks: string[];
     gate?: "held" | "stepped";
+    delay?: number;
+    tool?: { name: string; input: Record<string, Json> };
+    target?: "remote";
   };
   releaseGate: { lease: string; gate: string };
   observe: { lease?: string };
@@ -27,10 +47,27 @@ export interface Commands {
     path: string;
     method?: "GET" | "POST" | "PATCH" | "DELETE";
     body?: Json;
+    project?: "secondary";
   };
   productRpc: { lease: string; method: string; params: Json };
+  auxiliary: {
+    lease: string;
+    kind: "password" | "setup" | "open-setup" | "remote-password";
+  };
   writeProjectFiles: { lease: string; files: Record<string, string> };
-  restart: { lease: string; target: "native" };
+  restart: { lease: string; target: "native" | "sidecar" };
+  scenario: {
+    lease: string;
+    action:
+      | "hold"
+      | "release"
+      | "freeze"
+      | "thaw"
+      | "fail"
+      | "succeed"
+      | "stop";
+    sessionID?: string;
+  };
   stop: Record<string, never>;
 }
 export type Command = keyof Commands;
@@ -87,14 +124,16 @@ export function request(value: unknown): ControlRequest {
     start: ["profile", "version"],
     beginTest: ["identity"],
     endTest: ["lease"],
-    queueScript: ["lease", "chunks", "gate"],
+    queueScript: ["lease", "chunks", "gate", "delay", "tool", "target"],
     releaseGate: ["lease", "gate"],
     observe: ["lease"],
     materializeSnapshot: ["lease", "key"],
-    nativeRequest: ["lease", "path", "method", "body"],
+    nativeRequest: ["lease", "path", "method", "body", "project"],
     productRpc: ["lease", "method", "params"],
+    auxiliary: ["lease", "kind"],
     writeProjectFiles: ["lease", "files"],
     restart: ["lease", "target"],
+    scenario: ["lease", "action", "sessionID"],
     stop: [],
   };
   if (
@@ -115,6 +154,23 @@ export function request(value: unknown): ControlRequest {
           "ordinary",
           "isolated",
           "provider-hold",
+          "transport-page",
+          "transport-shell",
+          "transport-freeze",
+          "transport-bootstrap",
+          "transport-errors-http",
+          "transport-errors-late",
+          "transport-enrichment",
+          "transport-cooling",
+          "transport-restart",
+          "contract-core",
+          "contract-reconnect",
+          "contract-initial-question",
+          "contract-permission-feedback",
+          "contract-question-feedback",
+          "contract-task-pending",
+          "contract-task-background",
+          "contract-rpc",
           "fail-start",
           "fail-teardown",
         ].includes(
@@ -131,6 +187,19 @@ export function request(value: unknown): ControlRequest {
       text(p.identity);
       break;
     case "queueScript":
+      if (p.target !== undefined && p.target !== "remote") {
+        throw new Error("Unknown provider target");
+      }
+      if (p.tool !== undefined) {
+        const tool = object(p.tool);
+        keys(tool, ["name", "input"]);
+        text(tool.name);
+        object(tool.input);
+      }
+      if (
+        p.delay !== undefined &&
+        (typeof p.delay !== "number" || p.delay < 0 || p.delay > 2000)
+      ) throw new Error("Invalid script cadence");
       if (
         !Array.isArray(p.chunks) ||
         !p.chunks.every((s) => typeof s === "string")
@@ -148,8 +217,14 @@ export function request(value: unknown): ControlRequest {
       text(p.key);
       break;
     case "nativeRequest":
+      if (p.project !== undefined && p.project !== "secondary") {
+        throw new Error("Unknown owned project");
+      }
       text(p.path);
-      if (!/^\/(session(?:\/[^?#]*)?|experimental\/tool\/ids)$/.test(p.path)) {
+      if (
+        !/^\/(session(?:\/[^?#]*)?|permission(?:\/[^?#]*)?|experimental\/tool\/ids)$/
+          .test(p.path)
+      ) {
         throw new Error("Native path outside fixture vocabulary");
       }
       if (
@@ -162,13 +237,34 @@ export function request(value: unknown): ControlRequest {
     case "productRpc":
       text(p.method);
       break;
+    case "auxiliary":
+      if (
+        !["password", "setup", "open-setup", "remote-password"].includes(
+          String(p.kind),
+        )
+      ) throw new Error("Unknown auxiliary composition");
+      break;
     case "writeProjectFiles":
       if (!Object.values(object(p.files)).every((s) => typeof s === "string")) {
         throw new Error("Invalid project files");
       }
       break;
     case "restart":
-      if (p.target !== "native") throw new Error("Unknown restart target");
+      if (p.target !== "native" && p.target !== "sidecar") {
+        throw new Error("Unknown restart target");
+      }
+      break;
+    case "scenario":
+      if (
+        !["hold", "release", "freeze", "thaw", "fail", "succeed", "stop"]
+          .includes(String(p.action))
+      ) throw new Error("Unknown scenario action");
+      if (p.sessionID !== undefined) {
+        text(p.sessionID);
+        if (!/^ses_[a-zA-Z0-9]+$/.test(p.sessionID)) {
+          throw new Error("Invalid native scenario session");
+        }
+      }
   }
   return frame as unknown as ControlRequest;
 }
