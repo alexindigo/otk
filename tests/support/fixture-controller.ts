@@ -61,6 +61,7 @@ try {
     const directories: string[] = [];
     const gates = new Map<string, () => void>();
     let stopped = false;
+    let chunkTimeout: number | undefined;
     const resetPrefs = async () => {
       for (const [key, value] of Object.entries(baseline)) {
         const from = client!.frames.length;
@@ -148,6 +149,20 @@ try {
           }
           profile = frame.params.profile;
           fixture = await bind(() => nativeFixture());
+          if (profile === "provider-hold") {
+            const path = join(fixture.oc.root, "config/opencode/opencode.json");
+            const input = JSON.parse(await Deno.readTextFile(path));
+            input.provider.fake.options.chunkTimeout = 2000;
+            await Deno.writeTextFile(path, JSON.stringify(input));
+            await fixture.oc.restart();
+            const config = await fixture.oc.request<
+              { provider: { fake: { options: { chunkTimeout: number } } } }
+            >("/config");
+            chunkTimeout = config.provider.fake.options.chunkTimeout;
+            if (chunkTimeout !== 2000) {
+              throw new Error("Native inactivity profile not applied");
+            }
+          }
           fixture.fake.strict();
           const record = Deno.env.get("OTK_TEST_CONTROLLER_RECORD");
           if (record) {
@@ -262,6 +277,7 @@ try {
         case "observe":
           return {
             requests: fixture!.fake.requests,
+            chunkTimeout: chunkTimeout ?? null,
             active: fixture!.fake.active,
             pending: fixture!.fake.pending,
             unexpected: fixture!.fake.unexpected,

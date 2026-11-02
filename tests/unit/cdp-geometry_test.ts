@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+// Driver-specific regression retained until the driver itself retires (T4).
 import { tempDir, test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
 import { Cdp } from "../support/cdp.ts";
@@ -12,8 +13,6 @@ test("CDP clicks wait for rendered hit geometry before sending one native gestur
     if (
       method === "Input.dispatchMouseEvent" && params.type === "mousePressed"
     ) {
-      // Let the already-scheduled layout commit before input is delivered. This
-      // controls ordering, not elapsed time, and never changes the click point.
       await browser.poll("globalThis.moved");
       presses++;
     }

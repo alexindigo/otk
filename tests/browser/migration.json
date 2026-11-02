@@ -554,6 +554,11 @@
               "runner": "legacy",
               "file": "tests/e2e/cdp_test.ts",
               "testID": "legacy.cdp.977eca023587a20d"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/harness/pointer.spec.ts",
+              "testID": "harness.pointer-stability"
             }
           ],
           "retainedCoverage": {
@@ -564,16 +569,19 @@
               "CDP clicks wait for rendered hit geometry before sending one native gesture"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "tests/unit/cdp-geometry_test.ts",
+            "testID": "CDP clicks wait for rendered hit geometry before sending one native gesture"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/cdp_test.ts",
-            "testID": "legacy.cdp.977eca023587a20d"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/harness/pointer.spec.ts",
+            "testID": "harness.pointer-stability"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c97da36c1dc4d404998f6e8370442a011a94e8ebddf6c3fd4e2213b3273999a6",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         }
       ]
@@ -593,6 +601,11 @@
               "runner": "legacy",
               "file": "tests/e2e/cdp-click_test.ts",
               "testID": "legacy.cdp-click.a3e0b806c2e80b5a"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/harness/pointer.spec.ts",
+              "testID": "harness.pointer-left-scroll"
             }
           ],
           "retainedCoverage": {
@@ -605,14 +618,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/cdp-click_test.ts",
-            "testID": "legacy.cdp-click.a3e0b806c2e80b5a"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/harness/pointer.spec.ts",
+            "testID": "harness.pointer-left-scroll"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "a1e557c0a4c99b1487208c4dd0c6fb1fa954a559aa28b450e2e88860ea6c0313",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         },
         {
@@ -624,6 +637,11 @@
               "runner": "legacy",
               "file": "tests/e2e/cdp-click_test.ts",
               "testID": "legacy.cdp-click.bea50dee69b603b5"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/harness/pointer.spec.ts",
+              "testID": "harness.pointer-right-scroll"
             }
           ],
           "retainedCoverage": {
@@ -636,14 +654,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/cdp-click_test.ts",
-            "testID": "legacy.cdp-click.bea50dee69b603b5"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/harness/pointer.spec.ts",
+            "testID": "harness.pointer-right-scroll"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "a1e557c0a4c99b1487208c4dd0c6fb1fa954a559aa28b450e2e88860ea6c0313",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         }
       ]
@@ -4904,6 +4922,11 @@
               "runner": "legacy",
               "file": "tests/e2e/measurement_test.ts",
               "testID": "legacy.measurement.71fb8a60a824a420"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/harness/measurement.spec.ts",
+              "testID": "harness.highlight-starvation"
             }
           ],
           "retainedCoverage": {
@@ -4916,14 +4939,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/measurement_test.ts",
-            "testID": "legacy.measurement.71fb8a60a824a420"
+            "runner": "playwright",
+            "file": "tests/browser/scale/harness/measurement.spec.ts",
+            "testID": "harness.highlight-starvation"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f267ae4e54f3ba1a9e9e5534701a046e4ea184e1cf6d2b791aac276e7fd0aa2a",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         },
         {
@@ -4935,6 +4958,11 @@
               "runner": "legacy",
               "file": "tests/e2e/measurement_test.ts",
               "testID": "legacy.measurement.01984f1039ce2f75"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/harness/measurement.spec.ts",
+              "testID": "harness.heap-identities"
             }
           ],
           "retainedCoverage": {
@@ -4947,14 +4975,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/measurement_test.ts",
-            "testID": "legacy.measurement.01984f1039ce2f75"
+            "runner": "playwright",
+            "file": "tests/browser/scale/harness/measurement.spec.ts",
+            "testID": "harness.heap-identities"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f267ae4e54f3ba1a9e9e5534701a046e4ea184e1cf6d2b791aac276e7fd0aa2a",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         },
         {
@@ -4966,6 +4994,11 @@
               "runner": "legacy",
               "file": "tests/e2e/measurement_test.ts",
               "testID": "legacy.measurement.0b25ef6b54e1ed3f"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/harness/measurement.spec.ts",
+              "testID": "harness.heap-closure-Map"
             }
           ],
           "retainedCoverage": {
@@ -4978,14 +5011,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/measurement_test.ts",
-            "testID": "legacy.measurement.0b25ef6b54e1ed3f"
+            "runner": "playwright",
+            "file": "tests/browser/scale/harness/measurement.spec.ts",
+            "testID": "harness.heap-closure-Map"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f267ae4e54f3ba1a9e9e5534701a046e4ea184e1cf6d2b791aac276e7fd0aa2a",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         },
         {
@@ -4997,6 +5030,11 @@
               "runner": "legacy",
               "file": "tests/e2e/measurement_test.ts",
               "testID": "legacy.measurement.29944a5f691d6d8e"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/harness/measurement.spec.ts",
+              "testID": "harness.heap-flat-tail"
             }
           ],
           "retainedCoverage": {
@@ -5009,14 +5047,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/measurement_test.ts",
-            "testID": "legacy.measurement.29944a5f691d6d8e"
+            "runner": "playwright",
+            "file": "tests/browser/scale/harness/measurement.spec.ts",
+            "testID": "harness.heap-flat-tail"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f267ae4e54f3ba1a9e9e5534701a046e4ea184e1cf6d2b791aac276e7fd0aa2a",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         },
         {
@@ -5028,6 +5066,11 @@
               "runner": "legacy",
               "file": "tests/e2e/measurement_test.ts",
               "testID": "legacy.measurement.3761066ab9ad1275"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/harness/measurement.spec.ts",
+              "testID": "harness.heap-sliced-backing"
             }
           ],
           "retainedCoverage": {
@@ -5040,14 +5083,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/measurement_test.ts",
-            "testID": "legacy.measurement.3761066ab9ad1275"
+            "runner": "playwright",
+            "file": "tests/browser/scale/harness/measurement.spec.ts",
+            "testID": "harness.heap-sliced-backing"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f267ae4e54f3ba1a9e9e5534701a046e4ea184e1cf6d2b791aac276e7fd0aa2a",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         },
         {
@@ -5059,6 +5102,11 @@
               "runner": "legacy",
               "file": "tests/e2e/measurement_test.ts",
               "testID": "legacy.measurement.65fda70f7aa05db8"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/harness/measurement.spec.ts",
+              "testID": "harness.heap-split-cons"
             }
           ],
           "retainedCoverage": {
@@ -5071,14 +5119,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/measurement_test.ts",
-            "testID": "legacy.measurement.65fda70f7aa05db8"
+            "runner": "playwright",
+            "file": "tests/browser/scale/harness/measurement.spec.ts",
+            "testID": "harness.heap-split-cons"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f267ae4e54f3ba1a9e9e5534701a046e4ea184e1cf6d2b791aac276e7fd0aa2a",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         },
         {
@@ -5090,6 +5138,11 @@
               "runner": "legacy",
               "file": "tests/e2e/measurement_test.ts",
               "testID": "legacy.measurement.04186b399a88f2a5"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/harness/measurement.spec.ts",
+              "testID": "harness.heap-detached-text"
             }
           ],
           "retainedCoverage": {
@@ -5102,14 +5155,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/measurement_test.ts",
-            "testID": "legacy.measurement.04186b399a88f2a5"
+            "runner": "playwright",
+            "file": "tests/browser/scale/harness/measurement.spec.ts",
+            "testID": "harness.heap-detached-text"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f267ae4e54f3ba1a9e9e5534701a046e4ea184e1cf6d2b791aac276e7fd0aa2a",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         },
         {
@@ -5121,6 +5174,11 @@
               "runner": "legacy",
               "file": "tests/e2e/measurement_test.ts",
               "testID": "legacy.measurement.2c228f54149b9fcd"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/harness/measurement.spec.ts",
+              "testID": "harness.heap-empty-transcript"
             }
           ],
           "retainedCoverage": {
@@ -5133,14 +5191,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/measurement_test.ts",
-            "testID": "legacy.measurement.2c228f54149b9fcd"
+            "runner": "playwright",
+            "file": "tests/browser/scale/harness/measurement.spec.ts",
+            "testID": "harness.heap-empty-transcript"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f267ae4e54f3ba1a9e9e5534701a046e4ea184e1cf6d2b791aac276e7fd0aa2a",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         },
         {
@@ -5152,6 +5210,11 @@
               "runner": "legacy",
               "file": "tests/e2e/measurement_test.ts",
               "testID": "legacy.measurement.0629a2ada7119a28"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/harness/menu.spec.ts",
+              "testID": "harness.menu-readiness"
             }
           ],
           "retainedCoverage": {
@@ -5164,14 +5227,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/measurement_test.ts",
-            "testID": "legacy.measurement.0629a2ada7119a28"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/harness/menu.spec.ts",
+            "testID": "harness.menu-readiness"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f267ae4e54f3ba1a9e9e5534701a046e4ea184e1cf6d2b791aac276e7fd0aa2a",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         }
       ]
@@ -5370,6 +5433,11 @@
               "runner": "legacy",
               "file": "tests/e2e/message-heap-probe_test.ts",
               "testID": "legacy.message-heap-probe.97d04c94ae4f418b"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/harness/worker-heap.spec.ts",
+              "testID": "harness.worker-source-retention"
             }
           ],
           "retainedCoverage": {
@@ -5382,14 +5450,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-heap-probe_test.ts",
-            "testID": "legacy.message-heap-probe.97d04c94ae4f418b"
+            "runner": "playwright",
+            "file": "tests/browser/scale/harness/worker-heap.spec.ts",
+            "testID": "harness.worker-source-retention"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "d4f18c0036db0f8bcf8878a42fa63a097600f06853e477f68ee97da3efcf78da",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         }
       ]
@@ -7764,6 +7832,11 @@
               "runner": "legacy",
               "file": "tests/e2e/provider-hold_test.ts",
               "testID": "legacy.provider-hold.5077e17441a857cd"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/harness/provider-hold.spec.ts",
+              "testID": "harness.provider-held-inactivity"
             }
           ],
           "retainedCoverage": {
@@ -7776,14 +7849,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/provider-hold_test.ts",
-            "testID": "legacy.provider-hold.5077e17441a857cd"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/harness/provider-hold.spec.ts",
+            "testID": "harness.provider-held-inactivity"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "eeb3b02bf6cd7a9b7f2804b4bb27525c9e83b71843f32d83a3d8523861981dd3",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         },
         {
@@ -7795,6 +7868,11 @@
               "runner": "legacy",
               "file": "tests/e2e/provider-hold_test.ts",
               "testID": "legacy.provider-hold.87e5050e9dd68d66"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/harness/provider-hold.spec.ts",
+              "testID": "harness.provider-stepped-inactivity"
             }
           ],
           "retainedCoverage": {
@@ -7807,14 +7885,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/provider-hold_test.ts",
-            "testID": "legacy.provider-hold.87e5050e9dd68d66"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/harness/provider-hold.spec.ts",
+            "testID": "harness.provider-stepped-inactivity"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "eeb3b02bf6cd7a9b7f2804b4bb27525c9e83b71843f32d83a3d8523861981dd3",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c6-20261101/pre2/batch-harness-4779b6f4-42be-441f-896f-957b5d0dcc92"
           }
         }
       ]

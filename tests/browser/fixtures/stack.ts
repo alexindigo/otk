@@ -4,7 +4,7 @@ import { Controller } from "./protocol.ts";
 
 export const test = base.extend<Record<never, never>, { stack: Controller }>({
   stack: [async ({ browserName: _browserName }, use, workerInfo) => {
-    const version = workerInfo.project.name.replace(/^oc-/, "");
+    const version = workerInfo.project.name.replace(/^(?:oc|scale)-/, "");
     const start = performance.now();
     const controller = await new Controller(
       `worker-${workerInfo.workerIndex}-${workerInfo.project.name}`,

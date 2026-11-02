@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert, assertEquals } from "@std/assert";
-import type { Cdp } from "./cdp.ts";
+import { deepStrictEqual as assertEquals, ok as assert } from "node:assert";
+import type { HeapPort } from "./heap-port.ts";
 
 interface Snapshot {
   snapshot: {
@@ -33,7 +33,7 @@ export interface SessionHeapMeasurement {
 /** Heap observations report unknown paths explicitly; they do not gate cooling.
  * The strict analyzer remains available to its synthetic calibration controls. */
 export async function measureSessionHeap(
-  browser: Cdp,
+  browser: HeapPort,
   sessionID: string,
   marker: string,
 ): Promise<SessionHeapMeasurement> {
@@ -56,7 +56,7 @@ interface DomNode {
 
 /** One fixed GC sample, covering content independently of its retaining owner. */
 export async function sessionHeap(
-  browser: Cdp,
+  browser: HeapPort,
   sessionID: string,
   marker: string,
   diagnostics?: string[],

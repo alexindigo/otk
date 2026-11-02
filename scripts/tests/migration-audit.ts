@@ -121,7 +121,9 @@ if (import.meta.main) {
   }
   const cases = await collectLegacy(active);
   for (const row of rows) {
-    rejectDependencies(await Deno.readTextFile(row.file), row.file);
+    if (active.includes(row.file)) {
+      rejectDependencies(await Deno.readTextFile(row.file), row.file);
+    }
     if (
       files.has(row.file) || !areas.has(row.area) || !row.proofBoundary ||
       !row.groups.length
@@ -136,7 +138,7 @@ if (import.meta.main) {
     if (JSON.stringify(expected) !== JSON.stringify(owned)) {
       throw new Error(`Unowned/double-owned assertion group: ${row.file}`);
     }
-    const hash = await sha256(row.file);
+    const hash = active.includes(row.file) ? await sha256(row.file) : undefined;
     for (const group of row.groups) {
       if (
         ids.has(group.id) || !group.id || !group.originalTitle ||
@@ -162,31 +164,67 @@ if (import.meta.main) {
           group.activeOwner.testID !== group.id ||
           group.verificationReceipt.sourceSha256 !== hash)
       ) throw new Error(`Legacy collection receipt is stale: ${group.id}`);
+      if (
+        group.activeOwner.runner === "playwright" &&
+        (group.verificationReceipt.kind !== "old-new-batch" ||
+          !/^[a-f0-9]{64}$/.test(group.verificationReceipt.sourceSha256))
+      ) {
+        throw new Error(`Missing old/new transfer receipt: ${group.id}`);
+      }
     }
   }
-  const collection = await new Deno.Command("node", {
-    args: [
-      "tests/browser/node_modules/@playwright/test/cli.js",
-      "test",
-      "--config",
-      "tests/browser/playwright.config.ts",
-      "--list",
-      "--reporter=json",
-      `--project=oc-${Deno.env.get("OTK_TEST_VERSION")}`,
-    ],
-    signal: AbortSignal.timeout(60_000),
-    stdout: "piped",
-    stderr: "inherit",
-  }).output();
-  if (!collection.success) throw new Error("Playwright collection failed");
-  const report = JSON.parse(new TextDecoder().decode(collection.stdout));
-  if (report.errors.length) throw new Error("Playwright collection errors");
   const specs: Spec[] = [];
   const visit = (suite: Suite) => {
     specs.push(...suite.specs ?? []);
     for (const child of suite.suites ?? []) visit(child);
   };
-  for (const suite of report.suites) visit(suite);
+  for (const scale of [false, true]) {
+    const collection = await new Deno.Command("node", {
+      args: [
+        "tests/browser/node_modules/@playwright/test/cli.js",
+        "test",
+        "--config",
+        `tests/browser/playwright${scale ? ".scale" : ""}.config.ts`,
+        "--list",
+        "--reporter=json",
+        `--project=${scale ? "scale" : "oc"}-${
+          Deno.env.get("OTK_TEST_VERSION")
+        }`,
+      ],
+      signal: AbortSignal.timeout(60_000),
+      stdout: "piped",
+      stderr: "inherit",
+    }).output();
+    if (!collection.success) throw new Error("Playwright collection failed");
+    const report = JSON.parse(new TextDecoder().decode(collection.stdout));
+    if (report.errors.length) throw new Error("Playwright collection errors");
+    for (const suite of report.suites) visit(suite);
+  }
+  for (const row of rows) {
+    for (const group of row.groups) {
+      for (
+        const owner of group.destinations.filter((owner) =>
+          owner.runner === "playwright"
+        )
+      ) {
+        const matches = specs.filter((spec) =>
+          `tests/browser/${spec.file}` === owner.file &&
+          spec.title === owner.testID
+        );
+        if (
+          matches.length !== 1 ||
+          !matches[0].tags.some((tag) => tag.replace(/^@/, "") === row.area)
+        ) {
+          throw new Error(
+            `Missing/ambiguous destination or area: ${group.id}: ${owner.testID}`,
+          );
+        }
+      }
+      if (group.lowerTierWitness) {
+        await Deno.stat(group.lowerTierWitness.file);
+      }
+    }
+  }
   const browserIDs = new Set<string>(), counts: Record<string, number> = {};
   for (const spec of specs) {
     rejectDependencies(
@@ -219,14 +257,29 @@ if (import.meta.main) {
       activeLegacyGroups: cases.length,
       playwright: specs.length,
       areas: counts,
-      collectedLegacy: rows.map((row) => ({
+      collectedLegacy: rows.filter((row) => active.includes(row.file)).map((
+        row,
+      ) => ({
         file: row.file,
         area: row.area,
-        groups: row.groups.map((group) => ({
+        groups: row.groups.filter((group) =>
+          group.activeOwner.runner === "legacy"
+        ).map((group) => ({
           id: group.id,
           title: group.originalTitle,
         })),
       })),
+      transferred: rows.flatMap((row) =>
+        row.groups.filter((group) => group.activeOwner.runner === "playwright")
+          .map((group) => ({
+            source: row.file,
+            area: row.area,
+            id: group.id,
+            owner: group.activeOwner,
+            witness: group.lowerTierWitness,
+            receipt: group.verificationReceipt,
+          }))
+      ),
       collectedPlaywright: specs.map(({ id, file, title, tags }) => ({
         id,
         file,

@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assert } from "@std/assert";
+import { ok as assert } from "node:assert";
 
 export interface HighlightSample {
   marker: string;

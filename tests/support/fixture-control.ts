@@ -4,7 +4,12 @@ export const FIXTURE_PROTOCOL = 1;
 export type Json = null | boolean | number | string | Json[] | {
   [key: string]: Json;
 };
-export type Profile = "ordinary" | "isolated" | "fail-start" | "fail-teardown";
+export type Profile =
+  | "ordinary"
+  | "isolated"
+  | "provider-hold"
+  | "fail-start"
+  | "fail-teardown";
 export interface Commands {
   start: { profile: Profile; version: string };
   beginTest: { identity: string };
@@ -106,7 +111,13 @@ export function request(value: unknown): ControlRequest {
   switch (command) {
     case "start":
       if (
-        !["ordinary", "isolated", "fail-start", "fail-teardown"].includes(
+        ![
+          "ordinary",
+          "isolated",
+          "provider-hold",
+          "fail-start",
+          "fail-teardown",
+        ].includes(
           String(p.profile),
         )
       ) {

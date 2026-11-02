@@ -13,7 +13,9 @@ export default defineConfig({
       "contracts/**/*.spec.ts",
       "harness/**/*.spec.ts",
     ],
-  testIgnore: process.env.OTK_TEST_FORCED ? [] : ["harness/failures/**"],
+  testIgnore: process.env.OTK_TEST_FORCED
+    ? []
+    : ["**/harness/failures/**", "**/scale/**"],
   outputDir: join(root, "browser"),
   fullyParallel: true,
   workers: 3,

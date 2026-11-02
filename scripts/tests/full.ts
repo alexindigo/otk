@@ -2,6 +2,7 @@
 import { join } from "@std/path";
 import { sourceTree } from "./source.ts";
 import { stripVTControlCharacters } from "node:util";
+import { migrationLedger } from "./migration-audit.ts";
 
 const flags = new Set<string>();
 for (let i = 0; i < Deno.args.length; i++) {
@@ -40,8 +41,26 @@ const tiers: [string, string[]][] = [
   ["legacy", ["task", "test:e2e:legacy"]],
   ["migration", ["task", "test:migration", "--audit"]],
 ];
-// T1's visual/scale browser assertions remain active in the legacy tier until
-// their ledger transfers. Never run a second copy of that coverage.
+// Admit transferred scale proofs as soon as their legacy owners retire.
+if (
+  (await migrationLedger()).some((row) =>
+    row.groups.some((group) =>
+      group.activeOwner.runner === "playwright" &&
+      group.activeOwner.file.includes("/scale/")
+    )
+  )
+) {
+  tiers.splice(tiers.findIndex(([id]) => id === "legacy"), 0, [
+    "browser-scale",
+    [
+      "task",
+      "test:scale",
+      `--project=scale-${version}`,
+      "--workers=1",
+      "--retries=1",
+    ],
+  ]);
+}
 const selected = value("--tiers")?.split(",");
 if (selected?.some((name) => !tiers.some(([id]) => id === name))) {
   throw new Error("Unknown tier selection");
@@ -56,7 +75,7 @@ if (Deno.args.includes("--dry-run")) {
         id,
         command: [Deno.execPath(), ...args],
       })),
-      legacyIncludes: ["themes", "browser-scale"],
+      legacyIncludes: ["remaining themes", "remaining browser-scale"],
       compiledUpgrade: "integration",
     },
     null,

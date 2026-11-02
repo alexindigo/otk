@@ -18,6 +18,7 @@
     "fixtures/**/*.ts",
     "behavior/**/*.ts",
     "contracts/**/*.ts",
+    "scale/**/*.ts",
     "harness/**/*.ts"
   ]
 }

@@ -20,6 +20,8 @@
     "build:web:watch": "deno run -A npm:vite@8.2.0 build --config web/vite.config.ts --watch",
     "test:prepare": "deno run -A scripts/tests/prepare.ts",
     "test:e2e": "deno run -A scripts/tests/browser.ts",
+    "test:scale": "deno run -A scripts/tests/browser.ts --scale",
+    "test:batch": "deno run -A scripts/tests/batch.ts",
     "test:migration": "deno run -A scripts/tests/migration-audit.ts",
     "test:full": "deno run -A scripts/tests/full.ts",
     "test:e2e:legacy": {

@@ -8,6 +8,7 @@
   },
   "scripts": {
     "test": "playwright test --config playwright.config.ts",
+    "scale": "playwright test --config playwright.scale.config.ts",
     "check": "tsc --noEmit",
     "acceptance:tooling": "playwright test --config playwright.tooling.config.ts --workers=1 --retries=0"
   },

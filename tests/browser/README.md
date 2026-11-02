@@ -51,7 +51,9 @@ assigned version guests; never run these workloads directly on a physical host.
 deno task test:prepare --version 1.18.34
 deno task test:e2e --project=oc-1.18.34 --grep @smoke --retries=0
 deno task test:e2e --project=oc-1.18.34 --grep @fixture-acceptance --workers=3 --retries=0
-deno task test:e2e:legacy tests/e2e/workspace_test.ts tests/e2e/cdp_test.ts
+deno task test:e2e:legacy tests/e2e/workspace_test.ts
+deno task test:batch --area harness --version 1.18.34
+deno task test:scale --project=scale-1.18.34 --grep @harness --workers=1 --retries=0
 ```
 
 Preparation hashes the complete delivered source selection (excluding private,
@@ -158,3 +160,22 @@ For wiring inspection use `--dry-run`; for a short real lane control use
 cannot be mistaken for full qualification. B/C select their own native versions
 in their assigned guests. All these commands run in the named guest workspace
 with its disk-backed TMPDIR, never on Ark or the laptop.
+
+## Assertion transfers
+
+`test:batch` derives the old collection, exact new file/title destinations and
+named lower-tier witnesses from the ledger. It checks actual first-attempt
+outcomes against those identities and retains per-source mappings, full logs,
+native/source identity and old/new timings in a fresh batch receipt. Before
+retirement it runs both owners on one tree. After retirement it reports the
+ledger's historical comparison receipt and runs fresh destination/witness
+proofs; absence of an old file is never treated as an old passing result.
+
+Fast locator/input/menu contracts run in the ordinary project; heap and passive
+sampling calibration run only in the explicit scale project, with one worker and
+the full heap-string launch argument. Both are collected by the audit, and the
+full lane includes the scale project as soon as any scale owner transfers.
+Runtime-neutral heap analysis is shared with the remaining legacy consumers;
+only diagnostic heap/GC/worker-target traffic uses Playwright CDPSession. The
+old driver's internal geometry/click-count regression stays in Deno's driver
+unit group until T4 retires that driver.

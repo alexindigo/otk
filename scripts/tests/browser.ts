@@ -3,11 +3,13 @@ import { join } from "@std/path";
 import { readBuild, sourceTree } from "./prepare.ts";
 
 const tree = await sourceTree();
+const scale = Deno.args.includes("--scale");
+const args = Deno.args.filter((arg) => arg !== "--scale");
 const receipt = await readBuild(tree);
 const project =
   Deno.args.find((arg) => arg.startsWith("--project="))?.slice(10) ??
     Deno.args[Deno.args.indexOf("--project") + 1];
-if (project !== `oc-${receipt.native.version}`) {
+if (project !== `${scale ? "scale" : "oc"}-${receipt.native.version}`) {
   throw new Error(
     "Explicit project must match this guest's prepared native version",
   );
@@ -21,7 +23,9 @@ const guest = Deno.env.get("OTK_TEST_GUEST") ??
 const shard =
   (Deno.args.find((arg) => arg.startsWith("--shard="))?.slice(8) ?? "all")
     .replaceAll("/", "-");
-const run = `otk-${guest}-oc-${receipt.native.version}-${shard}-${
+const run = `otk-${guest}-${
+  scale ? "scale" : "oc"
+}-${receipt.native.version}-${shard}-${
   new Date().toISOString().replace(/[^0-9]/g, "")
 }-${crypto.randomUUID()}`;
 const root = join(Deno.cwd(), ".test-state/runs", run);
@@ -44,7 +48,14 @@ const errors: unknown[] = [];
 const cleanupProof: unknown[] = [];
 try {
   const status = await new Deno.Command("npm", {
-    args: ["--prefix", "tests/browser", "run", "test", "--", ...Deno.args],
+    args: [
+      "--prefix",
+      "tests/browser",
+      "run",
+      scale ? "scale" : "test",
+      "--",
+      ...args,
+    ],
     env,
     stdout: "inherit",
     stderr: "inherit",
