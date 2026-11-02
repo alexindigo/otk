@@ -38,7 +38,10 @@ const env = {
   OTK_TEST_RUN_ROOT: root,
   OTK_TEST_UNIT_INVENTORY: inventory,
   OTK_TEST_DENO_VERSION: Deno.version.deno,
-  OTK_TEST_PORTS_ROOT: join(root, "ports"),
+  // Nested acceptance invocations belong to the same allocator lifetime. A new
+  // evidence/run root must not let them lease an in-flight parent's port again.
+  OTK_TEST_PORTS_ROOT: Deno.env.get("OTK_TEST_PORTS_ROOT") ??
+    join(root, "ports"),
   OTK_TEST_GUEST: guest,
   OTK_TEST_NATIVE_SHA256: receipt.native.sha256,
 };

@@ -9,6 +9,7 @@ import { nativeVersion, seedProviderPackages } from "./provider-cache.ts";
 import { nativeBinary } from "./native.ts";
 import { opencodeV1SessionID } from "@otk/harness-opencode-v1";
 import { isSessionID } from "@otk/protocol";
+class NativePortCollision extends Error {}
 function sessionFixture<T extends { id: string }>(
   raw: T,
 ): T & { nativeID: string } {
@@ -286,6 +287,22 @@ export class OpencodeTest {
     await this.#start();
   }
   async #start(): Promise<void> {
+    for (let attempt = 0;; attempt++) {
+      try {
+        await this.#generation();
+        return;
+      } catch (error) {
+        if (!(error instanceof NativePortCollision) || attempt >= 2) {
+          throw error;
+        }
+        this.#record(new TextEncoder().encode(
+          `Native pre-admission port collision; retired generation and reallocating ${this.nativePort}\n`,
+        ));
+        this.nativePort = freePort();
+      }
+    }
+  }
+  async #generation(): Promise<void> {
     const ready = Promise.withResolvers<void>();
     const endpoint = new FreezeProxy(this.nativePort, {
       port: this.port,
@@ -312,6 +329,7 @@ export class OpencodeTest {
       }
     });
     const announced = Promise.withResolvers<void>();
+    let nativeAnnounced = false;
     let output = "";
     this.process.stdout!.on("data", (chunk) => {
       this.#record(chunk);
@@ -321,6 +339,7 @@ export class OpencodeTest {
           `opencode server listening on ${this.nativeURL}`,
         )
       ) {
+        nativeAnnounced = true;
         announced.resolve();
       }
     });
@@ -339,7 +358,63 @@ export class OpencodeTest {
       await this.#ready();
       ready.resolve();
     } catch (error) {
-      await this.stop();
+      let collision = false;
+      const errors: unknown[] = [error];
+      try {
+        // Never probe an unrelated server with HTTP or accept it as our native.
+        // Only a failed process before its own announcement can be reallocated.
+        if (!nativeAnnounced && this.process.exitCode !== null) {
+          try {
+            const probe = Deno.listen({
+              hostname: "127.0.0.1",
+              port: this.nativePort,
+            });
+            probe.close();
+          } catch (bind) {
+            if (!(bind instanceof Deno.errors.AddrInUse)) throw bind;
+            collision = true;
+          }
+        }
+        const listeners = await new Deno.Command("ss", {
+          args: ["-ltnp"],
+          signal: AbortSignal.timeout(5000),
+        }).output();
+        await Deno.writeTextFile(
+          this.#logPath + `.startup-${crypto.randomUUID()}.json`,
+          JSON.stringify(
+            {
+              time: Date.now(),
+              nativePort: this.nativePort,
+              port: this.port,
+              pid: this.process.pid,
+              nativeAnnounced,
+              collision,
+              error: String(error),
+              listenersExit: listeners.code,
+              listeners: new TextDecoder().decode(listeners.stdout),
+              listenersError: new TextDecoder().decode(listeners.stderr),
+            },
+            null,
+            2,
+          ),
+        );
+      } catch (capture) {
+        errors.push(capture);
+      } finally {
+        await this.stop();
+      }
+      if (errors.length > 1) {
+        throw new AggregateError(
+          errors,
+          "Native startup and evidence capture failed",
+        );
+      }
+      if (collision) {
+        throw new NativePortCollision(
+          `Native port ${this.nativePort} occupied before admission\n${this.log}`,
+          { cause: error },
+        );
+      }
       throw new Error(`${error}\n${this.log}`, { cause: error });
     }
   }
