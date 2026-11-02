@@ -248,7 +248,12 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
         .length,
       baselineCount,
     );
-    fake.queue({ chunks: ["Compiled beta2 consumer outcome"] });
+    // A digest counts headers, not completed replies. Force the count to arrive
+    // before any output so this contract cannot depend on provider timing.
+    const reply = fake.queueStepped({
+      chunks: ["Compiled beta2 consumer outcome"],
+    });
+    first.client.send({ t: "subscribe", sessionID: session.id });
     await first.client.rpc(
       "session.prompt",
       {
@@ -261,10 +266,40 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
       () => first.client.entry(session.id)?.digest.messageCount,
       (count) => (count ?? 0) >= 2,
     );
+    const pending = await first.client.rpc<MessagePage>("session.messages", {
+      sessionID: session.id,
+    });
+    const assistant = pending.items.find((message) =>
+      message.role === "assistant"
+    );
+    assert(assistant?.role === "assistant");
+    assert(pending.prompt);
+    assertEquals(assistant.replyTo, pending.prompt.id);
+    assertEquals(assistant.time.completed, undefined);
+    assertEquals(
+      JSON.stringify(pending).includes("Compiled beta2 consumer outcome"),
+      false,
+    );
+    // Prompt submission and the header count are not reply completion. Observe
+    // this reply's terminal content event, then read its authoritative page once.
+    reply.next();
+    await first.client.wait((frame) =>
+      frame.t === "content" && frame.sessionID === session.id &&
+      frame.event.op === "message.upsert" &&
+      frame.event.message.id === assistant.id &&
+      frame.event.message.role === "assistant" &&
+      frame.event.message.time.completed !== undefined
+    );
     const page = await first.client.rpc<MessagePage>("session.messages", {
       sessionID: session.id,
     });
     assert(JSON.stringify(page).includes("Compiled beta2 consumer outcome"));
+    const completed = page.items.find((message) => message.id === assistant.id);
+    assert(completed?.role === "assistant");
+    assert(completed.time.completed !== undefined);
+    assert(
+      JSON.stringify(completed).includes("Compiled beta2 consumer outcome"),
+    );
     assertEquals(await Deno.readTextFile(authPath), authText);
     assertEquals(await Deno.readTextFile(overlay), operatorText);
     for (const name of ["otk.db", "otk.db-wal", "digest.db", "digest.db-wal"]) {
