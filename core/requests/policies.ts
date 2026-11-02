@@ -90,7 +90,10 @@ export async function nativeEffect<R>(
   receipt: MetadataReceipt<R>,
 ): Promise<R> {
   await ctx.execution?.beforeEffect();
-  const result = await run(ctx.execution);
+  // Native invocation includes directory/attachment preparation and final reads,
+  // not only the HTTP exchange that an adapter may also explicitly yield.
+  const pending = run(ctx.execution);
+  const result = await (ctx.execution?.wait?.(pending) ?? pending);
   await ctx.execution?.checkpoint(receipt.kind, receipt.encode(result));
   return result;
 }
@@ -124,6 +127,25 @@ export function localResultExecution<P, T, R>(
         state: "complete",
         result: result(receipt.restore(record)),
       }),
+  };
+}
+
+/** Authoritative native validation precedes an atomic metadata-only effect. */
+export function preparedLocalExecution<P, R>(
+  scope: Scope<P>,
+  receipt: MetadataReceipt<R>,
+): RpcExecutionPolicy<P, R> {
+  return { ...localExecution(scope, receipt), kind: "prepared-local" };
+}
+
+export function preparedLocalResultExecution<P, T, R>(
+  scope: Scope<P>,
+  receipt: MetadataReceipt<T>,
+  result: (value: T) => R,
+): RpcExecutionPolicy<P, R> {
+  return {
+    ...localResultExecution(scope, receipt, result),
+    kind: "prepared-local",
   };
 }
 

@@ -90,7 +90,7 @@ export class RpcRegistry {
           scope: definition.execution?.scope(params) ?? {},
           run: async (execution, request) => {
             const owner = crypto.randomUUID();
-            let finished = false, active = false;
+            let finished = false, active = false, waiting = 0;
             const observe = (next: boolean) => {
               if (finished || active === next) return;
               active = next;
@@ -107,11 +107,16 @@ export class RpcRegistry {
                   execution.progress(value);
                 },
                 wait: async <T>(ready: Promise<T>): Promise<T> => {
+                  waiting++;
                   observe(false);
                   try {
-                    return await ready;
+                    return await (execution.wait?.(ready) ?? ready);
                   } finally {
-                    observe(true);
+                    if (--waiting === 0 && !execution.signal.aborted) {
+                      observe(
+                        true,
+                      );
+                    }
                   }
                 },
               }
@@ -122,6 +127,11 @@ export class RpcRegistry {
                 request,
                 execution: scoped,
                 sessionDirectories: (ids, signal) => {
+                  if (ids.length && definition.execution?.kind === "local") {
+                    throw new Error(
+                      "Local execution cannot resolve native identities",
+                    );
+                  }
                   const ready = this.#directories(
                     ids,
                     signal ?? scoped?.signal,
@@ -129,6 +139,11 @@ export class RpcRegistry {
                   return scoped?.wait?.(ready) ?? ready;
                 },
                 sessionDirectory: async (id) => {
+                  if (definition.execution?.kind === "local") {
+                    throw new Error(
+                      "Local execution cannot resolve native identities",
+                    );
+                  }
                   const ready = this.#directories([id], scoped?.signal);
                   return (await (scoped?.wait?.(ready) ?? ready))[id];
                 },

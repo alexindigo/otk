@@ -106,20 +106,22 @@ async function composition() {
 test("metadata feature registrations declare local atomic recovery and volatile read policies", async () => {
   const f = await composition();
   const local = [
-    "tasks.create",
     "tasks.rename",
     "tasks.reorder",
     "tasks.close",
-    "tasks.addSession",
     "tasks.removeSession",
-    "tasks.sessions",
     "projects.inactive",
     "projects.visit",
     "projects.templates",
-    "sessions.seen",
     "prefs.set",
     "layout.patch",
     "layout.location",
+  ];
+  const prepared = [
+    "tasks.create",
+    "tasks.addSession",
+    "tasks.sessions",
+    "sessions.seen",
     "frecency.bump",
   ];
   const reads = [
@@ -135,13 +137,26 @@ test("metadata feature registrations declare local atomic recovery and volatile 
     for (const method of local) {
       assertEquals(f.registry.policy(method)?.kind, "local", method);
     }
+    for (const method of prepared) {
+      assertEquals(f.registry.policy(method)?.kind, "prepared-local", method);
+    }
+    for (
+      const method of [
+        "tasks.addSession",
+        "tasks.removeSession",
+        "tasks.sessions",
+      ]
+    ) {
+      assertEquals(f.registry.policy(method)?.ordering, "target", method);
+    }
+    assertEquals(f.registry.policy("tasks.close")?.ordering, undefined);
     for (const method of reads) {
       const policy = f.registry.policy(method);
       assertEquals(policy?.kind, "read", method);
       assertEquals(policy?.receipt({}), undefined, method);
     }
     assertEquals(
-      new Set([...local, ...reads, "projects.add"]),
+      new Set([...local, ...prepared, ...reads, "projects.add"]),
       new Set(f.registry.methods()),
     );
   } finally {
@@ -281,13 +296,20 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       counts[policy.kind] = (counts[policy.kind] ?? 0) + 1;
       assertEquals(
         descriptions.get(method)?.kind,
-        policy.kind === "local" || policy.kind === "native"
+        policy.kind === "local" || policy.kind === "prepared-local" ||
+          policy.kind === "native"
           ? "mutation"
           : policy.kind,
         method,
       );
     }
-    assertEquals(counts, { read: 22, native: 15, local: 16, lease: 2 });
+    assertEquals(counts, {
+      read: 22,
+      native: 15,
+      local: 10,
+      "prepared-local": 6,
+      lease: 2,
+    });
   } finally {
     approvals.close();
     f.inbox.close();

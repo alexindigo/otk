@@ -143,7 +143,7 @@ export interface OperationContext {
   progress(value: RequestProgress): void;
   beforeEffect(): Promise<void>;
   checkpoint(kind: string, receipt: ReceiptData): Promise<void>;
-  /** Yield interactive scheduling pressure while readiness/I/O is outstanding. */
+  /** Yield execution/interactive pressure, then re-queue when readiness/I/O settles. */
   wait?<T>(readiness: Promise<T>): Promise<T>;
 }
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

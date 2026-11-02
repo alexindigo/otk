@@ -16,7 +16,10 @@ export type RequestRecovery<R> =
   | { state: "reload" };
 export interface RpcExecutionPolicy<P, R> {
   priority?: "ordinary" | "interrupt";
-  kind: "read" | "local" | "native" | "lease";
+  // Native-validated metadata still commits locally, but is not offline-local.
+  kind: "read" | "local" | "prepared-local" | "native" | "lease";
+  /** Feature-owned semantic ordering through readiness; independent intents omit it. */
+  ordering?: "target";
   /** A settled watch can retain an explicitly releasable operation lifetime. */
   lifetime?: "request";
   scope(

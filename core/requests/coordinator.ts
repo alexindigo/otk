@@ -50,6 +50,8 @@ interface Entry {
   result?: { value: unknown; bytes: number };
   work?: Promise<void>;
   timer?: ReturnType<typeof setTimeout>;
+  turn?: { ready: Promise<void>; release(): void };
+  waiting: number;
 }
 export interface CoordinatorOptions {
   registry: RpcRegistry;
@@ -80,6 +82,8 @@ export class RequestCoordinator {
     Map<RequestRecipient, { lifetime: RequestLifetime; close(): void }>
   >();
   #queues = new Map<string, Promise<void>>();
+  // Semantic effect ordering is distinct from the yielded executing turn.
+  #effects = new Map<string, Promise<void>>();
   #run = crypto.randomUUID();
   #started = false;
   #stopped = false;
@@ -150,6 +154,7 @@ export class RequestCoordinator {
         controller: new AbortController(),
         recipients: new Map(),
         bytes: 0,
+        waiting: 0,
       };
       this.#entries.set(id, entry);
     }
@@ -389,7 +394,9 @@ export class RequestCoordinator {
         window_id: ref.window,
         method: control.method,
         fingerprint,
-        execution: prepared.execution.kind,
+        execution: prepared.execution.kind === "prepared-local"
+          ? "local"
+          : prepared.execution.kind,
         state: "queued",
         seq: 1,
         accepted_at: now,
@@ -442,7 +449,28 @@ export class RequestCoordinator {
       });
     }
   }
-  #execution(entry: Entry): RequestExecution {
+  async #acquire(entry: Entry, queue?: string): Promise<void> {
+    if (queue && !entry.turn) {
+      const predecessor = this.#queues.get(queue);
+      const released = Promise.withResolvers<void>();
+      const ready = Promise.resolve(predecessor);
+      const tail = ready.then(() => released.promise);
+      this.#queues.set(queue, tail);
+      entry.turn = {
+        ready,
+        release: () => {
+          released.resolve();
+          if (this.#queues.get(queue) === tail) this.#queues.delete(queue);
+        },
+      };
+    }
+    await entry.turn?.ready;
+  }
+  #yield(entry: Entry): void {
+    entry.turn?.release();
+    entry.turn = undefined;
+  }
+  #execution(entry: Entry, queue?: string): RequestExecution {
     return {
       key: {
         clientID: entry.ref.clientID,
@@ -451,6 +479,29 @@ export class RequestCoordinator {
       },
       signal: entry.controller.signal,
       progress: (value) => this.#progress(entry, value),
+      wait: async <T>(ready: Promise<T>): Promise<T> => {
+        if (entry.waiting++ === 0) {
+          this.#yield(entry);
+          this.#progress(entry, {
+            phase: "waiting",
+            // Yielding I/O is not evidence that the backend is unavailable.
+            // Keep action-specific pending copy until actual liveness evidence.
+            code: "working",
+          });
+        }
+        try {
+          return await ready;
+        } finally {
+          if (
+            --entry.waiting === 0 && !this.#stopped &&
+            !entry.controller.signal.aborted
+          ) {
+            await this.#acquire(entry, queue);
+            entry.controller.signal.throwIfAborted();
+            this.#progress(entry, { phase: "running", code: "working" });
+          }
+        }
+      },
       beforeEffect: () => {
         entry.controller.signal.throwIfAborted();
         if (entry.record.dispatched_at === null) {
@@ -478,6 +529,7 @@ export class RequestCoordinator {
       local: (run, encode) => {
         if (
           entry.policy.kind !== "local" &&
+          entry.policy.kind !== "prepared-local" &&
           !(entry.policy.kind === "native" &&
             entry.record.dispatched_at !== null &&
             entry.record.receipt_json !== null)
@@ -526,20 +578,49 @@ export class RequestCoordinator {
   #schedule(entry: Entry, recover: boolean): void {
     if (entry.work || this.#stopped) return;
     const scope = entry.record.scope_session;
-    // Serialize effects, not observations: a held native exchange must remain
-    // observable, and a held read must not prevent its session's next action.
+    // Read/lease lifetimes never acquire an effect turn. A readiness wait yields
+    // that turn, while native effects retain their independent I/O ordering.
     const queue = scope &&
-        (entry.policy.kind === "local" || entry.policy.kind === "native")
+        (entry.policy.kind === "local" ||
+          entry.policy.kind === "prepared-local" ||
+          entry.policy.kind === "native") &&
+        entry.policy.priority !== "interrupt"
       ? JSON.stringify([entry.record.principal, scope])
       : undefined;
-    const predecessor = queue && entry.policy.priority !== "interrupt"
-      ? this.#queues.get(queue)
+    const metadata = entry.policy.kind === "local" ||
+      entry.policy.kind === "prepared-local";
+    const target = entry.record.scope_resource
+      ? ["resource", entry.record.scope_resource]
+      : scope
+      ? ["session", scope, entry.record.method]
+      : entry.record.scope_directory
+      ? ["directory", entry.record.scope_directory, entry.record.method]
       : undefined;
+    const order = entry.policy.priority === "interrupt"
+      ? undefined
+      : entry.policy.kind === "native" && scope
+      ? JSON.stringify([entry.record.principal, "native", scope])
+      : metadata && entry.policy.ordering === "target" && target
+      ? JSON.stringify([entry.record.principal, "metadata", target])
+      : undefined;
+    const predecessor = order ? this.#effects.get(order) : undefined;
+    // Reserve ready work in admission order, but never reserve a turn while
+    // waiting for another effect's semantic ordering permission.
+    const admitted = predecessor ? undefined : this.#acquire(entry, queue);
     const work = new Promise<void>((resolve) => setTimeout(resolve, 0)).then(
       async () => {
         await predecessor;
-        if (this.#stopped || entry.controller.signal.aborted) return;
-        const execution = this.#execution(entry);
+        if (this.#stopped || entry.controller.signal.aborted) {
+          await admitted;
+          this.#yield(entry);
+          return;
+        }
+        await (admitted ?? this.#acquire(entry, queue));
+        if (this.#stopped || entry.controller.signal.aborted) {
+          this.#yield(entry);
+          return;
+        }
+        const execution = this.#execution(entry, queue);
         entry.timer = setTimeout(() => {
           if (this.#refresh(entry)) return;
           if (!terminal(entry.record)) {
@@ -555,11 +636,11 @@ export class RequestCoordinator {
         }, this.options.policy.livenessms);
         try {
           if (recover) {
-            const recovered = await entry.policy.recover(
+            const recovered = await execution.wait!(entry.policy.recover(
               this.options.registry.context,
               entry.record,
               execution,
-            );
+            ));
             if (recovered.state === "pending") {
               this.#progress(entry, recovered.progress);
               return;
@@ -596,7 +677,9 @@ export class RequestCoordinator {
           );
           if (this.#stopped || entry.record.state === "released") return;
           if (
-            entry.policy.kind === "local" && entry.record.state !== "succeeded"
+            (entry.policy.kind === "local" ||
+              entry.policy.kind === "prepared-local") &&
+            entry.record.state !== "succeeded"
           ) throw new Error("Local handler omitted atomic completion");
           this.#complete(entry, result);
         } catch (cause) {
@@ -640,6 +723,7 @@ export class RequestCoordinator {
             });
           }
         } finally {
+          this.#yield(entry);
           clearTimeout(entry.timer);
           entry.timer = undefined;
           if (terminal(entry.record) || entry.record.dispatched_at !== null) {
@@ -651,13 +735,15 @@ export class RequestCoordinator {
     );
     entry.work = work;
     this.#jobs.add(work);
-    if (queue && entry.policy.priority !== "interrupt") {
-      this.#queues.set(queue, work);
+    if (order) {
+      this.#effects.set(order, work);
     }
     const finish = () => {
       this.#jobs.delete(work);
       entry.work = undefined;
-      if (queue && this.#queues.get(queue) === work) this.#queues.delete(queue);
+      if (order && this.#effects.get(order) === work) {
+        this.#effects.delete(order);
+      }
       this.#retire(entry);
     };
     void work.then(finish, finish);

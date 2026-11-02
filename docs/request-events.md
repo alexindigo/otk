@@ -21,6 +21,29 @@ Releasing one read subscriber does not cancel another subscriber; releasing the
 last read subscriber releases its demand. Detaching a mutation's presentation or
 socket does not undo its effect.
 
+Same-session ready effects execute in admission order. Waiting for readiness or
+I/O yields the executing turn; its ready continuation re-queues behind already
+ready work. A native-dependent metadata validation cannot hold up an independent
+local write such as disabling auto-approve. Native effects keep a separate
+same-session ordering permission through HTTP settlement, so a later ordinary
+native effect cannot overtake an earlier one. Features explicitly declare
+`ordering: "target"` when conflicting metadata needs its own lifetime permission
+(the feature's resource, or its method/session target), so an older pending
+enable cannot overwrite a later disable and membership intents for the same task
+retain their order. A resource identity alone does not imply serialization:
+closing a task remains independent of held membership validation, which must
+revalidate ownership before writing. Independent metadata does not borrow either
+permission. Interrupts retain their explicit priority bypass. Neither yielding
+nor re-queuing resends a handler or weakens its intent duplicate fence, atomic
+metadata receipt, dispatch fence or cancellation cleanup.
+
+Registrations distinguish strictly local metadata from `prepared-local` metadata
+that needs authoritative native validation. Both persist local atomic
+completion; only the latter may resolve native identities. Task membership,
+seen, frecency and enable-only approval validation declare that preparation
+explicitly. Policy disable itself performs no native read and remains available
+offline.
+
 `request.received` releases volatile delivery data, not the durable duplicate
 fence. Read bodies larger than the aggregate replay budget are delivered in full
 and then reacquired through the authoritative reader when needed. The consumer

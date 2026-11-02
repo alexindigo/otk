@@ -18,9 +18,9 @@ import type { FrameSource } from "../ws/connections.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID } from "../ws/params.ts";
 import {
-  localExecution,
   localWrite,
   metadataReceipt,
+  preparedLocalExecution,
   readExecution,
 } from "../requests/policies.ts";
 import { object } from "../ws/params.ts";
@@ -364,10 +364,13 @@ export class PermissionFeature implements FrameSource {
   }
   register(rpc: RpcRegistry): void {
     rpc.register("permission.auto", {
-      execution: localExecution(
-        (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
-        policyReceipt,
-      ),
+      execution: {
+        ...preparedLocalExecution(
+          (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
+          policyReceipt,
+        ),
+        ordering: "target",
+      },
       params(p) {
         if (typeof p.enabled !== "boolean") {
           throw new HarnessError("params", "Expected enabled boolean");

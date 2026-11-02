@@ -71,7 +71,7 @@ test("auto-approve commits its receipt before automatic work, and activity is a 
     lease: { id: "socket", signal: new AbortController().signal, defer() {} },
   };
   try {
-    assertEquals(registry.policy("permission.auto")?.kind, "local");
+    assertEquals(registry.policy("permission.auto")?.kind, "prepared-local");
     assertEquals(registry.policy("permission.activity")?.kind, "read");
     await coordinator.accept("local", {
       t: "request",

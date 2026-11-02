@@ -30,6 +30,7 @@ import {
   localWrite,
   nativeEffect,
   nativeExecution,
+  preparedLocalExecution,
   readExecution,
 } from "../requests/policies.ts";
 import {
@@ -584,7 +585,7 @@ export class InboxFeature implements FrameSource {
       handler: (_ctx, directory) => s.tasks.list(directory),
     });
     rpc.register("tasks.create", {
-      execution: localExecution(
+      execution: preparedLocalExecution(
         (p: { directory: string }) => ({ directory: p.directory }),
         taskReceipt,
       ),
@@ -655,13 +656,16 @@ export class InboxFeature implements FrameSource {
       sessionID: sessionID(p)!,
     });
     rpc.register("tasks.addSession", {
-      execution: localExecution(
-        (p: { sessionID: string; id: string }) => ({
-          sessionID: p.sessionID,
-          resource: p.id,
-        }),
-        taskReceipt,
-      ),
+      execution: {
+        ...preparedLocalExecution(
+          (p: { sessionID: string; id: string }) => ({
+            sessionID: p.sessionID,
+            resource: p.id,
+          }),
+          taskReceipt,
+        ),
+        ordering: "target",
+      },
       params: member,
       async handler(ctx, p) {
         const directory = s.tasks.get(p.id).directory;
@@ -680,13 +684,16 @@ export class InboxFeature implements FrameSource {
       },
     });
     rpc.register("tasks.removeSession", {
-      execution: localExecution(
-        (p: { sessionID: string; id: string }) => ({
-          sessionID: p.sessionID,
-          resource: p.id,
-        }),
-        taskReceipt,
-      ),
+      execution: {
+        ...localExecution(
+          (p: { sessionID: string; id: string }) => ({
+            sessionID: p.sessionID,
+            resource: p.id,
+          }),
+          taskReceipt,
+        ),
+        ordering: "target",
+      },
       params: member,
       handler: (ctx, p) =>
         localWrite(
@@ -696,10 +703,13 @@ export class InboxFeature implements FrameSource {
         ),
     });
     rpc.register("tasks.sessions", {
-      execution: localExecution(
-        (p: { id: string }) => ({ resource: p.id }),
-        taskReceipt,
-      ),
+      execution: {
+        ...preparedLocalExecution(
+          (p: { id: string }) => ({ resource: p.id }),
+          taskReceipt,
+        ),
+        ordering: "target",
+      },
       params: (p) => ({ id: text(p, "id")!, sessions: sessions(p) }),
       async handler(ctx, p) {
         const directory = s.tasks.get(p.id).directory;
@@ -721,7 +731,7 @@ export class InboxFeature implements FrameSource {
       },
     });
     rpc.register("sessions.seen", {
-      execution: localExecution(
+      execution: preparedLocalExecution(
         (id: string) => ({ sessionID: id }),
         seenReceipt,
       ),

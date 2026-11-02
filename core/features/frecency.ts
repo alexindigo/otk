@@ -8,9 +8,9 @@ import { MAX_NATIVE_PATH, projectPath } from "./project-scan.ts";
 import type { FrameSource } from "../ws/connections.ts";
 import type { ServerFrame } from "@otk/protocol";
 import {
-  localResultExecution,
   localWrite,
   metadataReceipt,
+  preparedLocalResultExecution,
   readExecution,
 } from "../requests/policies.ts";
 
@@ -60,7 +60,7 @@ export function register(
     },
   });
   rpc.register("frecency.bump", {
-    execution: localResultExecution(
+    execution: preparedLocalResultExecution(
       (p: { sessionID: string }) => ({ sessionID: p.sessionID }),
       bumpReceipt,
       () => null,

@@ -54,28 +54,44 @@ later macrotask executes it. Principal, tab identity and intent key form its
 duplicate fence; attempt IDs and recipient sockets do not. Different wire
 payloads cannot share an intent key. `detach` removes delivery only. Release
 cancels the last read subscriber, while a native mutation remains tracked.
-Same-session local/native effects retain FIFO order; declared reads and
-connection leases do not join that effect queue. A held native exchange remains
-observable, and a held read cannot prevent a later action. Declared interrupt
-priority continues to bypass ordinary effect order. `idle()` joins current owned
-work, not an assertion that a genuinely uncertain native outcome has become
-terminal.
+Same-session ready effects retain FIFO turns; declared reads and connection
+leases do not join that effect queue. Readiness/I/O waits yield the turn and
+ready continuations re-queue, so independent metadata can complete while native
+is offline. Native effects additionally retain a separate same-session ordering
+permission through their exchange: yielding never allows a second native effect
+to overtake the first. Features whose metadata intents need lifetime ordering
+declare `ordering: "target"`; their resource-keyed permission (method/session or
+method/directory when no resource is supplied) preserves policy and membership
+intent order. A resource witness alone never implies that permission. Task
+closure, for example, proceeds during membership validation; the later write
+must revalidate task ownership inside its transaction. An unrelated metadata
+effect needs neither permission. Declared interrupt priority continues to bypass
+ordinary effect order. `idle()` joins current owned work, not an assertion that
+a genuinely uncertain native outcome has become terminal.
 
-Local registrations use `ctx.execution.local(run, encode)`: pass its
-`StoreWrite` to every metadata mutation so effect and completion receipt commit
-together. Feature-contributed `RequestReceipts` are the only typed persistence
-vocabulary; read results remain volatile. Intermediate
-`checkpoint(kind, receipt)` requires a registration-owned runtime encoder.
-`beforeEffect()` commits the native dispatch fence; an unknown post-fence
-outcome stays reconciling and is never redispatched. Recovery is feature-owned,
-with reload allowed only for reads. Progress/liveness never fabricates a failed
-result. `maintenance()` performs bounded receipt/cache cleanup; active or
-unknown work is not expired to make room.
+Strictly local registrations never resolve native identities. Native-validated
+metadata uses `preparedLocalExecution` / `preparedLocalResultExecution`,
+including task membership, seen, frecency and enable-only approval validation.
+These are local effects in durable storage, preserving their existing atomic
+receipts and restart recovery, but explicitly declare a native preparation
+lifetime. Registry directory resolution rejects an undeclared native dependency
+in a strictly local registration. Both metadata classes use
+`ctx.execution.local(run, encode)`: pass its `StoreWrite` to every metadata
+mutation so effect and completion receipt commit together. Feature-contributed
+`RequestReceipts` are the only typed persistence vocabulary; read results remain
+volatile. Intermediate `checkpoint(kind, receipt)` requires a registration-owned
+runtime encoder. `beforeEffect()` commits the native dispatch fence; an unknown
+post-fence outcome stays reconciling and is never redispatched. Recovery is
+feature-owned, with reload allowed only for reads. Progress/liveness never
+fabricates a failed result. `maintenance()` performs bounded receipt/cache
+cleanup; active or unknown work is not expired to make room.
 
 The existing unique-token interactive observation wraps actual handler work.
-`ctx.execution.wait(promise)` releases that pressure while I/O or readiness is
-outstanding and reacquires it for the continuation. Late continuations cannot
-reactivate a finished handler. This uses the existing digest scheduling input.
+`ctx.execution.wait(promise)` releases that pressure and the coordinator's
+executing turn while I/O or readiness is outstanding, then re-queues before
+reacquiring pressure for the continuation. Native ordering permission is not an
+executing turn. Late continuations cannot reactivate a finished handler. This
+uses the existing digest scheduling input.
 
 `readExecution(scope)` declares volatile, reloadable reads. The registry
 observes their synchronous work and releases interactive pressure while their
