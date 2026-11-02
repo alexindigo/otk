@@ -1,201 +1,132 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../support/resources.ts";
-import { assert, assertEquals } from "@std/assert";
-import { join } from "@std/path";
-import { browserFixture, openSession } from "../support/browser-fixture.ts";
-import { runTool } from "../support/rendering.ts";
-import { WsClient } from "../support/ws-client.ts";
+import { assertEquals } from "@std/assert";
+import type { Message, UserMessage } from "@otk/protocol";
+import {
+  legacyStaticMessages,
+  visualReply,
+  visualText,
+} from "../support/legacy-message-scene.ts";
+const user = (id: string, text: string): UserMessage => ({
+  id,
+  sessionID: "tstv1-core",
+  role: "user",
+  time: { created: id === "queued" ? 7000 : 1 },
+  parts: [visualText(id + "-text", text)],
+});
 test("R8 revert RPC restores files, hides reverted turns and persists a joined counted strip on reload", async () => {
-  const f = await browserFixture({ edit: "allow", read: "allow" }, {
-    prepare: async (oc) => {
-      await Deno.writeTextFile(join(oc.directory, "revert.txt"), "before\n");
+  await legacyStaticMessages(
+    "otk-dark",
+    () => [user("prompt", "Review the file changes")],
+    async ({ b, capture }) => {
+      await b.poll(
+        "document.querySelector('.otk-rolled-back-strip')?.textContent.includes('1 prompt rolled back')",
+      );
+      await capture("reverted-strip");
+      await b.click(".otk-rollback-disclosure");
+      await b.poll(
+        "document.querySelector('.otk-rollback-details')?.textContent.includes('revert.txt')",
+      );
+      await capture("reverted-strip-details");
     },
-  });
-  let client: WsClient | undefined;
-  try {
-    const s = await f.oc.session<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "Revert rendering" },
-    });
-    const server = await f.sidecar(), browser = await f.browser(server.url);
-    await openSession(browser, s.id);
-    await runTool(f, browser, s.id, {
-      name: "edit",
-      input: {
-        filePath: join(f.oc.directory, "revert.txt"),
-        oldString: "before",
-        newString: "after",
-      },
-    });
-    assertEquals(
-      await Deno.readTextFile(join(f.oc.directory, "revert.txt")),
-      "after\n",
-    );
-    const raw = await f.oc.request<{ info: { id: string; role: string } }[]>(
-        `/session/${s.id}/message`,
-      ),
-      user = raw.find((m) => m.info.role === "user")!.info.id;
-    client = new WsClient(server.url);
-    await client.connect();
-    client.send({ t: "subscribe", sessionID: s.id });
-    await client.rpc("session.revert", { sessionID: s.id, messageID: user });
-    await client.wait((frame) =>
-      frame.t === "content" && frame.event.op === "session.revert" &&
-      frame.event.messageCount === 1
-    );
-    await browser.poll(
-      "document.querySelector('.otk-rolled-back-strip')?.textContent.includes('1 prompt rolled back') && document.querySelectorAll('[data-message]').length===0",
-    );
-    await browser.click(".otk-rollback-disclosure");
-    await browser.poll(
-      "document.querySelector('.otk-rollback-details')?.textContent.includes('revert.txt')",
-    );
-    assertEquals(
-      await Deno.readTextFile(join(f.oc.directory, "revert.txt")),
-      "before\n",
-    );
-    await browser.reload();
-    await browser.poll(
-      "document.querySelector('.otk-rolled-back-strip')?.textContent.includes('1 prompt rolled back') && document.querySelectorAll('[data-message]').length===0",
-    );
-    await browser.screenshot(join(f.oc.root, "r8-revert.png"));
-    const session = await f.oc.request(`/session/${s.id}`);
-    await Deno.writeTextFile(
-      join(f.oc.root, "recorded-revert.json"),
-      JSON.stringify({ session, messages: raw }, null, 2),
-    );
-  } finally {
-    await client?.close();
-    await f.stop();
-  }
+    {
+      configure: (f) =>
+        Object.assign(f.session, {
+          revert: {
+            messageID: "prompt",
+            messageCount: 1,
+            files: [{ path: "revert.txt", additions: 1, deletions: 1 }],
+          },
+        }),
+    },
+  );
 });
 test("real harness history renders file/agent chips and compaction divider", async () => {
-  const f = await browserFixture();
-  try {
-    const s = await f.oc.session<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "History details" },
-    });
-    const m = await f.oc.request<{ info: { id: string } }>(
-      `/session/${s.id}/message`,
-      {
-        method: "POST",
-        body: {
-          noReply: true,
-          parts: [{ type: "text", text: "Historical parts" }],
-        },
-      },
-    );
-    for (
-      const value of [
+  await legacyStaticMessages(
+    "otk-dark",
+    () => [{
+      ...user("prompt", "Historical parts"),
+      parts: [
+        visualText("text", "Historical parts"),
         {
-          type: "file",
+          id: "file",
+          kind: "file",
           mime: "text/plain",
-          filename: "fixture.txt",
+          name: "fixture.txt",
           url: "file:///fixture.txt",
         },
-        { type: "agent", name: "general" },
-        { type: "compaction", auto: false },
-      ]
-    ) {
-      const id = "prt_" + crypto.randomUUID().replaceAll("-", "");
-      await f.oc.request(`/session/${s.id}/message/${m.info.id}/part/${id}`, {
-        method: "PATCH",
-        body: { id, sessionID: s.nativeID, messageID: m.info.id, ...value },
-      });
-    }
-    const server = await f.sidecar(), browser = await f.browser(server.url);
-    await openSession(browser, s.id);
-    await browser.poll(
-      "document.querySelector('.otk-messages').textContent.includes('File: fixture.txt') && document.querySelector('.otk-messages').textContent.includes('Agent: general') && !!document.querySelector('.otk-compaction-divider')",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector('.otk-compaction-divider').closest('.otk-user-bubble')===null",
-      ),
-      true,
-      "Transcript markers must not inherit a prompt bubble in mixed messages",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector('.otk-user-bubble').textContent.includes('Historical parts')",
-      ),
-      true,
-    );
-    await browser.screenshot(join(f.oc.root, "message-chips-compaction.png"));
-  } finally {
-    await f.stop();
-  }
+        { id: "agent", kind: "agent", name: "general" },
+        { id: "compaction", kind: "compaction" },
+      ],
+    }],
+    async ({ b, capture }) => {
+      await b.poll(
+        "document.querySelector('.otk-messages').textContent.includes('File: fixture.txt')&&document.querySelector('.otk-messages').textContent.includes('Agent: general')&&!!document.querySelector('.otk-compaction-divider')",
+      );
+      assertEquals(
+        await b.evaluate(
+          "document.querySelector('.otk-compaction-divider').closest('.otk-user-bubble')===null",
+        ),
+        true,
+      );
+      await capture("chips-compaction");
+    },
+  );
 });
 test("message details show configured agent colour, queued-to-answered transition and no step scaffolds", async () => {
-  const f = await browserFixture(undefined, {
-    config: { agent: { build: { color: "#6bacff" } } },
-  });
-  try {
-    const s = await f.oc.session<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "Message details" },
-    });
-    const server = await f.sidecar(), browser = await f.browser(server.url);
-    await openSession(browser, s.id);
-    const reply = f.fake.queueHeld({
-      chunks: Array(20).fill("First reply continues. "),
-      delay: 100,
-    });
-    f.fake.queue({ chunks: ["Queued prompt answered."] });
-    await browser.type("textarea[name=prompt]", "First prompt");
-    await browser.key("Enter");
-    await browser.poll(
-      `document.querySelector('[data-session="${s.id}"]').dataset.status==='busy' && !!document.querySelector('[data-role=assistant] .otk-text')`,
-    );
-    await browser.type("textarea[name=prompt]", "Queued prompt");
-    await browser.key("Enter");
-    await browser.poll("!!document.querySelector('.otk-queued')");
-    // The visual system replaces the heavy user-message border with a subtle
-    // surface. The quiet metadata reveals the configured agent colour on hover.
-    await browser.click(".otk-message-agent");
-    assertEquals(
-      await browser.evaluate(
-        "getComputedStyle(document.querySelector('.otk-message-agent')).color",
-      ),
-      "rgb(107, 172, 255)",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "getComputedStyle(document.querySelector('[data-role=user]')).borderLeftWidth",
-      ),
-      "0px",
-    );
-    await browser.screenshot(join(f.oc.root, "message-queued.png"));
-    reply.release();
-    await browser.poll(
-      `document.querySelector('[data-session="${s.id}"]').dataset.status==='idle' && document.querySelector('.otk-messages').textContent.includes('Queued prompt answered.') && !document.querySelector('.otk-queued')`,
-      60000,
-    );
-    await browser.poll(
-      "(()=>{const footers=[...document.querySelectorAll('.otk-message-footer')];return footers.length>0 && footers.every(footer=>footer.textContent.includes('build') && /\\ds/.test(footer.textContent))})()",
-    );
-    const footers = await browser.evaluate<string[]>(
-      "[...document.querySelectorAll('.otk-message-footer')].map(el=>el.textContent)",
-    );
-    assert(
-      footers.every((footer) => footer.includes("build") && /\ds/.test(footer)),
-    );
-    assertEquals(
-      await browser.evaluate(
-        "[...document.querySelectorAll('.otk-messages p')].some(el=>el.textContent==='step'||el.textContent==='unknown')",
-      ),
-      false,
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelectorAll('.otk-message-footer .otk-copy-message svg').length",
-      ),
-      footers.length,
-      "Plain metadata has a copy affordance instead of a role glyph",
-    );
-    await browser.screenshot(join(f.oc.root, "message-answered.png"));
-  } finally {
-    await f.stop();
-  }
+  const states = (
+    done: boolean,
+  ): Message[] => [
+    user("prompt", "First prompt"),
+    visualReply("first", [visualText("first-text", "First reply continues.")], {
+      agentColor: "#6bacff",
+      time: { created: 2, ...(done ? { completed: 6000 } : {}) },
+    }),
+    user("queued", "Queued prompt"),
+    ...(done
+      ? [
+        visualReply("last", [
+          visualText("last-text", "Queued prompt answered."),
+        ], { replyTo: "queued", agentColor: "#6bacff" }),
+      ]
+      : []),
+  ];
+  await legacyStaticMessages(
+    "otk-dark",
+    () => states(false),
+    async ({ b, replace, capture, status }) => {
+      for (const done of [false, true]) {
+        if (done) {
+          status("idle");
+          await replace(states(true));
+        }
+        await b.poll(
+          done
+            ? "!document.querySelector('.otk-queued')"
+            : "!!document.querySelector('.otk-queued')",
+        );
+        await b.click(".otk-message-agent");
+        assertEquals(
+          await b.evaluate(
+            "getComputedStyle(document.querySelector('.otk-message-agent')).color",
+          ),
+          "rgb(107, 172, 255)",
+        );
+        assertEquals(
+          await b.evaluate(
+            "getComputedStyle(document.querySelector('[data-role=user]')).borderLeftWidth",
+          ),
+          "0px",
+        );
+        await capture(done ? "message-answered" : "message-queued");
+      }
+    },
+    {
+      configure: (f) =>
+        f.app.index.upsert({
+          ...f.app.index.get("tstv1-core")!,
+          status: "busy",
+        }),
+    },
+  );
 });

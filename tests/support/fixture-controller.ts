@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { join, relative, resolve } from "@std/path";
+import { fromFileUrl, join, relative, resolve } from "@std/path";
 import { nativeFixture } from "./native-fixture.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
-import { withResources } from "./resources.ts";
+import { resources, withResources } from "./resources.ts";
 import { WsClient } from "./ws-client.ts";
 import { waitFor } from "./opencode.ts";
 import { seedProviderPackages } from "./provider-cache.ts";
 import { transportScenario } from "./transport-scenario.ts";
+import { nativeMessageScenario } from "./native-message-scenario.ts";
+import { pricedMessageProvider } from "./priced-message-provider.ts";
 import { contractScenario } from "./contract-scenario.ts";
 import { transcriptConsumer } from "../reuse/transcript-consumer.ts";
 import {
@@ -63,6 +65,7 @@ try {
     let poisoned = false;
     let snapshotLease = false;
     const directories: string[] = [];
+    const extraPorts: number[] = [];
     const createdIDs: string[] = [];
     const gates = new Map<string, () => void>();
     const recordOwnership = async () => {
@@ -82,6 +85,7 @@ try {
             ]),
           ],
           ports: [
+            ...extraPorts,
             ...(transport?.port ? [transport.port] : []),
             ...owners.flatMap((
               owner,
@@ -98,7 +102,10 @@ try {
     };
     let stopped = false;
     let chunkTimeout: number | undefined;
-    let transport: ReturnType<typeof transportScenario> | undefined;
+    let transport:
+      | ReturnType<typeof transportScenario>
+      | Awaited<ReturnType<typeof nativeMessageScenario>>
+      | undefined;
     let contract: Awaited<ReturnType<typeof contractScenario>> | undefined;
     let bootstrap: {
       busy: { id: string };
@@ -258,9 +265,138 @@ try {
             throw new Error("Project/native version mismatch");
           }
           profile = frame.params.profile;
+          let contextOptions: Parameters<typeof nativeFixture>[1];
+          if (profile === "messages-priced") {
+            const priced = pricedMessageProvider();
+            extraPorts.push(priced.port);
+            contextOptions = { config: priced.config };
+          }
+          if (profile === "messages-context") {
+            const provider = Deno.serve({
+              hostname: "127.0.0.1",
+              port: 0,
+              onListen() {},
+            }, async (request) => {
+              await request.json();
+              const chunk = (
+                delta: unknown,
+                finish_reason: string | null = null,
+              ) =>
+                `data: ${
+                  JSON.stringify({
+                    id: "context-reply",
+                    object: "chat.completion.chunk",
+                    model: "beam-free",
+                    choices: [{ index: 0, delta, finish_reason }],
+                  })
+                }\n\n`;
+              return new Response(
+                chunk({
+                  role: "assistant",
+                  content: "Catalog context reply.",
+                }) + chunk({}, "stop") +
+                  `data: ${
+                    JSON.stringify({
+                      id: "context-reply",
+                      object: "chat.completion.chunk",
+                      choices: [],
+                      usage: {
+                        prompt_tokens: 2400,
+                        completion_tokens: 100,
+                        total_tokens: 2500,
+                      },
+                    })
+                  }\n\ndata: [DONE]\n\n`,
+                { headers: { "Content-Type": "text/event-stream" } },
+              );
+            });
+            resources().defer(
+              "context catalog provider",
+              () => provider.shutdown(),
+            );
+            extraPorts.push(provider.addr.port);
+            const options = {
+              baseURL: `http://127.0.0.1:${provider.addr.port}/v1`,
+              apiKey: "fixture",
+            };
+            contextOptions = {
+              config: {
+                model: "opencode/beam-free",
+                provider: {
+                  opencode: {
+                    npm: "@ai-sdk/openai-compatible",
+                    options,
+                    models: {
+                      "beam-free": {
+                        name: "Beam Free",
+                        limit: { context: 10000, output: 1000 },
+                        cost: { input: 0, output: 0 },
+                      },
+                    },
+                  },
+                  other: {
+                    npm: "@ai-sdk/openai-compatible",
+                    options,
+                    models: {
+                      "beam-free": {
+                        name: "Other catalog model",
+                        limit: { context: 20000, output: 1000 },
+                      },
+                    },
+                  },
+                },
+              },
+            };
+          }
           fixture = await bind(() =>
             nativeFixture(
-              profile === "transport-shell" ? { bash: "deny" } : undefined,
+              profile === "transport-shell"
+                ? { bash: "deny" }
+                : profile === "messages-tool-states"
+                ? { bash: "ask", websearch: "ask" }
+                : ([
+                    "messages-tools",
+                    "messages-files",
+                    "messages-forms",
+                    "messages-priced",
+                  ]
+                    .includes(profile))
+                ? {
+                  bash: "allow",
+                  read: "allow",
+                  glob: "allow",
+                  grep: "allow",
+                  external_directory: "allow",
+                  webfetch: "allow",
+                  skill: "allow",
+                }
+                : undefined,
+              ["messages-context", "messages-priced"].includes(profile)
+                ? contextOptions
+                : profile === "messages-tool-states"
+                ? { env: { OPENCODE_ENABLE_EXA: "1" } }
+                : profile === "messages-native"
+                ? { config: { agent: { build: { color: "#6bacff" } } } }
+                : profile === "messages-files"
+                ? {
+                  config: {
+                    lsp: {
+                      typescript: { disabled: true },
+                      deno: { disabled: true },
+                      fixture: {
+                        command: [
+                          Deno.execPath(),
+                          "run",
+                          fromFileUrl(
+                            new URL("./fake-lsp.ts", import.meta.url),
+                          ),
+                        ],
+                        extensions: [".ts"],
+                      },
+                    },
+                  },
+                }
+                : undefined,
             )
           );
           if (profile === "provider-hold") {
@@ -368,6 +504,7 @@ try {
               JSON.stringify({
                 pids: [Deno.pid, fixture.oc.process.pid!],
                 ports: [
+                  ...extraPorts,
                   fixture.fake.port,
                   fixture.oc.port,
                   fixture.oc.nativePort,
@@ -381,6 +518,15 @@ try {
           if (profile.startsWith("transport-")) {
             transport = transportScenario(fixture.oc, profile);
           }
+          if (
+            [
+              "messages-helper-pages",
+              "messages-recovery",
+              "messages-recovery-retry",
+            ].includes(profile)
+          ) {
+            transport = await nativeMessageScenario(fixture.oc, profile);
+          }
           const server = await bind(() =>
             fixture!.sidecar(
               transport
@@ -390,7 +536,11 @@ try {
                     : {}),
                   harness: {
                     url: transport.url,
-                    ...(["transport-bootstrap", "transport-enrichment"]
+                    ...([
+                        "transport-bootstrap",
+                        "transport-enrichment",
+                        "messages-helper-pages",
+                      ]
                         .includes(profile)
                       ? {
                         db: join(fixture!.oc.root, "unreadable.db"),
@@ -402,6 +552,8 @@ try {
                       : {}),
                   },
                 }
+                : ["messages-cooling", "messages-temperature"].includes(profile)
+                ? { messages: { coolms: 2500, preloadms: 1500 } }
                 : {},
             )
           );
@@ -460,6 +612,7 @@ try {
             version: nativeVersion,
             pids: [Deno.pid, fixture.oc.process.pid!, server.process.pid!],
             ports: [
+              ...extraPorts,
               fixture.fake.port,
               fixture.oc.port,
               server.port,
@@ -491,6 +644,22 @@ try {
             `# ${frame.params.identity}\n`,
           );
           await seedProviderPackages(join(directory, ".opencode"));
+          if (profile === "messages-forms") {
+            const files = {
+              "src/AGENTS.md":
+                "# Fixture instructions\nRead the fixture only.\n",
+              "src/probe.txt": "first\notk_marker\nthird\n",
+              ".opencode/skills/otk-fixture/SKILL.md":
+                "---\nname: otk-fixture\ndescription: OTK rendering fixture\n---\nRead only this fixture.\n",
+              ".opencode/tools/echo_fixture.ts":
+                "export default {description:'Local generic output fixture',args:{},async execute(){return Array.from({length:15},(_,i)=>'Generic line '+(i+1)).join('\\n')}};",
+            };
+            for (const [path, source] of Object.entries(files)) {
+              const target = join(directory, path);
+              await Deno.mkdir(join(target, ".."), { recursive: true });
+              await Deno.writeTextFile(target, source);
+            }
+          }
           await fixture!.oc.request("/experimental/tool/ids", { directory });
           directories.push(directory);
           lease = { lease: crypto.randomUUID(), directory, baseline };

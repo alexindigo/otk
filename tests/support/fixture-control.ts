@@ -6,6 +6,18 @@ export type Json = null | boolean | number | string | Json[] | {
 };
 export type Profile =
   | "ordinary"
+  | "messages-native"
+  | "messages-tools"
+  | "messages-cooling"
+  | "messages-files"
+  | "messages-context"
+  | "messages-temperature"
+  | "messages-helper-pages"
+  | "messages-recovery"
+  | "messages-recovery-retry"
+  | "messages-forms"
+  | "messages-tool-states"
+  | "messages-priced"
   | "isolated"
   | "provider-hold"
   | "transport-page"
@@ -18,6 +30,32 @@ export type Profile =
   | "transport-cooling"
   | "transport-restart"
   | "contract-core"
+  | "contract-messages-highlight"
+  | "contract-messages-facts"
+  | "contract-messages-metadata"
+  | "contract-messages-usage3"
+  | "contract-messages-usage120"
+  | "contract-messages-usage500"
+  | "contract-messages-context"
+  | "contract-messages-collapse"
+  | "contract-messages-labels"
+  | "contract-messages-labels-picker"
+  | "contract-messages-money"
+  | "contract-messages-window"
+  | "contract-messages-anchor"
+  | "contract-messages-diff"
+  | "contract-messages-disclosures"
+  | "contract-messages-usage-paging"
+  | "contract-messages-usage-unknown"
+  | "contract-messages-usage-queued"
+  | "contract-messages-usage-priced"
+  | "contract-messages-usage-unreported"
+  | "contract-messages-session-cost"
+  | "contract-messages-reading"
+  | "contract-messages-public-ui"
+  | "contract-messages-recorded-files"
+  | "contract-messages-recorded-tools"
+  | "contract-messages-clock"
   | "contract-reconnect"
   | "contract-initial-question"
   | "contract-permission-feedback"
@@ -152,6 +190,18 @@ export function request(value: unknown): ControlRequest {
       if (
         ![
           "ordinary",
+          "messages-native",
+          "messages-tools",
+          "messages-cooling",
+          "messages-files",
+          "messages-context",
+          "messages-temperature",
+          "messages-helper-pages",
+          "messages-recovery",
+          "messages-recovery-retry",
+          "messages-forms",
+          "messages-tool-states",
+          "messages-priced",
           "isolated",
           "provider-hold",
           "transport-page",
@@ -164,6 +214,32 @@ export function request(value: unknown): ControlRequest {
           "transport-cooling",
           "transport-restart",
           "contract-core",
+          "contract-messages-highlight",
+          "contract-messages-facts",
+          "contract-messages-metadata",
+          "contract-messages-usage3",
+          "contract-messages-usage120",
+          "contract-messages-usage500",
+          "contract-messages-context",
+          "contract-messages-collapse",
+          "contract-messages-labels",
+          "contract-messages-labels-picker",
+          "contract-messages-money",
+          "contract-messages-window",
+          "contract-messages-anchor",
+          "contract-messages-diff",
+          "contract-messages-disclosures",
+          "contract-messages-usage-paging",
+          "contract-messages-usage-unknown",
+          "contract-messages-usage-queued",
+          "contract-messages-usage-priced",
+          "contract-messages-usage-unreported",
+          "contract-messages-session-cost",
+          "contract-messages-reading",
+          "contract-messages-public-ui",
+          "contract-messages-recorded-files",
+          "contract-messages-recorded-tools",
+          "contract-messages-clock",
           "contract-reconnect",
           "contract-initial-question",
           "contract-permission-feedback",
@@ -222,7 +298,7 @@ export function request(value: unknown): ControlRequest {
       }
       text(p.path);
       if (
-        !/^\/(session(?:\/[^?#]*)?|permission(?:\/[^?#]*)?|experimental\/tool\/ids)$/
+        !/^\/(session(?:\/[^?#]*)?|permission(?:\/[^?#]*)?|question(?:\/[^?#]*)?|provider|experimental\/tool\/ids)$/
           .test(p.path)
       ) {
         throw new Error("Native path outside fixture vocabulary");

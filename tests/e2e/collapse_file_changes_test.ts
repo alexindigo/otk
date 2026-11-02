@@ -1,388 +1,68 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { publishUsage, turnDetail } from "../support/usage-summary.ts";
+// T2 fixed-state V remainder; preference persistence/remount is a Playwright contract.
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
-import {
-  type AssistantMessage,
-  type FileDiff,
-  type Message,
-  type Preferences,
-  usageHeader,
-  UsageLedger,
-} from "@otk/protocol";
-import { fixture } from "../support/config.ts";
-import { coreBackendFixture } from "../support/core-backend.ts";
-import { Cdp } from "../support/cdp.ts";
-import { WsClient } from "../support/ws-client.ts";
-
+import { legacyMessageScene } from "../support/legacy-message-scene.ts";
 test("U6 file changes start collapsed, disclose real content and follow the persisted Display preference", async () => {
-  const root = await fixture();
-  const file = (path: string): FileDiff => ({
-    path,
-    status: "modified",
-    additions: 1,
-    deletions: 1,
-    hunks: [{
-      oldStart: 1,
-      newStart: 1,
-      oldLines: 1,
-      newLines: 1,
-      lines: [
-        { kind: "del", text: "const before = true;", oldNo: 1 },
-        { kind: "add", text: "const after = true;", newNo: 1 },
-      ],
-    }],
-  });
-  const base = {
-    callID: "call",
-    status: "completed" as const,
-    awaitingPermission: false,
-    time: { start: 2000, end: 6000 },
-  };
-  const reply: AssistantMessage = {
-    id: "reply",
-    sessionID: "tstv1-core",
-    replyTo: "user",
-    role: "assistant",
-    agent: "build",
-    model: { provider: "test", model: "test" },
-    time: { created: 2000, completed: 6000 },
-    tokens: { input: 1, output: 0, reasoning: 0, cache: { read: 0, write: 0 } },
-    cost: 0,
-    interrupted: false,
-    parts: [
-      {
-        id: "edit",
-        kind: "tool",
-        call: {
-          ...base,
-          tool: "edit",
-          path: `${root}/edit.ts`,
-          files: [file(`${root}/edit.ts`)],
-          diagnostics: [],
-        },
-      },
-      {
-        id: "write",
-        kind: "tool",
-        call: {
-          ...base,
-          callID: "write",
-          tool: "write",
-          path: `${root}/write.ts`,
-          content: "const written = true;",
-          lang: "ts",
-          diagnostics: [],
-        },
-      },
-      {
-        id: "patch",
-        kind: "tool",
-        call: {
-          ...base,
-          callID: "patch",
-          tool: "patch",
-          files: [file(`${root}/patch.ts`)],
-        },
-      },
-      {
-        id: "read",
-        kind: "tool",
-        call: {
-          ...base,
-          callID: "read",
-          tool: "read",
-          path: `${root}/read.ts`,
-          loaded: [],
-          output: "Read result",
-        },
-      },
-    ],
-  };
-  const messages: Message[] = [{
-    id: "user",
-    sessionID: "tstv1-core",
-    role: "user",
-    time: { created: 1000 },
-    parts: [{
-      id: "text",
-      kind: "text",
-      synthetic: false,
-      blocks: [{
-        b: "paragraph",
-        inline: [{ i: "text", text: "Review the file changes" }],
-      }],
-    }],
-  }, reply];
-  const f = await coreBackendFixture(root, {
-    usage: {
-      getUsage: (_id, turnID) =>
-        Promise.resolve(
-          turnDetail(
-            new UsageLedger("tstv1-core", [usageHeader(reply)]).snapshot(),
-            turnID,
-          ),
-        ),
-    },
-    prompt: { prompt: () => Promise.resolve(), abort: () => Promise.resolve() },
-  });
-  f.app.backend.core.listMessages = (_id, opts) =>
-    Promise.resolve(f.page(messages, opts.before));
-  publishUsage(
-    f.app.index,
-    new UsageLedger("tstv1-core", [usageHeader(reply)]).snapshot(),
-  );
-  const b = await Cdp.launch(root), c = new WsClient(f.url);
-  const shots = Deno.env.get("OTK_COLLAPSE_SHOTS");
-  const capture = async (name: string) => {
-    if (!shots) return;
-    await Deno.mkdir(shots, { recursive: true });
-    for (
-      const [label, theme] of [["dark", "otk-dark"], ["light", "otk-light"]]
-    ) {
-      await c.rpc("prefs.set", { key: "theme", value: theme });
-      await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
-      await b.evaluate("document.activeElement?.blur(); document.fonts.ready");
-      await b.screenshot(`${shots}/${name}-${label}.png`);
-    }
-  };
-  const state = async (open: boolean) => {
-    await b.poll(
-      `[...document.querySelectorAll('[data-tool=edit], [data-tool=write], [data-tool=patch]')].length===3 && [...document.querySelectorAll('[data-tool=edit], [data-tool=write], [data-tool=patch]')].every(row=>row.querySelector('.otk-tool-toggle').getAttribute('aria-expanded')==='${open}' && !!row.querySelector('.otk-tool-body')===${open} && ((row.querySelector('.otk-tool-body')?.getBoundingClientRect().height??0)>0)===${open})`,
-    );
-    assertEquals(
-      await b.evaluate(
-        "!document.querySelector('[data-tool=read] .otk-tool-body')",
-      ),
-      true,
-    );
-  };
-  try {
-    await c.connect();
-    await c.rpc("prefs.set", { key: "animationsOff", value: true });
-    await b.send("Emulation.setDeviceMetricsOverride", {
-      width: 1280,
-      height: 900,
-      deviceScaleFactor: 1,
-      mobile: false,
-    });
-    await b.goto(`${f.url}/#/local/tstv1-core`);
-    await b.poll(
-      "document.querySelectorAll('.otk-tool-line').length===4 && !!document.querySelector('.otk-turn-usage > button')",
-    );
-    await capture("default");
-    await state(false);
-    assertEquals(
-      (await c.rpc<Preferences>("prefs.get", {})).collapseFileChanges,
-      true,
-    );
-    for (const tool of ["edit", "patch"]) {
-      assertEquals(
-        await b.evaluate(
-          `document.querySelector('[data-tool=${tool}] .otk-tool-target').textContent`,
-        ),
-        `${tool}.ts`,
-      );
-      assertEquals(
-        await b.evaluate(
-          `document.querySelector('[data-tool=${tool}] .otk-tool-add').textContent`,
-        ),
-        "+1",
-      );
-      assertEquals(
-        await b.evaluate(
-          `document.querySelector('[data-tool=${tool}] .otk-tool-del').textContent`,
-        ),
-        "−1",
-      );
-    }
-    for (const tool of ["edit", "write", "patch"]) {
-      await b.click(`[data-tool=${tool}] .otk-tool-toggle`);
-    }
-    await state(true);
-    await b.poll(
-      "document.querySelector('[data-tool=edit] .otk-diff').innerText.includes('const after = true;') && document.querySelector('[data-tool=patch] .otk-diff').innerText.includes('const after = true;') && document.querySelector('[data-tool=write] .otk-code').innerText.includes('const written = true;')",
-    );
-    await capture("manual-open");
-    await b.reload();
-    await state(false);
-    await b.click(".otk-display-menu > button");
-    await b.poll(
-      "document.querySelector('input[name=collapseFileChanges]')?.checked===true",
-    );
-    await capture("display-on");
-    await b.click("input[name=collapseFileChanges]");
-    await state(true);
-    await b.key("Escape");
-    assertEquals(
-      (await c.rpc<Preferences>("prefs.get", {})).collapseFileChanges,
-      false,
-    );
-    await b.reload();
-    await state(true);
-    await capture("off-reload");
-    // Explicit disclosure belongs to the row; a preference changes initial state.
-    await b.click("[data-tool=edit] .otk-tool-toggle");
-    await c.rpc("prefs.set", { key: "collapseFileChanges", value: true });
-    await state(false);
-    await c.rpc("prefs.set", { key: "collapseFileChanges", value: false });
-    await b.poll(
-      "!document.querySelector('[data-tool=edit] .otk-tool-body') && !!document.querySelector('[data-tool=write] .otk-tool-body') && !!document.querySelector('[data-tool=patch] .otk-tool-body')",
-    );
-    await b.reload();
-    await state(true);
-    await c.rpc("prefs.set", { key: "collapseFileChanges", value: true });
-    await state(false);
-    await b.reload();
-    await state(false);
-    assertEquals(b.errors, []);
-  } finally {
-    await Deno.writeTextFile(
-      `${root}/collapse-state.html`,
-      await b.evaluate<string>("document.documentElement.outerHTML"),
-    );
-    console.info("Collapse browser evidence:", root);
-    await c.close();
-    await b.close();
-    await f.app.stop();
-  }
-});
-
-test("U6 one-token labels and literal fallback phrases reach plain and picker footers", async () => {
-  for (const picker of [false, true]) {
-    const root = await fixture();
-    const reply: AssistantMessage = {
-      id: "reply",
-      sessionID: "tstv1-core",
-      role: "assistant",
-      replyTo: "user",
-      agent: "build",
-      model: { provider: "test", model: "test" },
-      time: { created: 1000, completed: 2000 },
-      tokens: {
-        input: 1,
-        output: 0,
-        reasoning: 0,
-        cache: { read: 0, write: 0 },
-      },
-      cost: 0,
-      interrupted: false,
-      parts: [],
-    };
-    const f = await coreBackendFixture(root, {
-      prompt: {
-        prompt: () => Promise.resolve(),
-        abort: () => Promise.resolve(),
-      },
-      usage: {
-        getUsage: (_id, turnID) =>
-          Promise.resolve(
-            turnDetail(
-              new UsageLedger("tstv1-core", [usageHeader(reply)]).snapshot(),
-              turnID,
+  for (const theme of ["otk-dark", "otk-light"]) {
+    await legacyMessageScene(
+      "contract-messages-collapse",
+      theme,
+      async ({ b, capture, set }) => {
+        await b.poll(
+          "document.querySelectorAll('.otk-tool-line').length===4&&!document.querySelector('.otk-tool-body')",
+        );
+        await capture("collapsed");
+        await set("collapseFileChanges", false);
+        await b.poll(
+          "document.querySelectorAll('[data-tool=edit] .otk-diff,[data-tool=patch] .otk-diff,[data-tool=write] .otk-code').length===3",
+        );
+        await capture("expanded");
+        for (const tool of ["edit", "patch"]) {
+          assertEquals(
+            await b.evaluate(
+              `document.querySelector('[data-tool=${tool}] .otk-tool-target').textContent`,
             ),
-          ),
-      },
-      ...(picker ? { agents: { listAgents: () => Promise.resolve([]) } } : {}),
-    });
-    f.app.backend.core.listMessages = () => Promise.resolve(f.page([reply]));
-    publishUsage(
-      f.app.index,
-      new UsageLedger("tstv1-core", [usageHeader(reply)]).snapshot(),
-    );
-    const b = await Cdp.launch(root), c = new WsClient(f.url);
-    try {
-      await c.connect();
-      await c.rpc("prefs.set", { key: "animationsOff", value: true });
-      await b.goto(`${f.url}/#/local/tstv1-core`);
-      await b.poll(
-        "!!document.querySelector('.otk-turn-usage > button') && !!document.querySelector('.otk-composer-model-name')",
-      );
-      const capture = async (name: string) => {
-        const shots = Deno.env.get("OTK_COLLAPSE_SHOTS");
-        if (!shots) return;
-        await Deno.mkdir(shots, { recursive: true });
-        for (
-          const [label, theme] of [["dark", "otk-dark"], ["light", "otk-light"]]
-        ) {
-          await c.rpc("prefs.set", { key: "theme", value: theme });
-          await b.poll(
-            `document.documentElement.dataset.otkTheme==='${theme}'`,
+            `${tool}.ts`,
           );
-          await b.evaluate(
-            "document.activeElement?.blur(); document.fonts.ready",
+          assertEquals(
+            await b.evaluate(
+              `document.querySelector('[data-tool=${tool}] .otk-tool-add').textContent`,
+            ),
+            "+1",
           );
-          await b.screenshot(
-            `${shots}/${name}-${label}.png`,
+          assertEquals(
+            await b.evaluate(
+              `document.querySelector('[data-tool=${tool}] .otk-tool-del').textContent`,
+            ),
+            "−1",
           );
         }
-      };
-      await capture(`labels-${picker ? "picker" : "plain"}`);
-      assertEquals(
-        await b.evaluate(
-          "document.querySelector('.otk-context-meter > span').textContent",
-        ),
-        "1 token",
+        await b.click(".otk-display-menu > button");
+        await capture("display-expanded");
+        await b.key("Escape");
+      },
+    );
+  }
+});
+test("U6 one-token labels and literal fallback phrases reach plain and picker footers", async () => {
+  for (const picker of [false, true]) {
+    for (const theme of ["otk-dark", "otk-light"]) {
+      await legacyMessageScene(
+        picker ? "contract-messages-labels-picker" : "contract-messages-labels",
+        theme,
+        async ({ b, capture, mutate }) => {
+          await b.poll("!!document.querySelector('.otk-message-footer')");
+          await capture(`labels-${picker}`);
+          if (!picker) {
+            await mutate("release");
+            await b.poll(
+              "document.querySelector('.otk-rolled-back-strip')?.textContent.includes('1 prompt rolled back')",
+            );
+            await capture("literal-rollback");
+          }
+        },
       );
-      assertEquals(
-        await b.evaluate(
-          "document.querySelector('.otk-turn-usage > button').textContent",
-        ),
-        "1 model call · 1 token · $0.00",
-      );
-      assertEquals(
-        await b.evaluate(
-          "document.querySelector('.otk-turn-usage > button').getAttribute('aria-label')",
-        ),
-        "Turn usage: 1 model call · 1 token · $0.00; exact cost $0",
-      );
-      assertEquals(
-        await b.evaluate(
-          picker
-            ? "document.querySelector('.otk-agent-picker .otk-composer-agent').textContent"
-            : "document.querySelector('.otk-prompt-context > span').textContent",
-        ),
-        "Default agent",
-      );
-      assertEquals(
-        await b.evaluate(
-          "document.querySelector('.otk-composer-model-name').textContent",
-        ),
-        "Default model",
-      );
-      if (picker) {
-        assertEquals(
-          await b.evaluate(
-            "document.querySelector('.otk-agent-picker > button').getAttribute('aria-label')",
-          ),
-          "Agent: Default agent",
-        );
-      } else {
-        await b.evaluate(
-          `(()=>{const d=new DataTransfer();d.setData('text/plain',${
-            JSON.stringify("long pasted line ".repeat(20))
-          });document.querySelector('textarea[name=prompt]').dispatchEvent(new ClipboardEvent('paste',{bubbles:true,clipboardData:d}));})()`,
-        );
-        await b.poll(
-          "document.querySelector('.otk-prompt-chip')?.textContent.includes('[Pasted ~1 line]')",
-        );
-        f.app.connections.content("tstv1-core", {
-          op: "session.revert",
-          messageID: "user",
-          messageCount: 1,
-          files: [{ path: "example.ts", additions: 1, deletions: 1 }],
-        });
-        await b.poll(
-          "document.querySelector('.otk-rolled-back-strip strong')?.textContent==='1 prompt rolled back'",
-        );
-        await capture("paste-revert");
-      }
-      assertEquals(b.errors, []);
-    } finally {
-      console.info("Labels browser evidence:", root);
-      await c.close();
-      await b.close();
-      await f.app.stop();
     }
   }
 });

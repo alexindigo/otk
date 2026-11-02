@@ -1,6 +1,25 @@
 {
   "schema": 1,
   "originalFileCount": 131,
+  "supplementalTransfers": [
+    {
+      "file": "tests/reuse/custom-tool_test.ts",
+      "area": "messages",
+      "batch": "A2",
+      "originalTitle": "independent public UI consumer renders external tools twice, updates live, routes callbacks and retains isolated fallback",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/messages/public-ui.spec.ts",
+        "testID": "messages.public-ui-external-tools-callbacks-isolation"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "2d51ea88508a517f6a83b3e64e87c731cd93a79caa5af44d5a2e78428db9eb87",
+        "run": "otk-t2-c8-20261102/a/cost-and-visual-fix.json (same-tree real old + new commands)"
+      }
+    }
+  ],
   "files": [
     {
       "file": "tests/e2e/activity-demand_test.ts",
@@ -305,6 +324,11 @@
               "runner": "legacy",
               "file": "tests/e2e/backend-facts_test.ts",
               "testID": "legacy.backend-facts.9fc7970de3f85350"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/metadata.spec.ts",
+              "testID": "messages.neutral-backend-facts"
             }
           ],
           "retainedCoverage": {
@@ -315,7 +339,10 @@
               "neutral backend facts reach reply, agent picker, task and truncation consumers in both themes"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/harness-opencode-v1/tests/backend-facts_test.ts",
+            "testID": "agent catalog and transcript colours carry neutral roles, literal colours or absence"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/backend-facts_test.ts",
@@ -324,7 +351,7 @@
           "verificationReceipt": {
             "kind": "registration-collection",
             "sourceSha256": "a2cf15c9a10b4a0e06f3425d37b3d04de29ea3a98d1d19ced37762df9554261b",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.backend-facts.9fc7970de3f85350"
           }
         }
       ]
@@ -781,9 +808,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.727f507370f917bc"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/viewport.spec.ts",
+              "testID": "messages.programmatic-reveal-real-click"
             }
           ],
           "retainedCoverage": {
@@ -796,14 +823,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.727f507370f917bc"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/viewport.spec.ts",
+            "testID": "messages.programmatic-reveal-real-click"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.727f507370f917bc"
           }
         },
         {
@@ -812,9 +839,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.b74ec8706e9d85ab"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/viewport.spec.ts",
+              "testID": "messages.programmatic-reveal-real-click"
             }
           ],
           "retainedCoverage": {
@@ -827,14 +854,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.b74ec8706e9d85ab"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/viewport.spec.ts",
+            "testID": "messages.programmatic-reveal-real-click"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.b74ec8706e9d85ab"
           }
         },
         {
@@ -843,9 +870,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.58c883801ebae680"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/viewport.spec.ts",
+              "testID": "messages.busy-worker-plaintext-release"
             }
           ],
           "retainedCoverage": {
@@ -858,14 +885,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.58c883801ebae680"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/viewport.spec.ts",
+            "testID": "messages.busy-worker-plaintext-release"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.58c883801ebae680"
           }
         },
         {
@@ -874,9 +901,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.1ac6c734f9111467"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/source-lifetime.spec.ts",
+              "testID": "messages.raw-tail-materialization-copy"
             }
           ],
           "retainedCoverage": {
@@ -889,14 +916,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.1ac6c734f9111467"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/source-lifetime.spec.ts",
+            "testID": "messages.raw-tail-materialization-copy"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.1ac6c734f9111467"
           }
         },
         {
@@ -905,9 +932,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.82c6a9488f0a3a4f"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/source-lifetime.spec.ts",
+              "testID": "messages.far-colour-before-dense-source"
             }
           ],
           "retainedCoverage": {
@@ -920,14 +947,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.82c6a9488f0a3a4f"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/source-lifetime.spec.ts",
+            "testID": "messages.far-colour-before-dense-source"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.82c6a9488f0a3a4f"
           }
         },
         {
@@ -936,9 +963,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.db271a40ff4bfdc6"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/source-geometry.spec.ts",
+              "testID": "messages.batch-grammar-recalled-tail"
             }
           ],
           "retainedCoverage": {
@@ -951,14 +978,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.db271a40ff4bfdc6"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/source-geometry.spec.ts",
+            "testID": "messages.batch-grammar-recalled-tail"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.db271a40ff4bfdc6"
           }
         },
         {
@@ -967,9 +994,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.6ab651d054b7e9ad"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/wheel-ordering.spec.ts",
+              "testID": "messages.wheel-growth-before-scroll-cpu-1"
             }
           ],
           "retainedCoverage": {
@@ -982,14 +1009,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.6ab651d054b7e9ad"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/wheel-ordering.spec.ts",
+            "testID": "messages.wheel-growth-before-scroll-cpu-1"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.6ab651d054b7e9ad"
           }
         },
         {
@@ -998,9 +1025,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.ae5e5de1627c6f20"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/wheel-ordering.spec.ts",
+              "testID": "messages.wheel-growth-before-scroll-cpu-8"
             }
           ],
           "retainedCoverage": {
@@ -1013,14 +1040,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.ae5e5de1627c6f20"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/wheel-ordering.spec.ts",
+            "testID": "messages.wheel-growth-before-scroll-cpu-8"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.ae5e5de1627c6f20"
           }
         },
         {
@@ -1029,9 +1056,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.3fab3a7302d1ac87"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/wheel-ordering.spec.ts",
+              "testID": "messages.wheel-growth-before-scroll-cpu-1"
             }
           ],
           "retainedCoverage": {
@@ -1044,14 +1071,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.3fab3a7302d1ac87"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/wheel-ordering.spec.ts",
+            "testID": "messages.wheel-growth-before-scroll-cpu-1"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.3fab3a7302d1ac87"
           }
         },
         {
@@ -1060,9 +1087,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.363c70599bc68b23"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/wheel-ordering.spec.ts",
+              "testID": "messages.wheel-growth-before-scroll-cpu-8"
             }
           ],
           "retainedCoverage": {
@@ -1075,14 +1102,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.363c70599bc68b23"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/wheel-ordering.spec.ts",
+            "testID": "messages.wheel-growth-before-scroll-cpu-8"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.363c70599bc68b23"
           }
         },
         {
@@ -1091,9 +1118,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.c9419f5496312911"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/source-geometry.spec.ts",
+              "testID": "messages.leading-clip-true-colour-gutter"
             }
           ],
           "retainedCoverage": {
@@ -1106,14 +1133,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.c9419f5496312911"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/source-geometry.spec.ts",
+            "testID": "messages.leading-clip-true-colour-gutter"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.c9419f5496312911"
           }
         },
         {
@@ -1122,9 +1149,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.8067a61ba1d884b2"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/source-lifetime.spec.ts",
+              "testID": "messages.raw-selection-other-viewport-warms"
             }
           ],
           "retainedCoverage": {
@@ -1137,14 +1164,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.8067a61ba1d884b2"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/source-lifetime.spec.ts",
+            "testID": "messages.raw-selection-other-viewport-warms"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.8067a61ba1d884b2"
           }
         },
         {
@@ -1153,9 +1180,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.d0d8c11ac1d32dee"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/source-geometry.spec.ts",
+              "testID": "messages.code-projection-copy-numbered-geometry"
             }
           ],
           "retainedCoverage": {
@@ -1168,14 +1195,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.d0d8c11ac1d32dee"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/source-geometry.spec.ts",
+            "testID": "messages.code-projection-copy-numbered-geometry"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.d0d8c11ac1d32dee"
           }
         },
         {
@@ -1184,9 +1211,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.3d7ac6d39d8b8bd9"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/source-lifetime.spec.ts",
+              "testID": "messages.atomic-append-selected-endpoints"
             }
           ],
           "retainedCoverage": {
@@ -1199,14 +1226,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.3d7ac6d39d8b8bd9"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/source-lifetime.spec.ts",
+            "testID": "messages.atomic-append-selected-endpoints"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.3d7ac6d39d8b8bd9"
           }
         },
         {
@@ -1215,9 +1242,9 @@
           "proofBoundary": "C+B: native scrolling/selection/copy/highlight/reveal and CPU-race cases; retain all parameter combinations except theme",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/code_viewport_test.ts",
-              "testID": "legacy.code_viewport.e2c2fd143865f328"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/source-geometry.spec.ts",
+              "testID": "messages.numbered-empty-blank-terminal-geometry"
             }
           ],
           "retainedCoverage": {
@@ -1230,14 +1257,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/code_viewport_test.ts",
-            "testID": "legacy.code_viewport.e2c2fd143865f328"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/source-geometry.spec.ts",
+            "testID": "messages.numbered-empty-blank-terminal-geometry"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "baa7a22340bfd5ee7ea073dc77a00dbaa9bf5ff170af395e7ac80da54eee9ae3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.code_viewport.e2c2fd143865f328"
           }
         }
       ]
@@ -1257,6 +1284,11 @@
               "runner": "legacy",
               "file": "tests/e2e/collapse_file_changes_test.ts",
               "testID": "legacy.collapse_file_changes.061d0a48796c0626"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/file-disclosure.spec.ts",
+              "testID": "messages.file-changes-disclosure-persistence"
             }
           ],
           "retainedCoverage": {
@@ -1275,8 +1307,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "eeb3aa8388ca5f75fd45273f91222121f36fa6f9c1f2733157f6cddda4ef0d37",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "c27aa3fe6b0c3d314f51e270f49fdd2697f4c0689db717bda99afff5f7f550ed",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.collapse_file_changes.061d0a48796c0626"
           }
         },
         {
@@ -1288,6 +1320,16 @@
               "runner": "legacy",
               "file": "tests/e2e/collapse_file_changes_test.ts",
               "testID": "legacy.collapse_file_changes.ad304c8cd82ce3b8"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/file-disclosure.spec.ts",
+              "testID": "messages.literal-labels-plain"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/file-disclosure.spec.ts",
+              "testID": "messages.literal-labels-picker"
             }
           ],
           "retainedCoverage": {
@@ -1306,8 +1348,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "eeb3aa8388ca5f75fd45273f91222121f36fa6f9c1f2733157f6cddda4ef0d37",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "c27aa3fe6b0c3d314f51e270f49fdd2697f4c0689db717bda99afff5f7f550ed",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.collapse_file_changes.ad304c8cd82ce3b8"
           }
         }
       ]
@@ -2201,9 +2243,9 @@
           "proofBoundary": "B+L: shared directory catalog demand and native model window",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context_meter_test.ts",
-              "testID": "legacy.context_meter.714aeab4dd7880ce"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/context-meter.spec.ts",
+              "testID": "messages.composer-meter-share-held-catalog"
             }
           ],
           "retainedCoverage": {
@@ -2216,14 +2258,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context_meter_test.ts",
-            "testID": "legacy.context_meter.714aeab4dd7880ce"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/context-meter.spec.ts",
+            "testID": "messages.composer-meter-share-held-catalog"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "2c541a032b8614e3748c2b4aa302b5fc24cf1d653bc5b0235dea9a2fa9b3a77c",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.context_meter.714aeab4dd7880ce"
           }
         },
         {
@@ -2232,9 +2274,9 @@
           "proofBoundary": "B+L: shared directory catalog demand and native model window",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context_meter_test.ts",
-              "testID": "legacy.context_meter.345d6e05ceac9b16"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/context-meter.spec.ts",
+              "testID": "messages.native-catalog-context-window"
             }
           ],
           "retainedCoverage": {
@@ -2247,14 +2289,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context_meter_test.ts",
-            "testID": "legacy.context_meter.345d6e05ceac9b16"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/context-meter.spec.ts",
+            "testID": "messages.native-catalog-context-window"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "2c541a032b8614e3748c2b4aa302b5fc24cf1d653bc5b0235dea9a2fa9b3a77c",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.context_meter.345d6e05ceac9b16"
           }
         }
       ]
@@ -3402,6 +3444,11 @@
               "runner": "legacy",
               "file": "tests/e2e/files_test.ts",
               "testID": "legacy.files.6e3e5ab2022eb7c5"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/files.spec.ts",
+              "testID": "messages.edit-write-patch-native-files-geometry"
             }
           ],
           "retainedCoverage": {
@@ -3412,7 +3459,10 @@
               "R2/R3 real edit diffs, live styles/wrap, write highlights/line numbers/diagnostics and patch statuses (otk-dark)"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/harness-opencode-v1/tests/tools_test.ts",
+            "testID": "recorded file tools map hunks, status, paths and one-based file-local diagnostics"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/files_test.ts",
@@ -3420,8 +3470,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "d6fc25669f12fa71bf2de2c94f391b3fd1471cb58f18707b65f5ac5f94d57ec3",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "cabcbdb22c16eeb7100aadaff06d6185e1666d09154f6b410dbfcc6666f75a9c",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.files.6e3e5ab2022eb7c5"
           }
         },
         {
@@ -3433,6 +3483,11 @@
               "runner": "legacy",
               "file": "tests/e2e/files_test.ts",
               "testID": "legacy.files.b2e4b5a5e72378dc"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/files.spec.ts",
+              "testID": "messages.edit-write-patch-native-files-geometry"
             }
           ],
           "retainedCoverage": {
@@ -3451,8 +3506,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "d6fc25669f12fa71bf2de2c94f391b3fd1471cb58f18707b65f5ac5f94d57ec3",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "cabcbdb22c16eeb7100aadaff06d6185e1666d09154f6b410dbfcc6666f75a9c",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.files.b2e4b5a5e72378dc"
           }
         }
       ]
@@ -3508,9 +3563,9 @@
           "proofBoundary": "B+L: held child reads do not block parent; progress/removal survives reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/helper-pages_test.ts",
-              "testID": "legacy.helper-pages.92764629f321cfcd"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/helper-pages.spec.ts",
+              "testID": "messages.helper-held-parent-paint-progress-removal-reload"
             }
           ],
           "retainedCoverage": {
@@ -3523,14 +3578,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/helper-pages_test.ts",
-            "testID": "legacy.helper-pages.92764629f321cfcd"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/helper-pages.spec.ts",
+            "testID": "messages.helper-held-parent-paint-progress-removal-reload"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "44bb89fd737dc05d03f9765e20ebd6e073b16f3aba622e6d8ea2de4d6c669c1e",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.helper-pages.92764629f321cfcd"
           }
         },
         {
@@ -3539,9 +3594,9 @@
           "proofBoundary": "B+L: held child reads do not block parent; progress/removal survives reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/helper-pages_test.ts",
-              "testID": "legacy.helper-pages.3841ab0a8c30398a"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/helper-pages.spec.ts",
+              "testID": "messages.helper-held-parent-paint-progress-removal-reload"
             }
           ],
           "retainedCoverage": {
@@ -3554,14 +3609,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/helper-pages_test.ts",
-            "testID": "legacy.helper-pages.3841ab0a8c30398a"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/helper-pages.spec.ts",
+            "testID": "messages.helper-held-parent-paint-progress-removal-reload"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "44bb89fd737dc05d03f9765e20ebd6e073b16f3aba622e6d8ea2de4d6c669c1e",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.helper-pages.3841ab0a8c30398a"
           }
         }
       ]
@@ -3617,9 +3672,9 @@
           "proofBoundary": "B+C; S for the 2,000-line measurement case: true worker color, cooling and passive latency",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/highlight_test.ts",
-              "testID": "legacy.highlight.b5d20a7b760918b9"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/highlight.spec.ts",
+              "testID": "messages.streaming-grammar-unknown-language"
             }
           ],
           "retainedCoverage": {
@@ -3632,14 +3687,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/highlight_test.ts",
-            "testID": "legacy.highlight.b5d20a7b760918b9"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/highlight.spec.ts",
+            "testID": "messages.streaming-grammar-unknown-language"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f4e7befafa3d422642e094647ab7388f702b221714654976e65fa57da7f251ce",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.highlight.b5d20a7b760918b9"
           }
         },
         {
@@ -3648,9 +3703,14 @@
           "proofBoundary": "B+C; S for the 2,000-line measurement case: true worker color, cooling and passive latency",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/highlight_test.ts",
-              "testID": "legacy.highlight.cfa8c623e89567cc"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/highlight-cooling.spec.ts",
+              "testID": "messages.highlight-cooling-worker-lifetime"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/messages/highlight-cooling.spec.ts",
+              "testID": "messages.highlight-cooling-heap-samples"
             }
           ],
           "retainedCoverage": {
@@ -3663,14 +3723,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/highlight_test.ts",
-            "testID": "legacy.highlight.cfa8c623e89567cc"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/highlight-cooling.spec.ts",
+            "testID": "messages.highlight-cooling-worker-lifetime"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f4e7befafa3d422642e094647ab7388f702b221714654976e65fa57da7f251ce",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.highlight.cfa8c623e89567cc"
           }
         },
         {
@@ -3679,9 +3739,9 @@
           "proofBoundary": "B+C; S for the 2,000-line measurement case: true worker color, cooling and passive latency",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/highlight_test.ts",
-              "testID": "legacy.highlight.35995068fc51d915"
+              "runner": "playwright",
+              "file": "tests/browser/scale/messages/highlight.spec.ts",
+              "testID": "messages.highlight-2000-lines-passive-latency"
             }
           ],
           "retainedCoverage": {
@@ -3694,14 +3754,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/highlight_test.ts",
-            "testID": "legacy.highlight.35995068fc51d915"
+            "runner": "playwright",
+            "file": "tests/browser/scale/messages/highlight.spec.ts",
+            "testID": "messages.highlight-2000-lines-passive-latency"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f4e7befafa3d422642e094647ab7388f702b221714654976e65fa57da7f251ce",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.highlight.35995068fc51d915"
           }
         }
       ]
@@ -3718,9 +3778,9 @@
           "proofBoundary": "C: equal source retains token nodes/admits no work; no sleep-based quiet window",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/highlight-input_test.ts",
-              "testID": "legacy.highlight-input.29260bf5926ee139"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/highlight-input.spec.ts",
+              "testID": "messages.equal-code-input-no-work"
             }
           ],
           "retainedCoverage": {
@@ -3733,14 +3793,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/highlight-input_test.ts",
-            "testID": "legacy.highlight-input.29260bf5926ee139"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/highlight-input.spec.ts",
+            "testID": "messages.equal-code-input-no-work"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "a07a716642db87417a56bb939f47999660a32fd4be6b70c13a95543bc0e5eff5",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.highlight-input.29260bf5926ee139"
           }
         }
       ]
@@ -5394,6 +5454,11 @@
               "runner": "legacy",
               "file": "tests/e2e/message-disclosures_test.ts",
               "testID": "legacy.message-disclosures.c2d8c0f7722a665c"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/disclosures.spec.ts",
+              "testID": "messages.disclosures-unmount-retain-choice-draft"
             }
           ],
           "retainedCoverage": {
@@ -5412,8 +5477,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "d4b0735a945d8e9a61bf26e4acedcd2b2378b8bd49f4748ee56d5df048b37c68",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "919220baa0114577628f46dd6e4e46362a521d487e04a09ff7c8305557484081",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-disclosures.c2d8c0f7722a665c"
           }
         },
         {
@@ -5425,6 +5490,11 @@
               "runner": "legacy",
               "file": "tests/e2e/message-disclosures_test.ts",
               "testID": "legacy.message-disclosures.30ed9048ebc80563"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/disclosures.spec.ts",
+              "testID": "messages.disclosures-unmount-retain-choice-draft"
             }
           ],
           "retainedCoverage": {
@@ -5443,8 +5513,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "d4b0735a945d8e9a61bf26e4acedcd2b2378b8bd49f4748ee56d5df048b37c68",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "919220baa0114577628f46dd6e4e46362a521d487e04a09ff7c8305557484081",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-disclosures.30ed9048ebc80563"
           }
         }
       ]
@@ -5544,9 +5614,9 @@
           "proofBoundary": "B+L: real newest10/off-page context/Undo/cursors/live/reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-pages_test.ts",
-              "testID": "legacy.message-pages.66de6c395d29744a"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/pages.spec.ts",
+              "testID": "messages.native-newest10-offpage-undo-cursors-live-reload"
             }
           ],
           "retainedCoverage": {
@@ -5557,16 +5627,19 @@
               "native newest10 keeps off-page composer/Undo context, pages, streams and restores after reload (otk-dark)"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/message-pages_test.ts",
+            "testID": "selected page installs coordinated metadata and latest prompt outside newest10 without session.get"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-pages_test.ts",
-            "testID": "legacy.message-pages.66de6c395d29744a"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/pages.spec.ts",
+            "testID": "messages.native-newest10-offpage-undo-cursors-live-reload"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "44835fc79f4c5bd0051f78dff190986d2afeadfe3bfaca4160bd13e86598a872",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-pages.66de6c395d29744a"
           }
         },
         {
@@ -5575,9 +5648,9 @@
           "proofBoundary": "B+L: real newest10/off-page context/Undo/cursors/live/reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-pages_test.ts",
-              "testID": "legacy.message-pages.ede56f349d3ff610"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/pages.spec.ts",
+              "testID": "messages.native-newest10-offpage-undo-cursors-live-reload"
             }
           ],
           "retainedCoverage": {
@@ -5590,14 +5663,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-pages_test.ts",
-            "testID": "legacy.message-pages.ede56f349d3ff610"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/pages.spec.ts",
+            "testID": "messages.native-newest10-offpage-undo-cursors-live-reload"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "44835fc79f4c5bd0051f78dff190986d2afeadfe3bfaca4160bd13e86598a872",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-pages.ede56f349d3ff610"
           }
         }
       ]
@@ -5614,9 +5687,9 @@
           "proofBoundary": "B+L: complete 102-step ledger and off-page source copy; unknown versus zero",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-projections_test.ts",
-              "testID": "legacy.message-projections.8f178849eb0bd2e9"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/pages.spec.ts",
+              "testID": "messages.native-102-step-ledger-offpage-copy"
             }
           ],
           "retainedCoverage": {
@@ -5627,16 +5700,19 @@
               "native 102-step reply opens only its complete turn ledger and copies off-page source (otk-dark)"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/transcript-projection_test.ts",
+            "testID": "the canonical transcript publishes one thousand part replacements without traversing history and lazily copies every missing step"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-projections_test.ts",
-            "testID": "legacy.message-projections.8f178849eb0bd2e9"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/pages.spec.ts",
+            "testID": "messages.native-102-step-ledger-offpage-copy"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4af03bb8d067401c0a317dacac772baed144928640cc94cef5030fb90a1eb1ba",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-projections.8f178849eb0bd2e9"
           }
         },
         {
@@ -5645,9 +5721,9 @@
           "proofBoundary": "B+L: complete 102-step ledger and off-page source copy; unknown versus zero",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-projections_test.ts",
-              "testID": "legacy.message-projections.0908795119c6668d"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/pages.spec.ts",
+              "testID": "messages.native-102-step-ledger-offpage-copy"
             }
           ],
           "retainedCoverage": {
@@ -5660,14 +5736,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-projections_test.ts",
-            "testID": "legacy.message-projections.0908795119c6668d"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/pages.spec.ts",
+            "testID": "messages.native-102-step-ledger-offpage-copy"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4af03bb8d067401c0a317dacac772baed144928640cc94cef5030fb90a1eb1ba",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-projections.0908795119c6668d"
           }
         },
         {
@@ -5676,9 +5752,9 @@
           "proofBoundary": "B+L: complete 102-step ledger and off-page source copy; unknown versus zero",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-projections_test.ts",
-              "testID": "legacy.message-projections.ba83d7bedb7839a0"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/usage-truth.spec.ts",
+              "testID": "messages.unreported-versus-zero-live-usage"
             }
           ],
           "retainedCoverage": {
@@ -5691,14 +5767,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-projections_test.ts",
-            "testID": "legacy.message-projections.ba83d7bedb7839a0"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/usage-truth.spec.ts",
+            "testID": "messages.unreported-versus-zero-live-usage"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4af03bb8d067401c0a317dacac772baed144928640cc94cef5030fb90a1eb1ba",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-projections.ba83d7bedb7839a0"
           }
         },
         {
@@ -5707,9 +5783,9 @@
           "proofBoundary": "B+L: complete 102-step ledger and off-page source copy; unknown versus zero",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-projections_test.ts",
-              "testID": "legacy.message-projections.8c5610b86f7f1760"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/usage-truth.spec.ts",
+              "testID": "messages.unreported-versus-zero-live-usage"
             }
           ],
           "retainedCoverage": {
@@ -5722,14 +5798,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-projections_test.ts",
-            "testID": "legacy.message-projections.8c5610b86f7f1760"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/usage-truth.spec.ts",
+            "testID": "messages.unreported-versus-zero-live-usage"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4af03bb8d067401c0a317dacac772baed144928640cc94cef5030fb90a1eb1ba",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-projections.8c5610b86f7f1760"
           }
         }
       ]
@@ -5746,9 +5822,9 @@
           "proofBoundary": "B+L: actual reconnect, failed-first checkpoint and terminal authority",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-recovery_test.ts",
-              "testID": "legacy.message-recovery.358d2f5235290b56"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/recovery.spec.ts",
+              "testID": "messages.native-reconnect-terminal-checkpoint-false"
             }
           ],
           "retainedCoverage": {
@@ -5759,16 +5835,19 @@
               "real native reconnect and lost seeds stay refreshing until a terminal source checkpoint (otk-dark, retry=false)"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/snapshot-recovery_test.ts",
+            "testID": "recovery state survives page installation, rejects stale generations and releases with authoritative source or cooling"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-recovery_test.ts",
-            "testID": "legacy.message-recovery.358d2f5235290b56"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/recovery.spec.ts",
+            "testID": "messages.native-reconnect-terminal-checkpoint-false"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "32fccff7ca683ed943a1ae63b11565a0435b12c78823e37a8469cbb11368f63a",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-recovery.358d2f5235290b56"
           }
         },
         {
@@ -5777,9 +5856,9 @@
           "proofBoundary": "B+L: actual reconnect, failed-first checkpoint and terminal authority",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-recovery_test.ts",
-              "testID": "legacy.message-recovery.a3edebf55c837fce"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/recovery.spec.ts",
+              "testID": "messages.native-reconnect-terminal-checkpoint-true"
             }
           ],
           "retainedCoverage": {
@@ -5792,14 +5871,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-recovery_test.ts",
-            "testID": "legacy.message-recovery.a3edebf55c837fce"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/recovery.spec.ts",
+            "testID": "messages.native-reconnect-terminal-checkpoint-true"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "32fccff7ca683ed943a1ae63b11565a0435b12c78823e37a8469cbb11368f63a",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-recovery.a3edebf55c837fce"
           }
         },
         {
@@ -5808,9 +5887,9 @@
           "proofBoundary": "B+L: actual reconnect, failed-first checkpoint and terminal authority",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-recovery_test.ts",
-              "testID": "legacy.message-recovery.991a49f1162779c9"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/recovery.spec.ts",
+              "testID": "messages.native-reconnect-terminal-checkpoint-false"
             }
           ],
           "retainedCoverage": {
@@ -5823,14 +5902,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-recovery_test.ts",
-            "testID": "legacy.message-recovery.991a49f1162779c9"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/recovery.spec.ts",
+            "testID": "messages.native-reconnect-terminal-checkpoint-false"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "32fccff7ca683ed943a1ae63b11565a0435b12c78823e37a8469cbb11368f63a",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-recovery.991a49f1162779c9"
           }
         },
         {
@@ -5839,9 +5918,9 @@
           "proofBoundary": "B+L: actual reconnect, failed-first checkpoint and terminal authority",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-recovery_test.ts",
-              "testID": "legacy.message-recovery.2bbc6faa741edb5d"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/recovery.spec.ts",
+              "testID": "messages.native-reconnect-terminal-checkpoint-true"
             }
           ],
           "retainedCoverage": {
@@ -5854,14 +5933,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-recovery_test.ts",
-            "testID": "legacy.message-recovery.2bbc6faa741edb5d"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/recovery.spec.ts",
+            "testID": "messages.native-reconnect-terminal-checkpoint-true"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "32fccff7ca683ed943a1ae63b11565a0435b12c78823e37a8469cbb11368f63a",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-recovery.2bbc6faa741edb5d"
           }
         }
       ]
@@ -6080,9 +6159,9 @@
           "proofBoundary": "B+L: warm reuse, cold cancellation, attention preload and drafts",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-temperature_test.ts",
-              "testID": "legacy.message-temperature.99d8f01f7313e910"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/temperature.spec.ts",
+              "testID": "messages.warm-cold-attention-preload-drafts"
             }
           ],
           "retainedCoverage": {
@@ -6095,14 +6174,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-temperature_test.ts",
-            "testID": "legacy.message-temperature.99d8f01f7313e910"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/temperature.spec.ts",
+            "testID": "messages.warm-cold-attention-preload-drafts"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "1b364ddff0667c3114f45b5b2e3c22cee8eb332f81e8745f6519c7ac0a987db3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-temperature.99d8f01f7313e910"
           }
         },
         {
@@ -6111,9 +6190,9 @@
           "proofBoundary": "B+L: warm reuse, cold cancellation, attention preload and drafts",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-temperature_test.ts",
-              "testID": "legacy.message-temperature.ac3e314ba62c6e99"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/temperature.spec.ts",
+              "testID": "messages.warm-cold-attention-preload-drafts"
             }
           ],
           "retainedCoverage": {
@@ -6126,14 +6205,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-temperature_test.ts",
-            "testID": "legacy.message-temperature.ac3e314ba62c6e99"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/messages/temperature.spec.ts",
+            "testID": "messages.warm-cold-attention-preload-drafts"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "1b364ddff0667c3114f45b5b2e3c22cee8eb332f81e8745f6519c7ac0a987db3",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-temperature.ac3e314ba62c6e99"
           }
         }
       ]
@@ -6153,6 +6232,11 @@
               "runner": "legacy",
               "file": "tests/e2e/message-window_test.ts",
               "testID": "legacy.message-window.bdaae9711c55a0d0"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/window.spec.ts",
+              "testID": "messages.timeline-window-native-selection"
             }
           ],
           "retainedCoverage": {
@@ -6171,8 +6255,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "1dd019f49d0826df4b4dfe451128c60b1f7b6d027ff4dc7d35be62d79b13351a",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "eb6db7c7f1e5070b3e16539bcfccb29ceec4f09f617a12b962bca1ddacaf89e5",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.bdaae9711c55a0d0"
           }
         },
         {
@@ -6184,6 +6268,11 @@
               "runner": "legacy",
               "file": "tests/e2e/message-window_test.ts",
               "testID": "legacy.message-window.2ba9ccc0fe490904"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/window.spec.ts",
+              "testID": "messages.timeline-window-native-selection"
             }
           ],
           "retainedCoverage": {
@@ -6202,8 +6291,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "1dd019f49d0826df4b4dfe451128c60b1f7b6d027ff4dc7d35be62d79b13351a",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "eb6db7c7f1e5070b3e16539bcfccb29ceec4f09f617a12b962bca1ddacaf89e5",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.2ba9ccc0fe490904"
           }
         },
         {
@@ -6215,6 +6304,11 @@
               "runner": "legacy",
               "file": "tests/e2e/message-window_test.ts",
               "testID": "legacy.message-window.ab7d799421931b33"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/window.spec.ts",
+              "testID": "messages.prepend-one-pixel-anchor"
             }
           ],
           "retainedCoverage": {
@@ -6233,8 +6327,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "1dd019f49d0826df4b4dfe451128c60b1f7b6d027ff4dc7d35be62d79b13351a",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "eb6db7c7f1e5070b3e16539bcfccb29ceec4f09f617a12b962bca1ddacaf89e5",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.ab7d799421931b33"
           }
         },
         {
@@ -6246,6 +6340,11 @@
               "runner": "legacy",
               "file": "tests/e2e/message-window_test.ts",
               "testID": "legacy.message-window.f74f0699375f7808"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/window.spec.ts",
+              "testID": "messages.prepend-one-pixel-anchor"
             }
           ],
           "retainedCoverage": {
@@ -6264,8 +6363,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "1dd019f49d0826df4b4dfe451128c60b1f7b6d027ff4dc7d35be62d79b13351a",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "eb6db7c7f1e5070b3e16539bcfccb29ceec4f09f617a12b962bca1ddacaf89e5",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.f74f0699375f7808"
           }
         },
         {
@@ -6277,6 +6376,11 @@
               "runner": "legacy",
               "file": "tests/e2e/message-window_test.ts",
               "testID": "legacy.message-window.c8d34daa31cb34c2"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/window.spec.ts",
+              "testID": "messages.diff-native-range-measured-anchor"
             }
           ],
           "retainedCoverage": {
@@ -6295,8 +6399,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "1dd019f49d0826df4b4dfe451128c60b1f7b6d027ff4dc7d35be62d79b13351a",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "eb6db7c7f1e5070b3e16539bcfccb29ceec4f09f617a12b962bca1ddacaf89e5",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.c8d34daa31cb34c2"
           }
         },
         {
@@ -6308,6 +6412,11 @@
               "runner": "legacy",
               "file": "tests/e2e/message-window_test.ts",
               "testID": "legacy.message-window.63d9e82576a936e7"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/window.spec.ts",
+              "testID": "messages.diff-native-range-measured-anchor"
             }
           ],
           "retainedCoverage": {
@@ -6326,8 +6435,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "1dd019f49d0826df4b4dfe451128c60b1f7b6d027ff4dc7d35be62d79b13351a",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "eb6db7c7f1e5070b3e16539bcfccb29ceec4f09f617a12b962bca1ddacaf89e5",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.63d9e82576a936e7"
           }
         }
       ]
@@ -6347,6 +6456,11 @@
               "runner": "legacy",
               "file": "tests/e2e/messages_test.ts",
               "testID": "legacy.messages.a9f539f5751da38e"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/history.spec.ts",
+              "testID": "messages.revert-files-counted-strip-reload"
             }
           ],
           "retainedCoverage": {
@@ -6357,7 +6471,10 @@
               "R8 revert RPC restores files, hides reverted turns and persists a joined counted strip on reload"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "tests/integration/session_actions_test.ts",
+            "testID": "restore returns rolled-back prompts to the real native conversation"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/messages_test.ts",
@@ -6365,8 +6482,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "5995783a93b1ab176b070647826ee65c8e5d2f3876fbc5b0b8026a82a2c1e8ac",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "19513071ccd8df793aadc421e0caf6cbb932a75773ffd85fca17070428f13453",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.messages.a9f539f5751da38e"
           }
         },
         {
@@ -6378,6 +6495,11 @@
               "runner": "legacy",
               "file": "tests/e2e/messages_test.ts",
               "testID": "legacy.messages.01b78c86b8e9b006"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/history.spec.ts",
+              "testID": "messages.history-chips-compaction"
             }
           ],
           "retainedCoverage": {
@@ -6396,8 +6518,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "5995783a93b1ab176b070647826ee65c8e5d2f3876fbc5b0b8026a82a2c1e8ac",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "19513071ccd8df793aadc421e0caf6cbb932a75773ffd85fca17070428f13453",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.messages.01b78c86b8e9b006"
           }
         },
         {
@@ -6409,6 +6531,11 @@
               "runner": "legacy",
               "file": "tests/e2e/messages_test.ts",
               "testID": "legacy.messages.8306e7f2f54f60dc"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/history.spec.ts",
+              "testID": "messages.queued-answered-agent-details"
             }
           ],
           "retainedCoverage": {
@@ -6427,8 +6554,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "5995783a93b1ab176b070647826ee65c8e5d2f3876fbc5b0b8026a82a2c1e8ac",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "19513071ccd8df793aadc421e0caf6cbb932a75773ffd85fca17070428f13453",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.messages.8306e7f2f54f60dc"
           }
         }
       ]
@@ -6448,6 +6575,11 @@
               "runner": "legacy",
               "file": "tests/e2e/metadata-truth_test.ts",
               "testID": "legacy.metadata-truth.1abba4028b1a5cd2"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/metadata.spec.ts",
+              "testID": "messages.unknown-metadata-output-draft"
             }
           ],
           "retainedCoverage": {
@@ -6458,7 +6590,10 @@
               "native unknown search/diff metadata and shared output policy reach both themed consumers"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/harness-opencode-v1/tests/metadata-truth_test.ts",
+            "testID": "native search counts distinguish unknown, reported zero and complete decoded results"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/metadata-truth_test.ts",
@@ -6466,8 +6601,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "0bbddfc0bde12167e3da2e90f0af4fb03be2b4a90eda2082d036b6865d68b4d1",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "9feb6643afa986a673b49ee23daa06ea4309bcb13495d4e00c872532cfe785d5",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.metadata-truth.1abba4028b1a5cd2"
           }
         }
       ]
@@ -6487,6 +6622,11 @@
               "runner": "legacy",
               "file": "tests/e2e/money_format_test.ts",
               "testID": "legacy.money_format.a4eecac4aacec3bf"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/money.spec.ts",
+              "testID": "messages.exact-money-accessibility-all-consumers"
             }
           ],
           "retainedCoverage": {
@@ -6497,7 +6637,10 @@
               "U14 r2 one money rule and exact title-free accessibility reach overlay, footer, meter and session rows"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/usage_test.ts",
+            "testID": "exact money preserves sub-cent amounts and full reported precision without false zero"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/money_format_test.ts",
@@ -6506,7 +6649,7 @@
           "verificationReceipt": {
             "kind": "registration-collection",
             "sourceSha256": "ba83d63a084d857dc9ee0973ae86de1089d7329fd67c064b96573191c301c523",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.money_format.a4eecac4aacec3bf"
           }
         }
       ]
@@ -8818,6 +8961,11 @@
               "runner": "legacy",
               "file": "tests/e2e/response_progress_test.ts",
               "testID": "legacy.response_progress.9eabce50ab073925"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/response-progress.spec.ts",
+              "testID": "messages.response-progress-motion-completion-interruption"
             }
           ],
           "retainedCoverage": {
@@ -8836,8 +8984,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "c1b785d67438f1799da08c03fc99d3300501fc36438bcdeac3b3ae0fbdbee4ae",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "dec989eea8441fd6be8212a53b1e44ce685cd20a686a1e19c135f8ddf16c0d24",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.response_progress.9eabce50ab073925"
           }
         }
       ]
@@ -9230,6 +9378,11 @@
               "runner": "legacy",
               "file": "tests/e2e/session_cost_test.ts",
               "testID": "legacy.session_cost.91521036ff0b0c19"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/session-cost.spec.ts",
+              "testID": "messages.unopened-session-helper-costs-live-display-persistence"
             }
           ],
           "retainedCoverage": {
@@ -9240,7 +9393,10 @@
               "U5 Sessions rows present whole-session usage for unopened sessions and helpers, refresh live and respect persisted Show cost (otk-dark)"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/session-usage_test.ts",
+            "testID": "usage reconnect rejects old generations, isolates targets and exposes whole-session totals for other consumers"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/session_cost_test.ts",
@@ -9248,8 +9404,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "4ba05a0ed4c8545a61b6926ac3b2eb21539ccfaa922b33496d3025133aab598d",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "4e80ec17fc324c3f1c2421d1a080ec1b8b0640b06e31e327219838180e465256",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.session_cost.91521036ff0b0c19"
           }
         },
         {
@@ -9261,6 +9417,11 @@
               "runner": "legacy",
               "file": "tests/e2e/session_cost_test.ts",
               "testID": "legacy.session_cost.b399f337faeb7d92"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/session-cost.spec.ts",
+              "testID": "messages.unopened-session-helper-costs-live-display-persistence"
             }
           ],
           "retainedCoverage": {
@@ -9279,8 +9440,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "4ba05a0ed4c8545a61b6926ac3b2eb21539ccfaa922b33496d3025133aab598d",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "4e80ec17fc324c3f1c2421d1a080ec1b8b0640b06e31e327219838180e465256",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.session_cost.b399f337faeb7d92"
           }
         },
         {
@@ -9292,6 +9453,11 @@
               "runner": "legacy",
               "file": "tests/e2e/session_cost_test.ts",
               "testID": "legacy.session_cost.e387c7bff75d1e69"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/session-cost.spec.ts",
+              "testID": "messages.unopened-session-helper-costs-live-display-persistence"
             }
           ],
           "retainedCoverage": {
@@ -9310,8 +9476,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "4ba05a0ed4c8545a61b6926ac3b2eb21539ccfaa922b33496d3025133aab598d",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "4e80ec17fc324c3f1c2421d1a080ec1b8b0640b06e31e327219838180e465256",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.session_cost.e387c7bff75d1e69"
           }
         }
       ]
@@ -11384,6 +11550,11 @@
               "runner": "legacy",
               "file": "tests/e2e/timestamps_test.ts",
               "testID": "legacy.timestamps.5f265e810dedfa63"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/timestamps.spec.ts",
+              "testID": "messages.native-final-clock-hover-ax-preference-restart"
             }
           ],
           "retainedCoverage": {
@@ -11394,7 +11565,10 @@
               "creation-time hover and persistent visibility, structural footer date/clock, native final time and completed restart in otk-dark"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/harness-opencode-v1/tests/message-clock_test.ts",
+            "testID": "clock scalar SQL matches native output clocks without selecting bodies"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/timestamps_test.ts",
@@ -11402,8 +11576,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "9bd23f7e120dc6a9f96a4f0c9b48dcc31a3cb3d117f1279955d3b665c49ddd84",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "595e20053f6e8d95bafa3add145c90deb790fe96b22f6e55cc767c56e8053405",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.timestamps.5f265e810dedfa63"
           }
         },
         {
@@ -11415,6 +11589,11 @@
               "runner": "legacy",
               "file": "tests/e2e/timestamps_test.ts",
               "testID": "legacy.timestamps.d1e170f36815dba6"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/timestamps.spec.ts",
+              "testID": "messages.native-final-clock-hover-ax-preference-restart"
             }
           ],
           "retainedCoverage": {
@@ -11433,8 +11612,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "9bd23f7e120dc6a9f96a4f0c9b48dcc31a3cb3d117f1279955d3b665c49ddd84",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "595e20053f6e8d95bafa3add145c90deb790fe96b22f6e55cc767c56e8053405",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.timestamps.d1e170f36815dba6"
           }
         }
       ]
@@ -11454,6 +11633,11 @@
               "runner": "legacy",
               "file": "tests/e2e/todos_questions_test.ts",
               "testID": "legacy.todos_questions.088fe5d5199c1286"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/todos-questions.spec.ts",
+              "testID": "messages.native-todos-readonly-questions"
             }
           ],
           "retainedCoverage": {
@@ -11464,7 +11648,10 @@
               "R4 todo checklist states and read-only question answers from real opencode"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/harness-opencode-v1/tests/tools_test.ts",
+            "testID": "recorded opencode 1.18.34 todo and question calls become OTK shapes"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/todos_questions_test.ts",
@@ -11472,8 +11659,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "334ae014658e40860c648c6d28245f3cde3cd2ad90403fcd0bd443d5e6f37576",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "66e706ae14067b24a8d283db01f1147e7a46f0995fa052d5c947c1bba7e4d1c3",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.todos_questions.088fe5d5199c1286"
           }
         }
       ]
@@ -11493,6 +11680,11 @@
               "runner": "legacy",
               "file": "tests/e2e/tool_paths_test.ts",
               "testID": "legacy.tool_paths.0b499f03df85f171"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/tool-paths.spec.ts",
+              "testID": "messages.project-and-outside-tool-paths-reload"
             }
           ],
           "retainedCoverage": {
@@ -11503,7 +11695,10 @@
               "tool headers, bodies and path-list results share project context, including outside paths and reload"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/harness-opencode-v1/tests/search-output_test.ts",
+            "testID": "native path-list results carry paths and pagination metadata without model envelopes"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/tool_paths_test.ts",
@@ -11511,8 +11706,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "bd1634b6df0894f0c031fbeb61eeb23b97841d05670756890cd6916548a8ca77",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "18b2f717cc908deb050215c208aca51babf7af850186252d4dce0c5778cf7607",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tool_paths.0b499f03df85f171"
           }
         }
       ]
@@ -11532,6 +11727,11 @@
               "runner": "legacy",
               "file": "tests/e2e/tool_results_test.ts",
               "testID": "legacy.tool_results.162308504e5450a2"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/tool-results.spec.ts",
+              "testID": "messages.typed-native-results-reload"
             }
           ],
           "retainedCoverage": {
@@ -11550,8 +11750,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "d2160522f3dbc4674b12aa546f7bc249296af0deb6b0078508a6c8755878dfe6",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "1d4ac6ae8dbb4a4572bf0c58265be63c6222b13724e9dbe2d124a5c642aa4f64",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tool_results.162308504e5450a2"
           }
         },
         {
@@ -11563,6 +11763,11 @@
               "runner": "legacy",
               "file": "tests/e2e/tool_results_test.ts",
               "testID": "legacy.tool_results.2329aed070a36705"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/tool-results.spec.ts",
+              "testID": "messages.empty-result-offset-total"
             }
           ],
           "retainedCoverage": {
@@ -11573,7 +11778,10 @@
               "empty result pages retain offset and total without inverted ranges or false empty-file claims"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "tests/integration/tool-results_test.ts",
+            "testID": "stock read empty pages preserve real offset, zero-limit totals and source bytes"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/tool_results_test.ts",
@@ -11581,8 +11789,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "d2160522f3dbc4674b12aa546f7bc249296af0deb6b0078508a6c8755878dfe6",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "1d4ac6ae8dbb4a4572bf0c58265be63c6222b13724e9dbe2d124a5c642aa4f64",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tool_results.2329aed070a36705"
           }
         }
       ]
@@ -11602,6 +11810,11 @@
               "runner": "legacy",
               "file": "tests/e2e/tools_test.ts",
               "testID": "legacy.tools.6aafa6be59569ed9"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/tools.spec.ts",
+              "testID": "messages.bash-ten-thirty-cwd"
             }
           ],
           "retainedCoverage": {
@@ -11612,7 +11825,10 @@
               "R1 bash output is ten lines, expands to thirty, and displays differing cwd"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/harness-opencode-v1/tests/tools_test.ts",
+            "testID": "recorded basic tools retain OTK fields, actual search counts and denied/error states"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/tools_test.ts",
@@ -11620,8 +11836,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "500a1f238f84be19bc6d5fa31c3fa6773f3527e3b798969ec344154af0972664",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "2c9150814f2322a47e608aa7c03df943e1511b1683a8f762052b4f981345d7c9",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tools.6aafa6be59569ed9"
           }
         },
         {
@@ -11633,6 +11849,11 @@
               "runner": "legacy",
               "file": "tests/e2e/tools_test.ts",
               "testID": "legacy.tools.7e92fd3146ab8235"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/tools.spec.ts",
+              "testID": "messages.native-read-search-fetch-skill-generic-forms"
             }
           ],
           "retainedCoverage": {
@@ -11651,8 +11872,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "500a1f238f84be19bc6d5fa31c3fa6773f3527e3b798969ec344154af0972664",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "2c9150814f2322a47e608aa7c03df943e1511b1683a8f762052b4f981345d7c9",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tools.7e92fd3146ab8235"
           }
         },
         {
@@ -11664,6 +11885,11 @@
               "runner": "legacy",
               "file": "tests/e2e/tools_test.ts",
               "testID": "legacy.tools.7893eeb4d28ac2f4"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/tools.spec.ts",
+              "testID": "messages.native-read-search-fetch-skill-generic-forms"
             }
           ],
           "retainedCoverage": {
@@ -11682,8 +11908,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "500a1f238f84be19bc6d5fa31c3fa6773f3527e3b798969ec344154af0972664",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "2c9150814f2322a47e608aa7c03df943e1511b1683a8f762052b4f981345d7c9",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tools.7893eeb4d28ac2f4"
           }
         },
         {
@@ -11695,6 +11921,11 @@
               "runner": "legacy",
               "file": "tests/e2e/tools_test.ts",
               "testID": "legacy.tools.e50ba2aab9f587ff"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/tools.spec.ts",
+              "testID": "messages.permission-denial-error-state-contract"
             }
           ],
           "retainedCoverage": {
@@ -11713,8 +11944,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "500a1f238f84be19bc6d5fa31c3fa6773f3527e3b798969ec344154af0972664",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "2c9150814f2322a47e608aa7c03df943e1511b1683a8f762052b4f981345d7c9",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tools.e50ba2aab9f587ff"
           }
         }
       ]
@@ -11734,6 +11965,11 @@
               "runner": "legacy",
               "file": "tests/e2e/transcript_test.ts",
               "testID": "legacy.transcript.236c6bc197613fe8"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/reading.spec.ts",
+              "testID": "messages.reading-column-renderers-metadata-retry-tab-title"
             }
           ],
           "retainedCoverage": {
@@ -11744,7 +11980,10 @@
               "reading column, renderer disclosures, reply metadata, reported composer settings, retry and tab title (otk-dark)"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/transcript-projection_test.ts",
+            "testID": "transcript projection keeps logical reply identity across earlier pages and visits no history on part replacement"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/transcript_test.ts",
@@ -11752,8 +11991,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "c652d2bb0087d20efece45bd6cf37a79934dba4a7b11a76e846ca6f2e993b794",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "43f416cb99b89de235da2c7ae907f5e736d73238682224d05728d2fc045a56a1",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.transcript.236c6bc197613fe8"
           }
         },
         {
@@ -11765,6 +12004,11 @@
               "runner": "legacy",
               "file": "tests/e2e/transcript_test.ts",
               "testID": "legacy.transcript.36ff395b022bee97"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/reading.spec.ts",
+              "testID": "messages.reading-column-renderers-metadata-retry-tab-title"
             }
           ],
           "retainedCoverage": {
@@ -11783,8 +12027,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "c652d2bb0087d20efece45bd6cf37a79934dba4a7b11a76e846ca6f2e993b794",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "43f416cb99b89de235da2c7ae907f5e736d73238682224d05728d2fc045a56a1",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.transcript.36ff395b022bee97"
           }
         },
         {
@@ -11796,6 +12040,11 @@
               "runner": "legacy",
               "file": "tests/e2e/transcript_test.ts",
               "testID": "legacy.transcript.7e2c2b4ed1ac31cd"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/takeover.spec.ts",
+              "testID": "messages.takeovers-retain-two-drafts-native-outcomes"
             }
           ],
           "retainedCoverage": {
@@ -11814,8 +12063,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "c652d2bb0087d20efece45bd6cf37a79934dba4a7b11a76e846ca6f2e993b794",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "43f416cb99b89de235da2c7ae907f5e736d73238682224d05728d2fc045a56a1",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.transcript.7e2c2b4ed1ac31cd"
           }
         },
         {
@@ -11827,6 +12076,11 @@
               "runner": "legacy",
               "file": "tests/e2e/transcript_test.ts",
               "testID": "legacy.transcript.baa877294d0ca4ef"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/takeover.spec.ts",
+              "testID": "messages.takeovers-retain-two-drafts-native-outcomes"
             }
           ],
           "retainedCoverage": {
@@ -11845,8 +12099,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "c652d2bb0087d20efece45bd6cf37a79934dba4a7b11a76e846ca6f2e993b794",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "43f416cb99b89de235da2c7ae907f5e736d73238682224d05728d2fc045a56a1",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.transcript.baa877294d0ca4ef"
           }
         }
       ]
@@ -11866,6 +12120,11 @@
               "runner": "legacy",
               "file": "tests/e2e/turn_usage_layout_test.ts",
               "testID": "legacy.turn_usage_layout.63a4cc25d70f1e58"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/usage-layout.spec.ts",
+              "testID": "messages.usage-layout-3"
             }
           ],
           "retainedCoverage": {
@@ -11884,8 +12143,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "b91b3e93948e200273b68e78bfe6023accc8307a97f8d0e4c8bc4fd75843432d",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "ea1d66bfc24b26aad201e285a8d0c84a18bfa48e46da8c9f0e1fc02fabc6afba",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.63a4cc25d70f1e58"
           }
         },
         {
@@ -11897,6 +12156,11 @@
               "runner": "legacy",
               "file": "tests/e2e/turn_usage_layout_test.ts",
               "testID": "legacy.turn_usage_layout.a80c9002abf237dc"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/usage-layout.spec.ts",
+              "testID": "messages.usage-layout-120"
             }
           ],
           "retainedCoverage": {
@@ -11915,8 +12179,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "b91b3e93948e200273b68e78bfe6023accc8307a97f8d0e4c8bc4fd75843432d",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "ea1d66bfc24b26aad201e285a8d0c84a18bfa48e46da8c9f0e1fc02fabc6afba",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.a80c9002abf237dc"
           }
         },
         {
@@ -11928,6 +12192,11 @@
               "runner": "legacy",
               "file": "tests/e2e/turn_usage_layout_test.ts",
               "testID": "legacy.turn_usage_layout.083a4d3634295431"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/usage-layout.spec.ts",
+              "testID": "messages.usage-hover-rest-focus-grace"
             }
           ],
           "retainedCoverage": {
@@ -11946,8 +12215,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "b91b3e93948e200273b68e78bfe6023accc8307a97f8d0e4c8bc4fd75843432d",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "ea1d66bfc24b26aad201e285a8d0c84a18bfa48e46da8c9f0e1fc02fabc6afba",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.083a4d3634295431"
           }
         },
         {
@@ -11959,6 +12228,11 @@
               "runner": "legacy",
               "file": "tests/e2e/turn_usage_layout_test.ts",
               "testID": "legacy.turn_usage_layout.7e73117eaa730c05"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/usage-layout.spec.ts",
+              "testID": "messages.usage-hover-rest-focus-grace"
             }
           ],
           "retainedCoverage": {
@@ -11977,8 +12251,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "b91b3e93948e200273b68e78bfe6023accc8307a97f8d0e4c8bc4fd75843432d",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "ea1d66bfc24b26aad201e285a8d0c84a18bfa48e46da8c9f0e1fc02fabc6afba",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.7e73117eaa730c05"
           }
         },
         {
@@ -11987,9 +12261,9 @@
           "proofBoundary": "C+B+V; S for 500-call timing: retain real hover/rest/focus/scroll headers/Total",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/turn_usage_layout_test.ts",
-              "testID": "legacy.turn_usage_layout.ddd8e5b76f446cb2"
+              "runner": "playwright",
+              "file": "tests/browser/scale/messages/usage-detail.spec.ts",
+              "testID": "messages.usage-500-call-lazy-paint"
             }
           ],
           "retainedCoverage": {
@@ -12002,14 +12276,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/turn_usage_layout_test.ts",
-            "testID": "legacy.turn_usage_layout.ddd8e5b76f446cb2"
+            "runner": "playwright",
+            "file": "tests/browser/scale/messages/usage-detail.spec.ts",
+            "testID": "messages.usage-500-call-lazy-paint"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b91b3e93948e200273b68e78bfe6023accc8307a97f8d0e4c8bc4fd75843432d",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.ddd8e5b76f446cb2"
           }
         }
       ]
@@ -12029,6 +12303,11 @@
               "runner": "legacy",
               "file": "tests/e2e/turn_usage_test.ts",
               "testID": "legacy.turn_usage.05320037e542bf91"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/messages/turn-usage.spec.ts",
+              "testID": "messages.priced-native-multistep-usage-display-persistence"
             }
           ],
           "retainedCoverage": {
@@ -12039,7 +12318,10 @@
               "U4 stored multi-step turn usage reaches the footer and hover/focus split; Display cost off persists after reload"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/usage_test.ts",
+            "testID": "charged turn usage accumulates every category across exact-model steps without counting step parts twice"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/turn_usage_test.ts",
@@ -12047,8 +12329,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "844f7a86d38c2a86bec069591d631dfcbac7a7ef5e48b2a5ac5119df8cf7b7f0",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "18b4361c40ee31092f8ec18f2f1d554649250001e8fb92550d3b48fd02bf8b0e",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage.05320037e542bf91"
           }
         },
         {
@@ -12060,6 +12342,11 @@
               "runner": "legacy",
               "file": "tests/e2e/turn_usage_test.ts",
               "testID": "legacy.turn_usage.2dddb7ec1e2eb124"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/usage-truth.spec.ts",
+              "testID": "messages.unknown-prices-five-categories"
             }
           ],
           "retainedCoverage": {
@@ -12078,8 +12365,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "844f7a86d38c2a86bec069591d631dfcbac7a7ef5e48b2a5ac5119df8cf7b7f0",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "18b4361c40ee31092f8ec18f2f1d554649250001e8fb92550d3b48fd02bf8b0e",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage.2dddb7ec1e2eb124"
           }
         },
         {
@@ -12091,6 +12378,11 @@
               "runner": "legacy",
               "file": "tests/e2e/turn_usage_test.ts",
               "testID": "legacy.turn_usage.9f91cc69395cf4cb"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/usage-truth.spec.ts",
+              "testID": "messages.queued-turn-per-provider-category-costs"
             }
           ],
           "retainedCoverage": {
@@ -12109,8 +12401,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "844f7a86d38c2a86bec069591d631dfcbac7a7ef5e48b2a5ac5119df8cf7b7f0",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "18b4361c40ee31092f8ec18f2f1d554649250001e8fb92550d3b48fd02bf8b0e",
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage.9f91cc69395cf4cb"
           }
         }
       ]
@@ -12267,9 +12559,9 @@
           "proofBoundary": "B+L: complete 102-step totals through pages/duplicates/held snapshot/reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/usage_paging_test.ts",
-              "testID": "legacy.usage_paging.a7dd2b052026acad"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/usage-paging.spec.ts",
+              "testID": "messages.complete-usage-pages-duplicates-held-reload"
             }
           ],
           "retainedCoverage": {
@@ -12280,16 +12572,19 @@
               "U4 complete102-step turn and session totals survive paging, duplicate live updates, held snapshots and reload (otk-dark)"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/session-usage_test.ts",
+            "testID": "full usage resource coalesces reads and replaces buffered/duplicate live headers without counting snapshots twice"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/usage_paging_test.ts",
-            "testID": "legacy.usage_paging.a7dd2b052026acad"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/usage-paging.spec.ts",
+            "testID": "messages.complete-usage-pages-duplicates-held-reload"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "8c430b074446584cdf70657fbe8ac8103782e97392307e8747d416df7c2e5685",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.usage_paging.a7dd2b052026acad"
           }
         },
         {
@@ -12298,9 +12593,9 @@
           "proofBoundary": "B+L: complete 102-step totals through pages/duplicates/held snapshot/reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/usage_paging_test.ts",
-              "testID": "legacy.usage_paging.291d31f901653d92"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/usage-paging.spec.ts",
+              "testID": "messages.complete-usage-pages-duplicates-held-reload"
             }
           ],
           "retainedCoverage": {
@@ -12313,14 +12608,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/usage_paging_test.ts",
-            "testID": "legacy.usage_paging.291d31f901653d92"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/usage-paging.spec.ts",
+            "testID": "messages.complete-usage-pages-duplicates-held-reload"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "8c430b074446584cdf70657fbe8ac8103782e97392307e8747d416df7c2e5685",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.usage_paging.291d31f901653d92"
           }
         },
         {
@@ -12329,9 +12624,9 @@
           "proofBoundary": "B+L: complete 102-step totals through pages/duplicates/held snapshot/reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/usage_paging_test.ts",
-              "testID": "legacy.usage_paging.f03d4859698e04e9"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/messages/usage-paging.spec.ts",
+              "testID": "messages.complete-usage-pages-duplicates-held-reload"
             }
           ],
           "retainedCoverage": {
@@ -12344,14 +12639,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/usage_paging_test.ts",
-            "testID": "legacy.usage_paging.f03d4859698e04e9"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/messages/usage-paging.spec.ts",
+            "testID": "messages.complete-usage-pages-duplicates-held-reload"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "8c430b074446584cdf70657fbe8ac8103782e97392307e8747d416df7c2e5685",
-            "run": "otk-t1c5-20261101"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.usage_paging.f03d4859698e04e9"
           }
         }
       ]

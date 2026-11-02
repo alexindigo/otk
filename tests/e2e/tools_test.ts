@@ -1,316 +1,90 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+// T2 V remainder: characterized stock envelopes, no repeated native tool journeys.
 import { test } from "../support/resources.ts";
-import { serve } from "../support/http.ts";
 import { assertEquals } from "@std/assert";
-import { join } from "@std/path";
-import {
-  browserFixture,
-  openSession,
-  waitForReply,
-} from "../support/browser-fixture.ts";
-import {
-  expandTool,
-  recordTools,
-  runTool,
-  toolRow,
-} from "../support/rendering.ts";
-import { waitFor } from "../support/opencode.ts";
-import type { RawPart } from "@otk/harness-opencode-v1";
-import { WsClient } from "../support/ws-client.ts";
-test("R1 bash output is ten lines, expands to thirty, and displays differing cwd", async () => {
-  const f = await browserFixture({ bash: "allow" }, {
-    prepare: async (oc) => {
-      await Deno.mkdir(join(oc.directory, "sub"));
+import { legacyMessageScene } from "../support/legacy-message-scene.ts";
+import { revealViewportElement } from "../support/message-viewport.ts";
+import type { Cdp } from "../support/cdp.ts";
+async function reveal(b: Cdp, selector: string) {
+  await b.evaluate("document.querySelector('.otk-messages').scrollTop=0");
+  await b.poll(
+    "Number(document.querySelector('.otk-message-flow')?.dataset.messageCount)>=12",
+  );
+  await revealViewportElement(b, ".otk-messages", selector);
+}
+test("R1 bash output is ten lines, expands to thirty, and displays differing cwd", () =>
+  legacyMessageScene(
+    "contract-messages-recorded-tools",
+    "otk-dark",
+    async ({ b, capture }) => {
+      const selector = "[data-tool=bash][data-tool-status=completed]";
+      await reveal(b, selector + " .otk-tool-toggle");
+      await b.click(selector + " .otk-tool-toggle");
+      await b.poll(
+        `document.querySelector('${selector} .otk-tool-output')?.textContent.split('\\n').length===10`,
+      );
+      await capture("bash-ten");
+      await b.click(selector + " .otk-output-toggle");
+      await b.poll(
+        `document.querySelector('${selector} .otk-tool-output')?.textContent.split('\\n').length===30`,
+      );
+      await capture("bash-thirty");
     },
-  });
-  try {
-    const s = await f.oc.session<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "Bash rendering" },
-    });
-    const server = await f.sidecar(), browser = await f.browser(server.url);
-    await openSession(browser, s.id);
-    const raw = await runTool(f, browser, s.id, {
-      name: "bash",
-      input: {
-        command: "seq 1 30",
-        description: "Thirty lines",
-        workdir: join(f.oc.directory, "sub"),
-      },
-    });
-    await expandTool(browser, "[data-tool=bash]");
-    await browser.poll(
-      "document.querySelector('[data-tool=bash] .otk-tool-output')?.textContent.split('\\n').length===10",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector('[data-tool=bash]').textContent.includes('Running in')",
-      ),
-      true,
-    );
-    await browser.screenshot(join(f.oc.root, "r1-bash-collapsed.png"));
-    await browser.click("[data-tool=bash] .otk-output-toggle");
-    await browser.poll(
-      "document.querySelector('[data-tool=bash] .otk-tool-output').textContent.split('\\n').length===30",
-    );
-    await browser.screenshot(join(f.oc.root, "r1-bash-expanded.png"));
-    await recordTools(f.oc.root, "recorded-basic-tools", [raw]);
-  } finally {
-    await f.stop();
-  }
-});
+  ));
 for (const theme of ["otk-dark", "otk-light"]) {
   test(`R4 real read, directory listing, glob, grep, local fetch, skill and generic output forms (${theme})`, () =>
-    toolForms(theme));
+    legacyMessageScene(
+      "contract-messages-recorded-tools",
+      theme,
+      async ({ b, capture }) => {
+        for (const tool of ["read", "search", "fetch", "skill", "external"]) {
+          const selector = `[data-tool=${tool}][data-tool-status=completed]`;
+          await reveal(b, selector + " .otk-tool-toggle");
+          const toggles = await b.evaluate<number>(
+            `document.querySelectorAll('${selector} .otk-tool-toggle').length`,
+          );
+          for (let i = 0; i < toggles; i++) {
+            await b.evaluate(
+              `document.querySelectorAll('${selector} .otk-tool-toggle')[${i}].click()`,
+            );
+          }
+          await b.poll(
+            `!!document.querySelector('${selector} .otk-tool-body')`,
+          );
+          await capture(tool);
+        }
+        await reveal(b, "[data-tool=external] .otk-output-toggle");
+        await b.click("[data-tool=external] .otk-output-toggle");
+        await b.poll(
+          "document.querySelector('[data-tool=external] .otk-tool-output')?.textContent.split('\\n').length===15",
+        );
+        await capture("generic-expanded");
+      },
+    ));
 }
-async function toolForms(theme: string) {
-  const http = serve(
-    { hostname: "127.0.0.1", port: 0, onListen() {} },
-    () =>
-      new Response("OTK fetch fixture", {
-        headers: { "Content-Type": "text/plain" },
-      }),
-  );
-  const f = await browserFixture({
-    bash: "allow",
-    read: "allow",
-    glob: "allow",
-    grep: "allow",
-    webfetch: "allow",
-    skill: "allow",
-  }, {
-    prepare: async (oc) => {
-      await Deno.mkdir(join(oc.directory, "src"));
-      await Deno.writeTextFile(
-        join(oc.directory, "src/AGENTS.md"),
-        "# Fixture instructions\nRead the fixture only.\n",
+test("tool permission warning, denied strikethrough and expandable errors use one state contract", () =>
+  legacyMessageScene(
+    "contract-messages-recorded-tools",
+    "otk-dark",
+    async ({ b, capture }) => {
+      for (const tool of ["bash", "websearch"]) {
+        await reveal(b, `[data-tool=${tool}][data-tool-status=denied]`);
+        await capture(tool + "-denied");
+      }
+      await reveal(
+        b,
+        "[data-tool=read][data-tool-status=error] .otk-tool-error-toggle",
       );
-      await Deno.writeTextFile(
-        join(oc.directory, "src/probe.txt"),
-        "first\notk_marker\nthird\n",
+      await b.click(
+        "[data-tool=read][data-tool-status=error] .otk-tool-error-toggle",
       );
-      await Deno.mkdir(join(oc.directory, ".opencode/skills/otk-fixture"), {
-        recursive: true,
-      });
-      await Deno.writeTextFile(
-        join(oc.directory, ".opencode/skills/otk-fixture/SKILL.md"),
-        "---\nname: otk-fixture\ndescription: OTK rendering fixture\n---\nRead only this fixture.\n",
-      );
-      await Deno.mkdir(join(oc.directory, ".opencode/tools"), {
-        recursive: true,
-      });
-      await Deno.writeTextFile(
-        join(oc.directory, ".opencode/tools/echo_fixture.ts"),
-        "export default {description:'Local generic output fixture',args:{},async execute(){return Array.from({length:15},(_,i)=>'Generic line '+(i+1)).join('\\n')}};",
-      );
-    },
-  });
-  try {
-    const s = await f.oc.session<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "Tool forms" },
-    });
-    const server = await f.sidecar(), client = new WsClient(server.url);
-    await client.connect();
-    await client.rpc("prefs.set", { key: "theme", value: theme });
-    await client.close();
-    const browser = await f.browser(server.url);
-    await openSession(browser, s.id);
-    const parts: RawPart[] = [];
-    parts.push(
-      await runTool(f, browser, s.id, {
-        name: "read",
-        input: {
-          filePath: join(f.oc.directory, "src/probe.txt"),
-          offset: 2,
-          limit: 1,
-        },
-      }),
-    );
-    await expandTool(browser, toolRow(parts.at(-1)!));
-    await browser.poll(
-      "document.querySelector('[data-tool=read]')?.textContent.includes('↳ Loaded')",
-    );
-    parts.push(
-      await runTool(f, browser, s.id, {
-        name: "read",
-        input: { filePath: join(f.oc.directory, "src") },
-      }),
-    );
-    await expandTool(browser, toolRow(parts.at(-1)!));
-    await browser.poll(
-      "document.querySelector('[data-search-mode=list]')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('2 entries')",
-    );
-    parts.push(
-      await runTool(f, browser, s.id, {
-        name: "glob",
-        input: { pattern: "*.txt", path: join(f.oc.directory, "src") },
-      }),
-    );
-    await expandTool(browser, toolRow(parts.at(-1)!));
-    await browser.poll(
-      "document.querySelector('[data-search-mode=glob]')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('1 match') && !document.querySelector('[data-search-mode=glob]')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('1 matches')",
-    );
-    parts.push(
-      await runTool(f, browser, s.id, {
-        name: "grep",
-        input: {
-          pattern: "otk_marker",
-          path: join(f.oc.directory, "src"),
-          include: "*.txt",
-        },
-      }),
-    );
-    await expandTool(browser, toolRow(parts.at(-1)!));
-    await browser.poll(
-      "document.querySelector('[data-search-mode=grep]')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('1 match') && !document.querySelector('[data-search-mode=grep]')?.closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes('1 matches')",
-    );
-    const url = `http://127.0.0.1:${(http.addr as Deno.NetAddr).port}/fixture`;
-    parts.push(
-      await runTool(f, browser, s.id, {
-        name: "webfetch",
-        input: { url, format: "text" },
-      }),
-    );
-    await browser.poll(
-      `document.querySelector('[data-tool=fetch]')?.textContent.includes(${
-        JSON.stringify(url)
-      })`,
-    );
-    parts.push(
-      await runTool(f, browser, s.id, {
-        name: "skill",
-        input: { name: "otk-fixture" },
-      }),
-    );
-    await browser.poll(
-      "document.querySelector('[data-tool=skill]')?.textContent.includes('otk-fixture')",
-    );
-    parts.push(
-      await runTool(f, browser, s.id, { name: "echo_fixture", input: {} }),
-    );
-    await browser.click(".otk-display-menu > button");
-    await browser.click("input[name=genericToolOutput]");
-    await browser.click(".otk-display-menu > button");
-    await expandTool(browser, toolRow(parts.at(-1)!));
-    await browser.poll(
-      `document.querySelector('[data-tool=external] .otk-tool-output')?.textContent===${
-        JSON.stringify(
-          Array.from({ length: 10 }, (_, i) => `Generic line ${i + 1}`).join(
-            "\n",
-          ),
-        )
-      }`,
-    );
-    await browser.click("[data-tool=external] .otk-output-toggle");
-    await browser.poll(
-      `document.querySelector('[data-tool=external] .otk-tool-output')?.textContent===${
-        JSON.stringify(
-          Array.from({ length: 15 }, (_, i) => `Generic line ${i + 1}`).join(
-            "\n",
-          ),
-        )
-      }`,
-    );
-    await recordTools(f.oc.root, "recorded-form-tools", parts);
-    await browser.screenshot(join(f.oc.root, "r4-tool-forms.png"));
-  } finally {
-    await http.shutdown();
-    await f.stop();
-  }
-}
-test("tool permission warning, denied strikethrough and expandable errors use one state contract", async () => {
-  const f = await browserFixture({ bash: "ask", websearch: "ask" }, {
-    env: { OPENCODE_ENABLE_EXA: "1" },
-  });
-  try {
-    const s = await f.oc.session<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "Tool states" },
-    });
-    const server = await f.sidecar(), browser = await f.browser(server.url);
-    await openSession(browser, s.id);
-    f.fake.queue({
-      tool: {
-        name: "bash",
-        input: { command: "echo denied", description: "Denied" },
-      },
-    });
-    await browser.type("textarea[name=prompt]", "Ask permission");
-    await browser.key("Enter");
-    await browser.poll(
-      "!!document.querySelector('[data-tool=bash].otk-tool-waiting')",
-    );
-    await browser.click(".otk-permission-actions > button:nth-child(3)");
-    await browser.poll("!!document.querySelector('textarea[name=rejection]')");
-    await browser.click(".otk-permission-dock button[type=submit]");
-    await browser.poll(
-      "!!document.querySelector('[data-tool=bash][data-tool-status=denied]')",
-    );
-    await browser.poll(
-      `document.querySelector('[data-session="${s.id}"]').dataset.status==='idle'`,
-    );
-    f.fake.queue({
-      tool: {
-        name: "websearch",
-        input: { query: "OTK rendering fixture", numResults: 8 },
-      },
-    });
-    await browser.type("textarea[name=prompt]", "Ask web search permission");
-    await browser.key("Enter");
-    await browser.poll(
-      "!!document.querySelector('[data-tool=websearch].otk-tool-waiting')",
-    );
-    await browser.click(".otk-permission-actions > button:nth-child(3)");
-    await browser.poll("!!document.querySelector('textarea[name=rejection]')");
-    await browser.click(".otk-permission-dock button[type=submit]");
-    await browser.poll(
-      "!!document.querySelector('[data-tool=websearch][data-tool-status=denied]')",
-    );
-    await browser.poll(
-      `document.querySelector('[data-session="${s.id}"]').dataset.status==='idle'`,
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector('[data-tool=websearch]').textContent.includes('count unavailable')",
-      ),
-      false,
-    );
-    f.fake.queue({
-      tool: {
-        name: "read",
-        input: { filePath: join(f.oc.directory, "missing.txt") },
-      },
-    }, { chunks: ["Missing file handled."] });
-    await browser.type("textarea[name=prompt]", "Show a tool error");
-    await browser.key("Enter");
-    await browser.poll(
-      "!!document.querySelector('[data-tool=read][data-tool-status=error]')",
-    );
-    // A tool's terminal state precedes the assistant's continuation. Observe the
-    // complete turn before testing a disclosure in the following viewport.
-    await waitForReply(browser, s.id, "Missing file handled.");
-    await browser.click("[data-tool=read] .otk-tool-error-toggle");
-    await browser.poll(
-      "document.querySelector('.otk-tool-error')?.textContent.includes('File not found')",
-    );
-    await waitFor(
-      () => f.oc.request<{ parts: RawPart[] }[]>(`/session/${s.id}/message`),
-      (messages) =>
-        messages.some((m) =>
-          m.parts.some((p) => p.tool === "read" && p.state?.status === "error")
+      await b.poll("!!document.querySelector('.otk-tool-error')");
+      assertEquals(
+        await b.evaluate(
+          "document.querySelector('[data-tool=websearch]')?.textContent.includes('count unavailable')??false",
         ),
-    );
-    const raw = await f.oc.request<{ parts: RawPart[] }[]>(
-      `/session/${s.id}/message`,
-    );
-    await recordTools(
-      f.oc.root,
-      "recorded-state-tools",
-      raw.flatMap((m) => m.parts).filter((p) => p.type === "tool"),
-    );
-    await browser.screenshot(join(f.oc.root, "tool-states.png"));
-  } finally {
-    await f.stop();
-  }
-});
+        false,
+      );
+      await capture("error-expanded");
+    },
+  ));

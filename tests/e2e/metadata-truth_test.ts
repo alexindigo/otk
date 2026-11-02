@@ -8,7 +8,6 @@ import { coreBackendFixture } from "../support/core-backend.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { test } from "../support/resources.ts";
-import { sentFrames } from "../support/browser-fixture.ts";
 
 test("native unknown search/diff metadata and shared output policy reach both themed consumers", async () => {
   const root = await fixture();
@@ -151,24 +150,6 @@ test("native unknown search/diff metadata and shared output policy reach both th
         await b.screenshot(join(shots, `${theme}-metadata.png`));
       }
     }
-    await b.fill("textarea[name=prompt]", "Keep this unsent draft");
-    await b.evaluate(
-      `(()=>{const data=new DataTransfer();data.items.add(new File([new Uint8Array(20*1024*1024+1)],'too-large.bin',{type:'application/octet-stream'}));document.querySelector('.otk-prompt').dispatchEvent(new DragEvent('drop',{bubbles:true,dataTransfer:data}));})()`,
-    );
-    await b.poll(
-      "document.querySelector('.otk-prompt-chip')?.textContent.includes('Each upload must be 20 MiB or smaller')",
-    );
-    assertEquals(
-      await b.evaluate(
-        "document.querySelector('textarea[name=prompt]').value.includes('Keep this unsent draft')",
-      ),
-      true,
-    );
-    assertEquals(
-      sentFrames(b).filter(({ frame }) => frame.method === "session.prompt")
-        .length,
-      0,
-    );
     assertEquals(b.errors, []);
   } finally {
     await b.close();

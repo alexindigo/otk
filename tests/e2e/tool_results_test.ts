@@ -1,293 +1,183 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../support/resources.ts";
-import { assert, assertEquals } from "@std/assert";
-import { join } from "@std/path";
-import { browserFixture, openSession } from "../support/browser-fixture.ts";
-import { runTool } from "../support/rendering.ts";
+import { assertEquals } from "@std/assert";
+import {
+  legacyStaticMessages,
+  visualReply,
+} from "../support/legacy-message-scene.ts";
 import { highlightedRange } from "../support/highlight.ts";
+import type { ToolCall } from "@otk/protocol";
 import { revealViewportElement } from "../support/message-viewport.ts";
-
+const base = {
+  callID: "result",
+  status: "completed" as const,
+  awaitingPermission: false,
+  time: { start: 1000, end: 2000 },
+};
 test("typed results show highlighted native file ranges, paths and grep matches without model envelopes or repeated headers, including reload", async () => {
-  const source =
-    "// first\nexport const otk_result_marker = 1;\nexport const third = 2;\n// fourth\n";
-  const f = await browserFixture({
-    read: "allow",
-    glob: "allow",
-    grep: "allow",
-  }, {
-    prepare: async (oc) => {
-      await Deno.mkdir(join(oc.directory, "src"));
-      await Deno.mkdir(join(oc.directory, "src/sub"));
-      await Deno.writeTextFile(join(oc.directory, "src/probe.ts"), source);
-    },
-  });
-  try {
-    const session = await f.oc.session<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "Decoded tool results" },
-    });
-    const server = await f.sidecar(), browser = await f.browser(server.url);
-    await openSession(browser, session.id);
-    const cases = [
+  await legacyStaticMessages("otk-dark", (root) => {
+    const path = root + "/src/probe.ts";
+    const calls: ToolCall[] = [
       {
-        name: "read",
-        input: {
-          filePath: join(f.oc.directory, "src/probe.ts"),
-          offset: 2,
-          limit: 2,
+        ...base,
+        tool: "read",
+        path,
+        offset: 2,
+        limit: 2,
+        loaded: [],
+        outputContent: {
+          kind: "file",
+          text: "export const otk_result_marker = 1;\nexport const third = 2;",
+          lang: "ts",
+          startLine: 2,
+          endLine: 3,
+          totalLines: 4,
+          truncated: true,
         },
-        selector: "[data-tool=read]",
-        content: ".otk-code code",
-        expected:
-          "export const otk_result_marker = 1;\nexport const third = 2;",
       },
       {
-        name: "read",
-        input: { filePath: join(f.oc.directory, "src"), limit: 1 },
-        selector: '[data-tool=search]:has(.otk-tool-verb[title="List"])',
-        content: ".otk-tool-output",
-        expected: "src/probe.ts",
-      },
-      {
-        name: "glob",
-        input: { pattern: "*.ts", path: join(f.oc.directory, "src") },
-        selector:
-          '[data-tool=search]:has(.otk-tool-brief[title="*.ts · 1 match"])',
-        content: ".otk-tool-output",
-        expected: "src/probe.ts",
-      },
-      {
-        name: "grep",
-        input: {
-          pattern: "otk_result_marker",
-          path: join(f.oc.directory, "src"),
+        ...base,
+        tool: "search",
+        mode: "list",
+        path: root + "/src",
+        matches: 2,
+        outputContent: {
+          kind: "paths",
+          paths: [path],
+          offset: 1,
+          total: 2,
+          truncated: true,
         },
-        selector:
-          '[data-tool=search]:has(.otk-tool-brief[title="otk_result_marker · 1 match"])',
-        content: ".otk-tool-output",
-        expected: "src/probe.ts:2: export const otk_result_marker = 1;",
+      },
+      {
+        ...base,
+        tool: "search",
+        mode: "glob",
+        path: root + "/src",
+        pattern: "*.ts",
+        matches: 1,
+        outputContent: { kind: "paths", paths: [path], truncated: false },
+      },
+      {
+        ...base,
+        tool: "search",
+        mode: "grep",
+        path: root + "/src",
+        pattern: "otk_result_marker",
+        matches: 1,
+        outputContent: {
+          kind: "matches",
+          matches: [{
+            path,
+            line: 2,
+            text: "export const otk_result_marker = 1;",
+          }],
+          truncated: false,
+        },
       },
     ];
-    for (const item of cases) {
-      const raw = await runTool(f, browser, session.id, item);
-      assert(raw.state!.output);
-      if (item.content === ".otk-code code") {
-        assertEquals(
-          (raw.state!.metadata!.display as { text: string }).text,
-          item.expected,
-        );
-      } else if (item.name === "grep") {
-        assert(
-          raw.state!.output!.includes(
-            "  Line 2: export const otk_result_marker = 1;",
-          ),
-        );
-      }
-      await revealViewportElement(
-        browser,
-        ".otk-messages",
-        `${item.selector} .otk-tool-toggle`,
-      );
-      await browser.click(`${item.selector} .otk-tool-toggle`);
-      await browser.poll(
-        `!document.querySelector(${
-          JSON.stringify(item.selector + " .otk-tool-body")
-        }).hidden && document.querySelector(${
-          JSON.stringify(item.selector + " " + item.content)
-        })?.textContent===${JSON.stringify(item.expected)}`,
-      );
-      if (item.name === "read" && item.content === ".otk-code code") {
-        await highlightedRange(
-          browser,
-          `${item.selector} .otk-code[data-language=ts] code`,
-          "otk_result_marker",
-        );
-      }
-      assertEquals(
-        await browser.evaluate(
-          `document.querySelector(${
-            JSON.stringify(item.selector + " .otk-tool-body")
-          }).textContent.includes(${JSON.stringify(f.oc.directory)})`,
-        ),
-        false,
-      );
-      assertEquals(
-        await browser.evaluate(
-          `document.querySelector(${
-            JSON.stringify(item.selector + " .otk-tool-summary")
-          })`,
-        ),
-        null,
-      );
+    return calls.map((call, i) =>
+      visualReply("result-" + i, [{ id: "tool-" + i, kind: "tool", call }], {
+        replyTo: "prompt-" + i,
+      })
+    );
+  }, async ({ b, capture }) => {
+    for (let i = 0; i < 4; i++) {
+      await b.click(`[data-message=result-${i}] .otk-tool-toggle`);
     }
     await revealViewportElement(
-      browser,
+      b,
       ".otk-messages",
       "[data-tool=read] .otk-code",
     );
     await highlightedRange(
-      browser,
+      b,
       "[data-tool=read] .otk-code[data-language=ts] code",
       "otk_result_marker",
     );
     assertEquals(
-      await browser.evaluate(
+      await b.evaluate(
         "document.querySelector('[data-tool=read] .otk-code-numbers').textContent",
       ),
       "2\n3",
     );
     assertEquals(
-      await browser.evaluate(
+      await b.evaluate(
         "document.querySelector('[data-tool=read] [data-tool-result-meta]').textContent",
       ),
       "2–3 of 4 lines · More available",
     );
-    await revealViewportElement(
-      browser,
-      ".otk-messages",
-      "[data-search-mode=list]",
-    );
     assertEquals(
-      await browser.evaluate(
-        "document.querySelector('[data-search-mode=list] [data-tool-result-meta]').textContent",
-      ),
-      "1–1 of 2 entries · More available",
+      await b.evaluate("document.querySelectorAll('.otk-tool-summary').length"),
+      0,
     );
-    for (
-      const [mode, label] of [["list", "2 entries"], ["glob", "1 match"], [
-        "grep",
-        "1 match",
-      ]]
-    ) {
-      await revealViewportElement(
-        browser,
-        ".otk-messages",
-        `[data-search-mode=${mode}]`,
-      );
-      assertEquals(
-        await browser.evaluate(
-          `document.querySelector('[data-search-mode=${mode}]').closest('.otk-tool-line').querySelector('.otk-tool-brief').textContent.includes(${
-            JSON.stringify(label)
-          })`,
-        ),
-        true,
-      );
-    }
-    await browser.screenshot(join(f.oc.root, "toolrows-r2-results.png"));
-    const history = await f.oc.request<unknown[]>(
-      `/session/${session.id}/message`,
-    );
-    await browser.reload();
-    await openSession(browser, session.id);
-    await browser.poll(
-      `Number(document.querySelector('.otk-message-flow')?.dataset.messageCount)===${history.length}`,
-    );
-    for (const item of cases) {
-      await revealViewportElement(
-        browser,
-        ".otk-messages",
-        `${item.selector} .otk-tool-toggle`,
-      );
-      await browser.click(`${item.selector} .otk-tool-toggle`);
-      await browser.poll(
-        `!document.querySelector(${
-          JSON.stringify(item.selector + " .otk-tool-body")
-        }).hidden && document.querySelector(${
-          JSON.stringify(item.selector + " " + item.content)
-        })?.textContent===${JSON.stringify(item.expected)}`,
-      );
-      if (item.name === "read" && item.content === ".otk-code code") {
-        await highlightedRange(
-          browser,
-          `${item.selector} .otk-code[data-language=ts] code`,
-          "otk_result_marker",
-        );
-      }
-    }
-    await revealViewportElement(
-      browser,
-      ".otk-messages",
-      "[data-tool=read] .otk-code",
-    );
-    await highlightedRange(
-      browser,
-      "[data-tool=read] .otk-code[data-language=ts] code",
-      "otk_result_marker",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector('[data-tool=read] .otk-code-numbers').textContent",
-      ),
-      "2\n3",
-    );
-  } finally {
-    await f.stop();
-  }
-});
-
-test("empty result pages retain offset and total without inverted ranges or false empty-file claims", async () => {
-  const f = await browserFixture({ read: "allow" }, {
-    prepare: async (oc) => {
-      await Deno.mkdir(join(oc.directory, "src"));
-      await Deno.writeTextFile(join(oc.directory, "src/only.txt"), "only\n");
-    },
+    await capture("typed-file-paths-matches");
   });
-  try {
-    const s = await f.oc.session<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "Empty directory page" },
-    });
-    const server = await f.sidecar(), browser = await f.browser(server.url);
-    await openSession(browser, s.id);
-    const raw = await runTool(f, browser, s.id, {
-      name: "read",
-      input: { filePath: join(f.oc.directory, "src"), offset: 3 },
-    });
+});
+test("empty result pages retain offset and total without inverted ranges or false empty-file claims", async () => {
+  await legacyStaticMessages("otk-dark", () => [visualReply("empty", [
+    {
+      id: "directory",
+      kind: "tool",
+      call: {
+        ...base,
+        tool: "search",
+        mode: "list",
+        path: "/project/src",
+        matches: 1,
+        outputContent: {
+          kind: "paths",
+          paths: [],
+          offset: 3,
+          total: 1,
+          truncated: false,
+        },
+      },
+    },
+    {
+      id: "file",
+      kind: "tool",
+      call: {
+        ...base,
+        tool: "read",
+        path: "/project/src/only.txt",
+        loaded: [],
+        limit: 0,
+        outputContent: {
+          kind: "file",
+          text: "",
+          startLine: 1,
+          endLine: 0,
+          totalLines: 1,
+          truncated: true,
+        },
+      },
+    },
+  ])], async ({ b, capture }) => {
+    for (const tool of ["search", "read"]) {
+      await b.click(`[data-tool=${tool}] .otk-tool-toggle`);
+    }
+    await b.poll(
+      "document.querySelector('[data-tool=read] .otk-tool-body')?.textContent.includes('No lines returned')",
+    );
     assertEquals(
-      (raw.state!.metadata!.display as { entries: string[] }).entries,
-      [],
-    );
-    await browser.poll(
-      "document.querySelector('[data-tool=search]')?.dataset.toolStatus==='completed'",
-    );
-    await browser.click("[data-tool=search] .otk-tool-toggle");
-    await browser.poll(
-      "!document.querySelector('[data-tool=search] .otk-tool-body').hidden",
-    );
-    assertEquals(
-      await browser.evaluate(
+      await b.evaluate(
         "document.querySelector('[data-tool=search] .otk-tool-output').textContent",
       ),
       "No results",
     );
     assertEquals(
-      await browser.evaluate(
+      await b.evaluate(
         "document.querySelector('[data-tool=search] [data-tool-result-meta]').textContent",
       ),
       "Offset 3 · 1 entry total",
     );
-    await runTool(f, browser, s.id, {
-      name: "read",
-      input: { filePath: join(f.oc.directory, "src/only.txt"), limit: 0 },
-    });
-    await browser.poll(
-      "document.querySelector('[data-tool=read]')?.dataset.toolStatus==='completed'",
-    );
-    await browser.click("[data-tool=read] .otk-tool-toggle");
-    await browser.poll(
-      "document.querySelector('[data-tool=read] .otk-tool-body')?.textContent.includes('No lines returned')",
-    );
     assertEquals(
-      await browser.evaluate(
+      await b.evaluate(
         "document.querySelector('[data-tool=read] [data-tool-result-meta]').textContent",
       ),
       "1 line total · More available",
     );
-    assertEquals(
-      await Deno.readTextFile(join(f.oc.directory, "src/only.txt")),
-      "only\n",
-    );
-  } finally {
-    await f.stop();
-  }
+    await capture("empty-results");
+  });
 });

@@ -1,99 +1,96 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../support/resources.ts";
 import { assertEquals } from "@std/assert";
-import { join } from "@std/path";
-import { browserFixture, openSession } from "../support/browser-fixture.ts";
-import { waitFor } from "../support/opencode.ts";
-import type { RawPart } from "@otk/harness-opencode-v1";
-import { expandTool } from "../support/rendering.ts";
+import {
+  legacyStaticMessages,
+  visualReply,
+} from "../support/legacy-message-scene.ts";
+import type { QuestionCall } from "@otk/protocol";
+
 test("R4 todo checklist states and read-only question answers from real opencode", async () => {
-  const f = await browserFixture();
-  try {
-    const session = await f.oc.session<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "Todos and questions" },
-    });
-    const server = await f.sidecar(), browser = await f.browser(server.url);
-    await openSession(browser, session.id);
-    const todos = ["pending", "in_progress", "completed", "cancelled"].map((
-      status,
-    ) => ({ content: `${status} item`, status, priority: "medium" }));
-    f.fake.queue({ tool: { name: "todowrite", input: { todos } } }, {
-      chunks: ["Todos recorded."],
-    });
-    await browser.type("textarea[name=prompt]", "Record the checklist");
-    await browser.key("Enter");
-    await expandTool(browser, "[data-tool=todo]");
-    await browser.poll(
-      "document.querySelectorAll('.otk-todos li').length === 4",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "[...document.querySelectorAll('.otk-todos li')].map(el=>el.dataset.todoStatus)",
-      ),
-      todos.map((item) => item.status),
-    );
-    await browser.poll(
-      `document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle'`,
-    );
-    f.fake.queue({
-      tool: {
-        name: "question",
-        input: {
-          questions: [{
-            header: "Choice",
-            question: "Which rendering?",
-            options: [{ label: "Typed", description: "OTK shapes" }, {
-              label: "Raw",
-              description: "Harness types",
-            }],
-            multiple: false,
-          }],
-        },
+  const question: QuestionCall = {
+    tool: "question",
+    callID: "question",
+    status: "running",
+    awaitingPermission: false,
+    time: { start: 2000 },
+    questions: [{
+      text: "Which rendering?",
+      options: [
+        { label: "Typed", description: "OTK shapes" },
+        { label: "Raw", description: "Harness types" },
+      ],
+    }],
+  };
+  const snapshot = (answered: boolean) => [visualReply("reply", [
+    {
+      id: "todo",
+      kind: "tool",
+      call: {
+        tool: "todo",
+        callID: "todo",
+        status: "completed",
+        awaitingPermission: false,
+        time: { start: 1000, end: 2000 },
+        items: ["pending", "in_progress", "completed", "cancelled"].map((
+          status,
+        ) => ({
+          content: `${status} item`,
+          status: status as
+            | "pending"
+            | "in_progress"
+            | "completed"
+            | "cancelled",
+          priority: "medium",
+        })),
       },
-    }, { chunks: ["Typed answer recorded."] });
-    await browser.type("textarea[name=prompt]", "Ask the scripted question");
-    await browser.key("Enter");
-    const pending = await waitFor(
-      () => f.oc.request<{ id: string }[]>("/question"),
-      (items) => items.length === 1,
-    );
-    await expandTool(browser, "[data-tool=question]");
-    await browser.poll(
-      "document.querySelector('.otk-questions')?.textContent.includes('Awaiting answer')",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelectorAll('.otk-questions button, .otk-questions input').length",
-      ),
-      0,
-    );
-    await browser.screenshot(join(f.oc.root, "r4-question-pending.png"));
-    await f.oc.request(`/question/${pending[0].id}/reply`, {
-      method: "POST",
-      body: { answers: [["Typed"]] },
-    });
-    await browser.poll(
-      "document.querySelector('.otk-questions dd')?.textContent === 'Typed'",
-    );
-    await browser.poll(
-      `document.querySelector('[data-session="${session.id}"]').dataset.status === 'idle'`,
-    );
-    const raw = await f.oc.request<{ parts: RawPart[] }[]>(
-      `/session/${session.id}/message`,
-    );
-    await Deno.writeTextFile(
-      join(f.oc.root, "recorded-todo-question-parts.json"),
-      JSON.stringify(
-        raw.flatMap((m) => m.parts).filter((p) =>
-          p.type === "tool" || p.type === "reasoning"
-        ),
-        null,
-        2,
-      ),
-    );
-    await browser.screenshot(join(f.oc.root, "r4-todos-question-answered.png"));
-  } finally {
-    await f.stop();
-  }
+    },
+    {
+      id: "question",
+      kind: "tool",
+      call: answered
+        ? {
+          ...question,
+          status: "completed",
+          time: { start: 2000, end: 3000 },
+          questions: [{ ...question.questions[0], answer: ["Typed"] }],
+        }
+        : question,
+    },
+  ])];
+  await legacyStaticMessages(
+    "otk-dark",
+    () => snapshot(false),
+    async ({ b, replace, capture }) => {
+      for (const answered of [false, true]) {
+        if (answered) await replace(snapshot(true));
+        for (const tool of ["todo", "question"]) {
+          await b.click(
+            `[data-tool=${tool}] .otk-tool-toggle`,
+          );
+        }
+        await b.poll("document.querySelectorAll('.otk-todos li').length===4");
+        assertEquals(
+          await b.evaluate(
+            "[...document.querySelectorAll('.otk-todos li')].map(e=>e.dataset.todoStatus)",
+          ),
+          ["pending", "in_progress", "completed", "cancelled"],
+        );
+        await b.poll(
+          answered
+            ? "document.querySelector('.otk-questions dd')?.textContent==='Typed'"
+            : "document.querySelector('.otk-questions')?.textContent.includes('Awaiting answer')",
+        );
+        assertEquals(
+          await b.evaluate(
+            "document.querySelectorAll('.otk-questions button,.otk-questions input').length",
+          ),
+          0,
+        );
+        await capture(
+          answered ? "todos-question-answered" : "question-pending",
+        );
+      }
+    },
+  );
 });
