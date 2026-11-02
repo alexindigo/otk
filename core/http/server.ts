@@ -16,7 +16,21 @@ export async function serve(
       hostname: app.cfg.server.host,
       port: app.cfg.server.port,
       signal,
-    }, router);
+    }, (request, info) => {
+      // Pathfinder decodes captures before its middleware/error boundary.
+      // Validate once before any route or upgrade; retain the encoded URL so
+      // routing and static serving still decode their own values exactly once.
+      try {
+        decodeURIComponent(new URL(request.url).pathname);
+      } catch (error) {
+        if (!(error instanceof URIError)) throw error;
+        return new Response("Bad request", {
+          status: 400,
+          headers: { "Cache-Control": "no-store" },
+        });
+      }
+      return router(request, info);
+    });
   } catch (error) {
     if (error instanceof Deno.errors.AddrInUse) {
       throw new Error(
