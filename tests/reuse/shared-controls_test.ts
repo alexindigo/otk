@@ -423,22 +423,8 @@ test("restored own answers size from content after collapse and remount; autocom
         failures.push(e);
       }
       await capture(b, `${theme}-question-completion`, ".otk-question-dock");
-      // Capture blurs the input for stable pixels; keyboard interaction is refocused explicitly.
-      await b.click("textarea[name=prompt]");
-      await b.key("ArrowDown");
-      await b.key("Enter");
-      await b.poll(
-        "document.querySelector('textarea[name=prompt]').value==='Second option'",
-      );
-      await b.fill("textarea[name=prompt]", "@");
-      await b.poll(
-        "document.querySelectorAll('.otk-autocomplete button').length===2",
-      );
-      await b.click(".otk-autocomplete button:first-child");
-      await b.poll(
-        "document.querySelector('textarea[name=prompt]').value==='First option'",
-      );
-      await b.key("Escape");
+      // C9 owns native completion keyboard/pointer outcomes; retain this fixed
+      // per-theme selection geometry with the question-size visual remainder.
       await b.fill("textarea[name=prompt]", "");
     }
     await b.fill("textarea[name=question-answer]", "Short answer");

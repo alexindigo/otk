@@ -29,7 +29,7 @@ test("unregistered typed tool and part fallbacks ignore colliding extension-only
   }
 });
 
-test("paste drop and clipboard refusals reach owned feedback without clearing input or losing reply", async () => {
+test("clipboard refusal retains the authored draft and reply at its owned feedback", async () => {
   const f = await uiConsumer("?interaction-failures"), b = f.browser;
   try {
     await b.send("Emulation.setDeviceMetricsOverride", {
@@ -44,29 +44,8 @@ test("paste drop and clipboard refusals reach owned feedback without clearing in
     for (const theme of ["dark", "light"]) {
       await b.click(`[data-${theme}]`);
       await b.fill(".otk-prompt textarea", "Retain this unsent input");
-      for (const mode of ["sync", "async"]) {
-        for (const event of ["paste", "drop"]) {
-          await b.click(`[data-${mode}]`);
-          await b.evaluate(
-            `document.querySelector('${
-              event === "paste" ? ".otk-prompt textarea" : ".otk-prompt"
-            }').dispatchEvent(new ${
-              event === "paste"
-                ? "ClipboardEvent('paste', {bubbles:true,cancelable:true})"
-                : "DragEvent('drop', {bubbles:true,cancelable:true,dataTransfer:new DataTransfer()})"
-            })`,
-          );
-          await b.poll(
-            "document.querySelector('.otk-prompt [role=alert] .otk-control-label')?.textContent==='Could not finish this action. Try again'",
-          );
-          assertEquals(
-            await b.evaluate(
-              "document.querySelector('.otk-prompt textarea').value",
-            ),
-            "Retain this unsent input",
-          );
-        }
-      }
+      // Composer paste/drop refusal variants moved to Playwright C9. This
+      // remainder retains the reply-owned clipboard consequence in both themes.
       await b.click(".otk-copy-message");
       await b.poll(
         "document.querySelector('.otk-message [role=alert]')?.textContent==='Could not finish this action. Try again'",

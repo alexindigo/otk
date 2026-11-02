@@ -5,7 +5,6 @@ import { join } from "@std/path";
 import {
   browserFixture,
   openSession,
-  waitForReply,
   waitForViewing,
 } from "../support/browser-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
@@ -193,89 +192,8 @@ test("U13 prompt grows line by line up to its cap, keeps the caret and footer vi
       }`,
     );
     assertEquals((await measure()).height, 96);
-    f.fake.queue({ chunks: ["Growing draft received."] });
-    await b.click(".otk-prompt button[type=submit]");
-    await b.poll(`document.querySelector('${input}').value===''`);
-    assertEquals((await measure()).height, 48);
-    await waitForReply(b, session.id, "Growing draft received.");
-    const messages = await f.oc.request<
-      { info: { role: string }; parts: { type: string; text?: string }[] }[]
-    >(`/session/${session.id}/message`);
-    assert(
-      messages.some((row) =>
-        row.info.role === "user" &&
-        row.parts.some((part) => part.type === "text" && part.text === lines(4))
-      ),
-    );
-
-    // Expanded drafts retain the same owner through chips and a takeover.
-    await b.fill(input, lines(14));
-    const pasted = lines(200);
-    await b.evaluate(
-      `(()=>{const t=document.querySelector('${input}');t.setSelectionRange(t.value.length,t.value.length);const d=new DataTransfer();d.setData('text/plain',${
-        JSON.stringify(pasted)
-      });t.dispatchEvent(new ClipboardEvent('paste',{bubbles:true,clipboardData:d}));})()`,
-    );
-    await b.poll(
-      "document.querySelector('.otk-prompt-chip')?.textContent.includes('200 lines')",
-    );
-    const retained = await b.evaluate<string>(
-      `document.querySelector('${input}').value`,
-    );
-    assertEquals((await measure()).height, 240);
-    await b.click(".otk-prompt-chip button");
-    await b.poll(
-      `document.querySelector('textarea[name=editor]')?.value===${
-        JSON.stringify(pasted)
-      }`,
-    );
-    await b.key("Escape");
-    await b.poll("!document.querySelector('dialog[open]')");
-    f.fake.queue({
-      tool: {
-        name: "bash",
-        input: {
-          command: "printf u13-takeover",
-          description: "Expanded draft takeover",
-        },
-      },
-    }, { chunks: ["Takeover completed."] });
-    await f.oc.request(`/session/${session.id}/prompt_async`, {
-      method: "POST",
-      body: {
-        parts: [{
-          type: "text",
-          text:
-            "Exercise the takeover without submitting the retained browser draft",
-        }],
-      },
-    });
-    await b.poll(
-      "document.querySelector('.otk-permission-command')?.textContent==='printf u13-takeover' && document.querySelector('.otk-composer').hidden",
-    );
-    await b.click(".otk-permission-actions > button:first-child");
-    await waitForReply(b, session.id, "Takeover completed.");
-    await b.poll("!document.querySelector('.otk-composer').hidden");
-    assertEquals(
-      await b.evaluate(`document.querySelector('${input}').value`),
-      retained,
-    );
-    assertEquals((await measure()).height, 240);
-    assert(
-      await b.evaluate(
-        "document.querySelector('.otk-prompt-chip')?.textContent.includes('200 lines')",
-      ),
-    );
-    // Removing the pasted-text chip leaves authored lines, then a real send
-    // clears the expanded input and all of its attachments together.
-    await b.click('.otk-prompt-chip button[aria-label^="Remove "]');
-    await b.poll("!document.querySelector('.otk-prompt-chip')");
-    assertEquals((await measure()).height, 240);
-    f.fake.queue({ chunks: ["Expanded draft received."] });
-    await b.click(".otk-prompt button[type=submit]");
-    await b.poll(`document.querySelector('${input}').value===''`);
-    assertEquals((await measure()).height, 48);
-    await waitForReply(b, session.id, "Expanded draft received.");
+    // Native send, chip ownership and permission takeover live in C9. This
+    // remainder retains the fixed Dark/Linen growth/caret/editor geometry.
   } finally {
     await client?.close();
     await f.stop();

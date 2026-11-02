@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { coreBackendFixture } from "./core-backend.ts";
 import { messagesScenario } from "./messages-scenario.ts";
+import { composerContractScenario } from "./composer-contract-scenario.ts";
 import { inboxBrowserFixture } from "./inbox-browser.ts";
 import { fixture } from "./config.ts";
 import { WsClient } from "./ws-client.ts";
@@ -21,6 +22,9 @@ import type {
 
 /** Checked external-backend compositions: no native stack for absent-capability proofs. */
 export async function contractScenario(profile: Profile) {
+  if (profile.startsWith("contract-composer-")) {
+    return await composerContractScenario(profile);
+  }
   if (profile.startsWith("contract-messages-")) {
     return await messagesScenario(profile);
   }

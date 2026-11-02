@@ -9,6 +9,8 @@ import { seedProviderPackages } from "./provider-cache.ts";
 import { transportScenario } from "./transport-scenario.ts";
 import { nativeMessageScenario } from "./native-message-scenario.ts";
 import { pricedMessageProvider } from "./priced-message-provider.ts";
+import { composerProfile } from "./composer-profile.ts";
+import { nativeComposerScenario } from "./native-composer-scenario.ts";
 import { contractScenario } from "./contract-scenario.ts";
 import { transcriptConsumer } from "../reuse/transcript-consumer.ts";
 import {
@@ -62,6 +64,7 @@ try {
     let baseline: Record<string, Json> = {};
     let lease: TestLease | undefined;
     let profile = "ordinary" as Profile;
+    let composer: ReturnType<typeof composerProfile> | undefined;
     let poisoned = false;
     let snapshotLease = false;
     const directories: string[] = [];
@@ -105,6 +108,7 @@ try {
     let transport:
       | ReturnType<typeof transportScenario>
       | Awaited<ReturnType<typeof nativeMessageScenario>>
+      | ReturnType<typeof nativeComposerScenario>
       | undefined;
     let contract: Awaited<ReturnType<typeof contractScenario>> | undefined;
     let bootstrap: {
@@ -160,6 +164,13 @@ try {
       if (!lease) throw new Error("No active fixture lease");
       const f = fixture!;
       transport?.release();
+      if (composer?.selected) {
+        composer.selected.releaseAll();
+        await waitFor(() => composer!.selected!.active, (count) => count === 0);
+        if (composer.selected.pending || composer.selected.unexpected) {
+          throw new Error("Selected provider lease unsettled");
+        }
+      }
       if (remote) {
         remote.fake.releaseAll();
         await waitFor(() => remote!.fake.active, (count) => count === 0);
@@ -265,6 +276,9 @@ try {
             throw new Error("Project/native version mismatch");
           }
           profile = frame.params.profile;
+          if (profile.startsWith("composer-")) {
+            composer = composerProfile(profile);
+          }
           let contextOptions: Parameters<typeof nativeFixture>[1];
           if (profile === "messages-priced") {
             const priced = pricedMessageProvider();
@@ -350,7 +364,11 @@ try {
           }
           fixture = await bind(() =>
             nativeFixture(
-              profile === "transport-shell"
+              profile === "composer-plan"
+                ? { "*": "allow" }
+                : profile === "composer-pickers"
+                ? { bash: "allow" }
+                : profile === "transport-shell"
                 ? { bash: "deny" }
                 : profile === "messages-tool-states"
                 ? { bash: "ask", websearch: "ask" }
@@ -371,7 +389,9 @@ try {
                   skill: "allow",
                 }
                 : undefined,
-              ["messages-context", "messages-priced"].includes(profile)
+              composer
+                ? composer.options
+                : ["messages-context", "messages-priced"].includes(profile)
                 ? contextOptions
                 : profile === "messages-tool-states"
                 ? { env: { OPENCODE_ENABLE_EXA: "1" } }
@@ -518,6 +538,9 @@ try {
           if (profile.startsWith("transport-")) {
             transport = transportScenario(fixture.oc, profile);
           }
+          if (profile === "composer-native-default") {
+            transport = nativeComposerScenario(fixture.oc);
+          }
           if (
             [
               "messages-helper-pages",
@@ -644,6 +667,7 @@ try {
             `# ${frame.params.identity}\n`,
           );
           await seedProviderPackages(join(directory, ".opencode"));
+          await composer?.prepare(directory);
           if (profile === "messages-forms") {
             const files = {
               "src/AGENTS.md":
@@ -674,8 +698,18 @@ try {
           }
           return null;
         case "queueScript": {
+          if (
+            (frame.params.delay ?? 0) > 2000 &&
+            profile !== "composer-long-command"
+          ) {
+            throw new Error(
+              "Long cadence requires the composer long-command profile",
+            );
+          }
           const provider = frame.params.target === "remote"
             ? remote?.fake
+            : frame.params.target === "selected"
+            ? composer?.selected
             : fixture!.fake;
           if (!provider) throw new Error("Provider target not acquired");
           const id = crypto.randomUUID();
@@ -707,6 +741,8 @@ try {
         case "observe":
           return {
             requests: fixture!.fake.requests,
+            selectedRequests: composer?.selected?.requests ?? [],
+            mcpRequests: composer?.mcp?.requests ?? [],
             transport: transport?.observe() ?? null,
             bootstrap: bootstrap ?? null,
             operation: operation ?? null,
@@ -738,6 +774,18 @@ try {
           };
         case "nativeRequest": {
           const params = frame.params;
+          if (params.target === "remote") {
+            if (profile !== "composer-history" || !remote || params.project) {
+              throw new Error(
+                "Remote native target outside history composition",
+              );
+            }
+            return await remote.oc.request(params.path, {
+              method: params.method,
+              body: params.body,
+              directory: remote.oc.directory,
+            });
+          }
           if (params.project && profile === "ordinary") {
             throw new Error("Multiple projects require isolated profile");
           }
@@ -787,7 +835,7 @@ try {
           }
           const kind = frame.params.kind;
           let session: unknown;
-          if (kind === "remote-password") {
+          if (kind === "remote-password" || kind === "remote-open") {
             if (remote) throw new Error("Remote server already acquired");
             const logs = Deno.env.get("OTK_TEST_LOG_ROOT");
             const path = join(fixture!.oc.root, "remote-logs");
@@ -805,7 +853,9 @@ try {
               body: { title: "Second host" },
             });
           }
-          const owner = kind === "remote-password" ? remote! : fixture!;
+          const owner = kind === "remote-password" || kind === "remote-open"
+            ? remote!
+            : fixture!;
           const server = await owner.sidecar({
             server: { origins: [fixture!.servers[0].url] },
             auth: kind === "password" || kind === "remote-password"
@@ -815,6 +865,8 @@ try {
                 password: "secret",
                 secretkey: "01234567890123456789012345678901",
               }
+              : kind === "remote-open" || kind === "history-sibling"
+              ? { type: "none" }
               : { type: "" },
           });
           await recordOwnership();
@@ -890,6 +942,42 @@ try {
           }
           return null;
         case "scenario":
+          if (
+            frame.params.action === "fail" &&
+            ["composer-commands", "composer-shell-failure"].includes(profile)
+          ) {
+            if (operation || !frame.params.sessionID) {
+              throw new Error(
+                "Composer diagnostic requires one captured session",
+              );
+            }
+            const result = operation = { settled: false } as {
+              settled: boolean;
+              error?: string;
+            };
+            const sessionID = `opcv1-${frame.params.sessionID}`;
+            const pending = profile === "composer-commands"
+              ? client!.rpc("session.command", {
+                sessionID,
+                command: "missing-otk-command",
+                arguments: "",
+              })
+              : client!.rpc("session.shell", {
+                sessionID,
+                command: "echo should-not-run",
+                agent: "missing-otk-agent",
+              });
+            // Match the original independent-client fault injection. Keeping the
+            // controller responsive lets the browser observe the deferred error
+            // rather than serializing all inspection behind its native receipt.
+            void pending.then(() => {
+              result.settled = true;
+            }, (error) => {
+              result.settled = true;
+              result.error = String(error);
+            });
+            return null;
+          }
           if (!transport) throw new Error("No native transport scenario");
           if (
             profile === "transport-cooling" && frame.params.action === "hold"

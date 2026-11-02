@@ -6,6 +6,24 @@ export type Json = null | boolean | number | string | Json[] | {
 };
 export type Profile =
   | "ordinary"
+  | "composer-pickers"
+  | "composer-applied"
+  | "composer-selection"
+  | "composer-plan"
+  | "composer-commands"
+  | "composer-mentions"
+  | "composer-submission"
+  | "composer-required"
+  | "composer-catalog"
+  | "composer-native-default"
+  | "composer-long-command"
+  | "composer-history"
+  | "composer-shell-failure"
+  | "contract-composer-missing"
+  | "contract-composer-none"
+  | "contract-composer-pending-choice"
+  | "contract-composer-failed-variant"
+  | "contract-composer-native-null"
   | "messages-native"
   | "messages-tools"
   | "messages-cooling"
@@ -75,7 +93,7 @@ export interface Commands {
     gate?: "held" | "stepped";
     delay?: number;
     tool?: { name: string; input: Record<string, Json> };
-    target?: "remote";
+    target?: "remote" | "selected";
   };
   releaseGate: { lease: string; gate: string };
   observe: { lease?: string };
@@ -86,11 +104,18 @@ export interface Commands {
     method?: "GET" | "POST" | "PATCH" | "DELETE";
     body?: Json;
     project?: "secondary";
+    target?: "remote";
   };
   productRpc: { lease: string; method: string; params: Json };
   auxiliary: {
     lease: string;
-    kind: "password" | "setup" | "open-setup" | "remote-password";
+    kind:
+      | "password"
+      | "setup"
+      | "open-setup"
+      | "remote-password"
+      | "remote-open"
+      | "history-sibling";
   };
   writeProjectFiles: { lease: string; files: Record<string, string> };
   restart: { lease: string; target: "native" | "sidecar" };
@@ -166,7 +191,7 @@ export function request(value: unknown): ControlRequest {
     releaseGate: ["lease", "gate"],
     observe: ["lease"],
     materializeSnapshot: ["lease", "key"],
-    nativeRequest: ["lease", "path", "method", "body", "project"],
+    nativeRequest: ["lease", "path", "method", "body", "project", "target"],
     productRpc: ["lease", "method", "params"],
     auxiliary: ["lease", "kind"],
     writeProjectFiles: ["lease", "files"],
@@ -190,6 +215,24 @@ export function request(value: unknown): ControlRequest {
       if (
         ![
           "ordinary",
+          "composer-pickers",
+          "composer-applied",
+          "composer-selection",
+          "composer-plan",
+          "composer-commands",
+          "composer-mentions",
+          "composer-submission",
+          "composer-required",
+          "composer-catalog",
+          "composer-native-default",
+          "composer-long-command",
+          "composer-history",
+          "composer-shell-failure",
+          "contract-composer-missing",
+          "contract-composer-none",
+          "contract-composer-pending-choice",
+          "contract-composer-failed-variant",
+          "contract-composer-native-null",
           "messages-native",
           "messages-tools",
           "messages-cooling",
@@ -263,7 +306,10 @@ export function request(value: unknown): ControlRequest {
       text(p.identity);
       break;
     case "queueScript":
-      if (p.target !== undefined && p.target !== "remote") {
+      if (
+        p.target !== undefined &&
+        !["remote", "selected"].includes(String(p.target))
+      ) {
         throw new Error("Unknown provider target");
       }
       if (p.tool !== undefined) {
@@ -274,7 +320,7 @@ export function request(value: unknown): ControlRequest {
       }
       if (
         p.delay !== undefined &&
-        (typeof p.delay !== "number" || p.delay < 0 || p.delay > 2000)
+        (typeof p.delay !== "number" || p.delay < 0 || p.delay > 16000)
       ) throw new Error("Invalid script cadence");
       if (
         !Array.isArray(p.chunks) ||
@@ -293,12 +339,15 @@ export function request(value: unknown): ControlRequest {
       text(p.key);
       break;
     case "nativeRequest":
+      if (p.target !== undefined && p.target !== "remote") {
+        throw new Error("Unknown native target");
+      }
       if (p.project !== undefined && p.project !== "secondary") {
         throw new Error("Unknown owned project");
       }
       text(p.path);
       if (
-        !/^\/(session(?:\/[^?#]*)?|permission(?:\/[^?#]*)?|question(?:\/[^?#]*)?|provider|experimental\/tool\/ids)$/
+        !/^\/(session(?:\/[^?#]*)?|permission(?:\/[^?#]*)?|question(?:\/[^?#]*)?|provider|command|experimental\/tool\/ids)$/
           .test(p.path)
       ) {
         throw new Error("Native path outside fixture vocabulary");
@@ -315,7 +364,14 @@ export function request(value: unknown): ControlRequest {
       break;
     case "auxiliary":
       if (
-        !["password", "setup", "open-setup", "remote-password"].includes(
+        ![
+          "password",
+          "setup",
+          "open-setup",
+          "remote-password",
+          "remote-open",
+          "history-sibling",
+        ].includes(
           String(p.kind),
         )
       ) throw new Error("Unknown auxiliary composition");

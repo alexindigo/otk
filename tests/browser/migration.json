@@ -18,6 +18,59 @@
         "sourceSha256": "2d51ea88508a517f6a83b3e64e87c731cd93a79caa5af44d5a2e78428db9eb87",
         "run": "otk-t2-c8-20261102/a/cost-and-visual-fix.json (same-tree real old + new commands)"
       }
+    },
+    {
+      "file": "tests/reuse/secondary-failures_test.ts",
+      "area": "composer",
+      "batch": "A3",
+      "originalTitle": "successful prompt clears its submitted draft despite failed project visit and shows separate feedback",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/composer/public-ui.spec.ts",
+        "testID": "composer.public-ui-secondary-failure-keeps-successful-send-and-separate-feedback"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "33f2ae5d60c36d2d1811dc495fa810be8f8afa832566eae63bd6d2c8882bb1f7",
+        "run": "otk-t2-c9-20261102/c/supplemental-first: nine old and three new passed on the same delivered tree"
+      }
+    },
+    {
+      "file": "tests/reuse/interaction-failures_test.ts",
+      "area": "composer",
+      "batch": "A3",
+      "originalTitle": "paste drop and clipboard refusals reach owned feedback without clearing input or losing reply",
+      "portion": "all synchronous/asynchronous paste/drop refusal combinations; reply clipboard remainder stays active in Deno",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/composer/public-ui.spec.ts",
+        "testID": "composer.public-ui-sync-async-paste-drop-refusals-retain-input"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "f974747ba877c72d447059f09833aaa430e685ae9b820b30b5bdbc902b10c660",
+        "run": "otk-t2-c9-20261102/c/supplemental-first"
+      }
+    },
+    {
+      "file": "tests/reuse/shared-controls_test.ts",
+      "area": "composer",
+      "batch": "A3",
+      "originalTitle": "restored own answers size from content after collapse and remount; autocomplete uses permanent shared pointers",
+      "portion": "native completion keyboard/pointer outcomes and exact pseudo-element geometry; question restoration and Dark/Linen geometry remain active in Deno",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/composer/public-ui.spec.ts",
+        "testID": "composer.public-ui-completion-native-keyboard-pointer-and-selection-geometry"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "39352a0782fc2ac89e7d88d2f13c240876c78700d01d2aa1d96a472d7d35e1e3",
+        "run": "otk-t2-c9-20261102/c/supplemental-first"
+      }
     }
   ],
   "files": [
@@ -173,9 +226,9 @@
           "proofBoundary": "B+L: late upload/draft ownership; keep real paste/drop",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/attachment_ownership_test.ts",
-              "testID": "legacy.attachment_ownership.725795b4288b0e00"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/attachments.spec.ts",
+              "testID": "composer.upload-completions-retain-edits-removals-concurrent-and-replaced-drafts"
             }
           ],
           "retainedCoverage": {
@@ -186,16 +239,19 @@
               "P9 upload completions preserve edits, removals, concurrent work and replaced session drafts"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/drafts_test.ts",
+            "testID": "draft writers retain session ownership, attachments and invocation-current identity across delayed painting"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/attachment_ownership_test.ts",
-            "testID": "legacy.attachment_ownership.725795b4288b0e00"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/attachments.spec.ts",
+            "testID": "composer.upload-completions-retain-edits-removals-concurrent-and-replaced-drafts"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "d5645e5c0971d588f5643f73abb38f0eaf46d283c5e279eca45a6fd9f6cf3c00",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -212,9 +268,9 @@
           "proofBoundary": "B+L: actual file parts and oversize draft preservation",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/attachments_test.ts",
-              "testID": "legacy.attachments.8b7357ee8abd75d1"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/attachments.spec.ts",
+              "testID": "composer.drop-paste-reference-and-exact-native-file"
             }
           ],
           "retainedCoverage": {
@@ -225,16 +281,19 @@
               "P9 client drop and image paste reach stock opencode as file parts; paths become references"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/attachment-batches_test.ts",
+            "testID": "attachment admission is aggregate and a partial origin cannot admit a prompt"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/attachments_test.ts",
-            "testID": "legacy.attachments.8b7357ee8abd75d1"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/attachments.spec.ts",
+            "testID": "composer.drop-paste-reference-and-exact-native-file"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "3b7c810f33a1d74a17fd7eafb6ef055461bb8a20ef709fc89a342e896408047a",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -243,9 +302,9 @@
           "proofBoundary": "B+L: actual file parts and oversize draft preservation",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/attachments_test.ts",
-              "testID": "legacy.attachments.38dc938e820357ed"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/attachments.spec.ts",
+              "testID": "composer.oversize-combined-files-retain-draft-without-send"
             }
           ],
           "retainedCoverage": {
@@ -256,16 +315,19 @@
               "P9 oversized combined uploads show an immediate error without sending or losing the draft"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/attachment-batches_test.ts",
+            "testID": "attachment admission is aggregate and a partial origin cannot admit a prompt"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/attachments_test.ts",
-            "testID": "legacy.attachments.38dc938e820357ed"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/attachments.spec.ts",
+            "testID": "composer.oversize-combined-files-retain-draft-without-send"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "3b7c810f33a1d74a17fd7eafb6ef055461bb8a20ef709fc89a342e896408047a",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -564,9 +626,9 @@
           "proofBoundary": "B+L: cold contexts, keyed files/tasks, no repeated discovery",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/catalog-updates_test.ts",
-              "testID": "legacy.catalog-updates.c481bb13b7b2be8d"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/catalog.spec.ts",
+              "testID": "composer.cold-contexts-keyed-catalog-task-file-updates-without-rediscovery"
             }
           ],
           "retainedCoverage": {
@@ -579,14 +641,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/catalog-updates_test.ts",
-            "testID": "legacy.catalog-updates.c481bb13b7b2be8d"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/catalog.spec.ts",
+            "testID": "composer.cold-contexts-keyed-catalog-task-file-updates-without-rediscovery"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "5fe903aa3c74c33d63a55ccdce99024dcf4b98a5a33a68af54e6e6526b4869a3",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -1366,9 +1428,9 @@
           "proofBoundary": "B+L: actual native slash outcomes and preserved newer drafts",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/commands_test.ts",
-              "testID": "legacy.commands.0135b683c205b0fd"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/commands.spec.ts",
+              "testID": "composer.native-project-mcp-skill-slash-multiline-and-dirty-new"
             }
           ],
           "retainedCoverage": {
@@ -1379,16 +1441,19 @@
               "P5 project, MCP and skill slash commands run with multiline arguments; builtins preserve dirty navigation"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/submission-intent_test.ts",
+            "testID": "a pending native submission does not swallow a later input command or admit another send"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/commands_test.ts",
-            "testID": "legacy.commands.0135b683c205b0fd"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/commands.spec.ts",
+            "testID": "composer.native-project-mcp-skill-slash-multiline-and-dirty-new"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "86ea021de6ab0e0e30c7890745a7d754ee4ad9919f3e98f2b5ea807b7c89e581",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -1397,9 +1462,9 @@
           "proofBoundary": "B+L: actual native slash outcomes and preserved newer drafts",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/commands_test.ts",
-              "testID": "legacy.commands.1844105073c9d0cc"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/commands.spec.ts",
+              "testID": "composer.long-slash-retains-unconfirmed-and-newer-draft-until-real-completion"
             }
           ],
           "retainedCoverage": {
@@ -1412,14 +1477,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/commands_test.ts",
-            "testID": "legacy.commands.1844105073c9d0cc"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/commands.spec.ts",
+            "testID": "composer.long-slash-retains-unconfirmed-and-newer-draft-until-real-completion"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "86ea021de6ab0e0e30c7890745a7d754ee4ad9919f3e98f2b5ea807b7c89e581",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -1428,9 +1493,9 @@
           "proofBoundary": "B+L: actual native slash outcomes and preserved newer drafts",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/commands_test.ts",
-              "testID": "legacy.commands.c24485fa86281db2"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/commands.spec.ts",
+              "testID": "composer.deferred-slash-failure-keeps-new-draft-and-reloads-authority"
             }
           ],
           "retainedCoverage": {
@@ -1443,14 +1508,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/commands_test.ts",
-            "testID": "legacy.commands.c24485fa86281db2"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/commands.spec.ts",
+            "testID": "composer.deferred-slash-failure-keeps-new-draft-and-reloads-authority"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "86ea021de6ab0e0e30c7890745a7d754ee4ad9919f3e98f2b5ea807b7c89e581",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -1850,6 +1915,11 @@
               "runner": "legacy",
               "file": "tests/e2e/composer_applied_test.ts",
               "testID": "legacy.composer_applied.acf82293256d8a9f"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/selection.spec.ts",
+              "testID": "composer.applied-default-explicit-and-restored-native-selection"
             }
           ],
           "retainedCoverage": {
@@ -1867,9 +1937,9 @@
             "testID": "legacy.composer_applied.acf82293256d8a9f"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "d5f1fc782c73aec7191c5ce2398ce9d478c32c812dbf9c9685a3e5dcd006b2d3",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "f6b815f7fb78b8ed9365ba312050f238cd38817e12d8ad683365587e8a499aca",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -1881,6 +1951,11 @@
               "runner": "legacy",
               "file": "tests/e2e/composer_applied_test.ts",
               "testID": "legacy.composer_applied.7ac36edcd9a3f39e"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/selection.spec.ts",
+              "testID": "composer.applied-default-explicit-and-restored-native-selection"
             }
           ],
           "retainedCoverage": {
@@ -1898,9 +1973,9 @@
             "testID": "legacy.composer_applied.7ac36edcd9a3f39e"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "d5f1fc782c73aec7191c5ce2398ce9d478c32c812dbf9c9685a3e5dcd006b2d3",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "f6b815f7fb78b8ed9365ba312050f238cd38817e12d8ad683365587e8a499aca",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -1912,6 +1987,11 @@
               "runner": "legacy",
               "file": "tests/e2e/composer_applied_test.ts",
               "testID": "legacy.composer_applied.f44c25674a7cc766"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/selection.spec.ts",
+              "testID": "composer.applied-default-explicit-and-restored-native-selection"
             }
           ],
           "retainedCoverage": {
@@ -1929,9 +2009,9 @@
             "testID": "legacy.composer_applied.f44c25674a7cc766"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "d5f1fc782c73aec7191c5ce2398ce9d478c32c812dbf9c9685a3e5dcd006b2d3",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "f6b815f7fb78b8ed9365ba312050f238cd38817e12d8ad683365587e8a499aca",
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -1951,6 +2031,11 @@
               "runner": "legacy",
               "file": "tests/e2e/composer_pickers_test.ts",
               "testID": "legacy.composer_pickers.f99a8626677d48e1"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/selection.spec.ts",
+              "testID": "composer.pickers-native-selection-favourites-keys-slash-shell"
             }
           ],
           "retainedCoverage": {
@@ -1968,9 +2053,9 @@
             "testID": "legacy.composer_pickers.f99a8626677d48e1"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "7691907a593a6325eace33b2140bfdd78ce99e1fc01c34299437f325a933e374",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8f53dec7dca672487a004d17d3636ba60a064bec070a0b27346e0a4e36581f54",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -1982,6 +2067,11 @@
               "runner": "legacy",
               "file": "tests/e2e/composer_pickers_test.ts",
               "testID": "legacy.composer_pickers.e97cbd84b57dd456"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/selection.spec.ts",
+              "testID": "composer.pickers-native-selection-favourites-keys-slash-shell"
             }
           ],
           "retainedCoverage": {
@@ -1999,9 +2089,9 @@
             "testID": "legacy.composer_pickers.e97cbd84b57dd456"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "7691907a593a6325eace33b2140bfdd78ce99e1fc01c34299437f325a933e374",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8f53dec7dca672487a004d17d3636ba60a064bec070a0b27346e0a4e36581f54",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -2013,6 +2103,11 @@
               "runner": "legacy",
               "file": "tests/e2e/composer_pickers_test.ts",
               "testID": "legacy.composer_pickers.6ba65d5e312d9511"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/selection.spec.ts",
+              "testID": "composer.pickers-native-selection-favourites-keys-slash-shell"
             }
           ],
           "retainedCoverage": {
@@ -2030,9 +2125,9 @@
             "testID": "legacy.composer_pickers.6ba65d5e312d9511"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "7691907a593a6325eace33b2140bfdd78ce99e1fc01c34299437f325a933e374",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8f53dec7dca672487a004d17d3636ba60a064bec070a0b27346e0a4e36581f54",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -2041,9 +2136,9 @@
           "proofBoundary": "B+C+V+L: native selection, catalog pending/errors, keyboard and geometry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/composer_pickers_test.ts",
-              "testID": "legacy.composer_pickers.574913356a0963ac"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/composer/catalog.spec.ts",
+              "testID": "composer.catalog-missing"
             }
           ],
           "retainedCoverage": {
@@ -2056,14 +2151,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/composer_pickers_test.ts",
-            "testID": "legacy.composer_pickers.574913356a0963ac"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/composer/catalog.spec.ts",
+            "testID": "composer.catalog-missing"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "7691907a593a6325eace33b2140bfdd78ce99e1fc01c34299437f325a933e374",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8f53dec7dca672487a004d17d3636ba60a064bec070a0b27346e0a4e36581f54",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -2072,9 +2167,9 @@
           "proofBoundary": "B+C+V+L: native selection, catalog pending/errors, keyboard and geometry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/composer_pickers_test.ts",
-              "testID": "legacy.composer_pickers.15f00448c086ed67"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/composer/catalog.spec.ts",
+              "testID": "composer.catalog-none"
             }
           ],
           "retainedCoverage": {
@@ -2087,14 +2182,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/composer_pickers_test.ts",
-            "testID": "legacy.composer_pickers.15f00448c086ed67"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/composer/catalog.spec.ts",
+            "testID": "composer.catalog-none"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "7691907a593a6325eace33b2140bfdd78ce99e1fc01c34299437f325a933e374",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8f53dec7dca672487a004d17d3636ba60a064bec070a0b27346e0a4e36581f54",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -2103,9 +2198,9 @@
           "proofBoundary": "B+C+V+L: native selection, catalog pending/errors, keyboard and geometry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/composer_pickers_test.ts",
-              "testID": "legacy.composer_pickers.f6149da29c146660"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/composer/catalog.spec.ts",
+              "testID": "composer.catalog-pending-choice"
             }
           ],
           "retainedCoverage": {
@@ -2118,14 +2213,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/composer_pickers_test.ts",
-            "testID": "legacy.composer_pickers.f6149da29c146660"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/composer/catalog.spec.ts",
+            "testID": "composer.catalog-pending-choice"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "7691907a593a6325eace33b2140bfdd78ce99e1fc01c34299437f325a933e374",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8f53dec7dca672487a004d17d3636ba60a064bec070a0b27346e0a4e36581f54",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -2134,9 +2229,9 @@
           "proofBoundary": "B+C+V+L: native selection, catalog pending/errors, keyboard and geometry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/composer_pickers_test.ts",
-              "testID": "legacy.composer_pickers.3914add069f9813d"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/composer/catalog.spec.ts",
+              "testID": "composer.catalog-failed-variant"
             }
           ],
           "retainedCoverage": {
@@ -2149,14 +2244,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/composer_pickers_test.ts",
-            "testID": "legacy.composer_pickers.3914add069f9813d"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/composer/catalog.spec.ts",
+            "testID": "composer.catalog-failed-variant"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "7691907a593a6325eace33b2140bfdd78ce99e1fc01c34299437f325a933e374",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8f53dec7dca672487a004d17d3636ba60a064bec070a0b27346e0a4e36581f54",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -2165,9 +2260,9 @@
           "proofBoundary": "B+C+V+L: native selection, catalog pending/errors, keyboard and geometry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/composer_pickers_test.ts",
-              "testID": "legacy.composer_pickers.98bc9e74a995ae12"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/composer/catalog.spec.ts",
+              "testID": "composer.catalog-native-null"
             }
           ],
           "retainedCoverage": {
@@ -2180,14 +2275,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/composer_pickers_test.ts",
-            "testID": "legacy.composer_pickers.98bc9e74a995ae12"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/composer/catalog.spec.ts",
+            "testID": "composer.catalog-native-null"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "7691907a593a6325eace33b2140bfdd78ce99e1fc01c34299437f325a933e374",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8f53dec7dca672487a004d17d3636ba60a064bec070a0b27346e0a4e36581f54",
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -3211,9 +3306,14 @@
           "proofBoundary": "B: 200-line editor save/cancel, chips and final bytes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/editor_test.ts",
-              "testID": "legacy.editor.a8f9e9862d200c57"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/editor.spec.ts",
+              "testID": "composer.editor-paste-save-cancel-expanded-bytes"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/composer/editor.spec.ts",
+              "testID": "composer.editor-dialog-and-action-geometry"
             }
           ],
           "retainedCoverage": {
@@ -3226,14 +3326,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/editor_test.ts",
-            "testID": "legacy.editor.a8f9e9862d200c57"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/editor.spec.ts",
+            "testID": "composer.editor-paste-save-cancel-expanded-bytes"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "cb2b9570614aea8869804759d69a6f9463c84d2fb13ede5e5593cff88c86b89c",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -3242,9 +3342,14 @@
           "proofBoundary": "B: 200-line editor save/cancel, chips and final bytes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/editor_test.ts",
-              "testID": "legacy.editor.01e60542a6e18eeb"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/editor.spec.ts",
+              "testID": "composer.editor-late-upload-retains-current-draft"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/composer/editor.spec.ts",
+              "testID": "composer.editor-dialog-and-action-geometry"
             }
           ],
           "retainedCoverage": {
@@ -3257,14 +3362,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/editor_test.ts",
-            "testID": "legacy.editor.01e60542a6e18eeb"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/editor.spec.ts",
+            "testID": "composer.editor-late-upload-retains-current-draft"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "cb2b9570614aea8869804759d69a6f9463c84d2fb13ede5e5593cff88c86b89c",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -3817,9 +3922,9 @@
           "proofBoundary": "B+L: multi-sidecar recall, bytes, local partial success and caret",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/history_test.ts",
-              "testID": "legacy.history.728351bf0f46ccc2"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/history.spec.ts",
+              "testID": "composer.multi-sidecar-time-ordered-recall-shell-dirty-guard-and-return"
             }
           ],
           "retainedCoverage": {
@@ -3830,16 +3935,19 @@
               "P6 history merges connected sidecars by time, recalls shell mode and protects edited recalled drafts"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/harness-opencode-v1/tests/history_test.ts",
+            "testID": "history reads captured 1.18.34 DB, restores shell/file/agent, drops adjacent duplicates and never writes it"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/history_test.ts",
-            "testID": "legacy.history.728351bf0f46ccc2"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/history.spec.ts",
+            "testID": "composer.multi-sidecar-time-ordered-recall-shell-dirty-guard-and-return"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b942c5cb6ef52111ecc440df520086a8d6315a8884dedbe210584e5600cab7e9",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -3848,9 +3956,9 @@
           "proofBoundary": "B+L: multi-sidecar recall, bytes, local partial success and caret",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/history_test.ts",
-              "testID": "legacy.history.4ff098ca9c7c3ce2"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/history.spec.ts",
+              "testID": "composer.remote-image-recall-resolves-origin-bytes-only-on-send"
             }
           ],
           "retainedCoverage": {
@@ -3863,14 +3971,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/history_test.ts",
-            "testID": "legacy.history.4ff098ca9c7c3ce2"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/history.spec.ts",
+            "testID": "composer.remote-image-recall-resolves-origin-bytes-only-on-send"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b942c5cb6ef52111ecc440df520086a8d6315a8884dedbe210584e5600cab7e9",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -3879,9 +3987,9 @@
           "proofBoundary": "B+L: multi-sidecar recall, bytes, local partial success and caret",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/history_test.ts",
-              "testID": "legacy.history.af6a98a0cd5ca4f1"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/history.spec.ts",
+              "testID": "composer.valid-local-recall-survives-definitive-connected-sibling-rejection"
             }
           ],
           "retainedCoverage": {
@@ -3894,14 +4002,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/history_test.ts",
-            "testID": "legacy.history.af6a98a0cd5ca4f1"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/history.spec.ts",
+            "testID": "composer.valid-local-recall-survives-definitive-connected-sibling-rejection"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b942c5cb6ef52111ecc440df520086a8d6315a8884dedbe210584e5600cab7e9",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -3910,9 +4018,9 @@
           "proofBoundary": "B+L: multi-sidecar recall, bytes, local partial success and caret",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/history_test.ts",
-              "testID": "legacy.history.6e72995e054da076"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/recall.spec.ts",
+              "testID": "composer.recalled-caret-accepts-next-native-key-before-paint"
             }
           ],
           "retainedCoverage": {
@@ -3925,14 +4033,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/history_test.ts",
-            "testID": "legacy.history.6e72995e054da076"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/recall.spec.ts",
+            "testID": "composer.recalled-caret-accepts-next-native-key-before-paint"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b942c5cb6ef52111ecc440df520086a8d6315a8884dedbe210584e5600cab7e9",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -3949,9 +4057,9 @@
           "proofBoundary": "B+L: ordered exact image/PDF bytes; one visible failed recall",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/history-batches_test.ts",
-              "testID": "legacy.history-batches.4d0453a758a71c82"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/recall.spec.ts",
+              "testID": "composer.cold-recall-image-pdf-exact-ordered-bytes"
             }
           ],
           "retainedCoverage": {
@@ -3962,16 +4070,19 @@
               "cold browser recalls image and PDF references and sends exact provider bytes with retained chip order"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/harness-opencode-v1/tests/history-batches_test.ts",
+            "testID": "attachment batches correlate ordered refs, validate before body reads, and reject the whole batch"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/history-batches_test.ts",
-            "testID": "legacy.history-batches.4d0453a758a71c82"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/recall.spec.ts",
+            "testID": "composer.cold-recall-image-pdf-exact-ordered-bytes"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "449c2fb17b69a0096d335108005cba8a33ae39ffa5c7e8e55151ed8f55f87489",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -3980,9 +4091,9 @@
           "proofBoundary": "B+L: ordered exact image/PDF bytes; one visible failed recall",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/history-batches_test.ts",
-              "testID": "legacy.history-batches.dfe5834abf2b718f"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/recall.spec.ts",
+              "testID": "composer.definitive-recall-rejection-is-one-visible-failure"
             }
           ],
           "retainedCoverage": {
@@ -3995,14 +4106,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/history-batches_test.ts",
-            "testID": "legacy.history-batches.dfe5834abf2b718f"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/recall.spec.ts",
+            "testID": "composer.definitive-recall-rejection-is-one-visible-failure"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "449c2fb17b69a0096d335108005cba8a33ae39ffa5c7e8e55151ed8f55f87489",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -4011,9 +4122,9 @@
           "proofBoundary": "B+L: ordered exact image/PDF bytes; one visible failed recall",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/history-batches_test.ts",
-              "testID": "legacy.history-batches.30122de0bd238f4c"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/recall.spec.ts",
+              "testID": "composer.definitive-recall-rejection-is-one-visible-failure"
             }
           ],
           "retainedCoverage": {
@@ -4026,14 +4137,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/history-batches_test.ts",
-            "testID": "legacy.history-batches.30122de0bd238f4c"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/recall.spec.ts",
+            "testID": "composer.definitive-recall-rejection-is-one-visible-failure"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "449c2fb17b69a0096d335108005cba8a33ae39ffa5c7e8e55151ed8f55f87489",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -4050,9 +4161,9 @@
           "proofBoundary": "B+L: deleted attachment cannot send or discard draft",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/history-recall-failure_test.ts",
-              "testID": "legacy.history-recall-failure.e19d18378772debc"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/recall.spec.ts",
+              "testID": "composer.deleted-recall-rejects-with-complete-draft-and-no-send"
             }
           ],
           "retainedCoverage": {
@@ -4063,16 +4174,19 @@
               "deleted recall attachment rejects definitively and preserves the complete draft without native send in otk-dark"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/history-availability_test.ts",
+            "testID": "recall preserves partial source ownership but reports an entirely unavailable provider set"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/history-recall-failure_test.ts",
-            "testID": "legacy.history-recall-failure.e19d18378772debc"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/recall.spec.ts",
+            "testID": "composer.deleted-recall-rejects-with-complete-draft-and-no-send"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f9be3b81d4e4719cc67bba7fefb15bec9743a9d90484381f1980ea74ac6581e1",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -4081,9 +4195,9 @@
           "proofBoundary": "B+L: deleted attachment cannot send or discard draft",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/history-recall-failure_test.ts",
-              "testID": "legacy.history-recall-failure.2a2502984f3a565e"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/recall.spec.ts",
+              "testID": "composer.deleted-recall-rejects-with-complete-draft-and-no-send"
             }
           ],
           "retainedCoverage": {
@@ -4096,14 +4210,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/history-recall-failure_test.ts",
-            "testID": "legacy.history-recall-failure.2a2502984f3a565e"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/recall.spec.ts",
+            "testID": "composer.deleted-recall-rejects-with-complete-draft-and-no-send"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f9be3b81d4e4719cc67bba7fefb15bec9743a9d90484381f1980ea74ac6581e1",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -4120,9 +4234,9 @@
           "proofBoundary": "B+L: chosen model and explicit Default survive recall/editor/send",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/history-selection_test.ts",
-              "testID": "legacy.history-selection.eb0404a052a1df83"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/selection.spec.ts",
+              "testID": "composer.recall-chosen-model-high-editor-send"
             }
           ],
           "retainedCoverage": {
@@ -4133,16 +4247,19 @@
               "history recall retains chosen model and high through editor, send and native receipt"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/prompt-history_test.ts",
+            "testID": "history recall and return to empty preserve current choices including own undefined Default"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/history-selection_test.ts",
-            "testID": "legacy.history-selection.eb0404a052a1df83"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/selection.spec.ts",
+            "testID": "composer.recall-chosen-model-high-editor-send"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b3f98fa1d13c8974c2f3da3c1bd65beef790ea16b6274179e5e3dcf1bb07e989",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -4151,9 +4268,9 @@
           "proofBoundary": "B+L: chosen model and explicit Default survive recall/editor/send",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/history-selection_test.ts",
-              "testID": "legacy.history-selection.c1cab5606427cdff"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/selection.spec.ts",
+              "testID": "composer.recall-chosen-model-explicit-default-editor-send"
             }
           ],
           "retainedCoverage": {
@@ -4166,14 +4283,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/history-selection_test.ts",
-            "testID": "legacy.history-selection.c1cab5606427cdff"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/selection.spec.ts",
+            "testID": "composer.recall-chosen-model-explicit-default-editor-send"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b3f98fa1d13c8974c2f3da3c1bd65beef790ea16b6274179e5e3dcf1bb07e989",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -4193,6 +4310,11 @@
               "runner": "legacy",
               "file": "tests/e2e/images_test.ts",
               "testID": "legacy.images.bcd93021cfca4416"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/images.spec.ts",
+              "testID": "composer.images-paste-drop-unique-chip-native-original-dialog-and-recall"
             }
           ],
           "retainedCoverage": {
@@ -4210,9 +4332,9 @@
             "testID": "legacy.images.bcd93021cfca4416"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "153833dded486d0ff5763cbde2fb916ae02b4a879a6a168250a2b83a84933edf",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8575cc16b83219be200cc0fe0e3a61d6a21cda25eb77da406af154e9f9f263cb",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -4221,9 +4343,9 @@
           "proofBoundary": "B+V+L: trusted uploads, unique chips and original-image dialog",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/images_test.ts",
-              "testID": "legacy.images.b44f4b9eb6f714ff"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/images.spec.ts",
+              "testID": "composer.pending-image-session-owner-and-removal-fence"
             }
           ],
           "retainedCoverage": {
@@ -4236,14 +4358,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/images_test.ts",
-            "testID": "legacy.images.b44f4b9eb6f714ff"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/images.spec.ts",
+            "testID": "composer.pending-image-session-owner-and-removal-fence"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "153833dded486d0ff5763cbde2fb916ae02b4a879a6a168250a2b83a84933edf",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8575cc16b83219be200cc0fe0e3a61d6a21cda25eb77da406af154e9f9f263cb",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -4255,6 +4377,11 @@
               "runner": "legacy",
               "file": "tests/e2e/images_test.ts",
               "testID": "legacy.images.6f0367f0ab37600b"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/images.spec.ts",
+              "testID": "composer.images-paste-drop-unique-chip-native-original-dialog-and-recall"
             }
           ],
           "retainedCoverage": {
@@ -4272,9 +4399,9 @@
             "testID": "legacy.images.6f0367f0ab37600b"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "153833dded486d0ff5763cbde2fb916ae02b4a879a6a168250a2b83a84933edf",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8575cc16b83219be200cc0fe0e3a61d6a21cda25eb77da406af154e9f9f263cb",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -4283,9 +4410,9 @@
           "proofBoundary": "B+V+L: trusted uploads, unique chips and original-image dialog",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/images_test.ts",
-              "testID": "legacy.images.1794792c805212ad"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/images.spec.ts",
+              "testID": "composer.pending-image-session-owner-and-removal-fence"
             }
           ],
           "retainedCoverage": {
@@ -4298,14 +4425,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/images_test.ts",
-            "testID": "legacy.images.1794792c805212ad"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/images.spec.ts",
+            "testID": "composer.pending-image-session-owner-and-removal-fence"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "153833dded486d0ff5763cbde2fb916ae02b4a879a6a168250a2b83a84933edf",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8575cc16b83219be200cc0fe0e3a61d6a21cda25eb77da406af154e9f9f263cb",
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -5381,9 +5508,9 @@
           "proofBoundary": "B+L: native file/range/agent/MCP input and empty completion keys",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/mentions_test.ts",
-              "testID": "legacy.mentions.5b238457b52828ae"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/mentions.spec.ts",
+              "testID": "composer.empty-completion-preserves-enter-native-up-and-escape"
             }
           ],
           "retainedCoverage": {
@@ -5396,14 +5523,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/mentions_test.ts",
-            "testID": "legacy.mentions.5b238457b52828ae"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/mentions.spec.ts",
+            "testID": "composer.empty-completion-preserves-enter-native-up-and-escape"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "e3ff513e7f398f16bdfaee5e5f999480f2d49dd186e004e579e10a562699d07f",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -5412,9 +5539,9 @@
           "proofBoundary": "B+L: native file/range/agent/MCP input and empty completion keys",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/mentions_test.ts",
-              "testID": "legacy.mentions.b26ce651c63f8d19"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/mentions.spec.ts",
+              "testID": "composer.native-file-range-agent-mcp-directory-frecency"
             }
           ],
           "retainedCoverage": {
@@ -5427,14 +5554,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/mentions_test.ts",
-            "testID": "legacy.mentions.b26ce651c63f8d19"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/mentions.spec.ts",
+            "testID": "composer.native-file-range-agent-mcp-directory-frecency"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "e3ff513e7f398f16bdfaee5e5f999480f2d49dd186e004e579e10a562699d07f",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -6739,6 +6866,11 @@
               "runner": "legacy",
               "file": "tests/e2e/native-default_test.ts",
               "testID": "legacy.native-default.109c70c2de4f7481"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/native-default.spec.ts",
+              "testID": "composer.unreported-default-omitted-at-wire-native-and-applied-honestly"
             }
           ],
           "retainedCoverage": {
@@ -6756,9 +6888,9 @@
             "testID": "legacy.native-default.109c70c2de4f7481"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "58e0c7c7875708907794e498f77aced6295a98c3a09622608e738b9793335348",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "592bf07a1e31a2ef406481e67ae2188e1a50f719cd082b850b4ed83eeca6ba74",
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -7536,6 +7668,11 @@
               "runner": "legacy",
               "file": "tests/e2e/plan_switch_test.ts",
               "testID": "legacy.plan_switch.4a4e12ba77c8f3ce"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/plan-switch.spec.ts",
+              "testID": "composer.native-plan-approval-next-selection-and-plugin-name-nontransition"
             }
           ],
           "retainedCoverage": {
@@ -7553,9 +7690,9 @@
             "testID": "legacy.plan_switch.4a4e12ba77c8f3ce"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "3b81a37286069bf87dabeb05cd19349480eaa54ec84f44dd74c9df21e3c02d02",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "048e9f256e8b7b03722a0b165826f160ed1decbbf9baf4184f91d6e833f36b00",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -7567,6 +7704,11 @@
               "runner": "legacy",
               "file": "tests/e2e/plan_switch_test.ts",
               "testID": "legacy.plan_switch.af536089bacbbab5"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/plan-switch.spec.ts",
+              "testID": "composer.native-plan-approval-next-selection-and-plugin-name-nontransition"
             }
           ],
           "retainedCoverage": {
@@ -7584,9 +7726,9 @@
             "testID": "legacy.plan_switch.af536089bacbbab5"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "3b81a37286069bf87dabeb05cd19349480eaa54ec84f44dd74c9df21e3c02d02",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "048e9f256e8b7b03722a0b165826f160ed1decbbf9baf4184f91d6e833f36b00",
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -7598,6 +7740,11 @@
               "runner": "legacy",
               "file": "tests/e2e/plan_switch_test.ts",
               "testID": "legacy.plan_switch.9ed536441fb9f5f9"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/plan-switch.spec.ts",
+              "testID": "composer.native-plan-approval-next-selection-and-plugin-name-nontransition"
             }
           ],
           "retainedCoverage": {
@@ -7615,9 +7762,9 @@
             "testID": "legacy.plan_switch.9ed536441fb9f5f9"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "3b81a37286069bf87dabeb05cd19349480eaa54ec84f44dd74c9df21e3c02d02",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "048e9f256e8b7b03722a0b165826f160ed1decbbf9baf4184f91d6e833f36b00",
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -8026,6 +8173,11 @@
               "runner": "legacy",
               "file": "tests/e2e/prompt_size_test.ts",
               "testID": "legacy.prompt_size.e8a976bd4604181e"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/composer/prompt-size.spec.ts",
+              "testID": "composer.native-grow-cap-caret-shrink-wrap-editor-send-and-takeover"
             }
           ],
           "retainedCoverage": {
@@ -8043,9 +8195,9 @@
             "testID": "legacy.prompt_size.e8a976bd4604181e"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "b569ec5898feda11076a1115650ebb5dce678612f3fe08ee6b54679020974d3e",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "55e552a51b0353b4daf8b57731a183aa94b6e6a6dc06f519bb1fa8a94d8d8267",
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -8826,9 +8978,9 @@
           "proofBoundary": "B+L: normal/slash invalid path keeps complete draft and retries all parts",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/required-attachments_test.ts",
-              "testID": "legacy.required-attachments.22081f37c5b982bd"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/required-attachments.spec.ts",
+              "testID": "composer.required-prompt-missing-complete-draft-and-all-parts-retry"
             }
           ],
           "retainedCoverage": {
@@ -8839,16 +8991,19 @@
               "prompt keeps the entire draft when a selected attachment becomes missing and retries with every attachment"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/harness-opencode-v1/tests/required-attachments_test.ts",
+            "testID": "required attachment mapping preserves every source, order, directory and range"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/required-attachments_test.ts",
-            "testID": "legacy.required-attachments.22081f37c5b982bd"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/required-attachments.spec.ts",
+            "testID": "composer.required-prompt-missing-complete-draft-and-all-parts-retry"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b2cbd946abb76fb8a2508d84410a26611a11e5c752803f76a1d9af7fc3661db9",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -8857,9 +9012,9 @@
           "proofBoundary": "B+L: normal/slash invalid path keeps complete draft and retries all parts",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/required-attachments_test.ts",
-              "testID": "legacy.required-attachments.e6e003b11ae61011"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/required-attachments.spec.ts",
+              "testID": "composer.required-prompt-unreadable-complete-draft-and-all-parts-retry"
             }
           ],
           "retainedCoverage": {
@@ -8872,14 +9027,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/required-attachments_test.ts",
-            "testID": "legacy.required-attachments.e6e003b11ae61011"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/required-attachments.spec.ts",
+            "testID": "composer.required-prompt-unreadable-complete-draft-and-all-parts-retry"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b2cbd946abb76fb8a2508d84410a26611a11e5c752803f76a1d9af7fc3661db9",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -8888,9 +9043,9 @@
           "proofBoundary": "B+L: normal/slash invalid path keeps complete draft and retries all parts",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/required-attachments_test.ts",
-              "testID": "legacy.required-attachments.f1d4c991ebda84f7"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/required-attachments.spec.ts",
+              "testID": "composer.required-command-missing-complete-draft-and-all-parts-retry"
             }
           ],
           "retainedCoverage": {
@@ -8903,14 +9058,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/required-attachments_test.ts",
-            "testID": "legacy.required-attachments.f1d4c991ebda84f7"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/required-attachments.spec.ts",
+            "testID": "composer.required-command-missing-complete-draft-and-all-parts-retry"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b2cbd946abb76fb8a2508d84410a26611a11e5c752803f76a1d9af7fc3661db9",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -8919,9 +9074,9 @@
           "proofBoundary": "B+L: normal/slash invalid path keeps complete draft and retries all parts",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/required-attachments_test.ts",
-              "testID": "legacy.required-attachments.7fce95f5b6c9c998"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/required-attachments.spec.ts",
+              "testID": "composer.required-command-unreadable-complete-draft-and-all-parts-retry"
             }
           ],
           "retainedCoverage": {
@@ -8934,14 +9089,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/required-attachments_test.ts",
-            "testID": "legacy.required-attachments.7fce95f5b6c9c998"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/required-attachments.spec.ts",
+            "testID": "composer.required-command-unreadable-complete-draft-and-all-parts-retry"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b2cbd946abb76fb8a2508d84410a26611a11e5c752803f76a1d9af7fc3661db9",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -10560,9 +10715,9 @@
           "proofBoundary": "B+L: trusted literal bang/mode, real output and late failure/draft",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/shell_test.ts",
-              "testID": "legacy.shell.58623b5a8102d7ac"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/shell.spec.ts",
+              "testID": "composer.literal-pasted-bang-and-ordinary-native-typing"
             }
           ],
           "retainedCoverage": {
@@ -10575,14 +10730,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/shell_test.ts",
-            "testID": "legacy.shell.58623b5a8102d7ac"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/shell.spec.ts",
+            "testID": "composer.literal-pasted-bang-and-ordinary-native-typing"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b7647618fb5bdd480d3156ec2bc6be60bb68940c6d46a5f0521a8960ddf001a6",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -10591,9 +10746,9 @@
           "proofBoundary": "B+L: trusted literal bang/mode, real output and late failure/draft",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/shell_test.ts",
-              "testID": "legacy.shell.36a6551dd3b176e0"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/shell.spec.ts",
+              "testID": "composer.shell-native-output-local-mode-exit-and-real-long-command"
             }
           ],
           "retainedCoverage": {
@@ -10606,14 +10761,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/shell_test.ts",
-            "testID": "legacy.shell.36a6551dd3b176e0"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/shell.spec.ts",
+            "testID": "composer.shell-native-output-local-mode-exit-and-real-long-command"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b7647618fb5bdd480d3156ec2bc6be60bb68940c6d46a5f0521a8960ddf001a6",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -10622,9 +10777,9 @@
           "proofBoundary": "B+L: trusted literal bang/mode, real output and late failure/draft",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/shell_test.ts",
-              "testID": "legacy.shell.c370c72dd543e4d6"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/shell.spec.ts",
+              "testID": "composer.deferred-shell-failure-keeps-new-draft-and-reloads-authority"
             }
           ],
           "retainedCoverage": {
@@ -10637,14 +10792,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/shell_test.ts",
-            "testID": "legacy.shell.c370c72dd543e4d6"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/shell.spec.ts",
+            "testID": "composer.deferred-shell-failure-keeps-new-draft-and-reloads-authority"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b7647618fb5bdd480d3156ec2bc6be60bb68940c6d46a5f0521a8960ddf001a6",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
@@ -10801,9 +10956,9 @@
           "proofBoundary": "B+L: native normal/shell/command submits promote once and persist",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/submission-owner_test.ts",
-              "testID": "legacy.submission-owner.43266d0419e7b28e"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/submission.spec.ts",
+              "testID": "composer.normal-submission-promotes-once-and-persists-success"
             }
           ],
           "retainedCoverage": {
@@ -10816,14 +10971,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/submission-owner_test.ts",
-            "testID": "legacy.submission-owner.43266d0419e7b28e"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/submission.spec.ts",
+            "testID": "composer.normal-submission-promotes-once-and-persists-success"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f14a36d60db4a4582569ecc1c41c84b3c1a814f379caaec8db48e6cf505412c4",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -10832,9 +10987,9 @@
           "proofBoundary": "B+L: native normal/shell/command submits promote once and persist",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/submission-owner_test.ts",
-              "testID": "legacy.submission-owner.f9b84a458b0e53bb"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/submission.spec.ts",
+              "testID": "composer.shell-submission-promotes-once-and-persists-success"
             }
           ],
           "retainedCoverage": {
@@ -10847,14 +11002,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/submission-owner_test.ts",
-            "testID": "legacy.submission-owner.f9b84a458b0e53bb"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/submission.spec.ts",
+            "testID": "composer.shell-submission-promotes-once-and-persists-success"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f14a36d60db4a4582569ecc1c41c84b3c1a814f379caaec8db48e6cf505412c4",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -10863,9 +11018,9 @@
           "proofBoundary": "B+L: native normal/shell/command submits promote once and persist",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/submission-owner_test.ts",
-              "testID": "legacy.submission-owner.4d6d1008ee61cac8"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/submission.spec.ts",
+              "testID": "composer.slash-submission-promotes-once-and-persists-success"
             }
           ],
           "retainedCoverage": {
@@ -10878,14 +11033,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/submission-owner_test.ts",
-            "testID": "legacy.submission-owner.4d6d1008ee61cac8"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/submission.spec.ts",
+            "testID": "composer.slash-submission-promotes-once-and-persists-success"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f14a36d60db4a4582569ecc1c41c84b3c1a814f379caaec8db48e6cf505412c4",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         },
         {
@@ -10894,9 +11049,9 @@
           "proofBoundary": "B+L: native normal/shell/command submits promote once and persist",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/submission-owner_test.ts",
-              "testID": "legacy.submission-owner.85f9fc917123a56d"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/composer/submission.spec.ts",
+              "testID": "composer.palette-submission-promotes-once-and-persists-success"
             }
           ],
           "retainedCoverage": {
@@ -10909,14 +11064,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/submission-owner_test.ts",
-            "testID": "legacy.submission-owner.85f9fc917123a56d"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/composer/submission.spec.ts",
+            "testID": "composer.palette-submission-promotes-once-and-persists-success"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f14a36d60db4a4582569ecc1c41c84b3c1a814f379caaec8db48e6cf505412c4",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c9-20261102"
           }
         }
       ]
