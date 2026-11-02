@@ -8,6 +8,7 @@ import { cfg, fixture } from "../../../tests/support/config.ts";
 import { OpencodeV1Adapter as Opencode1Adapter } from "../adapter.ts";
 import { Client } from "../client.ts";
 import type { Session } from "../types.ts";
+import type { ContentOp } from "@otk/protocol";
 
 const tick = () => new Promise<void>((resolve) => setTimeout(resolve, 0));
 async function wait(predicate: () => boolean) {
@@ -35,6 +36,7 @@ const stages = [
   "disposal",
 ] as const;
 type Stage = typeof stages[number] | "event colour" | "event message";
+const retiredColor = "#123456", currentColor = "#abcdef";
 
 async function recording(stage?: Stage, watchdog = false, failStatus = false) {
   const root = await fixture(), settings = cfg();
@@ -42,9 +44,16 @@ async function recording(stage?: Stage, watchdog = false, failStatus = false) {
   if (watchdog) settings.harness.heartbeattimeout = 0.1;
   const held = Promise.withResolvers<void>();
   const reached = Promise.withResolvers<void>();
+  const returned = Promise.withResolvers<void>();
+  const replacementColors = Promise.withResolvers<void>();
+  const eventStage = stage === "event colour" || stage === "event message";
+  // Old event work, replacement colours and bootstrap inventory may overlap.
+  if (eventStage) settings.catalogs.concurrency = 3;
   const streams: ReadableStreamDefaultController<Uint8Array>[] = [];
   const signals: (AbortSignal | null | undefined)[] = [];
   const paths: string[] = [], published: string[] = [];
+  const content: { at: number; id: string; event: ContentOp }[] = [];
+  const colorGenerations: number[] = [];
   const index = new SessionIndex();
   let pages = 0, streamAborts = 0, health = 0;
   const fetcher: typeof fetch = async (input, options) => {
@@ -52,6 +61,11 @@ async function recording(stage?: Stage, watchdog = false, failStatus = false) {
     paths.push(path);
     const page = path === "/experimental/session" ? ++pages : 0;
     if (path === "/global/health") health++;
+    const generation = health;
+    if (eventStage && path === "/agent") {
+      colorGenerations.push(generation);
+      if (generation > 1) await replacementColors.promise;
+    }
     const hold =
       stage === "health" && path === "/global/health" && health === 1 ||
       stage === "first page" && page === 1 ||
@@ -61,7 +75,7 @@ async function recording(stage?: Stage, watchdog = false, failStatus = false) {
       stage === "permission" && path === "/permission" ||
       stage === "question" && path === "/question" ||
       stage === "disposal" && page === 2 ||
-      stage === "event colour" && path === "/agent" ||
+      stage === "event colour" && path === "/agent" && generation === 1 ||
       stage === "event message" && path === "/session/root/message/msg";
     if (hold) {
       signals.push(options?.signal);
@@ -69,6 +83,7 @@ async function recording(stage?: Stage, watchdog = false, failStatus = false) {
       // Deliberately finish after cancellation: fencing must not depend on fetch
       // honouring abort, and stop must join even a late body/transport completion.
       if (stage !== "page body") await held.promise;
+      if (stage !== "page body") returned.resolve();
     }
     if (path === "/global/health") return Response.json({ version: "1.18.34" });
     if (page) {
@@ -101,9 +116,30 @@ async function recording(stage?: Stage, watchdog = false, failStatus = false) {
     if (path === "/permission" || path === "/question") {
       return Response.json([]);
     }
-    if (path === "/agent") return Response.json([]);
+    if (path === "/agent") {
+      return Response.json(
+        eventStage
+          ? [{
+            name: "build",
+            mode: "all",
+            color: generation === 1 ? retiredColor : currentColor,
+          }]
+          : [],
+      );
+    }
     if (path === "/session/root/message/msg") {
-      return Response.json({ parts: [] });
+      // A live completion would publish message.clock, so stale work is not
+      // vacuously silent because an empty response has no last-output value.
+      return Response.json({
+        parts: [{
+          id: "part",
+          messageID: "msg",
+          sessionID: "root",
+          type: "text",
+          text: "Retired output",
+          time: { start: 1, end: 9 },
+        }],
+      });
     }
     assertEquals(path, "/global/event");
     return new Response(
@@ -116,6 +152,9 @@ async function recording(stage?: Stage, watchdog = false, failStatus = false) {
           }
           options?.signal?.addEventListener("abort", () => {
             streamAborts++;
+            // Only the original connection is meant to expire. Later barriers
+            // control the replacement's optional work without racing its timer.
+            if (eventStage) settings.harness.heartbeattimeout = 30;
             try {
               controller.close();
             } catch { /* test already closed it */ }
@@ -143,7 +182,10 @@ async function recording(stage?: Stage, watchdog = false, failStatus = false) {
       index.remove(id);
       published.push(`remove:${id}`);
     },
-    content: (_id, op) => published.push(`content:${op.op}`),
+    content: (id, event) => {
+      content.push({ at: published.length, id, event });
+      published.push(`content:${event.op}`);
+    },
     bootstrapComplete: () => published.push("resync"),
     invalidate() {},
   };
@@ -183,13 +225,18 @@ async function recording(stage?: Stage, watchdog = false, failStatus = false) {
     signals,
     paths,
     published,
+    content,
+    colorGenerations,
     streams,
     send,
     reached: reached.promise,
+    returned: returned.promise,
     release: () => held.resolve(),
+    releaseColors: () => replacementColors.resolve(),
     streamAborts: () => streamAborts,
     async close() {
       held.resolve();
+      replacementColors.resolve();
       for (const stream of streams) {
         try {
           stream.close();
@@ -310,10 +357,22 @@ for (const stage of ["event colour", "event message"] as const) {
       await record.reached;
       const before = [...record.published];
       await wait(() => record.streamAborts() === 1);
-      record.release();
       await wait(() => record.streams.length === 2);
       await wait(() =>
         record.published.filter((value) => value === "resync").length === 2
+      );
+      await wait(() => record.colorGenerations.length === 2);
+      assertEquals(record.colorGenerations, [1, 2]);
+      assertEquals(record.signals[0]?.aborted, true);
+      // Complete retired work only while its replacement is live, then require
+      // that replacement's independently held colour result at the consumer.
+      record.release();
+      await record.returned;
+      record.releaseColors();
+      await wait(() =>
+        record.content.some(({ event }) =>
+          event.op === "agent.colors" && event.colors.build === currentColor
+        )
       );
       const after = record.published.slice(before.length);
       const retired = after.indexOf("reconnecting");
@@ -323,13 +382,31 @@ for (const stage of ["event colour", "event message"] as const) {
           value === "content:agent.colors"
         ),
       );
-      assertEquals(record.signals[0]?.aborted, true);
       assertEquals(after.slice(retired), [
         "reconnecting",
         "reset:opcv1-root",
         "connected",
         "resync",
+        "content:agent.colors",
       ], "Retired event published into the replacement connection");
+      const fence = before.length + retired;
+      assertEquals(
+        record.content.filter(({ at }) => at >= fence).map(({ id, event }) => ({
+          id,
+          event,
+        })),
+        [{
+          id: "opcv1-root",
+          event: { op: "agent.colors", colors: { build: currentColor } },
+        }],
+        "Only replacement-generation decoration may publish after the fence",
+      );
+      await record.adapter.core.stop();
+      assertEquals(
+        record.published.slice(before.length),
+        after,
+        "Joining retired work published another late result",
+      );
     } finally {
       await record.close();
     }
