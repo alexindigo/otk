@@ -175,7 +175,7 @@ try {
         return;
       }
       const sessions = await f.oc.sessionList<
-        { id: string; directory: string }
+        { id: string; directory: string; parentID?: string }
       >(
         "/session",
         lease.directory,
@@ -202,14 +202,25 @@ try {
       for (const task of tasks) {
         await client!.rpc("tasks.close", { id: task.id });
       }
-      for (const session of sessions) {
-        const row = session as { id: string; directory?: string };
-        if (row.directory === lease.directory) {
+      const owned = sessions.filter((row) =>
+        row.directory === lease!.directory
+      );
+      const ownedIDs = new Set(owned.map((row) => row.id));
+      // Native DELETE recursively retires children. Submit each owned family
+      // once, from its root, rather than replaying a stale child enumeration.
+      for (const session of owned) {
+        if (!session.parentID || !ownedIDs.has(session.parentID)) {
           await f.oc.request(`/session/${session.id}`, {
             method: "DELETE",
             directory: lease.directory,
           });
         }
+      }
+      const remaining = await f.oc.sessionList<
+        { id: string; directory: string }
+      >("/session", lease.directory);
+      if (remaining.some((row) => row.directory === lease!.directory)) {
+        throw new Error("Owned native sessions remain after family retirement");
       }
       await resetPrefs();
       f.fake.requests.length = 0;
