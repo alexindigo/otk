@@ -10,6 +10,19 @@ const types: Record<string, string> = {
   ".woff": "font/woff",
   ".json": "application/json",
 };
+async function staticFile(
+  path: string,
+): Promise<Uint8Array<ArrayBuffer> | null> {
+  try {
+    // The compiled VFS and host filesystem use different directory-read errors.
+    // Only regular files are readable assets, including the SPA index.
+    if (!(await Deno.stat(path)).isFile) return null;
+    return await Deno.readFile(path);
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error;
+    return null;
+  }
+}
 export async function staticResponse(
   path: string,
   app: { staticRoot: string },
@@ -46,8 +59,8 @@ export async function staticResponse(
       },
     });
   };
-  try {
-    const bytes = await Deno.readFile(join(root, safe));
+  const bytes = await staticFile(join(root, safe));
+  if (bytes !== null) {
     if (extname(safe) === ".html") return html(bytes);
     return new Response(bytes, {
       headers: {
@@ -55,19 +68,11 @@ export async function staticResponse(
         "X-Content-Type-Options": "nosniff",
       },
     });
-  } catch (e) {
-    if (
-      !(e instanceof Deno.errors.NotFound) &&
-      !(e instanceof Deno.errors.IsADirectory)
-    ) throw e;
-    try {
-      return html(await Deno.readFile(join(root, "index.html")));
-    } catch (error) {
-      if (!(error instanceof Deno.errors.NotFound)) throw error;
-      return new Response(
-        await Deno.readFile(new URL("../static/index.html", import.meta.url)),
-        { headers: { "content-type": types[".html"] } },
-      );
-    }
   }
+  const index = await staticFile(join(root, "index.html"));
+  if (index !== null) return html(index);
+  return new Response(
+    await Deno.readFile(new URL("../static/index.html", import.meta.url)),
+    { headers: { "content-type": types[".html"] } },
+  );
 }
