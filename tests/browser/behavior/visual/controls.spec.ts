@@ -153,6 +153,12 @@ test(
       sessions: ids,
     });
     await openSession(state, page, ids[4]);
+    // The neighboring meter owns a separate grid track. Its digest paint can
+    // move More without changing the outer breadcrumb row's rectangle.
+    await expect(page.locator(".otk-context-meter")).toHaveAttribute(
+      "data-cost",
+      "0",
+    );
     await state.product("layout.patch", {
       leftCollapsed: true,
       rightCollapsed: true,
@@ -163,10 +169,11 @@ test(
       '.otk-context-menu [data-context-command="session.rename"]',
     ).click();
     await expect(page.locator(".otk-title-editor input")).toBeFocused();
-    // Native content sizing can settle after the editor acquires focus. The
-    // anchor invariant starts from its measured layout, as in the legacy driver.
+    const more = page.locator(".otk-folded-crumbs > button");
+    // Join font/layout settlement on the actual gesture target, after the
+    // neighboring digest consumer has painted its authoritative value.
     await expect.poll(() =>
-      page.locator(".otk-breadcrumb-row").evaluate(async (el) => {
+      more.evaluate(async (el) => {
         await document.fonts.ready;
         let r = el.getBoundingClientRect();
         for (let i = 0; i < 2; i++) {
@@ -181,8 +188,7 @@ test(
         return true;
       })
     ).toBe(true);
-    const more = page.locator(".otk-folded-crumbs > button"),
-      before = (await more.boundingBox())!;
+    const before = (await more.boundingBox())!;
     await more.click();
     await expect(
       page.locator(".otk-folded-crumbs [data-overflow-target]").first(),

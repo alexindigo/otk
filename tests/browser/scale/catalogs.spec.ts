@@ -37,8 +37,28 @@ test(
     const paintStart = performance.now();
     await page.goto(`${state.url}/#/local/${target.id}`);
     await expect(page.locator("textarea[name=prompt]")).toBeVisible();
-    await expect.poll(() => page.locator(".otk-task-list [data-tab]").count())
-      .toBeGreaterThanOrEqual(251);
+    // The scale case owns the readiness lifetime. A browser-owned population
+    // join observes the end consumer without racing a separate short poll
+    // deadline against a single long rendering turn.
+    const population = await page.locator(".otk-task-list").evaluate((list) =>
+      new Promise<number>((resolve) => {
+        const check = () => {
+          const count = list.querySelectorAll("[data-tab]").length;
+          if (count < 251) return;
+          observer.disconnect();
+          resolve(count);
+        };
+        const observer = new MutationObserver(check);
+        observer.observe(list, {
+          childList: true,
+          subtree: true,
+          attributes: true,
+          attributeFilter: ["data-tab"],
+        });
+        check();
+      })
+    );
+    expect(population).toBeGreaterThanOrEqual(251);
     const paintMs = performance.now() - paintStart;
     const prompt = page.locator("textarea[name=prompt]"),
       autocomplete = page.locator(".otk-autocomplete");

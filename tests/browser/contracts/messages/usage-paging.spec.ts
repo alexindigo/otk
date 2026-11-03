@@ -13,7 +13,46 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
   }
   const control = (action: "release" | "succeed" | "hold") =>
     state.controller.call("scenario", { lease: state.lease.lease, action });
-  let hydrationEnd = 0;
+  // A socket belongs to its document. Keep its request inventory alive through
+  // reload rather than assigning late old-document reads to a new hydration by
+  // slicing a cumulative backend counter at a sampled index.
+  const documents: { before?: string }[][] = [];
+  page.on("websocket", (socket) => {
+    const calls: { before?: string }[] = [];
+    documents.push(calls);
+    socket.on("framesent", ({ payload }) => {
+      const frame = JSON.parse(payload.toString());
+      if (frame.t === "request" && frame.method === "session.messages") {
+        calls.push(
+          frame.params.before === undefined
+            ? {}
+            : { before: frame.params.before },
+        );
+      }
+    });
+  });
+  const noDetailBodyReads = async () => {
+    // Live transcript layout may reserve another historical page while usage
+    // changes. Every backend body read must match an explicit document-owned
+    // paging RPC; usage detail itself must never introduce an unrequested read.
+    await expect.poll(async () => {
+      const before = JSON.stringify(documents);
+      const { calls } = await state.observe<Observation>();
+      if (JSON.stringify(documents) !== before) return false;
+      const inventory = (reads: { before?: string }[]) =>
+        reads.map((read) => JSON.stringify(read)).sort();
+      return JSON.stringify(inventory(calls)) ===
+        JSON.stringify(inventory(documents.flat()));
+    }).toBe(true);
+    for (const calls of documents) {
+      const firstCursor = Number(calls[1]?.before?.slice("fixture:".length));
+      expect(calls).toEqual(
+        calls.map((_, i) =>
+          i ? { before: `fixture:${firstCursor - (i - 1) * 10}` } : {}
+        ),
+      );
+    }
+  };
   const hydration = async (expectedSummary: string) => {
     await expect.poll(async () => {
       const observation = await state.observe<Observation>();
@@ -60,14 +99,12 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
       );
     expect(observation.pendingPages).toBe(0);
     expect(acquired).toBeLessThan(observation.total);
-    expect(observation.calls.slice(hydrationEnd)).toEqual(
+    expect(documents.at(-1)).toEqual(
       Array.from(
         { length: Math.ceil(acquired / 10) },
         (_, i) => i ? { before: `fixture:${observation.total - i * 10}` } : {},
       ),
     );
-    hydrationEnd = observation.calls.length;
-    return hydrationEnd;
   };
   const last = page.locator(".otk-turn-usage > button").last(),
     cost = page.locator(".otk-context-meter");
@@ -93,10 +130,11 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
   await hydration("102 model calls · 102 tokens · $1.02");
   await summary("102 model calls · 102 tokens · $1.02", 1.02);
   await page.reload();
-  const detailBodyReads = await hydration(
+  await hydration(
     "102 model calls · 102 tokens · $1.02",
   );
   await expect(last).toHaveText("102 model calls · 102 tokens · $1.02");
+  const detailBodyReads = (await state.observe<Observation>()).calls.length;
   await hoverUsage();
   const rows = page.locator(".otk-usage-breakdown tbody tr");
   await expect(rows).toHaveCount(102);
@@ -151,19 +189,20 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
     })
   ).toBe(true);
   await page.mouse.move(1, 1);
+  // Before any live transcript growth, opening and inspecting the complete
+  // 102-call usage ledger must perform strictly zero additional body reads.
   expect((await state.observe<Observation>()).calls.length).toBe(
     detailBodyReads,
   );
+  await noDetailBodyReads();
   await control("succeed");
   await summary("1 model call · 2 tokens · $0.02", 1.04);
   await control("succeed");
   await summary("1 model call · 5 tokens · $0.05", 1.07);
   await control("hold");
-  expect((await state.observe<Observation>()).calls.length).toBe(
-    detailBodyReads,
-  );
+  await noDetailBodyReads();
   await page.reload();
-  const heldBodyReads = await hydration("1 model call · 5 tokens · $0.05");
+  await hydration("1 model call · 5 tokens · $0.05");
   await expect(last).toHaveText("1 model call · 5 tokens · $0.05");
   await hoverUsage();
   await expect.poll(() => state.observe<Observation>().then((o) => o.held))
@@ -172,10 +211,10 @@ test("messages.complete-usage-pages-duplicates-held-reload", {
   await summary("1 model call · 7 tokens · $0.07", 1.09);
   await control("succeed");
   await summary("1 model call · 9 tokens · $0.09", 1.11);
-  expect((await state.observe<Observation>()).calls.length).toBe(
-    heldBodyReads,
-  );
+  await noDetailBodyReads();
   await page.reload();
   await hydration("1 model call · 9 tokens · $0.09");
   await summary("1 model call · 9 tokens · $0.09", 1.11);
+  await noDetailBodyReads();
+  expect(documents).toHaveLength(4);
 });
