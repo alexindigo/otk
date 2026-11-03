@@ -754,6 +754,9 @@ try {
           const id = crypto.randomUUID();
           const script = {
             chunks: frame.params.chunks,
+            ...(frame.params.reasoning
+              ? { reasoning: frame.params.reasoning }
+              : {}),
             ...(frame.params.delay === undefined
               ? {}
               : { delay: frame.params.delay }),

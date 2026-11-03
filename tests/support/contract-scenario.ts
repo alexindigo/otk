@@ -5,6 +5,8 @@ import { composerContractScenario } from "./composer-contract-scenario.ts";
 import { sessionsScenario } from "./sessions-scenario.ts";
 import { attentionScenario } from "./attention-scenario.ts";
 import { menusScenario } from "./menus-scenario.ts";
+import { publicUiScenario } from "./public-ui-scenario.ts";
+import { visualScenario } from "./visual-scenario.ts";
 import { inboxBrowserFixture } from "./inbox-browser.ts";
 import { fixture } from "./config.ts";
 import { WsClient } from "./ws-client.ts";
@@ -25,6 +27,16 @@ import type {
 
 /** Checked external-backend compositions: no native stack for absent-capability proofs. */
 export async function contractScenario(profile: Profile) {
+  if (profile === "contract-visual-inbox") return await visualScenario();
+  if (profile === "contract-visual-styles") {
+    return await publicUiScenario("styles");
+  }
+  if (profile === "contract-visual-provider-ports") {
+    return await publicUiScenario("provider-ports");
+  }
+  if (profile === "contract-visual-native-events") {
+    return await publicUiScenario("native-events");
+  }
   if (profile.startsWith("contract-menus-")) {
     return await menusScenario(profile);
   }

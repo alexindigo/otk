@@ -81,108 +81,30 @@ async function consumer(
   }
 }
 
+// C13 owns component lifetimes, callbacks, native semantics and feedback focus.
+// These remaining scenes retain the original per-theme geometry and paint.
 test("joined notice publications retain disclosure state, DOM identity and the available Restore action", () =>
-  consumer("notice-lifetime", async (browser, root) => {
-    await browser.evaluate(
-      "styleTest.resetNotice();new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
-    );
-    const beforeRestores = await browser.evaluate<number>(
-      "Number(document.querySelector('[data-restores]').dataset.restores)",
-    );
-    await browser.evaluate(
-      "window.originalStrip=document.querySelector('.otk-rolled-back-strip')",
-    );
+  consumer("notice-lifetime", async (browser) => {
+    // Keep this scene's fixed paint without replaying publication/lifetime work.
+    await browser.evaluate("styleTest.resetNotice();styleTest.settleNotice()");
     if (
       await browser.evaluate(
         "document.querySelector('.otk-rollback-disclosure')?.getAttribute('aria-expanded')!=='true'",
       )
     ) await browser.click(".otk-rollback-disclosure");
-    await browser.evaluate(
-      "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
-    );
-    const opening = await browser.evaluate(
-      "[window.originalStrip===document.querySelector('.otk-rolled-back-strip'),document.querySelector('.otk-rollback-disclosure')?.getAttribute('aria-expanded')]",
-    );
-    const theme = await browser.evaluate<string>(
-      "document.documentElement.dataset.otkTheme",
-    );
-    await Deno.writeTextFile(
-      join(root, `notice-opening-${theme}.json`),
-      JSON.stringify(opening),
-    );
-    assertEquals(opening, [true, "true"]);
-    await browser.evaluate(
-      "styleTest.refreshNotice();new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "[window.originalStrip===document.querySelector('.otk-rolled-back-strip'),document.querySelector('.otk-rollback-disclosure')?.getAttribute('aria-expanded')]",
-      ),
-      [true, "true"],
-    );
-    await browser.evaluate(
-      "styleTest.settleNotice();new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "[window.originalStrip===document.querySelector('.otk-rolled-back-strip'),document.querySelector('.otk-rollback-disclosure')?.getAttribute('aria-expanded'),!!document.querySelector('.otk-rollback-footer button')]",
-      ),
-      [true, "true", true],
-    );
-    for (const state of ["pending", "error", "clear"]) {
-      await browser.evaluate(`styleTest.feedback('${state}')`);
-      await browser.evaluate(
-        "new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))",
-      );
-      assertEquals(
-        await browser.evaluate(
-          "[window.originalStrip===document.querySelector('.otk-rolled-back-strip'),document.querySelector('.otk-rollback-disclosure')?.getAttribute('aria-expanded'),!!document.querySelector('.otk-rollback-footer button'),document.querySelectorAll('.otk-composer-notice').length]",
-        ),
-        [true, "true", true, 1],
-      );
-    }
-    await browser.click(".otk-rollback-footer button");
     await browser.poll(
-      `Number(document.querySelector('[data-restores]').dataset.restores)===${
-        beforeRestores + 1
-      }`,
+      "document.querySelector('.otk-rollback-disclosure')?.getAttribute('aria-expanded')==='true'&&!!document.querySelector('.otk-rollback-footer button')",
     );
   }));
 
 test("feedback bindings release replaced owners and remount the original target's retained feedback", () =>
   consumer("feedback-owners", async (browser) => {
+    // The replacement-owner scene remains in the visual remainder until T3.
     await browser.evaluate(
-      "styleTest.mountFeedback(true);styleTest.feedbackOwner(0);styleTest.emitFeedback(0,'pending')",
+      "styleTest.mountFeedback(true);styleTest.feedbackOwner(1);styleTest.emitFeedback(1,'connection')",
     );
     await browser.poll(
-      "document.querySelector('[data-owner-subscriptions]').dataset.ownerSubscriptions==='1,0' && document.querySelector('[role=status]')?.textContent==='Original target'",
-    );
-    await browser.evaluate(
-      "styleTest.feedbackOwner(1);styleTest.emitFeedback(1,'connection')",
-    );
-    await browser.poll(
-      "document.querySelector('[data-owner-subscriptions]').dataset.ownerSubscriptions==='0,1' && document.querySelector('.is-reconnecting')?.textContent==='Replacement target'",
-    );
-    await browser.evaluate("styleTest.emitFeedback(0,'error')");
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector('.otk-feedback-status').textContent",
-      ),
-      "Replacement target",
-    );
-    await browser.evaluate("styleTest.mountFeedback(false)");
-    await browser.poll(
-      "document.querySelector('[data-owner-subscriptions]').dataset.ownerSubscriptions==='0,0'",
-    );
-    await browser.evaluate(
-      "styleTest.feedbackOwner(0);styleTest.mountFeedback(true)",
-    );
-    await browser.poll(
-      "document.querySelector('[data-owner-subscriptions]').dataset.ownerSubscriptions==='1,0' && document.querySelector('[role=alert]')?.textContent==='Original target'",
-    );
-    await browser.evaluate("styleTest.mountFeedback(false)");
-    await browser.poll(
-      "document.querySelector('[data-owner-subscriptions]').dataset.ownerSubscriptions==='0,0'",
+      "document.querySelector('.is-reconnecting')?.textContent==='Replacement target'",
     );
   }));
 

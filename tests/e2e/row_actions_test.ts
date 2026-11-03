@@ -81,30 +81,7 @@ test("project time and menu share a stable flowing cell on hover and focus; no t
         `getComputedStyle(document.querySelector('${row} .otk-project-menu')).opacity==='1'`,
       );
       assertEquals(await b.evaluate(geometry), before);
-      await b.key("Tab");
-      await b.poll(
-        `document.activeElement===document.querySelector('${row} .otk-popover-trigger')`,
-      );
-      // Native button activation needs the Enter character as well as key events.
-      await b.send("Input.dispatchKeyEvent", {
-        type: "keyDown",
-        key: "Enter",
-        code: "Enter",
-        windowsVirtualKeyCode: 13,
-        text: "\r",
-        unmodifiedText: "\r",
-      });
-      await b.send("Input.dispatchKeyEvent", {
-        type: "keyUp",
-        key: "Enter",
-        code: "Enter",
-        windowsVirtualKeyCode: 13,
-      });
-      await b.poll(`!!document.querySelector('${row} :popover-open')`);
-      await b.key("Escape");
-      await b.poll(
-        `!document.querySelector(':popover-open') && document.activeElement===document.querySelector('${row} .otk-popover-trigger')`,
-      );
+      // C13 owns native activation/dismissal/focus return, once in Dark.
       assertEquals(
         await b.evaluate(
           "document.querySelectorAll('.otk-tab [popover], .otk-tab button[popovertarget]').length",

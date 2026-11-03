@@ -69,8 +69,6 @@ test("controls: setup column, conditional captured credentials and uniform acces
         mobile: false,
       });
       await capture(b, `setup-password-${theme}`);
-      await b.fill("input[name=username]", "Retained user");
-      await b.fill("input[name=password]", "Retained password");
       await b.evaluate(
         "(()=>{const s=document.querySelector('select[name=type]');s.value='none';s.dispatchEvent(new Event('change',{bubbles:true}))})()",
       );
@@ -78,32 +76,13 @@ test("controls: setup column, conditional captured credentials and uniform acces
         "!document.querySelector('[data-auth-pane] input[name=username]')",
       );
       await capture(b, `setup-none-${theme}`);
-      await b.click("[data-auth-pane] button[type=submit]");
-      await b.poll(
-        "document.querySelector('[data-payload]').textContent.includes('none')",
-      );
-      assertEquals(
-        await b.evaluate(
-          "JSON.parse(document.querySelector('[data-payload]').textContent)",
-        ),
-        { type: "none", username: "", password: "" },
-      );
-      await b.click("[data-reject]");
-      await b.poll(
-        "!document.querySelector('[data-auth-pane] form[aria-busy=true]')",
-      );
       await b.evaluate(
         "(()=>{const s=document.querySelector('select[name=type]');s.value='password';s.dispatchEvent(new Event('change',{bubbles:true}))})()",
       );
       await b.poll(
-        "document.querySelector('input[name=username]')?.value==='Retained user'",
+        "!!document.querySelector('input[name=username]')",
       );
-      assertEquals(
-        await b.evaluate(
-          "document.querySelector('input[name=password]').value",
-        ),
-        "Retained password",
-      );
+      // C13 owns conditional credential capture and rejected-save behavior.
     }
     assertEquals(b.errors, []);
   } finally {

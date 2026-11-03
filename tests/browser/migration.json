@@ -124,6 +124,132 @@
         "sourceSha256": "1fa104a50b1c252a099dfc0feeeb0ed0c264dfaf0b94aaeb55e9151a916b524e",
         "run": "otk-t2-c12-20261103; archived-controls + area-menus"
       }
+    },
+    {
+      "file": "tests/reuse/shared-controls_test.ts",
+      "area": "visual",
+      "batch": "A7",
+      "originalTitle": "shared native controls reconcile rejected intents and follow injected preference groups",
+      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/visual/shared-controls.spec.ts",
+        "testID": "visual.shared-native-preference-rejections-and-contributed-groups"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "95f1118e4e3a190d1c7501f25bb44f5431abef145ce6e9d2c94d118efe288047",
+        "run": "otk-t2-c13-20261103; archived-controls + area-visual + reuse"
+      }
+    },
+    {
+      "file": "tests/reuse/shared-controls_test.ts",
+      "area": "visual",
+      "batch": "A7",
+      "originalTitle": "preference controls remain authoritative while pending, reject unready intent and accept injected settings",
+      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/visual/shared-controls.spec.ts",
+        "testID": "visual.shared-preferences-authoritative-pending-unready-intent-and-injection"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "95f1118e4e3a190d1c7501f25bb44f5431abef145ce6e9d2c94d118efe288047",
+        "run": "otk-t2-c13-20261103; archived-controls + area-visual + reuse"
+      }
+    },
+    {
+      "file": "tests/reuse/shared-controls_test.ts",
+      "area": "visual",
+      "batch": "A7",
+      "originalTitle": "shared file collections preserve counts, inline labels and disclosure; icon frames preserve native geometry",
+      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/visual/shared-controls.spec.ts",
+        "testID": "visual.shared-file-collections-disclose-exact-source-and-counts"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "95f1118e4e3a190d1c7501f25bb44f5431abef145ce6e9d2c94d118efe288047",
+        "run": "otk-t2-c13-20261103; archived-controls + area-visual + reuse"
+      }
+    },
+    {
+      "file": "tests/reuse/controls_test.ts",
+      "area": "visual",
+      "batch": "A7",
+      "originalTitle": "controls: setup column, conditional captured credentials and uniform accessory slots",
+      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/visual/shared-controls.spec.ts",
+        "testID": "visual.auth-conditional-captured-credentials-and-rejected-save"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "4811ffc2e04392315202e2d21f24b8ae9e9c11c0a6da7a96c3883f800e2f1db6",
+        "run": "otk-t2-c13-20261103; archived-controls + area-visual + reuse"
+      }
+    },
+    {
+      "file": "tests/reuse/controls_test.ts",
+      "area": "visual",
+      "batch": "A7",
+      "originalTitle": "controls: automatic Diff uses its own measured width, independent of ancestor hints",
+      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/visual/shared-controls.spec.ts",
+        "testID": "visual.independent-diff-auto-measures-own-container"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "4811ffc2e04392315202e2d21f24b8ae9e9c11c0a6da7a96c3883f800e2f1db6",
+        "run": "otk-t2-c13-20261103; archived-controls + area-visual + reuse"
+      }
+    },
+    {
+      "file": "tests/reuse/controls_test.ts",
+      "area": "visual",
+      "batch": "A7",
+      "originalTitle": "controls: required chip editor preserves node and focus across30 typed characters and resizing (dark)",
+      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/visual/shared-controls.spec.ts",
+        "testID": "visual.required-chip-editor-node-focus-each-character-resize-and-rejection"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "4811ffc2e04392315202e2d21f24b8ae9e9c11c0a6da7a96c3883f800e2f1db6",
+        "run": "otk-t2-c13-20261103; archived-controls + area-visual + reuse"
+      }
+    },
+    {
+      "file": "tests/reuse/controls_test.ts",
+      "area": "visual",
+      "batch": "A7",
+      "originalTitle": "controls: required chip editor preserves node and focus across30 typed characters and resizing (light)",
+      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/visual/shared-controls.spec.ts",
+        "testID": "visual.required-chip-editor-node-focus-each-character-resize-and-rejection"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "4811ffc2e04392315202e2d21f24b8ae9e9c11c0a6da7a96c3883f800e2f1db6",
+        "run": "otk-t2-c13-20261103; archived-controls + area-visual + reuse"
+      }
     }
   ],
   "files": [
@@ -1605,14 +1731,20 @@
               "runner": "legacy",
               "file": "tests/e2e/component-styles_test.ts",
               "testID": "legacy.component-styles.5c7225cd7b0c9c41"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/components.spec.ts",
+              "testID": "visual.notice-publication-retains-disclosure-node-and-restore"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "joined notice publications retain disclosure state, DOM identity and the available Restore action"
+              "Fixed notice-lifetime scene; publications, identity and Restore callbacks run in the Node destination"
             ]
           },
           "lowerTierWitness": null,
@@ -1622,9 +1754,9 @@
             "testID": "legacy.component-styles.5c7225cd7b0c9c41"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "736d7defe95f0f0349831f0a4fbaf58900c9bb6f3e6765d86f3b1b0144cfb51b",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -1636,14 +1768,20 @@
               "runner": "legacy",
               "file": "tests/e2e/component-styles_test.ts",
               "testID": "legacy.component-styles.ce1b7a5cd0bb6813"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/components.spec.ts",
+              "testID": "visual.feedback-owner-replacement-release-and-remount"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "feedback bindings release replaced owners and remount the original target's retained feedback"
+              "Fixed feedback-owners scene; subscription replacement, release and remount run in the Node destination"
             ]
           },
           "lowerTierWitness": null,
@@ -1653,9 +1791,9 @@
             "testID": "legacy.component-styles.ce1b7a5cd0bb6813"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "736d7defe95f0f0349831f0a4fbaf58900c9bb6f3e6765d86f3b1b0144cfb51b",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -1667,6 +1805,11 @@
               "runner": "legacy",
               "file": "tests/e2e/component-styles_test.ts",
               "testID": "legacy.component-styles.4a60a3a0682fa4ac"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/components.spec.ts",
+              "testID": "visual.theme-keymap-pending-safe-failure-and-focus"
             }
           ],
           "retainedCoverage": {
@@ -1685,8 +1828,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "736d7defe95f0f0349831f0a4fbaf58900c9bb6f3e6765d86f3b1b0144cfb51b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -1698,6 +1841,11 @@
               "runner": "legacy",
               "file": "tests/e2e/component-styles_test.ts",
               "testID": "legacy.component-styles.4ecf821baefe1ebb"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/components.spec.ts",
+              "testID": "visual.form-captures-once-readonly-retained-values-safe-error"
             }
           ],
           "retainedCoverage": {
@@ -1716,8 +1864,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "736d7defe95f0f0349831f0a4fbaf58900c9bb6f3e6765d86f3b1b0144cfb51b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -1729,6 +1877,11 @@
               "runner": "legacy",
               "file": "tests/e2e/component-styles_test.ts",
               "testID": "legacy.component-styles.cef84a56ec35ef07"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/components.spec.ts",
+              "testID": "visual.native-field-feedback-accessible-descriptions-and-retained-text"
             }
           ],
           "retainedCoverage": {
@@ -1747,8 +1900,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "736d7defe95f0f0349831f0a4fbaf58900c9bb6f3e6765d86f3b1b0144cfb51b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -1760,6 +1913,11 @@
               "runner": "legacy",
               "file": "tests/e2e/component-styles_test.ts",
               "testID": "legacy.component-styles.217739b837dac413"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/components.spec.ts",
+              "testID": "visual.request-feedback-reserves-field-track-and-centres-content"
             }
           ],
           "retainedCoverage": {
@@ -1778,8 +1936,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "736d7defe95f0f0349831f0a4fbaf58900c9bb6f3e6765d86f3b1b0144cfb51b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -1791,6 +1949,11 @@
               "runner": "legacy",
               "file": "tests/e2e/component-styles_test.ts",
               "testID": "legacy.component-styles.e13342416250c5e3"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/components.spec.ts",
+              "testID": "visual.command-menu-pending-focus-and-one-safe-failure"
             }
           ],
           "retainedCoverage": {
@@ -1809,8 +1972,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "736d7defe95f0f0349831f0a4fbaf58900c9bb6f3e6765d86f3b1b0144cfb51b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -1822,6 +1985,11 @@
               "runner": "legacy",
               "file": "tests/e2e/component-styles_test.ts",
               "testID": "legacy.component-styles.43924eff3815ce4a"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/components.spec.ts",
+              "testID": "visual.keyed-crumbs-and-menu-rows-replace-shrink-without-adoption"
             }
           ],
           "retainedCoverage": {
@@ -1840,8 +2008,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "736d7defe95f0f0349831f0a4fbaf58900c9bb6f3e6765d86f3b1b0144cfb51b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -1853,6 +2021,11 @@
               "runner": "legacy",
               "file": "tests/e2e/component-styles_test.ts",
               "testID": "legacy.component-styles.fadfceeea84fdaae"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/components.spec.ts",
+              "testID": "visual.blocks-own-prose-and-explicit-concealment"
             }
           ],
           "retainedCoverage": {
@@ -1871,8 +2044,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "736d7defe95f0f0349831f0a4fbaf58900c9bb6f3e6765d86f3b1b0144cfb51b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -1884,6 +2057,11 @@
               "runner": "legacy",
               "file": "tests/e2e/component-styles_test.ts",
               "testID": "legacy.component-styles.d13d88bb304fcfd1"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/components.spec.ts",
+              "testID": "visual.permission-summary-styles-independent-of-journal"
             }
           ],
           "retainedCoverage": {
@@ -1902,8 +2080,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "736d7defe95f0f0349831f0a4fbaf58900c9bb6f3e6765d86f3b1b0144cfb51b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -1915,6 +2093,11 @@
               "runner": "legacy",
               "file": "tests/e2e/component-styles_test.ts",
               "testID": "legacy.component-styles.20fc6be66b34f3fc"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/components.spec.ts",
+              "testID": "visual.standalone-siblings-style-and-disclosure-lifetimes"
             }
           ],
           "retainedCoverage": {
@@ -1933,8 +2116,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "736d7defe95f0f0349831f0a4fbaf58900c9bb6f3e6765d86f3b1b0144cfb51b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -1946,6 +2129,11 @@
               "runner": "legacy",
               "file": "tests/e2e/component-styles_test.ts",
               "testID": "legacy.component-styles.6d89a92f76644d2e"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/components.spec.ts",
+              "testID": "visual.chrome-input-owned-reservation-collapse-and-trigger-slot"
             }
           ],
           "retainedCoverage": {
@@ -1964,8 +2152,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "736d7defe95f0f0349831f0a4fbaf58900c9bb6f3e6765d86f3b1b0144cfb51b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "run": "otk-t2-c13-20261103"
           }
         }
       ]
@@ -3068,6 +3256,11 @@
               "runner": "legacy",
               "file": "tests/e2e/control_geometry_test.ts",
               "testID": "legacy.control_geometry.8038291d0c6e8da3"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/controls.spec.ts",
+              "testID": "visual.native-field-compact-hitboxes-without-consumer-overrides"
             }
           ],
           "retainedCoverage": {
@@ -3086,8 +3279,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "128d0900938d764139b8591953dd1e122142d1d9681188939dfd09c103dfa04f",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "c267a86717fb775e8b2ace64018e4644a6af50f29a900c5806b97b11a440f824",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -3099,6 +3292,11 @@
               "runner": "legacy",
               "file": "tests/e2e/control_geometry_test.ts",
               "testID": "legacy.control_geometry.c88251328cf6c9b3"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/visual/controls.spec.ts",
+              "testID": "visual.real-display-markdown-native-checkbox-select-and-settings-fields"
             }
           ],
           "retainedCoverage": {
@@ -3117,8 +3315,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "128d0900938d764139b8591953dd1e122142d1d9681188939dfd09c103dfa04f",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "c267a86717fb775e8b2ace64018e4644a6af50f29a900c5806b97b11a440f824",
+            "run": "otk-t2-c13-20261103"
           }
         }
       ]
@@ -3902,6 +4100,11 @@
               "runner": "legacy",
               "file": "tests/e2e/hidden-controls_test.ts",
               "testID": "legacy.hidden-controls.356801519d16643f"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/controls.spec.ts",
+              "testID": "visual.hidden-native-controls-remove-and-restore-layout-semantics"
             }
           ],
           "retainedCoverage": {
@@ -3920,8 +4123,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "383d633a208f39b147f0ce3f430f85e8466ba07625163ede05bbfa0a67f582a7",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "9c8ba1d2da12b8ae91009287581fcaababc5376ae8aea48329125892e4b33dc6",
+            "run": "otk-t2-c13-20261103"
           }
         }
       ]
@@ -5293,6 +5496,11 @@
               "runner": "legacy",
               "file": "tests/e2e/layout_test.ts",
               "testID": "legacy.layout.2fe638ea336f972b"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/chrome.spec.ts",
+              "testID": "visual.rapid-layout-independent-fields-broadcast-and-reload"
             }
           ],
           "retainedCoverage": {
@@ -5311,8 +5519,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "1de7fd53c69fcbbbbea5a136eb038014c36171252496575a1656a395b20b1e1c",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "bd3e1539e9b129d71886beaed58149e5b8b2ab2ef11a535a5cf38462e299f8cf",
+            "run": "otk-t2-c13-20261103"
           }
         }
       ]
@@ -7104,14 +7312,14 @@
           "proofBoundary": "C: real DOM currentTarget/listener retirement and measured input release",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/native-events_test.ts",
-              "testID": "legacy.native-events.9948b5404d2d00f2"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/native-events.spec.ts",
+              "testID": "visual.native-current-target-without-retaining-getter"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "forwarded native keyboard handlers use the DOM currentTarget without installing a retaining getter"
@@ -7119,14 +7327,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/native-events_test.ts",
-            "testID": "legacy.native-events.9948b5404d2d00f2"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/visual/native-events.spec.ts",
+            "testID": "visual.native-current-target-without-retaining-getter"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c5bed868eb938fcf3e72e1e7a5bf071a33c1471f2924d1c9b4bb9ca1095f316c",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -7135,14 +7343,14 @@
           "proofBoundary": "C: real DOM currentTarget/listener retirement and measured input release",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/native-events_test.ts",
-              "testID": "legacy.native-events.1fe66a4c2cc06719"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/native-events.spec.ts",
+              "testID": "visual.retired-context-releases-callback-with-retained-element"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "retired context targets release their callbacks even while a native element is retained"
@@ -7150,14 +7358,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/native-events_test.ts",
-            "testID": "legacy.native-events.1fe66a4c2cc06719"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/visual/native-events.spec.ts",
+            "testID": "visual.retired-context-releases-callback-with-retained-element"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c5bed868eb938fcf3e72e1e7a5bf071a33c1471f2924d1c9b4bb9ca1095f316c",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -7166,14 +7374,14 @@
           "proofBoundary": "C: real DOM currentTarget/listener retirement and measured input release",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/native-events_test.ts",
-              "testID": "legacy.native-events.724ffd8b392bd572"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/native-events.spec.ts",
+              "testID": "visual.retired-input-source-measured-after-native-key"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "retired input source is released after a real key event without requiring another key event"
@@ -7181,14 +7389,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/native-events_test.ts",
-            "testID": "legacy.native-events.724ffd8b392bd572"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/visual/native-events.spec.ts",
+            "testID": "visual.retired-input-source-measured-after-native-key"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c5bed868eb938fcf3e72e1e7a5bf071a33c1471f2924d1c9b4bb9ca1095f316c",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -7197,14 +7405,14 @@
           "proofBoundary": "C: real DOM currentTarget/listener retirement and measured input release",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/native-events_test.ts",
-              "testID": "legacy.native-events.7380e56f9476effd"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/native-events.spec.ts",
+              "testID": "visual.live-native-attributes-options-tuple-and-handler-retirement"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "native attribute forwarding replaces live attributes, preserves once/capture and tuple receivers, and removes retired handlers"
@@ -7212,14 +7420,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/native-events_test.ts",
-            "testID": "legacy.native-events.7380e56f9476effd"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/visual/native-events.spec.ts",
+            "testID": "visual.live-native-attributes-options-tuple-and-handler-retirement"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c5bed868eb938fcf3e72e1e7a5bf071a33c1471f2924d1c9b4bb9ca1095f316c",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c13-20261103"
           }
         }
       ]
@@ -8003,6 +8211,11 @@
               "runner": "legacy",
               "file": "tests/e2e/popover-sizing_test.ts",
               "testID": "legacy.popover-sizing.1363409c840c5a26"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/popovers.spec.ts",
+              "testID": "visual.popover-body-fallback-native-create-and-point-rect-corners"
             }
           ],
           "retainedCoverage": {
@@ -8034,6 +8247,11 @@
               "runner": "legacy",
               "file": "tests/e2e/popover-sizing_test.ts",
               "testID": "legacy.popover-sizing.35a6914a7167ef19"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/popovers.spec.ts",
+              "testID": "visual.popover-body-fallback-native-create-and-point-rect-corners"
             }
           ],
           "retainedCoverage": {
@@ -8065,6 +8283,11 @@
               "runner": "legacy",
               "file": "tests/e2e/popover-sizing_test.ts",
               "testID": "legacy.popover-sizing.3521f4d7be43c300"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/popovers.spec.ts",
+              "testID": "visual.tall-anchored-surface-native-side-scroll-and-last-hitbox"
             }
           ],
           "retainedCoverage": {
@@ -8101,14 +8324,14 @@
           "proofBoundary": "B: reasoning preference paints, broadcasts and reloads",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/preferences_test.ts",
-              "testID": "legacy.preferences.8c1db448a7a171ba"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/visual/preferences.spec.ts",
+              "testID": "visual.reasoning-display-persists-broadcasts-and-retains-exact-writes"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "R7 host preferences control real reasoning, persist on reload and propagate to an independent browser"
@@ -8116,14 +8339,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/preferences_test.ts",
-            "testID": "legacy.preferences.8c1db448a7a171ba"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/visual/preferences.spec.ts",
+            "testID": "visual.reasoning-display-persists-broadcasts-and-retains-exact-writes"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "7e39659c65380848f034482267e2eb2ddb43d2be32c922270dd63c7081bf00b7",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c13-20261103"
           }
         }
       ]
@@ -8530,9 +8753,9 @@
           "proofBoundary": "C: public injected ports stay live without constructing children",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/provider-ports_test.ts",
-              "testID": "legacy.provider-ports.a2036d7f764766ab"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/provider-ports.spec.ts",
+              "testID": "visual.public-provider-ports-live-copy-and-construction-lifetime"
             }
           ],
           "retainedCoverage": {
@@ -8545,14 +8768,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/provider-ports_test.ts",
-            "testID": "legacy.provider-ports.a2036d7f764766ab"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/visual/provider-ports.spec.ts",
+            "testID": "visual.public-provider-ports-live-copy-and-construction-lifetime"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "7d9b4fb0c7182d87980cc554884fae5782226c6e74d1b3358f2ff971d512e35f",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -8561,14 +8784,14 @@
           "proofBoundary": "C: public injected ports stay live without constructing children",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/provider-ports_test.ts",
-              "testID": "legacy.provider-ports.94d838588b9a1514"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/provider-ports.spec.ts",
+              "testID": "visual.public-provider-ports-live-copy-and-construction-lifetime"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark"
             ],
             "states": [
               "public provider ports exclude render props, remain live and copy without constructing children in otk-light"
@@ -8576,14 +8799,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/provider-ports_test.ts",
-            "testID": "legacy.provider-ports.94d838588b9a1514"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/visual/provider-ports.spec.ts",
+            "testID": "visual.public-provider-ports-live-copy-and-construction-lifetime"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "7d9b4fb0c7182d87980cc554884fae5782226c6e74d1b3358f2ff971d512e35f",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c13-20261103"
           }
         }
       ]
@@ -8820,6 +9043,11 @@
               "runner": "legacy",
               "file": "tests/e2e/remaining-ui_test.ts",
               "testID": "legacy.remaining-ui.eaa311a75157e555"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/chrome.spec.ts",
+              "testID": "visual.task-form-submission-real-owner-and-more-exact-partition-navigation"
             }
           ],
           "retainedCoverage": {
@@ -8838,8 +9066,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "e1a8acd365fd377b5fd3fb6a4afbd2842cb43eef3a646203c6f9fc8d0cacd69b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "0e67739b1138e1d39876761f9226b8d13abca3d95d4f6de6ed698271492c7121",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -8851,6 +9079,11 @@
               "runner": "legacy",
               "file": "tests/e2e/remaining-ui_test.ts",
               "testID": "legacy.remaining-ui.594a121bbf6d95c6"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/chrome.spec.ts",
+              "testID": "visual.task-form-submission-real-owner-and-more-exact-partition-navigation"
             }
           ],
           "retainedCoverage": {
@@ -8869,8 +9102,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "e1a8acd365fd377b5fd3fb6a4afbd2842cb43eef3a646203c6f9fc8d0cacd69b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "0e67739b1138e1d39876761f9226b8d13abca3d95d4f6de6ed698271492c7121",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -8900,8 +9133,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "e1a8acd365fd377b5fd3fb6a4afbd2842cb43eef3a646203c6f9fc8d0cacd69b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "0e67739b1138e1d39876761f9226b8d13abca3d95d4f6de6ed698271492c7121",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -8931,8 +9164,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "e1a8acd365fd377b5fd3fb6a4afbd2842cb43eef3a646203c6f9fc8d0cacd69b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "0e67739b1138e1d39876761f9226b8d13abca3d95d4f6de6ed698271492c7121",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -8944,6 +9177,11 @@
               "runner": "legacy",
               "file": "tests/e2e/remaining-ui_test.ts",
               "testID": "legacy.remaining-ui.eec79af0fe2b8db6"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/visual/controls.spec.ts",
+              "testID": "visual.native-editor-blur-retains-more-anchor-and-independent-navigation"
             }
           ],
           "retainedCoverage": {
@@ -8962,8 +9200,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "e1a8acd365fd377b5fd3fb6a4afbd2842cb43eef3a646203c6f9fc8d0cacd69b",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "0e67739b1138e1d39876761f9226b8d13abca3d95d4f6de6ed698271492c7121",
+            "run": "otk-t2-c13-20261103"
           }
         }
       ]
@@ -9562,6 +9800,11 @@
               "runner": "legacy",
               "file": "tests/e2e/row_actions_test.ts",
               "testID": "legacy.row_actions.d08b21450921b4d3"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/chrome.spec.ts",
+              "testID": "visual.project-row-hover-focus-native-menu-return-and-absent-tab-menus"
             }
           ],
           "retainedCoverage": {
@@ -9580,8 +9823,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "a969d6788115b566a9b9ef7ec6440d705832903aff8d69aef1dee0ffa98591cf",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "d77bd7d394593da739ad976570111849607b0d96ff1b70588ae7ccd34a9d6a47",
+            "run": "otk-t2-c13-20261103"
           }
         }
       ]
@@ -9645,6 +9888,11 @@
               "runner": "legacy",
               "file": "tests/e2e/selection_test.ts",
               "testID": "legacy.selection.62779b3e88612b98"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/selection.spec.ts",
+              "testID": "visual.selection-marks-real-boxes-state-and-reduced-colours"
             }
           ],
           "retainedCoverage": {
@@ -11199,6 +11447,11 @@
               "runner": "legacy",
               "file": "tests/e2e/sidebar_rails_test.ts",
               "testID": "legacy.sidebar_rails.7c14325a719c4897"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/chrome.spec.ts",
+              "testID": "visual.rail-actions-search-focus-sessions-and-restored-collapse"
             }
           ],
           "retainedCoverage": {
@@ -11217,8 +11470,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "2d08e9629689cfe8d2edfb882fdc9afb0f99bdc67e7df6e507a0cb7a6d1958df",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "c53041c76296a94f2b45a040ca617bdc22b1743de04d59be1fd724e202a2f0ca",
+            "run": "otk-t2-c13-20261103"
           }
         }
       ]
@@ -11517,6 +11770,11 @@
               "runner": "legacy",
               "file": "tests/e2e/surfaces_test.ts",
               "testID": "legacy.surfaces.2ceab90b51b31fe5"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/visual/chrome.spec.ts",
+              "testID": "visual.registered-dialogs-native-dismissal-focus-and-available-actions"
             }
           ],
           "retainedCoverage": {
@@ -11858,14 +12116,17 @@
           "proofBoundary": "B+C+V: real theme preview/cancel/save/error/broadcast/System persistence; isolated prefs",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/theme_test.ts",
-              "testID": "legacy.theme.dbb18a433f2057ea"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/visual/theme.spec.ts",
+              "testID": "visual.unknown-theme-fallback-keeps-persisted-identity"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "plugin:uninstalled",
+              "otk-dark fallback",
+              "otk-light",
+              "OS light"
             ],
             "states": [
               "unknown persisted theme paints the base in both browsers and after reload without rewriting identity"
@@ -11873,14 +12134,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/theme_test.ts",
-            "testID": "legacy.theme.dbb18a433f2057ea"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/visual/theme.spec.ts",
+            "testID": "visual.unknown-theme-fallback-keeps-persisted-identity"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "196f9c5852addb4cce4b15d32d99f948363a871f1e731146660c03c0d3f22d11",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "d8f9a3503d35c21a3623b4381fe8e3d06bfb39932c57d1aaaabf423dd6f38d6c",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -11889,14 +12150,18 @@
           "proofBoundary": "B+C+V: real theme preview/cancel/save/error/broadcast/System persistence; isolated prefs",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/theme_test.ts",
-              "testID": "legacy.theme.ea519f47b74763c7"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/visual/theme.spec.ts",
+              "testID": "visual.system-light-picker-broadcast-reload-os-and-unavailable-identities"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "system",
+              "OS light/dark",
+              "otk-light",
+              "otk-light-stone",
+              "unavailable/dark System-light fallback"
             ],
             "states": [
               "System light preference saves from the picker, broadcasts, survives reload and safely falls back for unavailable identities"
@@ -11904,14 +12169,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/theme_test.ts",
-            "testID": "legacy.theme.ea519f47b74763c7"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/visual/theme.spec.ts",
+            "testID": "visual.system-light-picker-broadcast-reload-os-and-unavailable-identities"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "196f9c5852addb4cce4b15d32d99f948363a871f1e731146660c03c0d3f22d11",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "d8f9a3503d35c21a3623b4381fe8e3d06bfb39932c57d1aaaabf423dd6f38d6c",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -11923,6 +12188,11 @@
               "runner": "legacy",
               "file": "tests/e2e/theme_test.ts",
               "testID": "legacy.theme.9f08e8f220faecd6"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/visual/theme.spec.ts",
+              "testID": "visual.real-code-diff-theme-preview-cancel-concurrent-save-and-system-without-worker-work"
             }
           ],
           "retainedCoverage": {
@@ -11941,8 +12211,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "196f9c5852addb4cce4b15d32d99f948363a871f1e731146660c03c0d3f22d11",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "d8f9a3503d35c21a3623b4381fe8e3d06bfb39932c57d1aaaabf423dd6f38d6c",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -11951,14 +12221,15 @@
           "proofBoundary": "B+C+V: real theme preview/cancel/save/error/broadcast/System persistence; isolated prefs",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/theme_test.ts",
-              "testID": "legacy.theme.4e1938cd4a5dd1cc"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/visual/theme.spec.ts",
+              "testID": "visual.theme-save-rejection-retains-preview-and-committed-state"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light preview"
             ],
             "states": [
               "theme save rejection stays visible, retains preview and never replaces host committed state"
@@ -11966,14 +12237,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/theme_test.ts",
-            "testID": "legacy.theme.4e1938cd4a5dd1cc"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/visual/theme.spec.ts",
+            "testID": "visual.theme-save-rejection-retains-preview-and-committed-state"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "196f9c5852addb4cce4b15d32d99f948363a871f1e731146660c03c0d3f22d11",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "d8f9a3503d35c21a3623b4381fe8e3d06bfb39932c57d1aaaabf423dd6f38d6c",
+            "run": "otk-t2-c13-20261103"
           }
         }
       ]
@@ -13268,14 +13539,14 @@
           "proofBoundary": "B+C+V+L: real preference persistence and all lights/motion/color states",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/visual_system_test.ts",
-              "testID": "legacy.visual_system.a3fb79ec94eb58d6"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/visual/preferences.spec.ts",
+              "testID": "visual.appearance-real-working-lights-preferences-and-reload"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "appearance settings persist, broadcast and paint real session status lights"
@@ -13283,14 +13554,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/visual_system_test.ts",
-            "testID": "legacy.visual_system.a3fb79ec94eb58d6"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/visual/preferences.spec.ts",
+            "testID": "visual.appearance-real-working-lights-preferences-and-reload"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "6bee848f25180f23bb5b466cf0ad6c06a55e2ae638cf7febfb42dc39789ddb4d",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "ab23dfed95f5ca9565c6226c2cdecb52de8fc329f037b89dd6eb02b97532cba3",
+            "run": "otk-t2-c13-20261103"
           }
         },
         {
@@ -13320,8 +13591,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "6bee848f25180f23bb5b466cf0ad6c06a55e2ae638cf7febfb42dc39789ddb4d",
-            "run": "otk-t1c5-20261101"
+            "sourceSha256": "ab23dfed95f5ca9565c6226c2cdecb52de8fc329f037b89dd6eb02b97532cba3",
+            "run": "otk-t2-c13-20261103"
           }
         }
       ]

@@ -4,7 +4,6 @@ import { join } from "@std/path";
 import { test } from "../support/resources.ts";
 import { uiConsumer } from "../support/ui-consumer.ts";
 import { selectionGeometry } from "../support/selection-geometry.ts";
-import { DEFAULT_PREFS } from "@otk/protocol";
 
 async function capture(
   b: import("../support/cdp.ts").Cdp,
@@ -32,112 +31,7 @@ async function capture(
   await b.screenshot(join(shots, `${name}-stable.png`));
 }
 
-test("shared native controls reconcile rejected intents and follow injected preference groups", async () => {
-  const f = await uiConsumer("?shared-controls"), b = f.browser;
-  try {
-    await b.poll("!!document.querySelector('.otk-visual-settings input')");
-    const failures: unknown[] = [];
-    for (
-      const selector of [
-        ".otk-visual-settings input[name=reducedColors]",
-        '.otk-notification-settings input[name="notify.sound"]',
-      ]
-    ) {
-      await b.click(selector);
-      await b.poll(
-        "document.querySelector('[data-pending]').textContent==='1'",
-      );
-      await b.click("[data-reject]");
-      await b.poll(
-        "document.querySelector('[data-pending]').textContent==='0'",
-      );
-      try {
-        assertEquals(
-          await b.evaluate(
-            `document.querySelector(${JSON.stringify(selector)}).checked`,
-          ),
-          false,
-          selector,
-        );
-      } catch (e) {
-        failures.push(e);
-      }
-    }
-    await b.click("[data-display] button");
-    const select = ".otk-display-preferences select[name=diffStyle]";
-    await b.poll(`!!document.querySelector('${select}')`);
-    await b.evaluate(
-      `(()=>{const e=document.querySelector('${select}');e.value='split';e.dispatchEvent(new Event('change',{bubbles:true}));})()`,
-    );
-    await b.poll("document.querySelector('[data-pending]').textContent==='1'");
-    await b.click("[data-reject]");
-    await b.poll("document.querySelector('[data-pending]').textContent==='0'");
-    try {
-      assertEquals(
-        await b.evaluate(`document.querySelector('${select}').value`),
-        DEFAULT_PREFS.diffStyle,
-      );
-    } catch (e) {
-      failures.push(e);
-    }
-    await b.key("Escape");
-    for (
-      const [region, name] of [["visual", "consumer.appearance"], [
-        "notification",
-        "consumer.notification",
-      ]]
-    ) {
-      try {
-        assertEquals(
-          await b.evaluate(
-            `!!document.querySelector('.otk-${region}-settings input[name="${name}"]')`,
-          ),
-          true,
-          "injected group",
-        );
-      } catch (e) {
-        failures.push(e);
-      }
-    }
-    await b.click("[data-broadcast]");
-    await b.poll(
-      'document.querySelector(".otk-visual-settings input[name=reducedColors]").checked && document.querySelector(\'.otk-notification-settings input[name="notify.sound"]\').checked',
-    );
-    // A failed older intent cannot restore its captured value over a new broadcast.
-    await b.click('.otk-notification-settings input[name="notify.sound"]');
-    await b.poll("document.querySelector('[data-pending]').textContent==='1'");
-    await b.click("[data-broadcast]");
-    await b.click("[data-reject]");
-    await b.poll(
-      "document.querySelector('.otk-notification-settings input[name=\"notify.sound\"]').checked",
-    );
-    for (
-      const [button, theme] of [["dark", "otk-dark"], ["light", "otk-light"]]
-    ) {
-      await b.click(`[data-${button}]`);
-      await b.click("[data-display] button");
-      await b.poll(
-        "!!document.querySelector('.otk-popover-panel:popover-open')",
-      );
-      await capture(b, `${theme}-preferences`);
-      await b.key("Escape");
-    }
-    try {
-      assertEquals(b.errors, []);
-    } catch (e) {
-      failures.push(e);
-    }
-    if (failures.length) {
-      throw new AggregateError(
-        failures,
-        "Native reconciliation / contributed groups",
-      );
-    }
-  } finally {
-    await f.close();
-  }
-});
-
+// C13 owns native preference reconciliation and injected-group behavior.
 test("shared file collections preserve counts, inline labels and disclosure; icon frames preserve native geometry", async () => {
   const f = await uiConsumer("?shared-controls"), b = f.browser;
   try {
@@ -268,49 +162,6 @@ test("restored own answers size from content after collapse and remount; autocom
         "Restored answers / shared completion selection",
       );
     }
-  } finally {
-    await f.close();
-  }
-});
-
-test("preference controls remain authoritative while pending, reject unready intent and accept injected settings", async () => {
-  const f = await uiConsumer("?shared-controls"), b = f.browser;
-  try {
-    await b.poll(
-      "!!document.querySelector('.otk-visual-settings input[name=\"consumer.appearance\"]')",
-    );
-    const field = '.otk-visual-settings input[name="consumer.appearance"]';
-    await b.click(field);
-    await b.poll("document.querySelector('[data-pending]').textContent==='1'");
-    assertEquals(
-      await b.evaluate(`document.querySelector('${field}').checked`),
-      false,
-    );
-    await b.click("[data-accept]");
-    await b.poll(`document.querySelector('${field}').checked`);
-    await b.click("[data-ready]");
-    const calls = await b.evaluate(
-      "document.querySelector('[data-calls]').textContent",
-    );
-    await b.click(field);
-    await b.poll(
-      "document.querySelector('.otk-visual-settings [role=alert]')?.textContent==='Could not finish this action. Try again'",
-    );
-    assertEquals(
-      await b.evaluate(`document.querySelector('${field}').checked`),
-      true,
-    );
-    assertEquals(
-      await b.evaluate("document.querySelector('[data-calls]').textContent"),
-      calls,
-    );
-    assertEquals(
-      await b.evaluate(
-        "!!document.querySelector('.otk-visual-settings :disabled')",
-      ),
-      false,
-    );
-    assertEquals(b.errors, []);
   } finally {
     await f.close();
   }

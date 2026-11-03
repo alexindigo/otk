@@ -6,6 +6,10 @@ export type Json = null | boolean | number | string | Json[] | {
 };
 export type Profile =
   | "ordinary"
+  | "contract-visual-inbox"
+  | "contract-visual-styles"
+  | "contract-visual-provider-ports"
+  | "contract-visual-native-events"
   | "contract-menus-inbox"
   | "contract-menus-content"
   | "contract-menus-context"
@@ -124,6 +128,7 @@ export interface Commands {
   queueScript: {
     lease: string;
     chunks: string[];
+    reasoning?: string[];
     gate?: "held" | "stepped";
     delay?: number;
     tool?: { name: string; input: Record<string, Json> };
@@ -222,7 +227,15 @@ export function request(value: unknown): ControlRequest {
     start: ["profile", "version"],
     beginTest: ["identity"],
     endTest: ["lease"],
-    queueScript: ["lease", "chunks", "gate", "delay", "tool", "target"],
+    queueScript: [
+      "lease",
+      "chunks",
+      "reasoning",
+      "gate",
+      "delay",
+      "tool",
+      "target",
+    ],
     releaseGate: ["lease", "gate"],
     observe: ["lease"],
     materializeSnapshot: ["lease", "key"],
@@ -250,6 +263,10 @@ export function request(value: unknown): ControlRequest {
       if (
         ![
           "ordinary",
+          "contract-visual-inbox",
+          "contract-visual-styles",
+          "contract-visual-provider-ports",
+          "contract-visual-native-events",
           "contract-menus-inbox",
           "contract-menus-content",
           "contract-menus-context",
@@ -375,6 +392,11 @@ export function request(value: unknown): ControlRequest {
       text(p.identity);
       break;
     case "queueScript":
+      if (
+        p.reasoning !== undefined &&
+        (!Array.isArray(p.reasoning) ||
+          !p.reasoning.every((s) => typeof s === "string"))
+      ) throw new Error("Invalid script reasoning");
       if (
         p.target !== undefined &&
         !["remote", "selected"].includes(String(p.target))

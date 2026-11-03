@@ -91,24 +91,7 @@ test("U7 shared rails keep Search and project light geometry, open Sessions and 
           "['.otk-corner-left','.otk-corner-right','.otk-inbox-search','.otk-right-rail [data-panel-view=sessions]'].every(s=>{const e=document.querySelector(s),r=e.getBoundingClientRect();return e.contains(document.elementFromPoint(r.x+r.width/2,r.y+r.height/2))})",
         ),
       );
-      await b.click(".otk-inbox-search");
-      await b.poll("!!document.querySelector('input[name=command-search]')");
-      await capture(`search-${name}`);
-      await b.key("Escape");
-      await b.poll(
-        "!document.querySelector('dialog') && document.activeElement===document.querySelector('.otk-inbox-search')",
-      );
-      await b.click(".otk-right-rail [data-panel-view=sessions]");
-      await b.poll(
-        "!document.querySelector('.otk-right-panel').hidden && !!document.querySelector('[data-session=tstv1-otk]')",
-      );
-      await capture(`sessions-${name}`);
-      await b.click(".otk-corner-right");
-      await b.poll("!!document.querySelector('.otk-right-rail')");
-      await b.reload();
-      await b.poll(
-        "document.querySelector('.otk-project-inbox')?.dataset.collapsed==='true' && !!document.querySelector('.otk-right-rail [data-panel-view=sessions]:not(:disabled)')",
-      );
+      // C13 owns Search, panel activation, native focus return and reload.
       assertEquals((await geometry()).lights, before.lights);
       for (
         const [id, status] of [["tstv1-otk", "working"], [

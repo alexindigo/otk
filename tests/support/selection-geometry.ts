@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Cdp } from "./cdp.ts";
-
 /** Measure the browser's actual pseudo-element box, not inferred CSS coordinates. */
 export async function selectionGeometry(
-  b: Pick<Cdp, "send" | "evaluate">,
+  b: {
+    send(method: string, params?: Record<string, unknown>): Promise<unknown>;
+  },
   selector: string,
 ): Promise<SelectionGeometry[]> {
   const { root } = await b.send("DOM.getDocument") as {

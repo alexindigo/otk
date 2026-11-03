@@ -4,89 +4,11 @@ import { test } from "../support/resources.ts";
 import { serve } from "../support/http.ts";
 import { assert, assertEquals } from "@std/assert";
 import { join } from "@std/path";
-import { browserFixture, openSession } from "../support/browser-fixture.ts";
 import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
-import { WsClient } from "../support/ws-client.ts";
 import { selectionGeometry } from "../support/selection-geometry.ts";
 
-test("appearance settings persist, broadcast and paint real session status lights", async () => {
-  const f = await browserFixture();
-  let client: WsClient | undefined;
-  try {
-    const seed = await f.oc.session<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "Visual system" },
-    });
-    const server = await f.sidecar(), browser = await f.browser(server.url);
-    client = new WsClient(server.url);
-    await client.connect();
-    await openSession(browser, seed.id);
-    const light = `[data-session="${seed.id}"] .otk-status-light`;
-    await browser.poll(
-      `document.querySelector('${light}')?.dataset.state === 'idle'`,
-    );
-    await browser.poll(
-      "document.fonts.ready.then(()=>document.fonts.check('13px \"IBM Plex Sans\"'))",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "getComputedStyle(document.querySelector('textarea[name=prompt]')).fontFamily",
-      ),
-      '"IBM Plex Sans", sans-serif',
-    );
-    const reply = f.fake.queueHeld({
-      chunks: ["Working with the visual system.", " Finished."],
-      delay: 900,
-    });
-    await browser.type("textarea[name=prompt]", "Show the working light");
-    await browser.key("Enter");
-    await browser.poll(
-      `document.querySelector('${light}')?.dataset.state === 'working'`,
-    );
-    reply.release();
-    await browser.poll(
-      `document.querySelector('${light}')?.dataset.state === 'idle'`,
-    );
-    await browser.click(".otk-settings-entry");
-    await browser.poll(
-      "!!document.querySelector('input[name=reducedColors]:not(:disabled)')",
-    );
-    const other = await f.browser(server.url);
-    for (const key of ["reducedColors", "animationsOff"]) {
-      await browser.click(`input[name=${key}]`);
-      const attr = key === "reducedColors"
-        ? "data-otk-reduced-colors"
-        : "data-otk-animations-off";
-      await browser.poll(`document.documentElement.hasAttribute('${attr}')`);
-      await other.poll(`document.documentElement.hasAttribute('${attr}')`);
-    }
-    const prefs = await client.rpc("prefs.get", {}) as Record<string, unknown>;
-    assertEquals(prefs.reducedColors, true);
-    assertEquals(prefs.animationsOff, true);
-    await browser.reload();
-    await browser.poll(
-      "document.documentElement.hasAttribute('data-otk-reduced-colors') && document.documentElement.hasAttribute('data-otk-animations-off')",
-    );
-    await openSession(browser, seed.id);
-    assertEquals(
-      await browser.evaluate(
-        `getComputedStyle(document.querySelector('${light} .otk-lamp-shape')).display`,
-      ),
-      "block",
-    );
-    assertEquals(
-      await browser.evaluate(
-        `getComputedStyle(document.querySelector('${light} .otk-lamp-body')).display`,
-      ),
-      "none",
-    );
-  } finally {
-    await client?.close();
-    await f.stop();
-  }
-});
-
+// C13 owns real preference persistence/broadcast and native working/idle state.
 test("public lights render all states, themed gel colours, sizing, event blink, breathing and motion suppression; reduced colours shapes and ageing", async () => {
   const root = await fixture(), dist = await consumerAssets("ui");
   const server = serve(

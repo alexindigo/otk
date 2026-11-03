@@ -186,14 +186,7 @@ test("shared field geometry excludes native compact inputs without consumer over
         assertEquals(result.hidden, 0);
       }
     }
-    await browser.click('[data-compact="0"]');
-    await browser.poll(
-      "document.querySelector('[data-compact=\"0\"]').checked",
-    );
-    await browser.click('[data-compact="1"]');
-    await browser.poll(
-      "document.querySelector('[data-compact=\"1\"]').checked",
-    );
+    // C13 owns native checkbox/radio interaction; retain the geometry matrix.
     assertEquals(browser.errors, []);
     console.info("Shared control fixture evidence:", root);
   } finally {
@@ -299,16 +292,7 @@ test("Display and Markdown consumers retain native checkbox bounds and field/sel
     ]);
     assert(geometry.tasks[0].text.includes("Unchecked task"));
     assert(geometry.tasks[1].text.includes("Checked task"));
-    await browser.click("input[name=timestamps]");
-    await browser.poll(
-      "document.querySelector('input[name=timestamps]').checked",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector('textarea[name=prompt]').value",
-      ),
-      "Retain this draft",
-    );
+    // C13 observes native preference changes and retained draft semantics.
     await browser.click(".otk-display-menu > button");
     await browser.key("k", 2);
     await browser.poll(
