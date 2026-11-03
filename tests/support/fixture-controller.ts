@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import "./fixture-diagnostics.ts";
 import { fromFileUrl, join, relative, resolve } from "@std/path";
 import { nativeFixture } from "./native-fixture.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
@@ -22,8 +23,6 @@ import {
   type TestLease,
 } from "./fixture-control.ts";
 
-// Stdout is exclusively framed control traffic, including during scope export.
-console.log = console.info = (...args: unknown[]) => console.error(...args);
 function details(error: unknown): NonNullable<ControlResponse["error"]> {
   return error instanceof Error
     ? {
@@ -991,6 +990,12 @@ try {
           }
           return null;
         case "scenario":
+          if (profile === "isolated" && frame.params.action === "succeed") {
+            console.debug("fixture diagnostic debug");
+            console.log("fixture diagnostic log");
+            console.info("fixture diagnostic info");
+            return null;
+          }
           if (
             frame.params.action === "fail" &&
             ["composer-commands", "composer-shell-failure"].includes(profile)

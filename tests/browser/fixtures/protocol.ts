@@ -27,6 +27,16 @@ import {
 import type { RpcMethod, RpcParams, RpcResult } from "@otk/protocol";
 
 const exec = promisify(execFile);
+export function controllerResponse(line: string) {
+  try {
+    return response(JSON.parse(line));
+  } catch (cause) {
+    throw new Error(
+      `Controller protocol error on line ${JSON.stringify(line)}`,
+      { cause },
+    );
+  }
+}
 export async function stopUnit(unit: string): Promise<void> {
   try {
     await exec("systemctl", ["--user", "stop", unit], { timeout: 15_000 });
@@ -49,6 +59,7 @@ export class Controller {
   log = "";
   #closed?: Promise<void>;
   #exit?: Promise<number | null>;
+  #protocolError?: Error;
   constructor(readonly identity: string, readonly version: string) {
     const run = process.env.OTK_TEST_RUN;
     const root = process.env.OTK_TEST_RUN_ROOT;
@@ -106,7 +117,7 @@ export class Controller {
     });
     createInterface({ input: this.child.stdout }).on("line", (line) => {
       try {
-        const frame = response(JSON.parse(line));
+        const frame = controllerResponse(line);
         const pending = this.pending.get(frame.id);
         if (!pending) {
           throw new Error(`Uncorrelated control response ${frame.id}`);
@@ -117,7 +128,11 @@ export class Controller {
             new Error(frame.error!.message, { cause: frame.error }),
           );}
       } catch (error) {
-        for (const p of this.pending.values()) p.reject(error as Error);
+        this.#protocolError = new Error(
+          `Controller protocol error on line ${JSON.stringify(line)}`,
+          { cause: error },
+        );
+        for (const p of this.pending.values()) p.reject(this.#protocolError);
         this.pending.clear();
       }
     });
@@ -148,6 +163,7 @@ export class Controller {
     params: Commands[Command],
     timeout = 30_000,
   ): Promise<T> {
+    if (this.#protocolError) throw this.#protocolError;
     const id = randomUUID();
     const frame = request({ v: 1, id, command, params });
     let timer: ReturnType<typeof setTimeout> | undefined;
