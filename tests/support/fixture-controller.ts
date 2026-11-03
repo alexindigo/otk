@@ -562,6 +562,7 @@ try {
                     ...([
                         "transport-bootstrap",
                         "transport-enrichment",
+                        "transport-deleted-seen",
                         "messages-helper-pages",
                       ]
                         .includes(profile)

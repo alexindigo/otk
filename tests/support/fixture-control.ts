@@ -39,6 +39,7 @@ export type Profile =
   | "isolated"
   | "provider-hold"
   | "transport-page"
+  | "transport-deleted-seen"
   | "transport-shell"
   | "transport-freeze"
   | "transport-bootstrap"
@@ -248,6 +249,7 @@ export function request(value: unknown): ControlRequest {
           "isolated",
           "provider-hold",
           "transport-page",
+          "transport-deleted-seen",
           "transport-shell",
           "transport-freeze",
           "transport-bootstrap",

@@ -120,6 +120,10 @@ does not make a session busy, and native index facts are never overwritten. The
 existing inbox priority owner combines native and operation attention. Resources
 own one presentation invalidation subscription per server and release it on
 removal/stop; operation metadata and identities still belong to the tracker.
+Authoritative session tombstones retire operation-derived attention, including
+late failures and attention inherited from a task or child. Automatic
+bookkeeping never creates mandatory attention, even when it fails; its request
+outcome and diagnostic feedback remain available independently.
 
 `HttpRequests` supplies an HTTP event transport over the same tracker. It sends
 envelopes and private receipt headers, then consumes held NDJSON events. It owns

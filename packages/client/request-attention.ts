@@ -36,25 +36,31 @@ export function requestAttention(
     key: string,
     status: InboxStatus,
   ) => map.set(key, attentionStatus(map.get(key), status));
+  const addSession = (id: string, status: InboxStatus) => {
+    if (!sessions.get(id)?.deleted) add(sessionStates, id, status);
+  };
   for (const operation of operations) {
     const state = operation.state, owner = state.owner;
     if (
       !owner || metadata.get(state.method)?.kind !== "mutation" ||
       state.phase === "succeeded" || state.phase === "released"
     ) continue;
-    if (
-      metadata.get(state.method)?.presentation === "bookkeeping" && !state.error
-    ) continue;
+    // Automatic bookkeeping has diagnostics, but never work for the user to
+    // supervise. Its failure must not promote a session/project into attention.
+    if (metadata.get(state.method)?.presentation === "bookkeeping") continue;
+    const session = sessions.get(owner), task = byTask.get(owner);
+    // Authoritative lifetime facts outrank every retained operation receipt,
+    // regardless of whether the operation settles before or after deletion.
+    if (session?.deleted) continue;
     const status =
       state.error || state.connection === "authentication-required" ||
         state.progress?.code === "input-required"
         ? "blocked"
         : "working";
-    const session = sessions.get(owner), task = byTask.get(owner);
     add(projectStates, session?.directory ?? task?.directory ?? owner, status);
     if (task) {
       taskStates[task.id] = attentionStatus(taskStates[task.id], status);
-      for (const id of task.sessions) add(sessionStates, id, status);
+      for (const id of task.sessions) addSession(id, status);
     }
     if (session) {
       for (
@@ -62,7 +68,7 @@ export function requestAttention(
           owner,
           ...sessionAncestors(owner, (id) => sessions.get(id)),
         ]
-      ) add(sessionStates, id, status);
+      ) addSession(id, status);
     }
   }
   return {

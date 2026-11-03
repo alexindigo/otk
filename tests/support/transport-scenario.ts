@@ -23,6 +23,7 @@ export function transportScenario(oc: OpencodeTest, profile: Profile) {
   resources().defer("release native transport scenario", release);
   const proxy = [
       "transport-page",
+      "transport-deleted-seen",
       "transport-shell",
       "transport-errors-http",
       "transport-errors-late",
@@ -32,6 +33,18 @@ export function transportScenario(oc: OpencodeTest, profile: Profile) {
       { hostname: "127.0.0.1", port: 0, onListen() {} },
       async (request) => {
         const url = new URL(request.url);
+        if (
+          profile === "transport-deleted-seen" && holding &&
+          request.method === "GET" &&
+          url.pathname === `/session/${sessionID}` &&
+          !url.searchParams.has("directory")
+        ) {
+          // Identity validation has no cached-directory query. Hold before the
+          // real native read so DELETE wins and the released lookup returns 404.
+          reads++;
+          entered = true;
+          await held.promise;
+        }
         if (
           profile === "transport-errors-http" && request.method === "POST" &&
           url.pathname.endsWith("/shell")
