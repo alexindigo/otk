@@ -6063,9 +6063,9 @@
           "proofBoundary": "S: ten full body cycles with another worker alive, retain raw samples",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-heap_test.ts",
-              "testID": "legacy.message-heap.b03e0960b2e5a4e0"
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-heap.spec.ts",
+              "testID": "scale.ten-body-cycles-independent-worker"
             }
           ],
           "retainedCoverage": {
@@ -6078,14 +6078,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-heap_test.ts",
-            "testID": "legacy.message-heap.b03e0960b2e5a4e0"
+            "runner": "playwright",
+            "file": "tests/browser/scale/message-heap.spec.ts",
+            "testID": "scale.ten-body-cycles-independent-worker"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "55361f15dd3fefa147649cf0ffcb5dcd20577b79deb40bbe426ed57a0d030abd",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         }
       ]
@@ -6489,9 +6489,9 @@
           "proofBoundary": "S: real input cadence/reserve and 1,000 native updates; no theme loop",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-runtime-scale_test.ts",
-              "testID": "legacy.message-runtime-scale.7e1299f11915fc93"
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-runtime.spec.ts",
+              "testID": "scale.native-input-cadence-reserve"
             }
           ],
           "retainedCoverage": {
@@ -6504,14 +6504,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-runtime-scale_test.ts",
-            "testID": "legacy.message-runtime-scale.7e1299f11915fc93"
+            "runner": "playwright",
+            "file": "tests/browser/scale/message-runtime.spec.ts",
+            "testID": "scale.native-input-cadence-reserve"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "541c169bf16a8e67a5b184b995aa9b969f3b20a6e21758c8d96fdbc121d5cbc7",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         },
         {
@@ -6520,9 +6520,9 @@
           "proofBoundary": "S: real input cadence/reserve and 1,000 native updates; no theme loop",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-runtime-scale_test.ts",
-              "testID": "legacy.message-runtime-scale.370adc541cf20d08"
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-runtime.spec.ts",
+              "testID": "scale.thousand-native-stream-updates"
             }
           ],
           "retainedCoverage": {
@@ -6535,14 +6535,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-runtime-scale_test.ts",
-            "testID": "legacy.message-runtime-scale.370adc541cf20d08"
+            "runner": "playwright",
+            "file": "tests/browser/scale/message-runtime.spec.ts",
+            "testID": "scale.thousand-native-stream-updates"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "541c169bf16a8e67a5b184b995aa9b969f3b20a6e21758c8d96fdbc121d5cbc7",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         },
         {
@@ -6551,29 +6551,30 @@
           "proofBoundary": "S: real input cadence/reserve and 1,000 native updates; no theme loop",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-runtime-scale_test.ts",
-              "testID": "legacy.message-runtime-scale.3c86dbd283a4f80b"
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-runtime.spec.ts",
+              "testID": "scale.native-input-cadence-reserve"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark"
             ],
             "states": [
-              "real scale wheel/PageUp/PageDown preserve ten-ahead reserve and reverse cache at 75ms collection latency (otk-light)"
+              "real scale wheel/PageUp/PageDown preserve ten-ahead reserve and reverse cache at 75ms collection latency (otk-light)",
+              "Duplicate theme journey consolidated in Dark; all non-theme parameters retained."
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-runtime-scale_test.ts",
-            "testID": "legacy.message-runtime-scale.3c86dbd283a4f80b"
+            "runner": "playwright",
+            "file": "tests/browser/scale/message-runtime.spec.ts",
+            "testID": "scale.native-input-cadence-reserve"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "541c169bf16a8e67a5b184b995aa9b969f3b20a6e21758c8d96fdbc121d5cbc7",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         },
         {
@@ -6582,29 +6583,30 @@
           "proofBoundary": "S: real input cadence/reserve and 1,000 native updates; no theme loop",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-runtime-scale_test.ts",
-              "testID": "legacy.message-runtime-scale.f63439391759b226"
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-runtime.spec.ts",
+              "testID": "scale.thousand-native-stream-updates"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark"
             ],
             "states": [
-              "real scale thousand streamed part updates visit no historical records and retain visible nodes (otk-light)"
+              "real scale thousand streamed part updates visit no historical records and retain visible nodes (otk-light)",
+              "Duplicate theme journey consolidated in Dark; all non-theme parameters retained."
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-runtime-scale_test.ts",
-            "testID": "legacy.message-runtime-scale.f63439391759b226"
+            "runner": "playwright",
+            "file": "tests/browser/scale/message-runtime.spec.ts",
+            "testID": "scale.thousand-native-stream-updates"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "541c169bf16a8e67a5b184b995aa9b969f3b20a6e21758c8d96fdbc121d5cbc7",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         }
       ]
@@ -6621,9 +6623,29 @@
           "proofBoundary": "S: five cold/preloaded paint measurements and exact source",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-scale_test.ts",
-              "testID": "legacy.message-scale.2acc44bfee7786f1"
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-paint.spec.ts",
+              "testID": "scale.newest10-cold-preloaded-paint-0"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-paint.spec.ts",
+              "testID": "scale.newest10-cold-preloaded-paint-1"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-paint.spec.ts",
+              "testID": "scale.newest10-cold-preloaded-paint-2"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-paint.spec.ts",
+              "testID": "scale.newest10-cold-preloaded-paint-3"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-paint.spec.ts",
+              "testID": "scale.newest10-cold-preloaded-paint-4"
             }
           ],
           "retainedCoverage": {
@@ -6636,14 +6658,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-scale_test.ts",
-            "testID": "legacy.message-scale.2acc44bfee7786f1"
+            "runner": "playwright",
+            "file": "tests/browser/scale/message-paint.spec.ts",
+            "testID": "scale.newest10-cold-preloaded-paint-0"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "6ce0bc5d71c688746a12c2f5fbed5cf4f2f37735f3fdb7cfa921bdc229562228",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         },
         {
@@ -6652,29 +6674,50 @@
           "proofBoundary": "S: five cold/preloaded paint measurements and exact source",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-scale_test.ts",
-              "testID": "legacy.message-scale.7313f35cd8b1140e"
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-paint.spec.ts",
+              "testID": "scale.newest10-cold-preloaded-paint-0"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-paint.spec.ts",
+              "testID": "scale.newest10-cold-preloaded-paint-1"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-paint.spec.ts",
+              "testID": "scale.newest10-cold-preloaded-paint-2"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-paint.spec.ts",
+              "testID": "scale.newest10-cold-preloaded-paint-3"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/message-paint.spec.ts",
+              "testID": "scale.newest10-cold-preloaded-paint-4"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark"
             ],
             "states": [
-              "real scale newest10 reports five cold and preloaded paint measurements (otk-light)"
+              "real scale newest10 reports five cold and preloaded paint measurements (otk-light)",
+              "Duplicate theme journey consolidated in Dark; all five cold/preloaded repetitions retained."
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-scale_test.ts",
-            "testID": "legacy.message-scale.7313f35cd8b1140e"
+            "runner": "playwright",
+            "file": "tests/browser/scale/message-paint.spec.ts",
+            "testID": "scale.newest10-cold-preloaded-paint-0"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "6ce0bc5d71c688746a12c2f5fbed5cf4f2f37735f3fdb7cfa921bdc229562228",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         }
       ]
@@ -8869,9 +8912,9 @@
           "proofBoundary": "S: 1,000 visits/updates, 1/4/16 consumers, warm assets/listener lifetime",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/remaining-pa_test.ts",
-              "testID": "legacy.remaining-pa.ca40170a45682df0"
+              "runner": "playwright",
+              "file": "tests/browser/scale/remaining.spec.ts",
+              "testID": "scale.thousand-project-visits"
             }
           ],
           "retainedCoverage": {
@@ -8884,14 +8927,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/remaining-pa_test.ts",
-            "testID": "legacy.remaining-pa.ca40170a45682df0"
+            "runner": "playwright",
+            "file": "tests/browser/scale/remaining.spec.ts",
+            "testID": "scale.thousand-project-visits"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f51b1762cb069fba75b40afc1ced0b0543fadc9b6262875c3ead996f7e3b0afd",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         },
         {
@@ -8900,9 +8943,9 @@
           "proofBoundary": "S: 1,000 visits/updates, 1/4/16 consumers, warm assets/listener lifetime",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/remaining-pa_test.ts",
-              "testID": "legacy.remaining-pa.ecb65b10cb6ebcf0"
+              "runner": "playwright",
+              "file": "tests/browser/scale/remaining.spec.ts",
+              "testID": "scale.thousand-closed-source-updates"
             }
           ],
           "retainedCoverage": {
@@ -8915,14 +8958,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/remaining-pa_test.ts",
-            "testID": "legacy.remaining-pa.ecb65b10cb6ebcf0"
+            "runner": "playwright",
+            "file": "tests/browser/scale/remaining.spec.ts",
+            "testID": "scale.thousand-closed-source-updates"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f51b1762cb069fba75b40afc1ced0b0543fadc9b6262875c3ead996f7e3b0afd",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         },
         {
@@ -8931,9 +8974,9 @@
           "proofBoundary": "S: 1,000 visits/updates, 1/4/16 consumers, warm assets/listener lifetime",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/remaining-pa_test.ts",
-              "testID": "legacy.remaining-pa.4b0ad9766e0ca0b6"
+              "runner": "playwright",
+              "file": "tests/browser/scale/publications.spec.ts",
+              "testID": "scale.one-four-sixteen-paused-consumers"
             }
           ],
           "retainedCoverage": {
@@ -8946,14 +8989,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/remaining-pa_test.ts",
-            "testID": "legacy.remaining-pa.4b0ad9766e0ca0b6"
+            "runner": "playwright",
+            "file": "tests/browser/scale/publications.spec.ts",
+            "testID": "scale.one-four-sixteen-paused-consumers"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f51b1762cb069fba75b40afc1ced0b0543fadc9b6262875c3ead996f7e3b0afd",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         },
         {
@@ -8962,9 +9005,9 @@
           "proofBoundary": "S: 1,000 visits/updates, 1/4/16 consumers, warm assets/listener lifetime",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/remaining-pa_test.ts",
-              "testID": "legacy.remaining-pa.e2c222e4ae09d520"
+              "runner": "playwright",
+              "file": "tests/browser/scale/publications.spec.ts",
+              "testID": "scale.warm-assets-listener-lifetimes"
             }
           ],
           "retainedCoverage": {
@@ -8977,14 +9020,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/remaining-pa_test.ts",
-            "testID": "legacy.remaining-pa.e2c222e4ae09d520"
+            "runner": "playwright",
+            "file": "tests/browser/scale/publications.spec.ts",
+            "testID": "scale.warm-assets-listener-lifetimes"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f51b1762cb069fba75b40afc1ced0b0543fadc9b6262875c3ead996f7e3b0afd",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         }
       ]
@@ -9001,9 +9044,9 @@
           "proofBoundary": "S: complete 10,000-file catalog/keyed task/final provider at 4,615 sessions",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/remaining-scale_test.ts",
-              "testID": "legacy.remaining-scale.8608748f2a202481"
+              "runner": "playwright",
+              "file": "tests/browser/scale/catalogs.spec.ts",
+              "testID": "scale.complete-catalogs-keyed-tasks-provider"
             }
           ],
           "retainedCoverage": {
@@ -9016,14 +9059,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/remaining-scale_test.ts",
-            "testID": "legacy.remaining-scale.8608748f2a202481"
+            "runner": "playwright",
+            "file": "tests/browser/scale/catalogs.spec.ts",
+            "testID": "scale.complete-catalogs-keyed-tasks-provider"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "f8e624254693bd0273a4497cb45b97db1a5a8bff273694e975a423e48c09b611",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         }
       ]
@@ -9420,9 +9463,9 @@
           "proofBoundary": "S: one pending task across socket replacement and authoritative rendered result",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/request-scale_test.ts",
-              "testID": "legacy.request-scale.323eb5008e3b5e66"
+              "runner": "playwright",
+              "file": "tests/browser/scale/request.spec.ts",
+              "testID": "scale.task-intent-socket-replacement"
             }
           ],
           "retainedCoverage": {
@@ -9435,14 +9478,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/request-scale_test.ts",
-            "testID": "legacy.request-scale.323eb5008e3b5e66"
+            "runner": "playwright",
+            "file": "tests/browser/scale/request.spec.ts",
+            "testID": "scale.task-intent-socket-replacement"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c267eb3827799741e807b51a594b32fb2bd4a506244daba3bba6db4c08b45757",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         }
       ]
@@ -10986,9 +11029,9 @@
           "proofBoundary": "S: cold/warm windows, interactive native work and mandatory lights",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-scale_test.ts",
-              "testID": "legacy.session-scale.99048696871b940c"
+              "runner": "playwright",
+              "file": "tests/browser/scale/session-scale.spec.ts",
+              "testID": "scale.cold-warm-windows-interactive-supervision"
             }
           ],
           "retainedCoverage": {
@@ -11001,14 +11044,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-scale_test.ts",
-            "testID": "legacy.session-scale.99048696871b940c"
+            "runner": "playwright",
+            "file": "tests/browser/scale/session-scale.spec.ts",
+            "testID": "scale.cold-warm-windows-interactive-supervision"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "2ab44d406fe60bc518fa8ac14d723f672645e6fd2953db1ef6358caeeaaee188",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         },
         {
@@ -11017,29 +11060,30 @@
           "proofBoundary": "S: cold/warm windows, interactive native work and mandatory lights",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-scale_test.ts",
-              "testID": "legacy.session-scale.c582e8cec4e63490"
+              "runner": "playwright",
+              "file": "tests/browser/scale/session-scale.spec.ts",
+              "testID": "scale.cold-warm-windows-interactive-supervision"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark"
             ],
             "states": [
-              "real native scale paints cold and warm windows and completes interactive work in otk-light"
+              "real native scale paints cold and warm windows and completes interactive work in otk-light",
+              "Duplicate theme journey consolidated in Dark; all non-theme parameters retained."
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-scale_test.ts",
-            "testID": "legacy.session-scale.c582e8cec4e63490"
+            "runner": "playwright",
+            "file": "tests/browser/scale/session-scale.spec.ts",
+            "testID": "scale.cold-warm-windows-interactive-supervision"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "2ab44d406fe60bc518fa8ac14d723f672645e6fd2953db1ef6358caeeaaee188",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         }
       ]
@@ -12040,14 +12084,21 @@
               "runner": "legacy",
               "file": "tests/e2e/task-overflow_test.ts",
               "testID": "legacy.task-overflow.74ea8d4b9f64c82e"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/scale/task-overflow.spec.ts",
+              "testID": "scale.required-tasks-wrap-and-more"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "251 idle tasks occupy one measured row; selected and attention tasks stay visible and only pins wrap"
+              "251 idle tasks occupy one measured row; selected and attention tasks stay visible and only pins wrap",
+              "C14 scale behavior transferred; fixed idle and required-wrap V scenes remain for T3."
             ]
           },
           "lowerTierWitness": null,
@@ -12057,9 +12108,9 @@
             "testID": "legacy.task-overflow.74ea8d4b9f64c82e"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "76a5c1ae4b32b5dd146da991769e2482acc896130f1cebae222e64ca8c7586ee",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "2482c3b2ea1da163b72fa4da983d29507d3fe7a16b5ae1426cf912dd4668f5fc",
+            "run": "otk-t2-c14-20261103: originals, final full S1 and batch-scale receipts"
           }
         }
       ]
@@ -13138,7 +13189,8 @@
               "original scenario (unchanged)"
             ],
             "states": [
-              "U14 500-call detail is lazy and opens within a one-second interaction budget"
+              "U14 500-call detail is lazy and opens within a one-second interaction budget",
+              "C14 retains five actual 500-row paint samples and lazy mount/unmount outcomes; elapsed durations are measurements, never a qualification budget."
             ]
           },
           "lowerTierWitness": null,
@@ -13150,7 +13202,7 @@
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "b91b3e93948e200273b68e78bfe6023accc8307a97f8d0e4c8bc4fd75843432d",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.ddd8e5b76f446cb2"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.ddd8e5b76f446cb2; requalified by otk-t2-c14-20261103 full S1"
           }
         }
       ]

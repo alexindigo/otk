@@ -6,8 +6,8 @@ import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { Cdp } from "../support/cdp.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { resources, test } from "../support/resources.ts";
-import { menuReady } from "../support/menu.ts";
 
+// C14 owns native More/navigation and mandatory-task behavior. Retain fixed V scenes.
 test("251 idle tasks occupy one measured row; selected and attention tasks stay visible and only pins wrap", async () => {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
@@ -21,56 +21,51 @@ test("251 idle tasks occupy one measured row; selected and attention tasks stay 
     const id = `tstv1-task-${n}`;
     ids.push(id);
     f.add({ ...f.entries[0], id, title: `Session ${n}` });
-    const task = await c.rpc<{ id: string }>("tasks.create", {
-      directory,
-      name: `Qualification task ${n}`,
-      sessions: [id],
-    });
-    tasks.push(task.id);
+    tasks.push(
+      (await c.rpc<{ id: string }>("tasks.create", {
+        directory,
+        name: `Qualification task ${n}`,
+        sessions: [id],
+      })).id,
+    );
   }
   await c.rpc("layout.patch", { leftCollapsed: true, rightCollapsed: true });
   await b.goto(`${f.url}/#/local/${ids[0]}`);
   await b.poll(
-    "!!document.querySelector('textarea[name=prompt]') && !!document.querySelector('.otk-task-list [data-tab]')",
+    "!!document.querySelector('textarea[name=prompt]')&&!!document.querySelector('.otk-task-list [data-tab]')",
   );
-  const visible = (n: number) =>
-    b.evaluate<boolean>(
-      `(()=>{const e=document.querySelector('[data-tab="${
-        tasks[n]
-      }"]'),r=e?.getBoundingClientRect();return !!r&&r.width>0&&r.height>0&&r.top>=0&&r.bottom<=innerHeight&&!e.closest('[hidden]')})()`,
-    );
   const geometry = () =>
     b.evaluate<
       { height: number; expected: number; visible: string[]; pinned: string[] }
-    >(`(()=>{const strip=document.querySelector('.otk-task-strip'),row=strip.querySelector('.otk-overflow-row');return {height:strip.getBoundingClientRect().height,expected:parseFloat(getComputedStyle(strip).getPropertyValue('--chrome-header-height')),visible:[...strip.querySelectorAll('.otk-overflow-item:not([hidden]) [data-tab]')].map(e=>e.dataset.tab),pinned:[...strip.querySelectorAll('.otk-overflow-item[data-pinned=true] [data-tab]')].map(e=>e.dataset.tab)}})()`);
+    >(`(()=>{const strip=document.querySelector('.otk-task-strip');return {height:strip.getBoundingClientRect().height,expected:parseFloat(getComputedStyle(strip).getPropertyValue('--chrome-header-height')),visible:[...strip.querySelectorAll('.otk-overflow-item:not([hidden]) [data-tab]')].map(e=>e.dataset.tab),pinned:[...strip.querySelectorAll('.otk-overflow-item[data-pinned=true] [data-tab]')].map(e=>e.dataset.tab)}})()`);
   const evidence: unknown[] = [];
-  resources().evidence("task overflow geometry", async () => {
-    await Deno.writeTextFile(
-      join(root, "task-overflow.json"),
-      JSON.stringify(evidence, null, 2),
+  resources().evidence(
+    "task overflow fixed geometry",
+    () =>
+      Deno.writeTextFile(
+        join(root, "task-overflow.json"),
+        JSON.stringify(evidence, null, 2),
+      ),
+  );
+  const size = async (width: number) => {
+    await b.send("Emulation.setDeviceMetricsOverride", {
+      width,
+      height: 900,
+      deviceScaleFactor: 1,
+      mobile: false,
+    });
+    await b.evaluate(
+      "document.fonts.ready.then(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))",
     );
-    await Deno.writeTextFile(
-      join(root, "task-overflow.html"),
-      await b.evaluate<string>("document.documentElement.outerHTML"),
-    );
-  });
+  };
   for (const theme of ["otk-dark", "otk-light"]) {
     await c.rpc("prefs.set", { key: "theme", value: theme });
     await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
     for (const width of [600, 800, 1280, 1920]) {
-      await b.send("Emulation.setDeviceMetricsOverride", {
-        width,
-        height: 900,
-        deviceScaleFactor: 1,
-        mobile: false,
-      });
-      await b.evaluate(
-        "document.fonts.ready.then(()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r))))",
-      );
+      await size(width);
       const g = await geometry();
       evidence.push({ theme, width, idle: g });
       assert(Math.abs(g.height - g.expected) <= 1, JSON.stringify(g));
-      assert(await visible(0));
       assertEquals(
         await b.evaluate(
           "document.querySelectorAll('.otk-task-list .otk-overflow-more').length",
@@ -79,28 +74,7 @@ test("251 idle tasks occupy one measured row; selected and attention tasks stay 
       );
     }
   }
-  await b.send("Emulation.setDeviceMetricsOverride", {
-    width: 800,
-    height: 900,
-    deviceScaleFactor: 1,
-    mobile: false,
-  });
-  await b.click('.otk-task-list [aria-label="More tasks"]');
-  const menu = ".otk-folded-tasks :popover-open [role=menu]";
-  await menuReady(b, menu, ".otk-folded-tasks");
-  await b.click(`${menu} [data-overflow-tab="${tasks[250]}"]`);
-  await b.poll(
-    `document.querySelector('[data-tab="${
-      tasks[250]
-    }"]')?.getAttribute('aria-selected')==='true' && location.hash.endsWith('/${
-      ids[250]
-    }')`,
-  );
-  assert(await visible(250));
-  f.update(ids[240], { status: "busy" });
-  f.update(ids[241], {
-    attention: { ...f.entries[0].attention, permissions: 1 },
-  });
+  await size(800);
   f.update(ids[242], { status: "busy" });
   await b.poll(
     `!!document.querySelector('[data-tab="${
@@ -108,58 +82,35 @@ test("251 idle tasks occupy one measured row; selected and attention tasks stay 
     }"] .otk-status-light[data-state=working]')`,
   );
   f.update(ids[242], { status: "idle" });
-  await b.poll(
-    `!!document.querySelector('[data-tab="${
-      tasks[240]
-    }"] .otk-status-light[data-state=working]') && !!document.querySelector('[data-tab="${
-      tasks[241]
-    }"] .otk-status-light[data-state=blocked]') && !!document.querySelector('[data-tab="${
-      tasks[242]
-    }"] .otk-status-light[data-state=finished]')`,
-  );
-  for (const n of [240, 241, 242, 250]) assert(await visible(n));
+  f.update(ids[241], {
+    attention: { ...f.entries[0].attention, permissions: 1 },
+  });
+  f.update(ids[240], { status: "busy" });
   for (let n = 200; n < 220; n++) f.update(ids[n], { status: "busy" });
-  await b.poll(
-    `document.querySelector('.otk-task-list .otk-overflow-row')?.classList.contains('wraps-required') && ${
-      JSON.stringify(tasks.slice(200, 220))
-    }.every(id=>{const e=document.querySelector('[data-tab="'+id+'"]'),r=e?.getBoundingClientRect();return !!r&&r.width>0&&r.height>0&&!e.closest('[hidden]')&&!!e.querySelector('.otk-status-light[data-state=working]')})`,
-  );
-  const wrapped = await geometry();
-  evidence.push({ wrapped });
-  assert(wrapped.height > wrapped.expected);
-  assertEquals(
-    wrapped.visible.slice().sort(),
-    wrapped.pinned.slice().sort(),
-    "Only required tasks occupy wrapped lines",
-  );
-  for (
-    const n of [
-      ...Array.from({ length: 20 }, (_, n) => n + 200),
-      240,
-      241,
-      242,
-      250,
-    ]
-  ) assert(await visible(n));
-  await b.click('.otk-task-list [aria-label="More tasks"]');
-  await menuReady(b, menu, ".otk-folded-tasks");
-  for (const id of wrapped.pinned) {
-    assertEquals(
-      await b.evaluate(
-        `!!document.querySelector('${menu} [data-overflow-tab="${id}"]')`,
-      ),
-      false,
-    );
-  }
-  await b.key("Escape");
-  const shots = Deno.env.get("OTK_REMAINING_SHOTS");
+  await b.goto(`${f.url}/#/local/${ids[250]}`);
   for (const theme of ["otk-dark", "otk-light"]) {
     await c.rpc("prefs.set", { key: "theme", value: theme });
-    await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
-    if (shots) {
-      await Deno.mkdir(shots, { recursive: true });
-      await b.screenshot(join(shots, `task-pins-${theme}.png`));
-    }
+    await b.poll(
+      `document.documentElement.dataset.otkTheme==='${theme}'&&document.querySelector('.otk-task-list .otk-overflow-row')?.classList.contains('wraps-required')`,
+    );
+    await b.evaluate("document.fonts.ready");
+    const g = await geometry();
+    evidence.push({ theme, width: 800, wrapped: g });
+    assert(g.height > g.expected);
+    assertEquals(g.visible.slice().sort(), g.pinned.slice().sort());
+    assert(
+      await b.evaluate(
+        `${
+          JSON.stringify([
+            ...tasks.slice(200, 220),
+            tasks[240],
+            tasks[241],
+            tasks[242],
+            tasks[250],
+          ])
+        }.every(id=>{const e=document.querySelector('[data-tab="'+id+'"]'),r=e?.getBoundingClientRect();return !!r&&r.width>0&&r.height>0&&r.top>=0&&r.bottom<=innerHeight&&!e.closest('[hidden]')})`,
+      ),
+    );
   }
   assertEquals(b.errors, []);
   await resources().capture();

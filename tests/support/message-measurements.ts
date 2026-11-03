@@ -1,9 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { Cdp } from "./cdp.ts";
 
 /** Test-only receipt/paint observation. No product debug port or body mirror. */
 export async function measureMessagePaint(
-  browser: Cdp,
+  browser: {
+    send(
+      method: "Page.addScriptToEvaluateOnNewDocument",
+      params: { source: string },
+    ): Promise<unknown>;
+  },
   sessionID: string,
   origin: string,
 ) {

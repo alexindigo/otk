@@ -6,6 +6,16 @@ export type Json = null | boolean | number | string | Json[] | {
 };
 export type Profile =
   | "ordinary"
+  | "contract-scale-request"
+  | "contract-scale-overflow"
+  | "contract-scale-remaining"
+  | "contract-scale-heap"
+  | "contract-scale-runtime"
+  | "contract-scale-scroll"
+  | "contract-scale-core"
+  | "contract-scale-paint"
+  | "contract-scale-sessions"
+  | "contract-scale-files"
   | "contract-visual-inbox"
   | "contract-visual-styles"
   | "contract-visual-provider-ports"
@@ -263,6 +273,16 @@ export function request(value: unknown): ControlRequest {
       if (
         ![
           "ordinary",
+          "contract-scale-request",
+          "contract-scale-overflow",
+          "contract-scale-remaining",
+          "contract-scale-heap",
+          "contract-scale-runtime",
+          "contract-scale-scroll",
+          "contract-scale-core",
+          "contract-scale-paint",
+          "contract-scale-sessions",
+          "contract-scale-files",
           "contract-visual-inbox",
           "contract-visual-styles",
           "contract-visual-provider-ports",
