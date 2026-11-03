@@ -11,21 +11,28 @@ import { withResources } from "../../tests/support/resources.ts";
 import { FakeLlm } from "../../tests/support/fake-llm.ts";
 import { hash, sourceTree } from "./source.ts";
 export { hash, sourceTree } from "./source.ts";
-export interface BuildReceipt {
+export interface TreeBuildReceipt {
   schema: 1;
   tree: string;
   binary: string;
   binarySha256: string;
   digestConsumer: { path: string; sha256: string };
-  native: { path: string; version: string; sha256: string };
-  providerCache: { path: string; sha256: string };
   web: Record<string, string>;
   deno: string;
   preparedAt: string;
   seconds: number;
 }
-export async function readBuild(tree: string): Promise<BuildReceipt> {
-  const receipt: BuildReceipt = JSON.parse(
+interface NativeIdentity {
+  native: { path: string; version: string; sha256: string };
+  providerCache: { path: string; sha256: string };
+}
+interface NativeReceipt extends NativeIdentity {
+  schema: 1;
+  tree: string;
+}
+export type BuildReceipt = TreeBuildReceipt & NativeIdentity;
+async function readTreeBuild(tree: string): Promise<TreeBuildReceipt> {
+  const receipt: TreeBuildReceipt = JSON.parse(
     await Deno.readTextFile(`.test-state/builds/${tree}/receipt.json`),
   );
   if (
@@ -38,25 +45,83 @@ export async function readBuild(tree: string): Promise<BuildReceipt> {
       "Prepared binary identity mismatch; run deno task test:prepare",
     );
   }
-  if (
-    receipt.native.version !== nativeVersion ||
-    receipt.native.sha256 !== await hash(nativeBinary)
-  ) {
-    throw new Error("Prepared native identity mismatch");
-  }
-  const cache = await validateProviderCache();
-  if (
-    receipt.providerCache.path !== cache ||
-    receipt.providerCache.sha256 !== await hash(join(cache, "ready.json"))
-  ) {
-    throw new Error("Prepared provider cache identity mismatch");
-  }
   for (const [path, digest] of Object.entries(receipt.web)) {
     if (await hash(path) !== digest) {
       throw new Error(`Prepared web asset changed: ${path}`);
     }
   }
   return receipt;
+}
+async function selectedNative(): Promise<NativeIdentity> {
+  const cache = await validateProviderCache();
+  return {
+    native: {
+      path: nativeBinary,
+      version: nativeVersion,
+      sha256: await hash(nativeBinary),
+    },
+    providerCache: {
+      path: cache,
+      sha256: await hash(join(cache, "ready.json")),
+    },
+  };
+}
+function validateNative(
+  receipt: NativeReceipt,
+  tree: string,
+  identity: NativeIdentity,
+): NativeReceipt {
+  if (
+    receipt.schema !== 1 || receipt.tree !== tree ||
+    receipt.native.path !== identity.native.path ||
+    receipt.native.version !== identity.native.version ||
+    receipt.native.sha256 !== identity.native.sha256
+  ) throw new Error("Prepared native identity mismatch");
+  if (
+    receipt.providerCache.path !== identity.providerCache.path ||
+    receipt.providerCache.sha256 !== identity.providerCache.sha256
+  ) throw new Error("Prepared provider cache identity mismatch");
+  return receipt;
+}
+function nativeReceiptPath(tree: string): string {
+  return `.test-state/builds/${tree}/natives/${nativeVersion}.json`;
+}
+/** Only preparation records a new version; consumers must find its identity. */
+export async function prepareNative(tree: string): Promise<void> {
+  await readTreeBuild(tree);
+  const identity = await selectedNative();
+  const path = nativeReceiptPath(tree);
+  let text: string;
+  try {
+    text = await Deno.readTextFile(path);
+  } catch (error) {
+    if (!(error instanceof Deno.errors.NotFound)) throw error;
+    await Deno.mkdir(`.test-state/builds/${tree}/natives`, { recursive: true });
+    await Deno.writeTextFile(
+      path,
+      JSON.stringify(
+        { schema: 1, tree, ...identity } satisfies NativeReceipt,
+        null,
+        2,
+      ),
+      { createNew: true },
+    );
+    return;
+  }
+  validateNative(JSON.parse(text), tree, identity);
+}
+export async function readBuild(tree: string): Promise<BuildReceipt> {
+  const build = await readTreeBuild(tree);
+  const native = validateNative(
+    JSON.parse(await Deno.readTextFile(nativeReceiptPath(tree))),
+    tree,
+    await selectedNative(),
+  );
+  return {
+    ...build,
+    native: native.native,
+    providerCache: native.providerCache,
+  };
 }
 if (import.meta.main) {
   const start = performance.now();
@@ -75,7 +140,7 @@ if (import.meta.main) {
     console.info(
       JSON.stringify({
         reused: true,
-        receipt: await readBuild(tree),
+        receipt: await readTreeBuild(tree),
         seconds: (performance.now() - start) / 1000,
       }),
     );
@@ -117,7 +182,6 @@ if (import.meta.main) {
     if (!consumer.success) {
       throw new Error(`Digest consumer compile exited ${consumer.code}`);
     }
-    const cache = await validateProviderCache();
     const web: Record<string, string> = {};
     const assets = async (directory: string) => {
       for await (const entry of Deno.readDir(directory)) {
@@ -127,7 +191,7 @@ if (import.meta.main) {
       }
     };
     await assets("web/dist");
-    const receipt: BuildReceipt = {
+    const receipt: TreeBuildReceipt = {
       schema: 1,
       tree,
       binary,
@@ -135,15 +199,6 @@ if (import.meta.main) {
       digestConsumer: {
         path: digestConsumer,
         sha256: await hash(digestConsumer),
-      },
-      native: {
-        path: nativeBinary,
-        version: nativeVersion,
-        sha256: await hash(nativeBinary),
-      },
-      providerCache: {
-        path: cache,
-        sha256: await hash(join(cache, "ready.json")),
       },
       web,
       deno: Deno.version.deno,
@@ -156,6 +211,7 @@ if (import.meta.main) {
     );
     console.info(JSON.stringify(receipt));
   }
+  await prepareNative(tree);
   await prepareConsumers(tree);
   if (Deno.args.includes("--scale")) {
     await withResources("prepare versioned native snapshots", async () => {
