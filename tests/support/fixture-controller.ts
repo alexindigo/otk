@@ -281,6 +281,9 @@ try {
             composer = composerProfile(profile);
           }
           let contextOptions: Parameters<typeof nativeFixture>[1];
+          if (profile === "menus-default") {
+            contextOptions = { config: { default_agent: "plan" } };
+          }
           if (profile === "messages-priced") {
             const priced = pricedMessageProvider();
             extraPorts.push(priced.port);
@@ -398,7 +401,8 @@ try {
                 ? composer.options
                 : profile === "sessions-discovery"
                 ? { env: { OPENCODE_PRINT_LOGS: "1" } }
-                : ["messages-context", "messages-priced"].includes(profile)
+                : ["messages-context", "messages-priced", "menus-default"]
+                    .includes(profile)
                 ? contextOptions
                 : profile === "messages-tool-states"
                 ? { env: { OPENCODE_ENABLE_EXA: "1" } }

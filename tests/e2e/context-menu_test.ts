@@ -1,736 +1,114 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { consumerAssets } from "../support/consumer-builds.ts";
 import { test } from "../support/resources.ts";
-import { assert, assertEquals } from "@std/assert";
-import { fixture } from "../support/config.ts";
-import { Cdp } from "../support/cdp.ts";
-import { inboxBrowserFixture } from "../support/inbox-browser.ts";
 import { openSession } from "../support/browser-fixture.ts";
-import { WsClient } from "../support/ws-client.ts";
-import { waitFor } from "../support/opencode.ts";
-import type { TaskRecord } from "@otk/protocol";
 import { menuReady } from "../support/menu.ts";
-
-const menuRoot = '[role="menu"][aria-label="Context menu"]';
-const menu = `:popover-open ${menuRoot}`;
-async function rightClick(browser: Cdp, selector: string, modifiers = 0) {
-  const point = await browser.evaluate<{ x: number; y: number }>(`(() => {
-    const el = document.querySelector(${JSON.stringify(selector)});
-    el.scrollIntoView({block:'nearest',behavior:'instant'});
-    const r = el.getBoundingClientRect();
-    return el.matches('textarea,input') ? {x:r.x+16,y:r.y+12} : {x:r.x+r.width/2,y:r.y+r.height/2};
-  })()`);
-  await pointer(browser, point, modifiers);
-}
-async function pointer(
-  browser: Cdp,
-  point: { x: number; y: number },
-  modifiers = 0,
-) {
-  for (const type of ["mousePressed", "mouseReleased"]) {
-    await browser.send("Input.dispatchMouseEvent", {
-      type,
-      ...point,
-      modifiers,
-      button: "right",
-      buttons: type === "mousePressed" ? 2 : 0,
-      clickCount: 1,
-    });
-  }
-}
-async function labels(browser: Cdp) {
-  await menuReady(browser, menu);
-  return browser.evaluate<string[]>(
-    `[...document.querySelectorAll('${menu} button')].map(el=>el.textContent)`,
-  );
-}
-async function action(browser: Cdp, id: string) {
-  await browser.click(`[data-context-command="${id}"]`);
-}
-async function closed(browser: Cdp) {
-  await browser.poll(
-    `!document.querySelector('${menu}')`,
-  );
-}
-async function setup() {
-  const root = await fixture(),
-    f = await inboxBrowserFixture(root),
-    browser = await Cdp.launch(root),
-    client = new WsClient(f.url);
-  await client.connect();
-  await browser.goto(f.url);
-  await openSession(browser, "tstv1-otk");
-  await browser.send("Browser.grantPermissions", {
-    origin: f.url,
-    permissions: ["clipboardReadWrite", "clipboardSanitizedWrite"],
-  });
-  return {
-    root,
-    f,
-    browser,
-    client,
-    stop: async () => {
-      await client.close();
-      await browser.close();
-      await f.app.stop();
-    },
-  };
-}
-async function capture(browser: Cdp, root: string, name: string) {
-  if (Deno.env.get("OTK_CONTEXT_SCREENSHOTS")) {
-    await browser.screenshot(`${root}/${name}.png`);
-  }
-}
-
+import {
+  legacyMenusScene,
+  menuGeometry,
+  visualDismiss,
+  visualMenu,
+  visualMenuRoot,
+} from "../support/legacy-menus-scene.ts";
 test("context menu: trusted right click, native escape hatch, keyboard navigation, fallback effects and four viewport corners", async () => {
-  const { browser, client, f, root, stop } = await setup();
+  const f = await legacyMenusScene();
   try {
-    await rightClick(browser, ".otk-tabs-project");
-    assertEquals(await labels(browser), [
-      "New session",
-      "Open command palette",
-      "Display preferences",
-    ]);
-    await browser.key("End");
-    await browser.poll(
-      'document.activeElement?.textContent === "Display preferences"',
+    const b = f.b;
+    await b.goto(f.url);
+    await openSession(b, "tstv1-otk");
+    const v = await b.evaluate<{ width: number; height: number }>(
+      "({width:innerWidth,height:innerHeight})",
     );
-    await browser.key("Home");
-    await browser.poll('document.activeElement?.textContent === "New session"');
-    await browser.key("ArrowUp");
-    await browser.poll(
-      'document.activeElement?.textContent === "Display preferences"',
-    );
-    await browser.key("ArrowDown");
-    await browser.poll('document.activeElement?.textContent === "New session"');
-    await browser.key("o");
-    await browser.poll(
-      'document.activeElement?.textContent === "Open command palette"',
-    );
-    await browser.key("Enter");
-    await browser.poll(
-      "!!document.querySelector('dialog[aria-label=\"Commands\"][open]')",
-    );
-    await browser.key("Escape");
-    await browser.poll("!document.querySelector('dialog[open]')");
-    await browser.evaluate("document.activeElement.blur()");
-    await browser.key("F10", 8);
-    assert((await labels(browser)).includes("New session"));
-    await browser.key("Escape");
-    await closed(browser);
-    await browser.poll(
-      "document.activeElement === document.body",
-    );
-    await browser.key("ContextMenu");
-    await labels(browser);
-    await browser.key("Escape");
-    await closed(browser);
-    // Observe defaultPrevented at the end of propagation, without replacing the
-    // trusted input gesture or claiming headless CDP paints a native browser menu.
-    await browser.evaluate(
-      `document.querySelector('.otk-app').addEventListener('contextmenu',e=>globalThis.contextPrevented=e.defaultPrevented,{once:true})`,
-    );
-    await rightClick(browser, ".otk-tabs-project", 8);
-    await browser.poll("globalThis.contextPrevented === false");
-    await closed(browser);
-    await browser.key("Escape");
     for (const theme of ["otk-dark", "otk-light"]) {
-      for (const key of ["ContextMenu", "F10"]) {
-        await browser.evaluate("document.activeElement.blur()");
-        assertEquals(
-          await browser.evaluate("document.activeElement === document.body"),
-          true,
-        );
-        await browser.key(key, key === "F10" ? 8 : 0);
-        assertEquals(await labels(browser), [
-          "New session",
-          "Open command palette",
-          "Display preferences",
-        ]);
-        await browser.key("Escape");
-        await closed(browser);
-      }
-      await client.rpc("prefs.set", { key: "theme", value: theme });
-      await browser.poll(
-        `document.documentElement.dataset.otkTheme==='${theme}'`,
-      );
-      const viewport = await browser.evaluate<
-        { width: number; height: number }
-      >("({width:innerWidth,height:innerHeight})");
+      await f.rpc("prefs.set", { key: "theme", value: theme });
+      await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
       for (
-        const [name, x, y] of [
-          ["top-left", 1, 1],
-          ["top-right", viewport.width - 1, 1],
-          ["bottom-left", 1, viewport.height - 1],
-          ["bottom-right", viewport.width - 1, viewport.height - 1],
-        ] as const
+        const [x, y] of [[1, 1], [v.width - 1, 1], [1, v.height - 1], [
+          v.width - 1,
+          v.height - 1,
+        ]]
       ) {
-        await pointer(browser, { x, y });
-        await labels(browser);
-        await browser.poll(
-          `(() => { const p=document.querySelector('${menu}').closest('.otk-surface'); const r=p.getBoundingClientRect(); return r.width>0 && r.height>0 && r.left>=0 && r.top>=0 && r.right<=innerWidth+.5 && r.bottom<=innerHeight+.5; })()`,
-        );
-        if (Deno.env.get("OTK_CONTEXT_SCREENSHOTS")) {
-          await browser.screenshot(`${root}/${theme}-${name}.png`);
+        for (const type of ["mousePressed", "mouseReleased"]) {
+          await b.send("Input.dispatchMouseEvent", {
+            type,
+            x,
+            y,
+            button: "right",
+            buttons: type === "mousePressed" ? 2 : 0,
+            clickCount: 1,
+          });
         }
-        await browser.key("Escape");
-        await closed(browser);
+        await menuReady(b, visualMenuRoot);
+        await menuGeometry(b, visualMenuRoot);
+        await visualDismiss(b);
       }
-      await capture(browser, root, `${theme}-app-before`);
-      await rightClick(browser, ".otk-tabs-project");
-      await labels(browser);
-      if (Deno.env.get("OTK_CONTEXT_SCREENSHOTS")) {
-        await browser.screenshot(`${root}/${theme}-app.png`);
-      }
-      await action(browser, "display.open");
-      await browser.poll(
-        "!!document.querySelector('dialog[aria-label=\"Display preferences\"][open]')",
-      );
-      await capture(browser, root, `${theme}-display-dialog`);
-      await rightClick(browser, 'dialog input[name="showCost"]');
-      await labels(browser);
-      await browser.poll(
-        "document.activeElement?.closest('[role=menu]') !== null",
-      );
-      await capture(browser, root, `${theme}-modal-menu`);
-      await browser.key("End");
-      await browser.poll(
-        'document.activeElement?.textContent === "Display preferences"',
-      );
-      await browser.key("Home");
-      await browser.poll(
-        'document.activeElement?.textContent === "New session"',
-      );
-      await browser.key("Escape");
-      await closed(browser);
-      assertEquals(
-        await browser.evaluate("!!document.querySelector('dialog[open]')"),
-        true,
-      );
-      await browser.poll("!!document.activeElement?.closest('dialog[open]')");
-      await browser.click('dialog input[name="showCost"]');
-      await browser.poll(
-        `document.querySelector('dialog input[name="showCost"]').checked === ${
-          theme !== "otk-dark"
-        }`,
-      );
-      await browser.key("Escape");
-      await browser.poll("!document.querySelector('dialog[open]')");
-      await browser.click(".otk-keys-entry");
-      await browser.poll(
-        "!!document.querySelector('dialog[aria-label=\"Keyboard shortcuts\"][open]')",
-      );
-      await capture(browser, root, `${theme}-keys-help`);
-      await browser.key("Escape");
-      await browser.poll("!document.querySelector('dialog[open]')");
+      await visualMenu(b, ".otk-tabs-project");
+      await b.click('[data-context-command="display.open"]');
+      await b.poll('!!document.querySelector("dialog[open]")');
+      await visualMenu(b, "dialog input[name=showCost]");
+      await visualDismiss(b);
+      await b.key("Escape");
+      await b.poll('!document.querySelector("dialog[open]")');
     }
-    const before = f.entries.length;
-    const previousHash = await browser.evaluate<string>("location.hash");
-    await rightClick(browser, ".otk-tabs-project");
-    await action(browser, "session.new");
-    await browser.poll(
-      `location.hash!==${
-        JSON.stringify(previousHash)
-      } && !!document.querySelector("textarea[name=prompt]")`,
-    );
-    assertEquals(f.entries.length, before + 1);
-    const created = f.entries[before];
-    await browser.poll(`location.hash.includes(${JSON.stringify(created.id)})`);
-    assertEquals(browser.errors, []);
-    console.info("context screenshot root", root);
   } finally {
-    await stop();
+    await f.close();
   }
 });
-
-test("context menu: links, images and selection outside fields use the real clipboard", async () => {
-  const { browser, client, f, root, stop } = await setup();
-  try {
-    // Real semantic DOM built-ins need no context binding or per-element listener.
-    await browser.evaluate(
-      `(() => {const host=document.querySelector('.otk-welcome') || document.querySelector('.otk-messages'); const p=document.createElement('p');p.id='context-probe'; const link=document.createElement('a');link.href=location.origin+'/api/health';link.textContent='Context link';p.append(link);const image=document.createElement('img');image.src='data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40"><rect width="40" height="40" fill="orange"/></svg>';image.alt='Context image';p.append(image);host.prepend(p)})()`,
-    );
-    await rightClick(browser, "#context-probe a");
-    assertEquals(await labels(browser), [
-      "Open link in new tab",
-      "Copy link address",
-      "Pin as task",
-      "Copy session title",
-      "Close session",
-    ]);
-    await action(browser, "context.link.copy");
-    await closed(browser);
-    assertEquals(
-      await browser.evaluate("navigator.clipboard.readText()"),
-      `${f.url}/api/health`,
-    );
-    await rightClick(browser, "#context-probe a");
-    await labels(browser);
-    await action(browser, "context.link.open");
-    await closed(browser);
-    const opened = await waitFor(async () => {
-      const targets = await browser.send("Target.getTargets");
-      return (targets.targetInfos as { url: string; targetId: string }[]).find((
-        target,
-      ) => target.url === `${f.url}/api/health`);
-    }, (target) => !!target);
-    await browser.send("Target.closeTarget", { targetId: opened!.targetId });
-    await browser.send("Page.bringToFront");
-    await rightClick(browser, "#context-probe img");
-    assertEquals(await labels(browser), [
-      "Open image",
-      "Copy image address",
-      "Pin as task",
-      "Copy session title",
-      "Close session",
-    ]);
-    await action(browser, "context.image.copy");
-    await closed(browser);
-    assert(
-      (await browser.evaluate<string>("navigator.clipboard.readText()"))
-        .startsWith("data:image/svg+xml"),
-    );
-    await rightClick(browser, "#context-probe img");
-    await labels(browser);
-    await action(browser, "context.image.open");
-    await browser.poll(
-      "!!document.querySelector('dialog[open] img[alt=\"Context image\"]')",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector('dialog[open] img[alt=\"Context image\"]').src",
-      ),
-      await browser.evaluate(
-        'document.querySelector("#context-probe img").src',
-      ),
-    );
-    await browser.key("Escape");
-    await browser.poll('!document.querySelector("dialog[open]")');
-    await browser.evaluate(
-      `document.querySelector('#context-probe a').append(document.querySelector('#context-probe img'))`,
-    );
-    await rightClick(browser, "#context-probe img");
-    assertEquals(await labels(browser), [
-      "Open image",
-      "Copy image address",
-      "Open link in new tab",
-      "Copy link address",
-      "Pin as task",
-      "Copy session title",
-      "Close session",
-    ]);
-    await browser.key("Escape");
-    await closed(browser);
-    await browser.evaluate(
-      `(() => {const r=document.createRange();r.selectNodeContents(document.querySelector('#context-probe a'));const s=document.getSelection();s.removeAllRanges();s.addRange(r)})()`,
-    );
-    await rightClick(browser, "#context-probe a");
-    assertEquals(await labels(browser), [
-      "Copy",
-      "Open link in new tab",
-      "Copy link address",
-      "Pin as task",
-      "Copy session title",
-      "Close session",
-    ]);
-    await action(browser, "context.selection.copy");
-    await closed(browser);
-    assertEquals(
-      await browser.evaluate("navigator.clipboard.readText()"),
-      "Context link",
-    );
-    if (Deno.env.get("OTK_CONTEXT_SCREENSHOTS")) {
-      for (const theme of ["otk-dark", "otk-light"]) {
-        await client.rpc("prefs.set", { key: "theme", value: theme });
-        await browser.poll(
-          `document.documentElement.dataset.otkTheme === '${theme}'`,
-        );
-        await rightClick(browser, "#context-probe a");
-        await labels(browser);
-        await capture(browser, root, `${theme}-link`);
-        await browser.key("Escape");
-        await closed(browser);
-        await rightClick(browser, "#context-probe img");
-        await labels(browser);
-        await capture(browser, root, `${theme}-nested-image-link`);
-        await browser.key("Escape");
-        await closed(browser);
-      }
-    }
-    assertEquals(browser.errors, []);
-    console.info("context screenshot root", root);
-  } finally {
-    await stop();
-  }
-});
-
-test("context binding: external command contributions, live target data, nested groups and destructive ordering", async () => {
-  const root = await fixture(), assets = await consumerAssets("context");
-  const f = await inboxBrowserFixture(root, [], {}, assets),
-    browser = await Cdp.launch(root);
-  try {
-    await browser.goto(f.url);
-    await browser.poll("!!document.querySelector('#inner')");
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector('#inner').dataset.composedRef",
-      ),
-      "yes",
-    );
-    await rightClick(browser, "#inner");
-    assertEquals(await labels(browser), [
-      "Inspect code",
-      "Inspect original",
-      "Close reply",
-    ]);
-    assertEquals(
-      await browser.evaluate(
-        `document.querySelectorAll('${menu} [role=group]').length`,
-      ),
-      2,
-    );
-    assertEquals(
-      await browser.evaluate(
-        `document.querySelectorAll('${menu} [role=separator]').length`,
-      ),
-      2,
-    );
-    await browser.key("End");
-    await browser.key(" ");
-    await browser.poll(
-      'document.querySelector("#result").textContent === "closed"',
-    );
-    await closed(browser);
-    await browser.click("#rename");
-    await browser.click("#disable");
-    await rightClick(browser, "#inner");
-    assertEquals(await labels(browser), [
-      "Inspect code",
-      "Inspect changed",
-    ]);
-    await action(browser, "probe.inner");
-    await browser.poll(
-      'document.querySelector("#result").textContent === "code:changed"',
-    );
-    await closed(browser);
-    await browser.click("#inner");
-    await browser.key("F10", 8);
-    await labels(browser);
-    await browser.key("Escape");
-    await closed(browser);
-    await browser.poll(
-      'document.activeElement === document.querySelector("#inner")',
-    );
-    // A keyboard invocation uses the entire element rect, not its bottom-left
-    // point. Native anchor flipping must clear the opposite edge at any corner.
-    for (
-      const [corner, edges] of Object.entries({
-        tl: "left:1px;top:1px",
-        tr: "right:1px;top:1px",
-        bl: "left:1px;bottom:1px",
-        br: "right:1px;bottom:1px",
-      })
-    ) {
-      await browser.evaluate(
-        `document.querySelector('#inner').style.cssText=${
-          JSON.stringify("position:fixed;width:160px;height:40px;")
-        }+${JSON.stringify(edges)};document.querySelector('#inner').focus()`,
-      );
-      await browser.key("ContextMenu");
-      await labels(browser);
-      await browser.poll(
-        `(()=>{const a=document.querySelector('#inner').getBoundingClientRect(),r=document.querySelector('${menu}').closest('.otk-surface').getBoundingClientRect();return r.width>0&&r.height>0&&r.left>=0&&r.top>=0&&r.right<=innerWidth+.5&&r.bottom<=innerHeight+.5&&(r.bottom<=a.top+.5||r.top>=a.bottom-.5||r.right<=a.left+.5||r.left>=a.right-.5)})()`,
-      );
-      await capture(browser, root, `rect-${corner}`);
-      await browser.key("Escape");
-      await closed(browser);
-    }
-    await browser.evaluate(
-      "document.querySelector('#inner').removeAttribute('style')",
-    );
-    // An unrelated selection never turns a body-focus invocation into text copy.
-    await browser.evaluate(
-      "(()=>{const range=document.createRange();range.selectNodeContents(document.querySelector('#result'));getSelection().removeAllRanges();getSelection().addRange(range);document.activeElement.blur()})()",
-    );
-    await browser.key("ContextMenu");
-    assertEquals(await labels(browser), ["app"]);
-    await browser.key("Escape");
-    await closed(browser);
-    await browser.click("#inner");
-    await browser.key("ContextMenu");
-    await labels(browser);
-    await browser.poll(
-      "document.activeElement.matches(':popover-open [role=menu] button')",
-    );
-    await browser.key("Tab");
-    await closed(browser);
-    assertEquals(
-      await browser.evaluate(
-        "document.activeElement === document.querySelector('#inner')",
-      ),
-      true,
-    );
-    await rightClick(browser, "#inner");
-    await labels(browser);
-    await browser.evaluate(
-      `window.originalMenu=document.querySelector('${menu}')`,
-    );
-    await rightClick(browser, `${menu} button`);
-    assertEquals(await labels(browser), ["Inspect code", "Inspect changed"]);
-    assertEquals(
-      await browser.evaluate(
-        `window.originalMenu===document.querySelector('${menu}')`,
-      ),
-      true,
-    );
-    await browser.key("Escape");
-    await closed(browser);
-    // Cancellation has no pointerup. A later context invocation must not wait
-    // forever for the cancelled button's release.
-    await browser.evaluate(
-      `(()=>{const el=document.querySelector('#inner');el.dispatchEvent(new PointerEvent('pointerdown',{bubbles:true,button:2}));el.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true,button:2}));const r=el.getBoundingClientRect();el.dispatchEvent(new MouseEvent('contextmenu',{bubbles:true,cancelable:true,clientX:r.x+8,clientY:r.y+8}))})()`,
-    );
-    assertEquals(await labels(browser), ["Inspect code", "Inspect changed"]);
-    await browser.key("Escape");
-    await closed(browser);
-    await rightClick(browser, "#inner");
-    await labels(browser);
-    await browser.evaluate("document.querySelector('#release-inner').click()");
-    await browser.poll(
-      `JSON.stringify([...document.querySelectorAll('${menu} button')].map(el=>el.textContent)) === JSON.stringify(['Inspect changed','probe.third'])`,
-    );
-    await action(browser, "probe.outer");
-    await browser.poll(
-      "document.querySelector('#result').textContent === 'changed'",
-    );
-    await closed(browser);
-    await browser.click("#open-modal");
-    await browser.poll('!!document.querySelector("dialog[open]")');
-    await browser.click("dialog .otk-display-menu > button");
-    await browser.poll(
-      "!!document.querySelector('dialog .otk-popover-panel[aria-label=\"Display preferences\"]:popover-open')",
-      3000,
-    );
-    await browser.key("Escape");
-    await browser.poll(
-      '!document.querySelector("dialog :popover-open") && !!document.querySelector("dialog[open]")',
-    );
-    await browser.poll(
-      'document.activeElement === document.querySelector("dialog .otk-display-menu > button")',
-    );
-    await browser.click("dialog .otk-display-menu > button");
-    await browser.key("Escape");
-    await browser.poll("!document.querySelector('dialog :popover-open')");
-    await browser.key("F10", 8);
-    await labels(browser);
-    await browser.poll(
-      '!!document.activeElement?.closest("dialog [role=menu]")',
-    );
-    await browser.key("ArrowDown");
-    await browser.poll('document.activeElement?.textContent === "app"');
-    await browser.key("Escape");
-    await closed(browser);
-    await browser.poll(
-      'document.activeElement === document.querySelector("dialog .otk-display-menu > button") && !!document.querySelector("dialog[open]")',
-    );
-    assertEquals(
-      await browser.evaluate(
-        `document.querySelectorAll('${menuRoot} [data-context-command]').length`,
-      ),
-      0,
-    );
-    await browser.poll(
-      "!document.querySelector('dialog .otk-popover-panel[aria-label=\"Context menu\"]')",
-      3000,
-    );
-    await browser.key("Escape");
-    await browser.poll('!document.querySelector("dialog[open]")');
-    await browser.click("#open-modal");
-    await browser.poll('!!document.querySelector("dialog[open]")');
-    await browser.click("dialog .otk-display-menu > button");
-    await browser.key("Escape");
-    await browser.poll("!document.querySelector('dialog :popover-open')");
-    await browser.key("ContextMenu");
-    await labels(browser);
-    // Removing the active Portal destination must clear the originating owner's
-    // targets even if the removed node never delivers a native toggle task.
-    await browser.evaluate("document.querySelector('#remove-modal').click()");
-    await browser.poll(
-      `!document.querySelector('dialog') && !document.querySelector('.otk-context-menu [data-context-command]') && !document.querySelector('.otk-popover-anchor')`,
-    );
-    await rightClick(browser, "#inner");
-    assertEquals(await labels(browser), ["Inspect changed", "probe.third"]);
-    await browser.evaluate("document.querySelector('#toggle-menus').click()");
-    await browser.poll(
-      "!document.querySelector('.otk-context-menu') && !document.querySelector('.otk-popover-anchor')",
-    );
-    await browser.click("#toggle-menus");
-    await rightClick(browser, "#no-viewer");
-    assertEquals(await labels(browser), ["Copy image address"]);
-    await browser.key("Escape");
-    await closed(browser);
-    assertEquals(browser.errors, []);
-  } finally {
-    await browser.close();
-    await f.app.stop();
-  }
-});
-
 test("all shared Menu callers distinguish pointer and keyboard opening with compact rows", async () => {
-  const { root, f, browser, client, stop } = await setup();
-  const projectTrigger =
-    "[data-project-sessions~=tstv1-otk] .otk-project-menu > button";
-  const projectMenu = ".otk-project-menu :popover-open [role=menu]";
-  const foldedTrigger = ".otk-folded-crumbs > button";
-  const foldedMenu = ".otk-folded-crumbs :popover-open [role=menu]";
-  const pointerFocus = async (selector: string) => {
-    await browser.poll(
-      `document.activeElement===document.querySelector('${selector}')`,
-      3000,
-    );
-    assertEquals(
-      await browser.evaluate(
-        `getComputedStyle(document.activeElement).outlineStyle`,
-      ),
-      "none",
-    );
-    assertEquals(
-      await browser.evaluate(
-        `[...document.querySelectorAll('${selector} button')].some(el=>el===document.activeElement)`,
-      ),
-      false,
-    );
-  };
-  const itemFocus = async (selector: string, last = false) => {
-    await browser.poll(
-      `document.activeElement===[...document.querySelectorAll('${selector} button')].${
-        last ? "at(-1)" : "at(0)"
-      }`,
-    );
-    await browser.poll(
-      `document.activeElement.matches(':focus-visible') && getComputedStyle(document.activeElement).outlineStyle==='solid' && parseFloat(getComputedStyle(document.activeElement).outlineWidth)>0`,
-    );
-  };
-  const density = async (selector: string) => {
-    assertEquals(
-      await browser.evaluate(
-        `[...document.querySelectorAll('${selector} button')].map(el=>el.getBoundingClientRect().height)`,
-      ),
-      await browser.evaluate(
-        `[...document.querySelectorAll('${selector} button')].map(()=>28)`,
-      ),
-    );
-    assertEquals(
-      await browser.evaluate(
-        `(()=>{const menu=document.querySelector('${selector}'),first=menu.parentElement.firstElementChild.getBoundingClientRect(),last=menu.parentElement.lastElementChild.getBoundingClientRect(),panel=menu.closest('.otk-surface').getBoundingClientRect();return Math.abs((first.top-panel.top)-(panel.bottom-last.bottom))<.5})()`,
-      ),
-      true,
-      "Menu items and reserved feedback have balanced block padding around their complete flow",
-    );
-  };
-  const enterTrigger = async () => {
-    await browser.send("Input.dispatchKeyEvent", {
-      type: "keyDown",
-      key: "Enter",
-      code: "Enter",
-      windowsVirtualKeyCode: 13,
-      text: "\r",
-      unmodifiedText: "\r",
-    });
-    await browser.send("Input.dispatchKeyEvent", {
-      type: "keyUp",
-      key: "Enter",
-      code: "Enter",
-      windowsVirtualKeyCode: 13,
-    });
-  };
+  const f = await legacyMenusScene();
   try {
-    const task = await client.rpc<TaskRecord>("tasks.create", {
-      directory: f.entries[0].directory,
-      name: "Compact menus",
+    const b = f.b;
+    await b.goto(f.url);
+    await openSession(b, "tstv1-otk");
+    const task = await f.rpc("tasks.create", {
+      directory: f.lease.directory,
+      name: "Compact visual menus",
+    }) as { id: string };
+    await f.rpc("tasks.sessions", {
+      id: task.id,
+      sessions: [
+        "tstv1-otk",
+        ...Array.from({ length: 9 }, (_, n) => `tstv1-r2-session-${n + 1}`),
+      ],
     });
-    const ids = ["tstv1-otk"];
-    for (let n = 1; n < 10; n++) {
-      const id = `tstv1-r2-session-${n}`;
-      f.add({ ...f.entries[0], id, title: `Menu session ${n}` });
-      ids.push(id);
-    }
-    await client.rpc("tasks.sessions", { id: task.id, sessions: ids });
-    await browser.poll(`!!document.querySelector('[data-tab="${task.id}"]')`);
-    await browser.click(`[data-tab="${task.id}"]`);
-    await browser.poll(`!!document.querySelector('${foldedTrigger}')`);
+    await b.poll(`!!document.querySelector('[data-tab="${task.id}"]')`);
+    await b.click(`[data-tab="${task.id}"]`);
+    await b.poll('!!document.querySelector(".otk-folded-crumbs > button")');
     for (const theme of ["otk-dark", "otk-light"]) {
-      await client.rpc("prefs.set", { key: "theme", value: theme });
-      await browser.poll(
-        `document.documentElement.dataset.otkTheme==='${theme}'`,
-      );
-      await browser.click('[data-crumb="tstv1-otk"]');
-      await rightClick(browser, '[data-crumb="tstv1-otk"]');
-      assert((await labels(browser)).includes("Copy session title"));
-      await pointerFocus(menu);
-      await density(menu);
-      await capture(browser, root, `${theme}-session-pointer`);
-      await browser.key("ArrowDown");
-      await itemFocus(menu);
-      await browser.key("Escape");
-      await closed(browser);
-      for (const key of ["ContextMenu", "F10"]) {
-        await browser.key(key, key === "F10" ? 8 : 0);
-        await labels(browser);
-        await itemFocus(menu);
-        await capture(browser, root, `${theme}-session-${key.toLowerCase()}`);
-        await browser.key("Escape");
-        await closed(browser);
+      await f.rpc("prefs.set", { key: "theme", value: theme });
+      await b.poll(`document.documentElement.dataset.otkTheme==='${theme}'`);
+      await visualMenu(b, '[data-crumb="tstv1-otk"]');
+      await visualDismiss(b);
+      for (
+        const [trigger, menu, owner] of [
+          [
+            '[data-project-sessions~="tstv1-otk"] .otk-project-menu > button',
+            ".otk-project-menu :popover-open [role=menu]",
+            '[data-project-sessions~="tstv1-otk"] .otk-project-menu',
+          ],
+          [
+            ".otk-folded-crumbs > button",
+            ".otk-folded-crumbs :popover-open [role=menu]",
+            ".otk-folded-crumbs",
+          ],
+        ]
+      ) {
+        const point = await b.evaluate<{ x: number; y: number }>(
+          `(()=>{const r=document.querySelector(${
+            JSON.stringify(trigger)
+          }).getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
+        );
+        await b.send("Input.dispatchMouseEvent", {
+          type: "mouseMoved",
+          ...point,
+        });
+        await b.click(trigger);
+        await menuReady(b, menu, owner);
+        await menuGeometry(b, menu);
+        await b.key("Escape");
+        await b.poll('!document.querySelector(":popover-open")');
       }
-      // A live document selection elsewhere must not contaminate a tab's menu.
-      await browser.evaluate(
-        "(()=>{const el=document.querySelector('.otk-user-bubble');const r=document.createRange();r.selectNodeContents(el);const s=document.getSelection();s.removeAllRanges();s.addRange(r)})()",
-      );
-      await rightClick(browser, `[data-tab="${task.id}"]`);
-      assertEquals((await labels(browser)).includes("Copy"), false);
-      await browser.key("Escape");
-      await closed(browser);
-      assertEquals(
-        await browser.evaluate("!!document.getSelection().toString()"),
-        true,
-      );
-      const point = await browser.evaluate<{ x: number; y: number }>(
-        `(()=>{const r=document.querySelector('[data-project-sessions~=tstv1-otk]').getBoundingClientRect();return {x:r.x+r.width/2,y:r.y+r.height/2}})()`,
-      );
-      await browser.send("Input.dispatchMouseEvent", {
-        type: "mouseMoved",
-        ...point,
-      });
-      await browser.click(projectTrigger);
-      await pointerFocus(projectMenu);
-      await density(projectMenu);
-      await capture(browser, root, `${theme}-project-pointer`);
-      await browser.key("ArrowDown");
-      await itemFocus(projectMenu);
-      await browser.key("Escape");
-      await browser.poll("!document.querySelector(':popover-open')");
-      await enterTrigger();
-      await itemFocus(projectMenu);
-      await capture(browser, root, `${theme}-project-keyboard`);
-      await browser.key("Escape");
-      await browser.poll("!document.querySelector(':popover-open')");
-      await browser.click(foldedTrigger);
-      await pointerFocus(foldedMenu);
-      await density(foldedMenu);
-      await capture(browser, root, `${theme}-folded-pointer`);
-      await browser.key("ArrowUp");
-      await itemFocus(foldedMenu, true);
-      await browser.key("Escape");
-      await browser.poll("!document.querySelector(':popover-open')");
-      await enterTrigger();
-      await itemFocus(foldedMenu);
-      await capture(browser, root, `${theme}-folded-keyboard`);
-      await browser.key("Escape");
-      await browser.poll("!document.querySelector(':popover-open')");
     }
-    assertEquals(browser.errors, []);
-    console.info("Shared Menu screenshot root", root);
   } finally {
-    await stop();
+    await f.close();
   }
 });

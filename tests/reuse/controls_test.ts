@@ -178,17 +178,8 @@ test("controls: dialog pending and rejected action preserve form geometry and fo
         JSON.stringify({ idle, pending }),
       );
       await capture(b, `task-pending-${theme}`);
-      assertEquals(
-        await b.evaluate(
-          "document.querySelectorAll('dialog[open] [disabled]').length",
-        ),
-        0,
-      );
-      assert(
-        await b.evaluate(
-          "!!document.activeElement?.getBoundingClientRect().width&&getComputedStyle(document.activeElement).visibility!=='hidden'",
-        ),
-      );
+      // C12 owns pending control/focus and retained-form behavior in Playwright.
+      // Keep only these fixed per-theme geometry and semantic danger states.
       // Fixture settlement models a server outcome, not an action through the modal.
       await b.evaluate("document.querySelector('[data-reject]').click()");
       await b.poll("!!document.querySelector('dialog[open] [role=alert]')");

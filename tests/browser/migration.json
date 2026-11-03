@@ -106,6 +106,24 @@
         "sourceSha256": "0509f3c911ce10291c49195f9655620f91fd5e32b2ccb31ab00ba14bf51221d8",
         "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
       }
+    },
+    {
+      "file": "tests/reuse/controls_test.ts",
+      "area": "menus",
+      "batch": "A6",
+      "originalTitle": "controls: dialog pending and rejected action preserve form geometry and focus",
+      "portion": "Dark pending/rejected callback, retained form and visible focus; fixed Dark/Linen geometry and paint remain in Deno",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/menus/dialog-feedback.spec.ts",
+        "testID": "menus.public-dialog-pending-rejection-retains-form-and-visible-focus"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "1fa104a50b1c252a099dfc0feeeb0ed0c264dfaf0b94aaeb55e9151a916b524e",
+        "run": "otk-t2-c12-20261103; archived-controls + area-menus"
+      }
     }
   ],
   "files": [
@@ -2463,14 +2481,20 @@
               "runner": "legacy",
               "file": "tests/e2e/context-areas_test.ts",
               "testID": "legacy.context-areas.524593a986827696"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/areas.spec.ts",
+              "testID": "menus.current-session-omits-noops-background-open-and-task-promotion"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "C3 session menus omit current-place no-ops while background Open and task promotion still act"
+              "Fixed current-session menu groups, 28px rows and viewport bounds; commands are Playwright-owned"
             ]
           },
           "lowerTierWitness": null,
@@ -2480,9 +2504,9 @@
             "testID": "legacy.context-areas.524593a986827696"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "77c8c3a9d03bf7f84e9038f19fc4dd1dc4c0cfec40a4fd1814c577d150f1c953",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "a3403daacbb16d9164d3f834fee3347bb52928ca6f232277418142d427a463ab",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -2494,6 +2518,11 @@
               "runner": "legacy",
               "file": "tests/e2e/context-areas_test.ts",
               "testID": "legacy.context-areas.1f4330befbb5ff3a"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/areas.spec.ts",
+              "testID": "menus.area-groups-commands-search-focus-clipboard-editor-and-file-picker"
             }
           ],
           "retainedCoverage": {
@@ -2501,7 +2530,7 @@
               "otk-dark"
             ],
             "states": [
-              "C3 areas: empty regions, inner groups and shared control commands reach their consumers (otk-dark)"
+              "Fixed empty-area and inner-target menu geometry in Dark; commands are Playwright-owned"
             ]
           },
           "lowerTierWitness": null,
@@ -2511,9 +2540,9 @@
             "testID": "legacy.context-areas.1f4330befbb5ff3a"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "77c8c3a9d03bf7f84e9038f19fc4dd1dc4c0cfec40a4fd1814c577d150f1c953",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "a3403daacbb16d9164d3f834fee3347bb52928ca6f232277418142d427a463ab",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -2525,6 +2554,11 @@
               "runner": "legacy",
               "file": "tests/e2e/context-areas_test.ts",
               "testID": "legacy.context-areas.729f150fa43b9761"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/areas.spec.ts",
+              "testID": "menus.area-groups-commands-search-focus-clipboard-editor-and-file-picker"
             }
           ],
           "retainedCoverage": {
@@ -2532,7 +2566,7 @@
               "otk-light"
             ],
             "states": [
-              "C3 areas: empty regions, inner groups and shared control commands reach their consumers (otk-light)"
+              "Fixed empty-area and inner-target menu geometry in Linen; commands are Playwright-owned"
             ]
           },
           "lowerTierWitness": null,
@@ -2542,9 +2576,9 @@
             "testID": "legacy.context-areas.729f150fa43b9761"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "77c8c3a9d03bf7f84e9038f19fc4dd1dc4c0cfec40a4fd1814c577d150f1c953",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "a3403daacbb16d9164d3f834fee3347bb52928ca6f232277418142d427a463ab",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -2556,6 +2590,11 @@
               "runner": "legacy",
               "file": "tests/e2e/context-areas_test.ts",
               "testID": "legacy.context-areas.bd5feaa480a7e620"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/areas.spec.ts",
+              "testID": "menus.area-groups-commands-search-focus-clipboard-editor-and-file-picker"
             }
           ],
           "retainedCoverage": {
@@ -2563,7 +2602,7 @@
               "otk-light-stone"
             ],
             "states": [
-              "C3 areas: empty regions, inner groups and shared control commands reach their consumers (otk-light-stone)"
+              "Fixed empty-area and inner-target menu geometry in Stone; commands are Playwright-owned"
             ]
           },
           "lowerTierWitness": null,
@@ -2573,9 +2612,9 @@
             "testID": "legacy.context-areas.bd5feaa480a7e620"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "77c8c3a9d03bf7f84e9038f19fc4dd1dc4c0cfec40a4fd1814c577d150f1c953",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "a3403daacbb16d9164d3f834fee3347bb52928ca6f232277418142d427a463ab",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -2587,14 +2626,20 @@
               "runner": "legacy",
               "file": "tests/e2e/context-areas_test.ts",
               "testID": "legacy.context-areas.ad57fb98b12ed3dd"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/menus/native-commands.spec.ts",
+              "testID": "menus.native-area-picker-approval-and-activity-consumers"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "C3 stock areas: picker and approval commands, Activity panel and Dark/Linen menu geometry"
+              "Fixed native-capability area menu row density and bounds; native effects are Playwright-owned"
             ]
           },
           "lowerTierWitness": null,
@@ -2604,9 +2649,9 @@
             "testID": "legacy.context-areas.ad57fb98b12ed3dd"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "77c8c3a9d03bf7f84e9038f19fc4dd1dc4c0cfec40a4fd1814c577d150f1c953",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "a3403daacbb16d9164d3f834fee3347bb52928ca6f232277418142d427a463ab",
+            "run": "otk-t2-c12-20261103"
           }
         }
       ]
@@ -2626,14 +2671,20 @@
               "runner": "legacy",
               "file": "tests/e2e/context-menu_test.ts",
               "testID": "legacy.context-menu.eea88bc2d2692289"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/context-menu.spec.ts",
+              "testID": "menus.trusted-context-keyboard-fallback-escape-corners-and-create"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "context menu: trusted right click, native escape hatch, keyboard navigation, fallback effects and four viewport corners"
+              "Fixed point menus in all four corners and modal-hosted context menu geometry"
             ]
           },
           "lowerTierWitness": null,
@@ -2643,9 +2694,9 @@
             "testID": "legacy.context-menu.eea88bc2d2692289"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "55b3cbeef4cc146929f407f113a3a885a5fad61c9f262b4ea84d4b0a42d8e20e",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "0facff5b6779ed999f2ada4f62267f3792c87b76c94740186017940c1019b8d9",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -2654,14 +2705,14 @@
           "proofBoundary": "C+B+V+L: trusted input, clipboard, keys, native escape and compact bounds",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-menu_test.ts",
-              "testID": "legacy.context-menu.60aea98663930875"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/context-menu.spec.ts",
+              "testID": "menus.semantic-links-images-selection-real-clipboard-and-popup"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "context menu: links, images and selection outside fields use the real clipboard"
@@ -2669,14 +2720,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-menu_test.ts",
-            "testID": "legacy.context-menu.60aea98663930875"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/menus/context-menu.spec.ts",
+            "testID": "menus.semantic-links-images-selection-real-clipboard-and-popup"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "55b3cbeef4cc146929f407f113a3a885a5fad61c9f262b4ea84d4b0a42d8e20e",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -2685,14 +2736,14 @@
           "proofBoundary": "C+B+V+L: trusted input, clipboard, keys, native escape and compact bounds",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-menu_test.ts",
-              "testID": "legacy.context-menu.9e0c33a3163401dc"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/context-binding.spec.ts",
+              "testID": "menus.external-contributions-live-targets-native-keys-and-owner-teardown"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "context binding: external command contributions, live target data, nested groups and destructive ordering"
@@ -2700,14 +2751,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-menu_test.ts",
-            "testID": "legacy.context-menu.9e0c33a3163401dc"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/menus/context-binding.spec.ts",
+            "testID": "menus.external-contributions-live-targets-native-keys-and-owner-teardown"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "55b3cbeef4cc146929f407f113a3a885a5fad61c9f262b4ea84d4b0a42d8e20e",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -2719,14 +2770,20 @@
               "runner": "legacy",
               "file": "tests/e2e/context-menu_test.ts",
               "testID": "legacy.context-menu.e56a82303dd427c7"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/targets.spec.ts",
+              "testID": "menus.shared-menu-pointer-keyboard-focus-and-selection-isolation"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "all shared Menu callers distinguish pointer and keyboard opening with compact rows"
+              "Fixed session, project and folded menu 28px rows and balanced complete-flow padding"
             ]
           },
           "lowerTierWitness": null,
@@ -2736,9 +2793,9 @@
             "testID": "legacy.context-menu.e56a82303dd427c7"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "55b3cbeef4cc146929f407f113a3a885a5fad61c9f262b4ea84d4b0a42d8e20e",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "0facff5b6779ed999f2ada4f62267f3792c87b76c94740186017940c1019b8d9",
+            "run": "otk-t2-c12-20261103"
           }
         }
       ]
@@ -2758,14 +2815,20 @@
               "runner": "legacy",
               "file": "tests/e2e/context-targets_test.ts",
               "testID": "legacy.context-targets.0d0fe821a789f46b"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/targets.spec.ts",
+              "testID": "menus.captured-session-task-and-project-effects"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "C2 session targets: tabs, chips, rows, task actions and project menu have captured effects"
+              "Fixed session/tab/chip/task/project menu geometry; captured effects are Playwright-owned"
             ]
           },
           "lowerTierWitness": null,
@@ -2775,9 +2838,9 @@
             "testID": "legacy.context-targets.0d0fe821a789f46b"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "0ddf904a8ce67b6130174829409e3fbefea1322650d011c0e8253324e90b5f36",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8823d789c8841cf63e6e60a32dd477e46fc9cc8e3813fb609ed0242aab8daa4b",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -2786,14 +2849,14 @@
           "proofBoundary": "B+C+V+L: captured identity/effects, constant registration count, complete source copy",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-targets_test.ts",
-              "testID": "legacy.context-targets.ac592d29e8b49f84"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/context-binding.spec.ts",
+              "testID": "menus.reply-contributions-constant-count-and-complete-external-identity"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "C2 shared reply contributions stay constant across N real messages and external features receive identity"
@@ -2801,14 +2864,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-targets_test.ts",
-            "testID": "legacy.context-targets.ac592d29e8b49f84"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/menus/context-binding.spec.ts",
+            "testID": "menus.reply-contributions-constant-count-and-complete-external-identity"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "0ddf904a8ce67b6130174829409e3fbefea1322650d011c0e8253324e90b5f36",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -2817,14 +2880,14 @@
           "proofBoundary": "B+C+V+L: captured identity/effects, constant registration count, complete source copy",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-targets_test.ts",
-              "testID": "legacy.context-targets.eac72e570ec3c1d9"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/targets.spec.ts",
+              "testID": "menus.stale-task-and-session-commands-preserve-captured-identities"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "C2 stale task and phantom menus follow captured identities across session switches"
@@ -2832,14 +2895,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-targets_test.ts",
-            "testID": "legacy.context-targets.eac72e570ec3c1d9"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/menus/targets.spec.ts",
+            "testID": "menus.stale-task-and-session-commands-preserve-captured-identities"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "0ddf904a8ce67b6130174829409e3fbefea1322650d011c0e8253324e90b5f36",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -2851,6 +2914,11 @@
               "runner": "legacy",
               "file": "tests/e2e/context-targets_test.ts",
               "testID": "legacy.context-targets.6c9882df06ce2f70"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/context-binding.spec.ts",
+              "testID": "menus.project-dots-shared-projection-owned-failure-and-readiness"
             }
           ],
           "retainedCoverage": {
@@ -2858,7 +2926,7 @@
               "otk-dark"
             ],
             "states": [
-              "C2 project dots share the row projection and report failures without rejected event handlers (otk-dark)"
+              "Fixed project error flows below action within row bounds in Dark"
             ]
           },
           "lowerTierWitness": null,
@@ -2868,9 +2936,9 @@
             "testID": "legacy.context-targets.6c9882df06ce2f70"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "0ddf904a8ce67b6130174829409e3fbefea1322650d011c0e8253324e90b5f36",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8823d789c8841cf63e6e60a32dd477e46fc9cc8e3813fb609ed0242aab8daa4b",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -2882,6 +2950,11 @@
               "runner": "legacy",
               "file": "tests/e2e/context-targets_test.ts",
               "testID": "legacy.context-targets.5b869360b4166719"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/context-binding.spec.ts",
+              "testID": "menus.project-dots-shared-projection-owned-failure-and-readiness"
             }
           ],
           "retainedCoverage": {
@@ -2889,7 +2962,7 @@
               "otk-light"
             ],
             "states": [
-              "C2 project dots share the row projection and report failures without rejected event handlers (otk-light)"
+              "Fixed project error flows below action within row bounds in Linen"
             ]
           },
           "lowerTierWitness": null,
@@ -2899,9 +2972,9 @@
             "testID": "legacy.context-targets.5b869360b4166719"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "0ddf904a8ce67b6130174829409e3fbefea1322650d011c0e8253324e90b5f36",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8823d789c8841cf63e6e60a32dd477e46fc9cc8e3813fb609ed0242aab8daa4b",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -2913,14 +2986,20 @@
               "runner": "legacy",
               "file": "tests/e2e/context-targets_test.ts",
               "testID": "legacy.context-targets.0aafbf32a068d4e2"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/content.spec.ts",
+              "testID": "menus.content-targets-complete-source-code-hunks-and-feature-tools"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "C2 content targets: prompt, whole reply, nested code/diff and feature-contributed tool sources"
+              "Fixed prompt/reply/code/tool/path/diff-hunk menu geometry; complete source copy is Playwright-owned"
             ]
           },
           "lowerTierWitness": null,
@@ -2930,9 +3009,9 @@
             "testID": "legacy.context-targets.0aafbf32a068d4e2"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "0ddf904a8ce67b6130174829409e3fbefea1322650d011c0e8253324e90b5f36",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8823d789c8841cf63e6e60a32dd477e46fc9cc8e3813fb609ed0242aab8daa4b",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -2944,14 +3023,20 @@
               "runner": "legacy",
               "file": "tests/e2e/context-targets_test.ts",
               "testID": "legacy.context-targets.9fae431359f3e326"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/menus/native-commands.spec.ts",
+              "testID": "menus.native-background-auto-approve-target-and-real-reply-usage"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "C2 stock capabilities: targeted auto-approve and reply usage menu reach their real consumers"
+              "Fixed native approval on/off menus and reply usage menu/table states"
             ]
           },
           "lowerTierWitness": null,
@@ -2961,9 +3046,9 @@
             "testID": "legacy.context-targets.9fae431359f3e326"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "0ddf904a8ce67b6130174829409e3fbefea1322650d011c0e8253324e90b5f36",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "8823d789c8841cf63e6e60a32dd477e46fc9cc8e3813fb609ed0242aab8daa4b",
+            "run": "otk-t2-c12-20261103"
           }
         }
       ]
@@ -3133,14 +3218,14 @@
           "proofBoundary": "C+B+V+L: invocation identity, callback/focus and late save",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/dialog-identity_test.ts",
-              "testID": "legacy.dialog-identity.b0a42153db4f8899"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+              "testID": "menus.palette-availability-query-empty"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "palette omits unavailable actions and restores availability (query=\"\")"
@@ -3148,14 +3233,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/dialog-identity_test.ts",
-            "testID": "legacy.dialog-identity.b0a42153db4f8899"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+            "testID": "menus.palette-availability-query-empty"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "ea6c94cd385caaac7f499a8003f51394aea543ff73a8295034609ee74549b92d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -3164,14 +3249,14 @@
           "proofBoundary": "C+B+V+L: invocation identity, callback/focus and late save",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/dialog-identity_test.ts",
-              "testID": "legacy.dialog-identity.57d08a9a27424059"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+              "testID": "menus.palette-availability-query-filtered"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "palette omits unavailable actions and restores availability (query=\"Consumer action\")"
@@ -3179,14 +3264,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/dialog-identity_test.ts",
-            "testID": "legacy.dialog-identity.57d08a9a27424059"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+            "testID": "menus.palette-availability-query-filtered"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "ea6c94cd385caaac7f499a8003f51394aea543ff73a8295034609ee74549b92d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -3195,14 +3280,14 @@
           "proofBoundary": "C+B+V+L: invocation identity, callback/focus and late save",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/dialog-identity_test.ts",
-              "testID": "legacy.dialog-identity.2c16611163ed8a2f"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+              "testID": "menus.same-type-task-replacement-owns-form-save-and-focus"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "same-type dialog replacement mounts a fresh task form with its own save callback"
@@ -3210,14 +3295,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/dialog-identity_test.ts",
-            "testID": "legacy.dialog-identity.2c16611163ed8a2f"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+            "testID": "menus.same-type-task-replacement-owns-form-save-and-focus"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "ea6c94cd385caaac7f499a8003f51394aea543ff73a8295034609ee74549b92d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -3229,14 +3314,20 @@
               "runner": "legacy",
               "file": "tests/e2e/dialog-identity_test.ts",
               "testID": "legacy.dialog-identity.d27e968b23bbe6de"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+              "testID": "menus.late-task-save-preserves-replacement"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "late task save cannot close its same-type replacement"
+              "Fixed replacement task dialog paint; late-save and focus identities are Playwright-owned"
             ]
           },
           "lowerTierWitness": null,
@@ -3246,9 +3337,9 @@
             "testID": "legacy.dialog-identity.d27e968b23bbe6de"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "ea6c94cd385caaac7f499a8003f51394aea543ff73a8295034609ee74549b92d",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "4e0471529fc51ce5184b4ec0233537aa0be54831aec7a3bf6a2ce78ffacc3563",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -3257,14 +3348,14 @@
           "proofBoundary": "C+B+V+L: invocation identity, callback/focus and late save",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/dialog-identity_test.ts",
-              "testID": "legacy.dialog-identity.254aa3daad98636f"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+              "testID": "menus.dialog-invocation-content-dismiss-teardown-and-close-handles"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "dialog invocation owns content input, dismiss, teardown and returned close handles across replacements"
@@ -3272,14 +3363,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/dialog-identity_test.ts",
-            "testID": "legacy.dialog-identity.254aa3daad98636f"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+            "testID": "menus.dialog-invocation-content-dismiss-teardown-and-close-handles"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "ea6c94cd385caaac7f499a8003f51394aea543ff73a8295034609ee74549b92d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -3291,14 +3382,20 @@
               "runner": "legacy",
               "file": "tests/e2e/dialog-identity_test.ts",
               "testID": "legacy.dialog-identity.dd50261cf69135af"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+              "testID": "menus.deferred-feature-dismissal-is-invocation-bound"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "feature dismissal receives a close bound to its invocation, including deferred completion"
+              "Fixed replacement dismissal dialog paint; deferred-close identity is Playwright-owned"
             ]
           },
           "lowerTierWitness": null,
@@ -3308,9 +3405,9 @@
             "testID": "legacy.dialog-identity.dd50261cf69135af"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "ea6c94cd385caaac7f499a8003f51394aea543ff73a8295034609ee74549b92d",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "4e0471529fc51ce5184b4ec0233537aa0be54831aec7a3bf6a2ce78ffacc3563",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -3322,14 +3419,20 @@
               "runner": "legacy",
               "file": "tests/e2e/dialog-identity_test.ts",
               "testID": "legacy.dialog-identity.448018d37e67afc5"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+              "testID": "menus.standalone-palette-injected-close-callback"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "standalone palette dismisses through its injected callback without a host close command"
+              "Fixed closed standalone-palette state; injected action/close callback is Playwright-owned"
             ]
           },
           "lowerTierWitness": null,
@@ -3339,9 +3442,9 @@
             "testID": "legacy.dialog-identity.448018d37e67afc5"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "ea6c94cd385caaac7f499a8003f51394aea543ff73a8295034609ee74549b92d",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "4e0471529fc51ce5184b4ec0233537aa0be54831aec7a3bf6a2ce78ffacc3563",
+            "run": "otk-t2-c12-20261103"
           }
         }
       ]
@@ -4843,6 +4946,11 @@
               "runner": "legacy",
               "file": "tests/e2e/key-hints_test.ts",
               "testID": "legacy.key-hints.f607c239efc25bfa"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/key-hints.spec.ts",
+              "testID": "menus.command-hints-mounted-hidden-rebind-unbind-reset-and-native-actions"
             }
           ],
           "retainedCoverage": {
@@ -4850,7 +4958,7 @@
               "otk-dark"
             ],
             "states": [
-              "command hints follow mounted hidden bindings, saved overrides, unbinding and reset in otk-dark"
+              "Fixed mounted Keys help hint presentation in Dark; rebind/unbind/reset and native actions are Playwright-owned"
             ]
           },
           "lowerTierWitness": null,
@@ -4860,9 +4968,9 @@
             "testID": "legacy.key-hints.f607c239efc25bfa"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "3f28900a6879458c32554b21b92e105f449ce3da624b7e834d9166fb40a8de4d",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "4807b29b160c5c3ea1eb2981a873084248ed11e46bddfd5976b476d9ff2e6df2",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -4874,6 +4982,11 @@
               "runner": "legacy",
               "file": "tests/e2e/key-hints_test.ts",
               "testID": "legacy.key-hints.1d417223b8a8b9b1"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/key-hints.spec.ts",
+              "testID": "menus.command-hints-mounted-hidden-rebind-unbind-reset-and-native-actions"
             }
           ],
           "retainedCoverage": {
@@ -4881,7 +4994,7 @@
               "otk-light"
             ],
             "states": [
-              "command hints follow mounted hidden bindings, saved overrides, unbinding and reset in otk-light"
+              "Fixed mounted Keys help hint presentation in Linen; rebind/unbind/reset and native actions are Playwright-owned"
             ]
           },
           "lowerTierWitness": null,
@@ -4891,9 +5004,9 @@
             "testID": "legacy.key-hints.1d417223b8a8b9b1"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "3f28900a6879458c32554b21b92e105f449ce3da624b7e834d9166fb40a8de4d",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "4807b29b160c5c3ea1eb2981a873084248ed11e46bddfd5976b476d9ff2e6df2",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -4905,14 +5018,20 @@
               "runner": "legacy",
               "file": "tests/e2e/key-hints_test.ts",
               "testID": "legacy.key-hints.f9044e64b30f1cdd"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/key-hints.spec.ts",
+              "testID": "menus.dialog-editor-no-static-hints-save-cancel-native-focus"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "Dialog and Editor omit surface key hints while retaining save, cancel and native focus return"
+              "Fixed editor/dialog title and prose without static surface key hints; save/cancel/focus are Playwright-owned"
             ]
           },
           "lowerTierWitness": null,
@@ -4922,9 +5041,9 @@
             "testID": "legacy.key-hints.f9044e64b30f1cdd"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "3f28900a6879458c32554b21b92e105f449ce3da624b7e834d9166fb40a8de4d",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "4807b29b160c5c3ea1eb2981a873084248ed11e46bddfd5976b476d9ff2e6df2",
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -4933,14 +5052,19 @@
           "proofBoundary": "B+C+V: live key registration/hints and native widget actions",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/key-hints_test.ts",
-              "testID": "legacy.key-hints.6a09336aad56b545"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/key-hints.spec.ts",
+              "testID": "menus.permission-fixed-keys-respect-text-focus-and-review-layers"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/key-hints.spec.ts",
+              "testID": "menus.question-escape-keeps-answer-then-skips-from-controls"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "fixed permission keys and question Escape hints match their focused widget behavior"
@@ -4948,14 +5072,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/key-hints_test.ts",
-            "testID": "legacy.key-hints.6a09336aad56b545"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/menus/key-hints.spec.ts",
+            "testID": "menus.permission-fixed-keys-respect-text-focus-and-review-layers"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "3f28900a6879458c32554b21b92e105f449ce3da624b7e834d9166fb40a8de4d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         }
       ]
@@ -4972,14 +5096,14 @@
           "proofBoundary": "B+L: native palette/keys/conflict/save/reset/cycling outcomes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/keymap_test.ts",
-              "testID": "legacy.keymap.1f572d53fbd0435c"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/menus/keymap.spec.ts",
+              "testID": "menus.palette-project-and-slash-share-native-create-command"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "D1 palette, project button and slash create sessions through the same registered command"
@@ -4987,14 +5111,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/keymap_test.ts",
-            "testID": "legacy.keymap.1f572d53fbd0435c"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/menus/keymap.spec.ts",
+            "testID": "menus.palette-project-and-slash-share-native-create-command"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c56b9836369f320c5ea410d277d6a8334aafff645c218de06723b41ddfab37ca",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -5003,14 +5127,14 @@
           "proofBoundary": "B+L: native palette/keys/conflict/save/reset/cycling outcomes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/keymap_test.ts",
-              "testID": "legacy.keymap.0f3f4b99798e243d"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/menus/keymap.spec.ts",
+              "testID": "menus.escape-layer-priority-then-double-escape-native-interrupt"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "D3 Esc closes palette before permission confirmation and real double Esc interrupts"
@@ -5018,14 +5142,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/keymap_test.ts",
-            "testID": "legacy.keymap.0f3f4b99798e243d"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/menus/keymap.spec.ts",
+            "testID": "menus.escape-layer-priority-then-double-escape-native-interrupt"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c56b9836369f320c5ea410d277d6a8334aafff645c218de06723b41ddfab37ca",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -5034,14 +5158,14 @@
           "proofBoundary": "B+L: native palette/keys/conflict/save/reset/cycling outcomes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/keymap_test.ts",
-              "testID": "legacy.keymap.523d36b628e91618"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/menus/keymap.spec.ts",
+              "testID": "menus.rebind-conflict-save-native-key-reload-and-reset"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "D4 production rebind UI rejects conflicts, applies the new key, persists on reload and resets"
@@ -5049,14 +5173,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/keymap_test.ts",
-            "testID": "legacy.keymap.523d36b628e91618"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/menus/keymap.spec.ts",
+            "testID": "menus.rebind-conflict-save-native-key-reload-and-reset"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c56b9836369f320c5ea410d277d6a8334aafff645c218de06723b41ddfab37ca",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -5065,9 +5189,9 @@
           "proofBoundary": "B+L: native palette/keys/conflict/save/reset/cycling outcomes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/keymap_test.ts",
-              "testID": "legacy.keymap.c36d94d2607111e9"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/menus/keymap.spec.ts",
+              "testID": "menus.essential-agent-forward-reverse-newline-and-native-selection"
             }
           ],
           "retainedCoverage": {
@@ -5080,14 +5204,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/keymap_test.ts",
-            "testID": "legacy.keymap.c36d94d2607111e9"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/menus/keymap.spec.ts",
+            "testID": "menus.essential-agent-forward-reverse-newline-and-native-selection"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c56b9836369f320c5ea410d277d6a8334aafff645c218de06723b41ddfab37ca",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -5096,14 +5220,14 @@
           "proofBoundary": "B+L: native palette/keys/conflict/save/reset/cycling outcomes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/keymap_test.ts",
-              "testID": "legacy.keymap.986f872be70734a1"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/menus/keymap.spec.ts",
+              "testID": "menus.essential-agent-forward-reverse-newline-and-native-selection"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark"
             ],
             "states": [
               "essential Tab cycling selects primary agents in prompt, reverse cycles and sent messages carry selection in otk-light"
@@ -5111,14 +5235,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/keymap_test.ts",
-            "testID": "legacy.keymap.986f872be70734a1"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/menus/keymap.spec.ts",
+            "testID": "menus.essential-agent-forward-reverse-newline-and-native-selection"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c56b9836369f320c5ea410d277d6a8334aafff645c218de06723b41ddfab37ca",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -5127,14 +5251,14 @@
           "proofBoundary": "B+L: native palette/keys/conflict/save/reset/cycling outcomes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/keymap_test.ts",
-              "testID": "legacy.keymap.8a3bf7b94868bc53"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/menus/keymap.spec.ts",
+              "testID": "menus.configured-default-primary-order-preserves-unselected-send"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "agent cycling honors the native configured-default primary order without changing an unselected prompt"
@@ -5142,14 +5266,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/keymap_test.ts",
-            "testID": "legacy.keymap.8a3bf7b94868bc53"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/menus/keymap.spec.ts",
+            "testID": "menus.configured-default-primary-order-preserves-unselected-send"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c56b9836369f320c5ea410d277d6a8334aafff645c218de06723b41ddfab37ca",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         }
       ]
@@ -6866,9 +6990,9 @@
           "proofBoundary": "C+B: native text-field pointer and keyboard menu passthrough",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/native-context_test.ts",
-              "testID": "legacy.native-context.9e84b5420e239b48"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/native-context.spec.ts",
+              "testID": "menus.native-text-context-trusted-pointer-and-keyboard-passthrough"
             }
           ],
           "retainedCoverage": {
@@ -6881,14 +7005,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/native-context_test.ts",
-            "testID": "legacy.native-context.9e84b5420e239b48"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/menus/native-context.spec.ts",
+            "testID": "menus.native-text-context-trusted-pointer-and-keyboard-passthrough"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "cfa14205228485a0a691243c65c4f217709c21f52778558ec80c2f5507dad9c6",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         },
         {
@@ -6897,14 +7021,14 @@
           "proofBoundary": "C+B: native text-field pointer and keyboard menu passthrough",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/native-context_test.ts",
-              "testID": "legacy.native-context.9e0c921b3f2a9714"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/menus/native-context.spec.ts",
+              "testID": "menus.native-text-context-trusted-pointer-and-keyboard-passthrough"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark"
             ],
             "states": [
               "native text context survives pointer and keyboard invocation in otk-light"
@@ -6912,14 +7036,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/native-context_test.ts",
-            "testID": "legacy.native-context.9e0c921b3f2a9714"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/menus/native-context.spec.ts",
+            "testID": "menus.native-text-context-trusted-pointer-and-keyboard-passthrough"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "cfa14205228485a0a691243c65c4f217709c21f52778558ec80c2f5507dad9c6",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c12-20261103"
           }
         }
       ]

@@ -2,12 +2,12 @@
 import { join } from "@std/path";
 import { fixture } from "./config.ts";
 import { serve } from "./http.ts";
-import { consumerAssets } from "./consumer-builds.ts";
+import { type Consumer, consumerAssets } from "./consumer-builds.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
 import type { ControlRequest, TestLease } from "./fixture-control.ts";
 /** Prebuilt independent public-entry UI, without acquiring a native backend. */
-export async function publicUiScenario() {
-  const root = await fixture(), dist = await consumerAssets("ui");
+export async function publicUiScenario(consumer: Consumer = "ui") {
+  const root = await fixture(), dist = await consumerAssets(consumer);
   const server = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {

@@ -6,6 +6,14 @@ export type Json = null | boolean | number | string | Json[] | {
 };
 export type Profile =
   | "ordinary"
+  | "contract-menus-inbox"
+  | "contract-menus-content"
+  | "contract-menus-context"
+  | "contract-menus-dialog"
+  | "contract-menus-hints"
+  | "contract-menus-permission"
+  | "contract-menus-question"
+  | "menus-default"
   | "contract-attention-demand"
   | "contract-attention-digest"
   | "contract-attention-lights"
@@ -242,6 +250,14 @@ export function request(value: unknown): ControlRequest {
       if (
         ![
           "ordinary",
+          "contract-menus-inbox",
+          "contract-menus-content",
+          "contract-menus-context",
+          "contract-menus-dialog",
+          "contract-menus-hints",
+          "contract-menus-permission",
+          "contract-menus-question",
+          "menus-default",
           "contract-attention-demand",
           "contract-attention-digest",
           "contract-attention-lights",
