@@ -102,6 +102,11 @@ export class CommandHub {
     }
     return await command.run(context, args) as R;
   }
+  /** Projection refreshes share consent only while their contributor is identical. */
+  sameContextOwner(left: ContextAction, right: ContextAction): boolean {
+    const source = this.#actions.get(left);
+    return !!source && source.command === this.#actions.get(right)?.command;
+  }
   /** Context execution is bound to the contributing owner and current item list. */
   async runContext<R = void>(action: ContextAction): Promise<R> {
     const source = this.#actions.get(action);

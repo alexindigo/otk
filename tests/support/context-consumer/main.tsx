@@ -167,6 +167,23 @@ function Consumer() {
   const [menus, setMenus] = createSignal(true);
   const [transcript, setTranscript] = createSignal(false);
   const [projectProbe, setProjectProbe] = createSignal(false);
+  const [confirmTitle, setConfirmTitle] = createSignal(
+    "Press again to destroy",
+  );
+  const destroyCommand = () => ({
+    id: "probe.destroy",
+    title: "Destroy probe",
+    category: "Probe",
+    context: {
+      kind: "probe.confirm",
+      destructive: true,
+      confirm: () => confirmTitle(),
+    },
+    run: () => setResult("destroyed"),
+  });
+  ownedCommand({ commands }, destroyCommand());
+  let releaseReplacement: (() => void) | undefined;
+  onCleanup(() => releaseReplacement?.());
   ownedCommand({ commands }, {
     id: "probe.inner",
     title: "Inspect code",
@@ -222,6 +239,40 @@ function Consumer() {
     >
       <button type="button" id="rename" onClick={() => setName("changed")}>
         Change target data
+      </button>
+      <button
+        type="button"
+        id="confirm-target"
+        ref={contextTarget(() => ({ kind: "probe.confirm", data: "probe" }))}
+      >
+        Confirmation target
+      </button>
+      <button
+        type="button"
+        id="change-confirmation"
+        onClick={() => setConfirmTitle("Press again to destroy changed probe")}
+      >
+        Change confirmation
+      </button>
+      <button
+        type="button"
+        id="replace-confirmation"
+        onClick={() => {
+          commands.unregister("probe.destroy");
+          releaseReplacement = commands.register({
+            ...destroyCommand(),
+            run: () => setResult("replacement destroyed"),
+          });
+        }}
+      >
+        Replace confirmation owner
+      </button>
+      <button
+        type="button"
+        id="release-confirmation"
+        onClick={() => commands.unregister("probe.destroy")}
+      >
+        Release confirmation owner
       </button>
       <button type="button" id="disable" onClick={() => setAllowed(false)}>
         Remove close action

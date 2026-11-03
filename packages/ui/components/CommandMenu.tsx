@@ -43,7 +43,11 @@ export default function CommandMenu(props: {
   const [groups, setGroups] = createSignal<ContextAction[][]>([]);
   const rows = createMemo(() => groups().map(commandRows));
   const [error, setError] = createSignal<{ key: string; text: string }>();
-  const [armed, setArmed] = createSignal<{ key: string; title: string }>();
+  const [armed, setArmed] = createSignal<{
+    key: string;
+    title: string;
+    action: ContextAction;
+  }>();
   const [pending, setPending] = createSignal<string>();
   const errorId = `context-error-${createUniqueId()}`;
   let menu!: PopoverControl, generation = 0;
@@ -69,7 +73,8 @@ export default function CommandMenu(props: {
   };
   onSettled(() =>
     commands.subscribe(() => {
-      setArmed(undefined);
+      // Registry churn only requests reprojection. The validity check below
+      // owns disarming an action whose availability or confirmation changed.
       setRevision((value) => value + 1);
     })
   );
@@ -84,7 +89,8 @@ export default function CommandMenu(props: {
     if (
       active &&
       !next.flat().some((item) =>
-        item.key === active.key && item.confirm === active.title
+        item.key === active.key && item.confirm === active.title &&
+        commands.sameContextOwner(active.action, item)
       )
     ) setArmed(undefined);
     if (!next.length) menu.close();
@@ -106,9 +112,10 @@ export default function CommandMenu(props: {
     }
     if (
       item.confirm &&
-      (armed()?.key !== item.key || armed()?.title !== item.confirm)
+      (armed()?.key !== item.key || armed()?.title !== item.confirm ||
+        !commands.sameContextOwner(armed()!.action, item))
     ) {
-      setArmed({ key: item.key, title: item.confirm });
+      setArmed({ key: item.key, title: item.confirm, action: item });
       return;
     }
     setArmed(undefined);
