@@ -26,9 +26,15 @@ export async function nativeMessageScenario(
     assistants = new Set<string>(),
     streams = new Set<TransformStreamDefaultController<string>>();
   const held = Promise.withResolvers<void>();
+  const mutations: string[] = [];
+  const mutationDetails: string[] = [];
+  let mutationGate: PromiseWithResolvers<void> | undefined;
+  let mutationPath: string | undefined;
+  let rejectRevert = false;
   const release = () => {
     holding = false;
     held.resolve();
+    mutationGate?.resolve();
   };
   resources().defer("release native message read", release);
   const proxy = serve(
@@ -36,6 +42,36 @@ export async function nativeMessageScenario(
     async (req) => {
       const url = new URL(req.url);
       reads.push(url.pathname);
+      if (profile === "revert-native") {
+        const operation = url.pathname.split("/").at(-1)!;
+        if (
+          req.method === "DELETE" ||
+          (req.method === "POST" &&
+            ["abort", "revert", "unrevert", "summarize"].includes(operation))
+        ) mutationDetails.push(`${req.method} ${url.pathname}`);
+        if (operation === "summarize" && rejectRevert) {
+          return Response.json({
+            name: "CompactFailure",
+            data: { message: "Compact refused" },
+          }, { status: 500 });
+        }
+        if (
+          req.method === "POST" &&
+          ["abort", "revert", "unrevert"].includes(operation)
+        ) {
+          mutations.push(operation);
+          if (operation === mutationPath) await mutationGate?.promise;
+          if (operation === "revert" && rejectRevert) {
+            return Response.json({
+              _tag: "SessionBusyError",
+              sessionID: url.pathname.split("/")[2],
+            }, { status: 409 });
+          }
+        }
+        return await fetch(
+          new Request(new URL(url.pathname + url.search, oc.url), req),
+        );
+      }
       if (
         helper && holding &&
         url.pathname === `/session/${helper.child.nativeID}/message`
@@ -141,9 +177,25 @@ export async function nativeMessageScenario(
       points,
       snapshots,
       childReads,
+      mutations,
+      mutationDetails,
     }),
     release,
     control(action: "hold" | "release" | "freeze" | "thaw", id?: string) {
+      if (profile === "revert-native") {
+        if (action === "hold") {
+          if (!["revert", "unrevert"].includes(id ?? "")) {
+            throw new Error("Unknown revert gate");
+          }
+          mutationPath = id;
+          mutationGate = Promise.withResolvers<void>();
+        } else if (action === "release") {
+          mutationGate?.resolve();
+          mutationPath = undefined;
+        } else if (action === "freeze") rejectRevert = true;
+        else if (action === "thaw") rejectRevert = false;
+        return;
+      }
       if (action === "release") release();
       else if (action === "hold") sessionID = id;
       else if (action === "freeze") {

@@ -6,6 +6,25 @@ export type Json = null | boolean | number | string | Json[] | {
 };
 export type Profile =
   | "ordinary"
+  | "revert-native"
+  | "sessions-tasks"
+  | "sessions-discovery"
+  | "contract-sessions-inbox"
+  | "contract-sessions-panel"
+  | "contract-sessions-memory"
+  | "contract-sessions-membership"
+  | "contract-sessions-hierarchy"
+  | "contract-sessions-axiom"
+  | "contract-sessions-phantom"
+  | "contract-sessions-close"
+  | "contract-sessions-direct"
+  | "contract-sessions-resurrection"
+  | "contract-sessions-unknown"
+  | "contract-sessions-summary"
+  | "contract-sessions-window"
+  | "contract-sessions-catalog"
+  | "contract-sessions-merge"
+  | "contract-sessions-tabs"
   | "composer-pickers"
   | "composer-applied"
   | "composer-selection"
@@ -131,6 +150,7 @@ export interface Commands {
       | "succeed"
       | "stop";
     sessionID?: string;
+    target?: "revert" | "unrevert" | "backgrounds" | "summarize" | "tabs-pin";
   };
   stop: Record<string, never>;
 }
@@ -197,7 +217,7 @@ export function request(value: unknown): ControlRequest {
     auxiliary: ["lease", "kind"],
     writeProjectFiles: ["lease", "files"],
     restart: ["lease", "target"],
-    scenario: ["lease", "action", "sessionID"],
+    scenario: ["lease", "action", "sessionID", "target"],
     stop: [],
   };
   if (
@@ -216,6 +236,25 @@ export function request(value: unknown): ControlRequest {
       if (
         ![
           "ordinary",
+          "revert-native",
+          "sessions-tasks",
+          "sessions-discovery",
+          "contract-sessions-inbox",
+          "contract-sessions-panel",
+          "contract-sessions-memory",
+          "contract-sessions-membership",
+          "contract-sessions-hierarchy",
+          "contract-sessions-axiom",
+          "contract-sessions-phantom",
+          "contract-sessions-close",
+          "contract-sessions-direct",
+          "contract-sessions-resurrection",
+          "contract-sessions-unknown",
+          "contract-sessions-summary",
+          "contract-sessions-window",
+          "contract-sessions-catalog",
+          "contract-sessions-merge",
+          "contract-sessions-tabs",
           "composer-pickers",
           "composer-applied",
           "composer-selection",
@@ -322,7 +361,7 @@ export function request(value: unknown): ControlRequest {
       }
       if (
         p.delay !== undefined &&
-        (typeof p.delay !== "number" || p.delay < 0 || p.delay > 16000)
+        (typeof p.delay !== "number" || p.delay < 0 || p.delay > 20000)
       ) throw new Error("Invalid script cadence");
       if (
         !Array.isArray(p.chunks) ||
@@ -390,12 +429,19 @@ export function request(value: unknown): ControlRequest {
       break;
     case "scenario":
       if (
+        p.target !== undefined &&
+        !["revert", "unrevert", "backgrounds", "summarize", "tabs-pin"]
+          .includes(
+            String(p.target),
+          )
+      ) throw new Error("Unknown scenario target");
+      if (
         !["hold", "release", "freeze", "thaw", "fail", "succeed", "stop"]
           .includes(String(p.action))
       ) throw new Error("Unknown scenario action");
       if (p.sessionID !== undefined) {
         text(p.sessionID);
-        if (!/^ses_[a-zA-Z0-9]+$/.test(p.sessionID)) {
+        if (!/^(?:ses_[a-zA-Z0-9]+|tstv1-[a-zA-Z0-9-]+)$/.test(p.sessionID)) {
           throw new Error("Invalid native scenario session");
         }
       }

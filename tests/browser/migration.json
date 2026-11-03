@@ -71,6 +71,23 @@
         "sourceSha256": "39352a0782fc2ac89e7d88d2f13c240876c78700d01d2aa1d96a472d7d35e1e3",
         "run": "otk-t2-c9-20261102/c/supplemental-first"
       }
+    },
+    {
+      "file": "tests/reuse/shared-controls_test.ts",
+      "area": "sessions",
+      "batch": "A4",
+      "originalTitle": "both resize consumers guard readiness and own cancellation and pending final width",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/sessions/public-ui.spec.ts",
+        "testID": "sessions.public-resizers-readiness-cancel-capture-loss-final-pointer-and-overlapping-saves"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "552078928f2b5ed5a1feb576657de0cb3c5fbc1de12c152a9a9a149eacd26c26",
+        "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
+      }
     }
   ],
   "files": [
@@ -4452,14 +4469,20 @@
               "runner": "legacy",
               "file": "tests/e2e/inbox_test.ts",
               "testID": "legacy.inbox.7d73a648d1b2fde1"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/axiom.spec.ts",
+              "testID": "sessions.inactive-projects-three-required-lights-after-collapsed-reload"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "inbox activity returns inactive projects and all three required lights remain on-screen across reload and the rail"
+              "inbox activity returns inactive projects and all three required lights remain on-screen across reload and the rail",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -4469,9 +4492,9 @@
             "testID": "legacy.inbox.7d73a648d1b2fde1"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "bd8759f156ed6b56eef420059e696ed50e130b12d2ecb63757571832c4693faf",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "32603977084fb7cfbb540abbcfdba5a77d92623dfbea59d5adb3eb9720c19490",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -4483,14 +4506,20 @@
               "runner": "legacy",
               "file": "tests/e2e/inbox_test.ts",
               "testID": "legacy.inbox.3ed13f3b45358055"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/inbox.spec.ts",
+              "testID": "sessions.inbox-clock-ageing-view-action-reset-and-inactive-pause"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "inbox mocked-clock ageing, reduced-colour underlines, visit resets on opening and acting, and inactive clock pause"
+              "inbox mocked-clock ageing, reduced-colour underlines, visit resets on opening and acting, and inactive clock pause",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -4500,9 +4529,9 @@
             "testID": "legacy.inbox.3ed13f3b45358055"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "bd8759f156ed6b56eef420059e696ed50e130b12d2ecb63757571832c4693faf",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "32603977084fb7cfbb540abbcfdba5a77d92623dfbea59d5adb3eb9720c19490",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -4511,29 +4540,30 @@
           "proofBoundary": "B+V+L: supervision, guarded navigation, server merge; global variants isolated",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/inbox_test.ts",
-              "testID": "legacy.inbox.3be0f1ed60cd9251"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/inbox.spec.ts",
+              "testID": "sessions.inbox-add-empty-scanned-project-width-reload-and-retained-draft"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "inbox adds empty and scanned projects, persists layout bounds and keeps centre navigation guarded"
+              "inbox adds empty and scanned projects, persists layout bounds and keeps centre navigation guarded",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/inbox_test.ts",
-            "testID": "legacy.inbox.3be0f1ed60cd9251"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/inbox.spec.ts",
+            "testID": "sessions.inbox-add-empty-scanned-project-width-reload-and-retained-draft"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "bd8759f156ed6b56eef420059e696ed50e130b12d2ecb63757571832c4693faf",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -4542,29 +4572,30 @@
           "proofBoundary": "B+V+L: supervision, guarded navigation, server merge; global variants isolated",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/inbox_test.ts",
-              "testID": "legacy.inbox.0f4d35b6ddf99085"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/inbox.spec.ts",
+              "testID": "sessions.merged-servers-duplicate-name-labels-order-status-and-reload"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "inbox merges servers with duplicate-name machine labels and stable order through status changes"
+              "inbox merges servers with duplicate-name machine labels and stable order through status changes",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/inbox_test.ts",
-            "testID": "legacy.inbox.0f4d35b6ddf99085"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/inbox.spec.ts",
+            "testID": "sessions.merged-servers-duplicate-name-labels-order-status-and-reload"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "bd8759f156ed6b56eef420059e696ed50e130b12d2ecb63757571832c4693faf",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -4573,29 +4604,30 @@
           "proofBoundary": "B+V+L: supervision, guarded navigation, server merge; global variants isolated",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/inbox_test.ts",
-              "testID": "legacy.inbox.cda2611d9411d3b6"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/inbox.spec.ts",
+              "testID": "sessions.reopening-selected-session-resets-visit-without-url-or-draft-replacement"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "opening the already-selected session resets its visit without replacing the URL or draft"
+              "opening the already-selected session resets its visit without replacing the URL or draft",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/inbox_test.ts",
-            "testID": "legacy.inbox.cda2611d9411d3b6"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/inbox.spec.ts",
+            "testID": "sessions.reopening-selected-session-resets-visit-without-url-or-draft-replacement"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "bd8759f156ed6b56eef420059e696ed50e130b12d2ecb63757571832c4693faf",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -7396,14 +7428,20 @@
               "runner": "legacy",
               "file": "tests/e2e/panels_test.ts",
               "testID": "legacy.panels.1f0d8cd08180b67f"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/sessions/panels.spec.ts",
+              "testID": "sessions.registered-panel-lifetime-native-resize-persistence-and-fallback"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "registered panel views, width and collapsed state persist in host preferences; unavailable capabilities stay hidden"
+              "registered panel views, width and collapsed state persist in host preferences; unavailable capabilities stay hidden",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -7413,9 +7451,9 @@
             "testID": "legacy.panels.1f0d8cd08180b67f"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "7ac25666a650324201ed5193faa6da828c69a0137012ee2169261fe3d2ceaa89",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "10c8ebaca79c9aa69330b0572d0179b8d25428d4c0ffb3eec8245f5db609be4b",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -7427,14 +7465,20 @@
               "runner": "legacy",
               "file": "tests/e2e/panels_test.ts",
               "testID": "legacy.panels.c44b2165da787ce9"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/hierarchy.spec.ts",
+              "testID": "sessions.task-hierarchy-filter-preview-draft-promotion-and-reload"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "Sessions groups the selected project's parent-child tree by task, filters titles and opens previews and solid tasks"
+              "Sessions groups the selected project's parent-child tree by task, filters titles and opens previews and solid tasks",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -7444,9 +7488,9 @@
             "testID": "legacy.panels.c44b2165da787ce9"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "7ac25666a650324201ed5193faa6da828c69a0137012ee2169261fe3d2ceaa89",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "10c8ebaca79c9aa69330b0572d0179b8d25428d4c0ffb3eec8245f5db609be4b",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -7924,6 +7968,11 @@
               "runner": "legacy",
               "file": "tests/e2e/project-catalog_test.ts",
               "testID": "legacy.project-catalog.c2a2d216aed6bb58"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/projects.spec.ts",
+              "testID": "sessions.project-catalog-discovery-activity-creation-and-collapse"
             }
           ],
           "retainedCoverage": {
@@ -7931,7 +7980,8 @@
               "otk-dark"
             ],
             "states": [
-              "project catalog sections, discovery lights, viewing, creation and persisted collapse in otk-dark"
+              "project catalog sections, discovery lights, viewing, creation and persisted collapse in otk-dark",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -7941,9 +7991,9 @@
             "testID": "legacy.project-catalog.c2a2d216aed6bb58"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "eff7fd52d6aca851595bc36a8e252b0a60d442cbfb8eb4b19629720b74128b9d",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "0769abe8f728a48b49d50b7e597652a602c75cdfc23e1102103e9341a724a11f",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -7955,14 +8005,21 @@
               "runner": "legacy",
               "file": "tests/e2e/project-catalog_test.ts",
               "testID": "legacy.project-catalog.2879a3858f58d123"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/projects.spec.ts",
+              "testID": "sessions.project-catalog-discovery-activity-creation-and-collapse"
             }
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
               "otk-light"
             ],
             "states": [
-              "project catalog sections, discovery lights, viewing, creation and persisted collapse in otk-light"
+              "project catalog sections, discovery lights, viewing, creation and persisted collapse in otk-light",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -7972,9 +8029,9 @@
             "testID": "legacy.project-catalog.2879a3858f58d123"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "eff7fd52d6aca851595bc36a8e252b0a60d442cbfb8eb4b19629720b74128b9d",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "0769abe8f728a48b49d50b7e597652a602c75cdfc23e1102103e9341a724a11f",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -7983,29 +8040,30 @@
           "proofBoundary": "B+V+L: real discovery/creation and zero native wake; global bootstrap isolated",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/project-catalog_test.ts",
-              "testID": "legacy.project-catalog.f2dcf30bb974b020"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/discovery.spec.ts",
+              "testID": "sessions.idle-discovered-catalog-zero-native-instance-wake"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "idle discovered catalog renders without creating a native opencode instance"
+              "idle discovered catalog renders without creating a native opencode instance",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/project-catalog_test.ts",
-            "testID": "legacy.project-catalog.f2dcf30bb974b020"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/discovery.spec.ts",
+            "testID": "sessions.idle-discovered-catalog-zero-native-instance-wake"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "eff7fd52d6aca851595bc36a8e252b0a60d442cbfb8eb4b19629720b74128b9d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -8022,29 +8080,30 @@
           "proofBoundary": "B+L: session/task restoration, missing/closed fallback and reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/project-memory_test.ts",
-              "testID": "legacy.project-memory.0b24e9cc0b83e85b"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/memory.spec.ts",
+              "testID": "sessions.project-memory-session-task-reload-closed-and-missing-fallback"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "project switches restore the last session and task across reload; closed and missing sessions fall back"
+              "project switches restore the last session and task across reload; closed and missing sessions fall back",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/project-memory_test.ts",
-            "testID": "legacy.project-memory.0b24e9cc0b83e85b"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/memory.spec.ts",
+            "testID": "sessions.project-memory-session-task-reload-closed-and-missing-fallback"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "2c582a2188c22a980b9adbf7fea10ed48751da71b80a46757eda6be965ab1d56",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -8061,9 +8120,9 @@
           "proofBoundary": "B+L: retire held scan before current-connection add",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/project-scan_test.ts",
-              "testID": "legacy.project-scan.cc10e5a52c246dd4"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/projects.spec.ts",
+              "testID": "sessions.project-scan-retires-disconnected-work-current-connection-add"
             }
           ],
           "retainedCoverage": {
@@ -8071,19 +8130,20 @@
               "otk-dark"
             ],
             "states": [
-              "project dialog retires a disconnected scan and reloads its current connection before adding the chosen directory in otk-dark"
+              "project dialog retires a disconnected scan and reloads its current connection before adding the chosen directory in otk-dark",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/project-scan_test.ts",
-            "testID": "legacy.project-scan.cc10e5a52c246dd4"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/projects.spec.ts",
+            "testID": "sessions.project-scan-retires-disconnected-work-current-connection-add"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "d85b4d13e391e95633d0390a7f7bc96bfde2e5acdd8509f7939f47384468594d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -8092,29 +8152,30 @@
           "proofBoundary": "B+L: retire held scan before current-connection add",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/project-scan_test.ts",
-              "testID": "legacy.project-scan.34011b860301f42b"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/projects.spec.ts",
+              "testID": "sessions.project-scan-retires-disconnected-work-current-connection-add"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark"
             ],
             "states": [
-              "project dialog retires a disconnected scan and reloads its current connection before adding the chosen directory in otk-light"
+              "project dialog retires a disconnected scan and reloads its current connection before adding the chosen directory in otk-light",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/project-scan_test.ts",
-            "testID": "legacy.project-scan.34011b860301f42b"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/projects.spec.ts",
+            "testID": "sessions.project-scan-retires-disconnected-work-current-connection-add"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "d85b4d13e391e95633d0390a7f7bc96bfde2e5acdd8509f7939f47384468594d",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -9157,29 +9218,30 @@
           "proofBoundary": "B+V+L: real shared-file rollback/restore, dirty drafts and pending/error strip",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/revert_strip_test.ts",
-              "testID": "legacy.revert_strip.b407b610580d7f34"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/revert/journeys.spec.ts",
+              "testID": "revert.shared-directory-native-rollback-restore-other-edit"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "shared-directory revert follows native file rollback without confirmation and restore recovers the other session's edit"
+              "shared-directory revert follows native file rollback without confirmation and restore recovers the other session's edit",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/revert_strip_test.ts",
-            "testID": "legacy.revert_strip.b407b610580d7f34"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/revert/journeys.spec.ts",
+            "testID": "revert.shared-directory-native-rollback-restore-other-edit"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "7a24fc51fd24ae9f4a1840bce1a6482fae55b22b81c9ecb92e1b7c9c41fe57af",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -9191,6 +9253,11 @@
               "runner": "legacy",
               "file": "tests/e2e/revert_strip_test.ts",
               "testID": "legacy.revert_strip.3c2eb4ed54aa9a29"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/revert/journeys.spec.ts",
+              "testID": "revert.files-conversation-copy-reload-restore-and-commit"
             }
           ],
           "retainedCoverage": {
@@ -9198,19 +9265,23 @@
               "otk-dark"
             ],
             "states": [
-              "revert strip restores files and conversation, survives reload and commits on the next prompt (otk-dark)"
+              "revert strip restores files and conversation, survives reload and commits on the next prompt (otk-dark)",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/session-revert_test.ts",
+            "testID": "strip projects authoritative counts, bounded prompts and files including older-server fallback"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/revert_strip_test.ts",
             "testID": "legacy.revert_strip.3c2eb4ed54aa9a29"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "7a24fc51fd24ae9f4a1840bce1a6482fae55b22b81c9ecb92e1b7c9c41fe57af",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "e3de6debce5904e5dd6dec215b1bc658e173f295a18ce71c4bc187516b34ae45",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -9222,26 +9293,36 @@
               "runner": "legacy",
               "file": "tests/e2e/revert_strip_test.ts",
               "testID": "legacy.revert_strip.ffa6a033c8de71ab"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/revert/journeys.spec.ts",
+              "testID": "revert.files-conversation-copy-reload-restore-and-commit"
             }
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
               "otk-light"
             ],
             "states": [
-              "revert strip restores files and conversation, survives reload and commits on the next prompt (otk-light)"
+              "revert strip restores files and conversation, survives reload and commits on the next prompt (otk-light)",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/session-revert_test.ts",
+            "testID": "strip projects authoritative counts, bounded prompts and files including older-server fallback"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/revert_strip_test.ts",
             "testID": "legacy.revert_strip.ffa6a033c8de71ab"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "7a24fc51fd24ae9f4a1840bce1a6482fae55b22b81c9ecb92e1b7c9c41fe57af",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "e3de6debce5904e5dd6dec215b1bc658e173f295a18ce71c4bc187516b34ae45",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -9253,14 +9334,21 @@
               "runner": "legacy",
               "file": "tests/e2e/revert_strip_test.ts",
               "testID": "legacy.revert_strip.e35568b2184f5a44"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/revert/journeys.spec.ts",
+              "testID": "revert.pending-error-owned-feedback-retry"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "revert pending and error stay joined to the composer and retry clears failure"
+              "revert pending and error stay joined to the composer and retry clears failure",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -9270,9 +9358,9 @@
             "testID": "legacy.revert_strip.e35568b2184f5a44"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "7a24fc51fd24ae9f4a1840bce1a6482fae55b22b81c9ecb92e1b7c9c41fe57af",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "e3de6debce5904e5dd6dec215b1bc658e173f295a18ce71c4bc187516b34ae45",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -9693,29 +9781,30 @@
           "proofBoundary": "B+V+L: real compact/model/queue, inclusive fork, armed delete/rename",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-actions_test.ts",
-              "testID": "legacy.session-actions.8bc010ed1bd5582c"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/actions.spec.ts",
+              "testID": "sessions.compact-real-duration-queued-behind-current-work"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "compact uses the next-prompt model, survives a 20-second summary and queues behind current work"
+              "compact uses the next-prompt model, survives a 20-second summary and queues behind current work",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-actions_test.ts",
-            "testID": "legacy.session-actions.8bc010ed1bd5582c"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/actions.spec.ts",
+            "testID": "sessions.compact-real-duration-queued-behind-current-work"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b29889a95d6d5617f3c4b3286f17af99cd536d9c9f0043269945572c3e2f1525",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -9724,29 +9813,30 @@
           "proofBoundary": "B+V+L: real compact/model/queue, inclusive fork, armed delete/rename",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-actions_test.ts",
-              "testID": "legacy.session-actions.a9c3e28be2cc1bf2"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/actions.spec.ts",
+              "testID": "sessions.compact-native-http-failure-one-owned-feedback"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "compact HTTP failure reaches ordinary session error presentation"
+              "compact HTTP failure reaches ordinary session error presentation",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-actions_test.ts",
-            "testID": "legacy.session-actions.a9c3e28be2cc1bf2"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/actions.spec.ts",
+            "testID": "sessions.compact-native-http-failure-one-owned-feedback"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b29889a95d6d5617f3c4b3286f17af99cd536d9c9f0043269945572c3e2f1525",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -9758,6 +9848,11 @@
               "runner": "legacy",
               "file": "tests/e2e/session-actions_test.ts",
               "testID": "legacy.session-actions.8513d6e4cfa00d3c"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/actions.spec.ts",
+              "testID": "sessions.inclusive-grouped-fork-shared-files-original-draft-and-full-fork"
             }
           ],
           "retainedCoverage": {
@@ -9765,7 +9860,8 @@
               "otk-dark"
             ],
             "states": [
-              "fork hover actions retain grouped replies and fork notes in otk-dark"
+              "fork hover actions retain grouped replies and fork notes in otk-dark",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -9775,9 +9871,9 @@
             "testID": "legacy.session-actions.8513d6e4cfa00d3c"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "b29889a95d6d5617f3c4b3286f17af99cd536d9c9f0043269945572c3e2f1525",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "65a0ce10f7df468cb4066d4a32aae3917e01bed04d5ac8301a9456dddd4ef328",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -9789,14 +9885,21 @@
               "runner": "legacy",
               "file": "tests/e2e/session-actions_test.ts",
               "testID": "legacy.session-actions.7db64225ca57f75a"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/actions.spec.ts",
+              "testID": "sessions.inclusive-grouped-fork-shared-files-original-draft-and-full-fork"
             }
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
               "otk-light"
             ],
             "states": [
-              "fork hover actions retain grouped replies and fork notes in otk-light"
+              "fork hover actions retain grouped replies and fork notes in otk-light",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -9806,9 +9909,9 @@
             "testID": "legacy.session-actions.7db64225ca57f75a"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "b29889a95d6d5617f3c4b3286f17af99cd536d9c9f0043269945572c3e2f1525",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "65a0ce10f7df468cb4066d4a32aae3917e01bed04d5ac8301a9456dddd4ef328",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -9817,29 +9920,30 @@
           "proofBoundary": "B+V+L: real compact/model/queue, inclusive fork, armed delete/rename",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-actions_test.ts",
-              "testID": "legacy.session-actions.6dfa6681499c8907"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/actions.spec.ts",
+              "testID": "sessions.working-family-delete-aborts-before-removal-and-retains-details"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "working family deletion names helpers and aborts before native removal"
+              "working family deletion names helpers and aborts before native removal",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-actions_test.ts",
-            "testID": "legacy.session-actions.6dfa6681499c8907"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/actions.spec.ts",
+            "testID": "sessions.working-family-delete-aborts-before-removal-and-retains-details"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "b29889a95d6d5617f3c4b3286f17af99cd536d9c9f0043269945572c3e2f1525",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -9851,6 +9955,11 @@
               "runner": "legacy",
               "file": "tests/e2e/session-actions_test.ts",
               "testID": "legacy.session-actions.c4a019f31d8b4260"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/actions.spec.ts",
+              "testID": "sessions.rename-only-invoking-tab-chip-row-cancel-empty-blur-and-reload"
             }
           ],
           "retainedCoverage": {
@@ -9858,7 +9967,8 @@
               "otk-dark"
             ],
             "states": [
-              "rename edits only its tab, chip or row and persists after reload in otk-dark"
+              "rename edits only its tab, chip or row and persists after reload in otk-dark",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -9868,9 +9978,9 @@
             "testID": "legacy.session-actions.c4a019f31d8b4260"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "b29889a95d6d5617f3c4b3286f17af99cd536d9c9f0043269945572c3e2f1525",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "65a0ce10f7df468cb4066d4a32aae3917e01bed04d5ac8301a9456dddd4ef328",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -9882,6 +9992,11 @@
               "runner": "legacy",
               "file": "tests/e2e/session-actions_test.ts",
               "testID": "legacy.session-actions.965e46998b7bc0bf"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/actions.spec.ts",
+              "testID": "sessions.delete-dirty-guard-pointer-keyboard-disarm-native-removal"
             }
           ],
           "retainedCoverage": {
@@ -9889,7 +10004,8 @@
               "otk-dark"
             ],
             "states": [
-              "delete protects lost drafts, disarms on navigation and removes native sessions in otk-dark"
+              "delete protects lost drafts, disarms on navigation and removes native sessions in otk-dark",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -9899,9 +10015,9 @@
             "testID": "legacy.session-actions.965e46998b7bc0bf"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "b29889a95d6d5617f3c4b3286f17af99cd536d9c9f0043269945572c3e2f1525",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "65a0ce10f7df468cb4066d4a32aae3917e01bed04d5ac8301a9456dddd4ef328",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -9913,14 +10029,21 @@
               "runner": "legacy",
               "file": "tests/e2e/session-actions_test.ts",
               "testID": "legacy.session-actions.9ad7ab89e405dea2"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/actions.spec.ts",
+              "testID": "sessions.rename-only-invoking-tab-chip-row-cancel-empty-blur-and-reload"
             }
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
               "otk-light"
             ],
             "states": [
-              "rename edits only its tab, chip or row and persists after reload in otk-light"
+              "rename edits only its tab, chip or row and persists after reload in otk-light",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -9930,9 +10053,9 @@
             "testID": "legacy.session-actions.9ad7ab89e405dea2"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "b29889a95d6d5617f3c4b3286f17af99cd536d9c9f0043269945572c3e2f1525",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "65a0ce10f7df468cb4066d4a32aae3917e01bed04d5ac8301a9456dddd4ef328",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -9944,14 +10067,21 @@
               "runner": "legacy",
               "file": "tests/e2e/session-actions_test.ts",
               "testID": "legacy.session-actions.4a2029e9e52d2d9c"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/actions.spec.ts",
+              "testID": "sessions.delete-dirty-guard-pointer-keyboard-disarm-native-removal"
             }
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
               "otk-light"
             ],
             "states": [
-              "delete protects lost drafts, disarms on navigation and removes native sessions in otk-light"
+              "delete protects lost drafts, disarms on navigation and removes native sessions in otk-light",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -9961,9 +10091,9 @@
             "testID": "legacy.session-actions.4a2029e9e52d2d9c"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "b29889a95d6d5617f3c4b3286f17af99cd536d9c9f0043269945572c3e2f1525",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "65a0ce10f7df468cb4066d4a32aae3917e01bed04d5ac8301a9456dddd4ef328",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -9975,14 +10105,21 @@
               "runner": "legacy",
               "file": "tests/e2e/session-actions_test.ts",
               "testID": "legacy.session-actions.695c4f0b09b4c634"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/actions.spec.ts",
+              "testID": "sessions.rename-only-invoking-tab-chip-row-cancel-empty-blur-and-reload"
             }
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
               "otk-light-stone"
             ],
             "states": [
-              "rename edits only its tab, chip or row and persists after reload in otk-light-stone"
+              "rename edits only its tab, chip or row and persists after reload in otk-light-stone",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -9992,9 +10129,9 @@
             "testID": "legacy.session-actions.695c4f0b09b4c634"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "b29889a95d6d5617f3c4b3286f17af99cd536d9c9f0043269945572c3e2f1525",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "65a0ce10f7df468cb4066d4a32aae3917e01bed04d5ac8301a9456dddd4ef328",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10006,14 +10143,21 @@
               "runner": "legacy",
               "file": "tests/e2e/session-actions_test.ts",
               "testID": "legacy.session-actions.78dff3f7c5121136"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/actions.spec.ts",
+              "testID": "sessions.delete-dirty-guard-pointer-keyboard-disarm-native-removal"
             }
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
               "otk-light-stone"
             ],
             "states": [
-              "delete protects lost drafts, disarms on navigation and removes native sessions in otk-light-stone"
+              "delete protects lost drafts, disarms on navigation and removes native sessions in otk-light-stone",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -10023,9 +10167,9 @@
             "testID": "legacy.session-actions.78dff3f7c5121136"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "b29889a95d6d5617f3c4b3286f17af99cd536d9c9f0043269945572c3e2f1525",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "65a0ce10f7df468cb4066d4a32aae3917e01bed04d5ac8301a9456dddd4ef328",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -10042,9 +10186,9 @@
           "proofBoundary": "B+L: close preserves native record and mandatory activity",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-close_test.ts",
-              "testID": "legacy.session-close.551b267124541b34"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/close.spec.ts",
+              "testID": "sessions.close-surfaces-membership-and-mandatory-phantom"
             }
           ],
           "retainedCoverage": {
@@ -10052,19 +10196,20 @@
               "otk-dark"
             ],
             "states": [
-              "S1 close tab, task row, helper and transcript preserves Sessions and mandatory activity in otk-dark"
+              "S1 close tab, task row, helper and transcript preserves Sessions and mandatory activity in otk-dark",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-close_test.ts",
-            "testID": "legacy.session-close.551b267124541b34"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/close.spec.ts",
+            "testID": "sessions.close-surfaces-membership-and-mandatory-phantom"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "0c804c2b59f50c4e4fa2b57f8d7d57a9c5a268b4881f2bf32e37e2b9b9779ac3",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10073,29 +10218,30 @@
           "proofBoundary": "B+L: close preserves native record and mandatory activity",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-close_test.ts",
-              "testID": "legacy.session-close.205497df3ad5c333"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/close.spec.ts",
+              "testID": "sessions.close-surfaces-membership-and-mandatory-phantom"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark"
             ],
             "states": [
-              "S1 close tab, task row, helper and transcript preserves Sessions and mandatory activity in otk-light"
+              "S1 close tab, task row, helper and transcript preserves Sessions and mandatory activity in otk-light",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-close_test.ts",
-            "testID": "legacy.session-close.205497df3ad5c333"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/close.spec.ts",
+            "testID": "sessions.close-surfaces-membership-and-mandatory-phantom"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "0c804c2b59f50c4e4fa2b57f8d7d57a9c5a268b4881f2bf32e37e2b9b9779ac3",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10104,29 +10250,30 @@
           "proofBoundary": "B+L: close preserves native record and mandatory activity",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-close_test.ts",
-              "testID": "legacy.session-close.1e33d2069ae1f706"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/close.spec.ts",
+              "testID": "sessions.native-close-preserves-record-and-reopens"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "S1 closing a real opencode session preserves its record and reopens from Sessions"
+              "S1 closing a real opencode session preserves its record and reopens from Sessions",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-close_test.ts",
-            "testID": "legacy.session-close.1e33d2069ae1f706"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/close.spec.ts",
+            "testID": "sessions.native-close-preserves-record-and-reopens"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "0c804c2b59f50c4e4fa2b57f8d7d57a9c5a268b4881f2bf32e37e2b9b9779ac3",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -10146,14 +10293,21 @@
               "runner": "legacy",
               "file": "tests/e2e/session-digest_test.ts",
               "testID": "legacy.session-digest.d1f6f23b803f49fe"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/digest.spec.ts",
+              "testID": "sessions.native-summaries-lazy-detail-tombstone-retained-task-metadata-only"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "shipped summaries update rows and footers without detail; deletion retains task and opens metadata-only details"
+              "shipped summaries update rows and footers without detail; deletion retains task and opens metadata-only details",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -10163,9 +10317,9 @@
             "testID": "legacy.session-digest.d1f6f23b803f49fe"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "966e914353ba2604a01895589e87bf173a00464ccafd3c152db2c6b633fe05ba",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "df926dd7129c5935b92a15d1c7c619e54a83d5a01789f8672c66bc24cae67e43",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10174,29 +10328,30 @@
           "proofBoundary": "B+C+V+L: final native totals, tombstones/resurrection, honest unknown/detail",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-digest_test.ts",
-              "testID": "legacy.session-digest.eff40f427ce31fd5"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/sessions/digest.spec.ts",
+              "testID": "sessions.tombstone-releases-content-resurrection-reacquires-once-with-draft"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "accepted tombstones release content and resurrection reacquires once while retaining the draft"
+              "accepted tombstones release content and resurrection reacquires once while retaining the draft",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-digest_test.ts",
-            "testID": "legacy.session-digest.eff40f427ce31fd5"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/sessions/digest.spec.ts",
+            "testID": "sessions.tombstone-releases-content-resurrection-reacquires-once-with-draft"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "966e914353ba2604a01895589e87bf173a00464ccafd3c152db2c6b633fe05ba",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10205,29 +10360,30 @@
           "proofBoundary": "B+C+V+L: final native totals, tombstones/resurrection, honest unknown/detail",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-digest_test.ts",
-              "testID": "legacy.session-digest.88aa399fd5b4817f"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/digest.spec.ts",
+              "testID": "sessions.external-deletion-keeps-dirty-permission-normal-release-guard"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "external deletion retains dirty permission input and closing still uses the normal release guard"
+              "external deletion retains dirty permission input and closing still uses the normal release guard",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-digest_test.ts",
-            "testID": "legacy.session-digest.88aa399fd5b4817f"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/digest.spec.ts",
+            "testID": "sessions.external-deletion-keeps-dirty-permission-normal-release-guard"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "966e914353ba2604a01895589e87bf173a00464ccafd3c152db2c6b633fe05ba",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10239,6 +10395,11 @@
               "runner": "legacy",
               "file": "tests/e2e/session-digest_test.ts",
               "testID": "legacy.session-digest.cf9635a15ba0961b"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/sessions/digest.spec.ts",
+              "testID": "sessions.unknown-summary-rejected-detail-has-no-invented-zero"
             }
           ],
           "retainedCoverage": {
@@ -10246,7 +10407,8 @@
               "otk-dark"
             ],
             "states": [
-              "unknown summaries and rejected detail never render a fictitious zero ledger (otk-dark)"
+              "unknown summaries and rejected detail never render a fictitious zero ledger (otk-dark)",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -10256,9 +10418,9 @@
             "testID": "legacy.session-digest.cf9635a15ba0961b"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "966e914353ba2604a01895589e87bf173a00464ccafd3c152db2c6b633fe05ba",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "df926dd7129c5935b92a15d1c7c619e54a83d5a01789f8672c66bc24cae67e43",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10270,14 +10432,21 @@
               "runner": "legacy",
               "file": "tests/e2e/session-digest_test.ts",
               "testID": "legacy.session-digest.7c3660546273d8aa"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/sessions/digest.spec.ts",
+              "testID": "sessions.unknown-summary-rejected-detail-has-no-invented-zero"
             }
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
               "otk-light"
             ],
             "states": [
-              "unknown summaries and rejected detail never render a fictitious zero ledger (otk-light)"
+              "unknown summaries and rejected detail never render a fictitious zero ledger (otk-light)",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -10287,9 +10456,9 @@
             "testID": "legacy.session-digest.7c3660546273d8aa"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "966e914353ba2604a01895589e87bf173a00464ccafd3c152db2c6b633fe05ba",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "df926dd7129c5935b92a15d1c7c619e54a83d5a01789f8672c66bc24cae67e43",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10298,29 +10467,30 @@
           "proofBoundary": "B+C+V+L: final native totals, tombstones/resurrection, honest unknown/detail",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-digest_test.ts",
-              "testID": "legacy.session-digest.6c261eb81abad22f"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/sessions/digest.spec.ts",
+              "testID": "sessions.summary-only-facts-no-dead-usage-action"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "summary-only backends show facts without a dead usage control or context action"
+              "summary-only backends show facts without a dead usage control or context action",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-digest_test.ts",
-            "testID": "legacy.session-digest.6c261eb81abad22f"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/sessions/digest.spec.ts",
+            "testID": "sessions.summary-only-facts-no-dead-usage-action"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "966e914353ba2604a01895589e87bf173a00464ccafd3c152db2c6b633fe05ba",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -10337,29 +10507,33 @@
           "proofBoundary": "B+L: qualified identities across native create/helper/reload/canonical URL",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-ids_test.ts",
-              "testID": "legacy.session-ids.33252e7a0578fb26"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/identities.spec.ts",
+              "testID": "sessions.native-qualified-identities-helper-cold-reload-and-canonical-route"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "qualified identities survive native creation, prompt, external helper, cold reload and canonical navigation"
+              "qualified identities survive native creation, prompt, external helper, cold reload and canonical navigation",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/session-id-links_test.ts",
+            "testID": "session routes admit only canonical qualified session and root identities"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-ids_test.ts",
-            "testID": "legacy.session-ids.33252e7a0578fb26"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/identities.spec.ts",
+            "testID": "sessions.native-qualified-identities-helper-cold-reload-and-canonical-route"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "3abf633c21f91c2311d52555d1fd60115cba3d6476af9cbd3a5eedec24828cb7",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -10446,9 +10620,9 @@
           "proofBoundary": "B+C+V: held direct-route metadata, measured focus/menu/filter, collapsed AXIOM reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-window_test.ts",
-              "testID": "legacy.session-window.c64833b93e9e276a"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/sessions/window.spec.ts",
+              "testID": "sessions.direct-route-task-metadata-before-hierarchy-held-transcript-independent-paint"
             }
           ],
           "retainedCoverage": {
@@ -10456,19 +10630,20 @@
               "otk-dark"
             ],
             "states": [
-              "direct-route Sessions waits for task metadata and paints while the selected transcript is held (otk-dark)"
+              "direct-route Sessions waits for task metadata and paints while the selected transcript is held (otk-dark)",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-window_test.ts",
-            "testID": "legacy.session-window.c64833b93e9e276a"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/sessions/window.spec.ts",
+            "testID": "sessions.direct-route-task-metadata-before-hierarchy-held-transcript-independent-paint"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "8fc1afc83b3d66c2f4656b34d62200d12c190439e31f1261b5bcdea4675dfd29",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10477,29 +10652,30 @@
           "proofBoundary": "B+C+V: held direct-route metadata, measured focus/menu/filter, collapsed AXIOM reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-window_test.ts",
-              "testID": "legacy.session-window.cf85d32c6c612056"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/sessions/window.spec.ts",
+              "testID": "sessions.direct-route-task-metadata-before-hierarchy-held-transcript-independent-paint"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark"
             ],
             "states": [
-              "direct-route Sessions waits for task metadata and paints while the selected transcript is held (otk-light)"
+              "direct-route Sessions waits for task metadata and paints while the selected transcript is held (otk-light)",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-window_test.ts",
-            "testID": "legacy.session-window.cf85d32c6c612056"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/sessions/window.spec.ts",
+            "testID": "sessions.direct-route-task-metadata-before-hierarchy-held-transcript-independent-paint"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "8fc1afc83b3d66c2f4656b34d62200d12c190439e31f1261b5bcdea4675dfd29",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10508,29 +10684,30 @@
           "proofBoundary": "B+C+V: held direct-route metadata, measured focus/menu/filter, collapsed AXIOM reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-window_test.ts",
-              "testID": "legacy.session-window.be134db7bc5d49e1"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/sessions/window.spec.ts",
+              "testID": "sessions.virtual-list-bounded-dom-no-row-body-reads-unmounts-on-collapse"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "active Sessions windows its DOM and releases it on collapse"
+              "active Sessions windows its DOM and releases it on collapse",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-window_test.ts",
-            "testID": "legacy.session-window.be134db7bc5d49e1"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/sessions/window.spec.ts",
+            "testID": "sessions.virtual-list-bounded-dom-no-row-body-reads-unmounts-on-collapse"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "8fc1afc83b3d66c2f4656b34d62200d12c190439e31f1261b5bcdea4675dfd29",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10542,6 +10719,11 @@
               "runner": "legacy",
               "file": "tests/e2e/session-window_test.ts",
               "testID": "legacy.session-window.1cd1e91207b04499"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/sessions/window.spec.ts",
+              "testID": "sessions.measured-window-identity-focus-menu-search-anchor-editor-and-scope"
             }
           ],
           "retainedCoverage": {
@@ -10549,7 +10731,8 @@
               "otk-dark"
             ],
             "states": [
-              "Sessions retains measured identity, focus, menu, search and scope in otk-dark"
+              "Sessions retains measured identity, focus, menu, search and scope in otk-dark",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -10559,9 +10742,9 @@
             "testID": "legacy.session-window.1cd1e91207b04499"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "8fc1afc83b3d66c2f4656b34d62200d12c190439e31f1261b5bcdea4675dfd29",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "ff2b9a07e7ea82aa26c7e0d86428dc4948ed80c2131a67369473e5ce438ca293",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10573,14 +10756,21 @@
               "runner": "legacy",
               "file": "tests/e2e/session-window_test.ts",
               "testID": "legacy.session-window.c906feeaace23004"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/sessions/window.spec.ts",
+              "testID": "sessions.measured-window-identity-focus-menu-search-anchor-editor-and-scope"
             }
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
               "otk-light"
             ],
             "states": [
-              "Sessions retains measured identity, focus, menu, search and scope in otk-light"
+              "Sessions retains measured identity, focus, menu, search and scope in otk-light",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -10590,9 +10780,9 @@
             "testID": "legacy.session-window.c906feeaace23004"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "8fc1afc83b3d66c2f4656b34d62200d12c190439e31f1261b5bcdea4675dfd29",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "ff2b9a07e7ea82aa26c7e0d86428dc4948ed80c2131a67369473e5ce438ca293",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10601,9 +10791,9 @@
           "proofBoundary": "B+C+V: held direct-route metadata, measured focus/menu/filter, collapsed AXIOM reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-window_test.ts",
-              "testID": "legacy.session-window.d14444f6582ff1f3"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/axiom.spec.ts",
+              "testID": "sessions.axiom-filtered-offscreen-unmounted-collapsed-reload-mandatory-tabs"
             }
           ],
           "retainedCoverage": {
@@ -10611,19 +10801,20 @@
               "otk-dark"
             ],
             "states": [
-              "AXIOM activity survives filtered offscreen unmounted Sessions and collapsed reload in otk-dark"
+              "AXIOM activity survives filtered offscreen unmounted Sessions and collapsed reload in otk-dark",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-window_test.ts",
-            "testID": "legacy.session-window.d14444f6582ff1f3"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/axiom.spec.ts",
+            "testID": "sessions.axiom-filtered-offscreen-unmounted-collapsed-reload-mandatory-tabs"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "8fc1afc83b3d66c2f4656b34d62200d12c190439e31f1261b5bcdea4675dfd29",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -10632,29 +10823,30 @@
           "proofBoundary": "B+C+V: held direct-route metadata, measured focus/menu/filter, collapsed AXIOM reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-window_test.ts",
-              "testID": "legacy.session-window.d6cd309f3b001d13"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/axiom.spec.ts",
+              "testID": "sessions.axiom-filtered-offscreen-unmounted-collapsed-reload-mandatory-tabs"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark"
             ],
             "states": [
-              "AXIOM activity survives filtered offscreen unmounted Sessions and collapsed reload in otk-light"
+              "AXIOM activity survives filtered offscreen unmounted Sessions and collapsed reload in otk-light",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-window_test.ts",
-            "testID": "legacy.session-window.d6cd309f3b001d13"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/axiom.spec.ts",
+            "testID": "sessions.axiom-filtered-offscreen-unmounted-collapsed-reload-mandatory-tabs"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "8fc1afc83b3d66c2f4656b34d62200d12c190439e31f1261b5bcdea4675dfd29",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -11161,26 +11353,35 @@
               "runner": "legacy",
               "file": "tests/e2e/tabs_test.ts",
               "testID": "legacy.tabs.a7246c86ebd0f632"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/tabs.spec.ts",
+              "testID": "sessions.task-tabs-native-create-rename-order-close-crumbs-meter-draft-and-reload"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "task tabs create rename reorder and close without deleting sessions; ordered crumbs nest helpers and meter matches backend"
+              "task tabs create rename reorder and close without deleting sessions; ordered crumbs nest helpers and meter matches backend",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/task-actions_test.ts",
+            "testID": "task action editors retain the owning RPC connection and directory"
+          },
           "activeOwner": {
             "runner": "legacy",
             "file": "tests/e2e/tabs_test.ts",
             "testID": "legacy.tabs.a7246c86ebd0f632"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "fe4f1752b3dc8ba3572b45fb1677139a1416cec88fdc27da1ddc2d5f07ab7c4e",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "d5ec560088f55cddd616e4aba64a99f806954f1fe2cc736ed6944eef473f3931",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -11192,14 +11393,20 @@
               "runner": "legacy",
               "file": "tests/e2e/tabs_test.ts",
               "testID": "legacy.tabs.a7bd5850e079cdff"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/tabs.spec.ts",
+              "testID": "sessions.long-task-chain-fold-reveal-and-reduced-color-light"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "long task chains fold in the middle, reveal a chosen session and preserve reduced-colour crumb lights"
+              "long task chains fold in the middle, reveal a chosen session and preserve reduced-colour crumb lights",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -11209,9 +11416,9 @@
             "testID": "legacy.tabs.a7bd5850e079cdff"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "fe4f1752b3dc8ba3572b45fb1677139a1416cec88fdc27da1ddc2d5f07ab7c4e",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "d5ec560088f55cddd616e4aba64a99f806954f1fe2cc736ed6944eef473f3931",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -11223,14 +11430,20 @@
               "runner": "legacy",
               "file": "tests/e2e/tabs_test.ts",
               "testID": "legacy.tabs.57e725dd179cb035"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/tabs.spec.ts",
+              "testID": "sessions.phantom-preview-pin-double-send-membership-and-idle-seen-departure"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "all four phantom rules render through preview pin double-click send and idle-seen departure"
+              "all four phantom rules render through preview pin double-click send and idle-seen departure",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -11240,9 +11453,9 @@
             "testID": "legacy.tabs.57e725dd179cb035"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "fe4f1752b3dc8ba3572b45fb1677139a1416cec88fdc27da1ddc2d5f07ab7c4e",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "d5ec560088f55cddd616e4aba64a99f806954f1fe2cc736ed6944eef473f3931",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -11251,29 +11464,30 @@
           "proofBoundary": "B+V+L: task/breadcrumb/native actions and all mandatory phantom cases",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/tabs_test.ts",
-              "testID": "legacy.tabs.5dc7c6dd396dbc30"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/tabs.spec.ts",
+              "testID": "sessions.axiom-three-mandatory-phantoms-inactive-rail-collapsed-reload"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "axiom 1: working blocked and unseen-finished ungrouped tabs and rail light stay on-screen after inactive activity and reload"
+              "axiom 1: working blocked and unseen-finished ungrouped tabs and rail light stay on-screen after inactive activity and reload",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/tabs_test.ts",
-            "testID": "legacy.tabs.5dc7c6dd396dbc30"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/tabs.spec.ts",
+            "testID": "sessions.axiom-three-mandatory-phantoms-inactive-rail-collapsed-reload"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "fe4f1752b3dc8ba3572b45fb1677139a1416cec88fdc27da1ddc2d5f07ab7c4e",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -11290,9 +11504,9 @@
           "proofBoundary": "B+L: actual async creation preserves concurrent membership",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/task-membership_test.ts",
-              "testID": "legacy.task-membership.3617b77ead052e81"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/membership.spec.ts",
+              "testID": "sessions.create-in-task-retains-concurrent-authoritative-membership"
             }
           ],
           "retainedCoverage": {
@@ -11300,19 +11514,20 @@
               "otk-dark"
             ],
             "states": [
-              "create-in-task preserves membership changes made while session creation is pending (otk-dark)"
+              "create-in-task preserves membership changes made while session creation is pending (otk-dark)",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/task-membership_test.ts",
-            "testID": "legacy.task-membership.3617b77ead052e81"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/membership.spec.ts",
+            "testID": "sessions.create-in-task-retains-concurrent-authoritative-membership"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "96df5a3fb99f3880d9a23dd771a8cdd88fa52df9f0132531536c86095b7c114f",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -11321,29 +11536,30 @@
           "proofBoundary": "B+L: actual async creation preserves concurrent membership",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/task-membership_test.ts",
-              "testID": "legacy.task-membership.41c0e53346c9c9bb"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/membership.spec.ts",
+              "testID": "sessions.create-in-task-retains-concurrent-authoritative-membership"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark"
             ],
             "states": [
-              "create-in-task preserves membership changes made while session creation is pending (otk-light)"
+              "create-in-task preserves membership changes made while session creation is pending (otk-light)",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/task-membership_test.ts",
-            "testID": "legacy.task-membership.41c0e53346c9c9bb"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/membership.spec.ts",
+            "testID": "sessions.create-in-task-retains-concurrent-authoritative-membership"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "96df5a3fb99f3880d9a23dd771a8cdd88fa52df9f0132531536c86095b7c114f",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -11399,29 +11615,30 @@
           "proofBoundary": "B+L: actual child progress/navigation and sibling/parent history",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/tasks_test.ts",
-              "testID": "legacy.tasks.31c598fc33c59616"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/tasks.spec.ts",
+              "testID": "sessions.real-task-progress-helper-sibling-parent-history-and-draft"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "R5 task progress, real child navigation, parent/history and sibling cycle preserve navigation ownership"
+              "R5 task progress, real child navigation, parent/history and sibling cycle preserve navigation ownership",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/tasks_test.ts",
-            "testID": "legacy.tasks.31c598fc33c59616"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/tasks.spec.ts",
+            "testID": "sessions.real-task-progress-helper-sibling-parent-history-and-draft"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "cd8693294688800194719edd669e4342e77fe3a135c91f367a28a11b5dc65d5c",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -11573,6 +11790,11 @@
               "runner": "legacy",
               "file": "tests/e2e/timeline_test.ts",
               "testID": "legacy.timeline.434f6ce26faf21a4"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/timeline.spec.ts",
+              "testID": "sessions.timeline-reveal-focus-actions-copy-rollback-restore-reload"
             }
           ],
           "retainedCoverage": {
@@ -11580,7 +11802,8 @@
               "otk-dark"
             ],
             "states": [
-              "Timeline reveals and focuses prompts, shares hover/context actions and follows rollback (otk-dark)"
+              "Timeline reveals and focuses prompts, shares hover/context actions and follows rollback (otk-dark)",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -11590,9 +11813,9 @@
             "testID": "legacy.timeline.434f6ce26faf21a4"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "5fe31af4016484463a3f8e8a0cc77c71fb7e14aa3e558343cee4d15278897f01",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "128de69468c05647bf9323c2f0890db59ebdaa929e56fcc4b1ccaef44e90a397",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -11604,14 +11827,21 @@
               "runner": "legacy",
               "file": "tests/e2e/timeline_test.ts",
               "testID": "legacy.timeline.bfa85e413994400c"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/timeline.spec.ts",
+              "testID": "sessions.timeline-reveal-focus-actions-copy-rollback-restore-reload"
             }
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
               "otk-light"
             ],
             "states": [
-              "Timeline reveals and focuses prompts, shares hover/context actions and follows rollback (otk-light)"
+              "Timeline reveals and focuses prompts, shares hover/context actions and follows rollback (otk-light)",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -11621,9 +11851,9 @@
             "testID": "legacy.timeline.bfa85e413994400c"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "5fe31af4016484463a3f8e8a0cc77c71fb7e14aa3e558343cee4d15278897f01",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "128de69468c05647bf9323c2f0890db59ebdaa929e56fcc4b1ccaef44e90a397",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -11635,14 +11865,21 @@
               "runner": "legacy",
               "file": "tests/e2e/timeline_test.ts",
               "testID": "legacy.timeline.b46fdd4bb69e84c8"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/timeline.spec.ts",
+              "testID": "sessions.timeline-reveal-focus-actions-copy-rollback-restore-reload"
             }
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
               "otk-light-stone"
             ],
             "states": [
-              "Timeline reveals and focuses prompts, shares hover/context actions and follows rollback (otk-light-stone)"
+              "Timeline reveals and focuses prompts, shares hover/context actions and follows rollback (otk-light-stone)",
+              "Dark browser outcome; fixed legacy paint only"
             ]
           },
           "lowerTierWitness": null,
@@ -11652,9 +11889,9 @@
             "testID": "legacy.timeline.b46fdd4bb69e84c8"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "5fe31af4016484463a3f8e8a0cc77c71fb7e14aa3e558343cee4d15278897f01",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "128de69468c05647bf9323c2f0890db59ebdaa929e56fcc4b1ccaef44e90a397",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -11663,29 +11900,30 @@
           "proofBoundary": "B+V+L: actual reveal/focus/shared actions/rollback/earlier pages",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/timeline_test.ts",
-              "testID": "legacy.timeline.7095b771adf7fc93"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/timeline.spec.ts",
+              "testID": "sessions.timeline-shared-transcript-earlier-pages-and-project-only-clear"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "Timeline pages the same transcript and clears on project-only selection"
+              "Timeline pages the same transcript and clears on project-only selection",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/timeline_test.ts",
-            "testID": "legacy.timeline.7095b771adf7fc93"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/sessions/timeline.spec.ts",
+            "testID": "sessions.timeline-shared-transcript-earlier-pages-and-project-only-clear"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "5fe31af4016484463a3f8e8a0cc77c71fb7e14aa3e558343cee4d15278897f01",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]
@@ -12613,9 +12851,9 @@
           "proofBoundary": "B+L: real busy interruption, rollback/restore and edited draft guard",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/undo_redo_test.ts",
-              "testID": "legacy.undo_redo.42c2a8b4107d3ee3"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/revert/journeys.spec.ts",
+              "testID": "revert.undo-redo-aliases-draft-guard-and-busy-interruption"
             }
           ],
           "retainedCoverage": {
@@ -12623,19 +12861,23 @@
               "otk-dark"
             ],
             "states": [
-              "undo/redo aliases recall prompts, palette protects edited drafts and busy Undo interrupts (otk-dark)"
+              "undo/redo aliases recall prompts, palette protects edited drafts and busy Undo interrupts (otk-dark)",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/undo-redo_test.ts",
+            "testID": "undo recalls only into empty/owned drafts and redo clears only owned content while keeping choices"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/undo_redo_test.ts",
-            "testID": "legacy.undo_redo.42c2a8b4107d3ee3"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/revert/journeys.spec.ts",
+            "testID": "revert.undo-redo-aliases-draft-guard-and-busy-interruption"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4667e8e67ed4b493426fe8484fb1b1eb91d87a3e14d72f20af528d6dbb4bf71f",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -12644,29 +12886,33 @@
           "proofBoundary": "B+L: real busy interruption, rollback/restore and edited draft guard",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/undo_redo_test.ts",
-              "testID": "legacy.undo_redo.efd9a397ec0c6af0"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/revert/journeys.spec.ts",
+              "testID": "revert.undo-redo-aliases-draft-guard-and-busy-interruption"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark"
             ],
             "states": [
-              "undo/redo aliases recall prompts, palette protects edited drafts and busy Undo interrupts (otk-light)"
+              "undo/redo aliases recall prompts, palette protects edited drafts and busy Undo interrupts (otk-light)",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
-          "lowerTierWitness": null,
+          "lowerTierWitness": {
+            "file": "packages/client/tests/undo-redo_test.ts",
+            "testID": "undo recalls only into empty/owned drafts and redo clears only owned content while keeping choices"
+          },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/undo_redo_test.ts",
-            "testID": "legacy.undo_redo.efd9a397ec0c6af0"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/revert/journeys.spec.ts",
+            "testID": "revert.undo-redo-aliases-draft-guard-and-busy-interruption"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4667e8e67ed4b493426fe8484fb1b1eb91d87a3e14d72f20af528d6dbb4bf71f",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
         {
@@ -12675,29 +12921,30 @@
           "proofBoundary": "B+L: real busy interruption, rollback/restore and edited draft guard",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/undo_redo_test.ts",
-              "testID": "legacy.undo_redo.c3dda021ba1137cb"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/revert/journeys.spec.ts",
+              "testID": "revert.controls-absent-while-working-and-in-readonly-helper"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
-              "revert controls are absent while working and in read-only helpers"
+              "revert controls are absent while working and in read-only helpers",
+              "Dark browser outcome; complete source scenario retained"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/undo_redo_test.ts",
-            "testID": "legacy.undo_redo.c3dda021ba1137cb"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/revert/journeys.spec.ts",
+            "testID": "revert.controls-absent-while-working-and-in-readonly-helper"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4667e8e67ed4b493426fe8484fb1b1eb91d87a3e14d72f20af528d6dbb4bf71f",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
       ]

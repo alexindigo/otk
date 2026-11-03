@@ -122,6 +122,7 @@ try {
       | undefined;
     let lifecycle: Awaited<ReturnType<typeof transcriptConsumer>> | undefined;
     let secondaryDirectory: string | undefined;
+    let discovery: { logStart: number; directories: string[] } | undefined;
     const subscriptions = new Set<string>();
     const coolingResources = () => {
       if (!cooling || !lifecycle) return null;
@@ -366,6 +367,10 @@ try {
             nativeFixture(
               profile === "composer-plan"
                 ? { "*": "allow" }
+                : profile === "revert-native"
+                ? { edit: "allow", read: "allow", bash: "allow" }
+                : profile === "sessions-tasks"
+                ? { bash: "ask", task: "allow" }
                 : profile === "composer-pickers"
                 ? { bash: "allow" }
                 : profile === "transport-shell"
@@ -391,6 +396,8 @@ try {
                 : undefined,
               composer
                 ? composer.options
+                : profile === "sessions-discovery"
+                ? { env: { OPENCODE_PRINT_LOGS: "1" } }
                 : ["messages-context", "messages-priced"].includes(profile)
                 ? contextOptions
                 : profile === "messages-tool-states"
@@ -419,6 +426,22 @@ try {
                 : undefined,
             )
           );
+          if (profile === "sessions-discovery") {
+            const roots = [
+              fixture.oc.directory,
+              join(fixture.oc.root, "another-project"),
+            ];
+            await Deno.mkdir(roots[1]);
+            for (const directory of roots) {
+              await fixture.oc.session("/session", {
+                method: "POST",
+                directory,
+                body: { title: "Idle discovery" },
+              });
+            }
+            await fixture.oc.restart();
+            discovery = { directories: roots, logStart: fixture.oc.log.length };
+          }
           if (profile === "provider-hold") {
             const path = join(fixture.oc.root, "config/opencode/opencode.json");
             const input = JSON.parse(await Deno.readTextFile(path));
@@ -546,6 +569,7 @@ try {
               "messages-helper-pages",
               "messages-recovery",
               "messages-recovery-retry",
+              "revert-native",
             ].includes(profile)
           ) {
             transport = await nativeMessageScenario(fixture.oc, profile);
@@ -647,6 +671,16 @@ try {
         case "beginTest": {
           if (lease || poisoned) throw new Error("Worker lease not clean");
           await resetPrefs();
+          if (profile === "sessions-discovery") {
+            // This isolated contract begins after native restart but before any
+            // sidecar-selected namespace or tool/catalog admission can wake it.
+            lease = {
+              lease: crypto.randomUUID(),
+              directory: fixture!.oc.directory,
+              baseline,
+            };
+            return lease;
+          }
           const directory = join(
             fixture!.oc.root,
             `project-${
@@ -701,10 +735,10 @@ try {
         case "queueScript": {
           if (
             (frame.params.delay ?? 0) > 2000 &&
-            profile !== "composer-long-command"
+            !["composer-long-command", "revert-native"].includes(profile)
           ) {
             throw new Error(
-              "Long cadence requires the composer long-command profile",
+              "Long cadence requires an explicit long-duration profile",
             );
           }
           const provider = frame.params.target === "remote"
@@ -742,6 +776,13 @@ try {
         case "observe":
           return {
             requests: fixture!.fake.requests,
+            discovery: discovery
+              ? {
+                directories: discovery.directories,
+                creations: fixture!.oc.log.slice(discovery.logStart).split("\n")
+                  .filter((line) => line.includes("creating instance")),
+              }
+              : null,
             selectedRequests: composer?.selected?.requests ?? [],
             mcpRequests: composer?.mcp?.requests ?? [],
             transport: transport?.observe() ?? null,
@@ -1032,7 +1073,7 @@ try {
           ) throw new Error("Action outside native transport scenario");
           transport.control(
             frame.params.action as "hold" | "release" | "freeze" | "thaw",
-            frame.params.sessionID,
+            frame.params.target ?? frame.params.sessionID,
           );
           return null;
         case "materializeSnapshot": {
