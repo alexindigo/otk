@@ -216,51 +216,8 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
           { shape, label, display: "block", body: "none" },
         );
       }
-      await c.rpc("prefs.set", { key: "reducedColors", value: false });
-      await c.rpc("tasks.addSession", {
-        id: task.id,
-        sessionID: "tstv1-blocked",
-      });
-      await b.poll(`${light(tab)}?.dataset.state==='blocked'`);
-      // Once the blocking request resolves, the unseen finish outranks work in
-      // both aggregate consumers, including after reload and in the sidebar rail.
-      f.update("tstv1-blocked", {
-        attention: { ...attention, permissions: 0 },
-      });
-      for (let reload = 0; reload < 2; reload++) {
-        if (reload) await b.reload();
-        await b.poll(`${light(tab)}?.dataset.state==='finished'`);
-        await b.poll(`${light(project)}?.dataset.state==='finished'`);
-      }
-      await b.click('[aria-label="Collapse projects"]');
-      await b.poll(
-        "document.querySelector('.otk-project-inbox').dataset.collapsed==='true'",
-      );
-      await b.poll(`${light(project)}?.dataset.state==='finished'`);
-      await b.poll(
-        "!!document.querySelector('.otk-server-status .otk-connection-light[data-connection-state=connected]')",
-      );
-      f.app.connections.connection("reconnecting");
-      await b.poll(
-        "!!document.querySelector('.otk-server-status .otk-connection-light[data-connection-state=reconnecting]')",
-      );
-      f.app.connections.connection("connected");
-      await b.click(".otk-settings-entry");
-      await b.poll(
-        "!!document.querySelector('.otk-settings .otk-connection-light[data-connection-state=connected]')",
-      );
-      f.app.connections.connection("connecting");
-      await b.poll(
-        "!!document.querySelector('.otk-settings .otk-connection-light[data-connection-state=connecting]')",
-      );
-      f.app.connections.connection("reconnecting");
-      await b.poll(
-        "!!document.querySelector('.otk-settings .otk-connection-light[data-connection-state=reconnecting]')",
-      );
-      f.app.connections.connection("connected");
-      await b.poll(
-        "!!document.querySelector('.otk-settings .otk-connection-light[data-connection-state=connected]')",
-      );
+      // Priority, collapsed/reloaded visibility and connection transitions move
+      // to behavior/attention/lights.spec.ts; this is the fixed V remainder.
       assertEquals(b.errors, []);
     } finally {
       await c.close();

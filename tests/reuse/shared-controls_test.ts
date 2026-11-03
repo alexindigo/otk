@@ -259,11 +259,8 @@ test("restored own answers size from content after collapse and remount; autocom
       // per-theme selection geometry with the question-size visual remainder.
       await b.fill("textarea[name=prompt]", "");
     }
-    await b.fill("textarea[name=question-answer]", "Short answer");
-    const shrunk = await b.evaluate<number>(
-      "document.querySelector('textarea[name=question-answer]').clientHeight",
-    );
-    assert(shrunk <= 24, `own answer shrinks with its value: ${shrunk}`);
+    // C11 owns the Dark collapse/remount and shrink contract in Playwright;
+    // this remainder retains restored-height/selection geometry in both themes.
     assertEquals(b.errors, []);
     if (failures.length) {
       throw new AggregateError(

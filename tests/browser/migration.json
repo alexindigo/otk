@@ -88,6 +88,24 @@
         "sourceSha256": "552078928f2b5ed5a1feb576657de0cb3c5fbc1de12c152a9a9a149eacd26c26",
         "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
       }
+    },
+    {
+      "file": "tests/reuse/shared-controls_test.ts",
+      "area": "attention",
+      "batch": "A5",
+      "originalTitle": "restored own answers size from content after collapse and remount; autocomplete uses permanent shared pointers",
+      "portion": "Dark own-answer collapse/remount persistence, content-driven height and shrink; fixed Dark/Linen geometry remains in Deno",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/attention/public-ui.spec.ts",
+        "testID": "attention.public-own-answer-resizes-after-collapse-remount-and-shrinks"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "0509f3c911ce10291c49195f9655620f91fd5e32b2ccb31ab00ba14bf51221d8",
+        "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
+      }
     }
   ],
   "files": [
@@ -103,14 +121,14 @@
           "proofBoundary": "B: hidden demand release and current keyed titles",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/activity-demand_test.ts",
-              "testID": "legacy.activity-demand.8ba423a308c501e4"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/activity.spec.ts",
+              "testID": "attention.hidden-activity-releases-one-hundred-invalidations-and-reconnect"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "hidden Activity releases demand across one hundred invalidations and reconnect; reacquire sees current keyed titles"
@@ -118,14 +136,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/activity-demand_test.ts",
-            "testID": "legacy.activity-demand.8ba423a308c501e4"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/attention/activity.spec.ts",
+            "testID": "attention.hidden-activity-releases-one-hundred-invalidations-and-reconnect"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4d72ff1f9aea8c7992f0291ecd095b2a83d91d8dcd9cc04206c3598a17d80dec",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
           }
         }
       ]
@@ -145,6 +163,11 @@
               "runner": "legacy",
               "file": "tests/e2e/approval_attention_test.ts",
               "testID": "legacy.approval_attention.d5b551234a0b043c"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/auto.spec.ts",
+              "testID": "attention.automatic-held-permission-is-quiet-and-real-reply-updates-only-own-family"
             }
           ],
           "retainedCoverage": {
@@ -152,7 +175,7 @@
               "otk-dark"
             ],
             "states": [
-              "U9 r2 browser-open automatic permission stays quiet through toast OS takeover and attention consumers; reply and accessible policy reach the end (otk-dark)"
+              "Fixed quiet automatic pending/confirmed activity and policy marks"
             ]
           },
           "lowerTierWitness": null,
@@ -162,9 +185,9 @@
             "testID": "legacy.approval_attention.d5b551234a0b043c"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "0c15bbf74d228c3cd265b3d664b0ed3b86b0f6423f0d22cd847a9b1f953d608c",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "507dd6c4c367abbc06ad19fe422f1fda17f4085ff659f09c00348f45adfc374c",
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
           }
         },
         {
@@ -176,6 +199,11 @@
               "runner": "legacy",
               "file": "tests/e2e/approval_attention_test.ts",
               "testID": "legacy.approval_attention.32f288330006b5b8"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/auto.spec.ts",
+              "testID": "attention.automatic-held-permission-is-quiet-and-real-reply-updates-only-own-family"
             }
           ],
           "retainedCoverage": {
@@ -183,7 +211,7 @@
               "otk-light"
             ],
             "states": [
-              "U9 r2 browser-open automatic permission stays quiet through toast OS takeover and attention consumers; reply and accessible policy reach the end (otk-light)"
+              "Fixed quiet automatic pending/confirmed activity and policy marks"
             ]
           },
           "lowerTierWitness": null,
@@ -193,9 +221,9 @@
             "testID": "legacy.approval_attention.32f288330006b5b8"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "0c15bbf74d228c3cd265b3d664b0ed3b86b0f6423f0d22cd847a9b1f953d608c",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "507dd6c4c367abbc06ad19fe422f1fda17f4085ff659f09c00348f45adfc374c",
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
           }
         },
         {
@@ -207,6 +235,11 @@
               "runner": "legacy",
               "file": "tests/e2e/approval_attention_test.ts",
               "testID": "legacy.approval_attention.9d2860f9c4ad71fe"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/auto.spec.ts",
+              "testID": "attention.automatic-held-permission-is-quiet-and-real-reply-updates-only-own-family"
             }
           ],
           "retainedCoverage": {
@@ -214,7 +247,7 @@
               "otk-light-stone"
             ],
             "states": [
-              "U9 r2 browser-open automatic permission stays quiet through toast OS takeover and attention consumers; reply and accessible policy reach the end (otk-light-stone)"
+              "Fixed quiet automatic pending/confirmed activity and policy marks"
             ]
           },
           "lowerTierWitness": null,
@@ -224,9 +257,9 @@
             "testID": "legacy.approval_attention.9d2860f9c4ad71fe"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "0c15bbf74d228c3cd265b3d664b0ed3b86b0f6423f0d22cd847a9b1f953d608c",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "507dd6c4c367abbc06ad19fe422f1fda17f4085ff659f09c00348f45adfc374c",
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
           }
         }
       ]
@@ -368,10 +401,12 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "U10 auto-approve leads the footer, uses the theme accent when on and preserves picker geometry"
+              "Fixed off/on accent, footer order and responsive picker/accessory geometry"
             ]
           },
           "lowerTierWitness": null,
@@ -381,9 +416,9 @@
             "testID": "legacy.auto_approve_footer.f6533d7d9374db39"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "0d61421c0e038ff98d612fae65405ab1f15035d32028f7b89dfc0593ea8b341b",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
           }
         }
       ]
@@ -3649,14 +3684,20 @@
               "runner": "legacy",
               "file": "tests/e2e/focus_test.ts",
               "testID": "legacy.focus.d6d33c4d0e1f7a84"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/focus.spec.ts",
+              "testID": "attention.question-transitions-focus-visible-controls-and-preserve-independent-focus"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "U15 own-answer Enter and all question transitions focus visible controls; composer owns its rounded focus border"
+              "Composer border, own-answer outline perimeter, primary contrast and non-control outline exclusions"
             ]
           },
           "lowerTierWitness": null,
@@ -3666,9 +3707,9 @@
             "testID": "legacy.focus.d6d33c4d0e1f7a84"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "d7ba4640a93393b6fc73a2d254f7a2b0b1b9c25263e68d4feb6364712dc7587f",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "80647ab914259c76989094c65dd7eb4b03f8b4908031dcb6acf41be0689c9855",
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
           }
         }
       ]
@@ -4644,14 +4685,14 @@
           "proofBoundary": "B+L: consumed digest retains actual notification action; tombstone retracts",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/index-notifications_test.ts",
-              "testID": "legacy.index-notifications.fb5229f57034bc57"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/digest.spec.ts",
+              "testID": "attention.consumed-digest-keeps-real-notification-action-tombstone-retracts"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "a consumed digest preserves the real toast action and favicon count; tombstoning retracts them"
@@ -4659,14 +4700,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/index-notifications_test.ts",
-            "testID": "legacy.index-notifications.fb5229f57034bc57"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/attention/digest.spec.ts",
+            "testID": "attention.consumed-digest-keeps-real-notification-action-tombstone-retracts"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "0084d5ab91e54414b48b1e1f2dfaf8eadcc6f48d54a87742671738c7331f1c76",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
           }
         }
       ]
@@ -7115,14 +7156,14 @@
           "proofBoundary": "B+C+L: real OS permission, Web Audio, clipboard/default action, native family file outcome; multi-stack profile",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/notifications_test.ts",
-              "testID": "legacy.notifications.dbfe3c5ae508a2cc"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/notification-open.spec.ts",
+              "testID": "attention.notification-focused-background-open-keeps-draft-selected-is-silent"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "D6 focused background completion opens while retaining the previous session draft; selected completion stays silent"
@@ -7130,14 +7171,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/notifications_test.ts",
-            "testID": "legacy.notifications.dbfe3c5ae508a2cc"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/attention/notification-open.spec.ts",
+            "testID": "attention.notification-focused-background-open-keeps-draft-selected-is-silent"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "038d352b0a091bd7f723b935716220da99fe3bf40e9be858a0620d3ca5bd3373",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
           }
         },
         {
@@ -7146,14 +7187,14 @@
           "proofBoundary": "B+C+L: real OS permission, Web Audio, clipboard/default action, native family file outcome; multi-stack profile",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/notifications_test.ts",
-              "testID": "legacy.notifications.28d25f935c7463ed"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/attention/notifications.spec.ts",
+              "testID": "attention.notification-real-granted-tag-replacement-default-action-focus-retraction"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "D7 real hidden/granted Notification tag replacement, session favicon count, guarded default action and focus retraction"
@@ -7161,14 +7202,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/notifications_test.ts",
-            "testID": "legacy.notifications.28d25f935c7463ed"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/attention/notifications.spec.ts",
+            "testID": "attention.notification-real-granted-tag-replacement-default-action-focus-retraction"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "038d352b0a091bd7f723b935716220da99fe3bf40e9be858a0620d3ca5bd3373",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
           }
         },
         {
@@ -7177,14 +7218,14 @@
           "proofBoundary": "B+C+L: real OS permission, Web Audio, clipboard/default action, native family file outcome; multi-stack profile",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/notifications_test.ts",
-              "testID": "legacy.notifications.d964025eb46f6471"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/attention/notifications.spec.ts",
+              "testID": "attention.notification-denied-permission-persists-blocked-and-hidden-toast-fallback"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "D8 OS opt-in calls actual denied browser permission, persists host choice, exposes blocked status and hidden toast fallback"
@@ -7192,14 +7233,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/notifications_test.ts",
-            "testID": "legacy.notifications.d964025eb46f6471"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/attention/notifications.spec.ts",
+            "testID": "attention.notification-denied-permission-persists-blocked-and-hidden-toast-fallback"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "038d352b0a091bd7f723b935716220da99fe3bf40e9be858a0620d3ca5bd3373",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
           }
         },
         {
@@ -7208,14 +7249,14 @@
           "proofBoundary": "B+C+L: real OS permission, Web Audio, clipboard/default action, native family file outcome; multi-stack profile",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/notifications_test.ts",
-              "testID": "legacy.notifications.737d5c145a70e0b6"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/attention/notifications.spec.ts",
+              "testID": "attention.notification-unavailable-real-constructor-falls-back-in-page"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "granted but unsupported Notification constructor exposes unavailability and uses in-page fallback"
@@ -7223,14 +7264,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/notifications_test.ts",
-            "testID": "legacy.notifications.737d5c145a70e0b6"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/attention/notifications.spec.ts",
+            "testID": "attention.notification-unavailable-real-constructor-falls-back-in-page"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "038d352b0a091bd7f723b935716220da99fe3bf40e9be858a0620d3ca5bd3373",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
           }
         },
         {
@@ -7239,14 +7280,14 @@
           "proofBoundary": "B+C+L: real OS permission, Web Audio, clipboard/default action, native family file outcome; multi-stack profile",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/notifications_test.ts",
-              "testID": "legacy.notifications.bc958bfccad36706"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/remote.spec.ts",
+              "testID": "attention.remote-child-notification-allow-once-keeps-local-draft-and-produces-file"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "D9 background child Allow once targets originating remote family and produces actual stock tool/file outcome"
@@ -7254,14 +7295,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/notifications_test.ts",
-            "testID": "legacy.notifications.bc958bfccad36706"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/attention/remote.spec.ts",
+            "testID": "attention.remote-child-notification-allow-once-keeps-local-draft-and-produces-file"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "038d352b0a091bd7f723b935716220da99fe3bf40e9be858a0620d3ca5bd3373",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
           }
         },
         {
@@ -7270,14 +7311,14 @@
           "proofBoundary": "B+C+L: real OS permission, Web Audio, clipboard/default action, native family file outcome; multi-stack profile",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/notifications_test.ts",
-              "testID": "legacy.notifications.de70bec50ee90b3e"
+              "runner": "playwright",
+              "file": "tests/browser/contracts/attention/notifications.spec.ts",
+              "testID": "attention.notification-real-web-audio-gesture-graphs-frequencies-analyser-and-reload"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "Web Audio gesture unlock schedules distinct running done/input tone graphs; notification preference reloads"
@@ -7285,14 +7326,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/notifications_test.ts",
-            "testID": "legacy.notifications.de70bec50ee90b3e"
+            "runner": "playwright",
+            "file": "tests/browser/contracts/attention/notifications.spec.ts",
+            "testID": "attention.notification-real-web-audio-gesture-graphs-frequencies-analyser-and-reload"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "038d352b0a091bd7f723b935716220da99fe3bf40e9be858a0620d3ca5bd3373",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
           }
         }
       ]
@@ -7510,6 +7551,11 @@
               "runner": "legacy",
               "file": "tests/e2e/permission_details_test.ts",
               "testID": "legacy.permission_details.65a8e73caa86208f"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/details.spec.ts",
+              "testID": "attention.permission-toast-and-takeover-share-exact-summary-before-native-approval"
             }
           ],
           "retainedCoverage": {
@@ -7517,7 +7563,7 @@
               "otk-dark"
             ],
             "states": [
-              "U9 permission toast and takeover share exact bash, generic and edit summaries before approval (otk-dark)"
+              "Fixed bash/read/edit permission toast and takeover summary layout"
             ]
           },
           "lowerTierWitness": null,
@@ -7527,9 +7573,9 @@
             "testID": "legacy.permission_details.65a8e73caa86208f"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "b7d5dd7d0b7cccc1d8eeebf00e8ec6f33fbe5f369ba809c6d43286efab766b65",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "cf07193e56a1981f604cedce3d21a8c659e6c3f27b1cd81d382dd69d760ff58c",
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
           }
         },
         {
@@ -7541,6 +7587,11 @@
               "runner": "legacy",
               "file": "tests/e2e/permission_details_test.ts",
               "testID": "legacy.permission_details.b7b6eab85c8ed66e"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/details.spec.ts",
+              "testID": "attention.permission-toast-and-takeover-share-exact-summary-before-native-approval"
             }
           ],
           "retainedCoverage": {
@@ -7548,7 +7599,7 @@
               "otk-light"
             ],
             "states": [
-              "U9 permission toast and takeover share exact bash, generic and edit summaries before approval (otk-light)"
+              "Fixed bash/read/edit permission toast and takeover summary layout"
             ]
           },
           "lowerTierWitness": null,
@@ -7558,9 +7609,9 @@
             "testID": "legacy.permission_details.b7b6eab85c8ed66e"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "b7d5dd7d0b7cccc1d8eeebf00e8ec6f33fbe5f369ba809c6d43286efab766b65",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "cf07193e56a1981f604cedce3d21a8c659e6c3f27b1cd81d382dd69d760ff58c",
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
           }
         }
       ]
@@ -7577,14 +7628,14 @@
           "proofBoundary": "B+L: real completed/denied tools/files, child routing and confirmations",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/permissions_test.ts",
-              "testID": "legacy.permissions.3a94634e66285d28"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/permissions.spec.ts",
+              "testID": "attention.permission-typed-read-edit-rejection-keeps-real-file"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "web typed edit and generic permission details render before rejected tools leave files unchanged"
@@ -7592,14 +7643,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/permissions_test.ts",
-            "testID": "legacy.permissions.3a94634e66285d28"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/attention/permissions.spec.ts",
+            "testID": "attention.permission-typed-read-edit-rejection-keeps-real-file"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "0a896ba74f421d3e9efb4e090e45d2a7aaecb9ac8a1512cce4b57f5595a21cd5",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
           }
         },
         {
@@ -7608,14 +7659,14 @@
           "proofBoundary": "B+L: real completed/denied tools/files, child routing and confirmations",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/permissions_test.ts",
-              "testID": "legacy.permissions.8afd06016a19d461"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/permissions.spec.ts",
+              "testID": "attention.permission-once-completes-native-output-and-idle"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "E3 bash permission, real Allow once click, completed output-bearing tool and idle"
@@ -7623,14 +7674,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/permissions_test.ts",
-            "testID": "legacy.permissions.8afd06016a19d461"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/attention/permissions.spec.ts",
+            "testID": "attention.permission-once-completes-native-output-and-idle"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "0a896ba74f421d3e9efb4e090e45d2a7aaecb9ac8a1512cce4b57f5595a21cd5",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
           }
         },
         {
@@ -7639,14 +7690,14 @@
           "proofBoundary": "B+L: real completed/denied tools/files, child routing and confirmations",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/permissions_test.ts",
-              "testID": "legacy.permissions.8fdacb43e1aec875"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/permissions.spec.ts",
+              "testID": "attention.permission-child-routes-real-parent-dock-to-native-child"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "E4 real subagent permission appears on parent dock with child title"
@@ -7654,14 +7705,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/permissions_test.ts",
-            "testID": "legacy.permissions.8fdacb43e1aec875"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/attention/permissions.spec.ts",
+            "testID": "attention.permission-child-routes-real-parent-dock-to-native-child"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "0a896ba74f421d3e9efb4e090e45d2a7aaecb9ac8a1512cce4b57f5595a21cd5",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
           }
         },
         {
@@ -7670,14 +7721,14 @@
           "proofBoundary": "B+L: real completed/denied tools/files, child routing and confirmations",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/permissions_test.ts",
-              "testID": "legacy.permissions.666dfaf9961ac9b4"
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/permissions.spec.ts",
+              "testID": "attention.permission-reopen-always-confirmation-covered-command-and-dirty-reject"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark"
             ],
             "states": [
               "web permission snapshot on reopen, focused keys, always confirmation and rejection message"
@@ -7685,14 +7736,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/permissions_test.ts",
-            "testID": "legacy.permissions.666dfaf9961ac9b4"
+            "runner": "playwright",
+            "file": "tests/browser/behavior/attention/permissions.spec.ts",
+            "testID": "attention.permission-reopen-always-confirmation-covered-command-and-dirty-reject"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "0a896ba74f421d3e9efb4e090e45d2a7aaecb9ac8a1512cce4b57f5595a21cd5",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
           }
         }
       ]
@@ -8428,14 +8479,21 @@
               "runner": "legacy",
               "file": "tests/e2e/questions_test.ts",
               "testID": "legacy.questions.73f2223f3a9765fd"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/questions.spec.ts",
+              "testID": "attention.question-keyboard-multi-custom-confirm-and-real-rejection"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "P1 question tabs, keyboard choices, multi/custom answers, confirmation and reject reach the completed tool"
+              "Uncommitted question pointers and tabs across full/reduced colors"
             ]
           },
           "lowerTierWitness": null,
@@ -8445,9 +8503,9 @@
             "testID": "legacy.questions.73f2223f3a9765fd"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "019b38f7482b644e10e21803b861fece772d8fd781ed9f8d46c26e2ca61fc643",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "88adb07f09747367b49d409302e8347046ee97cc700aa14985f3b5d7272453c0",
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
           }
         }
       ]
@@ -9582,14 +9640,20 @@
               "runner": "legacy",
               "file": "tests/e2e/session_auto_test.ts",
               "testID": "legacy.session_auto.fba3efd58e338e57"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/auto.spec.ts",
+              "testID": "attention.auto-policy-broadcast-inheritance-reload-dirty-guard-offline-disable-and-journal"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light"
             ],
             "states": [
-              "U9 footer auto-approve, command, inherited marks and persisted activity reach browser consumers; dirty permission input is guarded"
+              "28px toggle, inherited centered mark and persisted failed/unconfirmed activity"
             ]
           },
           "lowerTierWitness": null,
@@ -9599,9 +9663,9 @@
             "testID": "legacy.session_auto.fba3efd58e338e57"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "821d7f67e4d7d10c6d762127d7685493442a355804b50f1b62c21c5ab3bf57f6",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "ea13c3261b989e4f52084258c51a704b5a62c8f0c3223862f76bad5e8a4486e7",
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
           }
         }
       ]
@@ -11050,6 +11114,11 @@
               "runner": "legacy",
               "file": "tests/e2e/status-lights_test.ts",
               "testID": "legacy.status-lights.9c55b549b1d7694b"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/lights.spec.ts",
+              "testID": "attention.project-task-lamps-keep-all-mandatory-activity-visible-through-collapse-reload"
             }
           ],
           "retainedCoverage": {
@@ -11057,7 +11126,7 @@
               "otk-dark"
             ],
             "states": [
-              "attention-first project and task lamps, all activity visible in otk-dark"
+              "Fixed four-state lamp tokens, gradients, breathe motion and reduced-motion/color glyphs"
             ]
           },
           "lowerTierWitness": null,
@@ -11067,9 +11136,9 @@
             "testID": "legacy.status-lights.9c55b549b1d7694b"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "1343ab41379d6d39da2b6eb7646e5ba27d5843457443489513cf3e82cb5f523f",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "d3eddfbad637b287a6d88617e54ba559e7e25186a3b8ef993660d89b20f3876d",
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
           }
         },
         {
@@ -11081,6 +11150,11 @@
               "runner": "legacy",
               "file": "tests/e2e/status-lights_test.ts",
               "testID": "legacy.status-lights.0b2bc2aa37b286c6"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/lights.spec.ts",
+              "testID": "attention.project-task-lamps-keep-all-mandatory-activity-visible-through-collapse-reload"
             }
           ],
           "retainedCoverage": {
@@ -11088,7 +11162,7 @@
               "otk-light"
             ],
             "states": [
-              "attention-first project and task lamps, all activity visible in otk-light"
+              "Fixed four-state lamp tokens, gradients, breathe motion and reduced-motion/color glyphs"
             ]
           },
           "lowerTierWitness": null,
@@ -11098,9 +11172,9 @@
             "testID": "legacy.status-lights.0b2bc2aa37b286c6"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "1343ab41379d6d39da2b6eb7646e5ba27d5843457443489513cf3e82cb5f523f",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "d3eddfbad637b287a6d88617e54ba559e7e25186a3b8ef993660d89b20f3876d",
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
           }
         },
         {
@@ -11112,6 +11186,11 @@
               "runner": "legacy",
               "file": "tests/e2e/status-lights_test.ts",
               "testID": "legacy.status-lights.d5bc877c2ba5b5e9"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/attention/lights.spec.ts",
+              "testID": "attention.project-task-lamps-keep-all-mandatory-activity-visible-through-collapse-reload"
             }
           ],
           "retainedCoverage": {
@@ -11119,7 +11198,7 @@
               "otk-light-stone"
             ],
             "states": [
-              "attention-first project and task lamps, all activity visible in otk-light-stone"
+              "Fixed four-state lamp tokens, gradients, breathe motion and reduced-motion/color glyphs"
             ]
           },
           "lowerTierWitness": null,
@@ -11129,9 +11208,9 @@
             "testID": "legacy.status-lights.d5bc877c2ba5b5e9"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "1343ab41379d6d39da2b6eb7646e5ba27d5843457443489513cf3e82cb5f523f",
-            "run": "otk-t1c5-20261101"
+            "kind": "old-new-batch",
+            "sourceSha256": "d3eddfbad637b287a6d88617e54ba559e7e25186a3b8ef993660d89b20f3876d",
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
           }
         }
       ]

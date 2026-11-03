@@ -3,6 +3,7 @@ import { coreBackendFixture } from "./core-backend.ts";
 import { messagesScenario } from "./messages-scenario.ts";
 import { composerContractScenario } from "./composer-contract-scenario.ts";
 import { sessionsScenario } from "./sessions-scenario.ts";
+import { attentionScenario } from "./attention-scenario.ts";
 import { inboxBrowserFixture } from "./inbox-browser.ts";
 import { fixture } from "./config.ts";
 import { WsClient } from "./ws-client.ts";
@@ -23,6 +24,9 @@ import type {
 
 /** Checked external-backend compositions: no native stack for absent-capability proofs. */
 export async function contractScenario(profile: Profile) {
+  if (profile.startsWith("contract-attention-")) {
+    return await attentionScenario(profile);
+  }
   if (profile.startsWith("contract-sessions-")) {
     return await sessionsScenario(profile);
   }

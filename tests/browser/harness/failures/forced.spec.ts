@@ -2,8 +2,27 @@
 import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { isolatedTest } from "../../fixtures/isolated.ts";
+import { notificationTest } from "../../fixtures/notifications.ts";
+import {
+  focusNotifications,
+  hideNotifications,
+} from "../../pages/notifications.ts";
 
 const scenario = process.env.OTK_TEST_FORCED;
+notificationTest(`forced notification profile ${scenario}`, {
+  tag: ["@notification-forced", "@attention"],
+}, async ({ page }) => {
+  await page.goto(
+    "data:text/html,<title>Notification failure evidence</title><button>Native visibility</button>",
+  );
+  await focusNotifications(page);
+  const restore = await hideNotifications(page);
+  await restore();
+  if (scenario === "notification-worker-crash") {
+    process.kill(process.pid, "SIGKILL");
+  }
+  throw new Error("Forced notification profile body failure");
+});
 const test = isolatedTest.extend<{ failureEvidence: void }>({
   failureEvidence: [async ({ context }, use) => {
     try {

@@ -6,6 +6,12 @@ export type Json = null | boolean | number | string | Json[] | {
 };
 export type Profile =
   | "ordinary"
+  | "contract-attention-demand"
+  | "contract-attention-digest"
+  | "contract-attention-lights"
+  | "contract-attention-native"
+  | "contract-attention-auto"
+  | "contract-attention-remote"
   | "revert-native"
   | "sessions-tasks"
   | "sessions-discovery"
@@ -236,6 +242,12 @@ export function request(value: unknown): ControlRequest {
       if (
         ![
           "ordinary",
+          "contract-attention-demand",
+          "contract-attention-digest",
+          "contract-attention-lights",
+          "contract-attention-native",
+          "contract-attention-auto",
+          "contract-attention-remote",
           "revert-native",
           "sessions-tasks",
           "sessions-discovery",

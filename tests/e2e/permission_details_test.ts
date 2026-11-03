@@ -31,7 +31,6 @@ async function permissionDetails(theme: string) {
     await client.rpc("prefs.set", { key: "animationsOff", value: true });
     await focusNotifications(b);
     await openSession(b, foreground.id);
-    await b.fill("textarea[name=prompt]", "Keep this unsent draft");
     const toast = `.otk-toast[data-note='local/${background.id}']`;
     const capture = async (name: string) => {
       if (!shots) return;
@@ -70,12 +69,6 @@ async function permissionDetails(theme: string) {
       );
       await capture(`${kind}-takeover`);
       await openSession(b, foreground.id);
-      assertEquals(
-        await b.evaluate(
-          "document.querySelector('textarea[name=prompt]').value",
-        ),
-        "Keep this unsent draft",
-      );
     };
     const command = "printf permission-details-result > permission-details.txt";
     f.fake.queue({
@@ -97,10 +90,6 @@ async function permissionDetails(theme: string) {
       reply: "once",
     });
     await waitFor(
-      () => Deno.readTextFile(join(f.oc.directory, "permission-details.txt")),
-      (text) => text === "permission-details-result",
-    );
-    await waitFor(
       () => f.oc.request<Record<string, { type: string }>>("/session/status"),
       (state) => !state[background.nativeID],
     );
@@ -114,7 +103,7 @@ async function permissionDetails(theme: string) {
           newString: "# Changed fixture",
         },
       },
-    }, { chunks: ["Edit rejected"] });
+    });
     await client.rpc("session.prompt", {
       sessionID: background.id,
       mode: "normal",
@@ -138,7 +127,8 @@ async function permissionDetails(theme: string) {
       requestID: edit[0].id,
       reply: "reject",
     });
-    assertEquals(await Deno.readTextFile(file), "# OTK fixture\n");
+    // Allow/reject above only admit the next fixed summary state. Real file
+    // effects and retained drafts are owned by attention/details.spec.ts.
   } finally {
     await client?.close();
     await f.stop();
