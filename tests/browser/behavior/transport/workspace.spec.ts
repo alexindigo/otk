@@ -2,6 +2,7 @@
 import { expect, test } from "../../fixtures/evidence.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
+import { scrollTranscript, wheelTranscript } from "../../pages/transcript.ts";
 
 const markdown = [
   "# Streaming\n\n",
@@ -378,8 +379,7 @@ test(
       .toHaveAttribute("data-status", "idle");
     await expect(page.locator(".otk-text table")).toBeAttached();
     const viewport = page.locator(".otk-messages");
-    await viewport.hover();
-    await page.mouse.wheel(0, -100000);
+    await scrollTranscript(page, false);
     await expect.poll(() => viewport.evaluate((el) => el.scrollTop)).toBe(0);
     const rendered: Record<string, unknown> = {};
     while (true) {
@@ -415,8 +415,7 @@ test(
         height: el.clientHeight,
       }));
       if (position.top >= position.end - 1) break;
-      await viewport.hover();
-      await page.mouse.wheel(0, position.height / 2);
+      await wheelTranscript(page, position.height / 2);
       await expect.poll(() => viewport.evaluate((el) => el.scrollTop))
         .toBeGreaterThan(position.top);
     }

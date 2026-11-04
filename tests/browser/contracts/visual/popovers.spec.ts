@@ -7,35 +7,70 @@ test.use({ profile: "contract-visual-inbox" });
 const tags = { tag: ["@visual", "@isolated"] },
   menu = ':popover-open [role="menu"][aria-label="Context menu"]';
 async function geometry(page: Page, selector: string, anchor?: string) {
-  await expect(page.locator(selector)).toBeVisible();
-  return await page.locator(selector).evaluate((el, anchor) => {
-    const surface = el.closest(".otk-surface")!,
-      panel = surface.closest(".otk-popover-panel")!,
-      body = surface.querySelector(".otk-surface-body")!,
-      r = surface.getBoundingClientRect(),
-      clip = body.getBoundingClientRect();
-    return {
-      surface: r.toJSON(),
-      panel: panel.getBoundingClientRect().toJSON(),
-      anchor: anchor
-        ? document.querySelector(anchor)!.getBoundingClientRect().toJSON()
-        : null,
-      body: { height: body.clientHeight, scroll: body.scrollHeight },
-      viewport: { width: innerWidth, height: innerHeight },
-      rows: Array.from(el.querySelectorAll("[role=menuitem]")).map((row) => {
-        const t = row.getBoundingClientRect(),
-          hit = document.elementFromPoint(
-            t.x + t.width / 2,
-            t.y + t.height / 2,
-          );
-        return {
-          visible: t.width > 0 && t.height > 0 && t.left >= r.left &&
-            t.right <= r.right && t.top >= clip.top && t.bottom <= clip.bottom,
-          hit: !!hit && row.contains(hit),
-        };
-      }),
-    };
-  }, anchor);
+  // A scrolled flex content wrapper can have no box while its Surface remains
+  // painted. Join native opening/layout through that owner, not the wrapper.
+  const owner = page.locator(selector).locator(
+    "xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' otk-surface ')][1]",
+  );
+  await expect(owner).toBeVisible();
+  const measure = () =>
+    page.locator(selector).evaluate((el, anchor) => {
+      const surface = el.closest(".otk-surface")!,
+        panel = surface.closest(".otk-popover-panel")!,
+        body = surface.querySelector(".otk-surface-body")!,
+        r = surface.getBoundingClientRect(),
+        clip = body.getBoundingClientRect();
+      return {
+        opened: panel.matches(":popover-open"),
+        surface: r.toJSON(),
+        panel: panel.getBoundingClientRect().toJSON(),
+        anchor: anchor
+          ? document.querySelector(anchor)!.getBoundingClientRect().toJSON()
+          : null,
+        body: { height: body.clientHeight, scroll: body.scrollHeight },
+        viewport: { width: innerWidth, height: innerHeight },
+        rows: Array.from(el.querySelectorAll("[role=menuitem]")).map((row) => {
+          const t = row.getBoundingClientRect(),
+            hit = document.elementFromPoint(
+              t.x + t.width / 2,
+              t.y + t.height / 2,
+            );
+          return {
+            visible: t.width > 0 && t.height > 0 && t.left >= r.left &&
+              t.right <= r.right && t.top >= clip.top &&
+              t.bottom <= clip.bottom,
+            hit: !!hit && row.contains(hit),
+          };
+        }),
+      };
+    }, anchor);
+  let previous = "", current: Awaited<ReturnType<typeof measure>> | undefined;
+  await expect.poll(async () => {
+    current = await measure();
+    const g = current, r = g.surface, a = g.anchor;
+    const snapshot = JSON.stringify([
+      g.surface,
+      g.panel,
+      g.anchor,
+      g.body,
+      g.viewport,
+    ]);
+    const stable = previous === snapshot;
+    previous = snapshot;
+    return stable && g.opened && r.width > 0 && r.height > 0 &&
+      g.body.height > 0 &&
+      r.left >= -.5 && r.top >= -.5 && r.right <= g.viewport.width + .5 &&
+      r.bottom <= g.viewport.height + .5 &&
+      (["left", "right", "top", "bottom"] as const).every((edge) =>
+        Math.abs(r[edge] - g.panel[edge]) <= .5
+      ) &&
+      (!a || r.bottom <= a.top + .5 || r.top >= a.bottom - .5 ||
+        r.right <= a.left + .5 || r.left >= a.right - .5);
+  }, {
+    message:
+      "Native Surface placement converges on stable, bounded owner geometry",
+  }).toBe(true);
+  return current!;
 }
 function contained(g: Awaited<ReturnType<typeof geometry>>) {
   const r = g.surface;
