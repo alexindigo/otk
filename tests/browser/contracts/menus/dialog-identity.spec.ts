@@ -10,6 +10,27 @@ test.beforeEach(async ({ isolatedState: state, page }) => {
 });
 const events = (page: Page) => page.evaluate<string[]>("dialogTest.events");
 const input = (page: Page) => page.locator("dialog[open] input[name=taskName]");
+for (const close of ["escape", "command", "handle"]) {
+  test(`menus.dialog-returns-focus-to-replaced-origin-${close}`, {
+    tag: ["@menus", "@isolated"],
+  }, async ({ page }) => {
+    await page.evaluate(
+      "dialogTest.task('Replacement origin').then(handle=>globalThis.originDialog=handle)",
+    );
+    await expect(input(page)).toHaveValue("Replacement origin");
+    const prior = await page.locator("#origin").elementHandle();
+    await page.evaluate("dialogTest.replaceOrigin()");
+    await expect.poll(() => prior!.evaluate((el) => el.isConnected)).toBe(
+      false,
+    );
+    await expect(page.locator("#origin")).toHaveCount(1);
+    if (close === "escape") await page.keyboard.press("Escape");
+    else if (close === "command") await page.evaluate("dialogTest.close()");
+    else await page.evaluate("originDialog.close()");
+    await expect(page.locator("dialog[open]")).toHaveCount(0);
+    await expect(page.locator("#origin")).toBeFocused();
+  });
+}
 for (const query of ["", "Consumer action"]) {
   test(`menus.palette-availability-query-${query ? "filtered" : "empty"}`, {
     tag: ["@menus", "@isolated"],

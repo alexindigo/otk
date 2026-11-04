@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { createSignal, onSettled, Show } from "solid-js";
+import { createSignal, For, onSettled, Show } from "solid-js";
 import { render } from "@solidjs/web";
 import { CommandHub } from "@otk/client";
 import {
@@ -30,6 +30,7 @@ const events: string[] = [],
   inputs: (() => string)[] = [];
 const [palette, setPalette] = createSignal(false);
 const [available, setAvailable] = createSignal(true);
+const [originGeneration, setOriginGeneration] = createSignal(0);
 commands.register({
   id: "consumer.action",
   title: "Consumer action",
@@ -66,6 +67,7 @@ const driver = {
   inputs,
   palette: () => setPalette(true),
   available: (value: boolean) => setAvailable(value),
+  replaceOrigin: () => setOriginGeneration((value) => value + 1),
   theme: (id: string) => theme.commit(id),
   finish: () => finish?.(),
   close: () => commands.run("dialog.close"),
@@ -97,7 +99,9 @@ render(() => (
   <CommandProvider commands={commands}>
     <UiProvider registries={ui}>
       <h1>Dialog lifetime consumer</h1>
-      <button type="button" id="origin">Opening control</button>
+      <For each={[originGeneration()]} keyed={(value) => value}>
+        {() => <button type="button" id="origin">Opening control</button>}
+      </For>
       <DialogHost />
       <Show when={palette()}>
         <Palette

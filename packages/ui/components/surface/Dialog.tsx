@@ -22,12 +22,17 @@ export default function Dialog(props: {
   });
   onSettled(() => {
     const prior = document.activeElement as HTMLElement | null;
+    const originID = prior?.id;
     dialog.showModal();
     const release = ports.keyboard?.layer(`${props.id}.close`, () => true, 30);
     return () => {
       release?.();
       dialog.close();
-      if (prior?.isConnected) prior.focus();
+      // Content publication can replace the opening control during the modal.
+      const origin = originID
+        ? document.getElementById(originID) ?? prior
+        : prior;
+      if (origin?.isConnected) origin.focus();
     };
   });
   return (

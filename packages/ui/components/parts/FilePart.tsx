@@ -5,6 +5,7 @@ import type { PartRegistry } from "../../registries/renderers.ts";
 import type { DialogRegistry } from "../../registries/shell.ts";
 import { ownedAction, useCommandPorts } from "../../keyboard/context.tsx";
 import ImageView from "../ImageView.tsx";
+import { useContentIdentity } from "../../features/transcript-context.tsx";
 export function registerImageDialog(dialogs: DialogRegistry): void {
   dialogs.register<{ name: string; url: string }>({
     id: "image",
@@ -19,6 +20,7 @@ export function registerFilePart(parts: PartRegistry): void {
     "file",
     (props) => {
       const { commands } = useCommandPorts();
+      const identity = useContentIdentity();
       const open = ownedAction("image.open", () =>
         commands.run("dialog.open", {
           id: "image",
@@ -37,6 +39,14 @@ export function registerFilePart(parts: PartRegistry): void {
         >
           <button
             type="button"
+            id={`otk-file-image-${
+              encodeURIComponent(JSON.stringify([
+                identity.sidecarId,
+                identity.sessionID,
+                identity.messageID,
+                props.part.id,
+              ]))
+            }`}
             class="otk-file-image"
             aria-label={`Open image: ${props.part.name}`}
             title={props.part.name}

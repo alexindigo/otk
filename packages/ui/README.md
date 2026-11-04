@@ -297,7 +297,11 @@ buttons; other files keep the existing chip. Consumers also select
 `registerImageDialog(dialogs)` to open the original source via `dialog.open`.
 Registered ImageView supplies only flowing image content; DialogHost and Dialog
 own the card, title, keyboard dismissal and return focus. Images use their
-original aspect ratio and semantic role radii in both themes.
+original aspect ratio and semantic role radii in both themes. Image buttons
+expose content-scoped native IDs across rendering lifetimes. Dialog captures the
+opening control's ID before showing the modal and resolves the current element
+at close; controls without an ID retain connected-node focus return. Feature
+content supplies no dialog-close focus handler.
 
 Features may contribute `settings()` content to the existing footer and one
 `selection(draft)` projection. `PromptContext.nextSelection()` reads that shared
