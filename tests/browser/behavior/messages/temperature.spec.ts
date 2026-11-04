@@ -101,18 +101,25 @@ test(
     await page.locator("textarea[name=prompt]").fill(
       "Unsent temperature draft",
     );
-    const borrowed = await page.locator(".otk-message-flow p").evaluateAll(
-      (rows) => {
-        const v = document.querySelector(".otk-messages")!
-          .getBoundingClientRect();
-        return rows.filter((e) => {
-          const r = e.getBoundingClientRect();
-          return r.bottom > v.top && r.top < v.bottom &&
-            e.textContent!.startsWith("Alpha prompt");
-        }).at(-1)?.textContent;
-      },
+    // Source admission precedes viewport/follow settlement. Borrow the known
+    // newest source only once it is visibly rendered with installed fonts, not
+    // an incidental row from an intermediate virtual range.
+    await tick(() =>
+      page.evaluate(() => document.fonts.ready.then(() => true))
     );
-    expect(borrowed).toBeTruthy();
+    const borrowed = "Alpha prompt 24";
+    await tick(() =>
+      expect.poll(() =>
+        page.locator(".otk-message-flow p").evaluateAll((rows) => {
+          const v = document.querySelector(".otk-messages")!
+            .getBoundingClientRect();
+          return rows.filter((e) => {
+            const r = e.getBoundingClientRect();
+            return r.bottom > v.top && r.top < v.bottom;
+          }).map((e) => e.textContent);
+        })
+      ).toContain(borrowed)
+    );
     const policy = capture.received.find((frame) => frame.t === "welcome")!
       .messages as MessagePolicy;
     expect(policy.coolms).toBeGreaterThan(0);
@@ -138,7 +145,7 @@ test(
     await expect(page.locator("textarea[name=prompt]")).toHaveValue(
       "Unsent temperature draft",
     );
-    await paint(borrowed!);
+    await paint(borrowed);
     await info.attach("warm-retained-source-ms", {
       body: JSON.stringify({
         ms: performance.now() - start,
