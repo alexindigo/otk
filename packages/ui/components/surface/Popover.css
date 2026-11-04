@@ -5,23 +5,33 @@
 }
 .otk-popover-panel {
   position: absolute;
-  position-area: top span-right;
   position-try-fallbacks:
-    --otk-popover-bounded,
-    --otk-popover-bounded flip-inline,
-    --otk-popover-bounded flip-block,
-    --otk-popover-bounded flip-block flip-inline;
+    flip-inline,
+    flip-block,
+    flip-block flip-inline,
+    --otk-popover-inline-bounds,
+    --otk-popover-inline-bounds flip-block;
   position-try-order: most-height;
-  inset: auto;
-  margin: 0;
+  /* The native inset rectangle owns both placement and available size. Anchor
+     edges stay flush; only edges outside the viewport gutter are clamped. */
+  top: 0;
+  right: 0;
+  bottom: max(var(--popover-gutter), anchor(top));
+  left: var(--popover-inline-start, max(var(--popover-gutter), anchor(left)));
+  align-self: end;
+  justify-self: start;
+  margin: var(--popover-gutter) var(--popover-gutter) 0 0;
   padding: 0;
   border: 0;
   background: transparent;
   color: var(--otk-fg);
-  width: min(28rem, calc(100vw - 2 * var(--popover-gutter)));
+  width: stretch;
   min-width: min(200px, calc(100vw - 2 * var(--popover-gutter)));
   max-width: min(28rem, calc(100vw - 2 * var(--popover-gutter)));
-  max-height: min(65vh, calc(100dvh - 2 * var(--popover-gutter)));
+  height: fit-content;
+  /* An empty anchor side cannot admit a zero-height control surface. */
+  min-height: var(--control-size);
+  max-height: stretch;
   overflow: visible;
   z-index: var(--layer-popover);
 }
@@ -31,24 +41,27 @@
 }
 .otk-popover-panel > .otk-surface {
   min-height: 0;
-  max-height: none;
+  max-height: min(65vh, calc(100dvh - 2 * var(--popover-gutter)));
 }
 .otk-popover-wide {
-  position-area: top span-all;
+  --popover-inline-start: var(--popover-gutter);
   justify-self: center;
   width: min(80rem, calc(100vw - 2 * var(--popover-gutter)));
   max-width: min(80rem, calc(100vw - 2 * var(--popover-gutter)));
 }
 .otk-popover-content {
-  width: max-content;
+  width: fit-content;
 }
 .otk-popover-anchor {
   position: fixed;
   pointer-events: none;
 }
-/* Try the Surface's natural size before clipping to an available side. An empty
-   side must cause native fallback, not make an empty positioning box fit. */
-@position-try --otk-popover-bounded {
-  max-height: min(65vh, calc(100% - var(--popover-gutter)), calc(100dvh - 2 *
-    var(--popover-gutter)));
+/* If neither inline side can hold the minimum width, use the bounded viewport
+   while retaining the same native block-side choice. */
+@position-try --otk-popover-inline-bounds {
+  left: var(--popover-gutter);
+  right: 0;
+  margin-left: 0;
+  margin-right: var(--popover-gutter);
+  justify-self: end;
 }
