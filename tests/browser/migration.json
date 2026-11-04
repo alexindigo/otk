@@ -19,6 +19,91 @@
   },
   "supplementalTransfers": [
     {
+      "file": "tests/reuse/interaction-failures_test.ts",
+      "area": "harness",
+      "batch": "C17",
+      "originalTitle": "unregistered typed tool and part fallbacks ignore colliding extension-only fields",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/harness/public-ui.spec.ts",
+        "testID": "harness.public-ui-unregistered-extension-fallbacks"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "e7cae6a2709569cf756381980fcf16cf9ae0da26e45dfde2d0850cb9e6934903",
+        "run": "c17/transfer/otk-tests-b: five Deno assertions and five Playwright replacements on one delivered tree"
+      }
+    },
+    {
+      "file": "tests/reuse/interaction-failures_test.ts",
+      "area": "harness",
+      "batch": "C17",
+      "originalTitle": "clipboard refusal retains the authored draft and reply at its owned feedback",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/harness/public-ui.spec.ts",
+        "testID": "harness.public-ui-clipboard-refusal-retained-draft"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "e7cae6a2709569cf756381980fcf16cf9ae0da26e45dfde2d0850cb9e6934903",
+        "run": "c17/transfer/otk-tests-b: five Deno assertions and five Playwright replacements on one delivered tree"
+      }
+    },
+    {
+      "file": "tests/reuse/interaction-failures_test.ts",
+      "area": "harness",
+      "batch": "C17",
+      "originalTitle": "a clipboard refusal is visible at the reply action without an unhandled rejection",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/harness/public-ui.spec.ts",
+        "testID": "harness.public-ui-clipboard-refusal-reply"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "e7cae6a2709569cf756381980fcf16cf9ae0da26e45dfde2d0850cb9e6934903",
+        "run": "c17/transfer/otk-tests-b: five Deno assertions and five Playwright replacements on one delivered tree"
+      }
+    },
+    {
+      "file": "tests/reuse/error-boundaries_test.ts",
+      "area": "harness",
+      "batch": "C17",
+      "originalTitle": "injected unknown failures remain visible in form preference and command consumers",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/harness/public-ui.spec.ts",
+        "testID": "harness.public-ui-unknown-failure-owned-feedback"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "691961a8d6a7fcb66861ee747d87c06a8271c97150f9bcdf8c45c36aa296569e",
+        "run": "c17/transfer/otk-tests-b: five Deno assertions and five Playwright replacements on one delivered tree"
+      }
+    },
+    {
+      "file": "tests/reuse/metadata-policy_test.ts",
+      "area": "harness",
+      "batch": "C17",
+      "originalTitle": "an independent public UI consumer borrows server path flavor, feature formatters and output policy",
+      "destination": {
+        "runner": "playwright",
+        "file": "tests/browser/contracts/harness/public-ui.spec.ts",
+        "testID": "harness.public-ui-server-metadata-formatters-and-output-policy"
+      },
+      "activeOwner": "playwright",
+      "verificationReceipt": {
+        "kind": "old-new-batch",
+        "sourceSha256": "eab6174740e4a1b40b5524e30eeb98e53b78db0d9b97f05d4222c7a42da89577",
+        "run": "c17/transfer/otk-tests-b: five Deno assertions and five Playwright replacements on one delivered tree"
+      }
+    },
+    {
       "file": "tests/reuse/custom-tool_test.ts",
       "area": "messages",
       "batch": "A2",
@@ -57,7 +142,7 @@
       "area": "composer",
       "batch": "A3",
       "originalTitle": "paste drop and clipboard refusals reach owned feedback without clearing input or losing reply",
-      "portion": "all synchronous/asynchronous paste/drop refusal combinations; reply clipboard remainder stays active in Deno",
+      "portion": "all synchronous/asynchronous paste/drop refusal combinations; reply clipboard remainder transferred in C17",
       "destination": {
         "runner": "playwright",
         "file": "tests/browser/contracts/composer/public-ui.spec.ts",
@@ -960,9 +1045,11 @@
               "CDP clicks wait for rendered hit geometry before sending one native gesture"
             ]
           },
-          "lowerTierWitness": {
-            "file": "tests/unit/cdp-geometry_test.ts",
-            "testID": "CDP clicks wait for rendered hit geometry before sending one native gesture"
+          "lowerTierWitness": null,
+          "retirement": {
+            "item": "C17",
+            "reason": "Driver-specific geometry witness retired with driver; pointer-stability preserves stable geometry, trusted input and single/double click outcomes with exactly the native press count for each gesture",
+            "receipt": "c17/transfer/otk-tests-b + c17/final/otk-tests-a"
           },
           "activeOwner": {
             "runner": "playwright",

@@ -2,6 +2,7 @@
 import { collectLegacy } from "./legacy-collection.ts";
 import { hash as sha256 } from "./source.ts";
 import { parse } from "@babel/parser";
+import { oldBrowserConsumers } from "../../tests/arch/browser-retirement.ts";
 
 interface Owner {
   runner: "legacy" | "playwright";
@@ -106,8 +107,17 @@ interface Suite {
   suites?: Suite[];
 }
 if (import.meta.main) {
-  if (Deno.args.length !== 1 || Deno.args[0] !== "--audit") {
-    throw new Error("Usage: test:migration --audit");
+  const allowed = [
+    "--audit",
+    "--require-no-legacy",
+    "--require-no-old-driver-consumers",
+  ];
+  if (
+    !Deno.args.includes("--audit") ||
+    Deno.args.some((arg) => !allowed.includes(arg)) ||
+    new Set(Deno.args).size !== Deno.args.length
+  ) {
+    throw new Error(`Usage: test:migration ${allowed.join(" ")}`);
   }
   const rows = await migrationLedger(),
     ids = new Set<string>(),
@@ -120,6 +130,20 @@ if (import.meta.main) {
     throw new Error("Legacy on-disk collection and ledger owners differ");
   }
   const cases = await collectLegacy(active);
+  if (
+    Deno.args.includes("--require-no-legacy") && (active.length || cases.length)
+  ) {
+    throw new Error("Legacy browser assertions remain");
+  }
+  const oldDriverConsumers = await oldBrowserConsumers();
+  if (
+    Deno.args.includes("--require-no-old-driver-consumers") &&
+    oldDriverConsumers.length
+  ) {
+    throw new Error(
+      `Retired browser consumers: ${oldDriverConsumers.join("; ")}`,
+    );
+  }
   for (const row of rows) {
     if (active.includes(row.file)) {
       rejectDependencies(await Deno.readTextFile(row.file), row.file);
@@ -227,6 +251,34 @@ if (import.meta.main) {
       }
     }
   }
+  const supplemental = JSON.parse(
+    await Deno.readTextFile("tests/browser/migration.json"),
+  ).supplementalTransfers as {
+    file: string;
+    originalTitle: string;
+    area: string;
+    activeOwner: string;
+    destination: Owner;
+    verificationReceipt: Group["verificationReceipt"];
+  }[];
+  for (const transfer of supplemental) {
+    const matches = specs.filter((spec) =>
+      `tests/browser/${spec.file}` === transfer.destination.file &&
+      spec.title === transfer.destination.testID
+    );
+    if (
+      !transfer.originalTitle || transfer.activeOwner !== "playwright" ||
+      transfer.destination.runner !== "playwright" || matches.length !== 1 ||
+      !matches[0].tags.some((tag) => tag.replace(/^@/, "") === transfer.area) ||
+      transfer.verificationReceipt.kind !== "old-new-batch" ||
+      !/^[a-f0-9]{64}$/.test(transfer.verificationReceipt.sourceSha256) ||
+      !transfer.verificationReceipt.run
+    ) {
+      throw new Error(
+        `Invalid supplemental transfer: ${transfer.file}: ${transfer.originalTitle}`,
+      );
+    }
+  }
   const browserIDs = new Set<string>(), counts: Record<string, number> = {};
   for (const spec of specs) {
     rejectDependencies(
@@ -257,6 +309,8 @@ if (import.meta.main) {
       assertionGroups: ids.size,
       activeLegacyFiles: active.length,
       activeLegacyGroups: cases.length,
+      oldDriverConsumers,
+      supplementalTransfers: supplemental.length,
       playwright: specs.length,
       areas: counts,
       collectedLegacy: rows.filter((row) => active.includes(row.file)).map((

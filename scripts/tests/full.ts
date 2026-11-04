@@ -47,8 +47,13 @@ const tiers: [string, string[]][] = [
   ["collection", ["run", "-A", "scripts/tests/collect.ts", version]],
   ["browser", ["task", "test:e2e", `--project=oc-${version}`]],
   ["quarantine", ["run", "-A", "scripts/tests/quarantine.ts", version]],
-  ["legacy", ["task", "test:e2e:legacy"]],
-  ["migration", ["task", "test:migration", "--audit"]],
+  ["migration", [
+    "task",
+    "test:migration",
+    "--audit",
+    "--require-no-legacy",
+    "--require-no-old-driver-consumers",
+  ]],
 ];
 // Admit transferred scale proofs as soon as their legacy owners retire.
 if (
@@ -59,7 +64,7 @@ if (
     )
   )
 ) {
-  tiers.splice(tiers.findIndex(([id]) => id === "legacy"), 0, [
+  tiers.splice(tiers.findIndex(([id]) => id === "migration"), 0, [
     "browser-scale",
     [
       "task",
@@ -97,7 +102,6 @@ if (Deno.args.includes("--dry-run")) {
         id,
         command: [Deno.execPath(), ...args],
       })),
-      legacyIncludes: ["remaining themes", "remaining browser-scale"],
       compiledUpgrade: "integration",
     },
     null,

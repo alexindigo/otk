@@ -2,7 +2,10 @@
 import { assert, assertEquals } from "@std/assert";
 import { OpencodeV1Adapter } from "@otk/harness-opencode-v1";
 import type { Harness } from "@otk/harness";
-import type { Cdp } from "./cdp.ts";
+interface SocketEvent {
+  method: string;
+  params: Record<string, unknown>;
+}
 
 export interface CatalogWatchObservation {
   id: number;
@@ -93,7 +96,7 @@ const discovery =
 
 /** CDP socket identities distinguish accepted generations from failed handshakes. */
 export function catalogGenerations(
-  events: readonly Cdp["events"][number][],
+  events: readonly SocketEvent[],
 ): Generation[] {
   const generations = new Map<string, Generation>();
   for (const event of events) {
@@ -139,7 +142,7 @@ export function catalogGenerations(
 
 /** Readiness predicate only; the assertion below rejects duplicates and leaks. */
 export function generationDemandReady(
-  events: readonly Cdp["events"][number][],
+  events: readonly SocketEvent[],
 ) {
   const accepted = catalogGenerations(events).filter((generation) =>
     generation.welcomes
@@ -154,7 +157,7 @@ export function generationDemandReady(
 }
 
 export function assertCatalogGenerations(
-  events: readonly Cdp["events"][number][],
+  events: readonly SocketEvent[],
   watches: readonly CatalogWatchObservation[],
   directory: string,
   closed = false,

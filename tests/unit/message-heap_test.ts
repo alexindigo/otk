@@ -3,7 +3,7 @@ import { assertEquals } from "@std/assert";
 import {
   messageHeapRetention,
   type MessageHeapSnapshot,
-} from "../support/message-heap.ts";
+} from "../support/message-heap-analysis.ts";
 
 function snapshot(shared: boolean, remove: boolean): MessageHeapSnapshot {
   const strings = [

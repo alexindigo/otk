@@ -39,14 +39,20 @@ test(
       const target = kind === "summary"
         ? page.getByText("Failure details", { exact: true })
         : page.getByRole("button", { name: "Error details" });
-      await target.click();
+      const clickCount = kind === "summary" ? 1 : 2;
+      await target.click({ clickCount });
       if (kind === "summary") {
         await expect(page.locator("details")).toHaveAttribute("open", "");
       } else await expect(target).toHaveAttribute("aria-expanded", "true");
       expect(
         await page.evaluate(() => Reflect.get(window, "gestureEvents")),
-      ).toEqual([{ trusted: true, detail: 1 }]);
-      expect(await page.evaluate(() => Reflect.get(window, "presses"))).toBe(1);
+      ).toEqual(Array.from({ length: clickCount }, (_, i) => ({
+        trusted: true,
+        detail: i + 1,
+      })));
+      expect(await page.evaluate(() => Reflect.get(window, "presses"))).toBe(
+        clickCount,
+      );
       expect((await target.boundingBox())!.y).toBe(240);
     }
   },

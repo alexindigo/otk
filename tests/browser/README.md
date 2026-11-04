@@ -51,7 +51,7 @@ assigned version guests; never run these workloads directly on a physical host.
 deno task test:prepare --version 1.18.34
 deno task test:e2e --project=oc-1.18.34 --grep @smoke --retries=0
 deno task test:e2e --project=oc-1.18.34 --grep @fixture-acceptance --workers=3 --retries=0
-deno task test:e2e:legacy
+deno task test:migration --audit --require-no-legacy --require-no-old-driver-consumers
 deno task test:batch --area harness --version 1.18.34
 deno task test:scale --project=scale-1.18.34 --grep @harness --workers=1 --retries=0
 ```
@@ -62,7 +62,9 @@ once, and records native/cache/binary/web hashes in
 `.test-state/builds/<tree>/receipt.json`. The compile recipe owns its frozen
 install and web build. A browser invocation validates that exact receipt before
 admitting workers; it neither installs dependencies nor builds in a test case.
-The legacy task reports no active assertions after the final visual transfers.
+The legacy browser task and driver are retired. Playwright owns all browser
+execution; Deno reuse tests retain their non-browser contracts. Stock system
+Chromium is no longer a dependency; Playwright uses its pinned managed browser.
 `migration.json` retains every original group, its behavior destinations and
 checked theme witnesses.
 

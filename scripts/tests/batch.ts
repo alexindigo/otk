@@ -2,7 +2,6 @@
 import { join } from "@std/path";
 import { migrationLedger } from "./migration-audit.ts";
 import { sourceTree } from "./source.ts";
-import { collectLegacy } from "./legacy-collection.ts";
 import { stripVTControlCharacters } from "node:util";
 
 const area = Deno.args[Deno.args.indexOf("--area") + 1];
@@ -148,22 +147,8 @@ const legacy = rows.filter((row) =>
   row.groups.some((group) => group.activeOwner.runner === "legacy")
 ).map((row) => row.file);
 if (legacy.length) {
-  const collected = await collectLegacy(legacy);
-  const expected = rows.filter((row) => legacy.includes(row.file)).flatMap(
-    (row) =>
-      row.groups.filter((group) => group.activeOwner.runner === "legacy").map(
-        (group) => `${row.file}:${group.originalTitle}`,
-      ),
-  ).sort();
-  if (
-    JSON.stringify(
-      collected.map((item) => `${item.file}:${item.title}`).sort(),
-    ) !== JSON.stringify(expected)
-  ) throw new Error("Old assertion ledger/collection mismatch");
-  await run(
-    "old",
-    ["task", "test:e2e:legacy", ...legacy],
-    collected.map((item) => ({ file: item.file, testID: item.title })),
+  throw new Error(
+    "Legacy browser runner is retired; migrate the active owners",
   );
 } else {
   // Retirement is admitted only by an explicit prior old/new receipt, never by absence.
