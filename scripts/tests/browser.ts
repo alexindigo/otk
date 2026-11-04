@@ -116,12 +116,19 @@ try {
           if (!(error instanceof Deno.errors.NotFound)) throw error;
         }
         for (const pid of owned?.pids ?? []) {
-          const alive = await new Deno.Command("/usr/bin/kill", {
-            args: ["-0", String(pid)],
-            signal: AbortSignal.timeout(5000),
-          }).output();
-          if (alive.success) {
-            throw new Error(`Owned PID survived cleanup: ${pid}`);
+          // A stopped cgroup can precede orphan reaping after a worker crash.
+          // Join PID disappearance, as the controller does, instead of racing it.
+          const deadline = performance.now() + 5000;
+          while (true) {
+            const alive = await new Deno.Command("/usr/bin/kill", {
+              args: ["-0", String(pid)],
+              signal: AbortSignal.timeout(5000),
+            }).output();
+            if (!alive.success) break;
+            if (performance.now() >= deadline) {
+              throw new Error(`Owned PID survived cleanup: ${pid}`);
+            }
+            await new Promise<void>((resolve) => setTimeout(resolve, 25));
           }
         }
         for (const port of owned?.ports ?? []) {
