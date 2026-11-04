@@ -1,0 +1,139 @@
+{
+  "schema": 1,
+  "integration": {
+    "composer": [
+      "attachment-mime_test.ts",
+      "commands_test.ts",
+      "history_test.ts",
+      "history-batches_test.ts",
+      "models_test.ts",
+      "native-selection_test.ts",
+      "shell_test.ts",
+      "catalog-file-policy_test.ts",
+      "directory-catalogs_test.ts"
+    ],
+    "messages": [
+      "bounded_history_test.ts",
+      "helper-pages_test.ts",
+      "tool-results_test.ts",
+      "session-digest_test.ts",
+      "enrichment-order_test.ts",
+      "frame_budget_test.ts",
+      "passive-safety_test.ts"
+    ],
+    "sessions": [
+      "children_test.ts",
+      "inbox_test.ts",
+      "local-session-effects_test.ts",
+      "project-location_test.ts",
+      "session_actions_test.ts",
+      "task-membership_test.ts",
+      "identity-batch_test.ts"
+    ],
+    "revert": ["session_actions_test.ts", "history_test.ts"],
+    "attention": [
+      "permissions_test.ts",
+      "questions_test.ts",
+      "session_auto_test.ts",
+      "children_test.ts"
+    ],
+    "menus": ["commands_test.ts", "prefs_test.ts"],
+    "visual": ["prefs_test.ts", "compiled-static_test.ts"],
+    "transport": [
+      "beta2-upgrade_test.ts",
+      "bootstrap-cost_test.ts",
+      "catalog-native_test.ts",
+      "compiled-beta2_test.ts",
+      "compiled-digest_test.ts",
+      "compiled-digest-services_test.ts",
+      "compiled-requests_test.ts",
+      "compiled-routing_test.ts",
+      "composition_test.ts",
+      "digest-catalog-admission_test.ts",
+      "http-requests_test.ts",
+      "native-request-events_test.ts",
+      "native-startup_test.ts",
+      "request-contract_test.ts",
+      "request-restart_test.ts",
+      "request-wire_test.ts",
+      "sidecar_test.ts"
+    ],
+    "harness": [
+      "fixture_providers_test.ts",
+      "fixture-boundaries_test.ts",
+      "fixture-lifetime_test.ts",
+      "fixture-readiness_test.ts",
+      "provider-cache_test.ts"
+    ]
+  },
+  "areas": [
+    "composer",
+    "messages",
+    "sessions",
+    "revert",
+    "attention",
+    "menus",
+    "visual",
+    "transport",
+    "harness"
+  ],
+  "rules": [
+    {
+      "id": 1,
+      "pattern": "(?i)^packages/(ui|client)/.*(prompt|composer|editor|attachment)",
+      "areas": ["composer", "attention", "menus"],
+      "themes": "style"
+    },
+    {
+      "id": 2,
+      "pattern": "(?i)^packages/(ui|client|content)/.*(transcript|message|viewport|highlight|usage)|^packages/content/",
+      "areas": ["messages", "sessions", "revert"],
+      "themes": "always"
+    },
+    {
+      "id": 3,
+      "pattern": "(?i)^packages/(ui|client)/.*(navigation|draft|session.action|task|inbox|shell|project|tabs|panel|sessions)",
+      "areas": ["sessions", "revert", "composer", "transport"]
+    },
+    {
+      "id": 4,
+      "pattern": "(?i)^packages/(ui|client)/.*(notif|approval|permission|question)",
+      "areas": ["attention", "sessions", "composer"]
+    },
+    {
+      "id": 5,
+      "pattern": "(?i)^packages/.*(context|command|keymap|dialog|popover|menu)",
+      "areas": ["menus", "composer", "sessions", "visual"]
+    },
+    {
+      "id": 6,
+      "pattern": "(?i)(theme|\\.css$|/controls/|/fonts?/)",
+      "areas": ["visual", "menus", "composer"],
+      "themes": "always"
+    },
+    {
+      "id": 7,
+      "pattern": "^packages/(native|opencode|harness|harness-opencode-v1|store|protocol)/|^core/|^(main|application)\\.ts$|^defaults/",
+      "broad": true,
+      "themes": "always",
+      "milestone": true
+    },
+    {
+      "id": 8,
+      "pattern": "^scripts/|^tests/(support|browser/(fixtures|pages))/|(^|/)(deno\\.(json|lock)|package(-lock)?\\.json|.*config\\.[^/]+)$|^tests/browser/(areas|quarantine)\\.json$",
+      "broad": true,
+      "themes": "always"
+    },
+    {
+      "id": 9,
+      "pattern": "^tests/.*(scale|heap|snapshots)",
+      "areas": ["messages", "sessions", "harness"],
+      "scale": true
+    },
+    {
+      "id": 10,
+      "pattern": "^(docs/.*\\.md|[^/]+\\.md|LICENSE)$",
+      "areas": []
+    }
+  ]
+}

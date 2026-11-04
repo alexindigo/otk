@@ -10,11 +10,12 @@ import {
   tool,
 } from "../../pages/attention.ts";
 import { focusNotifications, toast } from "../../pages/notifications.ts";
+import { collapsed } from "../../pages/sessions.ts";
 
 test.use({ profile: "contract-attention-remote" });
 test(
   "attention.remote-child-notification-allow-once-keeps-local-draft-and-produces-file",
-  { tag: ["@attention", "@isolated"] },
+  { tag: ["@attention", "@isolated", "@smoke", "@smoke.attention"] },
   async ({ isolatedState: state, page }) => {
     test.setTimeout(90_000);
     const a = await seed(state, "Local selected");
@@ -48,6 +49,10 @@ test(
     await expect(server).toContainText("connected");
     const sidecar = (await server.getAttribute("data-settings-sidecar"))!;
     await closeSettings(page);
+    await page.getByRole("button", { name: "Collapse projects", exact: true })
+      .click();
+    await page.locator(".otk-panel-collapse").click();
+    await collapsed(page);
     await page.locator("textarea[name=prompt]").fill("Retain local draft");
     await tool(state, "task", {
       subagent_type: "general",
@@ -86,6 +91,7 @@ test(
     const note = page.locator(toast(b.id, sidecar));
     await expect(note).toContainText("Allow once");
     await expect(note).toHaveCount(1);
+    await collapsed(page);
     await note.locator(".otk-toast-actions button").last().click();
     await expect.poll(async () => {
       const rows = await state.controller.call<

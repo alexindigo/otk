@@ -11,7 +11,11 @@
     "scale": "playwright test --config playwright.scale.config.ts",
     "themes": "playwright test --config playwright.themes.config.ts",
     "check": "tsc --noEmit",
-    "acceptance:tooling": "playwright test --config playwright.tooling.config.ts --workers=1 --retries=0"
+    "acceptance:tooling": "playwright test --config playwright.tooling.config.ts --workers=1 --retries=0",
+    "reporting": "playwright test --config playwright.reporting.config.ts",
+    "acceptance:reporting": "node --experimental-strip-types tooling/acceptance.ts reporting",
+    "acceptance:selection": "node --experimental-strip-types tooling/acceptance.ts selection",
+    "acceptance:sharding": "node --experimental-strip-types tooling/acceptance.ts sharding"
   },
   "devDependencies": {
     "@playwright/test": "1.64.1",

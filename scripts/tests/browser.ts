@@ -6,6 +6,16 @@ const tree = await sourceTree();
 const scale = Deno.args.includes("--scale");
 const themes = Deno.args.includes("--themes");
 const args = Deno.args.filter((arg) => !["--scale", "--themes"].includes(arg));
+const retry = args.find((arg) => arg.startsWith("--retries="))?.slice(10) ??
+  (args.includes("--retries")
+    ? args[args.indexOf("--retries") + 1]
+    : undefined);
+if (
+  retry && retry !== "0" &&
+  !(retry === "1" && Deno.env.get("OTK_TEST_MATRIX_FULL") === "1")
+) {
+  throw new Error("Automatic retries are full-matrix-only");
+}
 const receipt = await readBuild(tree);
 const project =
   Deno.args.find((arg) => arg.startsWith("--project="))?.slice(10) ??
@@ -162,6 +172,7 @@ try {
       {
         schema: 1,
         run,
+        parentRun: Deno.env.get("OTK_TEST_RUN") ?? null,
         tree,
         native: receipt.native,
         binary: { path: receipt.binary, sha256: receipt.binarySha256 },

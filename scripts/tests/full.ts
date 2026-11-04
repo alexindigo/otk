@@ -8,13 +8,15 @@ const flags = new Set<string>();
 for (let i = 0; i < Deno.args.length; i++) {
   const flag = Deno.args[i];
   if (
-    !["--version", "--tiers", "--dry-run"].includes(flag) || flags.has(flag)
+    (!["--version", "--tiers", "--dry-run", "--shard"].includes(flag) &&
+      !flag.startsWith("--shard=")) || flags.has(flag)
   ) {
     throw new Error(`Unknown or repeated argument: ${flag}`);
   }
   flags.add(flag);
   if (
-    flag !== "--dry-run" && (!Deno.args[++i] || Deno.args[i].startsWith("--"))
+    flag !== "--dry-run" && !flag.startsWith("--shard=") &&
+    (!Deno.args[++i] || Deno.args[i].startsWith("--"))
   ) {
     throw new Error(`Missing value: ${flag}`);
   }
@@ -34,10 +36,17 @@ const tiers: [string, string[]][] = [
   ["check", ["task", "check"]],
   ["unit", ["task", "test:unit"]],
   ["arch", ["task", "test:arch"]],
+  ["no-product-hooks", [
+    "run",
+    "--allow-read",
+    "scripts/tests/product-hooks.ts",
+  ]],
   ["reuse", ["task", "test:reuse"]],
   ["integration", ["task", "test:integration"]],
   ["integration-scale", ["task", "test:integration:scale"]],
-  ["browser", ["task", "test:e2e", `--project=oc-${version}`, "--retries=1"]],
+  ["collection", ["run", "-A", "scripts/tests/collect.ts", version]],
+  ["browser", ["task", "test:e2e", `--project=oc-${version}`]],
+  ["quarantine", ["run", "-A", "scripts/tests/quarantine.ts", version]],
   ["legacy", ["task", "test:e2e:legacy"]],
   ["migration", ["task", "test:migration", "--audit"]],
 ];
@@ -57,9 +66,22 @@ if (
       "test:scale",
       `--project=scale-${version}`,
       "--workers=1",
-      "--retries=1",
     ],
   ]);
+}
+if (version === "1.18.34") tiers.push(["themes", ["task", "test:themes"]]);
+const shard = value("--shard") ??
+  Deno.args.find((arg) => arg.startsWith("--shard="))?.slice(8);
+if (shard) {
+  if (
+    !/^[1-9]\d*\/[1-9]\d*$/.test(shard) ||
+    Number(shard.split("/")[0]) > Number(shard.split("/")[1])
+  ) throw new Error("Invalid shard");
+  for (const [id, args] of tiers) {
+    if (["browser", "browser-scale"].includes(id)) {
+      args.push(`--shard=${shard}`);
+    }
+  }
 }
 const selected = value("--tiers")?.split(",");
 if (selected?.some((name) => !tiers.some(([id]) => id === name))) {
@@ -157,6 +179,9 @@ for (const [id, args] of lane) {
         `--working-directory=${Deno.cwd()}`,
         ...environment,
         `--setenv=OTK_TEST_TREE=${tree}`,
+        `--setenv=OTK_TEST_MATRIX_FULL=${
+          Deno.env.get("OTK_TEST_MATRIX_FULL") === "1" ? "1" : "0"
+        }`,
         Deno.execPath(),
         ...args,
       ],
@@ -242,6 +267,8 @@ for (const [id, args] of lane) {
         schema: 1,
         version,
         tree,
+        base: Deno.env.get("OTK_TEST_BASE") ?? "missing",
+        selectionReason: "complete version qualification",
         inventory: join(root, "tiers.jsonl"),
         started,
         complete: !selected,

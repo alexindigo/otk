@@ -103,6 +103,11 @@ for (
     expect(receiptPath, "child supervisor must finish and write its receipt")
       .toBeTruthy();
     const receipt = JSON.parse(await readFile(receiptPath!, "utf8"));
+    expect(
+      receipt.parentRun,
+      "negative control remains owned by its qualification run",
+    )
+      .toBe(process.env.OTK_TEST_RUN);
     expect(receipt.cleanupErrors).toEqual([]);
     const root = join(receiptPath!, "..");
     for (const owned of await unitInventory(join(root, "units.jsonl"))) {

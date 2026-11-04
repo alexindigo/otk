@@ -76,7 +76,7 @@ isolatedTest("transport.workspace-projects", {
 });
 
 test("transport.incremental-markdown", {
-  tag: ["@transport", "@messages", "@smoke"],
+  tag: ["@transport", "@messages"],
 }, async ({ state, page }) => {
   const seed = await state.native<{ id: string }>("/session", "POST", {
     title: "Existing project",

@@ -124,7 +124,15 @@ test(
 
 test(
   "transport.history-drafts",
-  { tag: ["@transport", "@sessions"] },
+  {
+    tag: [
+      "@transport",
+      "@sessions",
+      "@composer",
+      "@smoke",
+      "@smoke.navigation",
+    ],
+  },
   async ({ state, page }) => {
     const a = await state.native<{ id: string }>("/session", "POST", {
       title: "Draft A",
@@ -149,6 +157,21 @@ test(
       page.locator(".otk-session-crumb[aria-current] .otk-crumb-title"),
     ).toHaveText("Draft B");
     await expect(input).toHaveValue("Unsent work");
+    await page.getByRole("button", { name: "Edit prompt", exact: true })
+      .click();
+    const editor = page.locator("textarea[name=editor]");
+    await editor.fill("Unsaved editor bytes");
+    page.once("dialog", (dialog) => dialog.dismiss());
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`${b.id}$`));
+    await expect(editor).toHaveValue("Unsaved editor bytes");
+    await page.locator(".otk-editor footer button").last().click();
+    await page.goBack();
+    await expect(page).toHaveURL(new RegExp(`${a.id}$`));
+    await expect(input).toHaveValue("");
+    await page.goForward();
+    await expect(page).toHaveURL(new RegExp(`${b.id}$`));
+    await expect(input).toHaveValue("Unsaved editor bytes");
   },
 );
 

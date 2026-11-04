@@ -445,11 +445,27 @@ heartbeat every 20 seconds. Connections close after 60 seconds without an
 incoming response or other valid client frame. This is an application-level
 heartbeat, not a WebSocket control-frame ping.
 
-Development verification runs inside virtual machine
-`arch-niri-otk-devbase-otk-m5a` on `ark.home`, as `tester` in
-`/home/tester/otk`, through the strict `otk-vm` / `otk-m5a` access profile and
-milestone plans. The test provider is scripted and uses no real model
-credentials.
+Development builds, tests and experiments run only inside `otk-tests-a`,
+`otk-tests-b` and `otk-tests-c` on `ark.home`, as `tester` in
+`/home/tester/otk`, with disk-backed `TMPDIR=/home/tester/otk/tmp`. If a guest
+is unavailable, stop rather than fall back to either host. Ark transport
+revalidates the receipt/domain/QGA/DMI/pin, delivers exact dirty source and
+copies reports. It never builds, tests or launches browsers on Ark. The test
+provider is scripted and uses no real model credentials.
+
+| # | Developer intent     | Ark transport                                                                                                        | Guest work                                                                  |
+| - | -------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 1 | Normal commit check  | `python3 scripts/test-matrix.py --lane commit --base HEAD`                                                           | A normally; shared changes fan out to A/B/C; dirty paths and smoke included |
+| 2 | One browser area     | `python3 scripts/test-vm.py otk-tests-a run -- deno task test:e2e --project=oc-1.18.34 --grep @composer --retries=0` | Fresh context and owned project; actual native outcomes                     |
+| 3 | Provider integration | `python3 scripts/test-vm.py otk-tests-b run -- deno task test:integration`                                           | 1.18.35; Deno file-parallel                                                 |
+| 4 | Theme/style change   | `python3 scripts/test-vm.py otk-tests-a run -- deno task test:themes --project=themes`                               | One ordered state sweep                                                     |
+| 5 | Heavy data/heap      | `python3 scripts/test-vm.py otk-tests-c run -- deno task test:scale --project=scale-1.19.3`                          | Isolated scale, measurements and structural assertions                      |
+| 6 | Milestone/release    | `python3 scripts/test-matrix.py --lane full --guests otk-tests-a,otk-tests-b,otk-tests-c`                            | All tiers/versions; scale and upgrades; themes once                         |
+| 7 | Trace investigation  | `python3 scripts/test-vm.py otk-tests-a run -- npm --prefix tests/browser exec -- playwright show-trace TRACE_PATH`  | Actual retained trace path; browser remains in guest                        |
+
+See [testing](./docs/testing.md) for selection, sharding, retry and quarantine
+contracts. Prepare the exact delivered tree with `test:prepare` before focused
+browser/integration commands.
 
 The [session digest qualification](./docs/session-digest-verification.md)
 documents the real-version scale generator, serving-isolate and browser budgets,

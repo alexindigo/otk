@@ -113,15 +113,16 @@ single feedback surface; raw native exceptions stay diagnostic-only.
 
 ## Qualification
 
-Run workloads only in virtual machine `arch-niri-otk-devbase-otk-m5a` on
-`ark.home`, transfer profile `otk-m5a`, through its pinned `otk-vm` access
-route. Use a frozen guest source below `/home/tester/otk` and disk-backed
-`TMPDIR=/home/tester/otk/tmp`; if unavailable, stop rather than use either host.
-The following commands are **inside that guest source workspace**:
+Run workloads only in `otk-tests-a/b/c` on `ark.home`, through the pinned
+receipt-bound `otk-vm` route, in `/home/tester/otk` with disk-backed
+`TMPDIR=/home/tester/otk/tmp`. Stop if unavailable. From Ark, after exact-source
+delivery, use the [testing transport](testing.md):
 
 ```sh
-deno task test tests/integration/request-restart_test.ts tests/integration/native-request-events_test.ts tests/integration/compiled-requests_test.ts tests/integration/request-scale_test.ts
-deno task test tests/e2e/request-activation_test.ts tests/e2e/request-feedback_test.ts tests/e2e/native-request-events_test.ts tests/e2e/request-scale_test.ts
+python3 scripts/test-vm.py otk-tests-a run -- deno task test:prepare --version 1.18.34 --scale
+python3 scripts/test-vm.py otk-tests-a run -- deno task test:integration
+python3 scripts/test-vm.py otk-tests-a run -- deno task test:e2e --project=oc-1.18.34 --grep @transport --retries=0
+python3 scripts/test-vm.py otk-tests-a run -- deno task test:scale --project=scale-1.18.34
 ```
 
 The compiled proof builds with the tracked recipe when `OTK_TEST_BINARY` is

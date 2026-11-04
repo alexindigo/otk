@@ -4,7 +4,7 @@ import { openSession, wire } from "../../fixtures/wire.ts";
 import { receivedPrompt } from "../../fixtures/provider.ts";
 
 test("transport.created-before-index", {
-  tag: ["@transport", "@readiness", "@smoke"],
+  tag: ["@transport", "@readiness"],
 }, async ({ state, page }) => {
   const seed = await state.native<{ id: string }>("/session", "POST", {
     title: "Existing project",

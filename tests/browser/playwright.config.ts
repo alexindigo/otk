@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { chromium, defineConfig } from "@playwright/test";
 import { join } from "node:path";
+import { projectPolicy } from "./project-policy.ts";
 
 const root = process.env.OTK_TEST_RUN_ROOT ??
   join(process.cwd(), "test-results", "unowned");
@@ -20,11 +21,17 @@ export default defineConfig({
   fullyParallel: true,
   workers: 3,
   forbidOnly: true,
-  retries: 0,
+  retries: process.env.OTK_TEST_MATRIX_FULL === "1" &&
+      process.env.OTK_TEST_QUARANTINE !== "1"
+    ? 1
+    : 0,
   failOnFlakyTests: true,
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  reporter: [["list"], ["json", { outputFile: join(root, "results.json") }]],
+  reporter: [["list"], ["json", { outputFile: join(root, "results.json") }], [
+    "blob",
+    { outputDir: join(root, "blob") },
+  ], ["./reporter.ts"]],
   metadata: {
     node: process.version,
     deno: process.env.OTK_TEST_DENO_VERSION,
@@ -37,6 +44,7 @@ export default defineConfig({
   },
   projects: ["1.18.34", "1.18.35", "1.19.3"].map((version) => ({
     name: `oc-${version}`,
+    ...projectPolicy(`oc-${version}`),
   })),
   use: {
     browserName: "chromium",

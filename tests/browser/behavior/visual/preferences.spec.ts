@@ -5,7 +5,7 @@ import { prompt } from "../../pages/transcript.ts";
 import { receivedPrompt } from "../../fixtures/provider.ts";
 import { independentPage } from "../../pages/visual.ts";
 test("visual.reasoning-display-persists-broadcasts-and-retains-exact-writes", {
-  tag: ["@visual"],
+  tag: ["@visual", "@smoke", "@smoke.preferences"],
 }, async ({ state, page, browser }) => {
   const session = await state.native<{ id: string }>("/session", "POST", {
     title: "Preferences",

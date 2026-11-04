@@ -8,6 +8,15 @@ viewport, cooling, uncertain-outcome and supervision assertions.
 
 ## Fixtures and observations
 
+Current owners are `tests/integration/scale/remaining-scale_test.ts`,
+`tests/browser/scale/remaining.spec.ts`,
+`tests/browser/scale/task-overflow.spec.ts`, and the shared
+`tests/browser/themes/sweep.spec.ts`. The historical source names in the
+transfer table below identify the original proofs;
+`tests/browser/migration.json` records their complete current destinations.
+Behavior runs once in Dark; theme geometry runs in the separate Dark/Linen/Stone
+sweep.
+
 | # | Test owner                                                                | Observable contract                                                                                                                                                                                                                                                                                                                                           |
 | - | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1 | `tests/integration/remaining-scale_test.ts`                               | 4,615 tasks/marks and251 tasks in one directory: list/get use two set statements, seen/task edits publish one keyed op. Ten exact provider attachments across two independent origins use two batches; a rejected member cannot mutate the captured draft or admit partial preparation. Provider bytes are absent from both OTK databases.                    |
@@ -47,19 +56,16 @@ no-additional-change PA disposition requires completed measurements.
 
 ## Execution
 
-All builds, tests and experiments run inside the assigned virtual machine
-`arch-niri-otk-devbase-otk-m5a` on `ark.home`, profile `otk-m5a`, with a
-disk-backed workspace below `/home/tester/otk` and
-`TMPDIR=/home/tester/otk/tmp`. Use the strict access route documented by
-`otk-vm`/`virsh-vm-shell`; if unavailable, stop rather than use either host.
-
-From an exact staged guest source, the focused command is:
+All builds, tests and experiments run in `otk-tests-a`, `otk-tests-b` and
+`otk-tests-c` on `ark.home`, `/home/tester/otk`, with
+`TMPDIR=/home/tester/otk/tmp`. Use the receipt-bound `otk-vm` route; stop if
+unavailable. From Ark, use the [testing transport](testing.md):
 
 ```sh
-export PATH=/home/tester/.deno/bin:/usr/local/bin:/usr/bin
-export TMPDIR=/home/tester/otk/tmp
-deno task build:web
-deno task test tests/integration/remaining-scale_test.ts tests/integration/beta2-upgrade_test.ts tests/integration/compiled-beta2_test.ts tests/reuse/remaining_test.ts tests/e2e/remaining-scale_test.ts tests/e2e/remaining-pa_test.ts tests/e2e/task-overflow_test.ts
+python3 scripts/test-vm.py otk-tests-a run -- deno task test:prepare --version 1.18.34 --scale
+python3 scripts/test-vm.py otk-tests-a run -- deno task test:integration:scale
+python3 scripts/test-vm.py otk-tests-a run -- deno task test:scale --project=scale-1.18.34
+python3 scripts/test-matrix.py --lane full --guests otk-tests-a,otk-tests-b,otk-tests-c
 ```
 
 Normal full-suite discovery also runs these cases. The unchanged milestone gate,

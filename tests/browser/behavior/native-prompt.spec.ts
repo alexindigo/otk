@@ -4,7 +4,7 @@ import { receivedPrompt } from "../fixtures/provider.ts";
 
 test(
   "smoke.native-prompt",
-  { tag: ["@smoke", "@transport"] },
+  { tag: ["@smoke", "@smoke.native-prompt", "@transport"] },
   async ({ state, page }) => {
     const seed = await state.native<{ id: string }>("/session", "POST", {
       title: "Smoke seed",

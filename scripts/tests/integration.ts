@@ -21,6 +21,15 @@ for await (const entry of Deno.readDir(directory)) {
   }
 }
 files.sort();
+const areaAt = Deno.args.indexOf("--areas");
+const selectedAreas = areaAt < 0
+  ? undefined
+  : Deno.args[areaAt + 1]?.split(",");
+if (selectedAreas && !selectedAreas.includes("*")) {
+  const matched = files.filter((file) => selectedAreas.includes(file));
+  if (!matched.length) throw new Error("Empty selected integration collection");
+  files.splice(0, files.length, ...matched);
+}
 if (!files.length) throw new Error(`Empty integration group: ${group}`);
 const tree = await sourceTree();
 const build = await readBuild(tree);
@@ -42,7 +51,9 @@ const args = [
   "--allow-env",
   "--allow-run",
   "--allow-sys=systemMemoryInfo",
-  ...Deno.args.slice(1),
+  ...Deno.args.slice(1).filter((_, i) =>
+    areaAt < 0 || i + 1 !== areaAt && i + 1 !== areaAt + 1
+  ),
   ...files,
 ];
 const selection = {

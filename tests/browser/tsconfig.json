@@ -13,6 +13,8 @@
     "paths": { "@otk/protocol": ["../../packages/protocol/mod.ts"] }
   },
   "include": [
+    "reporter.ts",
+    "project-policy.ts",
     "*.config.ts",
     "tooling/**/*.ts",
     "fixtures/**/*.ts",

@@ -21,21 +21,15 @@ population/history amplification, **not a 60-GB storage or I/O benchmark**.
 
 ## Execution boundary
 
-Run project workloads only inside virtual machine
-`arch-niri-otk-devbase-otk-m5a` on `ark.home`, through the strict `otk-vm` /
-`otk-m5a` access profile. Stage a fresh source tree beneath
-`/home/tester/otk/.test-state/beta2-m1/`; run fmt/lint only in that isolated
-source. Set `TMPDIR=/home/tester/otk/tmp`. If the guest is unavailable, stop
-rather than run on a physical host.
-
-From that isolated **guest** source directory:
+Run workloads only in `otk-tests-a/b/c` on `ark.home`, using the strict
+receipt-bound `otk-vm` route, `/home/tester/otk` and
+`TMPDIR=/home/tester/otk/tmp`. If unavailable, stop. From Ark, after
+exact-source delivery, use the [testing commands](testing.md):
 
 ```sh
-export PATH=/home/tester/.deno/bin:/usr/local/bin:/usr/bin
-export TMPDIR=/home/tester/otk/tmp
-deno task test tests/integration/session-scale_test.ts
-deno task build:web
-deno task test tests/e2e/session-scale_test.ts
+python3 scripts/test-vm.py otk-tests-a run -- deno task test:prepare --version 1.18.34 --scale
+python3 scripts/test-vm.py otk-tests-a run -- deno task test:integration:scale
+python3 scripts/test-vm.py otk-tests-a run -- deno task test:scale --project=scale-1.18.34
 ```
 
 For a retained standalone fixture, choose a new destination inside the guest
@@ -101,7 +95,7 @@ document as timeless performance claims.
 
 The message fixture retains the same population and adds a 102-step reply,
 helper-heavy parent, long code/diff, queued prompts and a unique-source payload.
-Tests record five cold and preloaded newest-page paints per theme, real native
+Tests record five cold and preloaded newest-page paints in Dark, real native
 cursor traversal and reverse reuse, 1,000 real streamed updates, and ten full
 load/cool heap cycles while another session keeps the highlighting worker alive.
 Paint, event-loop, highlighting, reserve-at-input-cadence and retained-byte
