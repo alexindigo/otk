@@ -49,6 +49,36 @@ if (process.argv[2] === "reporting") {
       `missing first attempt ${name}`,
     );
   }
+  const attachments = report.rows.find((row: { stableID: string }) =>
+    row.stableID === "reporting.attachments-stay-file-backed"
+  ).attempts[0].attachments;
+  assert.equal(attachments.length, 128);
+  for (const attachment of attachments) {
+    assert.equal(attachment.body, undefined);
+    assert.deepEqual(
+      readFileSync(attachment.path),
+      Buffer.alloc(256 * 1024, 255),
+    );
+  }
+  const html = join(root, "html");
+  const merged = spawnSync("npm", [
+    "exec",
+    "--",
+    "playwright",
+    "merge-reports",
+    "--reporter=html",
+    join(run.output, "blob"),
+  ], {
+    encoding: "utf8",
+    env: {
+      ...process.env,
+      PLAYWRIGHT_HTML_OUTPUT_DIR: html,
+      PLAYWRIGHT_HTML_OPEN: "never",
+    },
+  });
+  writeFileSync(join(root, "merge.log"), merged.stdout + merged.stderr);
+  assert.equal(merged.status, 0, merged.stdout + merged.stderr);
+  assert(existsSync(join(html, "index.html")));
   const q = spawnSync("deno", [
     "run",
     "-A",
@@ -59,7 +89,7 @@ if (process.argv[2] === "reporting") {
   assert.match(q.stdout, /QUARANTINE LANE.*empty/);
   writeFileSync(join(root, "quarantine.log"), q.stdout);
   console.log(
-    "FLAKE1: child nonzero, flaky distinct, first trace/screenshot/video retained, visible empty quarantine lane",
+    "FLAKE1: flaky distinct, first failure retained, binary attachments intact, HTML merged, visible empty quarantine lane",
   );
 } else if (process.argv[2] === "selection") {
   const project = `--project=oc-${process.env.OTK_TEST_VERSION}`;

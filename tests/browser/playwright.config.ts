@@ -28,10 +28,13 @@ export default defineConfig({
   failOnFlakyTests: true,
   timeout: 60_000,
   expect: { timeout: 10_000 },
-  reporter: [["list"], ["json", { outputFile: join(root, "results.json") }], [
-    "blob",
-    { outputDir: join(root, "blob") },
-  ], ["./reporter.ts"]],
+  // Retain evidence as files before JSON/blob reporters consume each result.
+  reporter: [
+    ["./reporter.ts"],
+    ["list"],
+    ["json", { outputFile: join(root, "results.json") }],
+    ["blob", { outputDir: join(root, "blob") }],
+  ],
   metadata: {
     node: process.version,
     deno: process.env.OTK_TEST_DENO_VERSION,

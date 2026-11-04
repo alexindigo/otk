@@ -5,8 +5,10 @@ import type {
   Reporter,
   Suite,
   TestCase,
+  TestResult,
 } from "@playwright/test/reporter";
 import { mkdirSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
 import { join } from "node:path";
 import { outcome } from "../../scripts/tests/report.ts";
 import { validateCollection } from "../../scripts/tests/selection.ts";
@@ -16,6 +18,28 @@ export default class Outcomes implements Reporter {
   private tests: TestCase[] = [];
   private config!: FullConfig;
   private invalid: string | undefined;
+  private retained = new Set<string>();
+  private retainAttachments(items: TestResult["attachments"]) {
+    const root = process.env.OTK_TEST_RUN_ROOT ??
+      this.config.projects[0].outputDir;
+    const directory = join(root, "attachments");
+    return items.map(({ body, ...metadata }) => {
+      if (!body) return metadata;
+      // Outcome rows and downstream reporters receive paths, never expanded
+      // Buffer arrays or duplicated inline blobs. Evidence bytes stay intact.
+      const digest = createHash("sha256").update(body).digest("hex");
+      const path = join(directory, digest);
+      if (!this.retained.has(digest)) {
+        mkdirSync(directory, { recursive: true });
+        writeFileSync(path, body);
+        this.retained.add(digest);
+      }
+      return { ...metadata, path };
+    });
+  }
+  onTestEnd(_test: TestCase, result: TestResult) {
+    result.attachments = this.retainAttachments(result.attachments);
+  }
   onBegin(config: FullConfig, suite: Suite) {
     this.config = config;
     this.tests = suite.allTests();
@@ -47,6 +71,9 @@ export default class Outcomes implements Reporter {
     }
   }
   onEnd(result: FullResult) {
+    const root = process.env.OTK_TEST_RUN_ROOT ??
+      this.config.projects[0].outputDir;
+    mkdirSync(root, { recursive: true });
     const rows = this.tests.map((test) => {
       const project = test.parent.project()!.name;
       const active = quarantine.some((q: { id: string; project: string }) =>
@@ -75,13 +102,10 @@ export default class Outcomes implements Reporter {
             totalMs: r.duration,
           },
           errors: r.errors,
-          attachments: r.attachments,
+          attachments: this.retainAttachments(r.attachments),
         })),
       };
     });
-    const root = process.env.OTK_TEST_RUN_ROOT ??
-      this.config.projects[0].outputDir;
-    mkdirSync(root, { recursive: true });
     const counts = Object.fromEntries(
       ["first-pass", "flaky", "failed", "quarantined", "not-run"].map((
         c,
