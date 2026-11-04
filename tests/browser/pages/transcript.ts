@@ -121,7 +121,12 @@ export async function scrollTranscript(page: Page, bottom: boolean) {
 
 /** Select through trusted native double-click, including an unstyled text node. */
 export async function selectSourceWord(page: Page, word: string, last = false) {
-  const point = await page.locator(".otk-code code").nth(last ? -1 : 0)
+  const code = page.locator(".otk-code code").nth(last ? -1 : 0);
+  // Font installation can resize both source and the enclosing composer. Keep
+  // the gesture attached to the code's current box through native actionability,
+  // rather than dispatching a previously sampled viewport coordinate.
+  await page.evaluate(() => document.fonts.ready.then(() => true));
+  const position = await code
     .evaluate((code, needle) => {
       const walk = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
       let node: Node | null;
@@ -131,12 +136,16 @@ export async function selectSourceWord(page: Page, word: string, last = false) {
         const range = document.createRange();
         range.setStart(node, offset);
         range.setEnd(node, offset + needle.length);
-        const box = range.getBoundingClientRect();
-        return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+        const box = range.getBoundingClientRect(),
+          origin = code.getBoundingClientRect();
+        return {
+          x: box.x - origin.x + box.width / 2,
+          y: box.y - origin.y + box.height / 2,
+        };
       }
       throw new Error("Missing native source word: " + needle);
     }, word);
-  await page.mouse.dblclick(point.x, point.y);
+  await code.dblclick({ position });
   await expect.poll(() => page.evaluate(() => getSelection()?.toString())).toBe(
     word,
   );
