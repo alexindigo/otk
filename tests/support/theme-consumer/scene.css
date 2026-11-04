@@ -50,3 +50,10 @@ header,
 .theme-pane-body > .otk-deleted-session {
   overflow: auto;
 }
+.theme-notice-session {
+  flex: 1;
+  min-height: 0;
+}
+.theme-notice-session > .otk-session-view {
+  height: 100%;
+}

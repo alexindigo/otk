@@ -6,6 +6,7 @@ import { isolatedTest as test } from "../fixtures/isolated.ts";
 import type { TestState } from "../fixtures/test-state.ts";
 import { wire } from "../fixtures/wire.ts";
 import { selectionGeometry } from "../../support/selection-geometry.ts";
+import { collections456 } from "./collections.ts";
 
 test.use({ profile: "contract-themes" });
 interface Theme {
@@ -127,13 +128,28 @@ async function marks(
 
 test(
   "themes.panes-chrome-rows",
-  { tag: ["@visual", "@sessions", "@transport", "@scale", "@themes"] },
+  {
+    tag: [
+      "@visual",
+      "@sessions",
+      "@transport",
+      "@scale",
+      "@themes",
+      "@composer",
+      "@attention",
+      "@messages",
+      "@revert",
+    ],
+  },
   async ({ isolatedState: state, page, context }, info) => {
+    // One ordered owner now retains six collections of full-frame evidence.
+    test.setTimeout(900_000);
     const facts = await state.observe<
       {
         scenes: string;
         native: { url: string; sessionID: string; emptyID: string };
         entries: { id: string; directory: string }[];
+        content: { sessionID: string };
       }
     >();
     const manifest =
@@ -148,11 +164,14 @@ test(
     const checked = JSON.parse(
       await readFile(new URL("./states.json", import.meta.url), "utf8"),
     );
-    expect(checked.collections).toEqual([1, 2, 3]);
+    expect(checked.collections).toEqual([1, 2, 3, 4, 5, 6]);
     const witnessed = new Set<string>();
     const traffic = await wire(page);
     await page.addInitScript(() => {
-      Date.now = () => 1793736000000;
+      // Keep fixture dates reproducible without freezing elapsed-time deadlines
+      // (including the code renderer's worker capture admission).
+      const origin = performance.now();
+      Date.now = () => 1793736000000 + Math.floor(performance.now() - origin);
     });
     const cdp = await context.newCDPSession(page);
     await state.product("prefs.set", { key: "animationsOff", value: true });
@@ -1358,6 +1377,18 @@ test(
             await shot(`task-required-${theme.id}-800`);
           });
         }
+      });
+      await collections456({
+        state,
+        page,
+        cdp,
+        themes: manifest.themes,
+        native: facts.native,
+        content: facts.content,
+        scenes: facts.scenes,
+        traffic,
+        paint,
+        shot,
       });
       const ledger = JSON.parse(
         await readFile(new URL("../migration.json", import.meta.url), "utf8"),

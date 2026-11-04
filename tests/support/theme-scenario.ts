@@ -8,12 +8,53 @@ import { serve } from "./http.ts";
 import { WsClient } from "./ws-client.ts";
 import { themeManifest } from "./theme-manifest.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
-import { registerSessionActions } from "../../core/mod.ts";
+import {
+  registerAgents,
+  registerModels,
+  registerPermissions,
+  registerQuestions,
+  registerSessionActions,
+} from "../../core/mod.ts";
+import { themeContent } from "./theme-content.ts";
+import { fixturePage } from "./message-pages.ts";
+import { FakeLlm } from "./fake-llm.ts";
 import { OperationFailure } from "@otk/protocol";
 import type { ControlRequest, Json, TestLease } from "./fixture-control.ts";
 /** One real native stack plus accurately labelled public external-backend scenes. */
 export async function themeScenario() {
-  const root = await fixture(), native = await nativeFixture();
+  const root = await fixture(),
+    native = await nativeFixture(undefined, {
+      providers: {
+        fake2: {
+          fake: new FakeLlm(),
+          name: "Second fixture provider",
+          models: {
+            scripted: {
+              name: "Scripted with variants",
+              release_date: "2026-10-17",
+              variants: {
+                low: { reasoningEffort: "low" },
+                high: { reasoningEffort: "high" },
+              },
+            },
+            plain: { name: "Plain model", release_date: "2026-10-16" },
+          },
+        },
+      },
+      config: {
+        default_agent: "reviewer",
+        agent: {
+          reviewer: {
+            mode: "primary",
+            model: "fake2/scripted",
+            variant: "high",
+            color: "#12abEF",
+          },
+          build: { model: "fake2/scripted", variant: "high" },
+          plan: { model: "fake2/scripted", variant: "low" },
+        },
+      },
+    });
   const session = await native.oc.session<{ id: string }>("/session", {
     method: "POST",
     body: { title: "Native theme corpus" },
@@ -107,6 +148,180 @@ export async function themeScenario() {
   const c = new WsClient(f.url);
   await c.connect();
   const base = f.entries[0];
+  const corpus = await themeContent(base.directory);
+  let contentState: keyof typeof corpus.collections = "reading";
+  let response = Promise.withResolvers<void>();
+  const getSession = f.app.backend.core.getSession;
+  f.app.backend.core.getSession = async (id) => {
+    const session = await getSession(id);
+    return id === corpus.sessionID && contentState === "revert"
+      ? {
+        ...session,
+        revert: {
+          messageID: "prompt",
+          messageCount: 1,
+          files: [{ path: "revert.txt", additions: 1, deletions: 1 }],
+        },
+      }
+      : session;
+  };
+  const listMessages = f.app.backend.core.listMessages;
+  f.app.backend.core.listMessages = async (id, opts) =>
+    id === corpus.sessionID
+      ? {
+        ...fixturePage(
+          id,
+          corpus.collections[contentState],
+          opts.before,
+          await f.app.backend.core.getSession(id),
+        ),
+        recovering: contentState === "recovery"
+          ? [{ messageID: "reading", partID: "prose", generation: 1 }]
+          : [],
+      }
+      : listMessages(id, opts);
+  f.add({ ...base, id: corpus.sessionID, title: "Public content contract" });
+  let attentionRegistered = false;
+  function contentCapabilities() {
+    if (attentionRegistered) return;
+    attentionRegistered = true;
+    Object.assign(f.app.backend.capabilities, {
+      agents: {
+        listAgents: () =>
+          Promise.resolve([
+            { name: "action", color: "accent" },
+            { name: "alternate", color: "secondary" },
+            { name: "literal", color: "#12abEF" },
+            { name: "uncoloured" },
+          ]),
+      },
+      models: {
+        listModels: () =>
+          Promise.resolve({
+            defaultState: "unknown",
+            providers: [{
+              id: "fake2",
+              name: "Second fixture provider",
+              models: [{
+                id: "scripted",
+                name: "Scripted with variants",
+                variants: ["low", "high"],
+                status: "active",
+                free: true,
+              }],
+            }],
+          }),
+      },
+      permissions: {
+        listPermissions: (id: string) =>
+          Promise.resolve(
+            id === corpus.sessionID && contentState.startsWith("permission")
+              ? [{
+                id: "permission",
+                sessionID: id,
+                kind: contentState === "permission-read"
+                  ? "read"
+                  : contentState === "permission-edit"
+                  ? "edit"
+                  : "bash",
+                title: "Run the proof",
+                patterns: [
+                  contentState === "permission"
+                    ? "echo proof"
+                    : base.directory + "/README.md",
+                ],
+                alwaysPatterns: ["echo *"],
+                detail: contentState === "permission-read"
+                  ? { kind: "generic", summary: "Read README.md" }
+                  : contentState === "permission-edit"
+                  ? {
+                    kind: "edit",
+                    files: [{
+                      path: base.directory + "/README.md",
+                      status: "modified",
+                      additions: 1,
+                      deletions: 1,
+                      hunks: [{
+                        oldStart: 1,
+                        newStart: 1,
+                        oldLines: 1,
+                        newLines: 1,
+                        lines: [{
+                          kind: "del",
+                          text: "# OTK fixture",
+                          oldNo: 1,
+                        }, {
+                          kind: "add",
+                          text: "# Changed fixture",
+                          newNo: 1,
+                        }],
+                      }],
+                    }],
+                  }
+                  : { kind: "bash", command: "echo proof" },
+                time: 1,
+              }]
+              : [],
+          ),
+        replyPermission: async () => {
+          await response.promise;
+          throw new OperationFailure(
+            "rejected",
+            "request.params",
+            new Error("private SQL /secret/path"),
+          );
+        },
+      },
+      questions: {
+        listQuestions: (id: string) =>
+          Promise.resolve(
+            id === corpus.sessionID && contentState === "question"
+              ? [{
+                id: "question",
+                sessionID: id,
+                questions: [
+                  {
+                    header: "Rendering",
+                    text: "Choose the output",
+                    options: [{ label: "Typed", description: "OTK shapes" }, {
+                      label: "Raw",
+                      description: "Harness shapes",
+                    }],
+                    multiple: false,
+                    custom: true,
+                  },
+                  {
+                    header: "Details",
+                    text: "Choose details",
+                    options: [
+                      { label: "Files", description: "Include files" },
+                      {
+                        label: "Tools",
+                        description: "Include tools",
+                      },
+                    ],
+                    multiple: true,
+                    custom: true,
+                  },
+                ],
+              }]
+              : [],
+          ),
+        answerQuestion: async () => {
+          await response.promise;
+          throw new OperationFailure(
+            "rejected",
+            "request.params",
+            new Error("private SQL /secret/path"),
+          );
+        },
+      },
+    });
+    registerPermissions(f.app.connections.rpc, f.app.backend);
+    registerQuestions(f.app.connections.rpc, f.app.backend);
+    registerModels(f.app.connections.rpc, f.app.backend);
+    registerAgents(f.app.connections.rpc, f.app.backend);
+  }
   for (let i = 1; i < 12; i++) {
     f.add({
       ...base,
@@ -220,15 +435,58 @@ export async function themeScenario() {
               emptyID: emptySession.id,
             },
             overflow,
+            content: {
+              sessionID: corpus.sessionID,
+              states: Object.keys(corpus.collections),
+            },
             frames: c.frames,
           };
         case "nativeRequest":
+          if (
+            frame.params.path === "/session" && frame.params.method === "POST"
+          ) {
+            return await native.oc.session("/session", {
+              method: "POST",
+              body: frame.params.body,
+            });
+          }
           return await native.oc.request(frame.params.path, {
             method: frame.params.method,
             body: frame.params.body,
             directory: native.oc.directory,
           });
         case "scenario": {
+          if (frame.params.sessionID) {
+            const name = frame.params.sessionID.slice("tstv1-".length);
+            if (!(name in corpus.collections)) {
+              throw new Error("Unknown fixed theme content");
+            }
+            contentState = name as keyof typeof corpus.collections;
+            contentCapabilities();
+            response.resolve();
+            response = Promise.withResolvers<void>();
+            f.update(corpus.sessionID, {
+              status: contentState === "streaming" || contentState === "queued"
+                ? "busy"
+                : contentState === "retry"
+                ? "retry"
+                : "idle",
+              retry: contentState === "retry"
+                ? {
+                  attempt: 2,
+                  message: "Provider is temporarily unavailable",
+                  next: 1793736006000,
+                }
+                : undefined,
+            });
+            return null;
+          }
+          if (
+            frame.params.action === "fail" && frame.params.target !== "tabs-pin"
+          ) {
+            response.resolve();
+            return null;
+          }
           if (frame.params.target !== "tabs-pin") {
             throw new Error("Unknown theme scenario");
           }

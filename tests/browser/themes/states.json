@@ -1,6 +1,6 @@
 {
   "schema": 1,
-  "collections": [1, 2, 3],
+  "collections": [1, 2, 3, 4, 5, 6],
   "themes": ["otk-dark", "otk-light", "otk-light-stone"],
   "variants": {
     "native-session": ["native-session-{theme}-1280"],
@@ -23,9 +23,180 @@
       "rename-row-{theme}-1280"
     ],
     "editing-more": ["editing-{theme}-600", "editing-more-{theme}-600"],
-    "public-chrome": ["public-chrome-{theme}-1280"]
+    "public-chrome": ["public-chrome-{theme}-1280"],
+    "composer": [
+      "composer-empty-{theme}-1280",
+      "composer-1-{theme}-1280",
+      "composer-4-{theme}-1280",
+      "composer-14-{theme}-1280",
+      "composer-editor-{theme}-1280",
+      "composer-chosen-{theme}-1280",
+      "composer-restored-{theme}-1280",
+      "composer-shell-{theme}-1280",
+      "composer-image-{theme}-1280",
+      "composer-image-dialog-{theme}-1280"
+    ],
+    "auto": [
+      "composer-auto-false-{theme}-1280",
+      "composer-auto-true-{theme}-1280",
+      "composer-auto-false-{theme}-1060",
+      "composer-auto-true-{theme}-1060"
+    ],
+    "takeover": [
+      "takeover-permission-{theme}-1280",
+      "takeover-question-{theme}-1280",
+      "takeover-own-answer-{theme}-1280",
+      "takeover-multiple-{theme}-1280",
+      "takeover-review-{theme}-1280",
+      "takeover-pending-permission-{theme}-1280",
+      "takeover-failure-permission-{theme}-1280",
+      "takeover-pending-question-{theme}-1280",
+      "takeover-failure-question-{theme}-1280"
+    ],
+    "tools": [
+      "tool-bash-collapsed-{theme}-1280",
+      "tool-bash-{theme}-1280",
+      "tool-read-{theme}-1280",
+      "tool-search-{theme}-1280",
+      "tool-fetch-{theme}-1280",
+      "tool-skill-{theme}-1280",
+      "tool-external-{theme}-1280",
+      "tool-bash-denied-{theme}-1280",
+      "tool-websearch-denied-{theme}-1280",
+      "content-tools-{theme}-1280"
+    ],
+    "files": [
+      "content-files-split-{theme}-1280",
+      "content-files-unified-{theme}-1280",
+      "content-write-{theme}-1280",
+      "content-files-{theme}-1280"
+    ],
+    "typed": [
+      "content-typed-{theme}-1280",
+      "content-empty-results-{theme}-1280"
+    ],
+    "paths": [
+      "result-false-read-{theme}-1280",
+      "result-false-list-{theme}-1280",
+      "result-false-glob-{theme}-1280",
+      "result-true-read-{theme}-1280",
+      "result-true-list-{theme}-1280",
+      "result-true-glob-{theme}-1280",
+      "result-cwd-{theme}-1280"
+    ],
+    "readonly": [
+      "content-question-pending-{theme}-1280",
+      "content-question-answered-{theme}-1280"
+    ],
+    "reading": [
+      "content-reading-{theme}-1280",
+      "content-chips-{theme}-1280",
+      "public-prose-{theme}-1280"
+    ],
+    "stream": [
+      "content-streaming-{theme}-1280",
+      "content-complete-{theme}-1280",
+      "content-interrupted-{theme}-1280",
+      "content-recovery-{theme}-1280",
+      "content-retry-{theme}-1280"
+    ],
+    "facts": [
+      "content-facts-{theme}-1280",
+      "content-facts-picker-{theme}-1280"
+    ],
+    "metadata": ["content-metadata-{theme}-1280"],
+    "disclosures": ["tool-disclosed-{theme}-1280", "tool-folded-{theme}-1280"],
+    "chips": ["content-chips-{theme}-1280"],
+    "queued": ["content-queued-{theme}-1280", "content-answered-{theme}-1280"],
+    "unreported": ["content-unreported-{theme}-1280"],
+    "notice-lifetime": ["public-notice-lifetime-{theme}-1280"],
+    "feedback-owners": ["public-feedback-owners-{theme}-1280"],
+    "prose": ["public-prose-{theme}-1280"],
+    "journal": ["public-journal-{theme}-1280"],
+    "siblings": ["public-siblings-{theme}-1280"],
+    "revert": [
+      "content-revert-{theme}-1280",
+      "public-notice-lifetime-{theme}-1280"
+    ],
+    "notices": [
+      "notice-clear-{theme}-1280",
+      "notice-pending-{theme}-1280",
+      "notice-error-{theme}-1280"
+    ]
   },
   "states": [
+    {
+      "id": "composer",
+      "collection": 4,
+      "viewports": [1280, 1060],
+      "source": "one native stack; actual textarea, clipboard image, editor and model/variant choices"
+    },
+    {
+      "id": "auto",
+      "collection": 4,
+      "viewports": [1280, 1060],
+      "source": "native on/off toggle and seven footer controls"
+    },
+    {
+      "id": "takeover",
+      "collection": 5,
+      "viewports": [1280],
+      "source": "public external-backend permission/question capability contracts, held and rejected response"
+    },
+    {
+      "id": "revert",
+      "collection": 5,
+      "viewports": [1280],
+      "source": "public reverted session metadata and independent SessionView notice contract"
+    },
+    {
+      "id": "notices",
+      "collection": 5,
+      "viewports": [1280],
+      "source": "public request feedback scene"
+    },
+    {
+      "id": "tools",
+      "collection": 6,
+      "viewports": [1280],
+      "source": "characterized stock tool envelopes mapped through the native adapter"
+    },
+    {
+      "id": "files",
+      "collection": 6,
+      "viewports": [1280],
+      "source": "characterized stock file envelopes mapped through the native adapter"
+    },
+    {
+      "id": "typed",
+      "collection": 6,
+      "viewports": [1280],
+      "source": "public typed file/path/match/empty result contracts"
+    },
+    {
+      "id": "paths",
+      "collection": 6,
+      "viewports": [1280],
+      "source": "project-relative and outside path contracts"
+    },
+    {
+      "id": "readonly",
+      "collection": 6,
+      "viewports": [1280],
+      "source": "public todo and read-only question contract"
+    },
+    {
+      "id": "reading",
+      "collection": 6,
+      "viewports": [1280],
+      "source": "public prose/code/reasoning/work/helper and historical part contracts"
+    },
+    {
+      "id": "stream",
+      "collection": 6,
+      "viewports": [1280],
+      "source": "public streaming/completed/interrupted and recovery checkpoint contracts"
+    },
     {
       "id": "native-session",
       "collection": 1,
@@ -356,6 +527,306 @@
       "legacy": "legacy.workspace.b01dbf0c44470730",
       "state": "chrome",
       "checks": ["sidebar/main shared edge", "main viewport bottom"]
+    },
+    {
+      "legacy": "legacy.auto_approve_footer.f6533d7d9374db39",
+      "state": "auto",
+      "checks": [
+        "28px toggle; exact order and centers; on/off class and color; no selection mark; stable picker lefts at 1280/1060"
+      ]
+    },
+    {
+      "legacy": "legacy.backend-facts.9fc7970de3f85350",
+      "state": "facts",
+      "checks": [
+        "honest task/truncation facts; reply, trigger and three picker agent colors"
+      ]
+    },
+    {
+      "legacy": "legacy.component-styles.5c7225cd7b0c9c41",
+      "state": "notice-lifetime",
+      "checks": ["joined notice disclosure and Restore fixed state"]
+    },
+    {
+      "legacy": "legacy.component-styles.ce1b7a5cd0bb6813",
+      "state": "feedback-owners",
+      "checks": ["replacement-owner reconnect state"]
+    },
+    {
+      "legacy": "legacy.component-styles.217739b837dac413",
+      "state": "notices",
+      "checks": [
+        "1280/800 reserved field/track bounds; pane/notice centers <1px; distinct safe danger color; no disabled actions"
+      ]
+    },
+    {
+      "legacy": "legacy.component-styles.fadfceeea84fdaae",
+      "state": "prose",
+      "checks": [
+        "equal public prose/reasoning/text-part tokens; explicit concealment and fence ownership"
+      ]
+    },
+    {
+      "legacy": "legacy.component-styles.d13d88bb304fcfd1",
+      "state": "journal",
+      "checks": [
+        "independent PermissionSummary and PermissionActivity exact four-row geometry"
+      ]
+    },
+    {
+      "legacy": "legacy.component-styles.20fc6be66b34f3fc",
+      "state": "siblings",
+      "checks": [
+        "independent WorkLog/Settings/RolledBackStrip/empty Sidebar styles; diff colors; disclosure mount/unmount"
+      ]
+    },
+    {
+      "legacy": "legacy.composer_applied.acf82293256d8a9f",
+      "state": "composer",
+      "checks": [
+        "applied/chosen/restored origin colors; exact label/font/rect equality; model gap/centers; selected default pointer"
+      ]
+    },
+    {
+      "legacy": "legacy.composer_applied.7ac36edcd9a3f39e",
+      "state": "composer",
+      "checks": [
+        "applied/chosen/restored origin colors; exact label/font/rect equality; model gap/centers; selected default pointer"
+      ]
+    },
+    {
+      "legacy": "legacy.composer_applied.f44c25674a7cc766",
+      "state": "composer",
+      "checks": [
+        "applied/chosen/restored origin colors; exact label/font/rect equality; model gap/centers; selected default pointer"
+      ]
+    },
+    {
+      "legacy": "legacy.composer_pickers.f99a8626677d48e1",
+      "state": "composer",
+      "checks": [
+        "native picker anchored bounds and stable input; selected pointers and favorite action; footer/chevron/accessibility; truncation at 1180/1060"
+      ]
+    },
+    {
+      "legacy": "legacy.composer_pickers.e97cbd84b57dd456",
+      "state": "composer",
+      "checks": [
+        "native picker anchored bounds and stable input; selected pointers and favorite action; footer/chevron/accessibility; truncation at 1180/1060"
+      ]
+    },
+    {
+      "legacy": "legacy.composer_pickers.6ba65d5e312d9511",
+      "state": "composer",
+      "checks": [
+        "native picker anchored bounds and stable input; selected pointers and favorite action; footer/chevron/accessibility; truncation at 1180/1060"
+      ]
+    },
+    {
+      "legacy": "legacy.files.6e3e5ab2022eb7c5",
+      "state": "files",
+      "checks": [
+        "split row equal heights/tops <=0.5px; unified no-wrap; worker-colored write source/gutters/diagnostics; four patch statuses"
+      ]
+    },
+    {
+      "legacy": "legacy.files.b2e4b5a5e72378dc",
+      "state": "files",
+      "checks": [
+        "split row equal heights/tops <=0.5px; unified no-wrap; worker-colored write source/gutters/diagnostics; four patch statuses"
+      ]
+    },
+    {
+      "legacy": "legacy.focus.d6d33c4d0e1f7a84",
+      "state": "takeover",
+      "checks": [
+        "composer border; own-answer row outline/clipping; focused primary contrast >=3; no wrapper rings"
+      ]
+    },
+    {
+      "legacy": "legacy.images.bcd93021cfca4416",
+      "state": "composer",
+      "checks": [
+        "one loaded chip and thumbnail; centered remove; original larger image dialog aspect/title; native focus return"
+      ]
+    },
+    {
+      "legacy": "legacy.images.6f0367f0ab37600b",
+      "state": "composer",
+      "checks": [
+        "one loaded chip and thumbnail; centered remove; original larger image dialog aspect/title; native focus return"
+      ]
+    },
+    {
+      "legacy": "legacy.message-disclosures.c2d8c0f7722a665c",
+      "state": "disclosures",
+      "checks": ["folded body absent; disclosed source; refold destroys body"]
+    },
+    {
+      "legacy": "legacy.message-disclosures.30ed9048ebc80563",
+      "state": "disclosures",
+      "checks": ["folded body absent; disclosed source; refold destroys body"]
+    },
+    {
+      "legacy": "legacy.messages.a9f539f5751da38e",
+      "state": "revert",
+      "checks": ["reverted count and file details"]
+    },
+    {
+      "legacy": "legacy.messages.01b78c86b8e9b006",
+      "state": "chips",
+      "checks": ["historical file/agent chips; compaction outside user bubble"]
+    },
+    {
+      "legacy": "legacy.messages.8306e7f2f54f60dc",
+      "state": "queued",
+      "checks": ["queued/answered states; agent color; zero user border"]
+    },
+    {
+      "legacy": "legacy.metadata-truth.1abba4028b1a5cd2",
+      "state": "metadata",
+      "checks": [
+        "unknown versus zero search metadata; absent path fallback; 10/15/10 generic output"
+      ]
+    },
+    {
+      "legacy": "legacy.native-default.109c70c2de4f7481",
+      "state": "unreported",
+      "checks": ["honest unreported backend model label"]
+    },
+    {
+      "legacy": "legacy.plan_switch.4a4e12ba77c8f3ce",
+      "state": "composer",
+      "checks": ["fixed plan/Low and build/High footer choices"]
+    },
+    {
+      "legacy": "legacy.plan_switch.af536089bacbbab5",
+      "state": "composer",
+      "checks": ["fixed plan/Low and build/High footer choices"]
+    },
+    {
+      "legacy": "legacy.plan_switch.9ed536441fb9f5f9",
+      "state": "composer",
+      "checks": ["fixed plan/Low and build/High footer choices"]
+    },
+    {
+      "legacy": "legacy.prompt_size.e8a976bd4604181e",
+      "state": "composer",
+      "checks": [
+        "native growth 48..240 and caret/scroll; fixed footer/bottom and top growth; soft wrap at 1060; editor replacement and shrink"
+      ]
+    },
+    {
+      "legacy": "legacy.request-feedback.983fa86d294e339e",
+      "state": "takeover",
+      "checks": [
+        "one pending/error sink; 16px centered icon; no empty feedback track"
+      ]
+    },
+    {
+      "legacy": "legacy.request-feedback.eefb5152f3968c4f",
+      "state": "takeover",
+      "checks": [
+        "one pending/error sink; 16px centered icon; no empty feedback track or question footer"
+      ]
+    },
+    {
+      "legacy": "legacy.response_progress.9eabce50ab073925",
+      "state": "stream",
+      "checks": [
+        "last flowing progress; full width 2px glimmer; static 20px alternative for motion/animations off; completion/interruption"
+      ]
+    },
+    {
+      "legacy": "legacy.revert_strip.3c2eb4ed54aa9a29",
+      "state": "revert",
+      "checks": ["joined left/right/bottom; prompt containment"]
+    },
+    {
+      "legacy": "legacy.revert_strip.ffa6a033c8de71ab",
+      "state": "revert",
+      "checks": ["joined left/right/bottom; prompt containment"]
+    },
+    {
+      "legacy": "legacy.revert_strip.e35568b2184f5a44",
+      "state": "revert",
+      "checks": [
+        "pending/error/strip exact row/notice/icon equality; centered text and icon"
+      ]
+    },
+    {
+      "legacy": "legacy.todos_questions.088fe5d5199c1286",
+      "state": "readonly",
+      "checks": [
+        "four todo statuses; pending/answered read-only question; no controls"
+      ]
+    },
+    {
+      "legacy": "legacy.tool_paths.0b499f03df85f171",
+      "state": "paths",
+      "checks": [
+        "relative/outside read/list/glob/cwd headers; no summary duplication"
+      ]
+    },
+    {
+      "legacy": "legacy.tool_results.162308504e5450a2",
+      "state": "typed",
+      "checks": [
+        "visible worker-colored marker; 2/3 gutters and range metadata; no summary"
+      ]
+    },
+    {
+      "legacy": "legacy.tool_results.2329aed070a36705",
+      "state": "typed",
+      "checks": ["empty offsets/totals and truthful no-lines/no-results text"]
+    },
+    {
+      "legacy": "legacy.tools.6aafa6be59569ed9",
+      "state": "tools",
+      "checks": ["10/30 bash output"]
+    },
+    {
+      "legacy": "legacy.tools.7e92fd3146ab8235",
+      "state": "tools",
+      "checks": [
+        "read/search/fetch/skill/generic forms; 15-line generic output"
+      ]
+    },
+    {
+      "legacy": "legacy.tools.7893eeb4d28ac2f4",
+      "state": "tools",
+      "checks": [
+        "read/search/fetch/skill/generic forms; 15-line generic output"
+      ]
+    },
+    {
+      "legacy": "legacy.tools.e50ba2aab9f587ff",
+      "state": "tools",
+      "checks": ["denied states; expanded error; no invented count"]
+    },
+    {
+      "legacy": "legacy.transcript.236c6bc197613fe8",
+      "state": "reading",
+      "checks": [
+        "736px centered lane; aligned prose/code/composer; 80% bubble; fonts/type/radius; work folds; retry banner"
+      ]
+    },
+    {
+      "legacy": "legacy.transcript.36ff395b022bee97",
+      "state": "reading",
+      "checks": [
+        "736px centered lane; aligned prose/code/composer; 80% bubble; fonts/type/radius; work folds; retry banner"
+      ]
+    },
+    {
+      "legacy": "legacy.transcript.7e2c2b4ed1ac31cd",
+      "state": "takeover",
+      "checks": ["one-pixel takeover border; hidden prompt"]
+    },
+    {
+      "legacy": "legacy.transcript.baa877294d0ca4ef",
+      "state": "takeover",
+      "checks": ["one-pixel takeover border; hidden prompt"]
     }
   ]
 }

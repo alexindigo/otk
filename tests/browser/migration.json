@@ -4,8 +4,8 @@
   "themeSweep": {
     "manifest": "tests/browser/themes/states.json",
     "testID": "themes.panes-chrome-rows",
-    "collections": [1, 2, 3],
-    "receipt": "otk-c15a-20261103; checked-state-manifest attachment"
+    "collections": [1, 2, 3, 4, 5, 6],
+    "receipt": "otk-c15a-20261103 + otk-c15b-20261103/resume-final; checked-state-manifest attachment"
   },
   "supplementalTransfers": [
     {
@@ -544,9 +544,9 @@
           "proofBoundary": "V: shield order/accent/accessory geometry; toggle behavior stays in session_auto",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/auto_approve_footer_test.ts",
-              "testID": "legacy.auto_approve_footer.f6533d7d9374db39"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             }
           ],
           "retainedCoverage": {
@@ -561,9 +561,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/auto_approve_footer_test.ts",
-            "testID": "legacy.auto_approve_footer.f6533d7d9374db39"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -585,9 +585,9 @@
           "proofBoundary": "B+V+L: real neutral facts reach their UI consumers",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/backend-facts_test.ts",
-              "testID": "legacy.backend-facts.9fc7970de3f85350"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -608,12 +608,12 @@
             "testID": "agent catalog and transcript colours carry neutral roles, literal colours or absence"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/backend-facts_test.ts",
-            "testID": "legacy.backend-facts.9fc7970de3f85350"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "a2cf15c9a10b4a0e06f3425d37b3d04de29ea3a98d1d19ced37762df9554261b",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.backend-facts.9fc7970de3f85350"
           }
@@ -1734,9 +1734,9 @@
           "proofBoundary": "C+V: public component lifetimes/feedback plus all style scenes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/component-styles_test.ts",
-              "testID": "legacy.component-styles.5c7225cd7b0c9c41"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -1755,9 +1755,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/component-styles_test.ts",
-            "testID": "legacy.component-styles.5c7225cd7b0c9c41"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -1771,9 +1771,9 @@
           "proofBoundary": "C+V: public component lifetimes/feedback plus all style scenes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/component-styles_test.ts",
-              "testID": "legacy.component-styles.ce1b7a5cd0bb6813"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -1792,9 +1792,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/component-styles_test.ts",
-            "testID": "legacy.component-styles.ce1b7a5cd0bb6813"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -1834,7 +1834,7 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
+            "sourceSha256": "9357f0d376700b4b9eb422acf3c1f5d1ac50e6c0e9187afc9c09a0b4fee13c5e",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -1870,7 +1870,7 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
+            "sourceSha256": "9357f0d376700b4b9eb422acf3c1f5d1ac50e6c0e9187afc9c09a0b4fee13c5e",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -1906,7 +1906,7 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
+            "sourceSha256": "9357f0d376700b4b9eb422acf3c1f5d1ac50e6c0e9187afc9c09a0b4fee13c5e",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -1916,9 +1916,9 @@
           "proofBoundary": "C+V: public component lifetimes/feedback plus all style scenes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/component-styles_test.ts",
-              "testID": "legacy.component-styles.217739b837dac413"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -1936,12 +1936,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/component-styles_test.ts",
-            "testID": "legacy.component-styles.217739b837dac413"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
@@ -1978,7 +1978,7 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
+            "sourceSha256": "9357f0d376700b4b9eb422acf3c1f5d1ac50e6c0e9187afc9c09a0b4fee13c5e",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -2024,9 +2024,9 @@
           "proofBoundary": "C+V: public component lifetimes/feedback plus all style scenes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/component-styles_test.ts",
-              "testID": "legacy.component-styles.fadfceeea84fdaae"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2044,12 +2044,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/component-styles_test.ts",
-            "testID": "legacy.component-styles.fadfceeea84fdaae"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
@@ -2060,9 +2060,9 @@
           "proofBoundary": "C+V: public component lifetimes/feedback plus all style scenes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/component-styles_test.ts",
-              "testID": "legacy.component-styles.d13d88bb304fcfd1"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2080,12 +2080,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/component-styles_test.ts",
-            "testID": "legacy.component-styles.d13d88bb304fcfd1"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
@@ -2096,9 +2096,9 @@
           "proofBoundary": "C+V: public component lifetimes/feedback plus all style scenes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/component-styles_test.ts",
-              "testID": "legacy.component-styles.20fc6be66b34f3fc"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2116,12 +2116,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/component-styles_test.ts",
-            "testID": "legacy.component-styles.20fc6be66b34f3fc"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
@@ -2176,9 +2176,9 @@
           "proofBoundary": "B+V+L: applied/explicit selection reaches native; origin paint",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/composer_applied_test.ts",
-              "testID": "legacy.composer_applied.acf82293256d8a9f"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2196,9 +2196,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/composer_applied_test.ts",
-            "testID": "legacy.composer_applied.acf82293256d8a9f"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -2212,9 +2212,9 @@
           "proofBoundary": "B+V+L: applied/explicit selection reaches native; origin paint",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/composer_applied_test.ts",
-              "testID": "legacy.composer_applied.7ac36edcd9a3f39e"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2232,9 +2232,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/composer_applied_test.ts",
-            "testID": "legacy.composer_applied.7ac36edcd9a3f39e"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -2248,9 +2248,9 @@
           "proofBoundary": "B+V+L: applied/explicit selection reaches native; origin paint",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/composer_applied_test.ts",
-              "testID": "legacy.composer_applied.f44c25674a7cc766"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2268,9 +2268,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/composer_applied_test.ts",
-            "testID": "legacy.composer_applied.f44c25674a7cc766"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -2292,9 +2292,9 @@
           "proofBoundary": "B+C+V+L: native selection, catalog pending/errors, keyboard and geometry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/composer_pickers_test.ts",
-              "testID": "legacy.composer_pickers.f99a8626677d48e1"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2312,9 +2312,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/composer_pickers_test.ts",
-            "testID": "legacy.composer_pickers.f99a8626677d48e1"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -2328,9 +2328,9 @@
           "proofBoundary": "B+C+V+L: native selection, catalog pending/errors, keyboard and geometry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/composer_pickers_test.ts",
-              "testID": "legacy.composer_pickers.e97cbd84b57dd456"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2348,9 +2348,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/composer_pickers_test.ts",
-            "testID": "legacy.composer_pickers.e97cbd84b57dd456"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -2364,9 +2364,9 @@
           "proofBoundary": "B+C+V+L: native selection, catalog pending/errors, keyboard and geometry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/composer_pickers_test.ts",
-              "testID": "legacy.composer_pickers.6ba65d5e312d9511"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2384,9 +2384,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/composer_pickers_test.ts",
-            "testID": "legacy.composer_pickers.6ba65d5e312d9511"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -3905,9 +3905,9 @@
           "proofBoundary": "B+V+L: real edit/write/patch renderers, highlight/gutters and diff geometry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/files_test.ts",
-              "testID": "legacy.files.6e3e5ab2022eb7c5"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -3928,12 +3928,12 @@
             "testID": "recorded file tools map hunks, status, paths and one-based file-local diagnostics"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/files_test.ts",
-            "testID": "legacy.files.6e3e5ab2022eb7c5"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "cabcbdb22c16eeb7100aadaff06d6185e1666d09154f6b410dbfcc6666f75a9c",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.files.6e3e5ab2022eb7c5"
           }
@@ -3944,9 +3944,9 @@
           "proofBoundary": "B+V+L: real edit/write/patch renderers, highlight/gutters and diff geometry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/files_test.ts",
-              "testID": "legacy.files.b2e4b5a5e72378dc"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -3964,12 +3964,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/files_test.ts",
-            "testID": "legacy.files.b2e4b5a5e72378dc"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "cabcbdb22c16eeb7100aadaff06d6185e1666d09154f6b410dbfcc6666f75a9c",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.files.b2e4b5a5e72378dc"
           }
@@ -3988,9 +3988,9 @@
           "proofBoundary": "B+V: question transitions focus visible controls, composer border",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/focus_test.ts",
-              "testID": "legacy.focus.d6d33c4d0e1f7a84"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -4009,9 +4009,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/focus_test.ts",
-            "testID": "legacy.focus.d6d33c4d0e1f7a84"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -4677,9 +4677,9 @@
           "proofBoundary": "B+V+L: trusted uploads, unique chips and original-image dialog",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/images_test.ts",
-              "testID": "legacy.images.bcd93021cfca4416"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -4697,9 +4697,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/images_test.ts",
-            "testID": "legacy.images.bcd93021cfca4416"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -4744,9 +4744,9 @@
           "proofBoundary": "B+V+L: trusted uploads, unique chips and original-image dialog",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/images_test.ts",
-              "testID": "legacy.images.6f0367f0ab37600b"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -4764,9 +4764,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/images_test.ts",
-            "testID": "legacy.images.6f0367f0ab37600b"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -5989,9 +5989,9 @@
           "proofBoundary": "B+C+V: expensive bodies unmount; choices survive virtual reentry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-disclosures_test.ts",
-              "testID": "legacy.message-disclosures.c2d8c0f7722a665c"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -6009,12 +6009,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-disclosures_test.ts",
-            "testID": "legacy.message-disclosures.c2d8c0f7722a665c"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "919220baa0114577628f46dd6e4e46362a521d487e04a09ff7c8305557484081",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-disclosures.c2d8c0f7722a665c"
           }
@@ -6025,9 +6025,9 @@
           "proofBoundary": "B+C+V: expensive bodies unmount; choices survive virtual reentry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-disclosures_test.ts",
-              "testID": "legacy.message-disclosures.30ed9048ebc80563"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -6045,12 +6045,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-disclosures_test.ts",
-            "testID": "legacy.message-disclosures.30ed9048ebc80563"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "919220baa0114577628f46dd6e4e46362a521d487e04a09ff7c8305557484081",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-disclosures.30ed9048ebc80563"
           }
@@ -7034,9 +7034,9 @@
           "proofBoundary": "B+V+L: real revert/files/count strip, chips/compaction and queued details; also tag @revert",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/messages_test.ts",
-              "testID": "legacy.messages.a9f539f5751da38e"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -7057,12 +7057,12 @@
             "testID": "restore returns rolled-back prompts to the real native conversation"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/messages_test.ts",
-            "testID": "legacy.messages.a9f539f5751da38e"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "19513071ccd8df793aadc421e0caf6cbb932a75773ffd85fca17070428f13453",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.messages.a9f539f5751da38e"
           }
@@ -7073,9 +7073,9 @@
           "proofBoundary": "B+V+L: real revert/files/count strip, chips/compaction and queued details; also tag @revert",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/messages_test.ts",
-              "testID": "legacy.messages.01b78c86b8e9b006"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -7093,12 +7093,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/messages_test.ts",
-            "testID": "legacy.messages.01b78c86b8e9b006"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "19513071ccd8df793aadc421e0caf6cbb932a75773ffd85fca17070428f13453",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.messages.01b78c86b8e9b006"
           }
@@ -7109,9 +7109,9 @@
           "proofBoundary": "B+V+L: real revert/files/count strip, chips/compaction and queued details; also tag @revert",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/messages_test.ts",
-              "testID": "legacy.messages.8306e7f2f54f60dc"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -7129,12 +7129,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/messages_test.ts",
-            "testID": "legacy.messages.8306e7f2f54f60dc"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "19513071ccd8df793aadc421e0caf6cbb932a75773ffd85fca17070428f13453",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.messages.8306e7f2f54f60dc"
           }
@@ -7153,9 +7153,9 @@
           "proofBoundary": "B+C+V+L: unknown native facts render honestly, no invented labels",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/metadata-truth_test.ts",
-              "testID": "legacy.metadata-truth.1abba4028b1a5cd2"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -7176,12 +7176,12 @@
             "testID": "native search counts distinguish unknown, reported zero and complete decoded results"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/metadata-truth_test.ts",
-            "testID": "legacy.metadata-truth.1abba4028b1a5cd2"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "9feb6643afa986a673b49ee23daa06ea4309bcb13495d4e00c872532cfe785d5",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.metadata-truth.1abba4028b1a5cd2"
           }
@@ -7317,9 +7317,9 @@
           "proofBoundary": "B+V+L: unreported choice omitted on send; actual native default applied",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/native-default_test.ts",
-              "testID": "legacy.native-default.109c70c2de4f7481"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -7337,9 +7337,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/native-default_test.ts",
-            "testID": "legacy.native-default.109c70c2de4f7481"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -8141,9 +8141,9 @@
           "proofBoundary": "B+V+L: real plan approval changes next prompt; coincidental name cannot",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/plan_switch_test.ts",
-              "testID": "legacy.plan_switch.4a4e12ba77c8f3ce"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -8161,9 +8161,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/plan_switch_test.ts",
-            "testID": "legacy.plan_switch.4a4e12ba77c8f3ce"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -8177,9 +8177,9 @@
           "proofBoundary": "B+V+L: real plan approval changes next prompt; coincidental name cannot",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/plan_switch_test.ts",
-              "testID": "legacy.plan_switch.af536089bacbbab5"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -8197,9 +8197,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/plan_switch_test.ts",
-            "testID": "legacy.plan_switch.af536089bacbbab5"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -8213,9 +8213,9 @@
           "proofBoundary": "B+V+L: real plan approval changes next prompt; coincidental name cannot",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/plan_switch_test.ts",
-              "testID": "legacy.plan_switch.9ed536441fb9f5f9"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -8233,9 +8233,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/plan_switch_test.ts",
-            "testID": "legacy.plan_switch.9ed536441fb9f5f9"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -8678,9 +8678,9 @@
           "proofBoundary": "B+C+V: actual caret/grow/shrink/editor/send behavior and geometry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/prompt_size_test.ts",
-              "testID": "legacy.prompt_size.e8a976bd4604181e"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -8698,9 +8698,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/prompt_size_test.ts",
-            "testID": "legacy.prompt_size.e8a976bd4604181e"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -9311,9 +9311,9 @@
           "proofBoundary": "B+C+V+L: pending/error sink focus, background work and one real long task",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/request-feedback_test.ts",
-              "testID": "legacy.request-feedback.983fa86d294e339e"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -9333,9 +9333,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/request-feedback_test.ts",
-            "testID": "legacy.request-feedback.983fa86d294e339e"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -9349,9 +9349,9 @@
           "proofBoundary": "B+C+V+L: pending/error sink focus, background work and one real long task",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/request-feedback_test.ts",
-              "testID": "legacy.request-feedback.eefb5152f3968c4f"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -9371,9 +9371,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/request-feedback_test.ts",
-            "testID": "legacy.request-feedback.eefb5152f3968c4f"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -9451,7 +9451,7 @@
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
-            "sourceSha256": "0379e0ca67ead7a37874f0e579610186ad30115220c12ab9aa283f949eccc515",
+            "sourceSha256": "346685e4df469c3c39ef57129c012342c18122829af01c0afa79388878420592",
             "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         }
@@ -9643,9 +9643,9 @@
           "proofBoundary": "B+V: actual progress/completion/interruption and static motion alternatives",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/response_progress_test.ts",
-              "testID": "legacy.response_progress.9eabce50ab073925"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -9663,12 +9663,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/response_progress_test.ts",
-            "testID": "legacy.response_progress.9eabce50ab073925"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "dec989eea8441fd6be8212a53b1e44ce685cd20a686a1e19c135f8ddf16c0d24",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.response_progress.9eabce50ab073925"
           }
@@ -9719,9 +9719,9 @@
           "proofBoundary": "B+V+L: real shared-file rollback/restore, dirty drafts and pending/error strip",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/revert_strip_test.ts",
-              "testID": "legacy.revert_strip.3c2eb4ed54aa9a29"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -9743,9 +9743,9 @@
             "testID": "strip projects authoritative counts, bounded prompts and files including older-server fallback"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/revert_strip_test.ts",
-            "testID": "legacy.revert_strip.3c2eb4ed54aa9a29"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -9759,9 +9759,9 @@
           "proofBoundary": "B+V+L: real shared-file rollback/restore, dirty drafts and pending/error strip",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/revert_strip_test.ts",
-              "testID": "legacy.revert_strip.ffa6a033c8de71ab"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -9784,9 +9784,9 @@
             "testID": "strip projects authoritative counts, bounded prompts and files including older-server fallback"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/revert_strip_test.ts",
-            "testID": "legacy.revert_strip.ffa6a033c8de71ab"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -9800,9 +9800,9 @@
           "proofBoundary": "B+V+L: real shared-file rollback/restore, dirty drafts and pending/error strip",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/revert_strip_test.ts",
-              "testID": "legacy.revert_strip.e35568b2184f5a44"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -9822,9 +9822,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/revert_strip_test.ts",
-            "testID": "legacy.revert_strip.e35568b2184f5a44"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -12554,9 +12554,9 @@
           "proofBoundary": "B+V+L: real native todo/read-only question data render",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/todos_questions_test.ts",
-              "testID": "legacy.todos_questions.088fe5d5199c1286"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12577,12 +12577,12 @@
             "testID": "recorded opencode 1.18.34 todo and question calls become OTK shapes"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/todos_questions_test.ts",
-            "testID": "legacy.todos_questions.088fe5d5199c1286"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "66e706ae14067b24a8d283db01f1147e7a46f0995fa052d5c947c1bba7e4d1c3",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.todos_questions.088fe5d5199c1286"
           }
@@ -12601,9 +12601,9 @@
           "proofBoundary": "B+V+L: actual project/outside paths across body/header/reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/tool_paths_test.ts",
-              "testID": "legacy.tool_paths.0b499f03df85f171"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12624,12 +12624,12 @@
             "testID": "native path-list results carry paths and pagination metadata without model envelopes"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/tool_paths_test.ts",
-            "testID": "legacy.tool_paths.0b499f03df85f171"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "18b2f717cc908deb050215c208aca51babf7af850186252d4dce0c5778cf7607",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tool_paths.0b499f03df85f171"
           }
@@ -12648,9 +12648,9 @@
           "proofBoundary": "B+V+L: real ranges/results plus fixed empty-page rendering",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/tool_results_test.ts",
-              "testID": "legacy.tool_results.162308504e5450a2"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12668,12 +12668,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/tool_results_test.ts",
-            "testID": "legacy.tool_results.162308504e5450a2"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "1d4ac6ae8dbb4a4572bf0c58265be63c6222b13724e9dbe2d124a5c642aa4f64",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tool_results.162308504e5450a2"
           }
@@ -12684,9 +12684,9 @@
           "proofBoundary": "B+V+L: real ranges/results plus fixed empty-page rendering",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/tool_results_test.ts",
-              "testID": "legacy.tool_results.2329aed070a36705"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12707,12 +12707,12 @@
             "testID": "stock read empty pages preserve real offset, zero-limit totals and source bytes"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/tool_results_test.ts",
-            "testID": "legacy.tool_results.2329aed070a36705"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "1d4ac6ae8dbb4a4572bf0c58265be63c6222b13724e9dbe2d124a5c642aa4f64",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tool_results.2329aed070a36705"
           }
@@ -12731,9 +12731,9 @@
           "proofBoundary": "B+V+L: real bash/read/search/fetch/skill/generic output and permission/error states",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/tools_test.ts",
-              "testID": "legacy.tools.6aafa6be59569ed9"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12754,12 +12754,12 @@
             "testID": "recorded basic tools retain OTK fields, actual search counts and denied/error states"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/tools_test.ts",
-            "testID": "legacy.tools.6aafa6be59569ed9"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "2c9150814f2322a47e608aa7c03df943e1511b1683a8f762052b4f981345d7c9",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tools.6aafa6be59569ed9"
           }
@@ -12770,9 +12770,9 @@
           "proofBoundary": "B+V+L: real bash/read/search/fetch/skill/generic output and permission/error states",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/tools_test.ts",
-              "testID": "legacy.tools.7e92fd3146ab8235"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12790,12 +12790,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/tools_test.ts",
-            "testID": "legacy.tools.7e92fd3146ab8235"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "2c9150814f2322a47e608aa7c03df943e1511b1683a8f762052b4f981345d7c9",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tools.7e92fd3146ab8235"
           }
@@ -12806,9 +12806,9 @@
           "proofBoundary": "B+V+L: real bash/read/search/fetch/skill/generic output and permission/error states",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/tools_test.ts",
-              "testID": "legacy.tools.7893eeb4d28ac2f4"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12826,12 +12826,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/tools_test.ts",
-            "testID": "legacy.tools.7893eeb4d28ac2f4"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "2c9150814f2322a47e608aa7c03df943e1511b1683a8f762052b4f981345d7c9",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tools.7893eeb4d28ac2f4"
           }
@@ -12842,9 +12842,9 @@
           "proofBoundary": "B+V+L: real bash/read/search/fetch/skill/generic output and permission/error states",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/tools_test.ts",
-              "testID": "legacy.tools.e50ba2aab9f587ff"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12862,12 +12862,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/tools_test.ts",
-            "testID": "legacy.tools.e50ba2aab9f587ff"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "2c9150814f2322a47e608aa7c03df943e1511b1683a8f762052b4f981345d7c9",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.tools.e50ba2aab9f587ff"
           }
@@ -12886,9 +12886,9 @@
           "proofBoundary": "B+C+V+L: complete transcript/takeover/navigation, retained draft and real replies",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/transcript_test.ts",
-              "testID": "legacy.transcript.236c6bc197613fe8"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12909,12 +12909,12 @@
             "testID": "transcript projection keeps logical reply identity across earlier pages and visits no history on part replacement"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/transcript_test.ts",
-            "testID": "legacy.transcript.236c6bc197613fe8"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "43f416cb99b89de235da2c7ae907f5e736d73238682224d05728d2fc045a56a1",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.transcript.236c6bc197613fe8"
           }
@@ -12925,9 +12925,9 @@
           "proofBoundary": "B+C+V+L: complete transcript/takeover/navigation, retained draft and real replies",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/transcript_test.ts",
-              "testID": "legacy.transcript.36ff395b022bee97"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12945,12 +12945,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/transcript_test.ts",
-            "testID": "legacy.transcript.36ff395b022bee97"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "43f416cb99b89de235da2c7ae907f5e736d73238682224d05728d2fc045a56a1",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.transcript.36ff395b022bee97"
           }
@@ -12961,9 +12961,9 @@
           "proofBoundary": "B+C+V+L: complete transcript/takeover/navigation, retained draft and real replies",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/transcript_test.ts",
-              "testID": "legacy.transcript.7e2c2b4ed1ac31cd"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12981,12 +12981,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/transcript_test.ts",
-            "testID": "legacy.transcript.7e2c2b4ed1ac31cd"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "43f416cb99b89de235da2c7ae907f5e736d73238682224d05728d2fc045a56a1",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.transcript.7e2c2b4ed1ac31cd"
           }
@@ -12997,9 +12997,9 @@
           "proofBoundary": "B+C+V+L: complete transcript/takeover/navigation, retained draft and real replies",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/transcript_test.ts",
-              "testID": "legacy.transcript.baa877294d0ca4ef"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -13017,12 +13017,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/transcript_test.ts",
-            "testID": "legacy.transcript.baa877294d0ca4ef"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "43f416cb99b89de235da2c7ae907f5e736d73238682224d05728d2fc045a56a1",
             "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.transcript.baa877294d0ca4ef"
           }
