@@ -178,17 +178,19 @@ if (import.meta.main) {
     specs.push(...suite.specs ?? []);
     for (const child of suite.suites ?? []) visit(child);
   };
-  for (const scale of [false, true]) {
+  for (const lane of ["", "scale", "themes"]) {
     const collection = await new Deno.Command("node", {
       args: [
         "tests/browser/node_modules/@playwright/test/cli.js",
         "test",
         "--config",
-        `tests/browser/playwright${scale ? ".scale" : ""}.config.ts`,
+        `tests/browser/playwright${lane ? "." + lane : ""}.config.ts`,
         "--list",
         "--reporter=json",
-        `--project=${scale ? "scale" : "oc"}-${
-          Deno.env.get("OTK_TEST_VERSION")
+        `--project=${
+          lane === "themes"
+            ? "themes"
+            : `${lane || "oc"}-${Deno.env.get("OTK_TEST_VERSION")}`
         }`,
       ],
       signal: AbortSignal.timeout(60_000),

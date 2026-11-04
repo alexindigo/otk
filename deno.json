@@ -21,6 +21,7 @@
     "test:prepare": "deno run -A scripts/tests/prepare.ts",
     "test:e2e": "deno run -A scripts/tests/browser.ts",
     "test:scale": "deno run -A scripts/tests/browser.ts --scale",
+    "test:themes": "deno run -A scripts/tests/browser.ts --themes --project=themes --workers=1 --retries=0",
     "test:batch": "deno run -A scripts/tests/batch.ts",
     "test:migration": "deno run -A scripts/tests/migration-audit.ts",
     "test:full": "deno run -A scripts/tests/full.ts",

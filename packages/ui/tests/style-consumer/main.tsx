@@ -1,11 +1,12 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { render } from "@solidjs/web";
-import { CommandHub } from "@otk/client";
+import { CommandHub, SidecarConnection } from "@otk/client";
 import { CommandProvider } from "../../keyboard/context.tsx";
 import { createUiRegistries, UiProvider } from "../../registries/context.tsx";
 import { ThemeRegistry } from "../../theme/registry.ts";
 import { browserThemeEnvironment, ThemeEngine } from "../../theme/engine.ts";
 import { registerOtkThemes } from "../../features/theme/otk.ts";
+import { paintVisualPreferences } from "../../features/visual.ts";
 import "@fontsource/ibm-plex-sans/400.css";
 import "@fontsource/ibm-plex-sans/500.css";
 import "@fontsource/ibm-plex-sans/600.css";
@@ -16,6 +17,18 @@ const themes = new ThemeRegistry();
 registerOtkThemes(themes);
 const theme = new ThemeEngine(themes, browserThemeEnvironment(), "otk-dark");
 theme.start();
+const server = new URL(location.href).searchParams.get("server");
+if (server) {
+  const connection = new SidecarConnection(server, {
+    status() {},
+    frame(frame) {
+      if (frame.t !== "prefs") return;
+      theme.commit(frame.prefs.theme, frame.prefs.systemLightTheme);
+      paintVisualPreferences(frame.prefs);
+    },
+  });
+  await connection.connect();
+}
 const driver = {
   engine: theme,
   theme: (id: string) => theme.commit(id),

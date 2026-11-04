@@ -17,6 +17,7 @@ export type Profile =
   | "contract-scale-sessions"
   | "contract-scale-files"
   | "contract-visual-inbox"
+  | "contract-themes"
   | "contract-visual-styles"
   | "contract-visual-provider-ports"
   | "contract-visual-native-events"
@@ -284,6 +285,7 @@ export function request(value: unknown): ControlRequest {
           "contract-scale-sessions",
           "contract-scale-files",
           "contract-visual-inbox",
+          "contract-themes",
           "contract-visual-styles",
           "contract-visual-provider-ports",
           "contract-visual-native-events",

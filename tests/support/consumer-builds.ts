@@ -4,6 +4,7 @@ import { exclusive, exists, fileHashes, stateRoot } from "./snapshots.ts";
 import { sourceTree } from "../../scripts/tests/source.ts";
 
 export const CONSUMERS = {
+  "theme-scenes": "tests/support/theme-consumer/vite.config.ts",
   ui: "tests/reuse/ui-consumer/vite.config.ts",
   dialog: "tests/reuse/dialog-consumer/vite.config.ts",
   context: "tests/support/context-consumer/vite.config.ts",

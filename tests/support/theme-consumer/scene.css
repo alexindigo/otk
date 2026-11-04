@@ -1,0 +1,52 @@
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+}
+body {
+  background: var(--otk-bg);
+  color: var(--otk-fg);
+}
+main {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+}
+header,
+.theme-pane-chrome {
+  padding: 16px;
+  background: var(--otk-bg-side);
+}
+.theme-panes {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-rows: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 12px;
+}
+.theme-panes section {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  min-width: 0;
+}
+.theme-pane-body {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+}
+.theme-pane-body > .otk-pane-state,
+.theme-retained {
+  grid-area: 1 / 1;
+}
+.theme-retained {
+  align-self: end;
+  margin: 12px;
+  font-family: monospace;
+}
+.theme-pane-body > .otk-deleted-session {
+  overflow: auto;
+}

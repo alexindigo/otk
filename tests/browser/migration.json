@@ -1,6 +1,12 @@
 {
   "schema": 1,
   "originalFileCount": 131,
+  "themeSweep": {
+    "manifest": "tests/browser/themes/states.json",
+    "testID": "themes.panes-chrome-rows",
+    "collections": [1, 2, 3],
+    "receipt": "otk-c15a-20261103; checked-state-manifest attachment"
+  },
   "supplementalTransfers": [
     {
       "file": "tests/reuse/custom-tool_test.ts",
@@ -988,9 +994,9 @@
           "proofBoundary": "V: corners, rails, selection and collapse compositions",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/chrome_test.ts",
-              "testID": "legacy.chrome.e8e9894a79f8f88c"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             }
           ],
           "retainedCoverage": {
@@ -1003,14 +1009,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/chrome_test.ts",
-            "testID": "legacy.chrome.e8e9894a79f8f88c"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "795838623558a4c51898c57c807a72ab4c183c8da156079011cc1a34896df46c",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-c15a-20261103/c15a-oldquiet.log; themes.panes-chrome-rows"
           }
         }
       ]
@@ -1027,9 +1033,9 @@
           "proofBoundary": "V: shared headers, rails and control reservations",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/chrome-geometry_test.ts",
-              "testID": "legacy.chrome-geometry.7f21e089c58dcbc5"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             }
           ],
           "retainedCoverage": {
@@ -1042,14 +1048,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/chrome-geometry_test.ts",
-            "testID": "legacy.chrome-geometry.7f21e089c58dcbc5"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "61be1bb7bdffdb4f37715096b8f4d17b3206406a8f1c1782bc5c591647b14378",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-c15a-20261103/c15a-oldchrome.log; themes.panes-chrome-rows"
           }
         }
       ]
@@ -1755,7 +1761,7 @@
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
-            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -1792,7 +1798,7 @@
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
-            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -1828,7 +1834,7 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -1864,7 +1870,7 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -1900,7 +1906,7 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -1936,7 +1942,7 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -1972,7 +1978,7 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -1982,9 +1988,9 @@
           "proofBoundary": "C+V: public component lifetimes/feedback plus all style scenes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/component-styles_test.ts",
-              "testID": "legacy.component-styles.43924eff3815ce4a"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2002,12 +2008,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/component-styles_test.ts",
-            "testID": "legacy.component-styles.43924eff3815ce4a"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
             "run": "otk-t2-c13-20261103"
           }
@@ -2044,7 +2050,7 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -2080,7 +2086,7 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -2116,7 +2122,7 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
+            "sourceSha256": "346833e0f035213609222df65c8df4db35edfe0c6e7299958f029e3d3d84a906",
             "run": "otk-t2-c13-20261103"
           }
         },
@@ -2126,9 +2132,9 @@
           "proofBoundary": "C+V: public component lifetimes/feedback plus all style scenes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/component-styles_test.ts",
-              "testID": "legacy.component-styles.6d89a92f76644d2e"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2146,12 +2152,12 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/component-styles_test.ts",
-            "testID": "legacy.component-styles.6d89a92f76644d2e"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "6088c05ca55214428b24727a962db01b9a96f61c881221a327418b94821799b5",
             "run": "otk-t2-c13-20261103"
           }
@@ -4813,9 +4819,9 @@
           "proofBoundary": "B+V+L: supervision, guarded navigation, server merge; global variants isolated",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/inbox_test.ts",
-              "testID": "legacy.inbox.7d73a648d1b2fde1"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -4834,9 +4840,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/inbox_test.ts",
-            "testID": "legacy.inbox.7d73a648d1b2fde1"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -4877,7 +4883,7 @@
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
-            "sourceSha256": "32603977084fb7cfbb540abbcfdba5a77d92623dfbea59d5adb3eb9720c19490",
+            "sourceSha256": "a2cff58c1459bea92d08a3f52bd926fc9c27a00b944f8ba738fdc96605c5be6d",
             "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
@@ -5493,9 +5499,9 @@
           "proofBoundary": "B+V: rapid independent gestures, authoritative broadcast/reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/layout_test.ts",
-              "testID": "legacy.layout.2fe638ea336f972b"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -5513,14 +5519,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/layout_test.ts",
-            "testID": "legacy.layout.2fe638ea336f972b"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "bd3e1539e9b129d71886beaed58149e5b8b2ab2ef11a535a5cf38462e299f8cf",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-c15a-20261103/c15a-old.log; themes.panes-chrome-rows"
           }
         }
       ]
@@ -7841,9 +7847,9 @@
           "proofBoundary": "B+C+V: registered view lifetime, saved size and scoped hierarchy",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/panels_test.ts",
-              "testID": "legacy.panels.1f0d8cd08180b67f"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -7862,9 +7868,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/panels_test.ts",
-            "testID": "legacy.panels.1f0d8cd08180b67f"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -7878,9 +7884,9 @@
           "proofBoundary": "B+C+V: registered view lifetime, saved size and scoped hierarchy",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/panels_test.ts",
-              "testID": "legacy.panels.c44b2165da787ce9"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -7899,9 +7905,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/panels_test.ts",
-            "testID": "legacy.panels.c44b2165da787ce9"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -8406,9 +8412,9 @@
           "proofBoundary": "B+V+L: real discovery/creation and zero native wake; global bootstrap isolated",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/project-catalog_test.ts",
-              "testID": "legacy.project-catalog.c2a2d216aed6bb58"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -8427,9 +8433,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/project-catalog_test.ts",
-            "testID": "legacy.project-catalog.c2a2d216aed6bb58"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -8443,9 +8449,9 @@
           "proofBoundary": "B+V+L: real discovery/creation and zero native wake; global bootstrap isolated",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/project-catalog_test.ts",
-              "testID": "legacy.project-catalog.2879a3858f58d123"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -8465,9 +8471,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/project-catalog_test.ts",
-            "testID": "legacy.project-catalog.2879a3858f58d123"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -9109,8 +9115,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "0e67739b1138e1d39876761f9226b8d13abca3d95d4f6de6ed698271492c7121",
-            "run": "otk-t2-c13-20261103"
+            "sourceSha256": "aae93aefc3a032bcbb0497deeecc8347d48171daa87481646393a8ff4afed09b",
+            "run": "otk-c15a-20261103"
           }
         },
         {
@@ -9119,9 +9125,9 @@
           "proofBoundary": "B+C+V: geometry viewport/zoom matrix and actual form/More navigation",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/remaining-ui_test.ts",
-              "testID": "legacy.remaining-ui.594a121bbf6d95c6"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -9139,14 +9145,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/remaining-ui_test.ts",
-            "testID": "legacy.remaining-ui.594a121bbf6d95c6"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "0e67739b1138e1d39876761f9226b8d13abca3d95d4f6de6ed698271492c7121",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-c15a-20261103/c15a-old.log; themes.panes-chrome-rows"
           }
         },
         {
@@ -9155,9 +9161,9 @@
           "proofBoundary": "B+C+V: geometry viewport/zoom matrix and actual form/More navigation",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/remaining-ui_test.ts",
-              "testID": "legacy.remaining-ui.9b1793bb357ff9f5"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             }
           ],
           "retainedCoverage": {
@@ -9170,14 +9176,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/remaining-ui_test.ts",
-            "testID": "legacy.remaining-ui.9b1793bb357ff9f5"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "0e67739b1138e1d39876761f9226b8d13abca3d95d4f6de6ed698271492c7121",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-c15a-20261103/c15a-old.log; themes.panes-chrome-rows"
           }
         },
         {
@@ -9207,8 +9213,8 @@
           },
           "verificationReceipt": {
             "kind": "registration-collection",
-            "sourceSha256": "0e67739b1138e1d39876761f9226b8d13abca3d95d4f6de6ed698271492c7121",
-            "run": "otk-t2-c13-20261103"
+            "sourceSha256": "aae93aefc3a032bcbb0497deeecc8347d48171daa87481646393a8ff4afed09b",
+            "run": "otk-c15a-20261103"
           }
         },
         {
@@ -9217,9 +9223,9 @@
           "proofBoundary": "B+C+V: geometry viewport/zoom matrix and actual form/More navigation",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/remaining-ui_test.ts",
-              "testID": "legacy.remaining-ui.eec79af0fe2b8db6"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -9237,14 +9243,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/remaining-ui_test.ts",
-            "testID": "legacy.remaining-ui.eec79af0fe2b8db6"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
-            "sourceSha256": "0e67739b1138e1d39876761f9226b8d13abca3d95d4f6de6ed698271492c7121",
-            "run": "otk-t2-c13-20261103"
+            "kind": "old-new-batch",
+            "sourceSha256": "1d077aa5367bb8005ba749c6f795ca9c60552987602ba9d155aed25c62a7277c",
+            "run": "otk-c15a-20261103"
           }
         }
       ]
@@ -9840,9 +9846,9 @@
           "proofBoundary": "C+V: stable flowing time/menu cell, hover/focus and absent tab menu",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/row_actions_test.ts",
-              "testID": "legacy.row_actions.d08b21450921b4d3"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -9860,14 +9866,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/row_actions_test.ts",
-            "testID": "legacy.row_actions.d08b21450921b4d3"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "d77bd7d394593da739ad976570111849607b0d96ff1b70588ae7ccd34a9d6a47",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-c15a-20261103/c15a-old.log; themes.panes-chrome-rows"
           }
         }
       ]
@@ -10351,7 +10357,7 @@
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
-            "sourceSha256": "65a0ce10f7df468cb4066d4a32aae3917e01bed04d5ac8301a9456dddd4ef328",
+            "sourceSha256": "556ada12d36a0705743ee934575580498f217c6bcc74598ef311cc36b3ce7bb2",
             "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
@@ -10389,7 +10395,7 @@
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
-            "sourceSha256": "65a0ce10f7df468cb4066d4a32aae3917e01bed04d5ac8301a9456dddd4ef328",
+            "sourceSha256": "556ada12d36a0705743ee934575580498f217c6bcc74598ef311cc36b3ce7bb2",
             "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
@@ -10431,9 +10437,9 @@
           "proofBoundary": "B+V+L: real compact/model/queue, inclusive fork, armed delete/rename",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-actions_test.ts",
-              "testID": "legacy.session-actions.c4a019f31d8b4260"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -10452,9 +10458,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-actions_test.ts",
-            "testID": "legacy.session-actions.c4a019f31d8b4260"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -10495,7 +10501,7 @@
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
-            "sourceSha256": "65a0ce10f7df468cb4066d4a32aae3917e01bed04d5ac8301a9456dddd4ef328",
+            "sourceSha256": "556ada12d36a0705743ee934575580498f217c6bcc74598ef311cc36b3ce7bb2",
             "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
@@ -10505,9 +10511,9 @@
           "proofBoundary": "B+V+L: real compact/model/queue, inclusive fork, armed delete/rename",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-actions_test.ts",
-              "testID": "legacy.session-actions.9ad7ab89e405dea2"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -10527,9 +10533,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-actions_test.ts",
-            "testID": "legacy.session-actions.9ad7ab89e405dea2"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -10571,7 +10577,7 @@
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
-            "sourceSha256": "65a0ce10f7df468cb4066d4a32aae3917e01bed04d5ac8301a9456dddd4ef328",
+            "sourceSha256": "556ada12d36a0705743ee934575580498f217c6bcc74598ef311cc36b3ce7bb2",
             "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
@@ -10581,9 +10587,9 @@
           "proofBoundary": "B+V+L: real compact/model/queue, inclusive fork, armed delete/rename",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-actions_test.ts",
-              "testID": "legacy.session-actions.695c4f0b09b4c634"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -10603,9 +10609,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-actions_test.ts",
-            "testID": "legacy.session-actions.695c4f0b09b4c634"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -10647,7 +10653,7 @@
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
-            "sourceSha256": "65a0ce10f7df468cb4066d4a32aae3917e01bed04d5ac8301a9456dddd4ef328",
+            "sourceSha256": "556ada12d36a0705743ee934575580498f217c6bcc74598ef311cc36b3ce7bb2",
             "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         }
@@ -10769,9 +10775,9 @@
           "proofBoundary": "B+C+V+L: final native totals, tombstones/resurrection, honest unknown/detail",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-digest_test.ts",
-              "testID": "legacy.session-digest.d1f6f23b803f49fe"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -10791,9 +10797,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-digest_test.ts",
-            "testID": "legacy.session-digest.d1f6f23b803f49fe"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -10898,7 +10904,7 @@
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
-            "sourceSha256": "df926dd7129c5935b92a15d1c7c619e54a83d5a01789f8672c66bc24cae67e43",
+            "sourceSha256": "bd2101b7b0e78c1a4bdf531fee562a6aa476a0feec3cb176a66406c819dd7228",
             "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
@@ -10936,7 +10942,7 @@
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
-            "sourceSha256": "df926dd7129c5935b92a15d1c7c619e54a83d5a01789f8672c66bc24cae67e43",
+            "sourceSha256": "bd2101b7b0e78c1a4bdf531fee562a6aa476a0feec3cb176a66406c819dd7228",
             "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
           }
         },
@@ -11196,9 +11202,9 @@
           "proofBoundary": "B+C+V: held direct-route metadata, measured focus/menu/filter, collapsed AXIOM reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-window_test.ts",
-              "testID": "legacy.session-window.1cd1e91207b04499"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -11217,9 +11223,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-window_test.ts",
-            "testID": "legacy.session-window.1cd1e91207b04499"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -11233,9 +11239,9 @@
           "proofBoundary": "B+C+V: held direct-route metadata, measured focus/menu/filter, collapsed AXIOM reload",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-window_test.ts",
-              "testID": "legacy.session-window.c906feeaace23004"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -11255,9 +11261,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-window_test.ts",
-            "testID": "legacy.session-window.c906feeaace23004"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -11488,9 +11494,9 @@
           "proofBoundary": "B+V: actual panel actions/restored layout and shared rail geometry",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/sidebar_rails_test.ts",
-              "testID": "legacy.sidebar_rails.7c14325a719c4897"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -11508,14 +11514,14 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/sidebar_rails_test.ts",
-            "testID": "legacy.sidebar_rails.7c14325a719c4897"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c53041c76296a94f2b45a040ca617bdc22b1743de04d59be1fd724e202a2f0ca",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-c15a-20261103/c15a-old.log; themes.panes-chrome-rows"
           }
         }
       ]
@@ -11855,9 +11861,9 @@
           "proofBoundary": "B+V+L: task/breadcrumb/native actions and all mandatory phantom cases",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/tabs_test.ts",
-              "testID": "legacy.tabs.a7246c86ebd0f632"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -11879,9 +11885,9 @@
             "testID": "task action editors retain the owning RPC connection and directory"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/tabs_test.ts",
-            "testID": "legacy.tabs.a7246c86ebd0f632"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -11895,9 +11901,9 @@
           "proofBoundary": "B+V+L: task/breadcrumb/native actions and all mandatory phantom cases",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/tabs_test.ts",
-              "testID": "legacy.tabs.a7bd5850e079cdff"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -11916,9 +11922,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/tabs_test.ts",
-            "testID": "legacy.tabs.a7bd5850e079cdff"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -11932,9 +11938,9 @@
           "proofBoundary": "B+V+L: task/breadcrumb/native actions and all mandatory phantom cases",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/tabs_test.ts",
-              "testID": "legacy.tabs.57e725dd179cb035"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -11953,9 +11959,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/tabs_test.ts",
-            "testID": "legacy.tabs.57e725dd179cb035"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -12081,9 +12087,9 @@
           "proofBoundary": "S+V: 251-task required-wrap/More behavior; fixed visual state joins sweep",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/task-overflow_test.ts",
-              "testID": "legacy.task-overflow.74ea8d4b9f64c82e"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12103,9 +12109,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/task-overflow_test.ts",
-            "testID": "legacy.task-overflow.74ea8d4b9f64c82e"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -12312,9 +12318,9 @@
           "proofBoundary": "B+V+L: actual reveal/focus/shared actions/rollback/earlier pages",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/timeline_test.ts",
-              "testID": "legacy.timeline.434f6ce26faf21a4"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12333,9 +12339,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/timeline_test.ts",
-            "testID": "legacy.timeline.434f6ce26faf21a4"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -12349,9 +12355,9 @@
           "proofBoundary": "B+V+L: actual reveal/focus/shared actions/rollback/earlier pages",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/timeline_test.ts",
-              "testID": "legacy.timeline.bfa85e413994400c"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12371,9 +12377,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/timeline_test.ts",
-            "testID": "legacy.timeline.bfa85e413994400c"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -12387,9 +12393,9 @@
           "proofBoundary": "B+V+L: actual reveal/focus/shared actions/rollback/earlier pages",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/timeline_test.ts",
-              "testID": "legacy.timeline.b46fdd4bb69e84c8"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12409,9 +12415,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/timeline_test.ts",
-            "testID": "legacy.timeline.b46fdd4bb69e84c8"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -13661,9 +13667,9 @@
           "proofBoundary": "B+C+V+L: core full-chain smoke, multi-server/auth/restart/history, 75-second real heartbeat",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/workspace_test.ts",
-              "testID": "legacy.workspace.b01dbf0c44470730"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -13683,9 +13689,9 @@
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.b01dbf0c44470730"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -13763,7 +13769,7 @@
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
-            "sourceSha256": "b99801b1f60b2d44cc17f71e04a8e509be13b896620baef150497fe2932f210f",
+            "sourceSha256": "e4e9ea66f713b56ce6091335d8d4715230ee180f27bca7a1d58e7b55eca35cff",
             "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
           }
         },

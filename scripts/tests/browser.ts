@@ -4,12 +4,19 @@ import { readBuild, sourceTree } from "./prepare.ts";
 
 const tree = await sourceTree();
 const scale = Deno.args.includes("--scale");
-const args = Deno.args.filter((arg) => arg !== "--scale");
+const themes = Deno.args.includes("--themes");
+const args = Deno.args.filter((arg) => !["--scale", "--themes"].includes(arg));
 const receipt = await readBuild(tree);
 const project =
   Deno.args.find((arg) => arg.startsWith("--project="))?.slice(10) ??
     Deno.args[Deno.args.indexOf("--project") + 1];
-if (project !== `${scale ? "scale" : "oc"}-${receipt.native.version}`) {
+if (
+  project !==
+    (themes
+      ? "themes"
+      : `${scale ? "scale" : "oc"}-${receipt.native.version}`) ||
+  (themes && receipt.native.version !== "1.18.34")
+) {
   throw new Error(
     "Explicit project must match this guest's prepared native version",
   );
@@ -24,7 +31,7 @@ const shard =
   (Deno.args.find((arg) => arg.startsWith("--shard="))?.slice(8) ?? "all")
     .replaceAll("/", "-");
 const run = `otk-${guest}-${
-  scale ? "scale" : "oc"
+  themes ? "themes" : scale ? "scale" : "oc"
 }-${receipt.native.version}-${shard}-${
   new Date().toISOString().replace(/[^0-9]/g, "")
 }-${crypto.randomUUID()}`;
@@ -55,7 +62,7 @@ try {
       "--prefix",
       "tests/browser",
       "run",
-      scale ? "scale" : "test",
+      themes ? "themes" : scale ? "scale" : "test",
       "--",
       ...args,
     ],

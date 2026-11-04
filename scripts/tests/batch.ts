@@ -174,25 +174,38 @@ if (legacy.length) {
     )
   ) throw new Error("Missing old/new retirement receipt");
 }
-for (const scale of [false, true]) {
+for (const lane of ["behavior", "scale", "themes"]) {
+  if (lane === "themes" && version !== "1.18.34") continue;
+  const belongs = (file: string) =>
+    (file.includes("/themes/")
+      ? "themes"
+      : file.includes("/scale/")
+      ? "scale"
+      : "behavior") === lane;
   const selected = [
     ...new Set(
-      destinations.filter((owner) => owner.file.includes("/scale/") === scale)
+      destinations.filter((owner) => belongs(owner.file))
         .map((owner) => owner.testID),
     ),
   ];
   if (selected.length) {
-    await run(scale ? "new-scale" : "new", [
+    await run(lane === "behavior" ? "new" : `new-${lane}`, [
       "task",
-      scale ? "test:scale" : "test:e2e",
-      `--project=${scale ? "scale" : "oc"}-${version}`,
+      lane === "themes"
+        ? "test:themes"
+        : lane === "scale"
+        ? "test:scale"
+        : "test:e2e",
+      ...(lane === "themes"
+        ? []
+        : [`--project=${lane === "scale" ? "scale" : "oc"}-${version}`]),
       "--grep",
       selected.map((id) => id.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|"),
       "--retries=0",
-      ...(scale ? ["--workers=1"] : []),
+      ...(lane === "scale" ? ["--workers=1"] : []),
     ], [
       ...new Map(
-        destinations.filter((owner) => owner.file.includes("/scale/") === scale)
+        destinations.filter((owner) => belongs(owner.file))
           .map(
             (owner) => [`${owner.file}:${owner.testID}`, {
               file: owner.file,

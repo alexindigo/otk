@@ -5,42 +5,6 @@ import { assert } from "@std/assert";
 import { join } from "@std/path";
 import { browserFixture, openSession } from "../support/browser-fixture.ts";
 
-test("E1 project inbox and Sessions tree scoped by directory, descendants nested, SPA assets and API boundary", async () => {
-  const f = await browserFixture();
-  try {
-    const root = await f.oc.session<{ id: string }>("/session", {
-      method: "POST",
-      body: { title: "Root session" },
-    });
-    await f.oc.session("/session", {
-      method: "POST",
-      body: { title: "Child session", parentID: root.id },
-    });
-    const directory = join(f.oc.root, "second-project");
-    await Deno.mkdir(directory);
-    const other = await f.oc.session<{ id: string }>("/session", {
-      method: "POST",
-      directory,
-      body: { title: "Other project" },
-    });
-    const server = await f.sidecar(), browser = await f.browser(server.url);
-    await openSession(browser, other.id);
-    const geometry = await browser.evaluate<
-      {
-        sidebarRight: number;
-        mainLeft: number;
-        viewport: number;
-        mainBottom: number;
-      }
-    >("(()=>{const s=document.querySelector('.otk-project-inbox').getBoundingClientRect(),m=document.querySelector('.otk-main').getBoundingClientRect();return {sidebarRight:s.right,mainLeft:m.left,viewport:innerHeight,mainBottom:m.bottom}})()");
-    assert(Math.abs(geometry.sidebarRight - geometry.mainLeft) < .5);
-    assert(Math.abs(geometry.viewport - geometry.mainBottom) < .5);
-    await browser.screenshot(join(f.oc.root, "workspace-geometry.png"));
-  } finally {
-    await f.stop();
-  }
-});
-
 test("E5 Esc confirmation then abort yields interrupted footer and idle session", async () => {
   const f = await browserFixture();
   try {

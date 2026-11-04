@@ -1,0 +1,361 @@
+{
+  "schema": 1,
+  "collections": [1, 2, 3],
+  "themes": ["otk-dark", "otk-light", "otk-light-stone"],
+  "variants": {
+    "native-session": ["native-session-{theme}-1280"],
+    "native-deleted": ["native-deleted-{theme}-1280"],
+    "empty": ["empty-{theme}-{viewport}-zoom{zoom}"],
+    "public-panes": ["public-panes-{theme}-1280"],
+    "chrome": [
+      "chrome-left-full-right-full-{theme}-reduced{reduced}",
+      "chrome-left-rail-right-full-{theme}-reduced{reduced}",
+      "chrome-left-full-right-rail-{theme}-reduced{reduced}",
+      "chrome-left-rail-right-rail-{theme}-reduced{reduced}"
+    ],
+    "timeline": ["timeline-{theme}-1280"],
+    "breadcrumbs": ["breadcrumbs-{theme}-{viewport}-zoom{zoom}"],
+    "row-editing": ["row-editing-{theme}-1280"],
+    "task-idle": ["task-idle-{theme}-{viewport}", "task-required-{theme}-800"],
+    "rename-tab": [
+      "rename-tab-{theme}-1280",
+      "rename-chip-{theme}-1280",
+      "rename-row-{theme}-1280"
+    ],
+    "editing-more": ["editing-{theme}-600", "editing-more-{theme}-600"],
+    "public-chrome": ["public-chrome-{theme}-1280"]
+  },
+  "states": [
+    {
+      "id": "native-session",
+      "collection": 1,
+      "viewports": [1280],
+      "source": "compact stock-native corpus"
+    },
+    {
+      "id": "native-empty",
+      "collection": 1,
+      "viewports": [1280],
+      "source": "empty stock-native session"
+    },
+    {
+      "id": "native-deleted",
+      "collection": 1,
+      "viewports": [1280],
+      "source": "native DELETE with retained task and metadata"
+    },
+    {
+      "id": "empty",
+      "collection": 1,
+      "viewports": [600, 800, 1280, 1920],
+      "zoom": [1, 2],
+      "source": "empty task via tasks.create"
+    },
+    {
+      "id": "public-panes",
+      "collection": 1,
+      "viewports": [1280],
+      "source": "public PaneState/DeletedSession component contracts"
+    },
+    {
+      "id": "chrome",
+      "collection": 2,
+      "viewports": [1280],
+      "layouts": ["full", "left-rail", "right-rail", "both-rails"],
+      "reducedColors": [false, true],
+      "source": "external backend contract"
+    },
+    {
+      "id": "timeline",
+      "collection": 3,
+      "viewports": [1280],
+      "source": "external backend contract"
+    },
+    {
+      "id": "breadcrumbs",
+      "collection": 3,
+      "viewports": [600, 800, 1280, 1920],
+      "zoom": [1, 2],
+      "source": "external backend contract"
+    },
+    {
+      "id": "row-editing",
+      "collection": 3,
+      "viewports": [1280],
+      "rightWidths": [280, 480, 320],
+      "source": "public external-backend rejected rename contract"
+    },
+    {
+      "id": "task-idle",
+      "collection": 3,
+      "viewports": [600, 800, 1280, 1920],
+      "source": "251 fixed external tasks; one seed"
+    },
+    {
+      "id": "task-required",
+      "collection": 3,
+      "viewports": [800],
+      "source": "selected/working/blocked/unseen-finished required wrapping"
+    },
+    {
+      "id": "rename-tab",
+      "collection": 3,
+      "viewports": [1280],
+      "origins": ["tab", "chip", "row"],
+      "source": "public external-backend rename contract"
+    },
+    {
+      "id": "editing-more",
+      "collection": 3,
+      "viewports": [600],
+      "source": "public keyed ProjectTabs component contract"
+    },
+    {
+      "id": "public-chrome",
+      "collection": 2,
+      "viewports": [1280],
+      "source": "public ProjectTabs/ProjectInbox input contract"
+    }
+  ],
+  "assertions": [
+    {
+      "legacy": "legacy.chrome.e8e9894a79f8f88c",
+      "state": "chrome",
+      "checks": [
+        "corners across collapse and reduced colors",
+        "non-colour selection",
+        "quiet chrome",
+        "pointer/persisted resize",
+        "palette/picker shared marks"
+      ]
+    },
+    {
+      "legacy": "legacy.inbox.7d73a648d1b2fde1",
+      "state": "chrome",
+      "checks": ["project lamp/name/time centers <=0.5px"]
+    },
+    {
+      "legacy": "legacy.panels.1f0d8cd08180b67f",
+      "state": "chrome",
+      "checks": [
+        "external registered view",
+        "ordered aligned right rail controls below header"
+      ]
+    },
+    {
+      "legacy": "legacy.project-catalog.c2a2d216aed6bb58",
+      "state": "chrome",
+      "checks": [
+        "tracked/discovered shared label edge",
+        "stable rail lights",
+        "template-only row has no lamp"
+      ]
+    },
+    {
+      "legacy": "legacy.project-catalog.2879a3858f58d123",
+      "state": "chrome",
+      "checks": [
+        "tracked/discovered shared label edge",
+        "stable rail lights",
+        "template-only row has no lamp"
+      ]
+    },
+    {
+      "legacy": "legacy.session-window.1cd1e91207b04499",
+      "state": "row-editing",
+      "checks": [
+        "280/480 widths",
+        "no wrapping",
+        "equal icon gaps",
+        "failed editor input/lamp/trailing centers",
+        "no horizontal overflow"
+      ]
+    },
+    {
+      "legacy": "legacy.session-window.c906feeaace23004",
+      "state": "row-editing",
+      "checks": [
+        "280/480 widths",
+        "no wrapping",
+        "equal icon gaps",
+        "failed editor input/lamp/trailing centers",
+        "no horizontal overflow"
+      ]
+    },
+    {
+      "legacy": "legacy.session-digest.d1f6f23b803f49fe",
+      "state": "native-deleted",
+      "checks": [
+        "row slot centers",
+        "new-session icon gaps",
+        "deleted native row contrast >=4.5"
+      ]
+    },
+    {
+      "legacy": "legacy.task-overflow.74ea8d4b9f64c82e",
+      "state": "task-idle",
+      "checks": [
+        "251 idle tasks one row at 600/800/1280/1920",
+        "one More",
+        "selected/working/blocked/finished pins only wrap at 800"
+      ]
+    },
+    {
+      "legacy": "legacy.session-actions.c4a019f31d8b4260",
+      "state": "rename-tab",
+      "checks": [
+        "one native title editor at tab/chip/row origin",
+        "focused full selection"
+      ]
+    },
+    {
+      "legacy": "legacy.session-actions.9ad7ab89e405dea2",
+      "state": "rename-tab",
+      "checks": [
+        "one native title editor at tab/chip/row origin",
+        "focused full selection"
+      ]
+    },
+    {
+      "legacy": "legacy.session-actions.695c4f0b09b4c634",
+      "state": "rename-tab",
+      "checks": [
+        "one native title editor at tab/chip/row origin",
+        "focused full selection"
+      ]
+    },
+    {
+      "legacy": "legacy.remaining-ui.eec79af0fe2b8db6",
+      "state": "editing-more",
+      "checks": [
+        "More anchor <=1px across native editor blur",
+        "selected pin",
+        "independent ordered menu partition"
+      ]
+    },
+    {
+      "legacy": "legacy.component-styles.43924eff3815ce4a",
+      "state": "editing-more",
+      "checks": [
+        "selected and editing pins",
+        "source order",
+        "More anchor <=1px",
+        "independent exact partition"
+      ]
+    },
+    {
+      "legacy": "legacy.component-styles.6d89a92f76644d2e",
+      "state": "public-chrome",
+      "checks": [
+        "input-owned reservation",
+        "collapsed server label only",
+        "public trigger class"
+      ]
+    },
+    {
+      "legacy": "legacy.chrome-geometry.7f21e089c58dcbc5",
+      "state": "chrome",
+      "checks": [
+        "shared rails/headers/controls/corner reservation",
+        "geometry token perturbation",
+        "keyboard and pointer persisted bounds once"
+      ]
+    },
+    {
+      "legacy": "legacy.layout.2fe638ea336f972b",
+      "state": "chrome",
+      "checks": ["48/360 widths"]
+    },
+    {
+      "legacy": "legacy.row_actions.d08b21450921b4d3",
+      "state": "chrome",
+      "checks": [
+        "secondary tone",
+        "static centered stable trailing cell",
+        "hover/focus",
+        "no tab menus"
+      ]
+    },
+    {
+      "legacy": "legacy.sidebar_rails.7c14325a719c4897",
+      "state": "chrome",
+      "checks": [
+        "fixed search and lamp centers",
+        "48px full-height edge rails",
+        "uncovered controls",
+        "working/blocked/finished pins"
+      ]
+    },
+    {
+      "legacy": "legacy.remaining-ui.594a121bbf6d95c6",
+      "state": "breadcrumbs",
+      "checks": [
+        "one line",
+        "selected pin",
+        "centers <=1px",
+        "no accessory overlap",
+        "one exact ordered More partition"
+      ]
+    },
+    {
+      "legacy": "legacy.remaining-ui.9b1793bb357ff9f5",
+      "state": "empty",
+      "checks": ["centers <=1px below chrome", "expanded/collapsed", "reload"]
+    },
+    {
+      "legacy": "legacy.panels.c44b2165da787ce9",
+      "state": "chrome",
+      "checks": ["Sessions lamp/title centers <=0.5px"]
+    },
+    {
+      "legacy": "legacy.tabs.a7246c86ebd0f632",
+      "state": "breadcrumbs",
+      "checks": ["8px crumb light"]
+    },
+    {
+      "legacy": "legacy.tabs.a7bd5850e079cdff",
+      "state": "breadcrumbs",
+      "checks": ["reduced-colour visible shape"]
+    },
+    {
+      "legacy": "legacy.tabs.57e725dd179cb035",
+      "state": "chrome",
+      "checks": ["visible italic phantom"]
+    },
+    {
+      "legacy": "legacy.timeline.434f6ce26faf21a4",
+      "state": "timeline",
+      "checks": [
+        "shared Sessions frame",
+        "stable hover/focus/time/action slot",
+        "transparent reveal",
+        "centers <=0.5px"
+      ]
+    },
+    {
+      "legacy": "legacy.timeline.bfa85e413994400c",
+      "state": "timeline",
+      "checks": [
+        "shared Sessions frame",
+        "stable hover/focus/time/action slot",
+        "transparent reveal",
+        "centers <=0.5px"
+      ]
+    },
+    {
+      "legacy": "legacy.timeline.b46fdd4bb69e84c8",
+      "state": "timeline",
+      "checks": [
+        "shared Sessions frame",
+        "stable hover/focus/time/action slot",
+        "transparent reveal",
+        "centers <=0.5px"
+      ]
+    },
+    {
+      "legacy": "legacy.workspace.b01dbf0c44470730",
+      "state": "chrome",
+      "checks": ["sidebar/main shared edge", "main viewport bottom"]
+    }
+  ]
+}

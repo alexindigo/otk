@@ -181,10 +181,9 @@ for (const theme of ["otk-dark", "otk-light"]) {
   });
 }
 for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
-  for (const kind of ["rename", "delete"] as const) {
-    const title = kind === "rename"
-      ? `rename edits only its tab, chip or row and persists after reload in ${theme}`
-      : `delete protects lost drafts, disarms on navigation and removes native sessions in ${theme}`;
+  {
+    const title =
+      `delete protects lost drafts, disarms on navigation and removes native sessions in ${theme}`;
     test(title, async () => {
       const f = await browserFixture();
       let client: WsClient | undefined;
@@ -199,36 +198,7 @@ for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         await client.rpc("prefs.set", { key: "theme", value: theme });
         const b = await f.browser(server.url);
         await openSession(b, s.id);
-        if (kind === "rename") {
-          for (
-            const [origin, selector] of [["tab", `[data-tab="${s.id}"]`], [
-              "chip",
-              `[data-crumb="${s.id}"]`,
-            ], ["row", `[data-session="${s.id}"]`]]
-          ) {
-            await sessionContext(b, selector);
-            await b.click(`${menu} [data-context-command="session.rename"]`);
-            await b.poll("!!document.querySelector('.otk-title-editor input')");
-            assertEquals(
-              await b.evaluate(
-                "document.querySelectorAll('.otk-title-editor').length",
-              ),
-              1,
-            );
-            assertEquals(
-              await b.evaluate(
-                "document.querySelector('.otk-title-editor').dataset.origin",
-              ),
-              origin,
-            );
-            assert(
-              await b.evaluate(
-                "(()=>{const e=document.activeElement;return e.selectionStart===0&&e.selectionEnd===e.value.length})()",
-              ),
-            );
-            await b.key("Escape");
-          }
-        } else {
+        {
           await sessionContext(b, `[data-tab="${s.id}"]`, "session.compact");
           await b.click(`${menu} [data-context-command="session.delete"]`);
           await b.poll(

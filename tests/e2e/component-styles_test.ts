@@ -5,7 +5,6 @@ import { resources, test } from "../support/resources.ts";
 import { serve } from "../support/http.ts";
 import { fixture } from "../support/config.ts";
 import { Cdp } from "../support/cdp.ts";
-import { menuReady } from "../support/menu.ts";
 import { consumerAssets } from "../support/consumer-builds.ts";
 
 async function consumer(
@@ -414,122 +413,6 @@ test("command menu pending slots keep geometry and visible focus, then expose on
     await browser.evaluate("styleTest.holdMenu(false)");
   }));
 
-test("keyed breadcrumbs and menu rows retain identity through folding, replacement and shrinking", () =>
-  consumer("lists", async (browser) => {
-    const ids = Array.from({ length: 10 }, (_, i) => `session-${i}`);
-    await browser.evaluate(
-      `styleTest.lists(${JSON.stringify(ids)},'session-4','session-7')`,
-    );
-    await browser.poll(
-      "document.querySelector('[data-crumb=\"session-7\"] input')?.value==='session-7'",
-    );
-    await browser.evaluate(
-      "globalThis.c8Rows=new Map([...document.querySelectorAll('[data-crumb]')].map(node=>[node.dataset.crumb,node]))",
-    );
-    await browser.send("Emulation.setDeviceMetricsOverride", {
-      width: 600,
-      height: 800,
-      deviceScaleFactor: 1,
-      mobile: false,
-    });
-    await browser.evaluate(
-      "new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))",
-    );
-    const visible = await browser.evaluate<string[]>(
-      "[...document.querySelectorAll('[data-crumb]')].filter(el=>!el.closest('[hidden]')).map(el=>el.dataset.crumb)",
-    );
-    assert(visible.includes("session-4") && visible.includes("session-7"));
-    assertEquals(
-      visible,
-      ids.filter((id) => visible.includes(id)),
-      "Stable source order",
-    );
-    assert(visible.length < ids.length, "Narrow measurements cause overflow");
-    assert(
-      await browser.evaluate(
-        "['session-1','session-4'].every(id=>c8Rows.get(id)===document.querySelector('[data-crumb=\"'+id+'\"]'))",
-      ),
-      "Overflow preserves keyed row nodes",
-    );
-    const moreBounds = () =>
-      browser.evaluate<number[]>(
-        "(()=>{const r=document.querySelector('.otk-folded-crumbs > button').getBoundingClientRect();return [r.x,r.y,r.width,r.height]})()",
-      );
-    const beforeMore = await moreBounds();
-    await browser.click(".otk-folded-crumbs > button");
-    await browser.poll(
-      "document.querySelectorAll('.otk-folded-crumbs [role=menuitem]').length>0",
-    );
-    await menuReady(
-      browser,
-      ".otk-folded-crumbs [role=menu]",
-      ".otk-folded-crumbs",
-    );
-    assert(
-      (await moreBounds()).every((value, i) =>
-        Math.abs(value - beforeMore[i]) <= 1
-      ),
-      "More's trailing track stays fixed while native editor blur changes chip width",
-    );
-    const currentVisible = await browser.evaluate<string[]>(
-      "[...document.querySelectorAll('[data-crumb]')].filter(el=>!el.closest('[hidden]')).map(el=>el.dataset.crumb)",
-    );
-    const omitted = await browser.evaluate<string[]>(
-      "[...document.querySelectorAll('.otk-folded-crumbs [data-overflow-target]')].map(el=>el.dataset.overflowTarget)",
-    );
-    assertEquals(
-      omitted,
-      ids.filter((id) => !currentVisible.includes(id)),
-      "One complete ordered overflow partition after ordinary editor blur",
-    );
-    assert(
-      await browser.evaluate(
-        "[...document.querySelectorAll('[data-overflow-target]')].every(item=>item!==c8Rows.get(item.dataset.overflowTarget)&&!item.closest('[data-overflow-key]'))",
-      ),
-      "More renders independent items without adopting chips",
-    );
-    await browser.key("Escape");
-    await browser.evaluate("styleTest.lists(['replacement'],'replacement')");
-    await browser.poll(
-      "document.querySelectorAll('[data-crumb]').length===1 && !!document.querySelector('[data-crumb=\"replacement\"]')",
-    );
-    await browser.evaluate("styleTest.lists([])");
-    await browser.poll("document.querySelectorAll('[data-crumb]').length===0");
-    await browser.evaluate(
-      `styleTest.lists(${JSON.stringify(ids.slice().reverse())},'session-4')`,
-    );
-    await browser.poll(
-      "!!document.querySelector('[data-crumb=\"session-4\"]')",
-    );
-    await browser.click('button[aria-label="Reactive list menu"]');
-    await browser.poll(
-      "document.querySelectorAll(':popover-open [role=menuitem]').length===3",
-    );
-    await browser.evaluate("styleTest.menuItems(['delete'])");
-    await browser.poll(
-      "document.querySelectorAll(':popover-open [role=menuitem]').length===1",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector(':popover-open [role=menuitem]').dataset.contextCommand",
-      ),
-      "list.delete",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelectorAll(':popover-open [role=group] [role=separator]').length",
-      ),
-      1,
-    );
-    await browser.evaluate("styleTest.menuItems(['one','two','delete'])");
-    await browser.poll(
-      "document.querySelectorAll(':popover-open [role=menuitem]').length===3",
-    );
-    await browser.key("Escape");
-    await browser.evaluate("styleTest.lists([])");
-    await browser.send("Emulation.clearDeviceMetricsOverride");
-  }));
-
 test("Blocks owns prose and concealment equally standalone, in reasoning and as a text part", () =>
   consumer("prose", async (browser) => {
     await browser.evaluate("styleTest.conceal(false)");
@@ -639,56 +522,5 @@ test("WorkLog Settings RolledBackStrip and empty Sidebar own their styles withou
     await browser.click(".otk-rollback-disclosure");
     await browser.poll(
       "document.querySelector('.otk-rollback-disclosure').getAttribute('aria-expanded')==='false' && !document.querySelector('.otk-rollback-file')",
-    );
-  }));
-
-test("ProjectTabs layout is input-owned and collapsed inbox hides only its label", () =>
-  consumer("chrome", async (browser) => {
-    const padding = () =>
-      browser.evaluate<string>(
-        "getComputedStyle(document.querySelector('.otk-task-strip')).paddingRight",
-      );
-    await browser.evaluate(
-      "styleTest.reserve(false);styleTest.collapse(false)",
-    );
-    const normal = await padding();
-    await browser.evaluate(
-      "document.body.className='otk-app';document.body.dataset.rightCollapsed='true'",
-    );
-    assertEquals(
-      await padding(),
-      normal,
-      "ProjectTabs reads its consumer's state",
-    );
-    await browser.evaluate(
-      "document.body.className='';styleTest.reserve(true)",
-    );
-    await browser.poll(
-      "getComputedStyle(document.querySelector('.otk-task-strip')).paddingRight!=='12px'",
-    );
-    const reserved = await padding();
-    assert(reserved !== normal);
-    await browser.evaluate("styleTest.collapse(true)");
-    await browser.poll(
-      "document.querySelector('.otk-project-inbox').dataset.collapsed==='true'",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "getComputedStyle(document.querySelector('.otk-server-status > span:last-child')).display",
-      ),
-      "none",
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector('.otk-server-status [role=img]').getBoundingClientRect().width>0",
-      ),
-      true,
-    );
-    assertEquals(
-      await browser.evaluate(
-        "document.querySelector('button[aria-label=\"Slot control\"]').classList.contains('consumer-trigger')",
-      ),
-      true,
-      "Popover did not forward the public trigger style slot",
     );
   }));

@@ -163,6 +163,16 @@ with its disk-backed TMPDIR, never on Ark or the laptop.
 
 ## Assertion transfers
 
+`deno task test:themes` runs the single ordered `themes` sweep on `otk-tests-a`
+with native 1.18.34, one worker, browser and real native stack. Its public
+component contracts share that fixture and their prepared assets. Real
+`prefs.set` broadcasts drive every named theme; `/manifest.json` publishes
+Deno-resolved registered theme data. The checked `themes/states.json` links
+retired V groups to the exact theme/viewport/zoom captures. Full screenshots,
+token and geometry observations are evidence, without pixel baselines. C15a
+covers state collections 1-3. Batch comparison runs theme destinations only on
+1.18.34; behavior and scale keep their version-qualified projects.
+
 `test:batch` derives the old collection, exact new file/title destinations and
 named lower-tier witnesses from the ledger. It checks actual first-attempt
 outcomes against those identities and retains per-source mappings, full logs,

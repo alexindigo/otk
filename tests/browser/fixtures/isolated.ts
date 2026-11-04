@@ -12,7 +12,8 @@ export const isolatedTest = test.extend<
   isolatedState: async ({ profile, context }, use, info) => {
     const controller = await new Controller(
       `isolated-${info.workerIndex}-${randomUUID()}`,
-      info.project.name.replace(/^(?:oc|scale)-/, ""),
+      info.project.metadata.nativeVersion ??
+        info.project.name.replace(/^(?:oc|scale)-/, ""),
     ).start(profile);
     try {
       const lease = await controller.call<TestLease>("beginTest", {

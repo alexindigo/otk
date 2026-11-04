@@ -7,6 +7,7 @@ import { attentionScenario } from "./attention-scenario.ts";
 import { menusScenario } from "./menus-scenario.ts";
 import { publicUiScenario } from "./public-ui-scenario.ts";
 import { visualScenario } from "./visual-scenario.ts";
+import { themeScenario } from "./theme-scenario.ts";
 import { scaleScenario } from "./scale-scenario.ts";
 import { inboxBrowserFixture } from "./inbox-browser.ts";
 import { fixture } from "./config.ts";
@@ -28,6 +29,7 @@ import type {
 
 /** Checked external-backend compositions: no native stack for absent-capability proofs. */
 export async function contractScenario(profile: Profile) {
+  if (profile === "contract-themes") return await themeScenario();
   if (profile.startsWith("contract-scale-")) {
     return await scaleScenario(profile);
   }

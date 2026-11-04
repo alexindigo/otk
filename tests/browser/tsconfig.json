@@ -19,6 +19,7 @@
     "behavior/**/*.ts",
     "contracts/**/*.ts",
     "scale/**/*.ts",
+    "themes/**/*.ts",
     "harness/**/*.ts"
   ]
 }
