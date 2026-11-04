@@ -96,8 +96,12 @@ export class FreezeProxy {
             }
           }
         } catch (error) {
+          // A peer may close while the opposite pump still owns a write. That
+          // terminates this TCP pair; it is not an upstream acquisition failure.
+          const peerClosed = error instanceof Deno.errors.BrokenPipe ||
+            error instanceof Deno.errors.ConnectionReset;
           if (
-            !((this.#stopping || closing) &&
+            !peerClosed && !((this.#stopping || closing) &&
               (error instanceof Deno.errors.BadResource ||
                 error instanceof Deno.errors.Interrupted))
           ) throw error;

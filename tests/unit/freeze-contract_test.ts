@@ -4,6 +4,46 @@ import { FreezeProxy } from "../support/freeze-proxy.ts";
 import { test, withResources } from "../support/resources.ts";
 import { serve } from "../support/http.ts";
 
+test("downstream disconnect during an upstream write retires the TCP pair without a fixture failure", async () => {
+  const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
+  const proxy = new FreezeProxy(listener.addr.port);
+  try {
+    for (let i = 0; i < 20; i++) {
+      const accepted = listener.accept();
+      const client = await Deno.connect({
+        hostname: "127.0.0.1",
+        port: proxy.port,
+      });
+      const server = await accepted;
+      const sending = (async () => {
+        try {
+          const bytes = new Uint8Array(8 * 1024 * 1024);
+          let sent = 0;
+          while (sent < bytes.length) {
+            sent += await server.write(bytes.subarray(sent));
+          }
+        } catch (error) {
+          if (
+            !(error instanceof Deno.errors.BrokenPipe ||
+              error instanceof Deno.errors.ConnectionReset ||
+              error instanceof Deno.errors.BadResource)
+          ) throw error;
+        } finally {
+          server.close();
+        }
+      })();
+      assert(await client.read(new Uint8Array(1)) !== null);
+      client.close();
+      await sending;
+    }
+    await proxy.stop();
+    assertEquals(proxy.connections, 0);
+  } finally {
+    listener.close();
+    await proxy.stop();
+  }
+});
+
 test("byte freezing makes no HTTP inventory claim while the HTTP boundary observes every keepalive request", async () => {
   const requests: string[] = [], ports = new Set<number>();
   const server = serve(
