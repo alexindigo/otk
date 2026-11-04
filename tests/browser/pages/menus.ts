@@ -17,6 +17,15 @@ export const panelActions = [
   "Find a session",
   "Collapse right panel",
 ];
+/** An open native shell can precede its reactive action projection. Geometry
+ * baselines belong to the complete visible menu, not that intermediate shell.
+ */
+export async function readyMenuBox(panel: Locator, labels: string[]) {
+  const items = panel.getByRole("menuitem");
+  await expect(items).toHaveText(labels);
+  for (const item of await items.all()) await expect(item).toBeVisible();
+  return (await panel.boundingBox())!;
+}
 /** Keyboard opening must paint a real ring on the focused, visible item. */
 export async function keyboardItem(item: Locator) {
   await expect(item).toBeFocused();

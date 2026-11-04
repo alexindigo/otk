@@ -2,6 +2,7 @@
 import type { Page } from "@playwright/test";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
+import { readyMenuBox } from "../../pages/menus.ts";
 test.use({ profile: "contract-visual-styles" });
 const tags = { tag: ["@visual", "@isolated"] };
 async function scene(page: Page, url: string, name: string) {
@@ -271,8 +272,7 @@ test(
       .click();
     const panel = page.locator(":popover-open"),
       action = panel.locator('[data-context-command="list.one"]');
-    await expect(action).toBeVisible();
-    const before = (await panel.boundingBox())!;
+    const before = await readyMenuBox(panel, ["one", "two", "delete"]);
     await action.focus();
     await page.keyboard.press("Enter");
     await expect(panel.getByRole("status")).not.toHaveText("");

@@ -5,6 +5,7 @@ import type { TestState } from "../fixtures/test-state.ts";
 import { labelTextBounds } from "../../support/control-geometry.ts";
 import { labels } from "./labels.ts";
 import { fixedContent } from "./content.ts";
+import { readyMenuBox } from "../pages/menus.ts";
 interface Inputs {
   state: TestState;
   page: Page;
@@ -165,11 +166,9 @@ export async function remainder(
         name: "Reactive list menu",
         exact: true,
       }).click();
-      const menu = page.locator(":popover-open"),
-        size = await menu.evaluate((el) => {
-          const r = el.getBoundingClientRect();
-          return [r.width, r.height];
-        });
+      const menu = page.locator(":popover-open");
+      const box = await readyMenuBox(menu, ["one", "two", "delete"]);
+      const size = [box.width, box.height];
       await menu.locator('[data-context-command="list.one"]').focus();
       await page.keyboard.press("Enter");
       await expect(menu.getByRole("status")).toBeFocused();
