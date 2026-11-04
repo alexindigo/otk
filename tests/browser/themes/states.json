@@ -1,29 +1,65 @@
 {
   "schema": 1,
-  "collections": [1, 2, 3, 4, 5, 6],
-  "themes": ["otk-dark", "otk-light", "otk-light-stone"],
+  "collections": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "themes": [
+    "otk-dark",
+    "otk-light",
+    "otk-light-stone"
+  ],
   "variants": {
-    "native-session": ["native-session-{theme}-1280"],
-    "native-deleted": ["native-deleted-{theme}-1280"],
-    "empty": ["empty-{theme}-{viewport}-zoom{zoom}"],
-    "public-panes": ["public-panes-{theme}-1280"],
+    "native-session": [
+      "native-session-{theme}-1280"
+    ],
+    "native-deleted": [
+      "native-deleted-{theme}-1280"
+    ],
+    "empty": [
+      "empty-{theme}-{viewport}-zoom{zoom}"
+    ],
+    "public-panes": [
+      "public-panes-{theme}-1280"
+    ],
     "chrome": [
       "chrome-left-full-right-full-{theme}-reduced{reduced}",
       "chrome-left-rail-right-full-{theme}-reduced{reduced}",
       "chrome-left-full-right-rail-{theme}-reduced{reduced}",
       "chrome-left-rail-right-rail-{theme}-reduced{reduced}"
     ],
-    "timeline": ["timeline-{theme}-1280"],
-    "breadcrumbs": ["breadcrumbs-{theme}-{viewport}-zoom{zoom}"],
-    "row-editing": ["row-editing-{theme}-1280"],
-    "task-idle": ["task-idle-{theme}-{viewport}", "task-required-{theme}-800"],
+    "timeline": [
+      "timeline-{theme}-1280"
+    ],
+    "breadcrumbs": [
+      "breadcrumbs-{theme}-{viewport}-zoom{zoom}"
+    ],
+    "row-editing": [
+      "row-editing-{theme}-1280"
+    ],
+    "task-idle": [
+      "task-idle-{theme}-{viewport}",
+      "task-required-{theme}-800"
+    ],
     "rename-tab": [
       "rename-tab-{theme}-1280",
       "rename-chip-{theme}-1280",
       "rename-row-{theme}-1280"
     ],
-    "editing-more": ["editing-{theme}-600", "editing-more-{theme}-600"],
-    "public-chrome": ["public-chrome-{theme}-1280"],
+    "editing-more": [
+      "editing-{theme}-600",
+      "editing-more-{theme}-600"
+    ],
+    "public-chrome": [
+      "public-chrome-{theme}-1280"
+    ],
     "composer": [
       "composer-empty-{theme}-1280",
       "composer-1-{theme}-1280",
@@ -104,187 +140,635 @@
       "content-facts-{theme}-1280",
       "content-facts-picker-{theme}-1280"
     ],
-    "metadata": ["content-metadata-{theme}-1280"],
-    "disclosures": ["tool-disclosed-{theme}-1280", "tool-folded-{theme}-1280"],
-    "chips": ["content-chips-{theme}-1280"],
-    "queued": ["content-queued-{theme}-1280", "content-answered-{theme}-1280"],
-    "unreported": ["content-unreported-{theme}-1280"],
-    "notice-lifetime": ["public-notice-lifetime-{theme}-1280"],
-    "feedback-owners": ["public-feedback-owners-{theme}-1280"],
-    "prose": ["public-prose-{theme}-1280"],
-    "journal": ["public-journal-{theme}-1280"],
-    "siblings": ["public-siblings-{theme}-1280"],
+    "metadata": [
+      "content-metadata-{theme}-1280"
+    ],
+    "disclosures": [
+      "tool-disclosed-{theme}-1280",
+      "tool-folded-{theme}-1280"
+    ],
+    "chips": [
+      "content-chips-{theme}-1280"
+    ],
+    "queued": [
+      "content-queued-{theme}-1280",
+      "content-answered-{theme}-1280"
+    ],
+    "unreported": [
+      "content-unreported-{theme}-1280"
+    ],
+    "notice-lifetime": [
+      "public-notice-lifetime-{theme}-1280"
+    ],
+    "feedback-owners": [
+      "public-feedback-owners-{theme}-1280"
+    ],
+    "prose": [
+      "public-prose-{theme}-1280"
+    ],
+    "journal": [
+      "public-journal-{theme}-1280"
+    ],
+    "siblings": [
+      "public-siblings-{theme}-1280"
+    ],
     "revert": [
       "content-revert-{theme}-1280",
       "public-notice-lifetime-{theme}-1280"
+    ],
+    "usage": [
+      "usage-small-true-1280-end-{theme}",
+      "usage-small-false-800-end-{theme}",
+      "usage-long-true-1280-middle-{theme}",
+      "usage-long-false-800-end-{theme}",
+      "usage-unknown-true-800-end-{theme}",
+      "usage-unreported-true-800-end-{theme}",
+      "usage-queued-true-800-end-{theme}"
+    ],
+    "money": [
+      "usage-money-0-{theme}",
+      "usage-money-1-{theme}",
+      "usage-money-2-{theme}",
+      "usage-money-3-{theme}",
+      "usage-money-4-{theme}",
+      "usage-money-5-{theme}"
+    ],
+    "dialogs": [
+      "dialog-display-{theme}",
+      "dialog-display-preferences-1280-zoom1-{theme}",
+      "dialog-commands-1280-zoom1-{theme}",
+      "dialog-keyboard-shortcuts-1280-zoom1-{theme}",
+      "dialog-theme-1280-zoom1-{theme}",
+      "dialog-add-project-1280-zoom1-{theme}",
+      "dialog-new-task-{viewport}-zoom{zoom}-{theme}",
+      "dialog-editor-{viewport}-zoom{zoom}-{theme}"
+    ],
+    "menus": [
+      "dialog-project-menu-{theme}",
+      "menu-delete-armed-{theme}",
+      "menu-point-1-1-{theme}",
+      "menu-point-1279-1-{theme}",
+      "menu-point-1-899-{theme}",
+      "menu-point-1279-899-{theme}",
+      "menu-rect-0-{theme}",
+      "menu-rect-1-{theme}",
+      "menu-rect-2-{theme}",
+      "menu-rect-3-{theme}",
+      "menu-tall-1280-0-{theme}",
+      "menu-tall-1280-1-{theme}",
+      "menu-tall-1280-2-{theme}",
+      "menu-tall-720-0-{theme}",
+      "menu-tall-720-1-{theme}",
+      "menu-tall-720-2-{theme}",
+      "menu-body-fallback-{theme}",
+      "menu-modal-{theme}"
+    ],
+    "lights": [
+      "lights-false-{theme}",
+      "lights-true-{theme}",
+      "lights-motion-setting-{theme}",
+      "lights-motion-system-{theme}"
+    ],
+    "automatic": [
+      "native-auto-pending-{theme}",
+      "native-auto-activity-{theme}"
+    ],
+    "all-selection": [
+      "selection-false-{theme}",
+      "selection-true-{theme}",
+      "selection-more-false-{theme}",
+      "selection-more-true-{theme}"
+    ],
+    "forms": [
+      "public-form-pending-{theme}",
+      "public-form-error-{theme}",
+      "public-form-notes-{theme}",
+      "public-form-kind-{theme}",
+      "public-task-pending-{theme}"
+    ],
+    "preference-feedback": [
+      "public-theme-pending-{theme}",
+      "public-theme-error-{theme}",
+      "public-keys-pending-{theme}",
+      "public-keys-error-{theme}"
+    ],
+    "menu-feedback": [
+      "public-menu-pending-{theme}",
+      "public-menu-error-{theme}"
+    ],
+    "dialog-lifetimes": [
+      "public-dialog-task-{theme}",
+      "public-dialog-dismissal-{theme}",
+      "public-dialog-palette-{theme}"
+    ],
+    "project-error": [
+      "public-project-error-{theme}"
+    ],
+    "type-scale": [
+      "type-scaled-{theme}"
+    ],
+    "timestamps": [
+      "timestamps-hover-{theme}",
+      "timestamps-always-{theme}"
+    ],
+    "window-bubble": [
+      "window-bubble-{theme}"
+    ],
+    "native-controls": [
+      "native-controls-320-{theme}",
+      "native-controls-920-{theme}"
+    ],
+    "checkboxes": [
+      "native-checkboxes-{theme}",
+      "native-settings-controls-{theme}"
+    ],
+    "labels": [
+      "labels-transcript-1280-{theme}",
+      "labels-transcript-800-{theme}",
+      "labels-panel-1280-{theme}",
+      "labels-panel-800-{theme}",
+      "labels-agent-1280-{theme}",
+      "labels-model-800-{theme}",
+      "labels-settings.open-1280-{theme}",
+      "labels-theme.open-800-{theme}",
+      "labels-help.keys-800-{theme}",
+      "labels-prompt.editor-800-{theme}",
+      "labels-permission-800-{theme}",
+      "labels-question-800-{theme}"
     ],
     "notices": [
       "notice-clear-{theme}-1280",
       "notice-pending-{theme}-1280",
       "notice-error-{theme}-1280"
+    ],
+    "context-sources": [
+      "menu-source-prompt-{theme}",
+      "menu-source-reply-{theme}",
+      "menu-source-code-{theme}",
+      "menu-source-bash-{theme}",
+      "menu-source-patch-{theme}",
+      "menu-source-diff-{theme}",
+      "menu-source-hunk-{theme}"
+    ],
+    "native-menus": [
+      "native-auto-menu-false-{theme}",
+      "native-auto-menu-true-{theme}",
+      "native-reply-usage-{theme}"
+    ],
+    "interrupt": [
+      "native-interrupt-confirmation-{theme}",
+      "native-interrupted-marker-{theme}"
+    ],
+    "reply-actions": [
+      "timestamps-created-user-{theme}",
+      "timestamps-created-assistant-{theme}",
+      "timestamps-hover-{theme}",
+      "joined-fork-{theme}-1280",
+      "window-bubble-{theme}"
+    ],
+    "composer-accessories": [
+      "composer-accessories-{theme}-{viewport}"
+    ],
+    "all-menus": [
+      "dialog-project-menu-{theme}",
+      "menu-delete-armed-{theme}",
+      "menu-point-1-1-{theme}",
+      "menu-point-1279-1-{theme}",
+      "menu-point-1-899-{theme}",
+      "menu-point-1279-899-{theme}",
+      "menu-rect-0-{theme}",
+      "menu-rect-1-{theme}",
+      "menu-rect-2-{theme}",
+      "menu-rect-3-{theme}",
+      "menu-tall-1280-0-{theme}",
+      "menu-tall-1280-1-{theme}",
+      "menu-tall-1280-2-{theme}",
+      "menu-tall-720-0-{theme}",
+      "menu-tall-720-1-{theme}",
+      "menu-tall-720-2-{theme}",
+      "menu-body-fallback-{theme}",
+      "menu-modal-{theme}",
+      "menu-source-prompt-{theme}",
+      "menu-source-reply-{theme}",
+      "menu-source-code-{theme}",
+      "menu-source-bash-{theme}",
+      "menu-source-patch-{theme}",
+      "menu-source-diff-{theme}",
+      "menu-source-hunk-{theme}",
+      "native-auto-menu-false-{theme}",
+      "native-auto-menu-true-{theme}",
+      "native-reply-usage-{theme}"
+    ],
+    "all-surfaces": [
+      "dialog-display-{theme}",
+      "dialog-display-preferences-1280-zoom1-{theme}",
+      "dialog-commands-1280-zoom1-{theme}",
+      "dialog-keyboard-shortcuts-1280-zoom1-{theme}",
+      "dialog-theme-1280-zoom1-{theme}",
+      "dialog-add-project-1280-zoom1-{theme}",
+      "dialog-new-task-{viewport}-zoom{zoom}-{theme}",
+      "dialog-editor-{viewport}-zoom{zoom}-{theme}",
+      "dialog-project-menu-{theme}",
+      "menu-delete-armed-{theme}",
+      "menu-point-1-1-{theme}",
+      "menu-point-1279-1-{theme}",
+      "menu-point-1-899-{theme}",
+      "menu-point-1279-899-{theme}",
+      "menu-rect-0-{theme}",
+      "menu-rect-1-{theme}",
+      "menu-rect-2-{theme}",
+      "menu-rect-3-{theme}",
+      "menu-tall-1280-0-{theme}",
+      "menu-tall-1280-1-{theme}",
+      "menu-tall-1280-2-{theme}",
+      "menu-tall-720-0-{theme}",
+      "menu-tall-720-1-{theme}",
+      "menu-tall-720-2-{theme}",
+      "menu-body-fallback-{theme}",
+      "menu-modal-{theme}",
+      "selection-false-{theme}",
+      "selection-true-{theme}",
+      "selection-more-false-{theme}",
+      "selection-more-true-{theme}"
+    ],
+    "remaining-controls": [
+      "dialog-display-{theme}",
+      "dialog-display-preferences-1280-zoom1-{theme}",
+      "dialog-commands-1280-zoom1-{theme}",
+      "dialog-keyboard-shortcuts-1280-zoom1-{theme}",
+      "dialog-theme-1280-zoom1-{theme}",
+      "dialog-add-project-1280-zoom1-{theme}",
+      "dialog-new-task-{viewport}-zoom{zoom}-{theme}",
+      "dialog-editor-{viewport}-zoom{zoom}-{theme}",
+      "composer-accessories-{theme}-{viewport}",
+      "native-checkboxes-{theme}",
+      "native-settings-controls-{theme}"
+    ],
+    "window-content": [
+      "window-bubble-{theme}",
+      "content-files-split-{theme}-1280",
+      "content-files-unified-{theme}-1280",
+      "content-write-{theme}-1280",
+      "content-files-{theme}-1280"
+    ],
+    "timestamp-actions": [
+      "timestamps-hover-{theme}",
+      "timestamps-always-{theme}",
+      "timestamps-created-user-{theme}",
+      "timestamps-created-assistant-{theme}",
+      "joined-fork-{theme}-1280",
+      "window-bubble-{theme}"
+    ],
+    "file-labels": [
+      "content-metadata-{theme}-1280",
+      "content-revert-{theme}-1280",
+      "public-notice-lifetime-{theme}-1280"
+    ],
+    "supplemental-setup": [
+      "public-setup-{viewport}-zoom{zoom}-{theme}",
+      "public-setup-none-{theme}"
+    ],
+    "supplemental-diff": [
+      "public-independent-diff-unified-{theme}",
+      "public-independent-diff-split-{theme}"
+    ],
+    "supplemental-task": [
+      "public-task-geometry-pending-{theme}",
+      "public-task-geometry-error-{theme}"
+    ],
+    "supplemental-chip": [
+      "public-chip-editor-{viewport}-{theme}",
+      "public-chip-pending-{theme}",
+      "public-chip-error-{theme}"
+    ],
+    "supplemental-shared": [
+      "public-shared-controls-{theme}"
     ]
   },
   "states": [
     {
+      "id": "usage",
+      "collection": 7,
+      "viewports": [
+        800,
+        1280
+      ],
+      "source": "one public usage ledger: small, long, queued, unknown prices and unreported values; costs on/off and pinned scrolling"
+    },
+    {
+      "id": "money",
+      "collection": 7,
+      "viewports": [
+        800
+      ],
+      "source": "zero, sub-cent and exact accessible costs from public usage inputs"
+    },
+    {
+      "id": "dialogs",
+      "collection": 8,
+      "viewports": [
+        600,
+        800,
+        1280,
+        1920
+      ],
+      "source": "registered real shell surfaces; editor and task forms at 1x/2x"
+    },
+    {
+      "id": "menus",
+      "collection": 8,
+      "viewports": [
+        720,
+        1280
+      ],
+      "source": "real point, rect and trigger owners; viewport corners, armed deletion and internal tall-content scrolling"
+    },
+    {
+      "id": "forms",
+      "collection": 8,
+      "viewports": [
+        1280
+      ],
+      "source": "prebuilt public Form, task-name dialog and pending/failure preference and menu contracts"
+    },
+    {
+      "id": "labels",
+      "collection": 8,
+      "viewports": [
+        800,
+        1280
+      ],
+      "source": "long control labels in transcript, pickers, menus, settings, dialogs and attention takeovers"
+    },
+    {
+      "id": "native-controls",
+      "collection": 8,
+      "viewports": [
+        1280
+      ],
+      "source": "native field and compact input matrix, UA shadow references and Markdown/Display checkboxes"
+    },
+    {
+      "id": "lights",
+      "collection": 9,
+      "viewports": [
+        1280
+      ],
+      "source": "public status, connection and activity domains with real visual preferences and reduced-motion media"
+    },
+    {
+      "id": "automatic",
+      "collection": 9,
+      "viewports": [
+        1280
+      ],
+      "source": "one native automatic permission held once, then confirmed and persisted failed/unconfirmed activity states"
+    },
+    {
       "id": "composer",
       "collection": 4,
-      "viewports": [1280, 1060],
+      "viewports": [
+        1280,
+        1060
+      ],
       "source": "one native stack; actual textarea, clipboard image, editor and model/variant choices"
     },
     {
       "id": "auto",
       "collection": 4,
-      "viewports": [1280, 1060],
+      "viewports": [
+        1280,
+        1060
+      ],
       "source": "native on/off toggle and seven footer controls"
     },
     {
       "id": "takeover",
       "collection": 5,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "public external-backend permission/question capability contracts, held and rejected response"
     },
     {
       "id": "revert",
       "collection": 5,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "public reverted session metadata and independent SessionView notice contract"
     },
     {
       "id": "notices",
       "collection": 5,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "public request feedback scene"
     },
     {
       "id": "tools",
       "collection": 6,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "characterized stock tool envelopes mapped through the native adapter"
     },
     {
       "id": "files",
       "collection": 6,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "characterized stock file envelopes mapped through the native adapter"
     },
     {
       "id": "typed",
       "collection": 6,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "public typed file/path/match/empty result contracts"
     },
     {
       "id": "paths",
       "collection": 6,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "project-relative and outside path contracts"
     },
     {
       "id": "readonly",
       "collection": 6,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "public todo and read-only question contract"
     },
     {
       "id": "reading",
       "collection": 6,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "public prose/code/reasoning/work/helper and historical part contracts"
     },
     {
       "id": "stream",
       "collection": 6,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "public streaming/completed/interrupted and recovery checkpoint contracts"
     },
     {
       "id": "native-session",
       "collection": 1,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "compact stock-native corpus"
     },
     {
       "id": "native-empty",
       "collection": 1,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "empty stock-native session"
     },
     {
       "id": "native-deleted",
       "collection": 1,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "native DELETE with retained task and metadata"
     },
     {
       "id": "empty",
       "collection": 1,
-      "viewports": [600, 800, 1280, 1920],
-      "zoom": [1, 2],
+      "viewports": [
+        600,
+        800,
+        1280,
+        1920
+      ],
+      "zoom": [
+        1,
+        2
+      ],
       "source": "empty task via tasks.create"
     },
     {
       "id": "public-panes",
       "collection": 1,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "public PaneState/DeletedSession component contracts"
     },
     {
       "id": "chrome",
       "collection": 2,
-      "viewports": [1280],
-      "layouts": ["full", "left-rail", "right-rail", "both-rails"],
-      "reducedColors": [false, true],
+      "viewports": [
+        1280
+      ],
+      "layouts": [
+        "full",
+        "left-rail",
+        "right-rail",
+        "both-rails"
+      ],
+      "reducedColors": [
+        false,
+        true
+      ],
       "source": "external backend contract"
     },
     {
       "id": "timeline",
       "collection": 3,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "external backend contract"
     },
     {
       "id": "breadcrumbs",
       "collection": 3,
-      "viewports": [600, 800, 1280, 1920],
-      "zoom": [1, 2],
+      "viewports": [
+        600,
+        800,
+        1280,
+        1920
+      ],
+      "zoom": [
+        1,
+        2
+      ],
       "source": "external backend contract"
     },
     {
       "id": "row-editing",
       "collection": 3,
-      "viewports": [1280],
-      "rightWidths": [280, 480, 320],
+      "viewports": [
+        1280
+      ],
+      "rightWidths": [
+        280,
+        480,
+        320
+      ],
       "source": "public external-backend rejected rename contract"
     },
     {
       "id": "task-idle",
       "collection": 3,
-      "viewports": [600, 800, 1280, 1920],
+      "viewports": [
+        600,
+        800,
+        1280,
+        1920
+      ],
       "source": "251 fixed external tasks; one seed"
     },
     {
       "id": "task-required",
       "collection": 3,
-      "viewports": [800],
+      "viewports": [
+        800
+      ],
       "source": "selected/working/blocked/unseen-finished required wrapping"
     },
     {
       "id": "rename-tab",
       "collection": 3,
-      "viewports": [1280],
-      "origins": ["tab", "chip", "row"],
+      "viewports": [
+        1280
+      ],
+      "origins": [
+        "tab",
+        "chip",
+        "row"
+      ],
       "source": "public external-backend rename contract"
     },
     {
       "id": "editing-more",
       "collection": 3,
-      "viewports": [600],
+      "viewports": [
+        600
+      ],
       "source": "public keyed ProjectTabs component contract"
     },
     {
       "id": "public-chrome",
       "collection": 2,
-      "viewports": [1280],
+      "viewports": [
+        1280
+      ],
       "source": "public ProjectTabs/ProjectInbox input contract"
     }
   ],
@@ -303,7 +787,9 @@
     {
       "legacy": "legacy.inbox.7d73a648d1b2fde1",
       "state": "chrome",
-      "checks": ["project lamp/name/time centers <=0.5px"]
+      "checks": [
+        "project lamp/name/time centers <=0.5px"
+      ]
     },
     {
       "legacy": "legacy.panels.1f0d8cd08180b67f",
@@ -435,7 +921,9 @@
     {
       "legacy": "legacy.layout.2fe638ea336f972b",
       "state": "chrome",
-      "checks": ["48/360 widths"]
+      "checks": [
+        "48/360 widths"
+      ]
     },
     {
       "legacy": "legacy.row_actions.d08b21450921b4d3",
@@ -471,27 +959,39 @@
     {
       "legacy": "legacy.remaining-ui.9b1793bb357ff9f5",
       "state": "empty",
-      "checks": ["centers <=1px below chrome", "expanded/collapsed", "reload"]
+      "checks": [
+        "centers <=1px below chrome",
+        "expanded/collapsed",
+        "reload"
+      ]
     },
     {
       "legacy": "legacy.panels.c44b2165da787ce9",
       "state": "chrome",
-      "checks": ["Sessions lamp/title centers <=0.5px"]
+      "checks": [
+        "Sessions lamp/title centers <=0.5px"
+      ]
     },
     {
       "legacy": "legacy.tabs.a7246c86ebd0f632",
       "state": "breadcrumbs",
-      "checks": ["8px crumb light"]
+      "checks": [
+        "8px crumb light"
+      ]
     },
     {
       "legacy": "legacy.tabs.a7bd5850e079cdff",
       "state": "breadcrumbs",
-      "checks": ["reduced-colour visible shape"]
+      "checks": [
+        "reduced-colour visible shape"
+      ]
     },
     {
       "legacy": "legacy.tabs.57e725dd179cb035",
       "state": "chrome",
-      "checks": ["visible italic phantom"]
+      "checks": [
+        "visible italic phantom"
+      ]
     },
     {
       "legacy": "legacy.timeline.434f6ce26faf21a4",
@@ -526,7 +1026,10 @@
     {
       "legacy": "legacy.workspace.b01dbf0c44470730",
       "state": "chrome",
-      "checks": ["sidebar/main shared edge", "main viewport bottom"]
+      "checks": [
+        "sidebar/main shared edge",
+        "main viewport bottom"
+      ]
     },
     {
       "legacy": "legacy.auto_approve_footer.f6533d7d9374db39",
@@ -545,12 +1048,16 @@
     {
       "legacy": "legacy.component-styles.5c7225cd7b0c9c41",
       "state": "notice-lifetime",
-      "checks": ["joined notice disclosure and Restore fixed state"]
+      "checks": [
+        "joined notice disclosure and Restore fixed state"
+      ]
     },
     {
       "legacy": "legacy.component-styles.ce1b7a5cd0bb6813",
       "state": "feedback-owners",
-      "checks": ["replacement-owner reconnect state"]
+      "checks": [
+        "replacement-owner reconnect state"
+      ]
     },
     {
       "legacy": "legacy.component-styles.217739b837dac413",
@@ -660,27 +1167,37 @@
     {
       "legacy": "legacy.message-disclosures.c2d8c0f7722a665c",
       "state": "disclosures",
-      "checks": ["folded body absent; disclosed source; refold destroys body"]
+      "checks": [
+        "folded body absent; disclosed source; refold destroys body"
+      ]
     },
     {
       "legacy": "legacy.message-disclosures.30ed9048ebc80563",
       "state": "disclosures",
-      "checks": ["folded body absent; disclosed source; refold destroys body"]
+      "checks": [
+        "folded body absent; disclosed source; refold destroys body"
+      ]
     },
     {
       "legacy": "legacy.messages.a9f539f5751da38e",
       "state": "revert",
-      "checks": ["reverted count and file details"]
+      "checks": [
+        "reverted count and file details"
+      ]
     },
     {
       "legacy": "legacy.messages.01b78c86b8e9b006",
       "state": "chips",
-      "checks": ["historical file/agent chips; compaction outside user bubble"]
+      "checks": [
+        "historical file/agent chips; compaction outside user bubble"
+      ]
     },
     {
       "legacy": "legacy.messages.8306e7f2f54f60dc",
       "state": "queued",
-      "checks": ["queued/answered states; agent color; zero user border"]
+      "checks": [
+        "queued/answered states; agent color; zero user border"
+      ]
     },
     {
       "legacy": "legacy.metadata-truth.1abba4028b1a5cd2",
@@ -692,22 +1209,30 @@
     {
       "legacy": "legacy.native-default.109c70c2de4f7481",
       "state": "unreported",
-      "checks": ["honest unreported backend model label"]
+      "checks": [
+        "honest unreported backend model label"
+      ]
     },
     {
       "legacy": "legacy.plan_switch.4a4e12ba77c8f3ce",
       "state": "composer",
-      "checks": ["fixed plan/Low and build/High footer choices"]
+      "checks": [
+        "fixed plan/Low and build/High footer choices"
+      ]
     },
     {
       "legacy": "legacy.plan_switch.af536089bacbbab5",
       "state": "composer",
-      "checks": ["fixed plan/Low and build/High footer choices"]
+      "checks": [
+        "fixed plan/Low and build/High footer choices"
+      ]
     },
     {
       "legacy": "legacy.plan_switch.9ed536441fb9f5f9",
       "state": "composer",
-      "checks": ["fixed plan/Low and build/High footer choices"]
+      "checks": [
+        "fixed plan/Low and build/High footer choices"
+      ]
     },
     {
       "legacy": "legacy.prompt_size.e8a976bd4604181e",
@@ -740,12 +1265,16 @@
     {
       "legacy": "legacy.revert_strip.3c2eb4ed54aa9a29",
       "state": "revert",
-      "checks": ["joined left/right/bottom; prompt containment"]
+      "checks": [
+        "joined left/right/bottom; prompt containment"
+      ]
     },
     {
       "legacy": "legacy.revert_strip.ffa6a033c8de71ab",
       "state": "revert",
-      "checks": ["joined left/right/bottom; prompt containment"]
+      "checks": [
+        "joined left/right/bottom; prompt containment"
+      ]
     },
     {
       "legacy": "legacy.revert_strip.e35568b2184f5a44",
@@ -778,12 +1307,16 @@
     {
       "legacy": "legacy.tool_results.2329aed070a36705",
       "state": "typed",
-      "checks": ["empty offsets/totals and truthful no-lines/no-results text"]
+      "checks": [
+        "empty offsets/totals and truthful no-lines/no-results text"
+      ]
     },
     {
       "legacy": "legacy.tools.6aafa6be59569ed9",
       "state": "tools",
-      "checks": ["10/30 bash output"]
+      "checks": [
+        "10/30 bash output"
+      ]
     },
     {
       "legacy": "legacy.tools.7e92fd3146ab8235",
@@ -802,7 +1335,9 @@
     {
       "legacy": "legacy.tools.e50ba2aab9f587ff",
       "state": "tools",
-      "checks": ["denied states; expanded error; no invented count"]
+      "checks": [
+        "denied states; expanded error; no invented count"
+      ]
     },
     {
       "legacy": "legacy.transcript.236c6bc197613fe8",
@@ -821,12 +1356,1173 @@
     {
       "legacy": "legacy.transcript.7e2c2b4ed1ac31cd",
       "state": "takeover",
-      "checks": ["one-pixel takeover border; hidden prompt"]
+      "checks": [
+        "one-pixel takeover border; hidden prompt"
+      ]
     },
     {
       "legacy": "legacy.transcript.baa877294d0ca4ef",
       "state": "takeover",
-      "checks": ["one-pixel takeover border; hidden prompt"]
+      "checks": [
+        "one-pixel takeover border; hidden prompt"
+      ]
+    },
+    {
+      "legacy": "legacy.approval_attention.d5b551234a0b043c",
+      "state": "automatic",
+      "checks": [
+        "quiet native automatic pending/completed activity; no blocked indicator or takeover; visible composer and policy mark"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/attention/auto.spec.ts",
+          "testID": "attention.automatic-held-permission-is-quiet-and-real-reply-updates-only-own-family"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.approval_attention.32f288330006b5b8",
+      "state": "automatic",
+      "checks": [
+        "quiet native automatic pending/completed activity; no blocked indicator or takeover; visible composer and policy mark"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/attention/auto.spec.ts",
+          "testID": "attention.automatic-held-permission-is-quiet-and-real-reply-updates-only-own-family"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.approval_attention.9d2860f9c4ad71fe",
+      "state": "automatic",
+      "checks": [
+        "quiet native automatic pending/completed activity; no blocked indicator or takeover; visible composer and policy mark"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/attention/auto.spec.ts",
+          "testID": "attention.automatic-held-permission-is-quiet-and-real-reply-updates-only-own-family"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.collapse_file_changes.061d0a48796c0626",
+      "state": "files",
+      "checks": [
+        "collapsed and expanded file source, exact path/addition/deletion labels, Display state"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/file-disclosure.spec.ts",
+          "testID": "messages.file-changes-disclosure-persistence"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.collapse_file_changes.ad304c8cd82ce3b8",
+      "state": "file-labels",
+      "checks": [
+        "collapsed and expanded file source, exact path/addition/deletion labels, Display state"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/file-disclosure.spec.ts",
+          "testID": "messages.literal-labels-plain"
+        },
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/file-disclosure.spec.ts",
+          "testID": "messages.literal-labels-picker"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.component-styles.4a60a3a0682fa4ac",
+      "state": "preference-feedback",
+      "checks": [
+        "fixed public feedback states preserve form/menu/preference bounds, readonly values, safe single errors and visible focus"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/visual/components.spec.ts",
+          "testID": "visual.theme-keymap-pending-safe-failure-and-focus"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.component-styles.4ecf821baefe1ebb",
+      "state": "forms",
+      "checks": [
+        "fixed public feedback states preserve form/menu/preference bounds, readonly values, safe single errors and visible focus"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/visual/components.spec.ts",
+          "testID": "visual.form-captures-once-readonly-retained-values-safe-error"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.component-styles.cef84a56ec35ef07",
+      "state": "forms",
+      "checks": [
+        "fixed public feedback states preserve form/menu/preference bounds, readonly values, safe single errors and visible focus"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/visual/components.spec.ts",
+          "testID": "visual.native-field-feedback-accessible-descriptions-and-retained-text"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.component-styles.e13342416250c5e3",
+      "state": "menu-feedback",
+      "checks": [
+        "fixed public feedback states preserve form/menu/preference bounds, readonly values, safe single errors and visible focus"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/visual/components.spec.ts",
+          "testID": "visual.command-menu-pending-focus-and-one-safe-failure"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.connection-lights.db4debaa073cec4a",
+      "state": "lights",
+      "checks": [
+        "all five connection states, exact domain tokens/glyphs, 10px sizing; independent 8px activity and motion suppression"
+      ],
+      "behaviorWitnesses": []
+    },
+    {
+      "legacy": "legacy.context-areas.524593a986827696",
+      "state": "all-menus",
+      "checks": [
+        "area and inner-target composition retains 28px rows, balanced flow and viewport bounds; command outcomes retain their recorded behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/areas.spec.ts",
+          "testID": "menus.current-session-omits-noops-background-open-and-task-promotion"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.context-areas.1f4330befbb5ff3a",
+      "state": "all-menus",
+      "checks": [
+        "area and inner-target composition retains 28px rows, balanced flow and viewport bounds; command outcomes retain their recorded behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/areas.spec.ts",
+          "testID": "menus.area-groups-commands-search-focus-clipboard-editor-and-file-picker"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.context-areas.729f150fa43b9761",
+      "state": "all-menus",
+      "checks": [
+        "area and inner-target composition retains 28px rows, balanced flow and viewport bounds; command outcomes retain their recorded behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/areas.spec.ts",
+          "testID": "menus.area-groups-commands-search-focus-clipboard-editor-and-file-picker"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.context-areas.bd5feaa480a7e620",
+      "state": "all-menus",
+      "checks": [
+        "area and inner-target composition retains 28px rows, balanced flow and viewport bounds; command outcomes retain their recorded behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/areas.spec.ts",
+          "testID": "menus.area-groups-commands-search-focus-clipboard-editor-and-file-picker"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.context-areas.ad57fb98b12ed3dd",
+      "state": "all-menus",
+      "checks": [
+        "area and inner-target composition retains 28px rows, balanced flow and viewport bounds; command outcomes retain their recorded behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/menus/native-commands.spec.ts",
+          "testID": "menus.native-area-picker-approval-and-activity-consumers"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.context-menu.eea88bc2d2692289",
+      "state": "all-menus",
+      "checks": [
+        "four point corners, modal-hosted input context, project/session/folded callers and complete balanced 28px rows"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/context-menu.spec.ts",
+          "testID": "menus.trusted-context-keyboard-fallback-escape-corners-and-create"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.context-menu.e56a82303dd427c7",
+      "state": "all-menus",
+      "checks": [
+        "four point corners, modal-hosted input context, project/session/folded callers and complete balanced 28px rows"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/targets.spec.ts",
+          "testID": "menus.shared-menu-pointer-keyboard-focus-and-selection-isolation"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.context-targets.0d0fe821a789f46b",
+      "state": "all-menus",
+      "checks": [
+        "tab/chip/row/task/project, prompt/reply/code/bash/patch/two diff-hunk sources and native auto/usage menus; captured effects retain their behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/targets.spec.ts",
+          "testID": "menus.captured-session-task-and-project-effects"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.context-targets.6c9882df06ce2f70",
+      "state": "project-error",
+      "checks": [
+        "tab/chip/row/task/project, prompt/reply/code/bash/patch/two diff-hunk sources and native auto/usage menus; captured effects retain their behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/context-binding.spec.ts",
+          "testID": "menus.project-dots-shared-projection-owned-failure-and-readiness"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.context-targets.5b869360b4166719",
+      "state": "project-error",
+      "checks": [
+        "tab/chip/row/task/project, prompt/reply/code/bash/patch/two diff-hunk sources and native auto/usage menus; captured effects retain their behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/context-binding.spec.ts",
+          "testID": "menus.project-dots-shared-projection-owned-failure-and-readiness"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.context-targets.0aafbf32a068d4e2",
+      "state": "all-menus",
+      "checks": [
+        "tab/chip/row/task/project, prompt/reply/code/bash/patch/two diff-hunk sources and native auto/usage menus; captured effects retain their behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/content.spec.ts",
+          "testID": "menus.content-targets-complete-source-code-hunks-and-feature-tools"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.context-targets.9fae431359f3e326",
+      "state": "all-menus",
+      "checks": [
+        "tab/chip/row/task/project, prompt/reply/code/bash/patch/two diff-hunk sources and native auto/usage menus; captured effects retain their behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/menus/native-commands.spec.ts",
+          "testID": "menus.native-background-auto-approve-target-and-real-reply-usage"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.control_geometry.8038291d0c6e8da3",
+      "state": "native-controls",
+      "checks": [
+        "full native text-state/compact matrix, native shadow references, width/padding/color/font, direct label representation and hidden input"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/visual/controls.spec.ts",
+          "testID": "visual.native-field-compact-hitboxes-without-consumer-overrides"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.control_geometry.c88251328cf6c9b3",
+      "state": "checkboxes",
+      "checks": [
+        "full native text-state/compact matrix, native shadow references, width/padding/color/font, direct label representation and hidden input"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/visual/controls.spec.ts",
+          "testID": "visual.real-display-markdown-native-checkbox-select-and-settings-fields"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.control_labels.9b9928ac0e96f358",
+      "state": "labels",
+      "checks": [
+        "single-line complete labels across transcript, chrome, pickers, settings, dialogs and permission/question; narrow stacked tool actions and clipped titles"
+      ],
+      "behaviorWitnesses": []
+    },
+    {
+      "legacy": "legacy.dialog-identity.d27e968b23bbe6de",
+      "state": "dialog-lifetimes",
+      "checks": [
+        "replacement task value, replacement dismissal name and dismissed standalone palette; invocation/callback outcomes retain recorded owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+          "testID": "menus.late-task-save-preserves-replacement"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.dialog-identity.dd50261cf69135af",
+      "state": "dialog-lifetimes",
+      "checks": [
+        "replacement task value, replacement dismissal name and dismissed standalone palette; invocation/callback outcomes retain recorded owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+          "testID": "menus.deferred-feature-dismissal-is-invocation-bound"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.dialog-identity.448018d37e67afc5",
+      "state": "dialog-lifetimes",
+      "checks": [
+        "replacement task value, replacement dismissal name and dismissed standalone palette; invocation/callback outcomes retain recorded owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/dialog-identity.spec.ts",
+          "testID": "menus.standalone-palette-injected-close-callback"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.hidden-controls.356801519d16643f",
+      "state": "native-controls",
+      "checks": [
+        "hidden shared action/group display none and zero client rectangles"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/visual/controls.spec.ts",
+          "testID": "visual.hidden-native-controls-remove-and-restore-layout-semantics"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.inbox.3ed13f3b45358055",
+      "state": "lights",
+      "checks": [
+        "all four fixed age states; reduced-color double underline at age 3; live clock behavior retains its recorded owner"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/sessions/inbox.spec.ts",
+          "testID": "sessions.inbox-clock-ageing-view-action-reset-and-inactive-pause"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.key-hints.f607c239efc25bfa",
+      "state": "dialogs",
+      "checks": [
+        "mounted Enter hint, editor title Close and Save to keep changes; no static editor/task surface hints"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/key-hints.spec.ts",
+          "testID": "menus.command-hints-mounted-hidden-rebind-unbind-reset-and-native-actions"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.key-hints.1d417223b8a8b9b1",
+      "state": "dialogs",
+      "checks": [
+        "mounted Enter hint, editor title Close and Save to keep changes; no static editor/task surface hints"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/key-hints.spec.ts",
+          "testID": "menus.command-hints-mounted-hidden-rebind-unbind-reset-and-native-actions"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.key-hints.f9044e64b30f1cdd",
+      "state": "dialogs",
+      "checks": [
+        "mounted Enter hint, editor title Close and Save to keep changes; no static editor/task surface hints"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/menus/key-hints.spec.ts",
+          "testID": "menus.dialog-editor-no-static-hints-save-cancel-native-focus"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.message-window.bdaae9711c55a0d0",
+      "state": "window-content",
+      "checks": [
+        "right-aligned <=80% prompt lane and unified diff source; native virtualization, prepend/selection and one-pixel anchors retain recorded behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/window.spec.ts",
+          "testID": "messages.timeline-window-native-selection"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.message-window.2ba9ccc0fe490904",
+      "state": "window-content",
+      "checks": [
+        "right-aligned <=80% prompt lane and unified diff source; native virtualization, prepend/selection and one-pixel anchors retain recorded behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/window.spec.ts",
+          "testID": "messages.timeline-window-native-selection"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.message-window.ab7d799421931b33",
+      "state": "window-content",
+      "checks": [
+        "right-aligned <=80% prompt lane and unified diff source; native virtualization, prepend/selection and one-pixel anchors retain recorded behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/window.spec.ts",
+          "testID": "messages.prepend-one-pixel-anchor"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.message-window.f74f0699375f7808",
+      "state": "window-content",
+      "checks": [
+        "right-aligned <=80% prompt lane and unified diff source; native virtualization, prepend/selection and one-pixel anchors retain recorded behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/window.spec.ts",
+          "testID": "messages.prepend-one-pixel-anchor"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.message-window.c8d34daa31cb34c2",
+      "state": "window-content",
+      "checks": [
+        "right-aligned <=80% prompt lane and unified diff source; native virtualization, prepend/selection and one-pixel anchors retain recorded behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/window.spec.ts",
+          "testID": "messages.diff-native-range-measured-anchor"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.message-window.63d9e82576a936e7",
+      "state": "window-content",
+      "checks": [
+        "right-aligned <=80% prompt lane and unified diff source; native virtualization, prepend/selection and one-pixel anchors retain recorded behavior owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/window.spec.ts",
+          "testID": "messages.diff-native-range-measured-anchor"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.money_format.a4eecac4aacec3bf",
+      "state": "money",
+      "checks": [
+        "six exact money cases across meter/footer/rows/overview/call/Total; title-free AX groups and session/button names; exact category cost"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/money.spec.ts",
+          "testID": "messages.exact-money-accessibility-all-consumers"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.permission_details.65a8e73caa86208f",
+      "state": "takeover",
+      "checks": [
+        "exact shared bash/read/edit toast and takeover summaries, contained static summary; native approval outcomes retain recorded owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/attention/details.spec.ts",
+          "testID": "attention.permission-toast-and-takeover-share-exact-summary-before-native-approval"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.permission_details.b7b6eab85c8ed66e",
+      "state": "takeover",
+      "checks": [
+        "exact shared bash/read/edit toast and takeover summaries, contained static summary; native approval outcomes retain recorded owners"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/attention/details.spec.ts",
+          "testID": "attention.permission-toast-and-takeover-share-exact-summary-before-native-approval"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.popover-sizing.1363409c840c5a26",
+      "state": "menus",
+      "checks": [
+        "reused body fallback, four point/rect corners, painted/positioned edges <=0.5px, hit-testable rows, tall side scrolling and final control"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/visual/popovers.spec.ts",
+          "testID": "visual.popover-body-fallback-native-create-and-point-rect-corners"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.popover-sizing.35a6914a7167ef19",
+      "state": "menus",
+      "checks": [
+        "reused body fallback, four point/rect corners, painted/positioned edges <=0.5px, hit-testable rows, tall side scrolling and final control"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/visual/popovers.spec.ts",
+          "testID": "visual.popover-body-fallback-native-create-and-point-rect-corners"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.popover-sizing.3521f4d7be43c300",
+      "state": "menus",
+      "checks": [
+        "reused body fallback, four point/rect corners, painted/positioned edges <=0.5px, hit-testable rows, tall side scrolling and final control"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/visual/popovers.spec.ts",
+          "testID": "visual.tall-anchored-surface-native-side-scroll-and-last-hitbox"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.prompt_bubble_geometry.d7239d98223b00be",
+      "state": "window-bubble",
+      "checks": [
+        "48px one-line prompt, 24px prose line and balanced padding within one pixel"
+      ],
+      "behaviorWitnesses": []
+    },
+    {
+      "legacy": "legacy.questions.73f2223f3a9765fd",
+      "state": "takeover",
+      "checks": [
+        "uncommitted question vertical pointers and horizontal tabs in full/reduced colors; no transform shift and <=0.5px centers"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/attention/questions.spec.ts",
+          "testID": "attention.question-keyboard-multi-custom-confirm-and-real-rejection"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.remaining-ui.eaa311a75157e555",
+      "state": "remaining-controls",
+      "checks": [
+        "task width/primary fill and padded input; all composer width/hover/focus accessory slots; editor gutters/flow at 1x and 2x"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/visual/chrome.spec.ts",
+          "testID": "visual.task-form-submission-real-owner-and-more-exact-partition-navigation"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.remaining-ui.833f48be2e1cbd3c",
+      "state": "remaining-controls",
+      "checks": [
+        "task width/primary fill and padded input; all composer width/hover/focus accessory slots; editor gutters/flow at 1x and 2x"
+      ],
+      "behaviorWitnesses": []
+    },
+    {
+      "legacy": "legacy.request-feedback.2802e60c017d6301",
+      "state": "forms",
+      "checks": [
+        "held task form identical bounds across all three themes; real elapsed task/reconnect outcomes retain their transport owner"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/transport/feedback.spec.ts",
+          "testID": "transport.forty-second-task"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.selection.62779b3e88612b98",
+      "state": "all-selection",
+      "checks": [
+        "project/session/tab/panel/folded/palette/theme-choice state, no transform, static 3x14/2px marks, stable boxes and exact ARIA in full/reduced colors"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/visual/selection.spec.ts",
+          "testID": "visual.selection-marks-real-boxes-state-and-reduced-colours"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.session_auto.fba3efd58e338e57",
+      "state": "automatic",
+      "checks": [
+        "28px native toggle, static centered policy mark and persisted failed/unconfirmed activity without spurious status"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/attention/auto.spec.ts",
+          "testID": "attention.auto-policy-broadcast-inheritance-reload-dirty-guard-offline-disable-and-journal"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.session_cost.91521036ff0b0c19",
+      "state": "usage",
+      "checks": [
+        "three charged selected/helper/unopened rows, aligned right/center edges, 30px height/no overflow at 320/280px, costs off"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/session-cost.spec.ts",
+          "testID": "messages.unopened-session-helper-costs-live-display-persistence"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.session_cost.b399f337faeb7d92",
+      "state": "usage",
+      "checks": [
+        "three charged selected/helper/unopened rows, aligned right/center edges, 30px height/no overflow at 320/280px, costs off"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/session-cost.spec.ts",
+          "testID": "messages.unopened-session-helper-costs-live-display-persistence"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.session_cost.e387c7bff75d1e69",
+      "state": "usage",
+      "checks": [
+        "three charged selected/helper/unopened rows, aligned right/center edges, 30px height/no overflow at 320/280px, costs off"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/session-cost.spec.ts",
+          "testID": "messages.unopened-session-helper-costs-live-display-persistence"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.session-actions.8513d6e4cfa00d3c",
+      "state": "reply-actions",
+      "checks": [
+        "500ms hover and 150ms leave grace; fixed fork slot across focus/blur/hover/leave, exact copy-clock gap, prompt copy geometry and 28/16px fork strip"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/sessions/actions.spec.ts",
+          "testID": "sessions.inclusive-grouped-fork-shared-files-original-draft-and-full-fork"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.session-actions.7db64225ca57f75a",
+      "state": "reply-actions",
+      "checks": [
+        "500ms hover and 150ms leave grace; fixed fork slot across focus/blur/hover/leave, exact copy-clock gap, prompt copy geometry and 28/16px fork strip"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/sessions/actions.spec.ts",
+          "testID": "sessions.inclusive-grouped-fork-shared-files-original-draft-and-full-fork"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.session-actions.965e46998b7bc0bf",
+      "state": "menus",
+      "checks": [
+        "500ms hover and 150ms leave grace; fixed fork slot across focus/blur/hover/leave, exact copy-clock gap, prompt copy geometry and 28/16px fork strip"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/sessions/actions.spec.ts",
+          "testID": "sessions.delete-dirty-guard-pointer-keyboard-disarm-native-removal"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.session-actions.4a2029e9e52d2d9c",
+      "state": "menus",
+      "checks": [
+        "500ms hover and 150ms leave grace; fixed fork slot across focus/blur/hover/leave, exact copy-clock gap, prompt copy geometry and 28/16px fork strip"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/sessions/actions.spec.ts",
+          "testID": "sessions.delete-dirty-guard-pointer-keyboard-disarm-native-removal"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.session-actions.78dff3f7c5121136",
+      "state": "menus",
+      "checks": [
+        "500ms hover and 150ms leave grace; fixed fork slot across focus/blur/hover/leave, exact copy-clock gap, prompt copy geometry and 28/16px fork strip"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/sessions/actions.spec.ts",
+          "testID": "sessions.delete-dirty-guard-pointer-keyboard-disarm-native-removal"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.session-digest.cf9635a15ba0961b",
+      "state": "usage",
+      "checks": [
+        "unreported footer says Tokens unavailable/Cost unavailable and never invents $0.00"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/sessions/digest.spec.ts",
+          "testID": "sessions.unknown-summary-rejected-detail-has-no-invented-zero"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.session-digest.7c3660546273d8aa",
+      "state": "usage",
+      "checks": [
+        "unreported footer says Tokens unavailable/Cost unavailable and never invents $0.00"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/sessions/digest.spec.ts",
+          "testID": "sessions.unknown-summary-rejected-detail-has-no-invented-zero"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.status-lights.9c55b549b1d7694b",
+      "state": "lights",
+      "checks": [
+        "exact four-state gel tokens/gradients, glyphs/labels, green 2600ms glow only, same steady motion alternatives and no color-only selection"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/attention/lights.spec.ts",
+          "testID": "attention.project-task-lamps-keep-all-mandatory-activity-visible-through-collapse-reload"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.status-lights.0b2bc2aa37b286c6",
+      "state": "lights",
+      "checks": [
+        "exact four-state gel tokens/gradients, glyphs/labels, green 2600ms glow only, same steady motion alternatives and no color-only selection"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/attention/lights.spec.ts",
+          "testID": "attention.project-task-lamps-keep-all-mandatory-activity-visible-through-collapse-reload"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.status-lights.d5bc877c2ba5b5e9",
+      "state": "lights",
+      "checks": [
+        "exact four-state gel tokens/gradients, glyphs/labels, green 2600ms glow only, same steady motion alternatives and no color-only selection"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/attention/lights.spec.ts",
+          "testID": "attention.project-task-lamps-keep-all-mandatory-activity-visible-through-collapse-reload"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.surfaces.2a215aba33140bf7",
+      "state": "all-surfaces",
+      "checks": [
+        "one Surface/title, padded contained flow, visible control focus, native dismissal/return, editor/task/Display and folded/project menus"
+      ],
+      "behaviorWitnesses": []
+    },
+    {
+      "legacy": "legacy.surfaces.2ceab90b51b31fe5",
+      "state": "all-surfaces",
+      "checks": [
+        "one Surface/title, padded contained flow, visible control focus, native dismissal/return, editor/task/Display and folded/project menus"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/visual/chrome.spec.ts",
+          "testID": "visual.registered-dialogs-native-dismissal-focus-and-available-actions"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.theme.9f08e8f220faecd6",
+      "state": "files",
+      "checks": [
+        "registered theme tokens reach real text/code/diff and chrome; preview/save/System and no-worker-work behavior retains recorded visual owner"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/visual/theme.spec.ts",
+          "testID": "visual.real-code-diff-theme-preview-cancel-concurrent-save-and-system-without-worker-work"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.timestamps.5f265e810dedfa63",
+      "state": "timestamp-actions",
+      "checks": [
+        "default/created hover/always visibility; exact date and stable right-aligned clock with <=0.5px centers; Dark/light composited ink and action slots"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/messages/timestamps.spec.ts",
+          "testID": "messages.native-final-clock-hover-ax-preference-restart"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.timestamps.d1e170f36815dba6",
+      "state": "timestamp-actions",
+      "checks": [
+        "default/created hover/always visibility; exact date and stable right-aligned clock with <=0.5px centers; Dark/light composited ink and action slots"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/messages/timestamps.spec.ts",
+          "testID": "messages.native-final-clock-hover-ax-preference-restart"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.turn_usage_layout.63a4cc25d70f1e58",
+      "state": "usage",
+      "checks": [
+        "3/120 call rows; 1280x720/800x600 bounds, truncated activity, aligned columns, pinned header/Total and last row after scroll"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/usage-layout.spec.ts",
+          "testID": "messages.usage-layout-3"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.turn_usage_layout.a80c9002abf237dc",
+      "state": "usage",
+      "checks": [
+        "3/120 call rows; 1280x720/800x600 bounds, truncated activity, aligned columns, pinned header/Total and last row after scroll"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/usage-layout.spec.ts",
+          "testID": "messages.usage-layout-120"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.turn_usage_layout.083a4d3634295431",
+      "state": "usage",
+      "checks": [
+        "3/120 call rows; 1280x720/800x600 bounds, truncated activity, aligned columns, pinned header/Total and last row after scroll"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/usage-layout.spec.ts",
+          "testID": "messages.usage-hover-rest-focus-grace"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.turn_usage_layout.7e73117eaa730c05",
+      "state": "usage",
+      "checks": [
+        "3/120 call rows; 1280x720/800x600 bounds, truncated activity, aligned columns, pinned header/Total and last row after scroll"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/usage-layout.spec.ts",
+          "testID": "messages.usage-hover-rest-focus-grace"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.turn_usage.05320037e542bf91",
+      "state": "usage",
+      "checks": [
+        "priced/unknown/queued fixed sources, correct 10/9 cells costs on/off and truthful absent category prices"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/messages/turn-usage.spec.ts",
+          "testID": "messages.priced-native-multistep-usage-display-persistence"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.turn_usage.2dddb7ec1e2eb124",
+      "state": "usage",
+      "checks": [
+        "priced/unknown/queued fixed sources, correct 10/9 cells costs on/off and truthful absent category prices"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/usage-truth.spec.ts",
+          "testID": "messages.unknown-prices-five-categories"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.turn_usage.9f91cc69395cf4cb",
+      "state": "usage",
+      "checks": [
+        "priced/unknown/queued fixed sources, correct 10/9 cells costs on/off and truthful absent category prices"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/contracts/messages/usage-truth.spec.ts",
+          "testID": "messages.queued-turn-per-provider-category-costs"
+        }
+      ]
+    },
+    {
+      "legacy": "legacy.type-tokens.0f8f41228272b6bf",
+      "state": "type-scale",
+      "checks": [
+        "all six rendered text/line roles follow injected tokens, minimum 12px floor and exact restoration"
+      ],
+      "behaviorWitnesses": []
+    },
+    {
+      "legacy": "legacy.visual_system.6b55dc4f563fa4ac",
+      "state": "lights",
+      "checks": [
+        "five public lamps, sizing/gradient/rim, event blink, body-steady breathe/halo, all themes and motion/color alternatives; reduced action contrast"
+      ],
+      "behaviorWitnesses": []
+    },
+    {
+      "legacy": "legacy.workspace.fc5e50ab313062af",
+      "state": "interrupt",
+      "checks": [
+        "real Esc confirmation then interrupted footer/idle and shared 8px circular blocked marker with 50% body radius"
+      ],
+      "behaviorWitnesses": [
+        {
+          "runner": "playwright",
+          "file": "tests/browser/behavior/transport/workspace.spec.ts",
+          "testID": "transport.interrupt-confirmation"
+        }
+      ]
+    }
+  ],
+  "supplementalAssertions": [
+    {
+      "source": "tests/reuse/shared-controls_test.ts",
+      "originalTitle": "restored own answers size from content after collapse and remount; autocomplete uses permanent shared pointers",
+      "id": "supplemental.3",
+      "state": "supplemental-shared",
+      "file": "tests/browser/themes/sweep.spec.ts",
+      "testID": "themes.panes-chrome-rows",
+      "receipt": "otk-c15c-20261103/focus-final"
+    },
+    {
+      "source": "tests/reuse/shared-controls_test.ts",
+      "originalTitle": "restored own answers size from content after collapse and remount; autocomplete uses permanent shared pointers",
+      "id": "supplemental.5",
+      "state": "supplemental-shared",
+      "file": "tests/browser/themes/sweep.spec.ts",
+      "testID": "themes.panes-chrome-rows",
+      "receipt": "otk-c15c-20261103/focus-final"
+    },
+    {
+      "source": "tests/reuse/controls_test.ts",
+      "originalTitle": "controls: dialog pending and rejected action preserve form geometry and focus",
+      "id": "supplemental.6",
+      "state": "supplemental-task",
+      "file": "tests/browser/themes/sweep.spec.ts",
+      "testID": "themes.panes-chrome-rows",
+      "receipt": "otk-c15c-20261103/focus-final"
+    },
+    {
+      "source": "tests/reuse/shared-controls_test.ts",
+      "originalTitle": "shared file collections preserve counts, inline labels and disclosure; icon frames preserve native geometry",
+      "id": "supplemental.9",
+      "state": "supplemental-shared",
+      "file": "tests/browser/themes/sweep.spec.ts",
+      "testID": "themes.panes-chrome-rows",
+      "receipt": "otk-c15c-20261103/focus-final"
+    },
+    {
+      "source": "tests/reuse/controls_test.ts",
+      "originalTitle": "controls: setup column, conditional captured credentials and uniform accessory slots",
+      "id": "supplemental.10",
+      "state": "supplemental-setup",
+      "file": "tests/browser/themes/sweep.spec.ts",
+      "testID": "themes.panes-chrome-rows",
+      "receipt": "otk-c15c-20261103/focus-final"
+    },
+    {
+      "source": "tests/reuse/controls_test.ts",
+      "originalTitle": "controls: automatic Diff uses its own measured width, independent of ancestor hints",
+      "id": "supplemental.11",
+      "state": "supplemental-diff",
+      "file": "tests/browser/themes/sweep.spec.ts",
+      "testID": "themes.panes-chrome-rows",
+      "receipt": "otk-c15c-20261103/focus-final"
+    },
+    {
+      "source": "tests/reuse/controls_test.ts",
+      "originalTitle": "controls: required chip editor preserves node and focus across30 typed characters and resizing (dark)",
+      "id": "supplemental.12",
+      "state": "supplemental-chip",
+      "file": "tests/browser/themes/sweep.spec.ts",
+      "testID": "themes.panes-chrome-rows",
+      "receipt": "otk-c15c-20261103/focus-final"
+    },
+    {
+      "source": "tests/reuse/controls_test.ts",
+      "originalTitle": "controls: required chip editor preserves node and focus across30 typed characters and resizing (light)",
+      "id": "supplemental.13",
+      "state": "supplemental-chip",
+      "file": "tests/browser/themes/sweep.spec.ts",
+      "testID": "themes.panes-chrome-rows",
+      "receipt": "otk-c15c-20261103/focus-final"
     }
   ]
 }

@@ -41,11 +41,12 @@ test("clipboard refusal retains the authored draft and reply at its owned feedba
     await b.evaluate(
       "Object.defineProperty(navigator, 'clipboard', { configurable:true, value:{writeText:()=>Promise.reject(new Error('Clipboard refused'))} })",
     );
-    for (const theme of ["dark", "light"]) {
+    {
+      const theme = "dark";
       await b.click(`[data-${theme}]`);
       await b.fill(".otk-prompt textarea", "Retain this unsent input");
       // Composer paste/drop refusal variants moved to Playwright C9. This
-      // remainder retains the reply-owned clipboard consequence in both themes.
+      // The reply-owned clipboard consequence runs once in Dark.
       await b.click(".otk-copy-message");
       await b.poll(
         "document.querySelector('.otk-message [role=alert]')?.textContent==='Could not finish this action. Try again'",

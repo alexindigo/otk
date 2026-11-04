@@ -52,7 +52,8 @@ test(
     await expect(label).toHaveText(name);
     await expect(label).toHaveAttribute("title", state.directory);
 
-    for (const theme of ["otk-dark", "otk-light"]) {
+    {
+      const theme = "otk-dark";
       await state.product("prefs.set", { key: "theme", value: theme });
       await expect(page.locator("html")).toHaveAttribute(
         "data-otk-theme",

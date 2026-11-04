@@ -2,6 +2,8 @@
 import { mapTool, type RawPart } from "@otk/harness-opencode-v1";
 import type { AssistantMessage, Message, Part } from "@otk/protocol";
 import { themeResults } from "./theme-results.ts";
+import { themeUsage } from "./theme-usage.ts";
+import { menusMessages } from "./menus-data.ts";
 
 /** Fixed, public external-backend contracts. These are not native journeys. */
 export async function themeContent(directory: string) {
@@ -234,7 +236,66 @@ export async function themeContent(directory: string) {
     sessionID,
     collections: {
       ...themeResults(directory, sessionID),
+      ...themeUsage(sessionID).collections,
+      labels: [
+        user,
+        reply("labels", [{
+          id: "failed",
+          kind: "tool",
+          call: {
+            ...base,
+            tool: "external",
+            name: "inspect",
+            callID: "failed",
+            status: "error",
+            summary:
+              "Inspect the complete dependency graph and every affected consumer before applying the shared correction",
+            error: "The requested dependency is unavailable.",
+          },
+        }, {
+          id: "failed-path",
+          kind: "tool",
+          call: {
+            ...base,
+            tool: "read",
+            callID: "failed-path",
+            status: "error",
+            path:
+              "/workspace/dependencies/complete-graph-and-every-affected-consumer/inspection.ts",
+            loaded: [],
+            offset: 100,
+            limit: 500,
+            error: "The requested file is unavailable.",
+          },
+        }]),
+      ],
+      "labels-permission": [user],
+      "labels-question": [user],
+      controls: [
+        user,
+        reply("controls", [{
+          id: "tasks",
+          kind: "text",
+          synthetic: false,
+          blocks: [{
+            b: "list",
+            ordered: false,
+            items: [false, true].map((checked) => ({
+              task: true,
+              checked,
+              blocks: [{
+                b: "paragraph",
+                inline: [{
+                  i: "text",
+                  text: checked ? "Checked task" : "Unchecked task",
+                }],
+              }],
+            })),
+          }],
+        }]),
+      ],
       tools: await recorded("tools"),
+      menus: menusMessages.map((message) => ({ ...message, sessionID })),
       files: await recorded("files"),
       "question-pending": forms(false),
       "question-answered": forms(true),

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createEffect, createSignal, type Element, For } from "solid-js";
 import { render } from "@solidjs/web";
-import { CommandHub } from "@otk/client";
+import { CommandHub, SidecarConnection } from "@otk/client";
 import {
   booleanPreference,
   type CapabilityName,
@@ -73,6 +73,18 @@ const themes = new ThemeRegistry();
 registerOtkThemes(themes);
 const theme = new ThemeEngine(themes, browserThemeEnvironment(), "otk-dark");
 theme.start();
+const server = new URL(location.href).searchParams.get("server");
+if (server) {
+  const connection = new SidecarConnection(server, {
+    status() {},
+    frame(frame) {
+      if (frame.t === "prefs") {
+        theme.commit(frame.prefs.theme, frame.prefs.systemLightTheme);
+      }
+    },
+  });
+  await connection.connect();
+}
 
 function ExternalTool(props: ToolProps): Element {
   return (

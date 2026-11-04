@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { createSignal, For, onCleanup, Show } from "solid-js";
 import { render } from "@solidjs/web";
-import { type Command, CommandHub } from "@otk/client";
+import { type Command, CommandHub, SidecarConnection } from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import {
   browserThemeEnvironment,
@@ -29,6 +29,18 @@ const themes = new ThemeRegistry();
 registerOtkThemes(themes);
 const theme = new ThemeEngine(themes, browserThemeEnvironment(), "otk-dark");
 theme.start();
+const server = new URL(location.href).searchParams.get("server");
+if (server) {
+  const connection = new SidecarConnection(server, {
+    status() {},
+    frame(frame) {
+      if (frame.t === "prefs") {
+        theme.commit(frame.prefs.theme, frame.prefs.systemLightTheme);
+      }
+    },
+  });
+  await connection.connect();
+}
 const [contextCount, setContextCount] = createSignal(0);
 class ProbeHub extends CommandHub {
   override register<A, R>(command: Command<A, R>): () => void {

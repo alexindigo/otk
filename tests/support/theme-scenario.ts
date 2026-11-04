@@ -14,16 +14,28 @@ import {
   registerPermissions,
   registerQuestions,
   registerSessionActions,
+  registerUsage,
 } from "../../core/mod.ts";
 import { themeContent } from "./theme-content.ts";
 import { fixturePage } from "./message-pages.ts";
 import { FakeLlm } from "./fake-llm.ts";
 import { OperationFailure } from "@otk/protocol";
+import {
+  type AssistantMessage,
+  type Message,
+  usageHeader,
+  UsageLedger,
+} from "@otk/protocol";
+import { publishUsage, turnDetail } from "./usage-summary.ts";
+import { themeUsage } from "./theme-usage.ts";
+import { resources } from "./resources.ts";
+import { OtkDb, permissionMigrations, PermissionStore } from "@otk/store";
+import type { PermissionRequest } from "@otk/protocol";
 import type { ControlRequest, Json, TestLease } from "./fixture-control.ts";
 /** One real native stack plus accurately labelled public external-backend scenes. */
 export async function themeScenario() {
   const root = await fixture(),
-    native = await nativeFixture(undefined, {
+    native = await nativeFixture({ bash: "ask", edit: "ask", read: "ask" }, {
       providers: {
         fake2: {
           fake: new FakeLlm(),
@@ -66,7 +78,31 @@ export async function themeScenario() {
       parts: [{ type: "text", text: "Fixed native source for theme evidence" }],
     },
   });
-  const sidecar = await native.sidecar();
+  const automaticGate = Promise.withResolvers<void>();
+  let automaticHeld = false, automaticReplying = false;
+  const automaticProxy = serve({
+    hostname: "127.0.0.1",
+    port: 0,
+    onListen() {},
+  }, async (request) => {
+    const url = new URL(request.url);
+    if (automaticHeld && /\/permission\/[^/]+\/reply$/.test(url.pathname)) {
+      automaticReplying = true;
+      await automaticGate.promise;
+    }
+    url.port = String(native.oc.port);
+    return await fetch(new Request(url, request));
+  });
+  resources().defer("theme automatic proxy", () => {
+    automaticGate.resolve();
+    return automaticProxy.shutdown();
+  });
+  const sidecar = await native.sidecar({
+    harness: {
+      url: `http://127.0.0.1:${automaticProxy.addr.port}`,
+      db: native.oc.db,
+    },
+  });
   const nc = new WsClient(sidecar.url);
   await nc.connect();
   await nc.rpc("layout.patch", {
@@ -77,6 +113,14 @@ export async function themeScenario() {
     method: "POST",
     body: { title: "Empty native session" },
   });
+  const automatic = await native.oc.session<{ id: string }>("/session", {
+    method: "POST",
+    body: { title: "Quiet automatic session" },
+  });
+  await native.oc.session("/session", {
+    method: "POST",
+    body: { title: "Inherited helper", parentID: automatic.id },
+  });
   await nc.rpc("tasks.create", {
     directory: native.oc.directory,
     name: "Retained native task",
@@ -84,14 +128,34 @@ export async function themeScenario() {
   });
   const dist = await consumerAssets("theme-scenes");
   const styles = await consumerAssets("styles");
+  const dialog = await consumerAssets("dialog");
+  const context = await consumerAssets("context");
+  const ui = await consumerAssets("ui");
   const manifest = await themeManifest();
   const server = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {
       const path = new URL(request.url).pathname;
       if (path === "/manifest.json") return Response.json(manifest);
-      const base = path.startsWith("/styles/") ? styles : dist;
-      const name = path.startsWith("/styles/") ? path.slice(7) : path;
+      const mount = path.startsWith("/styles/")
+        ? "styles"
+        : path.startsWith("/dialog/")
+        ? "dialog"
+        : path.startsWith("/context/")
+        ? "context"
+        : path.startsWith("/ui/")
+        ? "ui"
+        : undefined;
+      const base = mount === "styles"
+        ? styles
+        : mount === "dialog"
+        ? dialog
+        : mount === "context"
+        ? context
+        : mount === "ui"
+        ? ui
+        : dist;
+      const name = mount ? path.slice(mount.length + 1) : path;
       const file = join(base, name === "/" ? "index.html" : name);
       try {
         return new Response(await Deno.readFile(file), {
@@ -150,6 +214,17 @@ export async function themeScenario() {
   const base = f.entries[0];
   const corpus = await themeContent(base.directory);
   let contentState: keyof typeof corpus.collections = "reading";
+  const usage = themeUsage(corpus.sessionID);
+  let usageSeeded = false;
+  const usageLedger = () => {
+    const messages: Message[] = corpus.collections[contentState];
+    return new UsageLedger(
+      corpus.sessionID,
+      messages.filter((m): m is AssistantMessage => m.role === "assistant").map(
+        usageHeader,
+      ),
+    );
+  };
   let response = Promise.withResolvers<void>();
   const getSession = f.app.backend.core.getSession;
   f.app.backend.core.getSession = async (id) => {
@@ -193,29 +268,46 @@ export async function themeScenario() {
             { name: "alternate", color: "secondary" },
             { name: "literal", color: "#12abEF" },
             { name: "uncoloured" },
+            ...(contentState.startsWith("labels")
+              ? [{
+                name:
+                  "review the complete dependency graph and every affected consumer",
+              }]
+              : []),
           ]),
       },
       models: {
         listModels: () =>
-          Promise.resolve({
-            defaultState: "unknown",
-            providers: [{
-              id: "fake2",
-              name: "Second fixture provider",
-              models: [{
-                id: "scripted",
-                name: "Scripted with variants",
-                variants: ["low", "high"],
-                status: "active",
-                free: true,
-              }],
-            }],
-          }),
+          Promise.resolve(
+            contentState.startsWith("usage-") ||
+              contentState.startsWith("labels")
+              ? usage.catalog
+              : {
+                defaultState: "unknown",
+                providers: [{
+                  id: "fake2",
+                  name: "Second fixture provider",
+                  models: [{
+                    id: "scripted",
+                    name: "Scripted with variants",
+                    variants: ["low", "high"],
+                    status: "active",
+                    free: true,
+                  }],
+                }],
+              },
+          ),
+      },
+      usage: {
+        getUsage: (_id: string, turnID: string) =>
+          Promise.resolve(turnDetail(usageLedger().snapshot(), turnID)),
       },
       permissions: {
         listPermissions: (id: string) =>
           Promise.resolve(
-            id === corpus.sessionID && contentState.startsWith("permission")
+            id === corpus.sessionID &&
+              (contentState.startsWith("permission") ||
+                contentState === "labels-permission")
               ? [{
                 id: "permission",
                 sessionID: id,
@@ -275,7 +367,9 @@ export async function themeScenario() {
       questions: {
         listQuestions: (id: string) =>
           Promise.resolve(
-            id === corpus.sessionID && contentState === "question"
+            id === corpus.sessionID &&
+              (contentState === "question" ||
+                contentState === "labels-question")
               ? [{
                 id: "question",
                 sessionID: id,
@@ -283,7 +377,12 @@ export async function themeScenario() {
                   {
                     header: "Rendering",
                     text: "Choose the output",
-                    options: [{ label: "Typed", description: "OTK shapes" }, {
+                    options: [{
+                      label: contentState === "labels-question"
+                        ? "Review the complete dependency graph and every affected consumer"
+                        : "Typed",
+                      description: "OTK shapes",
+                    }, {
                       label: "Raw",
                       description: "Harness shapes",
                     }],
@@ -320,6 +419,7 @@ export async function themeScenario() {
     registerPermissions(f.app.connections.rpc, f.app.backend);
     registerQuestions(f.app.connections.rpc, f.app.backend);
     registerModels(f.app.connections.rpc, f.app.backend);
+    registerUsage(f.app.connections.rpc, f.app.backend);
     registerAgents(f.app.connections.rpc, f.app.backend);
   }
   for (let i = 1; i < 12; i++) {
@@ -402,6 +502,7 @@ export async function themeScenario() {
       native.oc.port,
       native.oc.nativePort,
       sidecar.port,
+      automaticProxy.addr.port,
     ],
   };
   const record = Deno.env.get("OTK_TEST_CONTROLLER_RECORD");
@@ -433,6 +534,8 @@ export async function themeScenario() {
               url: sidecar.url,
               sessionID: session.id,
               emptyID: emptySession.id,
+              automaticID: automatic.id,
+              automaticReplying,
             },
             overflow,
             content: {
@@ -456,6 +559,83 @@ export async function themeScenario() {
             directory: native.oc.directory,
           });
         case "scenario": {
+          if (frame.params.sessionID === "tstv1-native-interrupt") {
+            native.fake.queueHeld({ chunks: ["continuing "] });
+            await nc.rpc("session.prompt", {
+              sessionID: emptySession.id,
+              mode: "normal",
+              model: { provider: "fake", model: "scripted" },
+              parts: [{ kind: "text", text: "Continue slowly" }],
+            });
+            return null;
+          }
+          if (frame.params.sessionID === "tstv1-native-auto") {
+            if (frame.params.action === "hold") {
+              automaticHeld = true;
+              await nc.rpc("permission.auto", {
+                sessionID: automatic.id,
+                enabled: true,
+              });
+              native.fake.queue({
+                tool: {
+                  name: "bash",
+                  input: {
+                    command:
+                      "printf quiet-auto > quiet-auto.txt; printf quiet-auto",
+                    description: "Quiet automatic approval",
+                  },
+                },
+              }, { chunks: ["Quiet automatic reply completed"] });
+              await nc.rpc("session.prompt", {
+                sessionID: automatic.id,
+                mode: "normal",
+                model: { provider: "fake", model: "scripted" },
+                parts: [{ kind: "text", text: "Fixed quiet automatic state" }],
+              });
+            } else if (frame.params.action === "release") {
+              automaticHeld = false;
+              automaticGate.resolve();
+            } else if (frame.params.action === "fail") {
+              await nc.rpc("permission.activity", { sessionID: automatic.id });
+              const db = new OtkDb(
+                join(native.oc.root, `otk-${sidecar.port}`),
+                [permissionMigrations],
+                { busyms: 5000 },
+              );
+              try {
+                const store = new PermissionStore(db);
+                for (
+                  const [id, error] of [[
+                    "failed-display-fixture",
+                    "Stored failure fixture",
+                  ], ["unconfirmed-display-fixture", undefined]] as const
+                ) {
+                  const request: PermissionRequest = {
+                    id,
+                    sessionID: automatic.id,
+                    kind: "bash",
+                    title: "bash",
+                    patterns: [`printf ${id}`],
+                    alwaysPatterns: [],
+                    time: 1793736000000,
+                    detail: { kind: "bash", command: `printf ${id}` },
+                  };
+                  const record = store.start({
+                    session: automatic.id,
+                    requestID: id,
+                    request: JSON.stringify(request),
+                    reply: "once",
+                    source: "auto",
+                    owner: automatic.id,
+                  });
+                  if (error) store.finish(record, { outcome: "failed", error });
+                }
+              } finally {
+                db.close();
+              }
+            } else throw new Error("Unknown automatic theme state");
+            return null;
+          }
           if (frame.params.sessionID) {
             const name = frame.params.sessionID.slice("tstv1-".length);
             if (!(name in corpus.collections)) {
@@ -465,6 +645,21 @@ export async function themeScenario() {
             contentCapabilities();
             response.resolve();
             response = Promise.withResolvers<void>();
+            // Summaries belong to the digest owner, not metadata upserts.
+            const previousDigest = f.app.index.get(corpus.sessionID)!.digest;
+            const revision = previousDigest.revision + 1;
+            f.app.index.applyDigest({
+              id: corpus.sessionID,
+              revision,
+              summary: {
+                state: "unavailable",
+                revision,
+                total: undefined,
+                last: undefined,
+              },
+              turns: { upsert: {}, remove: Object.keys(previousDigest.turns) },
+              deleted: null,
+            });
             f.update(corpus.sessionID, {
               status: contentState === "streaming" || contentState === "queued"
                 ? "busy"
@@ -479,6 +674,36 @@ export async function themeScenario() {
                 }
                 : undefined,
             });
+            if (contentState.startsWith("usage-")) {
+              if (!usageSeeded) {
+                usageSeeded = true;
+                for (const name of ["helper", "unopened"]) {
+                  const id = `tstv1-usage-${name}`;
+                  f.add({
+                    ...base,
+                    id,
+                    title: "Charged " + name +
+                      " with a deliberately long title to test truncation",
+                    ...(name === "helper"
+                      ? {
+                        parentID: corpus.sessionID,
+                        attention: { ...base.attention, questions: 1 },
+                      }
+                      : {}),
+                  });
+                  publishUsage(
+                    f.app.index,
+                    new UsageLedger(id, [{
+                      ...usageHeader(
+                        usage.collections["usage-small"][1] as AssistantMessage,
+                      ),
+                      id: name,
+                    }]).snapshot(),
+                  );
+                }
+              }
+              publishUsage(f.app.index, usageLedger().snapshot());
+            }
             return null;
           }
           if (
@@ -534,6 +759,7 @@ export async function themeScenario() {
           return result;
         }
         case "stop":
+          automaticGate.resolve();
           await c.close();
           await nc.close();
           await server.shutdown();

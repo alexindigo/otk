@@ -127,6 +127,10 @@ test.describe("inbox ownership", () => {
           e.getBoundingClientRect().width
         )
       ).toBe(200);
+      // Width paint is transient until the resize command persists its value.
+      await expect.poll(async () =>
+        (await state.product("prefs.get", {})).shellLayout.leftWidth
+      ).toBe(200);
       await page.reload();
       await expect(page).toHaveURL(new RegExp(`${created.id}$`));
       await expect.poll(() =>

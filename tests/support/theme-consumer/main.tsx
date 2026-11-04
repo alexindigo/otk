@@ -4,6 +4,8 @@ import { createSignal, For } from "solid-js";
 import { SidecarConnection } from "@otk/client";
 import { DEFAULT_PREFS } from "@otk/protocol";
 import Notices from "./notices.tsx";
+import Lights from "./lights.tsx";
+import Controls from "./controls.tsx";
 import {
   browserThemeEnvironment,
   createUiRegistries,
@@ -59,7 +61,11 @@ render(() => (
       <header>
         Public component contracts - retained source is not a native failure
       </header>
-      {new URL(location.href).searchParams.get("scene") === "notices"
+      {new URL(location.href).searchParams.get("scene") === "controls"
+        ? <Controls />
+        : new URL(location.href).searchParams.get("scene") === "lights"
+        ? <Lights />
+        : new URL(location.href).searchParams.get("scene") === "notices"
         ? <Notices prefs={prefs()} />
         : (
           <div class="theme-panes">

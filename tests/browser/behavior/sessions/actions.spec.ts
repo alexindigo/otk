@@ -368,6 +368,10 @@ test(
       "data-status",
       "busy",
     );
+    // Admission precedes provider acquisition. Delete actual streaming work,
+    // not an admitted request whose queued script has not been consumed yet.
+    await expect(page.locator("[data-role=assistant] .otk-text"))
+      .toContainText("Still working.");
     const item = page.locator(
       `${contextMenu} [data-context-command="session.delete"]`,
     );

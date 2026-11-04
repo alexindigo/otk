@@ -51,7 +51,7 @@ assigned version guests; never run these workloads directly on a physical host.
 deno task test:prepare --version 1.18.34
 deno task test:e2e --project=oc-1.18.34 --grep @smoke --retries=0
 deno task test:e2e --project=oc-1.18.34 --grep @fixture-acceptance --workers=3 --retries=0
-deno task test:e2e:legacy tests/e2e/workspace_test.ts
+deno task test:e2e:legacy
 deno task test:batch --area harness --version 1.18.34
 deno task test:scale --project=scale-1.18.34 --grep @harness --workers=1 --retries=0
 ```
@@ -62,8 +62,9 @@ once, and records native/cache/binary/web hashes in
 `.test-state/builds/<tree>/receipt.json`. The compile recipe owns its frozen
 install and web build. A browser invocation validates that exact receipt before
 admitting workers; it neither installs dependencies nor builds in a test case.
-The legacy task defaults to the active legacy files in `migration.json` when no
-explicit files are given. It preserves their Deno runner and assertions.
+The legacy task reports no active assertions after the final visual transfers.
+`migration.json` retains every original group, its behavior destinations and
+checked theme witnesses.
 
 Import `test`/`expect` from `fixtures/evidence.ts` for ordinary journeys.
 Request `state` only when the test needs native services. Its worker owns the
@@ -146,14 +147,14 @@ old proof; the ledger is the legacy selection source.
 exact-tree preparation (including scale templates), static checks, unit,
 architecture, reuse, standard and scale integration, Playwright
 behavior/contracts/harness, legacy e2e and the ownership audit. Compiled/upgrade
-proofs are in standard integration; theme and browser-scale proofs remain in
-legacy until their later transfers. Each tier has an owned guest transient unit
-and retained output, exit, counts (null for non-test tiers or absent summaries),
-and elapsed timing in `.test-state/runs/full-<version>-<identity>/lane.json`.
-Tiers continue after a failure and the aggregate exits nonzero if any tier
-fails. Only this full lane sets one browser retry; failed-then-passed remains a
-nonzero flaky result. `tiers.jsonl` records exact unit ownership before each
-tier starts, preserving the in-flight identity if its supervisor is interrupted.
+proofs are in standard integration; theme and browser-scale proofs have their
+own projects. Each tier has an owned guest transient unit and retained output,
+exit, counts (null for non-test tiers or absent summaries), and elapsed timing
+in `.test-state/runs/full-<version>-<identity>/lane.json`. Tiers continue after
+a failure and the aggregate exits nonzero if any tier fails. Only this full lane
+sets one browser retry; failed-then-passed remains a nonzero flaky result.
+`tiers.jsonl` records exact unit ownership before each tier starts, preserving
+the in-flight identity if its supervisor is interrupted.
 
 For wiring inspection use `--dry-run`; for a short real lane control use
 `--tiers migration`. A selected-tier receipt says `complete: false`, so it
@@ -169,9 +170,10 @@ component contracts share that fixture and their prepared assets. Real
 `prefs.set` broadcasts drive every named theme; `/manifest.json` publishes
 Deno-resolved registered theme data. The checked `themes/states.json` links
 retired V groups to the exact theme/viewport/zoom captures. Full screenshots,
-token and geometry observations are evidence, without pixel baselines. C15a
-covers state collections 1-3. Batch comparison runs theme destinations only on
-1.18.34; behavior and scale keep their version-qualified projects.
+token and geometry observations are evidence, without pixel baselines. The sweep
+covers all nine state collections and the supplemental public consumers; no
+active legacy assertions remain. Batch comparison runs theme destinations only
+on 1.18.34; behavior and scale keep their version-qualified projects.
 
 `test:batch` derives the old collection, exact new file/title destinations and
 named lower-tier witnesses from the ledger. It checks actual first-attempt

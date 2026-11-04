@@ -4,8 +4,18 @@
   "themeSweep": {
     "manifest": "tests/browser/themes/states.json",
     "testID": "themes.panes-chrome-rows",
-    "collections": [1, 2, 3, 4, 5, 6],
-    "receipt": "otk-c15a-20261103 + otk-c15b-20261103/resume-final; checked-state-manifest attachment"
+    "collections": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      9
+    ],
+    "receipt": "otk-c15a-20261103 + otk-c15b-20261103/resume-final; checked-state-manifest attachment + otk-c15c-20261103/focus-final"
   },
   "supplementalTransfers": [
     {
@@ -65,7 +75,7 @@
       "area": "composer",
       "batch": "A3",
       "originalTitle": "restored own answers size from content after collapse and remount; autocomplete uses permanent shared pointers",
-      "portion": "native completion keyboard/pointer outcomes and exact pseudo-element geometry; question restoration and Dark/Linen geometry remain active in Deno",
+      "portion": "native completion keyboard/pointer outcomes and exact pseudo-element geometry; question restoration and Dark/Linen geometry remain active in Deno; remaining visual states transferred to the shared T3 sweep",
       "destination": {
         "runner": "playwright",
         "file": "tests/browser/contracts/composer/public-ui.spec.ts",
@@ -76,6 +86,13 @@
         "kind": "old-new-batch",
         "sourceSha256": "39352a0782fc2ac89e7d88d2f13c240876c78700d01d2aa1d96a472d7d35e1e3",
         "run": "otk-t2-c9-20261102/c/supplemental-first"
+      },
+      "themeWitness": {
+        "id": "supplemental.3",
+        "state": "supplemental-shared",
+        "file": "tests/browser/themes/sweep.spec.ts",
+        "testID": "themes.panes-chrome-rows",
+        "receipt": "otk-c15c-20261103/focus-final"
       }
     },
     {
@@ -100,7 +117,7 @@
       "area": "attention",
       "batch": "A5",
       "originalTitle": "restored own answers size from content after collapse and remount; autocomplete uses permanent shared pointers",
-      "portion": "Dark own-answer collapse/remount persistence, content-driven height and shrink; fixed Dark/Linen geometry remains in Deno",
+      "portion": "Dark own-answer collapse/remount persistence, content-driven height and shrink; fixed Dark/Linen geometry remains in Deno; remaining visual states transferred to the shared T3 sweep",
       "destination": {
         "runner": "playwright",
         "file": "tests/browser/contracts/attention/public-ui.spec.ts",
@@ -111,6 +128,13 @@
         "kind": "old-new-batch",
         "sourceSha256": "0509f3c911ce10291c49195f9655620f91fd5e32b2ccb31ab00ba14bf51221d8",
         "run": "otk-t2-c11-20261103; final archived originals + batch-attention + area-attention receipts"
+      },
+      "themeWitness": {
+        "id": "supplemental.5",
+        "state": "supplemental-shared",
+        "file": "tests/browser/themes/sweep.spec.ts",
+        "testID": "themes.panes-chrome-rows",
+        "receipt": "otk-c15c-20261103/focus-final"
       }
     },
     {
@@ -118,7 +142,7 @@
       "area": "menus",
       "batch": "A6",
       "originalTitle": "controls: dialog pending and rejected action preserve form geometry and focus",
-      "portion": "Dark pending/rejected callback, retained form and visible focus; fixed Dark/Linen geometry and paint remain in Deno",
+      "portion": "Dark pending/rejected callback, retained form and visible focus; fixed Dark/Linen geometry and paint remain in Deno; remaining visual states transferred to the shared T3 sweep",
       "destination": {
         "runner": "playwright",
         "file": "tests/browser/contracts/menus/dialog-feedback.spec.ts",
@@ -129,6 +153,13 @@
         "kind": "old-new-batch",
         "sourceSha256": "1fa104a50b1c252a099dfc0feeeb0ed0c264dfaf0b94aaeb55e9151a916b524e",
         "run": "otk-t2-c12-20261103; archived-controls + area-menus"
+      },
+      "themeWitness": {
+        "id": "supplemental.6",
+        "state": "supplemental-task",
+        "file": "tests/browser/themes/sweep.spec.ts",
+        "testID": "themes.panes-chrome-rows",
+        "receipt": "otk-c15c-20261103/focus-final"
       }
     },
     {
@@ -172,7 +203,7 @@
       "area": "visual",
       "batch": "A7",
       "originalTitle": "shared file collections preserve counts, inline labels and disclosure; icon frames preserve native geometry",
-      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3",
+      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3; remaining visual states transferred to the shared T3 sweep",
       "destination": {
         "runner": "playwright",
         "file": "tests/browser/contracts/visual/shared-controls.spec.ts",
@@ -183,6 +214,13 @@
         "kind": "old-new-batch",
         "sourceSha256": "95f1118e4e3a190d1c7501f25bb44f5431abef145ce6e9d2c94d118efe288047",
         "run": "otk-t2-c13-20261103; archived-controls + area-visual + reuse"
+      },
+      "themeWitness": {
+        "id": "supplemental.9",
+        "state": "supplemental-shared",
+        "file": "tests/browser/themes/sweep.spec.ts",
+        "testID": "themes.panes-chrome-rows",
+        "receipt": "otk-c15c-20261103/focus-final"
       }
     },
     {
@@ -190,7 +228,7 @@
       "area": "visual",
       "batch": "A7",
       "originalTitle": "controls: setup column, conditional captured credentials and uniform accessory slots",
-      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3",
+      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3; remaining visual states transferred to the shared T3 sweep",
       "destination": {
         "runner": "playwright",
         "file": "tests/browser/contracts/visual/shared-controls.spec.ts",
@@ -201,6 +239,13 @@
         "kind": "old-new-batch",
         "sourceSha256": "4811ffc2e04392315202e2d21f24b8ae9e9c11c0a6da7a96c3883f800e2f1db6",
         "run": "otk-t2-c13-20261103; archived-controls + area-visual + reuse"
+      },
+      "themeWitness": {
+        "id": "supplemental.10",
+        "state": "supplemental-setup",
+        "file": "tests/browser/themes/sweep.spec.ts",
+        "testID": "themes.panes-chrome-rows",
+        "receipt": "otk-c15c-20261103/focus-final"
       }
     },
     {
@@ -208,7 +253,7 @@
       "area": "visual",
       "batch": "A7",
       "originalTitle": "controls: automatic Diff uses its own measured width, independent of ancestor hints",
-      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3",
+      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3; remaining visual states transferred to the shared T3 sweep",
       "destination": {
         "runner": "playwright",
         "file": "tests/browser/contracts/visual/shared-controls.spec.ts",
@@ -219,6 +264,13 @@
         "kind": "old-new-batch",
         "sourceSha256": "4811ffc2e04392315202e2d21f24b8ae9e9c11c0a6da7a96c3883f800e2f1db6",
         "run": "otk-t2-c13-20261103; archived-controls + area-visual + reuse"
+      },
+      "themeWitness": {
+        "id": "supplemental.11",
+        "state": "supplemental-diff",
+        "file": "tests/browser/themes/sweep.spec.ts",
+        "testID": "themes.panes-chrome-rows",
+        "receipt": "otk-c15c-20261103/focus-final"
       }
     },
     {
@@ -226,7 +278,7 @@
       "area": "visual",
       "batch": "A7",
       "originalTitle": "controls: required chip editor preserves node and focus across30 typed characters and resizing (dark)",
-      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3",
+      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3; remaining visual states transferred to the shared T3 sweep",
       "destination": {
         "runner": "playwright",
         "file": "tests/browser/contracts/visual/shared-controls.spec.ts",
@@ -237,6 +289,13 @@
         "kind": "old-new-batch",
         "sourceSha256": "4811ffc2e04392315202e2d21f24b8ae9e9c11c0a6da7a96c3883f800e2f1db6",
         "run": "otk-t2-c13-20261103; archived-controls + area-visual + reuse"
+      },
+      "themeWitness": {
+        "id": "supplemental.12",
+        "state": "supplemental-chip",
+        "file": "tests/browser/themes/sweep.spec.ts",
+        "testID": "themes.panes-chrome-rows",
+        "receipt": "otk-c15c-20261103/focus-final"
       }
     },
     {
@@ -244,7 +303,7 @@
       "area": "visual",
       "batch": "A7",
       "originalTitle": "controls: required chip editor preserves node and focus across30 typed characters and resizing (light)",
-      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3",
+      "portion": "Dark browser contract transferred; fixed per-theme geometry/paint remains where applicable until T3; remaining visual states transferred to the shared T3 sweep",
       "destination": {
         "runner": "playwright",
         "file": "tests/browser/contracts/visual/shared-controls.spec.ts",
@@ -255,6 +314,13 @@
         "kind": "old-new-batch",
         "sourceSha256": "4811ffc2e04392315202e2d21f24b8ae9e9c11c0a6da7a96c3883f800e2f1db6",
         "run": "otk-t2-c13-20261103; archived-controls + area-visual + reuse"
+      },
+      "themeWitness": {
+        "id": "supplemental.13",
+        "state": "supplemental-chip",
+        "file": "tests/browser/themes/sweep.spec.ts",
+        "testID": "themes.panes-chrome-rows",
+        "receipt": "otk-c15c-20261103/focus-final"
       }
     }
   ],
@@ -310,9 +376,9 @@
           "proofBoundary": "B+V: quiet automatic approval and actual reply outcome",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/approval_attention_test.ts",
-              "testID": "legacy.approval_attention.d5b551234a0b043c"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -322,22 +388,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed quiet automatic pending/confirmed activity and policy marks"
+              "Fixed quiet automatic pending/confirmed activity and policy marks",
+              "V1 fixed-state witness: automatic"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/approval_attention_test.ts",
-            "testID": "legacy.approval_attention.d5b551234a0b043c"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "507dd6c4c367abbc06ad19fe422f1fda17f4085ff659f09c00348f45adfc374c",
-            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -346,9 +415,9 @@
           "proofBoundary": "B+V: quiet automatic approval and actual reply outcome",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/approval_attention_test.ts",
-              "testID": "legacy.approval_attention.32f288330006b5b8"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -358,22 +427,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed quiet automatic pending/confirmed activity and policy marks"
+              "Fixed quiet automatic pending/confirmed activity and policy marks",
+              "V1 fixed-state witness: automatic"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/approval_attention_test.ts",
-            "testID": "legacy.approval_attention.32f288330006b5b8"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "507dd6c4c367abbc06ad19fe422f1fda17f4085ff659f09c00348f45adfc374c",
-            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -382,9 +454,9 @@
           "proofBoundary": "B+V: quiet automatic approval and actual reply outcome",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/approval_attention_test.ts",
-              "testID": "legacy.approval_attention.9d2860f9c4ad71fe"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -394,22 +466,25 @@
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
+              "otk-light",
               "otk-light-stone"
             ],
             "states": [
-              "Fixed quiet automatic pending/confirmed activity and policy marks"
+              "Fixed quiet automatic pending/confirmed activity and policy marks",
+              "V1 fixed-state witness: automatic"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/approval_attention_test.ts",
-            "testID": "legacy.approval_attention.9d2860f9c4ad71fe"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "507dd6c4c367abbc06ad19fe422f1fda17f4085ff659f09c00348f45adfc374c",
-            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -1545,9 +1620,9 @@
           "proofBoundary": "B+V+L: file disclosure, labels and preference persistence",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/collapse_file_changes_test.ts",
-              "testID": "legacy.collapse_file_changes.061d0a48796c0626"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -1557,22 +1632,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "U6 file changes start collapsed, disclose real content and follow the persisted Display preference"
+              "U6 file changes start collapsed, disclose real content and follow the persisted Display preference",
+              "V1 fixed-state witness: files"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/collapse_file_changes_test.ts",
-            "testID": "legacy.collapse_file_changes.061d0a48796c0626"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c27aa3fe6b0c3d314f51e270f49fdd2697f4c0689db717bda99afff5f7f550ed",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.collapse_file_changes.061d0a48796c0626"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.collapse_file_changes.061d0a48796c0626; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -1581,9 +1659,9 @@
           "proofBoundary": "B+V+L: file disclosure, labels and preference persistence",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/collapse_file_changes_test.ts",
-              "testID": "legacy.collapse_file_changes.ad304c8cd82ce3b8"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -1598,22 +1676,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "U6 one-token labels and literal fallback phrases reach plain and picker footers"
+              "U6 one-token labels and literal fallback phrases reach plain and picker footers",
+              "V1 fixed-state witness: file-labels"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/collapse_file_changes_test.ts",
-            "testID": "legacy.collapse_file_changes.ad304c8cd82ce3b8"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c27aa3fe6b0c3d314f51e270f49fdd2697f4c0689db717bda99afff5f7f550ed",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.collapse_file_changes.ad304c8cd82ce3b8"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.collapse_file_changes.ad304c8cd82ce3b8; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -1808,9 +1889,9 @@
           "proofBoundary": "C+V: public component lifetimes/feedback plus all style scenes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/component-styles_test.ts",
-              "testID": "legacy.component-styles.4a60a3a0682fa4ac"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -1820,22 +1901,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "theme and keymap saves share reserved pending/failure tracks with no disabled actions"
+              "theme and keymap saves share reserved pending/failure tracks with no disabled actions",
+              "V1 fixed-state witness: preference-feedback"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/component-styles_test.ts",
-            "testID": "legacy.component-styles.4a60a3a0682fa4ac"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "9357f0d376700b4b9eb422acf3c1f5d1ac50e6c0e9187afc9c09a0b4fee13c5e",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-t2-c13-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -1844,9 +1928,9 @@
           "proofBoundary": "C+V: public component lifetimes/feedback plus all style scenes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/component-styles_test.ts",
-              "testID": "legacy.component-styles.4ecf821baefe1ebb"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -1856,22 +1940,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "shipped Form captures once, retains readonly values and stable feedback geometry without disabled controls"
+              "shipped Form captures once, retains readonly values and stable feedback geometry without disabled controls",
+              "V1 fixed-state witness: forms"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/component-styles_test.ts",
-            "testID": "legacy.component-styles.4ecf821baefe1ebb"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "9357f0d376700b4b9eb422acf3c1f5d1ac50e6c0e9187afc9c09a0b4fee13c5e",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-t2-c13-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -1880,9 +1967,9 @@
           "proofBoundary": "C+V: public component lifetimes/feedback plus all style scenes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/component-styles_test.ts",
-              "testID": "legacy.component-styles.cef84a56ec35ef07"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -1892,22 +1979,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "every native form field shares captured feedback tracks and retains accessible descriptions"
+              "every native form field shares captured feedback tracks and retains accessible descriptions",
+              "V1 fixed-state witness: forms"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/component-styles_test.ts",
-            "testID": "legacy.component-styles.cef84a56ec35ef07"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "9357f0d376700b4b9eb422acf3c1f5d1ac50e6c0e9187afc9c09a0b4fee13c5e",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-t2-c13-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -1952,9 +2042,9 @@
           "proofBoundary": "C+V: public component lifetimes/feedback plus all style scenes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/component-styles_test.ts",
-              "testID": "legacy.component-styles.e13342416250c5e3"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -1964,22 +2054,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "command menu pending slots keep geometry and visible focus, then expose one reserved safe failure"
+              "command menu pending slots keep geometry and visible focus, then expose one reserved safe failure",
+              "V1 fixed-state witness: menu-feedback"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/component-styles_test.ts",
-            "testID": "legacy.component-styles.e13342416250c5e3"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "9357f0d376700b4b9eb422acf3c1f5d1ac50e6c0e9187afc9c09a0b4fee13c5e",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-t2-c13-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -2563,29 +2656,32 @@
           "proofBoundary": "V+L: connection domain glyph/paint/motion, not session priority logic",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/connection-lights_test.ts",
-              "testID": "legacy.connection-lights.db4debaa073cec4a"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "independent connection and activity indicators keep domain states, theme paint, glyphs and motion"
+              "independent connection and activity indicators keep domain states, theme paint, glyphs and motion",
+              "V1 fixed-state witness: lights"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/connection-lights_test.ts",
-            "testID": "legacy.connection-lights.db4debaa073cec4a"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "fbbf6a4c83cb77940616b8bb44fb8f88241dd4152864b16294cd394dabd59894",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t1c5-20261101; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -2672,9 +2768,9 @@
           "proofBoundary": "B+C+V+L: area composition and actual commands",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-areas_test.ts",
-              "testID": "legacy.context-areas.524593a986827696"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2685,22 +2781,24 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed current-session menu groups, 28px rows and viewport bounds; commands are Playwright-owned"
+              "Fixed current-session menu groups, 28px rows and viewport bounds; commands are Playwright-owned",
+              "V1 fixed-state witness: all-menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-areas_test.ts",
-            "testID": "legacy.context-areas.524593a986827696"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "a3403daacbb16d9164d3f834fee3347bb52928ca6f232277418142d427a463ab",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -2709,9 +2807,9 @@
           "proofBoundary": "B+C+V+L: area composition and actual commands",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-areas_test.ts",
-              "testID": "legacy.context-areas.1f4330befbb5ff3a"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2721,22 +2819,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed empty-area and inner-target menu geometry in Dark; commands are Playwright-owned"
+              "Fixed empty-area and inner-target menu geometry in Dark; commands are Playwright-owned",
+              "V1 fixed-state witness: all-menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-areas_test.ts",
-            "testID": "legacy.context-areas.1f4330befbb5ff3a"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "a3403daacbb16d9164d3f834fee3347bb52928ca6f232277418142d427a463ab",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -2745,9 +2846,9 @@
           "proofBoundary": "B+C+V+L: area composition and actual commands",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-areas_test.ts",
-              "testID": "legacy.context-areas.729f150fa43b9761"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2757,22 +2858,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed empty-area and inner-target menu geometry in Linen; commands are Playwright-owned"
+              "Fixed empty-area and inner-target menu geometry in Linen; commands are Playwright-owned",
+              "V1 fixed-state witness: all-menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-areas_test.ts",
-            "testID": "legacy.context-areas.729f150fa43b9761"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "a3403daacbb16d9164d3f834fee3347bb52928ca6f232277418142d427a463ab",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -2781,9 +2885,9 @@
           "proofBoundary": "B+C+V+L: area composition and actual commands",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-areas_test.ts",
-              "testID": "legacy.context-areas.bd5feaa480a7e620"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2793,22 +2897,25 @@
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
+              "otk-light",
               "otk-light-stone"
             ],
             "states": [
-              "Fixed empty-area and inner-target menu geometry in Stone; commands are Playwright-owned"
+              "Fixed empty-area and inner-target menu geometry in Stone; commands are Playwright-owned",
+              "V1 fixed-state witness: all-menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-areas_test.ts",
-            "testID": "legacy.context-areas.bd5feaa480a7e620"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "a3403daacbb16d9164d3f834fee3347bb52928ca6f232277418142d427a463ab",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -2817,9 +2924,9 @@
           "proofBoundary": "B+C+V+L: area composition and actual commands",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-areas_test.ts",
-              "testID": "legacy.context-areas.ad57fb98b12ed3dd"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2830,22 +2937,24 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed native-capability area menu row density and bounds; native effects are Playwright-owned"
+              "Fixed native-capability area menu row density and bounds; native effects are Playwright-owned",
+              "V1 fixed-state witness: all-menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-areas_test.ts",
-            "testID": "legacy.context-areas.ad57fb98b12ed3dd"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "a3403daacbb16d9164d3f834fee3347bb52928ca6f232277418142d427a463ab",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -2862,9 +2971,9 @@
           "proofBoundary": "C+B+V+L: trusted input, clipboard, keys, native escape and compact bounds",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-menu_test.ts",
-              "testID": "legacy.context-menu.eea88bc2d2692289"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2875,22 +2984,24 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed point menus in all four corners and modal-hosted context menu geometry"
+              "Fixed point menus in all four corners and modal-hosted context menu geometry",
+              "V1 fixed-state witness: all-menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-menu_test.ts",
-            "testID": "legacy.context-menu.eea88bc2d2692289"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "0facff5b6779ed999f2ada4f62267f3792c87b76c94740186017940c1019b8d9",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -2961,9 +3072,9 @@
           "proofBoundary": "C+B+V+L: trusted input, clipboard, keys, native escape and compact bounds",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-menu_test.ts",
-              "testID": "legacy.context-menu.e56a82303dd427c7"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -2974,22 +3085,24 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed session, project and folded menu 28px rows and balanced complete-flow padding"
+              "Fixed session, project and folded menu 28px rows and balanced complete-flow padding",
+              "V1 fixed-state witness: all-menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-menu_test.ts",
-            "testID": "legacy.context-menu.e56a82303dd427c7"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "0facff5b6779ed999f2ada4f62267f3792c87b76c94740186017940c1019b8d9",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -3006,9 +3119,9 @@
           "proofBoundary": "B+C+V+L: captured identity/effects, constant registration count, complete source copy",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-targets_test.ts",
-              "testID": "legacy.context-targets.0d0fe821a789f46b"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -3019,22 +3132,24 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed session/tab/chip/task/project menu geometry; captured effects are Playwright-owned"
+              "Fixed session/tab/chip/task/project menu geometry; captured effects are Playwright-owned",
+              "V1 fixed-state witness: all-menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-targets_test.ts",
-            "testID": "legacy.context-targets.0d0fe821a789f46b"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "8823d789c8841cf63e6e60a32dd477e46fc9cc8e3813fb609ed0242aab8daa4b",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -3105,9 +3220,9 @@
           "proofBoundary": "B+C+V+L: captured identity/effects, constant registration count, complete source copy",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-targets_test.ts",
-              "testID": "legacy.context-targets.6c9882df06ce2f70"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -3117,22 +3232,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed project error flows below action within row bounds in Dark"
+              "Fixed project error flows below action within row bounds in Dark",
+              "V1 fixed-state witness: project-error"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-targets_test.ts",
-            "testID": "legacy.context-targets.6c9882df06ce2f70"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "8823d789c8841cf63e6e60a32dd477e46fc9cc8e3813fb609ed0242aab8daa4b",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -3141,9 +3259,9 @@
           "proofBoundary": "B+C+V+L: captured identity/effects, constant registration count, complete source copy",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-targets_test.ts",
-              "testID": "legacy.context-targets.5b869360b4166719"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -3153,22 +3271,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed project error flows below action within row bounds in Linen"
+              "Fixed project error flows below action within row bounds in Linen",
+              "V1 fixed-state witness: project-error"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-targets_test.ts",
-            "testID": "legacy.context-targets.5b869360b4166719"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "8823d789c8841cf63e6e60a32dd477e46fc9cc8e3813fb609ed0242aab8daa4b",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -3177,9 +3298,9 @@
           "proofBoundary": "B+C+V+L: captured identity/effects, constant registration count, complete source copy",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-targets_test.ts",
-              "testID": "legacy.context-targets.0aafbf32a068d4e2"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -3190,22 +3311,24 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed prompt/reply/code/tool/path/diff-hunk menu geometry; complete source copy is Playwright-owned"
+              "Fixed prompt/reply/code/tool/path/diff-hunk menu geometry; complete source copy is Playwright-owned",
+              "V1 fixed-state witness: all-menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-targets_test.ts",
-            "testID": "legacy.context-targets.0aafbf32a068d4e2"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "8823d789c8841cf63e6e60a32dd477e46fc9cc8e3813fb609ed0242aab8daa4b",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -3214,9 +3337,9 @@
           "proofBoundary": "B+C+V+L: captured identity/effects, constant registration count, complete source copy",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/context-targets_test.ts",
-              "testID": "legacy.context-targets.9fae431359f3e326"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -3227,22 +3350,24 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed native approval on/off menus and reply usage menu/table states"
+              "Fixed native approval on/off menus and reply usage menu/table states",
+              "V1 fixed-state witness: all-menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/context-targets_test.ts",
-            "testID": "legacy.context-targets.9fae431359f3e326"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "8823d789c8841cf63e6e60a32dd477e46fc9cc8e3813fb609ed0242aab8daa4b",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -3259,9 +3384,9 @@
           "proofBoundary": "C+V: real native compact input/checkbox/select bounds",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/control_geometry_test.ts",
-              "testID": "legacy.control_geometry.8038291d0c6e8da3"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -3271,22 +3396,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "shared field geometry excludes native compact inputs without consumer overrides"
+              "shared field geometry excludes native compact inputs without consumer overrides",
+              "V1 fixed-state witness: native-controls"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/control_geometry_test.ts",
-            "testID": "legacy.control_geometry.8038291d0c6e8da3"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c267a86717fb775e8b2ace64018e4644a6af50f29a900c5806b97b11a440f824",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-t2-c13-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -3295,9 +3423,9 @@
           "proofBoundary": "C+V: real native compact input/checkbox/select bounds",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/control_geometry_test.ts",
-              "testID": "legacy.control_geometry.c88251328cf6c9b3"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -3307,22 +3435,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Display and Markdown consumers retain native checkbox bounds and field/select semantics"
+              "Display and Markdown consumers retain native checkbox bounds and field/select semantics",
+              "V1 fixed-state witness: checkboxes"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/control_geometry_test.ts",
-            "testID": "legacy.control_geometry.c88251328cf6c9b3"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "c267a86717fb775e8b2ace64018e4644a6af50f29a900c5806b97b11a440f824",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-t2-c13-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -3339,29 +3470,32 @@
           "proofBoundary": "V: single-line labels across all recorded consumers",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/control_labels_test.ts",
-              "testID": "legacy.control_labels.9b9928ac0e96f358"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "control labels stay single-line across transcript, chrome, menus, pickers and dialogs"
+              "control labels stay single-line across transcript, chrome, menus, pickers and dialogs",
+              "V1 fixed-state witness: labels"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/control_labels_test.ts",
-            "testID": "legacy.control_labels.9b9928ac0e96f358"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "41cca1f4db03fe33101034e2c124bdc6d856bb8f6c384b8a4ee90e844cb6bbb5",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t1c5-20261101; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -3515,9 +3649,9 @@
           "proofBoundary": "C+B+V+L: invocation identity, callback/focus and late save",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/dialog-identity_test.ts",
-              "testID": "legacy.dialog-identity.d27e968b23bbe6de"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -3528,22 +3662,24 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed replacement task dialog paint; late-save and focus identities are Playwright-owned"
+              "Fixed replacement task dialog paint; late-save and focus identities are Playwright-owned",
+              "V1 fixed-state witness: dialog-lifetimes"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/dialog-identity_test.ts",
-            "testID": "legacy.dialog-identity.d27e968b23bbe6de"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "4e0471529fc51ce5184b4ec0233537aa0be54831aec7a3bf6a2ce78ffacc3563",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -3583,9 +3719,9 @@
           "proofBoundary": "C+B+V+L: invocation identity, callback/focus and late save",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/dialog-identity_test.ts",
-              "testID": "legacy.dialog-identity.dd50261cf69135af"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -3596,22 +3732,24 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed replacement dismissal dialog paint; deferred-close identity is Playwright-owned"
+              "Fixed replacement dismissal dialog paint; deferred-close identity is Playwright-owned",
+              "V1 fixed-state witness: dialog-lifetimes"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/dialog-identity_test.ts",
-            "testID": "legacy.dialog-identity.dd50261cf69135af"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "4e0471529fc51ce5184b4ec0233537aa0be54831aec7a3bf6a2ce78ffacc3563",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -3620,9 +3758,9 @@
           "proofBoundary": "C+B+V+L: invocation identity, callback/focus and late save",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/dialog-identity_test.ts",
-              "testID": "legacy.dialog-identity.448018d37e67afc5"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -3633,22 +3771,24 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed closed standalone-palette state; injected action/close callback is Playwright-owned"
+              "Fixed closed standalone-palette state; injected action/close callback is Playwright-owned",
+              "V1 fixed-state witness: dialog-lifetimes"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/dialog-identity_test.ts",
-            "testID": "legacy.dialog-identity.448018d37e67afc5"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "4e0471529fc51ce5184b4ec0233537aa0be54831aec7a3bf6a2ce78ffacc3563",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -4103,9 +4243,9 @@
           "proofBoundary": "C+V: hidden/restored native control semantics and paint",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/hidden-controls_test.ts",
-              "testID": "legacy.hidden-controls.356801519d16643f"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -4115,22 +4255,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "shared native control paint preserves hidden semantics through removal and restoration"
+              "shared native control paint preserves hidden semantics through removal and restoration",
+              "V1 fixed-state witness: native-controls"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/hidden-controls_test.ts",
-            "testID": "legacy.hidden-controls.356801519d16643f"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "9c8ba1d2da12b8ae91009287581fcaababc5376ae8aea48329125892e4b33dc6",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-t2-c13-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -4856,9 +4999,9 @@
           "proofBoundary": "B+V+L: supervision, guarded navigation, server merge; global variants isolated",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/inbox_test.ts",
-              "testID": "legacy.inbox.3ed13f3b45358055"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -4868,23 +5011,26 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
               "inbox mocked-clock ageing, reduced-colour underlines, visit resets on opening and acting, and inactive clock pause",
-              "Dark browser outcome; fixed legacy paint only"
+              "Dark browser outcome; fixed legacy paint only",
+              "V1 fixed-state witness: lights"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/inbox_test.ts",
-            "testID": "legacy.inbox.3ed13f3b45358055"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "a2cff58c1459bea92d08a3f52bd926fc9c27a00b944f8ba738fdc96605c5be6d",
-            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -5152,9 +5298,9 @@
           "proofBoundary": "B+C+V: live key registration/hints and native widget actions",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/key-hints_test.ts",
-              "testID": "legacy.key-hints.f607c239efc25bfa"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -5164,22 +5310,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed mounted Keys help hint presentation in Dark; rebind/unbind/reset and native actions are Playwright-owned"
+              "Fixed mounted Keys help hint presentation in Dark; rebind/unbind/reset and native actions are Playwright-owned",
+              "V1 fixed-state witness: dialogs"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/key-hints_test.ts",
-            "testID": "legacy.key-hints.f607c239efc25bfa"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "4807b29b160c5c3ea1eb2981a873084248ed11e46bddfd5976b476d9ff2e6df2",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -5188,9 +5337,9 @@
           "proofBoundary": "B+C+V: live key registration/hints and native widget actions",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/key-hints_test.ts",
-              "testID": "legacy.key-hints.1d417223b8a8b9b1"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -5200,22 +5349,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed mounted Keys help hint presentation in Linen; rebind/unbind/reset and native actions are Playwright-owned"
+              "Fixed mounted Keys help hint presentation in Linen; rebind/unbind/reset and native actions are Playwright-owned",
+              "V1 fixed-state witness: dialogs"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/key-hints_test.ts",
-            "testID": "legacy.key-hints.1d417223b8a8b9b1"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "4807b29b160c5c3ea1eb2981a873084248ed11e46bddfd5976b476d9ff2e6df2",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -5224,9 +5376,9 @@
           "proofBoundary": "B+C+V: live key registration/hints and native widget actions",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/key-hints_test.ts",
-              "testID": "legacy.key-hints.f9044e64b30f1cdd"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -5237,22 +5389,24 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed editor/dialog title and prose without static surface key hints; save/cancel/focus are Playwright-owned"
+              "Fixed editor/dialog title and prose without static surface key hints; save/cancel/focus are Playwright-owned",
+              "V1 fixed-state witness: dialogs"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/key-hints_test.ts",
-            "testID": "legacy.key-hints.f9044e64b30f1cdd"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "4807b29b160c5c3ea1eb2981a873084248ed11e46bddfd5976b476d9ff2e6df2",
-            "run": "otk-t2-c12-20261103"
+            "run": "otk-t2-c12-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -6810,9 +6964,9 @@
           "proofBoundary": "B+C+V: measured virtualization, Timeline focus, one-pixel anchor and native selection",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-window_test.ts",
-              "testID": "legacy.message-window.bdaae9711c55a0d0"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -6822,22 +6976,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "transcript windows acquired history and reveals an unmounted Timeline identity (otk-dark)"
+              "transcript windows acquired history and reveals an unmounted Timeline identity (otk-dark)",
+              "V1 fixed-state witness: window-content"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-window_test.ts",
-            "testID": "legacy.message-window.bdaae9711c55a0d0"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "eb6db7c7f1e5070b3e16539bcfccb29ceec4f09f617a12b962bca1ddacaf89e5",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.bdaae9711c55a0d0"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.bdaae9711c55a0d0; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -6846,9 +7003,9 @@
           "proofBoundary": "B+C+V: measured virtualization, Timeline focus, one-pixel anchor and native selection",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-window_test.ts",
-              "testID": "legacy.message-window.2ba9ccc0fe490904"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -6858,22 +7015,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "transcript windows acquired history and reveals an unmounted Timeline identity (otk-light)"
+              "transcript windows acquired history and reveals an unmounted Timeline identity (otk-light)",
+              "V1 fixed-state witness: window-content"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-window_test.ts",
-            "testID": "legacy.message-window.2ba9ccc0fe490904"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "eb6db7c7f1e5070b3e16539bcfccb29ceec4f09f617a12b962bca1ddacaf89e5",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.2ba9ccc0fe490904"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.2ba9ccc0fe490904; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -6882,9 +7042,9 @@
           "proofBoundary": "B+C+V: measured virtualization, Timeline focus, one-pixel anchor and native selection",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-window_test.ts",
-              "testID": "legacy.message-window.ab7d799421931b33"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -6894,22 +7054,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "older page prepend keeps the same anchored bubble within one pixel (otk-dark)"
+              "older page prepend keeps the same anchored bubble within one pixel (otk-dark)",
+              "V1 fixed-state witness: window-content"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-window_test.ts",
-            "testID": "legacy.message-window.ab7d799421931b33"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "eb6db7c7f1e5070b3e16539bcfccb29ceec4f09f617a12b962bca1ddacaf89e5",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.ab7d799421931b33"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.ab7d799421931b33; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -6918,9 +7081,9 @@
           "proofBoundary": "B+C+V: measured virtualization, Timeline focus, one-pixel anchor and native selection",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-window_test.ts",
-              "testID": "legacy.message-window.f74f0699375f7808"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -6930,22 +7093,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "older page prepend keeps the same anchored bubble within one pixel (otk-light)"
+              "older page prepend keeps the same anchored bubble within one pixel (otk-light)",
+              "V1 fixed-state witness: window-content"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-window_test.ts",
-            "testID": "legacy.message-window.f74f0699375f7808"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "eb6db7c7f1e5070b3e16539bcfccb29ceec4f09f617a12b962bca1ddacaf89e5",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.f74f0699375f7808"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.f74f0699375f7808; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -6954,9 +7120,9 @@
           "proofBoundary": "B+C+V: measured virtualization, Timeline focus, one-pixel anchor and native selection",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-window_test.ts",
-              "testID": "legacy.message-window.c8d34daa31cb34c2"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -6966,22 +7132,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "a large diff shares the transcript window, preserves native selection and its measured anchor (otk-dark)"
+              "a large diff shares the transcript window, preserves native selection and its measured anchor (otk-dark)",
+              "V1 fixed-state witness: window-content"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-window_test.ts",
-            "testID": "legacy.message-window.c8d34daa31cb34c2"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "eb6db7c7f1e5070b3e16539bcfccb29ceec4f09f617a12b962bca1ddacaf89e5",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.c8d34daa31cb34c2"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.c8d34daa31cb34c2; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -6990,9 +7159,9 @@
           "proofBoundary": "B+C+V: measured virtualization, Timeline focus, one-pixel anchor and native selection",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/message-window_test.ts",
-              "testID": "legacy.message-window.63d9e82576a936e7"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -7002,22 +7171,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "a large diff shares the transcript window, preserves native selection and its measured anchor (otk-light)"
+              "a large diff shares the transcript window, preserves native selection and its measured anchor (otk-light)",
+              "V1 fixed-state witness: window-content"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/message-window_test.ts",
-            "testID": "legacy.message-window.63d9e82576a936e7"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "eb6db7c7f1e5070b3e16539bcfccb29ceec4f09f617a12b962bca1ddacaf89e5",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.63d9e82576a936e7"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.message-window.63d9e82576a936e7; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -7200,9 +7372,9 @@
           "proofBoundary": "C+V+L: exact accessible cost reaches overlay/footer/meter/row; arithmetic table stays lower-tier",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/money_format_test.ts",
-              "testID": "legacy.money_format.a4eecac4aacec3bf"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -7212,10 +7384,13 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "U14 r2 one money rule and exact title-free accessibility reach overlay, footer, meter and session rows"
+              "U14 r2 one money rule and exact title-free accessibility reach overlay, footer, meter and session rows",
+              "V1 fixed-state witness: money"
             ]
           },
           "lowerTierWitness": {
@@ -7223,14 +7398,14 @@
             "testID": "exact money preserves sub-cent amounts and full reported precision without false zero"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/money_format_test.ts",
-            "testID": "legacy.money_format.a4eecac4aacec3bf"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "ba83d63a084d857dc9ee0973ae86de1089d7329fd67c064b96573191c301c523",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.money_format.a4eecac4aacec3bf"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.money_format.a4eecac4aacec3bf; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -7929,9 +8104,9 @@
           "proofBoundary": "B+V+L: exact shared summary before real approval",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/permission_details_test.ts",
-              "testID": "legacy.permission_details.65a8e73caa86208f"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -7941,22 +8116,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed bash/read/edit permission toast and takeover summary layout"
+              "Fixed bash/read/edit permission toast and takeover summary layout",
+              "V1 fixed-state witness: takeover"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/permission_details_test.ts",
-            "testID": "legacy.permission_details.65a8e73caa86208f"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "cf07193e56a1981f604cedce3d21a8c659e6c3f27b1cd81d382dd69d760ff58c",
-            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -7965,9 +8143,9 @@
           "proofBoundary": "B+V+L: exact shared summary before real approval",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/permission_details_test.ts",
-              "testID": "legacy.permission_details.b7b6eab85c8ed66e"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -7977,22 +8155,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed bash/read/edit permission toast and takeover summary layout"
+              "Fixed bash/read/edit permission toast and takeover summary layout",
+              "V1 fixed-state witness: takeover"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/permission_details_test.ts",
-            "testID": "legacy.permission_details.b7b6eab85c8ed66e"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "cf07193e56a1981f604cedce3d21a8c659e6c3f27b1cd81d382dd69d760ff58c",
-            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -8257,9 +8438,9 @@
           "proofBoundary": "C+V: actual point/rect corners, tall scrolling and painted hit bounds",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/popover-sizing_test.ts",
-              "testID": "legacy.popover-sizing.1363409c840c5a26"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -8269,22 +8450,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "native body fallback and point/rect corners size to hit-testable painted Surface in otk-dark"
+              "native body fallback and point/rect corners size to hit-testable painted Surface in otk-dark",
+              "V1 fixed-state witness: menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/popover-sizing_test.ts",
-            "testID": "legacy.popover-sizing.1363409c840c5a26"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "69a31b975d7e78963cb3445a796378adb0b2963b67cee16a84605f79e7857a93",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t1c5-20261101; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -8293,9 +8477,9 @@
           "proofBoundary": "C+V: actual point/rect corners, tall scrolling and painted hit bounds",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/popover-sizing_test.ts",
-              "testID": "legacy.popover-sizing.35a6914a7167ef19"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -8305,22 +8489,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "native body fallback and point/rect corners size to hit-testable painted Surface in otk-light"
+              "native body fallback and point/rect corners size to hit-testable painted Surface in otk-light",
+              "V1 fixed-state witness: menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/popover-sizing_test.ts",
-            "testID": "legacy.popover-sizing.35a6914a7167ef19"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "69a31b975d7e78963cb3445a796378adb0b2963b67cee16a84605f79e7857a93",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t1c5-20261101; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -8329,9 +8516,9 @@
           "proofBoundary": "C+V: actual point/rect corners, tall scrolling and painted hit bounds",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/popover-sizing_test.ts",
-              "testID": "legacy.popover-sizing.3521f4d7be43c300"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -8341,22 +8528,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "tall anchored Surface keeps its positioned bounds and scrolls within the available native side"
+              "tall anchored Surface keeps its positioned bounds and scrolls within the available native side",
+              "V1 fixed-state witness: menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/popover-sizing_test.ts",
-            "testID": "legacy.popover-sizing.3521f4d7be43c300"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "69a31b975d7e78963cb3445a796378adb0b2963b67cee16a84605f79e7857a93",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t1c5-20261101; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -8639,29 +8829,32 @@
           "proofBoundary": "V: one-line prompt height and structural lane",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/prompt_bubble_geometry_test.ts",
-              "testID": "legacy.prompt_bubble_geometry.d7239d98223b00be"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "one-line prompt bubbles retain their pre-windowing height in Dark and Linen"
+              "one-line prompt bubbles retain their pre-windowing height in Dark and Linen",
+              "V1 fixed-state witness: window-bubble"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/prompt_bubble_geometry_test.ts",
-            "testID": "legacy.prompt_bubble_geometry.d7239d98223b00be"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "8253b0e6e40d59464993b68230cd21cadfb5b8ebb6daf2ceae9991c893a25d08",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t1c5-20261101; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -8872,9 +9065,9 @@
           "proofBoundary": "B+V+L: real tool answers, focus, custom/multi/reject outcomes",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/questions_test.ts",
-              "testID": "legacy.questions.73f2223f3a9765fd"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -8889,19 +9082,20 @@
               "otk-light-stone"
             ],
             "states": [
-              "Uncommitted question pointers and tabs across full/reduced colors"
+              "Uncommitted question pointers and tabs across full/reduced colors",
+              "V1 fixed-state witness: takeover"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/questions_test.ts",
-            "testID": "legacy.questions.73f2223f3a9765fd"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "88adb07f09747367b49d409302e8347046ee97cc700aa14985f3b5d7272453c0",
-            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -9089,9 +9283,9 @@
           "proofBoundary": "B+C+V: geometry viewport/zoom matrix and actual form/More navigation",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/remaining-ui_test.ts",
-              "testID": "legacy.remaining-ui.eaa311a75157e555"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -9101,22 +9295,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "remaining UI: form fills its dialog and uses the primary action"
+              "remaining UI: form fills its dialog and uses the primary action",
+              "V1 fixed-state witness: remaining-controls"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/remaining-ui_test.ts",
-            "testID": "legacy.remaining-ui.eaa311a75157e555"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "aae93aefc3a032bcbb0497deeecc8347d48171daa87481646393a8ff4afed09b",
-            "run": "otk-c15a-20261103"
+            "run": "otk-c15a-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -9192,29 +9389,32 @@
           "proofBoundary": "B+C+V: geometry viewport/zoom matrix and actual form/More navigation",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/remaining-ui_test.ts",
-              "testID": "legacy.remaining-ui.833f48be2e1cbd3c"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "remaining UI: every composer and native preference select shares its accessory geometry"
+              "remaining UI: every composer and native preference select shares its accessory geometry",
+              "V1 fixed-state witness: remaining-controls"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/remaining-ui_test.ts",
-            "testID": "legacy.remaining-ui.833f48be2e1cbd3c"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "aae93aefc3a032bcbb0497deeecc8347d48171daa87481646393a8ff4afed09b",
-            "run": "otk-c15a-20261103"
+            "run": "otk-c15a-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -9423,9 +9623,9 @@
           "proofBoundary": "B+C+V+L: pending/error sink focus, background work and one real long task",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/request-feedback_test.ts",
-              "testID": "legacy.request-feedback.2802e60c017d6301"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -9435,24 +9635,26 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark (behavior/contracts once)",
-              "otk-dark / otk-light (legacy V remainder until T3)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
               "a forty-second task remains pending through repeat submission and socket replacement and renders one selected perf task",
-              "B/C owner: transport.forty-second-task; retained legacy V only: held task form identical bounds across Dark/Linen; T3 will retire the visual remainder"
+              "B/C owner: transport.forty-second-task; retained legacy V only: held task form identical bounds across Dark/Linen; T3 will retire the visual remainder",
+              "V1 fixed-state witness: forms"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/request-feedback_test.ts",
-            "testID": "legacy.request-feedback.2802e60c017d6301"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "346685e4df469c3c39ef57129c012342c18122829af01c0afa79388878420592",
-            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -9934,9 +10136,9 @@
           "proofBoundary": "C+V: real marks/state/hit boxes in full/reduced colors",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/selection_test.ts",
-              "testID": "legacy.selection.62779b3e88612b98"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -9946,22 +10148,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "selection flow, state and stable boxes span chrome, menu, palette and picker in all themes and colour modes"
+              "selection flow, state and stable boxes span chrome, menu, palette and picker in all themes and colour modes",
+              "V1 fixed-state witness: all-selection"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/selection_test.ts",
-            "testID": "legacy.selection.62779b3e88612b98"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "a24fbc6f83f92f5bc755b797d8059d75a5a5990912acce66e324fe51d8fd9f48",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t1c5-20261101; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -10058,9 +10263,9 @@
           "proofBoundary": "B+V+L: policy/activity/native replies/reload; guard dirty permission",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session_auto_test.ts",
-              "testID": "legacy.session_auto.fba3efd58e338e57"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -10071,22 +10276,24 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "28px toggle, inherited centered mark and persisted failed/unconfirmed activity"
+              "28px toggle, inherited centered mark and persisted failed/unconfirmed activity",
+              "V1 fixed-state witness: automatic"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session_auto_test.ts",
-            "testID": "legacy.session_auto.fba3efd58e338e57"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "ea13c3261b989e4f52084258c51a704b5a62c8f0c3223862f76bad5e8a4486e7",
-            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -10103,9 +10310,9 @@
           "proofBoundary": "B+V+L: unopened native session/helper totals, live updates and saved cost choice",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session_cost_test.ts",
-              "testID": "legacy.session_cost.91521036ff0b0c19"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -10115,10 +10322,13 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "U5 Sessions rows present whole-session usage for unopened sessions and helpers, refresh live and respect persisted Show cost (otk-dark)"
+              "U5 Sessions rows present whole-session usage for unopened sessions and helpers, refresh live and respect persisted Show cost (otk-dark)",
+              "V1 fixed-state witness: usage"
             ]
           },
           "lowerTierWitness": {
@@ -10126,14 +10336,14 @@
             "testID": "usage reconnect rejects old generations, isolates targets and exposes whole-session totals for other consumers"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session_cost_test.ts",
-            "testID": "legacy.session_cost.91521036ff0b0c19"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4e80ec17fc324c3f1c2421d1a080ec1b8b0640b06e31e327219838180e465256",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.session_cost.91521036ff0b0c19"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.session_cost.91521036ff0b0c19; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -10142,9 +10352,9 @@
           "proofBoundary": "B+V+L: unopened native session/helper totals, live updates and saved cost choice",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session_cost_test.ts",
-              "testID": "legacy.session_cost.b399f337faeb7d92"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -10154,22 +10364,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "U5 Sessions rows present whole-session usage for unopened sessions and helpers, refresh live and respect persisted Show cost (otk-light)"
+              "U5 Sessions rows present whole-session usage for unopened sessions and helpers, refresh live and respect persisted Show cost (otk-light)",
+              "V1 fixed-state witness: usage"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session_cost_test.ts",
-            "testID": "legacy.session_cost.b399f337faeb7d92"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4e80ec17fc324c3f1c2421d1a080ec1b8b0640b06e31e327219838180e465256",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.session_cost.b399f337faeb7d92"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.session_cost.b399f337faeb7d92; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -10178,9 +10391,9 @@
           "proofBoundary": "B+V+L: unopened native session/helper totals, live updates and saved cost choice",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session_cost_test.ts",
-              "testID": "legacy.session_cost.e387c7bff75d1e69"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -10190,22 +10403,25 @@
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
+              "otk-light",
               "otk-light-stone"
             ],
             "states": [
-              "U5 Sessions rows present whole-session usage for unopened sessions and helpers, refresh live and respect persisted Show cost (otk-light-stone)"
+              "U5 Sessions rows present whole-session usage for unopened sessions and helpers, refresh live and respect persisted Show cost (otk-light-stone)",
+              "V1 fixed-state witness: usage"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session_cost_test.ts",
-            "testID": "legacy.session_cost.e387c7bff75d1e69"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "4e80ec17fc324c3f1c2421d1a080ec1b8b0640b06e31e327219838180e465256",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.session_cost.e387c7bff75d1e69"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.session_cost.e387c7bff75d1e69; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -10330,46 +10546,9 @@
           "proofBoundary": "B+V+L: real compact/model/queue, inclusive fork, armed delete/rename",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-actions_test.ts",
-              "testID": "legacy.session-actions.8513d6e4cfa00d3c"
-            },
-            {
               "runner": "playwright",
-              "file": "tests/browser/behavior/sessions/actions.spec.ts",
-              "testID": "sessions.inclusive-grouped-fork-shared-files-original-draft-and-full-fork"
-            }
-          ],
-          "retainedCoverage": {
-            "themes": [
-              "otk-dark"
-            ],
-            "states": [
-              "fork hover actions retain grouped replies and fork notes in otk-dark",
-              "Dark browser outcome; fixed legacy paint only"
-            ]
-          },
-          "lowerTierWitness": null,
-          "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-actions_test.ts",
-            "testID": "legacy.session-actions.8513d6e4cfa00d3c"
-          },
-          "verificationReceipt": {
-            "kind": "old-new-batch",
-            "sourceSha256": "556ada12d36a0705743ee934575580498f217c6bcc74598ef311cc36b3ce7bb2",
-            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
-          }
-        },
-        {
-          "id": "legacy.session-actions.7db64225ca57f75a",
-          "originalTitle": "fork hover actions retain grouped replies and fork notes in otk-light",
-          "proofBoundary": "B+V+L: real compact/model/queue, inclusive fork, armed delete/rename",
-          "destinations": [
-            {
-              "runner": "legacy",
-              "file": "tests/e2e/session-actions_test.ts",
-              "testID": "legacy.session-actions.7db64225ca57f75a"
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -10380,23 +10559,65 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "fork hover actions retain grouped replies and fork notes in otk-light",
-              "Dark browser outcome; fixed legacy paint only"
+              "fork hover actions retain grouped replies and fork notes in otk-dark",
+              "Dark browser outcome; fixed legacy paint only",
+              "V1 fixed-state witness: reply-actions"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-actions_test.ts",
-            "testID": "legacy.session-actions.7db64225ca57f75a"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "556ada12d36a0705743ee934575580498f217c6bcc74598ef311cc36b3ce7bb2",
-            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
+          }
+        },
+        {
+          "id": "legacy.session-actions.7db64225ca57f75a",
+          "originalTitle": "fork hover actions retain grouped replies and fork notes in otk-light",
+          "proofBoundary": "B+V+L: real compact/model/queue, inclusive fork, armed delete/rename",
+          "destinations": [
+            {
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/behavior/sessions/actions.spec.ts",
+              "testID": "sessions.inclusive-grouped-fork-shared-files-original-draft-and-full-fork"
+            }
+          ],
+          "retainedCoverage": {
+            "themes": [
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
+            ],
+            "states": [
+              "fork hover actions retain grouped replies and fork notes in otk-light",
+              "Dark browser outcome; fixed legacy paint only",
+              "V1 fixed-state witness: reply-actions"
+            ]
+          },
+          "lowerTierWitness": null,
+          "activeOwner": {
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
+          },
+          "verificationReceipt": {
+            "kind": "old-new-batch",
+            "sourceSha256": "556ada12d36a0705743ee934575580498f217c6bcc74598ef311cc36b3ce7bb2",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -10474,9 +10695,9 @@
           "proofBoundary": "B+V+L: real compact/model/queue, inclusive fork, armed delete/rename",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-actions_test.ts",
-              "testID": "legacy.session-actions.965e46998b7bc0bf"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -10486,23 +10707,26 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
               "delete protects lost drafts, disarms on navigation and removes native sessions in otk-dark",
-              "Dark browser outcome; fixed legacy paint only"
+              "Dark browser outcome; fixed legacy paint only",
+              "V1 fixed-state witness: menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-actions_test.ts",
-            "testID": "legacy.session-actions.965e46998b7bc0bf"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "556ada12d36a0705743ee934575580498f217c6bcc74598ef311cc36b3ce7bb2",
-            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -10549,9 +10773,9 @@
           "proofBoundary": "B+V+L: real compact/model/queue, inclusive fork, armed delete/rename",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-actions_test.ts",
-              "testID": "legacy.session-actions.4a2029e9e52d2d9c"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -10562,23 +10786,25 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
               "delete protects lost drafts, disarms on navigation and removes native sessions in otk-light",
-              "Dark browser outcome; fixed legacy paint only"
+              "Dark browser outcome; fixed legacy paint only",
+              "V1 fixed-state witness: menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-actions_test.ts",
-            "testID": "legacy.session-actions.4a2029e9e52d2d9c"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "556ada12d36a0705743ee934575580498f217c6bcc74598ef311cc36b3ce7bb2",
-            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -10625,9 +10851,9 @@
           "proofBoundary": "B+V+L: real compact/model/queue, inclusive fork, armed delete/rename",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-actions_test.ts",
-              "testID": "legacy.session-actions.78dff3f7c5121136"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -10638,23 +10864,25 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
+              "otk-light",
               "otk-light-stone"
             ],
             "states": [
               "delete protects lost drafts, disarms on navigation and removes native sessions in otk-light-stone",
-              "Dark browser outcome; fixed legacy paint only"
+              "Dark browser outcome; fixed legacy paint only",
+              "V1 fixed-state witness: menus"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-actions_test.ts",
-            "testID": "legacy.session-actions.78dff3f7c5121136"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "556ada12d36a0705743ee934575580498f217c6bcc74598ef311cc36b3ce7bb2",
-            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -10877,46 +11105,9 @@
           "proofBoundary": "B+C+V+L: final native totals, tombstones/resurrection, honest unknown/detail",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/session-digest_test.ts",
-              "testID": "legacy.session-digest.cf9635a15ba0961b"
-            },
-            {
               "runner": "playwright",
-              "file": "tests/browser/contracts/sessions/digest.spec.ts",
-              "testID": "sessions.unknown-summary-rejected-detail-has-no-invented-zero"
-            }
-          ],
-          "retainedCoverage": {
-            "themes": [
-              "otk-dark"
-            ],
-            "states": [
-              "unknown summaries and rejected detail never render a fictitious zero ledger (otk-dark)",
-              "Dark browser outcome; fixed legacy paint only"
-            ]
-          },
-          "lowerTierWitness": null,
-          "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-digest_test.ts",
-            "testID": "legacy.session-digest.cf9635a15ba0961b"
-          },
-          "verificationReceipt": {
-            "kind": "old-new-batch",
-            "sourceSha256": "bd2101b7b0e78c1a4bdf531fee562a6aa476a0feec3cb176a66406c819dd7228",
-            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
-          }
-        },
-        {
-          "id": "legacy.session-digest.7c3660546273d8aa",
-          "originalTitle": "unknown summaries and rejected detail never render a fictitious zero ledger (otk-light)",
-          "proofBoundary": "B+C+V+L: final native totals, tombstones/resurrection, honest unknown/detail",
-          "destinations": [
-            {
-              "runner": "legacy",
-              "file": "tests/e2e/session-digest_test.ts",
-              "testID": "legacy.session-digest.7c3660546273d8aa"
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -10927,23 +11118,65 @@
           "retainedCoverage": {
             "themes": [
               "otk-dark",
-              "otk-light"
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "unknown summaries and rejected detail never render a fictitious zero ledger (otk-light)",
-              "Dark browser outcome; fixed legacy paint only"
+              "unknown summaries and rejected detail never render a fictitious zero ledger (otk-dark)",
+              "Dark browser outcome; fixed legacy paint only",
+              "V1 fixed-state witness: usage"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/session-digest_test.ts",
-            "testID": "legacy.session-digest.7c3660546273d8aa"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "bd2101b7b0e78c1a4bdf531fee562a6aa476a0feec3cb176a66406c819dd7228",
-            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts"
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
+          }
+        },
+        {
+          "id": "legacy.session-digest.7c3660546273d8aa",
+          "originalTitle": "unknown summaries and rejected detail never render a fictitious zero ledger (otk-light)",
+          "proofBoundary": "B+C+V+L: final native totals, tombstones/resurrection, honest unknown/detail",
+          "destinations": [
+            {
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
+            },
+            {
+              "runner": "playwright",
+              "file": "tests/browser/contracts/sessions/digest.spec.ts",
+              "testID": "sessions.unknown-summary-rejected-detail-has-no-invented-zero"
+            }
+          ],
+          "retainedCoverage": {
+            "themes": [
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
+            ],
+            "states": [
+              "unknown summaries and rejected detail never render a fictitious zero ledger (otk-light)",
+              "Dark browser outcome; fixed legacy paint only",
+              "V1 fixed-state witness: usage"
+            ]
+          },
+          "lowerTierWitness": null,
+          "activeOwner": {
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
+          },
+          "verificationReceipt": {
+            "kind": "old-new-batch",
+            "sourceSha256": "bd2101b7b0e78c1a4bdf531fee562a6aa476a0feec3cb176a66406c819dd7228",
+            "run": "otk-t2-c10-r2-20261103; final old originals + batch-sessions + batch-revert receipts; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -11538,9 +11771,9 @@
           "proofBoundary": "B+V+L: all mandatory activity visibly reaches project/task lamps",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/status-lights_test.ts",
-              "testID": "legacy.status-lights.9c55b549b1d7694b"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -11550,22 +11783,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed four-state lamp tokens, gradients, breathe motion and reduced-motion/color glyphs"
+              "Fixed four-state lamp tokens, gradients, breathe motion and reduced-motion/color glyphs",
+              "V1 fixed-state witness: lights"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/status-lights_test.ts",
-            "testID": "legacy.status-lights.9c55b549b1d7694b"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "d3eddfbad637b287a6d88617e54ba559e7e25186a3b8ef993660d89b20f3876d",
-            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -11574,9 +11810,9 @@
           "proofBoundary": "B+V+L: all mandatory activity visibly reaches project/task lamps",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/status-lights_test.ts",
-              "testID": "legacy.status-lights.0b2bc2aa37b286c6"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -11586,22 +11822,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Fixed four-state lamp tokens, gradients, breathe motion and reduced-motion/color glyphs"
+              "Fixed four-state lamp tokens, gradients, breathe motion and reduced-motion/color glyphs",
+              "V1 fixed-state witness: lights"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/status-lights_test.ts",
-            "testID": "legacy.status-lights.0b2bc2aa37b286c6"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "d3eddfbad637b287a6d88617e54ba559e7e25186a3b8ef993660d89b20f3876d",
-            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -11610,9 +11849,9 @@
           "proofBoundary": "B+V+L: all mandatory activity visibly reaches project/task lamps",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/status-lights_test.ts",
-              "testID": "legacy.status-lights.d5bc877c2ba5b5e9"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -11622,22 +11861,25 @@
           ],
           "retainedCoverage": {
             "themes": [
+              "otk-dark",
+              "otk-light",
               "otk-light-stone"
             ],
             "states": [
-              "Fixed four-state lamp tokens, gradients, breathe motion and reduced-motion/color glyphs"
+              "Fixed four-state lamp tokens, gradients, breathe motion and reduced-motion/color glyphs",
+              "V1 fixed-state witness: lights"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/status-lights_test.ts",
-            "testID": "legacy.status-lights.d5bc877c2ba5b5e9"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "d3eddfbad637b287a6d88617e54ba559e7e25186a3b8ef993660d89b20f3876d",
-            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes"
+            "run": "otk-t2-c11-20261103; fixed V and transferred browser outcomes; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -11786,29 +12028,32 @@
           "proofBoundary": "C+B+V: all dialogs/menus contained, dismiss/focus and available actions",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/surfaces_test.ts",
-              "testID": "legacy.surfaces.2a215aba33140bf7"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "Display preferences title flows fully inside its surface in every theme"
+              "Display preferences title flows fully inside its surface in every theme",
+              "V1 fixed-state witness: all-surfaces"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/surfaces_test.ts",
-            "testID": "legacy.surfaces.2a215aba33140bf7"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "1fe3f2f8cf0d5cd9d7e88fd67174d2036c46b4822e78e73f2cd2054289f81d99",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t1c5-20261101; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -11817,9 +12062,9 @@
           "proofBoundary": "C+B+V: all dialogs/menus contained, dismiss/focus and available actions",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/surfaces_test.ts",
-              "testID": "legacy.surfaces.2ceab90b51b31fe5"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -11829,22 +12074,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "every registered dialog and anchored menu shares contained flow and native dismissal"
+              "every registered dialog and anchored menu shares contained flow and native dismissal",
+              "V1 fixed-state witness: all-surfaces"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/surfaces_test.ts",
-            "testID": "legacy.surfaces.2ceab90b51b31fe5"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "1fe3f2f8cf0d5cd9d7e88fd67174d2036c46b4822e78e73f2cd2054289f81d99",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t1c5-20261101; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -12242,9 +12490,9 @@
           "proofBoundary": "B+C+V: real theme preview/cancel/save/error/broadcast/System persistence; isolated prefs",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/theme_test.ts",
-              "testID": "legacy.theme.9f08e8f220faecd6"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12254,22 +12502,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "D5 actual session/code/diff paint changes with no worker work; preview/cancel, host save/reload/broadcast and live System"
+              "D5 actual session/code/diff paint changes with no worker work; preview/cancel, host save/reload/broadcast and live System",
+              "V1 fixed-state witness: files"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/theme_test.ts",
-            "testID": "legacy.theme.9f08e8f220faecd6"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "d8f9a3503d35c21a3623b4381fe8e3d06bfb39932c57d1aaaabf423dd6f38d6c",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-t2-c13-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -12471,9 +12722,9 @@
           "proofBoundary": "B+V+L: real completion clock/restart and accessible structural time layout",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/timestamps_test.ts",
-              "testID": "legacy.timestamps.5f265e810dedfa63"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12483,10 +12734,13 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "creation-time hover and persistent visibility, structural footer date/clock, native final time and completed restart in otk-dark"
+              "creation-time hover and persistent visibility, structural footer date/clock, native final time and completed restart in otk-dark",
+              "V1 fixed-state witness: timestamp-actions"
             ]
           },
           "lowerTierWitness": {
@@ -12494,14 +12748,14 @@
             "testID": "clock scalar SQL matches native output clocks without selecting bodies"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/timestamps_test.ts",
-            "testID": "legacy.timestamps.5f265e810dedfa63"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "595e20053f6e8d95bafa3add145c90deb790fe96b22f6e55cc767c56e8053405",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.timestamps.5f265e810dedfa63"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.timestamps.5f265e810dedfa63; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -12510,9 +12764,9 @@
           "proofBoundary": "B+V+L: real completion clock/restart and accessible structural time layout",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/timestamps_test.ts",
-              "testID": "legacy.timestamps.d1e170f36815dba6"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -12522,22 +12776,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "creation-time hover and persistent visibility, structural footer date/clock, native final time and completed restart in otk-light"
+              "creation-time hover and persistent visibility, structural footer date/clock, native final time and completed restart in otk-light",
+              "V1 fixed-state witness: timestamp-actions"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/timestamps_test.ts",
-            "testID": "legacy.timestamps.d1e170f36815dba6"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "595e20053f6e8d95bafa3add145c90deb790fe96b22f6e55cc767c56e8053405",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.timestamps.d1e170f36815dba6"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.timestamps.d1e170f36815dba6; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -13041,9 +13298,9 @@
           "proofBoundary": "C+B+V; S for 500-call timing: retain real hover/rest/focus/scroll headers/Total",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/turn_usage_layout_test.ts",
-              "testID": "legacy.turn_usage_layout.63a4cc25d70f1e58"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -13053,22 +13310,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "U14 3 calls keep summary, header and Total on screen, support pointer and keyboard and retain exact U12 values"
+              "U14 3 calls keep summary, header and Total on screen, support pointer and keyboard and retain exact U12 values",
+              "V1 fixed-state witness: usage"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/turn_usage_layout_test.ts",
-            "testID": "legacy.turn_usage_layout.63a4cc25d70f1e58"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "ea1d66bfc24b26aad201e285a8d0c84a18bfa48e46da8c9f0e1fc02fabc6afba",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.63a4cc25d70f1e58"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.63a4cc25d70f1e58; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -13077,9 +13337,9 @@
           "proofBoundary": "C+B+V; S for 500-call timing: retain real hover/rest/focus/scroll headers/Total",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/turn_usage_layout_test.ts",
-              "testID": "legacy.turn_usage_layout.a80c9002abf237dc"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -13089,22 +13349,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "U14 120 calls keep summary, header and Total on screen, support pointer and keyboard and retain exact U12 values"
+              "U14 120 calls keep summary, header and Total on screen, support pointer and keyboard and retain exact U12 values",
+              "V1 fixed-state witness: usage"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/turn_usage_layout_test.ts",
-            "testID": "legacy.turn_usage_layout.a80c9002abf237dc"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "ea1d66bfc24b26aad201e285a8d0c84a18bfa48e46da8c9f0e1fc02fabc6afba",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.a80c9002abf237dc"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.a80c9002abf237dc; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -13113,9 +13376,9 @@
           "proofBoundary": "C+B+V; S for 500-call timing: retain real hover/rest/focus/scroll headers/Total",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/turn_usage_layout_test.ts",
-              "testID": "legacy.turn_usage_layout.083a4d3634295431"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -13125,22 +13388,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "T1 usage hover waits for pointer rest, retains surface travel, closes after grace and focuses immediately in otk-dark"
+              "T1 usage hover waits for pointer rest, retains surface travel, closes after grace and focuses immediately in otk-dark",
+              "V1 fixed-state witness: usage"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/turn_usage_layout_test.ts",
-            "testID": "legacy.turn_usage_layout.083a4d3634295431"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "ea1d66bfc24b26aad201e285a8d0c84a18bfa48e46da8c9f0e1fc02fabc6afba",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.083a4d3634295431"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.083a4d3634295431; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -13149,9 +13415,9 @@
           "proofBoundary": "C+B+V; S for 500-call timing: retain real hover/rest/focus/scroll headers/Total",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/turn_usage_layout_test.ts",
-              "testID": "legacy.turn_usage_layout.7e73117eaa730c05"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -13161,22 +13427,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-light"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "T1 usage hover waits for pointer rest, retains surface travel, closes after grace and focuses immediately in otk-light"
+              "T1 usage hover waits for pointer rest, retains surface travel, closes after grace and focuses immediately in otk-light",
+              "V1 fixed-state witness: usage"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/turn_usage_layout_test.ts",
-            "testID": "legacy.turn_usage_layout.7e73117eaa730c05"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "ea1d66bfc24b26aad201e285a8d0c84a18bfa48e46da8c9f0e1fc02fabc6afba",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.7e73117eaa730c05"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage_layout.7e73117eaa730c05; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -13225,9 +13494,9 @@
           "proofBoundary": "B+V+L: actual multi-step usage, queue/model costs and persisted Display choice",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/turn_usage_test.ts",
-              "testID": "legacy.turn_usage.05320037e542bf91"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -13237,10 +13506,13 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "U4 stored multi-step turn usage reaches the footer and hover/focus split; Display cost off persists after reload"
+              "U4 stored multi-step turn usage reaches the footer and hover/focus split; Display cost off persists after reload",
+              "V1 fixed-state witness: usage"
             ]
           },
           "lowerTierWitness": {
@@ -13248,14 +13520,14 @@
             "testID": "charged turn usage accumulates every category across exact-model steps without counting step parts twice"
           },
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/turn_usage_test.ts",
-            "testID": "legacy.turn_usage.05320037e542bf91"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "18b4361c40ee31092f8ec18f2f1d554649250001e8fb92550d3b48fd02bf8b0e",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage.05320037e542bf91"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage.05320037e542bf91; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -13264,9 +13536,9 @@
           "proofBoundary": "B+V+L: actual multi-step usage, queue/model costs and persisted Display choice",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/turn_usage_test.ts",
-              "testID": "legacy.turn_usage.2dddb7ec1e2eb124"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -13276,22 +13548,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "U4 unknown model prices show all five charged token categories without inventing costs"
+              "U4 unknown model prices show all five charged token categories without inventing costs",
+              "V1 fixed-state witness: usage"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/turn_usage_test.ts",
-            "testID": "legacy.turn_usage.2dddb7ec1e2eb124"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "18b4361c40ee31092f8ec18f2f1d554649250001e8fb92550d3b48fd02bf8b0e",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage.2dddb7ec1e2eb124"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage.2dddb7ec1e2eb124; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {
@@ -13300,9 +13575,9 @@
           "proofBoundary": "B+V+L: actual multi-step usage, queue/model costs and persisted Display choice",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/turn_usage_test.ts",
-              "testID": "legacy.turn_usage.9f91cc69395cf4cb"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -13312,22 +13587,25 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "U4 queued prompts do not split a turn and category costs use each step's exact provider"
+              "U4 queued prompts do not split a turn and category costs use each step's exact provider",
+              "V1 fixed-state witness: usage"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/turn_usage_test.ts",
-            "testID": "legacy.turn_usage.9f91cc69395cf4cb"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "18b4361c40ee31092f8ec18f2f1d554649250001e8fb92550d3b48fd02bf8b0e",
-            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage.9f91cc69395cf4cb"
+            "run": "t2/c8/retirement-receipts.json#/qualifiedGroups/legacy.turn_usage.9f91cc69395cf4cb; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -13344,29 +13622,32 @@
           "proofBoundary": "V: real computed text/line/font roles",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/type-tokens_test.ts",
-              "testID": "legacy.type-tokens.0f8f41228272b6bf"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "shared type tokens reach rendered chrome prose code and metadata in both themes"
+              "shared type tokens reach rendered chrome prose code and metadata in both themes",
+              "V1 fixed-state witness: type-scale"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/type-tokens_test.ts",
-            "testID": "legacy.type-tokens.0f8f41228272b6bf"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "e7c6f8e90d82524017d56d90cd391292b482c79cf14306b8388433007b1ac1ed",
-            "run": "otk-t1c5-20261101"
+            "run": "otk-t1c5-20261101; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -13628,29 +13909,32 @@
           "proofBoundary": "B+C+V+L: real preference persistence and all lights/motion/color states",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/visual_system_test.ts",
-              "testID": "legacy.visual_system.6b55dc4f563fa4ac"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
-              "public lights render all states, themed gel colours, sizing, event blink, breathing and motion suppression; reduced colours shapes and ageing"
+              "public lights render all states, themed gel colours, sizing, event blink, breathing and motion suppression; reduced colours shapes and ageing",
+              "V1 fixed-state witness: lights"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/visual_system_test.ts",
-            "testID": "legacy.visual_system.6b55dc4f563fa4ac"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
-            "kind": "registration-collection",
+            "kind": "old-new-batch",
             "sourceSha256": "ab23dfed95f5ca9565c6226c2cdecb52de8fc329f037b89dd6eb02b97532cba3",
-            "run": "otk-t2-c13-20261103"
+            "run": "otk-t2-c13-20261103; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         }
       ]
@@ -13741,9 +14025,9 @@
           "proofBoundary": "B+C+V+L: core full-chain smoke, multi-server/auth/restart/history, 75-second real heartbeat",
           "destinations": [
             {
-              "runner": "legacy",
-              "file": "tests/e2e/workspace_test.ts",
-              "testID": "legacy.workspace.fc5e50ab313062af"
+              "runner": "playwright",
+              "file": "tests/browser/themes/sweep.spec.ts",
+              "testID": "themes.panes-chrome-rows"
             },
             {
               "runner": "playwright",
@@ -13753,24 +14037,26 @@
           ],
           "retainedCoverage": {
             "themes": [
-              "otk-dark (behavior/contracts once)",
-              "original default theme (legacy V remainder until T3)"
+              "otk-dark",
+              "otk-light",
+              "otk-light-stone"
             ],
             "states": [
               "E5 Esc confirmation then abort yields interrupted footer and idle session",
-              "B/C owner: transport.interrupt-confirmation; retained legacy V only: shared circular interrupted marker dimensions/radius; T3 will retire the visual remainder"
+              "B/C owner: transport.interrupt-confirmation; retained legacy V only: shared circular interrupted marker dimensions/radius; T3 will retire the visual remainder",
+              "V1 fixed-state witness: interrupt"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
-            "runner": "legacy",
-            "file": "tests/e2e/workspace_test.ts",
-            "testID": "legacy.workspace.fc5e50ab313062af"
+            "runner": "playwright",
+            "file": "tests/browser/themes/sweep.spec.ts",
+            "testID": "themes.panes-chrome-rows"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
             "sourceSha256": "e4e9ea66f713b56ce6091335d8d4715230ee180f27bca7a1d58e7b55eca35cff",
-            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee"
+            "run": "otk-t2-c7-20261102/compare2/batch-transport-39f4363b-10a5-4877-81c4-893c8fe4f5ee; otk-c15c-20261103/focus-final; checked-state-manifest attachment"
           }
         },
         {

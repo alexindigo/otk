@@ -5,6 +5,8 @@ import type { TestState } from "../fixtures/test-state.ts";
 import type { wire } from "../fixtures/wire.ts";
 import { promptFooterControls } from "../../support/prompt-footer.ts";
 import { selectionGeometry } from "../../support/selection-geometry.ts";
+import { fixedContent } from "./content.ts";
+import { accessoryGeometry } from "../../support/control-geometry.ts";
 
 interface Theme {
   id: string;
@@ -31,7 +33,7 @@ async function frames(page: Page) {
   );
 }
 /** Reveal through reader scroll intents, including source outside the live range. */
-async function reveal(page: Page, selector: string) {
+export async function reveal(page: Page, selector: string) {
   const pane = page.locator(".otk-messages");
   const wheel = async (deltaY: number) => {
     if (Math.abs(deltaY) < 1) return;
@@ -83,6 +85,102 @@ async function reveal(page: Page, selector: string) {
   if (g.delta !== 0) {
     await wheel(Math.max(-g.top, Math.min(g.delta, g.end - g.top)));
   }
+}
+export async function composerAccessories(
+  page: Page,
+  theme: Theme,
+  shot: Inputs["shot"],
+) {
+  // Every width scene owns its layout independently of preceding full panels.
+  if (
+    await page.locator(".otk-project-inbox").getAttribute("data-collapsed") ===
+      "false"
+  ) await page.locator(".otk-corner-left").click();
+  if (await page.locator(".otk-right-panel").isVisible()) {
+    await page.locator(".otk-corner-right").click();
+  }
+  await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
+    "data-collapsed",
+    "true",
+  );
+  await expect(page.locator(".otk-right-panel")).not.toBeVisible();
+  for (const width of [600, 800, 1280, 1920]) {
+    await page.setViewportSize({ width, height: 1000 });
+    for (const mode of ["normal", "focus", "hover"]) {
+      const control = page.locator(".otk-control-trigger").first();
+      if (mode === "focus") await control.focus();
+      if (mode === "hover") await control.hover();
+      await frames(page);
+      const values = await page.evaluate(accessoryGeometry) as {
+        icon: number[];
+        gaps: number[];
+      }[];
+      expect(values.length).toBeGreaterThanOrEqual(2);
+      for (const value of values) {
+        expect(value.icon).toEqual([16, 16]);
+        expect(Math.max(...value.gaps) - Math.min(...value.gaps))
+          .toBeLessThanOrEqual(1);
+      }
+    }
+    await shot(`composer-accessories-${theme.id}-${width}`);
+  }
+  await page.setViewportSize({ width: 1280, height: 657 });
+  await page.locator(".otk-corner-left").click();
+  await page.locator(".otk-corner-right").click();
+  await expect(page.locator(".otk-right-panel")).toBeVisible();
+}
+export async function loadedImage(
+  { state, page, sessionID, nativePage, theme, image, shot }: {
+    state: TestState;
+    page: Page;
+    sessionID: string;
+    nativePage(id: string): Promise<void>;
+    theme: Theme;
+    image: string;
+    shot: Inputs["shot"];
+  },
+) {
+  const filename = `sample-${theme.id}.png`;
+  await state.native(`/session/${sessionID}/message`, "POST", {
+    noReply: true,
+    parts: [{ type: "text", text: "Describe these shapes." }, {
+      type: "file",
+      filename,
+      mime: "image/png",
+      url: image,
+    }],
+  });
+  await nativePage(sessionID);
+  const trigger = page.getByRole("button", {
+    name: `Open image: ${filename}`,
+    exact: true,
+  });
+  await expect.poll(() =>
+    trigger.locator("img").evaluate((el) =>
+      (el as HTMLImageElement).naturalWidth
+    )
+  ).toBe(640);
+  expect(await trigger.locator("img").getAttribute("src")).toBe(image);
+  await trigger.click();
+  const view = page.locator("dialog[open] img");
+  await expect.poll(() =>
+    view.evaluate((el) => (el as HTMLImageElement).naturalWidth)
+  ).toBe(640);
+  expect(await view.getAttribute("src")).toBe(image);
+  expect(
+    await view.evaluate((el) => {
+      const r = el.getBoundingClientRect();
+      return Math.abs(r.width / r.height - 1.6);
+    }),
+  ).toBeLessThan(.01);
+  expect((await view.boundingBox())!.width).toBeGreaterThan(
+    (await trigger.locator("img").boundingBox())!.width,
+  );
+  await expect(page.locator("dialog[open] h2")).toHaveCount(1);
+  await expect(page.locator("dialog[open] h2")).toHaveText(filename);
+  await shot(`composer-image-dialog-${theme.id}-1280`);
+  await page.keyboard.press("Escape");
+  await expect(trigger).toBeFocused();
 }
 async function token(page: Page, name: string) {
   return await page.evaluate((name) => {
@@ -249,6 +347,8 @@ export async function collections456(input: Inputs) {
         await expect(page.locator(".otk-variant-picker > button"))
           .toHaveAttribute("aria-label", "Variant: High (agent default)");
         await prompt.fill("");
+        await prompt.focus();
+        await composerAccessories(page, theme, shot);
         await prompt.focus();
         const empty = await nativeInput(page);
         await expect(prompt).toHaveCSS("outline-style", "none");
@@ -680,48 +780,15 @@ export async function collections456(input: Inputs) {
         ).toBeLessThanOrEqual(.5);
         await shot(`composer-image-${theme.id}-1280`);
         await page.locator(".otk-prompt-chip button:last-child").click();
-        await state.native(`/session/${images.id}/message`, "POST", {
-          noReply: true,
-          parts: [{ type: "text", text: "Describe these shapes." }, {
-            type: "file",
-            filename: "sample.png",
-            mime: "image/png",
-            url: image,
-          }],
-        });
-        await nativePage(images.id);
-        await expect.poll(() =>
-          page.locator(".otk-file-image img").last().evaluate((el) =>
-            (el as HTMLImageElement).naturalWidth
-          )
-        ).toBe(640);
-        expect(
-          await page.locator(".otk-file-image img").last().getAttribute("src"),
-        ).toBe(image);
-        await page.locator(".otk-file-image").last().click();
-        await expect.poll(() =>
-          page.locator("dialog[open] img").evaluate((el) =>
-            (el as HTMLImageElement).naturalWidth
-          )
-        ).toBe(640);
-        expect(await page.locator("dialog[open] img").getAttribute("src")).toBe(
+        await loadedImage({
+          state,
+          page,
+          sessionID: images.id,
+          nativePage,
+          theme,
           image,
-        );
-        expect(
-          await page.locator("dialog[open] img").evaluate((el) => {
-            const r = el.getBoundingClientRect();
-            return Math.abs(r.width / r.height - 1.6);
-          }),
-        ).toBeLessThan(.01);
-        expect((await page.locator("dialog[open] img").boundingBox())!.width)
-          .toBeGreaterThan(
-            (await page.locator(".otk-file-image img").last().boundingBox())!
-              .width,
-          );
-        await expect(page.locator("dialog[open] h2")).toHaveCount(1);
-        await shot(`composer-image-dialog-${theme.id}-1280`);
-        await page.keyboard.press("Escape");
-        await expect(page.locator(".otk-file-image").last()).toBeFocused();
+          shot,
+        });
         await nativePage(native.emptyID);
         await prompt.fill("");
         await prompt.press("!");
@@ -795,15 +862,7 @@ export async function collections456(input: Inputs) {
       key: "collapseFileChanges",
       value: name !== "files",
     });
-    await state.controller.call("scenario", {
-      lease: state.lease.lease,
-      action: "hold",
-      sessionID: "tstv1-" + name,
-    });
-    await page.goto(state.url + "/#/local/" + content.sessionID);
-    await page.reload();
-    await expect(page.locator(".otk-session-view")).toBeVisible();
-    await frames(page);
+    await fixedContent(state, page, content.sessionID, name);
   };
   await test.step("5/public-takeovers", async () => {
     for (
@@ -1042,6 +1101,20 @@ export async function collections456(input: Inputs) {
           await expect(page.locator(".otk-fork-note")).toContainText(
             "Files are shared with the original.",
           );
+          expect(
+            await page.locator(".otk-fork-note").evaluate((note) => {
+              const button = note.querySelector("button")!;
+              const rect = (el: Element) => {
+                const r = el.getBoundingClientRect();
+                return [r.width, r.height];
+              };
+              return [
+                rect(button),
+                rect(note.querySelector(".otk-composer-notice-icon > svg")!),
+                rect(button.querySelector("svg")!),
+              ];
+            }),
+          ).toEqual([[28, 28], [16, 16], [16, 16]]);
         }
         await shot(`joined-${mode}-${theme.id}-1280`);
       }

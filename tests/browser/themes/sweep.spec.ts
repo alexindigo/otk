@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { CDPSession, Page, TestInfo } from "@playwright/test";
+import type { CDPSession, Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { expect } from "../fixtures/evidence.ts";
 import { isolatedTest as test } from "../fixtures/isolated.ts";
@@ -7,6 +7,11 @@ import type { TestState } from "../fixtures/test-state.ts";
 import { wire } from "../fixtures/wire.ts";
 import { selectionGeometry } from "../../support/selection-geometry.ts";
 import { collections456 } from "./collections.ts";
+import { collections789 } from "./overlays.ts";
+import { remainder } from "./remainder.ts";
+import { nativeStates } from "./native-states.ts";
+import { supplemental } from "./supplemental.ts";
+import { capture, restoreViewport } from "./capture.ts";
 
 test.use({ profile: "contract-themes" });
 interface Theme {
@@ -47,12 +52,6 @@ async function tokens(page: Page, theme: Theme) {
       getComputedStyle(el).colorScheme
     ),
   ).toBe(theme.mode);
-}
-async function capture(page: Page, info: TestInfo, name: string) {
-  await settled(page);
-  const path = info.outputPath(name + ".png");
-  await page.screenshot({ path, fullPage: true });
-  await info.attach(name, { path, contentType: "image/png" });
 }
 async function layout(
   state: TestState,
@@ -139,15 +138,21 @@ test(
       "@attention",
       "@messages",
       "@revert",
+      "@menus",
     ],
   },
   async ({ isolatedState: state, page, context }, info) => {
-    // One ordered owner now retains six collections of full-frame evidence.
-    test.setTimeout(900_000);
+    // One ordered owner retains all nine collections of full-frame evidence.
+    test.setTimeout(1_500_000);
     const facts = await state.observe<
       {
         scenes: string;
-        native: { url: string; sessionID: string; emptyID: string };
+        native: {
+          url: string;
+          sessionID: string;
+          emptyID: string;
+          automaticID: string;
+        };
         entries: { id: string; directory: string }[];
         content: { sessionID: string };
       }
@@ -164,7 +169,7 @@ test(
     const checked = JSON.parse(
       await readFile(new URL("./states.json", import.meta.url), "utf8"),
     );
-    expect(checked.collections).toEqual([1, 2, 3, 4, 5, 6]);
+    expect(checked.collections).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9]);
     const witnessed = new Set<string>();
     const traffic = await wire(page);
     await page.addInitScript(() => {
@@ -199,7 +204,7 @@ test(
     }
     async function shot(name: string) {
       witnessed.add(name);
-      await capture(page, info, name);
+      await capture(page, cdp, info, name);
     }
     try {
       // The real compact corpus is acquired once. Component scenes below make no
@@ -351,7 +356,7 @@ test(
           });
         }
       });
-      await cdp.send("Emulation.clearDeviceMetricsOverride");
+      await restoreViewport(page, cdp);
       await page.setViewportSize({ width: 1280, height: 900 });
       await test.step("1/public-loading-reconnecting-error-deleted", async () => {
         await page.goto(
@@ -1158,7 +1163,7 @@ test(
                 });
               }
             }
-            await cdp.send("Emulation.clearDeviceMetricsOverride");
+            await restoreViewport(page, cdp);
             await page.setViewportSize({ width: 1280, height: 900 });
             await page.setViewportSize({ width: 800, height: 800 });
             await settled(page);
@@ -1390,6 +1395,42 @@ test(
         paint,
         shot,
       });
+      await collections789({
+        state,
+        page,
+        cdp,
+        themes: manifest.themes,
+        content: facts.content,
+        scenes: facts.scenes,
+        paint,
+        shot,
+      });
+      await remainder({
+        state,
+        page,
+        themes: manifest.themes,
+        scenes: facts.scenes,
+        content: facts.content,
+        paint,
+        shot,
+      });
+      await supplemental({
+        state,
+        page,
+        cdp,
+        themes: manifest.themes,
+        scenes: facts.scenes,
+        paint,
+        shot,
+      });
+      await nativeStates({
+        state,
+        page,
+        themes: manifest.themes,
+        native: facts.native,
+        paint,
+        shot,
+      });
       const ledger = JSON.parse(
         await readFile(new URL("../migration.json", import.meta.url), "utf8"),
       );
@@ -1402,8 +1443,70 @@ test(
       ).sort();
       expect(checked.assertions.map((a: { legacy: string }) => a.legacy).sort())
         .toEqual(owned);
+      expect(
+        checked.supplementalAssertions.map((a: { id: string }) => a.id).sort(),
+      ).toEqual(
+        ledger.supplementalTransfers.filter((
+          a: { themeWitness?: { id: string } },
+        ) => a.themeWitness).map((a: { themeWitness: { id: string } }) =>
+          a.themeWitness.id
+        ).sort(),
+      );
       const proofMap: Record<string, string[]> = {};
-      for (const assertion of checked.assertions) {
+      // Check fixed-state evidence independently of historical assertion groups.
+      for (
+        const id of [
+          "usage",
+          "money",
+          "dialogs",
+          "menus",
+          "lights",
+          "automatic",
+          "all-selection",
+          "forms",
+          "preference-feedback",
+          "menu-feedback",
+          "dialog-lifetimes",
+          "project-error",
+          "type-scale",
+          "timestamps",
+          "window-bubble",
+          "native-controls",
+          "checkboxes",
+          "labels",
+        ]
+      ) {
+        for (const template of checked.variants[id] as string[]) {
+          let names = [template];
+          for (
+            const [key, values] of Object.entries({
+              theme: manifest.themes.map((t) => t.id),
+              viewport: [600, 800, 1280, 1920],
+              zoom: [1, 2],
+              reduced: [false, true],
+            })
+          ) {
+            names = names.flatMap((name) =>
+              name.includes(`{${key}}`)
+                ? values.map((value) =>
+                  name.replaceAll(`{${key}}`, String(value))
+                )
+                : [name]
+            );
+          }
+          for (const name of names) {
+            expect(witnessed.has(name), id + ": " + name).toBe(true);
+          }
+        }
+      }
+      for (
+        const assertion of [
+          ...checked.assertions,
+          ...checked.supplementalAssertions.map((
+            a: { id: string; state: string },
+          ) => ({ legacy: a.id, state: a.state })),
+        ]
+      ) {
         const variants = checked.variants[assertion.state] as string[];
         expect(variants, assertion.legacy).toBeTruthy();
         const names: string[] = [];

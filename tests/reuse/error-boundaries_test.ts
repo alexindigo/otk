@@ -4,7 +4,7 @@ import { join } from "@std/path";
 import { test } from "../support/resources.ts";
 import { uiConsumer } from "../support/ui-consumer.ts";
 
-test("injected unknown failures remain visible in form preference and command consumers in both themes", async () => {
+test("injected unknown failures remain visible in form preference and command consumers", async () => {
   const f = await uiConsumer("?error-boundaries"), b = f.browser;
   try {
     await b.send("Emulation.setDeviceMetricsOverride", {
@@ -54,7 +54,8 @@ test("injected unknown failures remain visible in form preference and command co
       );
       assertEquals(b.errors, []);
       if (kind === "string") {
-        for (const theme of ["dark", "light"]) {
+        {
+          const theme = "dark";
           await b.click(`[data-${theme}]`);
           const shots = Deno.env.get("OTK_B5_SHOTS");
           if (shots) {
