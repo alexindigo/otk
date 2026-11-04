@@ -2,6 +2,7 @@
 import { fromFileUrl, join } from "@std/path";
 import type { Harness, HarnessSink } from "@otk/harness";
 import type { ContentSession, IndexEntry, Message } from "@otk/protocol";
+import type { OtkDb } from "@otk/store";
 import { startApplication } from "../../application.ts";
 import { cfg } from "./config.ts";
 import { resources } from "./resources.ts";
@@ -13,6 +14,7 @@ export async function inboxBrowserFixture(
   origins: string[] = [],
   messages: Record<string, Message[]> = {},
   assets = fromFileUrl(new URL("../../web/dist/", import.meta.url)),
+  initialize?: (store: OtkDb, entries: IndexEntry[]) => void,
 ) {
   const scope = resources();
   const names = ["otk", "atmosphera", "globnotes", "luch"],
@@ -138,6 +140,7 @@ export async function inboxBrowserFixture(
     settings,
     backend,
     assets,
+    { upgrade: (store) => initialize?.(store, entries) },
   );
   const stop = app.stop.bind(app);
   app.stop = scope.defer("inbox application", stop);

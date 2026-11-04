@@ -12,6 +12,7 @@ import { coreBackendFixture } from "./core-backend.ts";
 import { scaleReadiness } from "./scale-readiness.ts";
 import { scaleNativeEvidence } from "./scale-evidence.ts";
 import { populationScaleScenario } from "./population-scale-scenario.ts";
+import { Tasks } from "@otk/store";
 import type { ControlRequest, Profile, TestLease } from "./fixture-control.ts";
 
 /** Private isolated scale compositions; browser input stays in Playwright. */
@@ -37,7 +38,29 @@ export async function scaleScenario(profile: Profile) {
   const request = profile === "contract-scale-request"
     ? await requestScaleFixture()
     : undefined;
-  const inbox = request || core ? undefined : await inboxBrowserFixture(root);
+  const ids: string[] = [], tasks: string[] = [];
+  const inbox = request || core ? undefined : await inboxBrowserFixture(
+    root,
+    [],
+    {},
+    undefined,
+    (store, entries) => {
+      // This fixed population qualifies overflow, not task-creation RPCs. Seed
+      // it once before the application subscribes, as other scale fixtures do.
+      const owner = new Tasks(store), base = entries[0];
+      store.write((tx) => {
+        for (let n = 0; n < 251; n++) {
+          const id = `tstv1-task-${n}`;
+          ids.push(id);
+          entries.push({ ...base, id, title: `Session ${n}` });
+          tasks.push(
+            owner.create(base.directory, `Qualification task ${n}`, [id], tx)
+              .id,
+          );
+        }
+      });
+    },
+  );
   const f = request ?? core ?? inbox!;
   if (request) scaleNativeEvidence(request.native);
   const readiness = request ? await scaleReadiness(request.native) : [];
@@ -47,7 +70,6 @@ export async function scaleScenario(profile: Profile) {
   const held = Promise.withResolvers<void>();
   resources().defer("scale request gate", () => held.resolve());
   let effects = 0;
-  const ids: string[] = [], tasks: string[] = [];
   if (request) {
     const registry = request.app.requests.options.registry,
       prepare = registry.prepare.bind(registry);
@@ -65,19 +87,6 @@ export async function scaleScenario(profile: Profile) {
         : prepared;
     };
   } else if (inbox) {
-    const directory = inbox!.entries[0].directory;
-    for (let n = 0; n < 251; n++) {
-      const id = `tstv1-task-${n}`;
-      ids.push(id);
-      inbox!.add({ ...inbox!.entries[0], id, title: `Session ${n}` });
-      tasks.push(
-        (await client.rpc<{ id: string }>("tasks.create", {
-          directory,
-          name: `Qualification task ${n}`,
-          sessions: [id],
-        })).id,
-      );
-    }
     await client.rpc("layout.patch", {
       leftCollapsed: true,
       rightCollapsed: true,
