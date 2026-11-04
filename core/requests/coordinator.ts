@@ -82,6 +82,9 @@ export class RequestCoordinator {
     Map<RequestRecipient, { lifetime: RequestLifetime; close(): void }>
   >();
   #queues = new Map<string, Promise<void>>();
+  // Preserve each sender's input order before asynchronous fingerprints finish.
+  // This orders admission only; execution/readiness remains independently scoped.
+  #admissions = new Map<string, Promise<void>>();
   // Semantic effect ordering is distinct from the yielded executing turn.
   #effects = new Map<string, Promise<void>>();
   #run = crypto.randomUUID();
@@ -343,6 +346,7 @@ export class RequestCoordinator {
       return;
     }
     const ref = requestRef(control.ref, this.options.bootstrap);
+    let admission: { ready: Promise<void>; release(): void } | undefined;
     try {
       const prepared = this.options.registry.prepare(
         control.method,
@@ -359,8 +363,14 @@ export class RequestCoordinator {
           retry: "same-intent",
         });
       }
-      const fingerprint =
-        await (this.options.fingerprint ?? requestFingerprint)(canonical);
+      admission = this.#admission(principal, ref.clientID);
+      const [fingerprint] = await Promise.all([
+        (this.options.fingerprint ?? requestFingerprint)(canonical),
+        admission.ready,
+      ]);
+      if (this.#stopped) {
+        throw new Error("Request coordinator is not admitting");
+      }
       const key = keyOf(principal, ref), old = this.options.receipts.get(key);
       if (
         old &&
@@ -447,7 +457,23 @@ export class RequestCoordinator {
         ref,
         error: this.#failure(cause),
       });
+    } finally {
+      admission?.release();
     }
+  }
+  #admission(principal: string, clientID: string) {
+    const key = JSON.stringify([principal, clientID]);
+    const ready = this.#admissions.get(key) ?? Promise.resolve();
+    const released = Promise.withResolvers<void>();
+    const tail = ready.then(() => released.promise);
+    this.#admissions.set(key, tail);
+    return {
+      ready,
+      release: () => {
+        released.resolve();
+        if (this.#admissions.get(key) === tail) this.#admissions.delete(key);
+      },
+    };
   }
   async #acquire(entry: Entry, queue?: string): Promise<void> {
     if (queue && !entry.turn) {

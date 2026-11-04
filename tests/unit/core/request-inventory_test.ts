@@ -26,7 +26,7 @@ import type {
   RpcParams,
   RpcResult,
 } from "@otk/protocol";
-import { createRequestMetadata } from "@otk/protocol";
+import { createRequestMetadata, requestFingerprint } from "@otk/protocol";
 import {
   frecencyOptions,
   IndexStore,
@@ -89,8 +89,13 @@ async function composition() {
   registerLayout(registry, prefs);
   registerFrecency(registry, harness, frecency);
   const receipts = new Requests(db);
-  const coordinator = () =>
-    new RequestCoordinator({ registry, receipts, policy: cfg().requests });
+  const coordinator = (fingerprint?: (canonical: string) => Promise<string>) =>
+    new RequestCoordinator({
+      registry,
+      receipts,
+      policy: cfg().requests,
+      fingerprint,
+    });
   return {
     db,
     stores,
@@ -316,6 +321,115 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     f.db.close();
   }
 });
+
+for (
+  const field of [
+    "leftWidth",
+    "rightWidth",
+    "rightView",
+    "projectLocations",
+  ] as const
+) {
+  test(`layout ${field} preserves intent order across asynchronous fingerprinting`, async () => {
+    const f = await composition();
+    const held = Promise.withResolvers<void>(),
+      entered = Promise.withResolvers<void>();
+    const laterHashed = Promise.withResolvers<void>();
+    let count = 0;
+    const coordinator = f.coordinator(async (canonical) => {
+      const position = ++count;
+      const fingerprint = await requestFingerprint(canonical);
+      if (position === 1) {
+        entered.resolve();
+        await held.promise;
+      } else laterHashed.resolve();
+      return fingerprint;
+    });
+    await coordinator.start();
+    const clientID = crypto.randomUUID(), window = coordinator.window();
+    const events: RequestEvent[] = [];
+    const recipient = {
+      send: (event: RequestEvent) => events.push(event),
+      lease: {
+        id: "layout-order",
+        signal: new AbortController().signal,
+        defer() {},
+      },
+    };
+    const firstValue = field === "leftWidth"
+      ? 360
+      : field === "rightWidth"
+      ? 480
+      : "sessions";
+    const lastValue = field === "leftWidth"
+      ? 200
+      : field === "rightWidth"
+      ? 280
+      : "timeline";
+    const location = (sessionID: string) => ({
+      sidecarId: "local",
+      directory: "/p",
+      sessionID,
+    });
+    const admit = (value: number | string) =>
+      coordinator.accept("local", {
+        t: "request",
+        ref: {
+          id: crypto.randomUUID(),
+          clientID,
+          key: crypto.randomUUID(),
+          window: window.id,
+        },
+        method: field === "projectLocations"
+          ? "layout.location"
+          : "layout.patch",
+        params: field === "projectLocations"
+          ? location(`tstv1-${value}`)
+          : { [field]: value },
+      }, recipient);
+    try {
+      const first = admit(firstValue);
+      await entered.promise;
+      const last = admit(lastValue);
+      await laterHashed.promise;
+      // Another tab can read while this sender's first fingerprint is held.
+      await coordinator.accept("local", {
+        t: "request",
+        ref: {
+          id: crypto.randomUUID(),
+          clientID: crypto.randomUUID(),
+          key: crypto.randomUUID(),
+          window: window.id,
+        },
+        method: "prefs.get",
+        params: {},
+      }, recipient);
+      await coordinator.idle();
+      assertEquals(
+        events.filter((event) => event.t === "request.result").length >= 1,
+        true,
+      );
+      held.resolve();
+      await Promise.all([first, last]);
+      await coordinator.idle();
+      assertEquals(
+        events.filter((event) => event.t === "request.result").length,
+        3,
+      );
+      assertEquals(
+        f.prefs.get().shellLayout[field],
+        field === "projectLocations"
+          ? [location(`tstv1-${lastValue}`)]
+          : lastValue,
+      );
+    } finally {
+      held.resolve();
+      await coordinator.stop();
+      f.inbox.close();
+      f.db.close();
+    }
+  });
+}
 
 test("real metadata actions settle with their writes and replay original results after coordinator restart", async () => {
   const f = await composition();

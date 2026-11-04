@@ -51,7 +51,9 @@ before closing storage. `window()` issues admission windows.
 `accept(principal, control,
 recipient)` acknowledges an admitted intent before a
 later macrotask executes it. Principal, tab identity and intent key form its
-duplicate fence; attempt IDs and recipient sockets do not. Different wire
+duplicate fence; attempt IDs and recipient sockets do not. Per-principal/tab
+admission retains input order across asynchronous fingerprinting, without
+holding an executing turn or waiting for effect completion. Different wire
 payloads cannot share an intent key. `detach` removes delivery only. Release
 cancels the last read subscriber, while a native mutation remains tracked.
 Same-session ready effects retain FIFO turns; declared reads and connection
