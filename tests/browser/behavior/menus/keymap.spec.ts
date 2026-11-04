@@ -2,7 +2,7 @@
 import { expect, test } from "../../fixtures/evidence.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
-import { messages, prompt, reply } from "../../pages/composer.ts";
+import { messages, prompt, reply, sendPrompt } from "../../pages/composer.ts";
 const palette = "dialog[aria-label=Commands][open]";
 const keys = 'dialog[aria-label="Keyboard shortcuts"][open]';
 
@@ -57,7 +57,7 @@ test("menus.escape-layer-priority-then-double-escape-native-interrupt", {
   });
   await state.queue(["After permission."]);
   await prompt(page).pressSequentially("Run the layer probe");
-  await prompt(page).press("Enter");
+  await sendPrompt(page);
   await page.locator(".otk-permission-actions button").nth(1).click();
   await expect(page.locator(".otk-permission-confirm")).toBeVisible();
   await page.keyboard.press("Control+k");
@@ -74,7 +74,7 @@ test("menus.escape-layer-priority-then-double-escape-native-interrupt", {
   await reply(state, page, seed.id, "After permission.");
   const held = await state.queue(["stream "], "held");
   await prompt(page).fill("Interrupt this long turn");
-  await prompt(page).press("Enter");
+  await sendPrompt(page);
   await expect(page.locator(`[data-session="${seed.id}"]`)).toHaveAttribute(
     "data-status",
     "busy",
@@ -184,7 +184,7 @@ test("menus.essential-agent-forward-reverse-newline-and-native-selection", {
   await expect(prompt(page)).toHaveValue("Use the selected agent\n");
   expect((await state.observe<{ requests: unknown[] }>()).requests)
     .toHaveLength(0);
-  await page.keyboard.press("Enter");
+  await sendPrompt(page);
   await reply(state, page, seed.id, "Selected plan replied.");
   expect(
     frames.sent.find(({ frame }) => frame.method === "session.prompt")!.frame
@@ -221,7 +221,7 @@ isolatedTest.describe("configured primary order", () => {
       await expect(page.locator(".otk-composer-agent")).toHaveText("Plan");
       await state.queue(["Default plan replied."]);
       await prompt(page).fill("Keep the backend default");
-      await prompt(page).press("Enter");
+      await sendPrompt(page);
       await reply(state, page, seed.id, "Default plan replied.");
       expect(
         frames.sent.find(({ frame }) => frame.method === "session.prompt")!
@@ -239,7 +239,7 @@ isolatedTest.describe("configured primary order", () => {
       }
       await state.queue(["Cycled build replied."]);
       await prompt(page).pressSequentially("Send the cycled agent");
-      await prompt(page).press("Enter");
+      await sendPrompt(page);
       await reply(state, page, seed.id, "Cycled build replied.");
       expect(
         (await messages(state, seed.id)).filter((row) =>
