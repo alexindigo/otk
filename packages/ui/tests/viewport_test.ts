@@ -151,13 +151,19 @@ function viewportFixture(
     "requestAnimationFrame",
     "cancelAnimationFrame",
     "ResizeObserver",
+    "Element",
   ] as const;
   const saved = names.map((name) =>
     Object.getOwnPropertyDescriptor(globalThis, name)
   );
   let next = 0, resize = () => {};
   const frames = new Map<number, FrameRequestCallback>();
-  class Pane extends EventTarget {
+  class FixtureElement extends EventTarget {
+    closest() {
+      return null;
+    }
+  }
+  class Pane extends FixtureElement {
     writes = 0;
     scrollHeight = 1000;
     clientHeight = 100;
@@ -194,6 +200,7 @@ function viewportFixture(
       observe() {}
       disconnect() {}
     },
+    FixtureElement,
   ];
   names.forEach((name, i) =>
     Object.defineProperty(globalThis, name, {
@@ -349,3 +356,38 @@ Deno.test("measurement settlement keeps the requested row instead of rebasing to
     }
   });
 });
+
+for (const input of ["wheel", "keydown"]) {
+  for (const endBeforeMovement of [false, true]) {
+    Deno.test(`queued scrollend preserves ${input} through pending geometry (end before movement: ${endBeforeMovement})`, () => {
+      viewportFixture(({ pane, flush }) => {
+        const lease = acquireViewport(pane);
+        const release = lease.owner.register({
+          id: "rows",
+          depth: 1,
+          anchor: () => ({ key: "row", offset: pane.scrollTop }),
+          resolve: (anchor) => anchor.offset,
+        });
+        try {
+          for (let n = 0; n < 4; n++) flush();
+          const event = new Event(input);
+          Object.defineProperty(event, input === "wheel" ? "deltaY" : "key", {
+            value: input === "wheel" ? -8 : "ArrowUp",
+          });
+          pane.dispatchEvent(event);
+          lease.owner.layout();
+          if (!endBeforeMovement) pane.scrollTop = 892;
+          pane.dispatchEvent(new Event("scrollend"));
+          if (endBeforeMovement) pane.scrollTop = 892;
+          pane.dispatchEvent(new Event("scroll"));
+          pane.dispatchEvent(new Event("scrollend"));
+          for (let n = 0; n < 4; n++) flush();
+          assertEquals(pane.scrollTop, 892);
+        } finally {
+          release();
+          lease.release();
+        }
+      });
+    });
+  }
+}

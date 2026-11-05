@@ -130,7 +130,10 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     disposed = false,
     dragging = false,
     pressed = false;
-  let gesture: "toward" | "away" | undefined, startX = 0, startY = 0;
+  let gesture: "toward" | "away" | undefined,
+    gestureMoved = false,
+    startX = 0,
+    startY = 0;
   let position = viewport.scrollTop,
     frame: number | undefined,
     revision = 0,
@@ -187,6 +190,7 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   const externalPosition = () => {
     const top = viewport.scrollTop, expected = clamp(position);
     if (Math.abs(top - expected) <= 1) return false;
+    if (gesture) gestureMoved = true;
     position = top;
     if ((gesture || dragging) && mode === "anchored") {
       if (geometryPending) {
@@ -314,11 +318,12 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
     mode = "anchored";
     if (captureNow) capture();
   };
-  const wheel = (event: WheelEvent) => {
-    gesture = event.deltaY < 0 ? "away" : "toward";
+  const beginGesture = (direction: "away" | "toward") => {
+    gesture = direction;
+    gestureMoved = false;
     if (gesture === "away") away();
     else if (bottom()) mode = "follow";
-    // A wheel intent at a native boundary cannot produce a scrollend event.
+    // An input intent at a native boundary cannot produce a scrollend event.
     // Settle that intent here rather than indefinitely blocking geometry work.
     if (
       (gesture === "away" && viewport.scrollTop <= 0) ||
@@ -329,6 +334,8 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       layout();
     }
   };
+  const wheel = (event: WheelEvent) =>
+    beginGesture(event.deltaY < 0 ? "away" : "toward");
   const down = (event: PointerEvent) => {
     cancelNavigation();
     capture();
@@ -371,6 +378,11 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
   };
   const end = () => {
     const userGesture = !!gesture || dragging;
+    // A previous programmatic scroll can end after new input was accepted but
+    // before its native displacement/notification. Join that displacement while
+    // its intent still owns the anchors; an unrelated ending cannot retire it.
+    if (userGesture) externalPosition();
+    if (gesture && !gestureMoved) return;
     gesture = undefined;
     if (userGesture && !geometryPending) capture();
     if (geometryPending) schedule();
@@ -390,12 +402,12 @@ function createViewportPosition(viewport: HTMLElement): ViewportPosition {
       ["ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", " "]
         .includes(event.key)
     ) {
-      gesture = ["ArrowUp", "PageUp", "Home"].includes(event.key) ||
+      beginGesture(
+        ["ArrowUp", "PageUp", "Home"].includes(event.key) ||
           (event.key === " " && event.shiftKey)
-        ? "away"
-        : "toward";
-      if (gesture === "away") away();
-      else if (bottom()) mode = "follow";
+          ? "away"
+          : "toward",
+      );
     }
   };
   const observer = new ResizeObserver(layout);

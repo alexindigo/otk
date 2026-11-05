@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
+import { viewing } from "../../pages/composer.ts";
 import type { CDPSession, Page } from "@playwright/test";
 
 const source = Array.from(
@@ -36,11 +37,15 @@ async function orderedWheel(page: Page, cdp: CDPSession, grow: boolean) {
     // the viewport's target listener, and only after this trusted wheel. The
     // non-passive wheel capture makes the browser join intent dispatch before
     // applying its default scroll, even with a compositor-scrolled transcript.
+    // A queued notification can precede that default movement. Admit only the
+    // gesture's physical endpoint, not the first scroll after its wheel event.
     // Use the transcript gutter so nested code scrollers cannot take the wheel.
     // Await installation before dispatch; no page calls follow it.
     const armed = await context.send("Runtime.evaluate", {
       expression:
-        `(()=>{const pane=document.querySelector('.otk-messages');let trusted=false;pane.addEventListener('wheel',event=>{trusted=event.isTrusted;pane.setAttribute('data-ordering-wheel',trusted?'trusted':'synthetic');pane.setAttribute('data-ordering-wheel-gap',String(pane.scrollHeight-pane.clientHeight-pane.scrollTop))},{once:true,capture:true,passive:false});const hold=event=>{if(event.target!==pane||!trusted)return;document.removeEventListener('scroll',hold,true);debugger;};document.addEventListener('scroll',hold,true);const box=pane.getBoundingClientRect();return {x:box.x+8,y:box.y+box.height/2,gap:pane.scrollHeight-pane.clientHeight-pane.scrollTop};})()`,
+        `(()=>{const pane=document.querySelector('.otk-messages');let trusted=false;pane.addEventListener('wheel',event=>{trusted=event.isTrusted;pane.setAttribute('data-ordering-wheel',trusted?'trusted':'synthetic');pane.setAttribute('data-ordering-wheel-gap',String(pane.scrollHeight-pane.clientHeight-pane.scrollTop))},{once:true,capture:true,passive:false});const hold=event=>{if(event.target!==pane||!trusted||Math.abs(pane.scrollHeight-pane.clientHeight-pane.scrollTop-${
+          grow ? 0 : 8
+        })>.5)return;document.removeEventListener('scroll',hold,true);debugger;};document.addEventListener('scroll',hold,true);const box=pane.getBoundingClientRect();return {x:box.x+8,y:box.y+box.height/2,gap:pane.scrollHeight-pane.clientHeight-pane.scrollTop};})()`,
       returnByValue: true,
     });
     expect(armed.exceptionDetails).toBeUndefined();
@@ -150,18 +155,9 @@ for (const cpuRate of [1, 8]) {
       await expect(
         page.locator(`.otk-project-sessions [data-session="${session.id}"]`),
       ).toHaveAttribute("data-status", "idle");
-      await expect.poll(() =>
-        frames.sent.some(({ frame }) =>
-          frame.method === "layout.location" &&
-          frame.params?.sessionID === session.id &&
-          frames.received.some((result) =>
-            result.t === "request.result" &&
-            result.ref?.key === frame.ref?.key &&
-            (result.outcome as { ok: boolean }).ok
-          )
-        )
-      ).toBe(true);
-      await expect(page.locator(".otk-composer-notice")).toHaveCount(0);
+      // Viewing also settles sessions.seen. Its pending notice changes the
+      // viewport allocation independently of the transcript's native idle state.
+      await viewing(page, frames, session.id);
       await expect(
         page.locator(".otk-message-details").filter({ hasText: "streaming" }),
       ).toHaveCount(0);
