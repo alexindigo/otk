@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Harness } from "@otk/harness";
 import { type OtkDb, type Prefs, Requests } from "@otk/store";
-import type { Preferences } from "@otk/protocol";
+import {
+  type DiagnosticSink,
+  type Preferences,
+  StoppedError,
+} from "@otk/protocol";
 import { AuthState } from "./auth/state.ts";
 import type { ServiceConfig } from "./config/schema.ts";
 import { IndexStore } from "./index/store.ts";
 import { Connections } from "./ws/connections.ts";
 import type { FrameSource } from "./ws/connections.ts";
 import type { RpcRegistry } from "./ws/registry.ts";
-import { serve } from "./http/server.ts";
+import { bind } from "./http/server.ts";
+import { diagnosticsLog } from "./diagnostics-log.ts";
 import type { SectionObserver } from "./diagnostics.ts";
 import { RequestCoordinator } from "./requests/coordinator.ts";
 import { BootstrapRequests } from "./http/bootstrap.ts";
@@ -24,6 +29,8 @@ export interface CoreOptions {
   index?: IndexStore;
   sources?: readonly FrameSource[];
   diagnostics?: SectionObserver;
+  diagnostic?: DiagnosticSink;
+  signal?: AbortSignal;
 }
 export interface CoreServer {
   server: Deno.HttpServer<Deno.NetAddr>;
@@ -54,18 +61,19 @@ function startBackend(
 /** Application composition supplies a backend, registrations, store and assets. */
 export async function startCore(options: CoreOptions): Promise<CoreServer> {
   const { cfg, backend, store, prefs, rpc, staticRoot } = options;
+  const diagnostic = options.diagnostic ?? diagnosticsLog(cfg.log.level);
   const index = options.index ?? new IndexStore();
   const requests = new RequestCoordinator({
     registry: rpc,
     receipts: new Requests(store),
     policy: cfg.requests,
-    diagnostic: (id, cause) => console.warn("request", id, cause),
+    diagnostic: (id, cause) => diagnostic("warn", `request ${id}`, cause),
   });
   let bootstrap: BootstrapRequests | undefined;
   let maintenance: ReturnType<typeof setInterval> | undefined;
   let connections: Connections | undefined,
     server: Deno.HttpServer<Deno.NetAddr> | undefined;
-  let backendOwned = false, stopping: Promise<void> | undefined;
+  let stopping: Promise<void> | undefined;
   const stop = (): Promise<void> =>
     stopping ??= Promise.resolve().then(async () => {
       const errors: unknown[] = [];
@@ -83,15 +91,27 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
         }}
       await attempt(() => requests.stop());
       if (bootstrap) await attempt(() => bootstrap!.stop());
-      if (backendOwned) await attempt(() => backend.core.stop());
+      await attempt(() => backend.core.stop());
       if (server) await attempt(() => server!.shutdown());
       await attempt(() => store.close());
       if (errors.length) {
         throw new AggregateError(errors, "Service cleanup failed");
       }
     });
+  const cancelled = () => {
+    void stop().catch(() => {});
+  };
+  const check = () => {
+    if (options.signal?.aborted) {
+      throw new StoppedError("Service startup stopped");
+    }
+  };
+  options.signal?.addEventListener("abort", cancelled, { once: true });
   try {
+    check();
     const auth = new AuthState(cfg);
+    const listener = bind(cfg, undefined, diagnostic);
+    server = listener.server;
     const transport = connections = new Connections(
       backend,
       index,
@@ -109,23 +129,26 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       options.sources,
       options.diagnostics,
     );
-    backendOwned = true;
     await startBackend(backend, index, transport);
+    check();
     await requests.start();
+    check();
     bootstrap = new BootstrapRequests({
       cfg,
       auth,
       backend,
       store,
       window: () => requests.window(),
-      diagnostic: (id, cause) => console.warn("bootstrap request", id, cause),
+      diagnostic: (id, cause) =>
+        diagnostic("warn", `bootstrap request ${id}`, cause),
     });
     await bootstrap.start();
+    check();
     maintenance = setInterval(
       () => requests.maintenance(),
       cfg.requests.livenessms,
     );
-    server = await serve({
+    await listener.handle({
       cfg,
       auth,
       bootstrap,
@@ -133,6 +156,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       connections: transport,
       staticRoot,
     });
+    check();
     return {
       server,
       backend,
@@ -152,5 +176,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       );
     }
     throw error;
+  } finally {
+    options.signal?.removeEventListener("abort", cancelled);
   }
 }

@@ -3,12 +3,14 @@ import type { DigestPolicy } from "@otk/harness";
 import type {
   AttachmentPolicy,
   ClientRequestPolicy,
+  LogLevel,
   MessagePolicy,
   RequestPolicy,
 } from "@otk/protocol";
 export type LeafType = "string" | "int" | "float" | "bool" | "list";
 export type Schema = { [node: string]: LeafType | Schema };
 export const SERVICE_SCHEMA: Schema = {
+  log: { level: "string" },
   server: { host: "string", port: "int", origins: "list" },
   auth: {
     type: "string",
@@ -76,6 +78,7 @@ export const SERVICE_SCHEMA: Schema = {
   },
 };
 export interface ServiceConfig {
+  log: { level: LogLevel };
   server: { host: string; port: number; origins: string[] };
   auth: {
     type: string;

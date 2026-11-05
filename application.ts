@@ -23,6 +23,7 @@ import {
 } from "@otk/store";
 import {
   type CoreServer,
+  type DiagnosticSink,
   type FrameSource,
   frecencyOptions,
   IndexStore,
@@ -68,6 +69,8 @@ export function startApplication(
     interactive?: (owner: string, active: boolean) => void;
     attention?: (sessionID: string) => void;
     diagnostics?: SectionObserver;
+    diagnostic?: DiagnosticSink;
+    signal?: AbortSignal;
   } = {},
 ): Promise<CoreServer> {
   const store = new OtkDb(cfg.state.path, [
@@ -167,6 +170,8 @@ export function startApplication(
       index,
       sources,
       diagnostics: options.diagnostics,
+      diagnostic: options.diagnostic,
+      signal: options.signal,
     });
   } catch (error) {
     const failures: unknown[] = [error];

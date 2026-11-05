@@ -6,8 +6,7 @@ export async function consumeEvents(
   bytes: () => void,
   event: (envelope: Envelope, textLength: number) => void | Promise<void>,
   accept?: (type: string) => boolean,
-  failed: (error: unknown) => void = (error) =>
-    console.warn("harness event:", error),
+  failed: (error: unknown) => void = () => {},
   ended?: () => void,
 ): Promise<void> {
   if (!response.body) throw new Error("SSE body missing");

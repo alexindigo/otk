@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { DiagnosticSink } from "@otk/protocol";
 import type { AgentsCapability } from "@otk/harness";
 import type { AgentColor, CatalogAgent } from "@otk/protocol";
 import type { DirectoryCatalogs } from "./catalogs.ts";
@@ -106,6 +107,7 @@ export class AgentColors {
     ) => void = () => {},
     readonly scope: () => object | undefined = () => undefined,
     readonly catalogs?: DirectoryCatalogs,
+    readonly diagnostic: DiagnosticSink = () => {},
   ) {}
   get(directory?: string): Promise<Map<string, AgentColor>> {
     if (this.catalogs && directory === undefined) {
@@ -132,8 +134,9 @@ export class AgentColors {
         }).catch((error) => {
           if (this.#directories.get(directory) === current) {
             current.failed = true;
-            console.warn(
-              `Optional agent colors for ${directory ?? "default directory"}:`,
+            this.diagnostic(
+              "warn",
+              `Optional agent colors for ${directory ?? "default directory"}`,
               error,
             );
           }

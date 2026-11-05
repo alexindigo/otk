@@ -2,7 +2,7 @@
 import { DatabaseSync } from "node:sqlite";
 import {
   type AttachmentPolicy,
-  errorMessage,
+  type DiagnosticSink,
   type HistoryAttachmentRef,
   type HistoryEntry,
   MAX_UPLOAD_BYTES,
@@ -44,6 +44,7 @@ export class HistoryReader {
     readonly policy: Pick<AttachmentPolicy, "maxrefs" | "maxbytes">,
     readonly yieldTurn: () => Promise<void> = () =>
       new Promise((resolve) => setTimeout(resolve, 0)),
+    readonly diagnostic: DiagnosticSink = () => {},
   ) {}
   async list(signal?: AbortSignal): Promise<HistoryEntry[]> {
     const selected: Row[] = [];
@@ -142,10 +143,10 @@ export class HistoryReader {
       } catch (error) {
         if (!this.#malformed.has(String(row.id))) {
           this.#malformed.add(String(row.id));
-          console.warn(
-            `history db: skipped malformed message ${row.id}: ${
-              errorMessage(error)
-            }`,
+          this.diagnostic(
+            "warn",
+            `history db: skipped malformed message ${row.id}`,
+            error,
           );
         }
       }
@@ -241,6 +242,7 @@ export class HistoryDatabase {
   reader(
     policy: Pick<AttachmentPolicy, "maxrefs" | "maxbytes">,
     yieldTurn?: () => Promise<void>,
+    diagnostic?: DiagnosticSink,
   ): HistoryReader {
     return new HistoryReader(
       () => {
@@ -255,6 +257,7 @@ export class HistoryDatabase {
       },
       policy,
       yieldTurn,
+      diagnostic,
     );
   }
   close(): void {
@@ -272,13 +275,18 @@ export class History implements HistoryCapability {
   constructor(
     readonly source: string | ProviderReadPort,
     readonly policy: Pick<AttachmentPolicy, "maxrefs" | "maxbytes">,
+    readonly diagnostic: DiagnosticSink = () => {},
   ) {}
   #local(): HistoryReader {
     if (typeof this.source !== "string") {
       throw new Error("Expected native database");
     }
     this.#database ??= new HistoryDatabase(this.source);
-    return this.#reader ??= this.#database.reader(this.policy);
+    return this.#reader ??= this.#database.reader(
+      this.policy,
+      undefined,
+      this.diagnostic,
+    );
   }
   async #read<
     K extends "history.list" | "history.entries" | "history.attachments",

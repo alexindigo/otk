@@ -3,6 +3,7 @@ import { errorMessage, MIN_MESSAGE_REPLAY_BYTES } from "@otk/protocol";
 // Service-only port of globnotes-layered-config/server/config/loader.ts.
 import { parse } from "@std/toml";
 import { join } from "@std/path";
+import { diagnosticsLog } from "../diagnostics-log.ts";
 import {
   type LeafType,
   type Schema,
@@ -284,6 +285,12 @@ export function loadServiceConfig(
       "harness.requestms (OTK_HARNESS_REQUESTMS): expected positive safe integer",
     );
   }
+  if (
+    isObject(tree.log) &&
+    !["warn", "info", "debug"].includes(String(tree.log.level))
+  ) {
+    errors.push("log.level (OTK_LOG_LEVEL): expected warn, info or debug");
+  }
   if (errors.length) throw new ConfigError(errors);
   return {
     config: tree as unknown as ServiceConfig,
@@ -318,15 +325,20 @@ export function config(sources: Omit<LoadSources, "authState">): ServiceConfig {
     authState: authState ?? undefined,
   });
   result.config.state.path = path;
+  const diagnostic = diagnosticsLog(result.config.log.level);
   if (result.config.harness.type === "opencode1") {
-    console.warn(
+    diagnostic(
+      "warn",
       'harness.type (OTK_HARNESS_TYPE): "opencode1" is deprecated; use "opencode-v1".',
     );
     result.config.harness.type = "opencode-v1";
   }
-  for (const p of result.loaded) console.info(`config: loaded ${p}`);
+  for (const p of result.loaded) diagnostic("info", `config: loaded ${p}`);
   if (result.envOverridden.length) {
-    console.info(`config: env overrides ${result.envOverridden.join(", ")}`);
+    diagnostic(
+      "info",
+      `config: env overrides ${result.envOverridden.join(", ")}`,
+    );
   }
   return result.config;
 }

@@ -84,9 +84,7 @@ test("accepted deletion before catalog seeds retained metadata and survives rest
     2000,
   );
   assertEquals(index.get(metadata.id)!.title, metadata.title);
-  assertEquals(diagnostics.map((error) => [error.name, error.message]), [[
-    "AbortError",
-    "Digest bridge stopped",
-  ]]);
+  assertEquals(diagnostics, []);
   await bridge.stop();
+  assertEquals(diagnostics, []);
 });

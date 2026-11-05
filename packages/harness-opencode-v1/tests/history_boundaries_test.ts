@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { diagnosticsLog } from "../../../core/diagnostics-log.ts";
 import { test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { fromFileUrl, join } from "@std/path";
@@ -122,7 +123,11 @@ for (const malformed of ["url", "json"] as const) {
       f.db.prepare("UPDATE part SET data=? WHERE id=?").run("{bad", "prt_bad");
     }
     f.db.close();
-    const reader = new History(f.path, cfg().attachments);
+    const reader = new History(
+      f.path,
+      cfg().attachments,
+      diagnosticsLog("info"),
+    );
     const warn = console.warn, warnings: string[] = [];
     try {
       console.warn = (...values: unknown[]) => {

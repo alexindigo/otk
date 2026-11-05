@@ -3,6 +3,8 @@ import { fromFileUrl } from "@std/path";
 import {
   config as loadConfig,
   type CoreServer,
+  type DiagnosticSink,
+  isCancellation,
   type ServiceConfig,
 } from "./core/mod.ts";
 import { startApplication } from "./application.ts";
@@ -17,6 +19,7 @@ import { StreamBuffers } from "@otk/content";
 import { IndexStore } from "./core/index/store.ts";
 import { DigestBridge } from "./core/digest/bridge.ts";
 import type { ServingDiagnostics } from "./core/diagnostics.ts";
+import { diagnosticsLog } from "./core/diagnostics-log.ts";
 let memo: ServiceConfig | undefined;
 export function config(): ServiceConfig {
   return memo ??= loadConfig({
@@ -28,6 +31,8 @@ export function config(): ServiceConfig {
 export async function start(
   cfg: ServiceConfig,
   diagnostics?: ServingDiagnostics,
+  signal?: AbortSignal,
+  diagnostic: DiagnosticSink = diagnosticsLog(cfg.log.level),
 ): Promise<CoreServer> {
   if (cfg.harness.type !== "opencode-v1") {
     throw new Error(
@@ -93,13 +98,14 @@ export async function start(
         }
       }
     },
-    diagnostic: (error) => console.warn("session digest:", error),
+    diagnostic: (error) => diagnostic("warn", "session digest", error),
   });
   const backend = new OpencodeV1Adapter(
     cfg,
     new StreamBuffers(),
     fetch,
     digest,
+    diagnostic,
   );
   return await startApplication(
     cfg,
@@ -111,23 +117,40 @@ export async function start(
       interactive: (owner, active) => digest.interactive(owner, active),
       attention: (sessionID) => digest.attention(sessionID),
       diagnostics: diagnostics?.section,
+      diagnostic,
+      signal,
     },
   );
 }
 if (import.meta.main) {
+  const lifetime = new AbortController();
+  let app: CoreServer | undefined;
+  let stopping: Promise<void> | undefined;
+  let diagnostic = diagnosticsLog("info");
+  const fail = (error: unknown) => {
+    diagnostic("warn", "OTK", error);
+    Deno.exitCode = 1;
+  };
+  const stop = () => {
+    lifetime.abort();
+    if (app) {
+      stopping ??= app.stop();
+      void stopping.catch(fail);
+    }
+  };
+  Deno.addSignalListener("SIGTERM", stop);
+  Deno.addSignalListener("SIGINT", stop);
   try {
-    const app = await start(config());
-    let stopping = false;
-    const stop = async () => {
-      if (stopping) return;
-      stopping = true;
-      await app.stop();
-      Deno.exit();
-    };
-    Deno.addSignalListener("SIGTERM", stop);
-    Deno.addSignalListener("SIGINT", stop);
+    const cfg = config();
+    diagnostic = diagnosticsLog(cfg.log.level);
+    app = await start(cfg, undefined, lifetime.signal, diagnostic);
+    if (lifetime.signal.aborted) stop();
+    await app.server.finished;
+    await stopping;
   } catch (error) {
-    console.error(error);
-    Deno.exit(1);
+    if (!isCancellation(error)) fail(error);
+  } finally {
+    Deno.removeSignalListener("SIGTERM", stop);
+    Deno.removeSignalListener("SIGINT", stop);
   }
 }

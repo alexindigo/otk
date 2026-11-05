@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./VirtualList.css" with { type: "text" };
+import { isCancellation } from "@otk/protocol";
 import { createWindow, type WindowAnchor } from "@otk/client";
 import { acquireViewport, type ViewportPosition } from "./viewport.ts";
 import { nativeAttributes } from "./native-attributes.ts";
@@ -336,7 +337,7 @@ export default function VirtualList(props: {
             initialPosition.scrollTop) + origin();
           return { start: top, end: top, measured: true };
         }, "start").catch((error) => {
-          if (error.name !== "AbortError") throw error;
+          if (!isCancellation(error)) throw error;
         });
       }
     },

@@ -21,6 +21,7 @@ import {
 import {
   type DigestDelta,
   errorMessage,
+  isCancellation,
   OperationFailure,
   type SessionMetadata,
 } from "@otk/protocol";
@@ -832,8 +833,7 @@ function handle(message: ToWorker): void {
                 );
                 await wait(cached.task.catch((error) => {
                   if (
-                    !(error instanceof DOMException &&
-                      error.name === "AbortError")
+                    !isCancellation(error)
                   ) throw error;
                 }));
               }
@@ -938,7 +938,15 @@ function handle(message: ToWorker): void {
                     diagnosticID: crypto.randomUUID(),
                   },
                 });
-                console.warn("Provider read:", error);
+                if (!isCancellation(error)) {
+                  post({
+                    t: "error",
+                    run: run!,
+                    id: 0,
+                    scope: "worker",
+                    message: `Provider read: ${errorMessage(error)}`,
+                  });
+                }
               }
             } else if (message.t === "deleted") {
               if (message.connection === connection) {
@@ -1020,7 +1028,7 @@ function handle(message: ToWorker): void {
 }
 function observeTask(task: Promise<unknown>, message: ToWorker): void {
   void task.catch((error) => {
-    if (!(error instanceof DOMException && error.name === "AbortError")) {
+    if (!isCancellation(error)) {
       post({
         t: "error",
         run: run!,

@@ -9,7 +9,7 @@ import type {
   ProviderReadOptions,
 } from "@otk/harness";
 import type { SessionMetadata, TurnUsageSnapshot } from "@otk/protocol";
-import { OperationFailure } from "@otk/protocol";
+import { OperationFailure, StoppedError } from "@otk/protocol";
 import type { OpencodeV1Config } from "@otk/harness-opencode-v1";
 import type {
   DigestPressure,
@@ -144,7 +144,7 @@ export class DigestBridge implements DigestPort {
   }
   start(): Promise<void> {
     if (this.#stop) {
-      return Promise.reject(new Error("Digest bridge is stopped"));
+      return Promise.reject(new StoppedError("Digest bridge is stopped"));
     }
     clearTimeout(this.#retry);
     this.#retry = undefined;
@@ -805,7 +805,7 @@ export class DigestBridge implements DigestPort {
     clearTimeout(this.#retry);
     this.#retry = undefined;
     this.#running = false;
-    const released = new DOMException("Digest bridge stopped", "AbortError");
+    const released = new StoppedError("Digest bridge stopped");
     // Retire caller authority immediately; joining worker cleanup must not leave
     // startup or other read gates able to resolve from a late accepted frame.
     for (const pending of this.#pending.values()) pending.reject(released);
@@ -818,9 +818,7 @@ export class DigestBridge implements DigestPort {
     this.#intents.clear();
     if (!this.#worker) return;
     for (const shared of this.#shared.values()) {
-      shared.controller.abort(
-        new DOMException("Digest bridge stopped", "AbortError"),
-      );
+      shared.controller.abort(released);
     }
     this.#shared.clear();
     const worker = this.#worker;
@@ -847,9 +845,11 @@ export class DigestBridge implements DigestPort {
         }),
       ]);
     } catch (error) {
-      this.options.diagnostic?.(
-        error instanceof Error ? error : new Error(String(error)),
-      );
+      if (this.#worker === worker) {
+        this.options.diagnostic?.(
+          error instanceof Error ? error : new Error(String(error)),
+        );
+      }
       worker.terminate();
       throw error;
     } finally {
@@ -858,7 +858,8 @@ export class DigestBridge implements DigestPort {
       this.#running = false;
       for (const timer of this.#timers) clearTimeout(timer);
       this.#timers.clear();
-      this.#fail(new DOMException("Digest bridge stopped", "AbortError"));
+      for (const pending of this.#pending.values()) pending.reject(released);
+      this.#pending.clear();
       this.#dirty.clear();
       this.#fineKeys = 0;
       this.#sequences.clear();

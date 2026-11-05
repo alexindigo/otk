@@ -10,10 +10,19 @@ import {
   startCore,
 } from "../../../core/mod.ts";
 import { test } from "../../support/resources.ts";
+import { bounded } from "../../support/resources.ts";
+import { StoppedError } from "@otk/protocol";
 import { cfg, fixture } from "./support.ts";
 
 for (
-  const failure of ["auth", "backend", "listen", "stop", "source"] as const
+  const failure of [
+    "auth",
+    "backend",
+    "listen",
+    "stop",
+    "source",
+    "signal",
+  ] as const
 ) {
   test(`service lifetime attempts all cleanup after ${failure} failure`, async () => {
     const root = await fixture(), settings = cfg();
@@ -22,17 +31,29 @@ for (
     settings.auth.type = "none";
     if (failure === "auth") settings.auth.type = "invalid" as never;
     const stops: string[] = [];
+    let starts = 0;
+    const lifetime = new AbortController();
+    const opening = Promise.withResolvers<void>();
     const backend: Harness = {
       capabilities: {},
       core: {
         kind: "test",
         version: "1",
-        start: () =>
-          failure === "backend"
+        start: () => {
+          starts++;
+          if (failure === "signal") {
+            queueMicrotask(() => lifetime.abort());
+            return opening.promise;
+          }
+          return failure === "backend"
             ? Promise.reject(new Error("start failed"))
-            : Promise.resolve(),
+            : Promise.resolve();
+        },
         stop() {
           stops.push("backend");
+          if (failure === "signal") {
+            opening.reject(new StoppedError("Startup stopped"));
+          }
           return failure === "stop"
             ? Promise.reject(new Error("stop failed"))
             : Promise.resolve();
@@ -85,9 +106,10 @@ for (
         staticRoot: root,
         index,
         sources: [source],
+        signal: lifetime.signal,
       });
       if (failure !== "stop" && failure !== "source") {
-        await assertRejects(() => starting);
+        await bounded("startup rollback", assertRejects(() => starting));
       } else {
         service = await starting;
         const first = service.stop(), second = service.stop();
@@ -107,6 +129,7 @@ for (
         );
       }
       assert(stops.includes("source"), "Feature lifetime was not released");
+      if (failure === "listen") assertEquals(starts, 0);
       assertEquals(listeners, 0, "Index subscription survived teardown");
       assertThrows(() => prefs.get(), Error);
     } finally {

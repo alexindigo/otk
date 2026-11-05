@@ -16,6 +16,7 @@ import { AgentColors } from "../agents.ts";
 import { Client, NativeRequestFailure } from "../client.ts";
 import { MessageRecovery } from "../recovery.ts";
 import { mapIndex } from "../map.ts";
+import { diagnosticsLog } from "../../../core/diagnostics-log.ts";
 import type { Info, Session } from "../types.ts";
 
 const wait = async (predicate: () => boolean) => {
@@ -53,6 +54,7 @@ async function recording(
   seeds = [session("root"), session("other")],
   delayed = false,
   recoverypending?: number,
+  diagnostic = diagnosticsLog("info"),
 ) {
   const settings = cfg();
   if (recoverypending !== undefined) {
@@ -108,7 +110,13 @@ async function recording(
       ),
     );
   };
-  const adapter = new Opencode1Adapter(settings, buffers, fetcher);
+  const adapter = new Opencode1Adapter(
+    settings,
+    buffers,
+    fetcher,
+    undefined,
+    diagnostic,
+  );
   adapter.core.subscriptions("opcv1-root", 1);
   await adapter.core.start({
     index,
@@ -181,6 +189,35 @@ test("SSE contains bad JSON, bad envelopes and rejected consumers without losing
   );
   assertEquals(failures.length, 3);
   assertEquals(received, ["healthy"]);
+});
+
+test("adapter reports ignored event types once and retains per-type counts", async () => {
+  const lines: string[] = [];
+  const record = await recording(
+    undefined,
+    undefined,
+    false,
+    undefined,
+    diagnosticsLog("debug", (_level, line) => lines.push(line)),
+  );
+  try {
+    for (let i = 0; i < 5; i++) record.send("native.unknown");
+    for (let i = 0; i < 3; i++) record.send("native.other");
+    await record.drain();
+    assertEquals(
+      lines.filter((line) => line.startsWith("harness event ignored:")),
+      [
+        "harness event ignored: native.unknown",
+        "harness event ignored: native.other",
+      ],
+    );
+    assertEquals([...record.adapter.ignoredEvents], [["native.unknown", 5], [
+      "native.other",
+      3,
+    ]]);
+  } finally {
+    await record.adapter.core.stop();
+  }
 });
 
 test("adapter contains buffered and live poisoned events and failed follow-up reads to their session", async () => {

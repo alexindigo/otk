@@ -157,6 +157,16 @@ retained. Concurrent stop calls join one idempotent teardown. Connections
 release timers and subscriptions immediately and cannot rearm them from a late
 RPC completion.
 
+The listener is reserved before backend startup and admits routes only after
+startup completes. Signals installed by the process root cancel startup as well
+as normal operation. Clean close retires pending digest callers with the shared
+`StoppedError`, without reporting failure; real worker failures and shutdown
+timeouts remain diagnostics. `isCancellation` is the protocol cancellation
+classifier. The injected `DiagnosticSink` routes warn/info/debug through one
+levelled output owner, filtering cancellation and repeated failure objects.
+`[log] level` defaults to `info`; `OTK_LOG_LEVEL` overrides it. Ignored native
+event types emit once at debug, with counts available on the adapter.
+
 `RpcRegistry(backend, store)` dispatches registered methods and gives handlers
 `RpcContext` (`harness`, `store`, authoritative `sessionDirectory(id)` and
 `sessionDirectories(ids,signal?)`). Both identity paths use the harness's narrow

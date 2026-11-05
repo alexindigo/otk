@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { EmptyState } from "./View.tsx";
 import "./SessionView.css" with { type: "text" };
+import { isCancellation } from "@otk/protocol";
 import {
   createEffect,
   createMemo,
@@ -239,7 +240,7 @@ export default function SessionView(props: {
         following?.pause();
         await window?.restore(returnAnchor);
       }).catch((error) => {
-        if (error.name !== "AbortError") {
+        if (!isCancellation(error)) {
           setRevealError(failureText(error));
         }
       });

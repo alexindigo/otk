@@ -350,6 +350,11 @@ export class OpencodeV1DigestSink implements DigestSink {
       },
       this.cfg.attachments,
       () => this.wait(new Promise((resolve) => setTimeout(resolve, 0))),
+      (_level, message, error) =>
+        this.storage.diagnostic(
+          undefined,
+          new Error(message, { cause: error }),
+        ),
     );
     return await run(reader);
   }

@@ -48,6 +48,7 @@
       "compiled-digest-services_test.ts",
       "compiled-requests_test.ts",
       "compiled-routing_test.ts",
+      "compiled-shutdown_test.ts",
       "composition_test.ts",
       "digest-catalog-admission_test.ts",
       "http-requests_test.ts",

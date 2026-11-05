@@ -1,5 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage, isAttentionOp, normalizeError } from "@otk/protocol";
+import {
+  type DiagnosticSink,
+  errorMessage,
+  isAttentionOp,
+  isCancellation,
+  normalizeError,
+} from "@otk/protocol";
 import type { ContentOp, Part, RevertInfo, Todo } from "@otk/protocol";
 import type { SessionMetadata as IndexEntry } from "@otk/protocol";
 import { harnessDb, type OpencodeV1AdapterConfig } from "./config.ts";
@@ -154,11 +160,21 @@ export class OpencodeV1Adapter implements Harness {
   #digestRevision = 0;
   #recoveryRevision = 0;
   #retired = new Set<string>();
+  #ignoredEvents = new Map<string, number>();
+  get ignoredEvents(): ReadonlyMap<string, number> {
+    return new Map(this.#ignoredEvents);
+  }
+  #ignored(type: string): void {
+    const count = this.#ignoredEvents.get(type) ?? 0;
+    this.#ignoredEvents.set(type, count + 1);
+    if (!count) this.diagnostic("debug", `harness event ignored: ${type}`);
+  }
   constructor(
     readonly cfg: OpencodeV1AdapterConfig,
     readonly buffers: StreamBuffers = new StreamBuffers(),
     fetcher = fetch,
     readonly digest?: DigestPort,
+    readonly diagnostic: DiagnosticSink = () => {},
   ) {
     this.#replay = new ContentReplay({
       ...cfg.messages,
@@ -208,16 +224,17 @@ export class OpencodeV1Adapter implements Harness {
           );
         }
       },
-      (error) => console.warn("message clock:", error),
+      (error) => this.diagnostic("warn", "message clock", error),
     );
     this.catalogs = new DirectoryCatalogs(catalogReads, {
       pending: cfg.catalogs.pending,
       questions: this.#questions,
       watchFiles: true,
-      diagnostic: (error) => console.warn("directory catalog:", error),
+      diagnostic: (error) =>
+        this.diagnostic("warn", "directory catalog", error),
     });
-    this.#db = new BootstrapDb(harnessDb(cfg));
-    this.#history = new History(catalogReads, cfg.attachments);
+    this.#db = new BootstrapDb(harnessDb(cfg), this.diagnostic);
+    this.#history = new History(catalogReads, cfg.attachments, this.diagnostic);
     this.#messages = new Messages(this.client, (id) => this.#directory(id));
     this.#colors = new AgentColors(
       this.client,
@@ -235,6 +252,7 @@ export class OpencodeV1Adapter implements Harness {
       },
       () => this.#controller,
       this.catalogs,
+      this.diagnostic,
     );
     this.#recovery = new MessageRecovery({
       concurrency: cfg.messages.recoveryconcurrency,
@@ -292,7 +310,7 @@ export class OpencodeV1Adapter implements Harness {
           this.#sink.content(session, { op: "stream.reconcile" });
         }
       },
-      failed: (error) => console.warn("message recovery:", error),
+      failed: (error) => this.diagnostic("warn", "message recovery", error),
     });
     this.#tasks = new TaskProgress({
       peek: (id) => this.#index.helper(id),
@@ -670,15 +688,18 @@ export class OpencodeV1Adapter implements Harness {
     this.#transcript.release();
     this.#retired.clear();
     this.#attention.reset([], [], []);
+    // Stop the digest before joining opening: its retired startup gate wakes
+    // the adapter's run task, including when a signal arrived during startup.
+    const digestStop = this.digest?.stop();
     const completed = await Promise.allSettled([
       this.#run?.task,
+      digestStop,
       ...[...this.#commands.values()].map((request) => request.task),
     ]);
     this.#db.close();
     this.#history.close();
-    await this.digest?.stop();
     const failed = completed.filter((result): result is PromiseRejectedResult =>
-      result.status === "rejected"
+      result.status === "rejected" && !isCancellation(result.reason)
     );
     if (failed.length) {
       throw new AggregateError(
@@ -969,7 +990,7 @@ export class OpencodeV1Adapter implements Harness {
                 }
               }).catch((error) => {
                 if (this.#current(controller)) {
-                  console.warn("bootstrap:", error);
+                  this.diagnostic("warn", "bootstrap", error);
                 }
                 controller.abort();
               });
@@ -1006,17 +1027,17 @@ export class OpencodeV1Adapter implements Harness {
               contentEvents.has(type) || type === "server.connected" ||
               type === "server.heartbeat"
             ) return true;
-            console.debug(`harness event ignored: ${type}`);
+            this.#ignored(type);
             return false;
           },
-          undefined,
+          (error) => this.diagnostic("warn", "harness event", error),
           () => {
             if (bootstrapping && !ready) controller.abort();
           },
         );
       } catch (error) {
         if (this.#current(controller)) {
-          console.warn(`harness stream: ${errorMessage(error)}`);
+          this.diagnostic("warn", "harness stream", error);
         }
       } finally {
         watchdog.stop();
@@ -1183,8 +1204,9 @@ export class OpencodeV1Adapter implements Harness {
         knownQuestionDirectories.add(directory);
       } catch (error) {
         if (!this.#current(controller)) return;
-        console.warn(
-          `bootstrap directory ${JSON.stringify(directory)}:`,
+        this.diagnostic(
+          "warn",
+          `bootstrap directory ${JSON.stringify(directory)}`,
           error,
         );
         // A failed inventory is not evidence that previous work/input ended.
@@ -1327,7 +1349,7 @@ export class OpencodeV1Adapter implements Harness {
       await this.#event(event, controller);
     } catch (error) {
       if (this.#current(controller)) {
-        console.warn("harness event:", event.payload?.type, error);
+        this.diagnostic("warn", `harness event ${event.payload?.type}`, error);
       }
     }
   }
@@ -1338,7 +1360,7 @@ export class OpencodeV1Adapter implements Harness {
     // The 1.x bridge emits both the legacy event and its durable "sync"
     // companion. The latter has syncEvent, not properties; do not apply twice.
     if (!contentEvents.has(type)) {
-      console.debug(`harness event ignored: ${type}`);
+      this.#ignored(type);
       return;
     }
     const catalogKinds = this.catalogs.event(event);
@@ -1365,7 +1387,7 @@ export class OpencodeV1Adapter implements Harness {
         void this.digest.deleted(this.#connection, id, revision, metadata)
           .catch((
             error,
-          ) => console.warn("digest deletion:", error));
+          ) => this.diagnostic("warn", "digest deletion", error));
       } else if (
         [
           "session.created",
@@ -1491,7 +1513,9 @@ export class OpencodeV1Adapter implements Harness {
             prompt: revert?.prompt,
           });
         }).catch((error) => {
-          if (!signal.aborted) console.warn("revert enrichment:", error);
+          if (!signal.aborted) {
+            this.diagnostic("warn", "revert enrichment", error);
+          }
         }).finally(() => {
           if (this.#revertReads.get(mapped.id) === local) {
             this.#revertReads.delete(mapped.id);
@@ -1855,7 +1879,7 @@ export class OpencodeV1Adapter implements Harness {
         content({ op: "diff.set", files: mapDiffs(p.diff as RawDiff[]) });
         break;
       default:
-        console.debug(`harness event ignored: ${type}`);
+        this.#ignored(type);
     }
   }
 }

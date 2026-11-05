@@ -5,6 +5,9 @@
 # ${XDG_CONFIG_HOME:-$HOME/.config}/otk/otk.toml when present, otherwise the
 # existing config/otk.toml next to the application source. Only one is loaded.
 
+[log]
+level = "info" # OTK_LOG_LEVEL - warn/info/debug; debug includes ignored native event types
+
 [server]
 host = "127.0.0.1" # OTK_SERVER_HOST — listener address
 port = 1502 # OTK_SERVER_PORT — sidecar HTTP port

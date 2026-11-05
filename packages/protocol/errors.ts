@@ -1,5 +1,21 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PublicFailure } from "./requests.ts";
+/** An owner has permanently retired its lifetime, rather than failed. */
+export class StoppedError extends Error {
+  override name = "StoppedError";
+}
+export function isCancellation(error: unknown): boolean {
+  return error instanceof StoppedError ||
+    (error instanceof DOMException && error.name === "AbortError");
+}
+
+export type LogLevel = "warn" | "info" | "debug";
+/** Libraries report facts; their consumer owns filtering and output. */
+export type DiagnosticSink = (
+  level: LogLevel,
+  message: string,
+  cause?: unknown,
+) => void;
 /** Nonempty feedback for an arbitrary thrown value. Failure reporting must not
  * itself throw, including for circular objects or hostile conversion hooks. */
 export function errorMessage(value: unknown): string {

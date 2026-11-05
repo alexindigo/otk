@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { errorMessage } from "@otk/protocol";
+import type { DiagnosticSink } from "@otk/protocol";
 import { DatabaseSync } from "node:sqlite";
 import type { NativeMessage } from "./messages.ts";
 import type { Info, RawPart } from "./types.ts";
@@ -10,7 +10,10 @@ import { runningDirectories } from "./db-hints.ts";
 /** Never creates or writes the harness database; schema checks name query columns. */
 export class BootstrapDb {
   #db: DatabaseSync | null = null;
-  constructor(readonly file: string) {
+  constructor(
+    readonly file: string,
+    readonly diagnostic: DiagnosticSink = () => {},
+  ) {
     try {
       this.#db = new DatabaseSync(file, { readOnly: true });
       const required = {
@@ -30,9 +33,7 @@ export class BootstrapDb {
       }
     } catch (e) {
       this.close();
-      console.warn(
-        `harness db: using API fallback: ${errorMessage(e)}`,
-      );
+      this.diagnostic("warn", "harness db: using API fallback", e);
     }
   }
   /** Undefined means hints are unavailable; an empty list is authoritative. */
@@ -41,9 +42,7 @@ export class BootstrapDb {
     try {
       return runningDirectories(this.#db, since);
     } catch (error) {
-      console.warn(
-        `harness db: using API fallback: ${errorMessage(error)}`,
-      );
+      this.diagnostic("warn", "harness db: using API fallback", error);
       return;
     }
   }

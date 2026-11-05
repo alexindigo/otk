@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Code.css" with { type: "text" };
+import { isCancellation } from "@otk/protocol";
 import {
   createEffect,
   createMemo,
@@ -371,7 +372,7 @@ export default function Code(
     }).catch((error) => {
       if (
         !disposed && id === generation && frame().model === owner &&
-        error.name !== "AbortError"
+        !isCancellation(error)
       ) setError(error.message || "Highlighting unavailable");
     });
   };
@@ -387,7 +388,7 @@ export default function Code(
       if (!previous || previous.value.lang !== value.lang) {
         void block.prepare(value.lang, value.text).catch((error) => {
           if (
-            !disposed && frame().model === owner && error.name !== "AbortError"
+            !disposed && frame().model === owner && !isCancellation(error)
           ) setError(error.message);
         });
       }

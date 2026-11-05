@@ -2,6 +2,7 @@
 import { cfg } from "../../support/config.ts";
 import { assertEquals, assertRejects } from "@std/assert";
 import { DigestBridge } from "../../../core/digest/bridge.ts";
+import { StoppedError } from "@otk/protocol";
 import { bounded, resources, tempDir, test } from "../../support/resources.ts";
 import { FakeLlm } from "../../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../../support/opencode.ts";
@@ -119,8 +120,10 @@ test("public worker port publishes real native totals and recovers committed met
   summaries.clear();
   turnKeys.clear();
   const failures: string[][] = [];
+  const diagnostics: Error[] = [];
   const restarted = new DigestBridge({
     ...options,
+    diagnostic: (error) => diagnostics.push(error),
     unready: (ids) => {
       failures.push([...ids]);
       for (const id of ids) {
@@ -153,9 +156,15 @@ test("public worker port publishes real native totals and recovers committed met
         value?.delta.summary.state === "ready" && value.revision > beforeCrash,
     );
     assertEquals(failures, [[session.id]]);
+    assertEquals(diagnostics.length, 1);
   } finally {
     await restarted.stop();
   }
+  assertEquals(
+    diagnostics.length,
+    1,
+    "Clean close reported a second worker failure",
+  );
   let closing: Promise<void> | undefined;
   const interrupted = new DigestBridge({
     ...options,
@@ -163,7 +172,7 @@ test("public worker port publishes real native totals and recovers committed met
       closing ??= interrupted.stop();
     },
   });
-  await assertRejects(() => interrupted.start(), DOMException, "stopped");
+  await assertRejects(() => interrupted.start(), StoppedError, "stopped");
   await closing;
 });
 
