@@ -1,9 +1,32 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
-import { test } from "../support/resources.ts";
+import { resources, test } from "../support/resources.ts";
 import { nativeFixture } from "../support/native-fixture.ts";
 import { waitFor } from "../support/opencode.ts";
+
+test("native public endpoint keeps its initial socket instead of rebinding a released address", async () => {
+  const listen = Deno.listen;
+  const rebindings: number[] = [];
+  // A competing listener wins any relinquished explicit TCP address. Port-zero
+  // admission is atomic and never exposes such an address to the competitor.
+  Deno.listen = ((options: Deno.ListenOptions) => {
+    if (options.port) {
+      rebindings.push(options.port);
+      const competing = listen(options);
+      resources().defer("competing public endpoint", () => competing.close());
+    }
+    return listen(options);
+  }) as typeof Deno.listen;
+  try {
+    const fixture = await nativeFixture();
+    const tools = await fixture.oc.request<string[]>("/experimental/tool/ids");
+    assert(tools.length > 0, "Consumer must reach the admitted real native");
+    assertEquals(rebindings, []);
+  } finally {
+    Deno.listen = listen;
+  }
+});
 
 test("native generation reallocates a proven occupied private port without borrowing its listener", async () => {
   const f = await nativeFixture();

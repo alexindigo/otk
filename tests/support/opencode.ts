@@ -223,8 +223,9 @@ export class OpencodeTest {
           },
         }),
       );
-      test.port = await freePort();
-      test.url = `http://127.0.0.1:${test.port}`;
+      // In-process listeners can bind atomically. Only the external native needs
+      // a numeric candidate with pre-admission collision recovery.
+      test.port = 0;
       test.nativePort = await freePort();
       test.db = join(env.XDG_DATA_HOME, "opencode/opencode.db");
       test.#env = env;
@@ -308,6 +309,8 @@ export class OpencodeTest {
       port: this.port,
       ready: ready.promise,
     });
+    this.port = endpoint.port;
+    this.url = `http://127.0.0.1:${this.port}`;
     const owner = ownedProcess(nativeBinary, [
       "serve",
       "--hostname",
