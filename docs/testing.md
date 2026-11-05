@@ -46,6 +46,11 @@ three guests in parallel and awaits every receipt; one failure fails
 aggregation. Targets of 15 minutes selected and 45 minutes full are
 measurements, not gates.
 
+For a repaired version lane, `--lane full --guests otk-tests-a` executes that
+guest's complete lane. The receipt records the selected `guests` and sets
+`matrixComplete` only when all three version lanes were collected; a subset
+receipt does not replace the other guests' qualification evidence.
+
 `--shard=1/2` and `--shard=2/2` pass through to Playwright with separate run,
 project, shard and attempt output roots and blob reports. Run extra shards
 sequentially on their version guest.

@@ -102,9 +102,7 @@ def main():
     vm.require(len(guests) == len(set(guests)) and all(g in vm.VERSIONS for g in guests), "Unknown/duplicate guest")
     for guest in guests:
         vm.identify(guest)
-    if a.lane == "full":
-        vm.require(set(guests) == set(vm.VERSIONS), "Full matrix requires A/B/C")
-    else:
+    if a.lane != "full":
         # Guest evaluates the map. Ark consumes only the returned routing metadata.
         r = vm.run("otk-tests-a", ["deno", "run", "-A", "scripts/tests/selection-cli.ts", "--changed-paths", ".test-state/transport/changed.paths"], root / "selection", paths, base)
         vm.require(r["exit"] == 0 and r["complete"], "Guest selection failed")
@@ -133,7 +131,9 @@ def main():
     trees = {r["tree"] for r in receipts}
     complete = len(receipts) == len(guests) and len(trees) == 1 and all(r["complete"] for r in receipts)
     merge = {"exit": 0, "qualification": False} if a.dry_run else merge_reports(root, receipts) if complete else {"exit": 1}
-    result = {"schema": 1, "lane": a.lane, "base": base, "complete": complete, "receipts": receipts,
+    result = {"schema": 1, "lane": a.lane, "base": base, "guests": guests,
+              "matrixComplete": a.lane == "full" and complete and set(guests) == set(vm.VERSIONS),
+              "complete": complete, "receipts": receipts,
               "merge": merge, "qualification": not a.dry_run, "seconds": time.monotonic() - started, "targetSeconds": 900 if a.lane == "commit" else 2700,
               "exit": 0 if complete and not merge["exit"] and all(r["exit"] == 0 for r in receipts) else 1}
     (root / "matrix.json").write_text(json.dumps(result, indent=2))
