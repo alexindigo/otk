@@ -3,6 +3,7 @@ tests/browser/node_modules/
 tests/browser/test-results/
 tests/browser/playwright-report/
 web/dist/
+/build/
 .test-state/
 /config/
 tmp/
