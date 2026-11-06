@@ -53,10 +53,10 @@ test("messages.unopened-session-helper-costs-live-display-persistence", {
       return true;
     })
   ).toBe(true);
-  // Transcript settling does not join the independent background scope warmer.
+  // Visible costs come from metadata, never background family body acquisition.
   await expect.poll(async () =>
     [...new Set((await state.observe<O>()).contentReads)].sort()
-  ).toEqual(["tstv1-core", "tstv1-helper", "tstv1-idle", "tstv1-unknown"]);
+  ).toEqual(["tstv1-core"]);
   const observation = await state.observe<O>(),
     acquired = Number(
       await page.locator(".otk-message-flow").getAttribute(
@@ -68,13 +68,10 @@ test("messages.unopened-session-helper-costs-live-display-persistence", {
     .toHaveLength(Math.ceil(acquired / 10));
   expect([...new Set(observation.contentReads)].sort()).toEqual([
     "tstv1-core",
-    "tstv1-helper",
-    "tstv1-idle",
-    "tstv1-unknown",
   ]);
   for (const id of ["tstv1-helper", "tstv1-idle", "tstv1-unknown"]) {
     expect(observation.contentReads.filter((read) => read === id)).toHaveLength(
-      1,
+      0,
     );
   }
   expect(observation.reads.filter((id) => id === "tstv1-core")).toHaveLength(0);

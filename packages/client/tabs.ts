@@ -7,8 +7,9 @@ import type {
 } from "@otk/protocol";
 import { INBOX_STATUS_PRIORITY, type InboxStatus, rollup } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
-import { familyTask, sessionFamily } from "./session-tree.ts";
+import { sessionFamily } from "./session-tree.ts";
 import type { RequestOptions } from "./requests.ts";
+import { taskBreadcrumbs, type TaskCrumb } from "./task-breadcrumbs.ts";
 import { attentionStatus, type OperationAttention } from "./inbox.ts";
 export type TabSelection = { kind: "task"; id: string } | {
   kind: "session";
@@ -23,6 +24,8 @@ export interface InboxTab {
   status: InboxStatus;
 }
 export interface TabInput {
+  /** Present for immutable snapshots from the shared project projection. */
+  version?: number;
   directory: string;
   entries: readonly (IndexMetadata & OperationAttention)[];
   taskActivity?: Readonly<Record<string, InboxStatus>>;
@@ -47,6 +50,9 @@ export interface ClientTabs {
   state: TabState;
   subscribe(listener: (state: TabState) => void): () => void;
   tabs(): InboxTab[];
+  crumbs(): TaskCrumb[];
+  entry(id: string): (IndexMetadata & OperationAttention) | undefined;
+  taskFor(id: string): TaskRecord | undefined;
   sessionFor(taskID: string): string | undefined;
   update(input: TabInput): void;
   select(selection: TabSelection, sessionID?: string): void;
@@ -94,27 +100,85 @@ export function createTabs(
     if (stopped) throw new Error("Project tabs are stopped");
     if (sources) model.update(sources.input());
   };
+  type Entry = IndexMetadata & OperationAttention;
+  let byID = new Map<string, Entry>(), taskByID = new Map<string, TaskRecord>();
+  let explicit = new Map<string, TaskRecord>(),
+    ancestry = new Map<string, string[]>();
+  let ownership = new Map<string, TaskRecord | undefined>();
+  let familyKeys = new Map<string, string>();
+  let children = new Map<string, Entry[]>(),
+    families = new Map<string, Entry[]>();
+  let entries: Entry[] = [], tasks: TaskRecord[] = [];
+  let derived: TabInput | undefined;
+  let cachedTabs: InboxTab[] | undefined, cachedSelection = "";
+  let cachedCrumbs: TaskCrumb[] = [],
+    crumbTabs: InboxTab[] | undefined,
+    crumbID: string | undefined;
+  const prepare = () => {
+    if (derived === input) return;
+    derived = input;
+    entries = input.entries.filter((e) => e.directory === input.directory);
+    tasks = input.inbox.tasks.filter((t) => t.directory === input.directory);
+    byID = new Map(entries.map((e) => [e.id, e]));
+    taskByID = new Map(tasks.map((t) => [t.id, t]));
+    explicit = new Map();
+    ancestry = new Map();
+    ownership = new Map();
+    familyKeys = new Map();
+    children = new Map();
+    families = new Map();
+    for (const task of tasks) {
+      for (const id of task.sessions) {
+        if (!explicit.has(id)) explicit.set(id, task);
+      }
+    }
+    for (const entry of entries) {
+      if (entry.parentID) {
+        const list = children.get(entry.parentID) ?? [];
+        list.push(entry);
+        children.set(entry.parentID, list);
+      }
+    }
+    const resolve = (start: string) => {
+      const path: string[] = [], seen = new Set<string>();
+      let id: string | undefined = start, task: TaskRecord | undefined;
+      while (id && !familyKeys.has(id) && !seen.has(id)) {
+        path.push(id);
+        seen.add(id);
+        task = explicit.get(id);
+        if (task) break;
+        id = byID.get(id)?.parentID;
+      }
+      task ??= id ? ownership.get(id) : undefined;
+      const key = task?.id ?? (id && familyKeys.get(id)) ?? path.at(-1)!;
+      for (const id of path) {
+        ownership.set(id, task);
+        familyKeys.set(id, key);
+      }
+      return key;
+    };
+    for (const entry of entries) {
+      const key = familyKeys.get(entry.id) ?? resolve(entry.id);
+      const list = families.get(key) ?? [];
+      list.push(entry);
+      families.set(key, list);
+    }
+    cachedTabs = undefined;
+  };
   function tabs(): InboxTab[] {
     // Inputs are not owned by the state factory; expose their invalidation too.
     void store.state.revision;
     // These are live resource getters, not cheap fields. Borrow one coherent
     // snapshot before walking the population or ancestry.
-    const { directory, entries: allEntries, inbox, taskActivity } = input;
-    const tasks = inbox.tasks.filter((task) => task.directory === directory);
-    const entries = allEntries.filter((e) => e.directory === directory);
-    const byID = new Map(entries.map((entry) => [entry.id, entry]));
-    const grouped = new Set(tasks.flatMap((task) => task.sessions));
+    prepare();
+    const selection =
+      `${store.state.selected?.kind}/${store.state.selected?.id}/${store.state.preview}`;
+    if (cachedTabs && selection === cachedSelection) return cachedTabs;
+    cachedSelection = selection;
+    const { inbox, taskActivity } = input;
+    const grouped = explicit;
     // Nearest explicit membership owns the whole inherited family. Helpers can
     // contribute work/attention, but cannot create a competing phantom tab.
-    const families = new Map<string, typeof entries>();
-    for (const entry of entries) {
-      const ancestry = sessionFamily(entry.id, (id) => byID.get(id));
-      const key = familyTask(tasks, ancestry, directory)?.id ??
-        ancestry.at(-1)!;
-      const family = families.get(key) ?? [];
-      family.push(entry);
-      families.set(key, family);
-    }
     const activity = (id: string) =>
       (families.get(id) ?? []).reduce(
         (time, entry) => Math.max(time, entry.timeUpdated),
@@ -152,25 +216,31 @@ export function createTabs(
         });
       }
     }
-    return result.sort((a, b) =>
+    return cachedTabs = result.sort((a, b) =>
       INBOX_STATUS_PRIORITY.indexOf(a.status) -
         INBOX_STATUS_PRIORITY.indexOf(b.status) ||
       activity(b.id) - activity(a.id) || a.id.localeCompare(b.id)
     );
   }
-  const lookup = (id: string) =>
-    input.entries.find((e) => e.id === id && e.directory === input.directory);
-  const rootFor = (id: string) => sessionFamily(id, lookup).at(-1)!;
-  const taskFor = (id: string) =>
-    familyTask(
-      input.inbox.tasks,
-      sessionFamily(id, lookup),
-      input.directory,
-    );
+  const lookup = (id: string) => {
+    prepare();
+    return byID.get(id);
+  };
+  const rootFor = (id: string) => {
+    prepare();
+    let path = ancestry.get(id);
+    if (!path) ancestry.set(id, path = sessionFamily(id, (id) => byID.get(id)));
+    return path.at(-1)!;
+  };
+  const taskFor = (id: string) => {
+    prepare();
+    return ownership.get(id) ?? explicit.get(id);
+  };
   const contains = (task: TaskRecord, id: string) =>
     taskFor(id)?.id === task.id;
   function sessionFor(taskID: string): string | undefined {
-    const task = input.inbox.tasks.find((t) => t.id === taskID);
+    prepare();
+    const task = taskByID.get(taskID);
     const saved = remembered.get(taskID);
     if (task && saved && contains(task, saved)) return saved;
     return task?.sessions[0];
@@ -213,11 +283,32 @@ export function createTabs(
     state: store.state,
     subscribe: store.subscribe,
     tabs,
+    entry(id) {
+      void store.state.revision;
+      return lookup(id);
+    },
+    taskFor,
+    crumbs() {
+      const rows = tabs(), id = store.state.selected?.id;
+      if (rows === crumbTabs && id === crumbID) return cachedCrumbs;
+      crumbTabs = rows;
+      crumbID = id;
+      const tab = rows.find((t) => t.id === id);
+      const task = taskByID.get(id ?? "") ??
+        (tab &&
+          { id: tab.id, directory: input.directory, sessions: tab.sessions });
+      return cachedCrumbs = task
+        ? taskBreadcrumbs(task, entries, tasks, children)
+        : [];
+    },
     sessionFor,
     update(next: TabInput): void {
       if (stopped) return;
+      if (next.version !== undefined && input === next) return;
       const changedProject = next.directory !== input.directory;
       input = next;
+      derived = undefined;
+      prepare();
       if (changedProject) selectionRevision++;
       for (const task of input.inbox.tasks) {
         for (const id of task.sessions) promotions.delete(id);

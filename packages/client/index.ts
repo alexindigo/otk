@@ -54,6 +54,10 @@ export interface ClientIndex {
   children(sidecarId: string, sessionID: string): readonly string[];
   ids(sidecarId: string, directory?: string): readonly string[];
   partition(sidecarId: string, directory?: string): MergedEntry[];
+  progress(
+    sidecarId: string,
+    directory: string,
+  ): { busy: boolean; announcement: string };
   catalog(sidecarId: string, directory?: string): readonly MergedMetadata[];
   getMetadata(sidecarId: string, sessionID: string): MergedMetadata | undefined;
   changes(sidecarId: string): IndexChanges | undefined;
@@ -73,11 +77,15 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
       members: Set<string>;
       ids?: readonly string[];
       catalog?: readonly MergedMetadata[];
+      entries?: MergedEntry[];
+      digesting?: number;
+      progress?: { busy: boolean; announcement: string };
     }
   >();
   const partitionClock = factory({ keys: {} as Record<string, number> });
   const membershipClock = factory({ keys: {} as Record<string, number> });
   const metadataClock = factory({ keys: {} as Record<string, number> });
+  const progressClock = factory({ keys: {} as Record<string, number> });
   const metadataValues = new WeakMap<MergedEntry, MergedMetadata>();
   const metadataValue = (entry: MergedEntry): MergedMetadata => {
     let value = metadataValues.get(entry);
@@ -159,6 +167,13 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
     if (next && !previous) member(next, true);
     if (next) entries[key] = next;
     else delete entries[key];
+    for (const value of [previous, next]) {
+      if (!value) continue;
+      const p = partitionKey(value.sidecarId, value.directory);
+      const partition = partitions.get(p)!;
+      partition.digesting = (partition.digesting ?? 0) +
+        (value.digest.state === "digesting" ? (value === next ? 1 : -1) : 0);
+    }
   };
   const members = (server: string, directory?: string) => {
     const key = partitionKey(server, directory);
@@ -177,6 +192,30 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
     },
   };
   const publish = (changed: Set<string>) => {
+    const progressChanged: string[] = [];
+    for (const key of touched) {
+      const partition = partitions.get(key);
+      if (!partition) continue;
+      partition.entries = undefined;
+      const busy = !!partition.digesting;
+      const announcement = partition.members.size && !busy
+        ? "Session summaries updated."
+        : "";
+      if (
+        partition.progress?.busy !== busy ||
+        partition.progress.announcement !== announcement
+      ) {
+        partition.progress = { busy, announcement };
+        progressChanged.push(key);
+      }
+    }
+    if (progressChanged.length) {
+      progressClock.update((draft) => {
+        for (const key of progressChanged) {
+          draft.keys[key] = (draft.keys[key] ?? 0) + 1;
+        }
+      });
+    }
     partitionClock.update((draft) => {
       for (const key of touched) draft.keys[key] = (draft.keys[key] ?? 0) + 1;
     });
@@ -215,10 +254,19 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
     children: (server, id) => [...(children.get(sessionKey(server, id)) ?? [])],
     changes: (server) => changes.get(server),
     partition: (server, directory) => {
-      void partitionClock.state.keys[partitionKey(server, directory)];
-      return members(server, directory).map((id) =>
-        entries[sessionKey(server, id)]
-      );
+      const key = partitionKey(server, directory);
+      void partitionClock.state.keys[key];
+      const partition = partitions.get(key);
+      return partition
+        ? partition.entries ??= members(server, directory).map((id) =>
+          entries[sessionKey(server, id)]
+        )
+        : [];
+    },
+    progress(server, directory) {
+      const key = partitionKey(server, directory);
+      void progressClock.state.keys[key];
+      return partitions.get(key)?.progress ?? { busy: false, announcement: "" };
     },
     catalog: (server, directory) => {
       const key = partitionKey(server, directory);
@@ -278,7 +326,13 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
           if (
             old.length !== next.length || old.some((id, i) => id !== next[i])
           ) {
-            partitions.set(p, { members, ids: next });
+            partitions.set(p, {
+              ...previous,
+              members,
+              ids: next,
+              catalog: undefined,
+              entries: undefined,
+            });
             membershipTouched.add(p);
             structural = true;
           }

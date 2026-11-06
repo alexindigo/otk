@@ -37,7 +37,9 @@ export function registerSessionsPanel(
               <ProjectSessions
                 project={project}
                 ready={shell.inbox(sidecarId).state.ready}
-                entries={shell.projectEntries(project)}
+                metadata={(id) => shell.metadataEntry(sidecarId, id)}
+                rows={(query) => shell.sessionRows(project, query)}
+                progress={shell.projectProgress(project)}
                 entry={(id) => shell.entry(project.sidecarId, id)}
                 interaction={shell.listInteraction(project)}
                 selected={shell.selection()}

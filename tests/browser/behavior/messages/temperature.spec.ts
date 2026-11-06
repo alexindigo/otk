@@ -5,7 +5,7 @@ import { openSession, wire } from "../../fixtures/wire.ts";
 import type { MessagePolicy } from "@otk/protocol";
 test.use({ profile: "messages-temperature" });
 test(
-  "messages.warm-cold-attention-preload-drafts",
+  "messages.warm-cold-selected-demand-drafts",
   { tag: ["@messages"] },
   async ({ isolatedState: state, page }, info) => {
     // The retention owner is createTranscripts' browser Date/setTimeout clock.
@@ -173,14 +173,13 @@ test(
       parts: [{ type: "text", text: "Wake the cold project" }],
     });
     await tick(() =>
-      expect.poll(() => settled(a.id, before).length).toBeGreaterThanOrEqual(
-        2,
-      )
+      expect(page.locator(`[data-project="${state.directory}"]`))
+        .toHaveAttribute("data-rollup", "working")
     );
     const initialReads = () =>
         pages(a.id).filter(({ frame }) => !frame.params?.before).length,
       initialBeforeClick = initialReads();
-    expect(pages(a.id).length).toBeGreaterThanOrEqual(before + 2);
+    expect(pages(a.id).length).toBe(before);
     expect(page.url().endsWith(a.id)).toBe(false);
     await page.getByRole("button", { name: "Collapse projects", exact: true })
       .click();
@@ -203,9 +202,8 @@ test(
       "Unsent temperature draft",
     );
     await paint("Wake the cold project");
-    expect(initialReads()).toBe(initialBeforeClick);
-    // A later finished attention edge also preloads while A is cold. Exercise
-    // the far side of that client's preload deadline before selecting it again.
+    expect(initialReads()).toBe(initialBeforeClick + 1);
+    // Finish metadata updates lamps while cold, without acquiring another body.
     await open(b.id);
     await page.clock.fastForward(policy.coolms + 1);
     const expiredSubscriptions =
@@ -215,18 +213,17 @@ test(
     const beforeFinish = pages(a.id).length;
     await state.release(held.gate);
     await tick(() =>
-      expect.poll(() => settled(a.id, beforeFinish).length)
-        .toBeGreaterThanOrEqual(
-          2,
-        )
+      expect(page.locator(`[data-project="${state.directory}"]`))
+        .toHaveAttribute("data-rollup", "finished")
     );
+    expect(pages(a.id).length).toBe(beforeFinish);
     const finishedInitial = initialReads();
     await page.clock.fastForward(policy.preloadms + 1);
     await expect.poll(() =>
       capture.sent.filter(({ frame }) =>
         frame.t === "unsubscribe" && frame.sessionID === a.id
       ).length
-    ).toBe(expiredSubscriptions + 1);
+    ).toBe(expiredSubscriptions);
     await open(a.id);
     expect(initialReads()).toBe(finishedInitial + 1);
     // Both retention deadlines are now observed. Resume normal animation frames

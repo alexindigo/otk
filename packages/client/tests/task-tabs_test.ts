@@ -40,7 +40,7 @@ const model = () =>
     throw Error("No promotion");
   });
 
-Deno.test("tab projection borrows each live resource input once for the whole population", () => {
+Deno.test("tab and crumb reads share cached keyed inputs instead of borrowing the population again", () => {
   const entries = Array.from({ length: 300 }, (_, i) => entry(`session-${i}`));
   const meta = inbox([task("task", [entries[0].id])]);
   const reads = { entries: 0, inbox: 0, taskActivity: 0 };
@@ -62,7 +62,10 @@ Deno.test("tab projection borrows each live resource input once for the whole po
   });
   reads.entries = reads.inbox = reads.taskActivity = 0;
   assertEquals(tabs.tabs().map((tab) => tab.id), ["task"]);
-  assertEquals(reads, { entries: 1, inbox: 1, taskActivity: 1 });
+  tabs.crumbs();
+  tabs.tabs();
+  tabs.entry(entries[0].id);
+  assertEquals(reads, { entries: 0, inbox: 1, taskActivity: 1 });
 });
 
 Deno.test("task tabs order by urgency then newest family activity, never stored order", () => {
@@ -105,6 +108,18 @@ Deno.test("task tabs order by urgency then newest family activity, never stored 
     "working",
     "idle",
   ]);
+});
+
+Deno.test("keyed task membership retains an explicitly grouped session before its index metadata arrives", () => {
+  const tabs = model();
+  tabs.update({
+    directory: "/p",
+    entries: [entry("a")],
+    inbox: inbox([task("task", ["a", "pending"])]),
+  });
+  tabs.select({ kind: "task", id: "task" }, "pending");
+  assertEquals(tabs.taskFor("pending")?.id, "task");
+  assertEquals(tabs.sessionFor("task"), "pending");
 });
 
 Deno.test("helpers roll up to their nearest task, never become phantom tabs, and finished helpers are quiet", () => {

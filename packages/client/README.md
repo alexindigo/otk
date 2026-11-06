@@ -278,10 +278,12 @@ the selected resource. The compatibility `state.content` references its
 canonical content. Model catalogs and usage leases retain their existing
 selected/open-detail owners. Tool-completion observers start a silent baseline
 on selection of an already-warm resource; hydration/history cannot trigger a
-historical agent switch. `createTranscriptScopes` derives active task families
-and initial/distinct attention edges from reduced server metadata; initial
-membership waits for inbox readiness. Visibility/Settings releases only screen
-demand. Metadata, drafts and seen/finish state are independent of body cooling.
+historical agent switch. `createTranscriptScopes` borrows task ownership from
+the shared project tabs selector. Its body demand contains only the selected
+session; crumbs and other task members remain metadata-only. Attention edges in
+other projects never preload transcripts. Initial membership waits for inbox
+readiness. Visibility/Settings releases only screen demand. Metadata, drafts and
+seen/finish state are independent of body cooling.
 
 `rpc.call(method, params, signal?)` derives its input and result types from
 `@otk/protocol`'s declaration-mergeable `RpcMethods` interface. Callers do not
@@ -684,12 +686,12 @@ idle phantom or replace the viewed identity with its root.
 `createServerResources({sidecars, index, factory?})` constructs its sidecar
 collection through the injected receiver factory and owns lazily cached inbox,
 approval and project-tab models. Its getters read live state; callers keep
-framework memoisation at their binding boundary. `tabSnapshot(project)` tracks
-current project inputs and returns source-free live accessors; `syncTabs`
-invalidates the model and previews the selected session only when needed.
-Retained tabs borrow current project partitions and inbox metadata, never
-detached whole-server entry/mark copies. Independent `createTabs` callers can
-still supply their own canonical references through `update`.
+framework memoisation at their binding boundary. `tabSnapshot(project)` borrows
+a stable semantic project snapshot; `syncTabs` reads invocation-current inputs
+and previews the selected session only when needed. Retained tabs borrow current
+project partitions and inbox metadata, never detached whole-server entry/mark
+copies. Independent `createTabs` callers can still supply their own canonical
+references through `update`.
 
 Frames reduce approvals, index and inbox before ordered observers run. An index
 gap requests a resnapshot and reaches observers with `accepted=false`, so
@@ -841,8 +843,18 @@ Hierarchy construction indexes parents, explicit membership, inherited ownership
 and child adjacency once, then walks iteratively. Deep chains cannot overflow
 the JavaScript stack; cycles and missing parents remain reachable. Task members
 retain explicit order. `createSessionTree().rows(...)` caches flattened keyed
-headings/session descriptors using structural/search inputs only. Live row facts
-continue to come from `ClientIndex.get`, never cached hierarchy entries.
+headings/session descriptors using stable structural/search inputs, without a
+serialized population signature. The project projection supplies those inputs
+through `ServerResources.sessionRows`. Live row facts continue to come from
+`ClientIndex.get`, never cached hierarchy entries.
+
+The same project owner supplies stable `projectMetadata` and keyed
+`metadataEntry` selectors to tabs, crumbs and Sessions. `ClientTabs.tabs` and
+`crumbs` share one keyed family/adjacency derivation; `entry` resolves crumb
+titles without a population search. `ClientIndex.partition` is cached by its
+partition clock, while `projectProgress` borrows incrementally maintained
+digest-state counts. Digest-only frames do not rebuild metadata or hierarchy
+inputs.
 
 `createWindow()` owns browser-independent measured viewport math. Supply ordered
 keys and role estimates with `update`, apply incremental sizes with `measure`,

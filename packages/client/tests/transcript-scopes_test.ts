@@ -9,6 +9,29 @@ import {
 } from "../mod.ts";
 import { shellEntry, shellFixture, shellTask } from "./shell-fixture.ts";
 
+Deno.test("pending inbox readiness cannot conflate different project scope keys", () => {
+  const f = shellFixture(), scopes: string[] = [];
+  f.resources.scope = (project) => {
+    if (project) scopes.push(project.directory);
+  };
+  const session = { demand() {}, transcripts: {} } as unknown as ClientSession;
+  const owner = createTranscriptScopes({ resources: f.resources, session });
+  try {
+    owner.update({
+      project: { sidecarId: "local", directory: "/p" },
+      screen: true,
+    });
+    owner.update({
+      project: { sidecarId: "local", directory: "/q" },
+      screen: true,
+    });
+    assertEquals(scopes, ["/p", "/q"]);
+  } finally {
+    owner.stop();
+    f.resources.stop();
+  }
+});
+
 Deno.test("ordinary digest metadata does not rebuild active body demand or scan the full catalog", () => {
   const f = shellFixture(), demands: TranscriptDemand[] = [];
   const session = {
@@ -74,7 +97,7 @@ Deno.test("ordinary digest metadata does not rebuild active body demand or scan 
   }
 });
 
-Deno.test("body scope uses nearest task ancestry, preserves member order, and visibility releases screen only", () => {
+Deno.test("body scope uses nearest task ancestry but admits only the selected session; crumbs stay metadata-only", () => {
   const f = shellFixture();
   const demands: TranscriptDemand[] = [];
   const preloads: {
@@ -128,8 +151,6 @@ Deno.test("body scope uses nearest task ancestry, preserves member order, and vi
       taskID: "task",
     });
     assertEquals(demands.at(-1)?.sessions.map((t) => t.sessionID), [
-      "sibling",
-      "root",
       "helper",
     ]);
     owner.update({
@@ -138,7 +159,7 @@ Deno.test("body scope uses nearest task ancestry, preserves member order, and vi
       screen: false,
     });
     assertEquals(demands.at(-1)?.selected, undefined);
-    assertEquals(demands.at(-1)?.sessions.length, 3);
+    assertEquals(demands.at(-1)?.sessions.length, 1);
     assertEquals(preloads, []);
   } finally {
     owner.stop();
@@ -146,7 +167,7 @@ Deno.test("body scope uses nearest task ancestry, preserves member order, and vi
   }
 });
 
-Deno.test("initial attentive metadata waits for task ownership; repeated busy/digest/seen frames cannot renew a preload edge", () => {
+Deno.test("initial and repeated attention/digest/finish metadata never preloads unselected task bodies", () => {
   const f = shellFixture();
   const preloads: unknown[][] = [];
   const session = {
@@ -175,12 +196,7 @@ Deno.test("initial attentive metadata waits for task ownership; repeated busy/di
       revision: 0,
       inbox,
     });
-    assertEquals(preloads.length, 1);
-    assertEquals(preloads[0][1], {
-      sidecarId: "local",
-      directory: "/p",
-      taskID: "task",
-    });
+    assertEquals(preloads, []);
     f.resources.receive("local", {
       t: "index.snapshot",
       rev: 1,
@@ -195,7 +211,7 @@ Deno.test("initial attentive metadata waits for task ownership; repeated busy/di
       revision: 0,
       inbox,
     });
-    assertEquals(preloads.length, 1);
+    assertEquals(preloads, []);
     f.resources.receive("local", {
       t: "index.snapshot",
       rev: 2,
@@ -207,21 +223,21 @@ Deno.test("initial attentive metadata waits for task ownership; repeated busy/di
       revision: 0,
       inbox: { ...inbox, finishes: { a: 9 } },
     });
-    assertEquals(preloads.length, 2);
+    assertEquals(preloads, []);
     f.resources.receive("local", {
       t: "inbox.snapshot",
       generation: "fixture",
       revision: 0,
       inbox: { ...inbox, finishes: { a: 9 } },
     });
-    assertEquals(preloads.length, 2);
+    assertEquals(preloads, []);
     f.resources.receive("local", {
       t: "inbox.snapshot",
       generation: "fixture",
       revision: 0,
       inbox: { ...inbox, finishes: { a: 10 } },
     });
-    assertEquals(preloads.length, 3);
+    assertEquals(preloads, []);
     assertEquals(f.calls, []);
   } finally {
     owner.stop();
@@ -229,7 +245,7 @@ Deno.test("initial attentive metadata waits for task ownership; repeated busy/di
   }
 });
 
-Deno.test("distinct new attention renews a scope while another request remains blocked, but resolution does not", () => {
+Deno.test("distinct cross-project attention edges cannot admit transcript preload demand", () => {
   const f = shellFixture(), preloads: unknown[][] = [];
   const session = {
     demand() {},
@@ -261,15 +277,15 @@ Deno.test("distinct new attention renews a scope while another request remains b
       },
     });
     snapshot(1);
-    assertEquals(preloads.length, 1);
+    assertEquals(preloads, []);
     snapshot(2);
-    assertEquals(preloads.length, 2);
+    assertEquals(preloads, []);
     snapshot(1);
-    assertEquals(preloads.length, 2);
+    assertEquals(preloads, []);
     snapshot(1, 1);
-    assertEquals(preloads.length, 3);
+    assertEquals(preloads, []);
     snapshot(1, 1);
-    assertEquals(preloads.length, 3);
+    assertEquals(preloads, []);
   } finally {
     owner.stop();
     f.resources.stop();

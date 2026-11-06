@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
-  type IndexEntry,
+  type IndexMetadata,
   sessionAncestors,
   type SessionLookup,
   type TaskRecord,
@@ -34,7 +34,7 @@ export function familySelection(
 }
 
 export interface SessionTreeRow {
-  session: IndexEntry;
+  session: IndexMetadata;
   depth: number;
   parentID?: string;
 }
@@ -47,7 +47,7 @@ export interface SessionTreeGroup {
  * their nearest grouped ancestor. Missing parents and cycles cannot hide rows.
  * Search keeps the ancestry of matching titles for orientation. */
 export function sessionTree(
-  entries: readonly IndexEntry[],
+  entries: readonly IndexMetadata[],
   tasks: readonly TaskRecord[],
   directory: string,
   query = "",
@@ -64,7 +64,7 @@ export function sessionTree(
   }
   const parents = new Map(sessions.map((e) => [e.id, e.parentID]));
   const ownership = new Map(explicit);
-  const groupFor = (entry: IndexEntry): string => {
+  const groupFor = (entry: IndexMetadata): string => {
     const path: string[] = [], seen = new Set<string>();
     let id: string | undefined = entry.id;
     while (id && byID.has(id) && !ownership.has(id) && !seen.has(id)) {
@@ -76,7 +76,7 @@ export function sessionTree(
     for (const key of path) ownership.set(key, group);
     return group;
   };
-  const buckets = new Map<string, IndexEntry[]>();
+  const buckets = new Map<string, IndexMetadata[]>();
   for (const session of sessions) {
     const id = groupFor(session);
     if (!buckets.has(id)) buckets.set(id, []);
@@ -90,7 +90,7 @@ export function sessionTree(
   }].map((group) => {
     const members = buckets.get(group.id) ?? [];
     const ids = new Set(members.map((e) => e.id));
-    const children = new Map<string, IndexEntry[]>();
+    const children = new Map<string, IndexMetadata[]>();
     for (const entry of members) {
       const parent = parents.get(entry.id);
       if (!parent || !ids.has(parent)) continue;
@@ -101,14 +101,14 @@ export function sessionTree(
     const visible = new Set<string>();
     for (const entry of members) {
       if (needle && !entry.title.toLocaleLowerCase().includes(needle)) continue;
-      let current: IndexEntry | undefined = entry;
+      let current: IndexMetadata | undefined = entry;
       while (current && ids.has(current.id) && !visible.has(current.id)) {
         visible.add(current.id);
         current = byID.get(parents.get(current.id) ?? "");
       }
     }
     const rows: SessionTreeRow[] = [], visited = new Set<string>();
-    const walk = (entry: IndexEntry) => {
+    const walk = (entry: IndexMetadata) => {
       const stack: SessionTreeRow[] = [{ session: entry, depth: 0 }];
       while (stack.length) {
         const row = stack.pop()!, id = row.session.id;
@@ -156,23 +156,45 @@ export type SessionListRow =
 /** Structural cache only: live status, attention and summaries stay in ClientIndex. */
 export function createSessionTree(): {
   rows(
-    entries: readonly IndexEntry[],
+    entries: readonly IndexMetadata[],
     tasks: readonly TaskRecord[],
     directory: string,
     query?: string,
   ): SessionListRow[];
 } {
-  let signature = "", result: SessionListRow[] = [];
+  let previousEntries: readonly IndexMetadata[] | undefined;
+  let previousTasks: readonly TaskRecord[] | undefined;
+  let previousDirectory = "", previousQuery = "", result: SessionListRow[] = [];
   return {
     rows(entries, tasks, directory, query = "") {
-      const next = JSON.stringify([
-        directory,
-        query.trim().toLocaleLowerCase(),
-        entries.map((e) => [e.id, e.parentID, e.directory, e.title]),
-        tasks.map((t) => [t.id, t.name, t.directory, t.order, t.sessions]),
-      ]);
-      if (signature === next) return result;
-      signature = next;
+      const needle = query.trim().toLocaleLowerCase();
+      const sameEntries = entries === previousEntries ||
+        (!!previousEntries && entries.length === previousEntries.length &&
+          entries.every((entry, i) => {
+            const previous = previousEntries![i];
+            return entry.id === previous.id &&
+              entry.directory === previous.directory &&
+              entry.parentID === previous.parentID &&
+              entry.title === previous.title;
+          }));
+      const sameTasks = tasks === previousTasks ||
+        (!!previousTasks && tasks.length === previousTasks.length &&
+          tasks.every((task, i) => {
+            const previous = previousTasks![i];
+            return task.id === previous.id && task.name === previous.name &&
+              task.directory === previous.directory &&
+              task.order === previous.order &&
+              task.sessions.length === previous.sessions.length &&
+              task.sessions.every((id, n) => id === previous.sessions[n]);
+          }));
+      if (
+        sameEntries && sameTasks && directory === previousDirectory &&
+        needle === previousQuery
+      ) return result;
+      previousEntries = entries;
+      previousTasks = tasks;
+      previousDirectory = directory;
+      previousQuery = needle;
       const groups = sessionTree(entries, tasks, directory, query);
       const size = groups.reduce((sum, group) => sum + group.rows.length, 0);
       let position = 0;

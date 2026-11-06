@@ -12,17 +12,24 @@ export function taskBreadcrumbs(
   task: Pick<TaskRecord, "id" | "directory" | "sessions">,
   entries: readonly (IndexMetadata & OperationAttention)[],
   tasks: readonly TaskRecord[] = [],
+  indexed?: ReadonlyMap<
+    string,
+    readonly (IndexMetadata & OperationAttention)[]
+  >,
 ): TaskCrumb[] {
   const delegated = new Set(
     tasks.filter((t) => t.directory === task.directory && t.id !== task.id)
       .flatMap((t) => t.sessions),
   );
-  const children = new Map<string, (IndexMetadata & OperationAttention)[]>();
-  for (const entry of entries) {
-    if (!entry.parentID || entry.directory !== task.directory) continue;
-    const siblings = children.get(entry.parentID) ?? [];
-    siblings.push(entry);
-    children.set(entry.parentID, siblings);
+  const collected = new Map<string, (IndexMetadata & OperationAttention)[]>();
+  const children = indexed ?? collected;
+  if (!indexed) {
+    for (const entry of entries) {
+      if (!entry.parentID || entry.directory !== task.directory) continue;
+      const siblings = collected.get(entry.parentID) ?? [];
+      siblings.push(entry);
+      collected.set(entry.parentID, siblings);
+    }
   }
   const visited = new Set(task.sessions), result: TaskCrumb[] = [];
   function helpers(parent: string) {

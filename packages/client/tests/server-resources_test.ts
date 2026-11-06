@@ -524,7 +524,7 @@ Deno.test("server resources project per-server attention and labelled projects f
   f.resources.stop();
 });
 
-Deno.test("server resource tab inputs borrow current metadata and sync only project selections", () => {
+Deno.test("server resource tabs cache semantic snapshots while commands and sync borrow invocation-current metadata", () => {
   const f = fixture(), p = { sidecarId: "local", directory: "/p" };
   f.receive("local", {
     t: "index.snapshot",
@@ -543,13 +543,10 @@ Deno.test("server resource tab inputs borrow current metadata and sync only proj
     snapshot.entries[0].attention,
     f.resources.entry("local", "session")!.attention,
   );
-  assertStrictEquals(snapshot.inbox.tasks[0], live.tasks[0]);
-  assertStrictEquals(
-    snapshot.inbox.tasks[0].sessions,
-    live.tasks[0].sessions,
-  );
-  assertStrictEquals(snapshot.inbox.seen, live.seen);
-  assertStrictEquals(snapshot.inbox.finishes, live.finishes);
+  assertEquals(snapshot.inbox.tasks[0], live.tasks[0]);
+  assertEquals(snapshot.inbox.seen, live.seen);
+  assertEquals(snapshot.inbox.finishes, live.finishes);
+  assertStrictEquals(snapshot, f.resources.tabSnapshot(p));
   f.receive("local", {
     t: "index.patch",
     rev: 1,
@@ -567,10 +564,12 @@ Deno.test("server resource tab inputs borrow current metadata and sync only proj
     revision: 0,
     inbox: { ...metadata(), tasks: [], seen: {}, finishes: {} },
   });
-  assertEquals(snapshot.entries[0].attention.permissions, 9);
-  assertEquals(snapshot.inbox.tasks, []);
-  assertEquals(snapshot.inbox.seen, {});
-  assertEquals(snapshot.inbox.finishes, {});
+  const current = f.resources.tabSnapshot(p);
+  assertNotStrictEquals(current, snapshot);
+  assertEquals(current.entries[0].attention.permissions, 9);
+  assertEquals(current.inbox.tasks, []);
+  assertEquals(current.inbox.seen, {});
+  assertEquals(current.inbox.finishes, {});
   f.resources.syncTabs(p, snapshot, { sidecarId: "local", sessionID: "other" });
   const tabs = f.resources.tabs(p);
   assertEquals(tabs.state.selected, undefined);
@@ -586,8 +585,8 @@ Deno.test("server resource tab inputs borrow current metadata and sync only proj
   });
   assertEquals(
     tabs.state.revision,
-    revision + 1,
-    "already-selected preview is not repeated",
+    revision,
+    "unchanged inputs and already-selected preview publish no invalidation",
   );
   f.resources.stop();
 });

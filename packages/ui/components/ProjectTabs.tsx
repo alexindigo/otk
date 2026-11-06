@@ -33,7 +33,6 @@ import {
   type SessionRename,
   summaryMeter,
   type TaskActions,
-  taskBreadcrumbs,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
 import EdgeTriangle from "./EdgeTriangle.tsx";
@@ -62,7 +61,8 @@ interface TaskContextTarget extends ProjectSelection {
 export default function ProjectTabs(props: {
   project: ProjectSelection;
   model: ClientTabs;
-  entries: MergedEntry[];
+  entries?: MergedEntry[];
+  currentEntry?(id: string): IndexEntry | undefined;
   inbox: InboxSnapshot;
   catalog?: ModelCatalog;
   entry?: IndexEntry;
@@ -89,7 +89,7 @@ export default function ProjectTabs(props: {
       props.model.state.selected?.kind === "task" &&
       t.id === props.model.state.selected.id
     );
-  const entry = (id: string) => props.entries.find((e) => e.id === id);
+  const entry = (id: string) => props.model.entry(id);
   const fail = (error: unknown) => {
     setError(failureText(error));
   };
@@ -182,24 +182,10 @@ export default function ProjectTabs(props: {
     "task.session.new",
     () => props.onCreateSession(active()),
   );
+  const tabs = createMemo(() => props.model.tabs());
   const crumbs = createMemo(() => {
-    const tab = props.model.tabs().find((tab) =>
-      tab.id === props.model.state.selected?.id
-    );
-    const task = active() ??
-      (tab
-        ? {
-          id: tab.id,
-          directory: props.project.directory,
-          sessions: tab.sessions,
-        }
-        : undefined);
-    if (!task) return [];
-    return taskBreadcrumbs(
-      task,
-      props.entries,
-      tasks(),
-    );
+    tabs();
+    return props.model.crumbs();
   });
   const required = () =>
     crumbs().filter((c) =>
@@ -210,7 +196,7 @@ export default function ProjectTabs(props: {
       }, "chip")
     ).map((c) => c.id);
   const tabRows = createMemo(() =>
-    props.model.tabs().map((tab) => ({ ...tab, key: `${tab.kind}/${tab.id}` }))
+    tabs().map((tab) => ({ ...tab, key: `${tab.kind}/${tab.id}` }))
   );
   let lane!: HTMLDivElement;
   const [edges, setEdges] = createSignal({ previous: false, next: false });
@@ -364,7 +350,9 @@ export default function ProjectTabs(props: {
                     {...selection({
                       class: "otk-tab-open " + (
                         tab().kind === "phantom"
-                          ? sessionState(entry(tab().id))
+                          ? sessionState(
+                            props.currentEntry?.(tab().id) ?? entry(tab().id),
+                          )
                           : ""
                       ) + (editing() ? " is-editing" : ""),
                       kind: "selected",
@@ -496,7 +484,10 @@ export default function ProjectTabs(props: {
                           ]}
                           {...selection({
                             class: `otk-session-crumb ${
-                              sessionState(entry(crumb().id))
+                              sessionState(
+                                props.currentEntry?.(crumb().id) ??
+                                  entry(crumb().id),
+                              )
                             }${editing() ? " is-editing" : ""}`,
                             kind: "current",
                             selected:

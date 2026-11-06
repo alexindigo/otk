@@ -440,6 +440,10 @@ export default function Shell(
           entries,
           entry,
           projectEntries: resources.projectEntries,
+          projectMetadata: resources.projectMetadata,
+          metadataEntry: resources.metadataEntry,
+          sessionRows: resources.sessionRows,
+          projectProgress: resources.projectProgress,
           listInteraction,
           selection: () => session.state.selection,
         }}
@@ -542,7 +546,8 @@ export default function Shell(
                         reserveTrailing={layout().rightCollapsed}
                         project={project()!}
                         model={tabsFor(project()!)}
-                        entries={resources.projectEntries(project()!)}
+                        currentEntry={(id) =>
+                          resources.entry(project()!.sidecarId, id)}
                         inbox={inbox(project()!.sidecarId).state.inbox}
                         entry={actions.selectedEntry()}
                         eligible={(target) => actions.eligibility(target).live}

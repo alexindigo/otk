@@ -37,6 +37,7 @@ import { createState, type StateFactory } from "./state.ts";
 import { type ClientTabs, createTabs, type TabInput } from "./tabs.ts";
 import { createTaskActions, type TaskActions } from "./task-actions.ts";
 import { requestAttention } from "./request-attention.ts";
+import type { SessionListRow } from "./session-tree.ts";
 import { createCatalogCodecs } from "@otk/protocol";
 import {
   type ClientDirectoryCatalogs,
@@ -83,6 +84,15 @@ export interface ServerResources {
   indexEntries(sidecar: string): readonly IndexEntry[];
   indexChanges(sidecar: string): IndexChanges | undefined;
   projectEntries(project: ProjectSelection): MergedEntry[];
+  projectMetadata(project: ProjectSelection): readonly MergedMetadata[];
+  metadataEntry(
+    sidecarId: string,
+    sessionID: string,
+  ): MergedMetadata | undefined;
+  sessionRows(project: ProjectSelection, query?: string): SessionListRow[];
+  projectProgress(
+    project: ProjectSelection,
+  ): { busy: boolean; announcement: string };
   projectRow(
     project: ProjectSelection,
     now: number,
@@ -366,22 +376,11 @@ export function createServerResources(o: {
     }
     return model;
   };
-  const tabInput = (p: ProjectSelection): TabInput => ({
-    directory: p.directory,
-    get taskActivity() {
-      return operationAttention(p.sidecarId).tasks;
-    },
-    get entries() {
-      return operationAttention(p.sidecarId).entries(
-        attention(p.sidecarId).entries(
-          o.index.catalog(p.sidecarId, p.directory),
-        ),
-      );
-    },
-    get inbox() {
-      return inbox(p.sidecarId).state.inbox;
-    },
-  });
+  const tabInput = (p: ProjectSelection): TabInput =>
+    projectOwner(p.sidecarId).input(
+      p.directory,
+      operationAttention(p.sidecarId).tasks,
+    );
   const tabs = (p: ProjectSelection): ClientTabs => {
     live();
     const key = `${p.sidecarId}/${p.directory}`;
@@ -506,6 +505,11 @@ export function createServerResources(o: {
       ),
     projectRow: (p, now, ageing) =>
       projectOwner(p.sidecarId).row(p.directory, now, ageing),
+    projectMetadata: (p) => tabInput(p).entries as readonly MergedMetadata[],
+    metadataEntry: (id, sessionID) => projectOwner(id).entry(sessionID),
+    sessionRows: (p, query) =>
+      projectOwner(p.sidecarId).rows(p.directory, query),
+    projectProgress: (p) => o.index.progress(p.sidecarId, p.directory),
     duplicateProjectName: (name) => {
       for (const s of sidecars.state.list) projectOwner(s.id);
       void nameClock.state.keys[name];
@@ -543,6 +547,7 @@ export function createServerResources(o: {
     },
     syncTabs(p, input, selected) {
       const model = tabs(p);
+      input = tabInput(p);
       model.update(input);
       const id = selected?.sessionID;
       if (

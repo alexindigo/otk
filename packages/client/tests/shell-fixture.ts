@@ -147,7 +147,7 @@ export function shellFixture(
     (id) => connections.get(id)!,
   );
   const entries = (id: string, rows: IndexEntry[]) =>
-    index.receive(id, { t: "index.snapshot", rev: 0, entries: rows });
+    resources.receive(id, { t: "index.snapshot", rev: 0, entries: rows });
   return {
     resources,
     session,

@@ -11,8 +11,10 @@ import {
   inboxStatus,
   type ListInteraction,
   type MergedEntry,
+  type MergedMetadata,
   type ProjectSelection,
   type Selection,
+  type SessionListRow,
   type SessionRename,
   usageCost,
 } from "@otk/client";
@@ -30,7 +32,10 @@ import { digestLabel, digestProgress } from "@otk/client";
 
 /** Reusable presentation of the client-owned task/session hierarchy. */
 export default function ProjectSessions(props: {
-  entries: MergedEntry[];
+  entries?: readonly MergedEntry[];
+  rows?(query: string): SessionListRow[];
+  progress?: { busy: boolean; announcement: string };
+  metadata?(id: string): MergedMetadata | undefined;
   entry?(id: string): IndexEntry | undefined;
   interaction?: ListInteraction;
   project?: ProjectSelection;
@@ -70,8 +75,8 @@ export default function ProjectSessions(props: {
   const rows = createMemo(() => {
     const project = props.project;
     return project && props.ready !== false
-      ? hierarchy.rows(
-        props.entries.filter((e) => e.sidecarId === project.sidecarId),
+      ? props.rows?.(query()) ?? hierarchy.rows(
+        (props.entries ?? []).filter((e) => e.sidecarId === project.sidecarId),
         props.inbox(project.sidecarId).tasks,
         project.directory,
         query(),
@@ -80,13 +85,12 @@ export default function ProjectSessions(props: {
   });
   const byKey = createMemo(() => new Map(rows().map((row) => [row.key, row])));
   const keys = createMemo(() => rows().map((row) => row.key));
-  const currentEntries = createMemo(() =>
-    new Map(props.entries.map((entry) => [entry.id, entry]))
-  );
   const merged = (id: string): MergedEntry => {
-    const raw = props.entry?.(id), projected = currentEntries().get(id);
+    const raw = props.entry?.(id),
+      projected = props.metadata?.(id) ??
+        props.entries?.find((e) => e.id === id);
     // Keyed authoritative facts; approval attention stays with its existing
-    // shared projection. This map borrows rows, it owns no replicated state.
+    // shared projection. Rows borrow current facts, never a replicated entry map.
     return raw
       ? {
         ...raw,
@@ -94,7 +98,7 @@ export default function ProjectSessions(props: {
         attention: projected?.attention ?? raw.attention,
         operationStatus: projected?.operationStatus,
       }
-      : projected!;
+      : projected as MergedEntry;
   };
   const cost = (id: string) => {
     if (props.cost) return props.cost(id);
@@ -114,8 +118,8 @@ export default function ProjectSessions(props: {
       : `Exact session cost: ${usageCost(value, "exact")}`;
   };
   const progress = createMemo(() =>
-    digestProgress(
-      props.entries.filter((entry) =>
+    props.progress ?? digestProgress(
+      (props.entries ?? []).filter((entry) =>
         entry.sidecarId === props.project?.sidecarId &&
         entry.directory === props.project.directory
       ),

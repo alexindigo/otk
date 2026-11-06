@@ -37,6 +37,10 @@ export interface ShellPorts {
   entries(): MergedEntry[];
   entry(server: string, session: string): IndexEntry | undefined;
   projectEntries(project: ProjectSelection): MergedEntry[];
+  projectMetadata: import("@otk/client").ServerResources["projectMetadata"];
+  metadataEntry: import("@otk/client").ServerResources["metadataEntry"];
+  sessionRows: import("@otk/client").ServerResources["sessionRows"];
+  projectProgress: import("@otk/client").ServerResources["projectProgress"];
   listInteraction(project: ProjectSelection, task?: string): ListInteraction;
   selection(): Selection | undefined;
 }

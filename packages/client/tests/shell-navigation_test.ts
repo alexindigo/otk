@@ -792,6 +792,12 @@ for (const status of ["working", "blocked", "finished"] as const) {
       entry.attention.permissions = 0;
       f.entries("local", [entry]);
       inbox.seen["tstv1-selected"] = 11;
+      f.resources.receive("local", {
+        t: "inbox.snapshot",
+        generation: "fixture",
+        revision: 0,
+        inbox,
+      });
       tabs.update(
         f.resources.tabSnapshot({ sidecarId: "local", directory: "/p" }),
       );
