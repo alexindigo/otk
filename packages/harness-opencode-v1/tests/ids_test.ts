@@ -2,6 +2,7 @@
 import { cfg } from "../../../tests/support/config.ts";
 import { fixtureMessagePolicy } from "../../../tests/support/message-pages.ts";
 import { assertEquals, assertRejects, assertThrows } from "@std/assert";
+import { DatabaseSync } from "node:sqlite";
 import { OpencodeV1Adapter, opencodeV1SessionID as ids } from "../mod.ts";
 import { isSessionID } from "@otk/protocol";
 import { tempDir, test } from "../../../tests/support/resources.ts";
@@ -128,12 +129,28 @@ test("public adapter qualifies every capability boundary, including externally c
   const question = { id: "que_request", sessionID: child.id, questions: [] };
   const calls: { path: string; body: Record<string, unknown> | undefined }[] =
     [];
+  const activityDB = (await tempDir("ids-")) + "/activity.db";
+  const db = new DatabaseSync(activityDB);
+  db.exec(
+    "CREATE TABLE session(id TEXT,directory TEXT,time_updated INTEGER); CREATE TABLE message(id TEXT,session_id TEXT,data TEXT)",
+  );
+  db.prepare("INSERT INTO session VALUES(?,?,?)").run(
+    root.id,
+    root.directory,
+    Date.now(),
+  );
+  db.prepare("INSERT INTO message VALUES(?,?,?)").run(
+    "message",
+    root.id,
+    JSON.stringify({ role: "user" }),
+  );
+  db.close();
   const adapter = new OpencodeV1Adapter(
     {
       ...cfg(),
       harness: {
         url: "http://native.invalid",
-        db: (await tempDir("ids-")) + "/missing.db",
+        db: activityDB,
         username: "",
         password: "",
         heartbeattimeout: 25,

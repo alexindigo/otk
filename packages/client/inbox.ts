@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { DEFAULT_PROJECT_AGEING } from "@otk/protocol";
+import { DEFAULT_PROJECT_AGEING, PROJECT_STATUS_PRIORITY } from "@otk/protocol";
 import type {
   InboxBaseline,
   InboxOp,
@@ -19,14 +19,7 @@ import { projectName } from "./project-navigation.ts";
 import { relativeTime } from "./format.ts";
 import type { IntentGroups, RequestOptions } from "./requests.ts";
 /** Attention first. All aggregate lights use this one immutable priority order. */
-export const INBOX_STATUS_PRIORITY = Object.freeze(
-  [
-    "blocked",
-    "finished",
-    "working",
-    "idle",
-  ] as const,
-);
+export const INBOX_STATUS_PRIORITY = Object.freeze(PROJECT_STATUS_PRIORITY);
 export type InboxStatus = typeof INBOX_STATUS_PRIORITY[number];
 export interface OperationAttention {
   operationStatus?: InboxStatus;
@@ -225,6 +218,8 @@ export function createInbox(
     },
   };
   let generation: string | undefined, revision = -1, epoch = 0, alive = true;
+  let summaryRevision = 0;
+  let observedSummary: { generation: string; revision: number } | undefined;
   let recoveryController: AbortController | undefined;
   let recovering: Promise<void> | undefined;
   let observed: { generation: string; revision: number } | undefined;
@@ -234,9 +229,13 @@ export function createInbox(
   };
   const baseline = (value: InboxBaseline) => {
     if (generation !== undefined && value.generation !== generation) return;
-    if (value.generation === generation && value.revision < revision) return;
+    if (
+      value.generation === generation && (value.revision < revision ||
+        (value.summaryRevision ?? 0) < summaryRevision)
+    ) return;
     generation = value.generation;
     revision = value.revision;
+    summaryRevision = value.summaryRevision ?? 0;
     current.inbox = {
       ...value.inbox,
       projects: [...value.inbox.projects],
@@ -266,7 +265,7 @@ export function createInbox(
         const value = await rpc.call("inbox.get", {}, controller.signal);
         if (!alive || at !== epoch || controller.signal.aborted) return;
         if (
-          observed && generation === observed.generation &&
+          observed && !observedSummary && generation === observed.generation &&
           revision >= observed.revision
         ) {
           observed = undefined;
@@ -278,9 +277,18 @@ export function createInbox(
           observed?.generation === value.generation &&
           observed.revision > value.revision
         ) continue;
+        if (
+          observedSummary?.generation === value.generation &&
+          observedSummary.revision > (value.summaryRevision ?? 0)
+        ) continue;
+        if (
+          value.generation === generation &&
+          (value.summaryRevision ?? 0) < summaryRevision
+        ) continue;
         if (generation !== value.generation) generation = undefined;
         baseline(value);
         observed = undefined;
+        observedSummary = undefined;
         return;
       }
     })().catch((error) => {
@@ -372,8 +380,10 @@ export function createInbox(
         recoveryController = undefined;
         generation = undefined;
         revision = -1;
+        summaryRevision = 0;
         recovering = undefined;
         observed = undefined;
+        observedSummary = undefined;
       } else if (frame.t === "inbox.snapshot") {
         baseline(frame);
         if (
@@ -383,6 +393,42 @@ export function createInbox(
           observed = undefined;
           recoveryController?.abort();
         }
+      } else if (frame.t === "inbox.summaries") {
+        if (
+          frame.generation === generation && frame.revision <= summaryRevision
+        ) return;
+        if (
+          frame.generation !== generation || frame.from !== summaryRevision ||
+          frame.revision !==
+            frame.from + frame.summaries.length + (frame.remove?.length ?? 0)
+        ) {
+          observedSummary = {
+            generation: frame.generation,
+            revision: frame.revision,
+          };
+          recover();
+          return;
+        }
+        summaryRevision = frame.revision;
+        for (const summary of frame.summaries) {
+          (current.inbox.summaries ??= {})[summary.directory] = summary;
+        }
+        for (const directory of frame.remove ?? []) {
+          delete current.inbox.summaries?.[directory];
+        }
+        clock.update((draft) => {
+          draft.revision++;
+        });
+        publish({
+          baseline: false,
+          projects: [
+            ...frame.summaries.map((s) => s.directory),
+            ...frame.remove ?? [],
+          ],
+          sessions: [],
+          tasks: false,
+          discovery: false,
+        });
       } else if (frame.t === "inbox.patch") {
         if (frame.generation === generation && frame.revision <= revision) {
           return;

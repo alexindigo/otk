@@ -152,6 +152,29 @@ export function startApplication(
       )
       : undefined;
     if (approvals) sources.push(approvals);
+    if (approvals) {
+      inbox.approvalAttention((id) => {
+        const entry = index.getMetadata(id);
+        if (!entry || approvals.owner(id)) return 0;
+        let count = entry.attention.permissions +
+          entry.attention.childPermissions;
+        if (!entry.attention.childPermissions) return count;
+        for (const childID of index.descendants(id)) {
+          if (childID === id) continue;
+          const child = index.getMetadata(childID);
+          if (
+            !child || !approvals.owner(childID) ||
+            child.parentID && approvals.owner(child.parentID)
+          ) continue;
+          count -= child.attention.permissions +
+            child.attention.childPermissions;
+        }
+        return Math.max(0, count);
+      }, (changed) =>
+        approvals.listen((frame) => {
+          if (frame.t === "approvals") changed();
+        }));
+    }
     approvals?.register(rpc);
     registerPermissions(
       rpc,

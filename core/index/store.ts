@@ -4,6 +4,18 @@ import type { ServerFrame } from "@otk/protocol";
 import { SessionIndex } from "@otk/harness";
 import type { SectionObserver } from "../diagnostics.ts";
 export class IndexStore extends SessionIndex {
+  #authority = new Set<(value: "current" | "stale" | "unknown") => void>();
+  observeAuthority(
+    listener: (value: "current" | "stale" | "unknown") => void,
+  ): () => void {
+    this.#authority.add(listener);
+    return () => {
+      this.#authority.delete(listener);
+    };
+  }
+  projectAuthority(value: "current" | "stale" | "unknown"): void {
+    for (const listener of this.#authority) listener(value);
+  }
   constructor(readonly diagnostics?: SectionObserver) {
     super();
   }

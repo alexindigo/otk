@@ -11,6 +11,8 @@ export interface SessionMetadata {
   timeUpdated: number;
   archived: boolean;
   status: "idle" | "busy" | "retry";
+  /** Missing retains the standalone harness's authoritative metadata contract. */
+  activityAuthority?: "current" | "stale" | "unknown";
   retry?: { attempt: number; message: string; next: number };
   attention: {
     permissions: number;

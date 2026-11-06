@@ -781,7 +781,21 @@ export class OpencodeV1DigestSink implements DigestSink {
     }
     let hints: string[] | undefined;
     try {
-      hints = this.#nativeVerified ? this.#native?.hints() : undefined;
+      if (this.#nativeVerified && this.#native) {
+        const candidates = new Set<string>();
+        for (let at = 0; at < entries.length; at += this.policy.batch) {
+          current();
+          for (
+            const directory of this.#native.hints(
+              entries.slice(at, at + this.policy.batch).map((entry) =>
+                entry.id
+              ),
+            )
+          ) candidates.add(directory);
+          await this.wait(new Promise((resolve) => setTimeout(resolve, 0)));
+        }
+        hints = [...candidates];
+      }
     } catch (error) {
       this.storage.diagnostic(undefined, error);
     }

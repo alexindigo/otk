@@ -201,6 +201,16 @@ full upserts leave metadata, project and attention reader clocks unchanged.
 Request attention borrows keyed session lookups and is cached until request or
 metadata changes.
 
+When supplied, server-owned inbox `summaries` govern project lamps, counts,
+unseen state and recency, with local request attention overlaid by its existing
+owner. Additive `inbox.summaries` frames have their own revision fence and share
+complete-inbox gap recovery. Unknown native activity never paints an idle lamp.
+Standalone consumers without summaries retain the metadata projection contract.
+Until summary authority is current and its counts are known, the P3 projection
+borrows retained per-session attention and seen/finish facts. Unknown scalar
+counts remain null; absent activity/unread authority is presented as unknown,
+never an invented idle lamp or seen mark. Ready summaries replace that fallback.
+
 The inbox owns accepted metadata synchronously and publishes a binding clock,
 matching the keyed index: projection observers and commands never wait for a
 framework to expose an accepted mark, task or project update.

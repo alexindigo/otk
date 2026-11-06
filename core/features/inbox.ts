@@ -7,6 +7,7 @@ import {
   type IndexEntry,
   isSessionID,
   type ProjectRecord,
+  type ProjectSummary,
   type ServerFrame,
   type TaskRecord,
 } from "@otk/protocol";
@@ -20,6 +21,7 @@ import type {
   Tasks,
 } from "@otk/store";
 import type { IndexStore } from "../index/store.ts";
+import { ProjectSummaries } from "../index/project-summaries.ts";
 import type { FrameSource } from "../ws/connections.ts";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID, text } from "../ws/params.ts";
@@ -54,6 +56,7 @@ export interface InboxStores {
   templates: ProjectTemplates;
 }
 interface InboxMaps {
+  summaries: Map<string, ProjectSummary>;
   projects: Map<string, ProjectRecord>;
   tasks: Map<string, TaskRecord>;
   seen: Map<string, number>;
@@ -71,6 +74,8 @@ export class InboxFeature implements FrameSource {
   #generation = crypto.randomUUID();
   #revision = 0;
   #pending = new Map<string, InboxOp>();
+  #summaryPending = new Map<string, ProjectSummary | null>();
+  #summaryRevision = 0;
   #projects = new Map<string, ProjectRecord>();
   #tasks = new Map<string, TaskRecord>();
   #templates: string[] = [];
@@ -83,6 +88,7 @@ export class InboxFeature implements FrameSource {
   #finishes = new Map<string, number>();
   #assemblies = new Set<InboxAssembly>();
   #user = "";
+  readonly summaries: ProjectSummaries;
   constructor(
     readonly stores: InboxStores,
     readonly index: IndexStore,
@@ -103,11 +109,48 @@ export class InboxFeature implements FrameSource {
       marks.set(session, time);
       this.#seen.set(user, marks);
     }
+    this.summaries = new ProjectSummaries(
+      (id) => ({
+        seen: this.#seen.get(this.user)?.get(id) ?? 0,
+        finish: this.#finishes.get(id) ?? 0,
+      }),
+      (summary) => {
+        this.#capture("summaries", summary.directory);
+        this.#summaryPending.set(summary.directory, summary);
+        this.#schedule();
+      },
+      (directory) => {
+        this.#capture("summaries", directory);
+        this.#summaryPending.set(directory, null);
+        this.#schedule();
+      },
+    );
+    for (const project of this.#projects.values()) {
+      this.summaries.ensure(project.directory);
+    }
+    for (const entry of index.snapshotEntries()) {
+      const { digest: _digest, ...metadata } = entry;
+      this.summaries.entry(metadata);
+    }
     this.#stops.push(
-      index.observe((entry, previous) => this.#observe(entry, previous)),
+      index.observe((entry, previous, delta) => {
+        if (
+          delta &&
+          JSON.stringify(entry.deleted) === JSON.stringify(previous?.deleted)
+        ) return;
+        this.#observe(entry, previous);
+        const { digest: _digest, ...metadata } = entry;
+        this.summaries.entry(metadata);
+        if (previous && entry.parentID !== previous.parentID) {
+          this.summaries.refresh();
+        }
+      }),
+      index.observeRemoval((id) => this.summaries.remove(id)),
+      index.observeAuthority((value) => this.summaries.authority(value)),
       stores.projects.listen((change) => {
         this.#identity();
         for (const project of change.upsert) {
+          this.summaries.ensure(project.directory);
           const known = this.#policies.find((policy) =>
             policy.user === change.user &&
             policy.directory === project.directory
@@ -140,9 +183,11 @@ export class InboxFeature implements FrameSource {
             });
           }
         }
+        this.#summaryDirectories();
       }),
       stores.finishes.listen(({ session, time }) => {
         this.#finishes.set(session, time);
+        this.summaries.mark(session);
         this.#capture("finishes", session);
         this.#queue(`finish:${session}`, {
           op: "finish",
@@ -156,6 +201,7 @@ export class InboxFeature implements FrameSource {
         marks.set(session, time);
         this.#seen.set(user, marks);
         if (user === this.user) {
+          this.summaries.mark(session);
           this.#capture("seen", session);
           this.#queue(`seen:${session}`, {
             op: "seen",
@@ -187,6 +233,16 @@ export class InboxFeature implements FrameSource {
   get user(): string {
     return typeof this.identity === "string" ? this.identity : this.identity();
   }
+  approvalAttention(
+    permissions: (id: string) => number,
+    listen: (changed: () => void) => () => void,
+  ): void {
+    this.summaries.permissions(permissions);
+    this.#stops.push(listen(() => this.summaries.refresh()));
+  }
+  #summaryDirectories(): void {
+    this.summaries.retain([...this.#projects.keys(), ...this.#discovered]);
+  }
   #identity(): void {
     const user = this.user;
     if (user === this.#user) return;
@@ -200,6 +256,9 @@ export class InboxFeature implements FrameSource {
     this.#generation = crypto.randomUUID();
     this.#revision = 0;
     this.#pending.clear();
+    this.#summaryPending.clear();
+    this.#summaryRevision = 0;
+    this.summaries?.refresh();
   }
   get(): InboxSnapshot {
     this.#identity();
@@ -214,6 +273,7 @@ export class InboxFeature implements FrameSource {
       finishes: Object.fromEntries(this.#finishes),
       pathTemplates: [...this.#templates],
       discovered: [...this.#discovered],
+      summaries: Object.fromEntries(this.summaries.values),
       ...(this.#discoveryError ? { discoveryError: this.#discoveryError } : {}),
     };
   }
@@ -230,6 +290,7 @@ export class InboxFeature implements FrameSource {
       const assembly: InboxAssembly = { dirty: new Map(), overflow: false };
       this.#assemblies.add(assembly);
       const maps: InboxMaps = {
+        summaries: new Map(),
         projects: new Map(),
         tasks: new Map(),
         seen: new Map(),
@@ -258,13 +319,14 @@ export class InboxFeature implements FrameSource {
         await copy(source.tasks, maps.tasks);
         await copy(source.seen, maps.seen);
         await copy(source.finishes, maps.finishes);
+        await copy(source.summaries, maps.summaries);
         this.#flush();
         if (assembly.overflow || generation !== this.#generation) continue;
         const current = this.#maps();
         for (const { kind, id } of assembly.dirty.values()) {
           const target = maps[kind] as Map<
             string,
-            ProjectRecord | TaskRecord | number
+            ProjectRecord | TaskRecord | ProjectSummary | number
           >;
           const value = current[kind].get(id);
           if (value === undefined) target.delete(id);
@@ -281,11 +343,17 @@ export class InboxFeature implements FrameSource {
           finishes: Object.fromEntries(maps.finishes),
           pathTemplates: [...this.#templates],
           discovered: [...this.#discovered],
+          summaries: Object.fromEntries(maps.summaries),
           ...(this.#discoveryError
             ? { discoveryError: this.#discoveryError }
             : {}),
         };
-        return { generation, revision: this.#revision, inbox };
+        return {
+          generation,
+          revision: this.#revision,
+          summaryRevision: this.#summaryRevision,
+          inbox,
+        };
       } finally {
         this.#assemblies.delete(assembly);
       }
@@ -293,6 +361,7 @@ export class InboxFeature implements FrameSource {
   }
   #maps(): InboxMaps {
     return {
+      summaries: this.summaries.values,
       projects: this.#projects,
       tasks: this.#tasks,
       seen: this.#seen.get(this.#user) ?? new Map(),
@@ -326,6 +395,9 @@ export class InboxFeature implements FrameSource {
   }
   #queue(key: string, op: InboxOp): void {
     this.#pending.set(key, op);
+    this.#schedule();
+  }
+  #schedule(): void {
     if (this.#scheduled || this.#closed) return;
     this.#scheduled = true;
     queueMicrotask(() => {
@@ -335,6 +407,25 @@ export class InboxFeature implements FrameSource {
     });
   }
   #flush(): void {
+    if (this.#summaryPending.size && !this.#closed) {
+      const summaries: ProjectSummary[] = [], remove: string[] = [];
+      for (const [directory, summary] of this.#summaryPending) {
+        if (summary) summaries.push(summary);
+        else remove.push(directory);
+      }
+      this.#summaryPending.clear();
+      const from = this.#summaryRevision;
+      this.#summaryRevision += summaries.length + remove.length;
+      const frame: ServerFrame = {
+        t: "inbox.summaries",
+        generation: this.#generation,
+        from,
+        revision: this.#summaryRevision,
+        summaries,
+        ...(remove.length ? { remove } : {}),
+      };
+      for (const listener of this.#listeners) listener(structuredClone(frame));
+    }
     if (!this.#pending.size || this.#closed) return;
     const ops = [...this.#pending.values()];
     this.#pending.clear();
@@ -403,6 +494,7 @@ export class InboxFeature implements FrameSource {
       const paths = await this.scan(this.#templates);
       if (this.#closed || version !== this.#scanVersion) return;
       this.#discovered = paths;
+      this.#summaryDirectories();
     } catch (error) {
       if (this.#closed || version !== this.#scanVersion) return;
       this.#discoveryError = errorMessage(error);

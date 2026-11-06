@@ -46,14 +46,25 @@ function startBackend(
   index: IndexStore,
   connections: Connections,
 ): Promise<void> {
+  let authoritySupplied = false;
   return backend.core.start({
     index,
-    connection: (state) => connections.connection(state),
+    connection: (state) => {
+      if (state !== "connected") index.projectAuthority("stale");
+      connections.connection(state);
+    },
+    projectAuthority: (value) => {
+      authoritySupplied = true;
+      index.projectAuthority(value);
+    },
     indexReset: (entries) => index.resetMetadata(entries),
     indexUpsert: (entry) => index.upsertMetadata(entry),
     indexRemove: (id) => index.remove(id),
     content: (id, event, clock) => connections.content(id, event, clock),
-    bootstrapComplete: () => connections.broadcast({ t: "bootstrap.complete" }),
+    bootstrapComplete: () => {
+      if (!authoritySupplied) index.projectAuthority("current");
+      connections.broadcast({ t: "bootstrap.complete" });
+    },
     invalidate: (value) =>
       connections.broadcast({ t: "transcript.invalidated", ...value }),
   });

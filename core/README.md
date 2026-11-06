@@ -482,6 +482,14 @@ hydration. Connections subscribe before awaiting generic source snapshots;
 closed sockets cancel assembly. The browser's inbox owner fences stale/gapped
 baselines and patches independently of the session-index owner.
 
+`ProjectSummaries` owns keyed scalar project status, session/unseen counts and
+recency. Metadata/SSE and committed marks update contributions; digest-only
+changes do no summary work. Inbox baselines include `summaries` and their
+independent revision; additive `inbox.summaries` frames publish changed
+projects. Automatic-permission coverage borrows the existing policy owner.
+Unknown native activity is explicit, and disconnect retains last-good facts as
+stale. No row requires session metadata to render its lamp or counts.
+
 ## Worker-backed digest services
 
 `core/digest/worker.ts` is an application composition root over public store,

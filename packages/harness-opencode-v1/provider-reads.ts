@@ -21,5 +21,7 @@ export const opencodeV1ReadCodecs: ProviderReadCodecs = {
   "catalog.models": catalogModelCodec,
   "catalog.resources": arrayReadCodec(),
   "catalog.questions": arrayReadCodec(),
+  "activity.status": arrayReadCodec(),
+  "activity.permissions": arrayReadCodec(),
   "catalog.files": catalogFileCodec,
 };

@@ -8,6 +8,9 @@ export function connectionPublication(
 ): HarnessSink {
   return {
     index: sink.index,
+    projectAuthority: (activity) => {
+      if (!signal.aborted) sink.projectAuthority?.(activity);
+    },
     connection: (state) => {
       if (!signal.aborted) sink.connection(state);
     },

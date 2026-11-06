@@ -110,9 +110,9 @@ export class DigestNativeDb {
     const stat = Deno.statSync(this.file);
     return `${stat.dev}:${stat.ino}:${stat.birthtime?.getTime() ?? ""}`;
   }
-  hints(): string[] {
+  hints(sessions: readonly string[]): string[] {
     this.observe?.("hints");
-    return runningDirectories(this.db, 0);
+    return runningDirectories(this.db, 0, sessions.map(ids.decode));
   }
   catalog(after: string, limit: number): SessionMetadata[] {
     this.observe?.("catalog");

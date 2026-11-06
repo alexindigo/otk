@@ -153,7 +153,10 @@ export default function ProjectInbox(props: {
         data-project-sessions={project().sessionIDs}
         data-inactive={project().inactive ? "true" : "false"}
         data-source={project().source}
-        data-rollup={project().status}
+        data-rollup={project().activityKnown === false
+          ? "unknown"
+          : project().status}
+        data-summary-authority={project().summary?.authority}
       >
         <SelectionContent class="otk-project-content">
           <button
@@ -163,13 +166,20 @@ export default function ProjectInbox(props: {
               duplicate() ? ` on ${project().label}` : ""
             }`}
             title={`${project().directory} · ${project().label}${
-              project().source === "template" ? "" : ` · ${project().status}`
+              project().source === "template"
+                ? ""
+                : ` - ${
+                  project().activityKnown === false
+                    ? "Activity unknown"
+                    : project().status
+                }`
             }`}
             onClick={() => void open(project())}
           >
             <span class="otk-project-marker">
               <Show
-                when={project().source !== "template"}
+                when={project().source !== "template" &&
+                  project().activityKnown !== false}
                 fallback={collapsed() ? name().slice(0, 1) : undefined}
               >
                 <StatusLight state={project().status} />
@@ -179,7 +189,11 @@ export default function ProjectInbox(props: {
               <span class="otk-project-name-line">
                 <span
                   class={`otk-project-name otk-age-${project().ageing}`}
-                  data-unread={project().unread ? "true" : "false"}
+                  data-unread={project().unreadKnown === false
+                    ? "unknown"
+                    : project().unread
+                    ? "true"
+                    : "false"}
                 >
                   {name()}
                 </span>

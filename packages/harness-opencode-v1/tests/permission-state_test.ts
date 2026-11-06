@@ -128,8 +128,8 @@ test("native pending permission events own normalized family reads and removal w
     ]);
     assertEquals(
       reads,
-      1,
-      "Family reads must not repeat the bootstrap inventory",
+      0,
+      "Event-owned family reads must not create native inventories",
     );
     await port.replyPermission({
       sessionID: "opcv1-child",

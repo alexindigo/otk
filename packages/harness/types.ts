@@ -38,6 +38,8 @@ export interface HarnessSink {
   indexReset(entries: SessionMetadata[]): void;
   indexUpsert(entry: SessionMetadata): void;
   indexRemove(sessionID: string): void;
+  /** Complete scalar catalog/activity authority, independently of digest readiness. */
+  projectAuthority?(activity: "current" | "unknown"): void;
   content(sessionID: string, op: ContentOp, clock?: ContentClock): void;
   bootstrapComplete(): void;
   invalidate(value: TranscriptInvalidation): void;

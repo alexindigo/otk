@@ -44,10 +44,13 @@ hiddenTest(
         page.getByRole("tab", { name: "Quiet automatic session", exact: true }),
       ).toBeVisible();
       await expect(
-        page.getByRole("button", {
-          name: "Quiet automatic session",
-          exact: true,
-        }),
+        page.getByRole("navigation", { name: "Task sessions" }).getByRole(
+          "button",
+          {
+            name: "Quiet automatic session",
+            exact: true,
+          },
+        ),
       ).toBeVisible();
     };
     await ax();

@@ -24,17 +24,19 @@ function priorityDefinitions(text: string): number {
     return new Set(values.filter((v) => states.has(v))).size > 1;
   }).length;
 }
-Deno.test("light priority has exactly one production definition at the client inbox owner", async () => {
+Deno.test("light priority has exactly one production definition in the shared inbox contract", async () => {
   const definitions: string[] = [];
   for (const [path, text] of await productionSources()) {
     if (!/\.tsx?$/.test(path)) continue;
     for (let i = 0; i < priorityDefinitions(text); i++) definitions.push(path);
   }
-  assertEquals(definitions, ["packages/client/inbox.ts"]);
-  const owner = new Source(await Deno.readTextFile("packages/client/inbox.ts"));
+  assertEquals(definitions, ["packages/protocol/inbox.ts"]);
+  const owner = new Source(
+    await Deno.readTextFile("packages/protocol/inbox.ts"),
+  );
   assert(owner.all.some((n) =>
     n.type === "VariableDeclarator" &&
-    owner.name(n.id) === "INBOX_STATUS_PRIORITY"
+    owner.name(n.id) === "PROJECT_STATUS_PRIORITY"
   ));
 });
 Deno.test("priority ownership detects reordered lists and numeric rank maps without treating labels as ranks", () => {

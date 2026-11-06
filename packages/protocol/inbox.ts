@@ -44,6 +44,21 @@ export interface TaskRecord {
   order: number;
   sessions: string[];
 }
+export const PROJECT_STATUS_PRIORITY = [
+  "blocked",
+  "finished",
+  "working",
+  "idle",
+] as const;
+export type ProjectStatus = typeof PROJECT_STATUS_PRIORITY[number];
+export interface ProjectSummary {
+  directory: string;
+  status: ProjectStatus | null;
+  sessionCount: number | null;
+  unseenCount: number | null;
+  lastActivity: number | null;
+  authority: "current" | "stale" | "unknown";
+}
 export interface InboxSnapshot {
   projects: ProjectRecord[];
   tasks: TaskRecord[];
@@ -53,6 +68,8 @@ export interface InboxSnapshot {
   /** Server-side template discovery; index discovery is projected from the index. */
   discovered?: string[];
   discoveryError?: string;
+  /** Additive server-owned scalar projection; no session data is needed by rows. */
+  summaries?: Record<string, ProjectSummary>;
 }
 export interface InboxVersion {
   generation: string;
@@ -60,6 +77,7 @@ export interface InboxVersion {
 }
 export interface InboxBaseline extends InboxVersion {
   inbox: InboxSnapshot;
+  summaryRevision?: number;
 }
 export type InboxOp =
   | { op: "project.upsert"; project: ProjectRecord }

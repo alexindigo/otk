@@ -1,5 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { InboxSnapshot, ProjectRecord, TaskRecord } from "@otk/protocol";
+import type {
+  InboxSnapshot,
+  ProjectRecord,
+  ProjectSummary,
+  TaskRecord,
+} from "@otk/protocol";
 import { createSessionTree } from "./session-tree.ts";
 import type { TabInput } from "./tabs.ts";
 import type { MergedMetadata } from "./index.ts";
@@ -18,7 +23,10 @@ import { createState, type StateFactory } from "./state.ts";
 
 export interface ProjectProjectionRow extends InboxProject {
   sessionIDs: string;
-  sessionCount: number;
+  sessionCount: number | null;
+  summary?: ProjectSummary;
+  activityKnown?: boolean;
+  unreadKnown?: boolean;
 }
 
 /** One sidecar's keyed metadata contributions. Digests never enter this owner. */
@@ -43,7 +51,9 @@ export function createProjectProjection(o: {
     members: Map<string, MergedMetadata>;
     counts: Record<InboxStatus, number>;
     unread: number;
+    unknownActivity: number;
     record?: ProjectRecord;
+    summary?: ProjectSummary;
     discovered: boolean;
     operation?: InboxStatus;
     ids?: string;
@@ -76,6 +86,7 @@ export function createProjectProjection(o: {
           INBOX_STATUS_PRIORITY.map((status) => [status, 0]),
         ) as Record<InboxStatus, number>,
         unread: 0,
+        unknownActivity: 0,
         discovered: false,
         operation: operationStates.get(directory),
         tasks: [],
@@ -93,7 +104,8 @@ export function createProjectProjection(o: {
       p.row = undefined;
       p.metadata = undefined;
       p.input = undefined;
-      const present = !!(p.members.size || p.record || p.discovered);
+      const present =
+        !!(p.members.size || p.record || p.discovered || p.summary);
       if (!present && !p.tasks.length) {
         projects.delete(directory);
       }
@@ -130,6 +142,10 @@ export function createProjectProjection(o: {
         ) p.structure = undefined;
         p.counts[before.status]--;
         p.unread -= Number(before.unread);
+        p.unknownActivity -= Number(
+          before.entry.activityAuthority === "unknown" ||
+            before.entry.activityAuthority === "stale",
+        );
         if (!entry || entry.directory !== before.entry.directory) {
           p.members.delete(id);
           p.ids = undefined;
@@ -145,6 +161,10 @@ export function createProjectProjection(o: {
         p.members.set(id, entry);
         p.counts[status!]++;
         p.unread += Number(unseen);
+        p.unknownActivity += Number(
+          entry.activityAuthority === "unknown" ||
+            entry.activityAuthority === "stale",
+        );
         sessions.set(id, { entry, status: status!, unread: unseen });
         dirty.add(entry.directory);
       } else sessions.delete(id);
@@ -217,6 +237,17 @@ export function createProjectProjection(o: {
     },
     inbox(next: InboxSnapshot, changes?: InboxChanges) {
       const dirty = new Set<string>();
+      for (
+        const directory of !changes || changes.baseline
+          ? new Set([...projects.keys(), ...Object.keys(next.summaries ?? {})])
+          : changes.projects
+      ) {
+        const p = ensure(directory), summary = next.summaries?.[directory];
+        if (JSON.stringify(p.summary) !== JSON.stringify(summary)) {
+          p.summary = summary;
+          dirty.add(directory);
+        }
+      }
       if (!changes || changes.baseline || changes.tasks) {
         const tasks = new Map<string, TaskRecord[]>();
         for (const task of next.tasks) {
@@ -314,12 +345,30 @@ export function createProjectProjection(o: {
       void clock.state.keys[directory];
       const p = projects.get(directory);
       if (!p) return undefined;
+      const summary = p.summary;
+      const summaryReady = summary?.authority === "current" &&
+        summary.status !== null && summary.sessionCount !== null &&
+        summary.unseenCount !== null;
+      // P3 still receives session facts. Borrow them until the summary's own
+      // authority is ready, without replacing its explicit unknown scalars.
+      const fallbackCurrent = p.members.size > 0 && p.unknownActivity === 0;
       const status = attentionStatus(
         p.operation,
-        ...INBOX_STATUS_PRIORITY.filter((s) => p.counts[s] > 0),
+        ...(summaryReady ? [summary.status!] : [
+          ...INBOX_STATUS_PRIORITY.filter((s) => p.counts[s] > 0),
+          ...(summary?.status && summary.status !== "idle"
+            ? [summary.status]
+            : []),
+        ]),
       );
+      const activityKnown = !summary || summaryReady || fallbackCurrent ||
+        p.operation !== undefined || status !== "idle";
+      const hasUnseen = p.unread > 0 || summary?.status === "finished";
+      const unreadKnown = !summary || summary.unseenCount !== null ||
+        fallbackCurrent || hasUnseen;
       const record = p.record;
-      const inactive = !!record?.inactive && status === "idle";
+      const inactive = !!record?.inactive && status === "idle" &&
+        activityKnown;
       const time = inactive ? record?.inactiveAt ?? record!.lastVisit : now;
       const text = record ? visitTime(record.lastVisit, time) : "";
       const age = record ? ageing(record.lastVisit, time, thresholds) : 0;
@@ -333,18 +382,29 @@ export function createProjectProjection(o: {
             added: false,
             inactive: false,
             lastVisit: 0,
-            order: p.members.size
+            order: p.summary
+              ? -(p.summary.lastActivity ?? 0)
+              : p.members.size
               ? -Math.max(...[...p.members.values()].map((e) => e.timeUpdated))
               : 0,
           }),
-          source: record ? "tracked" : p.members.size ? "index" : "template",
+          source: record
+            ? "tracked"
+            : (p.summary?.sessionCount ?? p.members.size) > 0
+            ? "index"
+            : "template",
           inactive,
           status,
-          unread: p.unread > 0,
+          unread: summary?.unseenCount != null
+            ? summary.unseenCount > 0
+            : hasUnseen,
+          activityKnown,
+          unreadKnown,
           visitText: text,
           ageing: age,
           sessionIDs: p.ids,
-          sessionCount: p.members.size,
+          sessionCount: p.summary ? p.summary.sessionCount : p.members.size,
+          summary: p.summary,
         };
       }
       return p.row;

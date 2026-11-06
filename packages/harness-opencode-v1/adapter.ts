@@ -1078,7 +1078,7 @@ export class OpencodeV1Adapter implements Harness {
     // Catalog preparation and live publication share one cooperative budget.
     // Bounding only the final writes leaves error/attention reconciliation as
     // an inventory-sized synchronous section on reconnect.
-    const budget = this.digest?.publishrows;
+    const budget = this.digest?.publishrows ?? this.cfg.digest.publishrows;
     let quota = budget;
     const each = async <T>(values: Iterable<T>, apply: (value: T) => void) => {
       for (const value of values) {
@@ -1126,71 +1126,86 @@ export class OpencodeV1Adapter implements Harness {
     const nextQuestions = new Map<string, PendingQuestion>();
     const knownQuestionDirectories = new Set<string>();
     // Native directory reads create retained instances and touch project clocks.
-    // Only unavailable hints require the bounded session-window API fallback.
-    const hints = catalog
-      ? catalog.hints
-      : this.#db.possiblyRunningDirectories(since);
+    // Without native scalar authority only previously observed activity is a
+    // candidate. A catalog directory is never itself permission to load an instance.
+    const hints = catalog ? catalog.hints : await this.#db.activityCandidates(
+      since,
+      this.cfg.digest.batch,
+      controller.signal,
+    );
     const directories = new Set<string>();
     if (hints) await each(hints, (directory) => directories.add(directory));
-    else {await each(entries.values(), (entry) =>
-        directories.add(entry.directory));}
+    else {await each(this.#index.snapshotEntries(), (entry) => {
+        const a = entry.attention;
+        if (
+          entry.status !== "idle" || a.error ||
+          a.permissions + a.questions + a.childPermissions + a.childQuestions >
+            0
+        ) {
+          directories.add(entry.directory);
+        }
+      });}
+    await each(entries.values(), (entry) => {
+      const previous = this.#index.getMetadata(entry.id);
+      entry.activityAuthority = hints
+        ? "current"
+        : previous
+        ? "stale"
+        : "unknown";
+      if (!hints && previous) {
+        entry.status = previous.status;
+        entry.retry = previous.retry;
+      }
+    });
+    const byDirectory = new Map<string, IndexEntry[]>();
+    await each(entries.values(), (entry) => {
+      const local = byDirectory.get(entry.directory) ?? [];
+      local.push(entry);
+      byDirectory.set(entry.directory, local);
+    });
     const inventory = async (directory: string) => {
       const local = new AbortController();
       const signal = AbortSignal.any([controller.signal, local.signal]);
-      const reads = [
-        this.client.json<
-          Record<
-            string,
-            {
-              type: IndexEntry["status"];
-              attempt?: number;
-              message?: string;
-              next?: number;
-            }
-          >
-        >("/session/status", {
-          query: { directory },
-          signal,
-        }),
-        this.client.json<RawPermission[]>("/permission", {
-          query: { directory },
-          signal,
-        }),
-        this.#catalogReads.read("catalog.questions", { directory }, {
-          owner: JSON.stringify(["questions", directory, this.#connection]),
-          priority: "attention",
-          signal,
-        }),
-      ] as const;
+      const options = {
+        owner: JSON.stringify(["activity", directory, this.#connection]),
+        priority: "attention" as const,
+        signal,
+      };
       try {
-        const [statuses, permissions, questions] = await Promise.all(reads)
-          .catch(async (error) => {
-            local.abort();
-            await Promise.allSettled(reads);
-            throw error;
-          });
+        const statuses = await this.#catalogReads.read("activity.status", {
+          directory,
+        }, options);
+        const permissions = await this.#catalogReads.read(
+          "activity.permissions",
+          { directory },
+          options,
+        );
+        const questions = await this.#catalogReads.read("catalog.questions", {
+          directory,
+        }, options);
         if (!this.#current(controller)) return;
-        await each(Object.entries(statuses), ([id, status]) => {
-          const entry = entries.get(ids.encode(id));
+        // A complete inventory proves omitted sessions idle; unavailable
+        // authority alone must retain their previous activity.
+        await each(byDirectory.get(directory) ?? [], (entry) => {
+          entry.status = "idle";
+          entry.retry = undefined;
+        });
+        await each(statuses, (status) => {
+          const entry = entries.get(status.id);
           if (!entry) return;
-          entry.status = status.type;
-          if (status.type === "retry") {
-            entry.retry = {
-              attempt: status.attempt!,
-              message: status.message!,
-              next: status.next!,
-            };
-          }
+          entry.status = status.status;
+          entry.retry = status.retry;
         });
         await each(permissions, (request) => {
           nextPermissions.set(
             request.id,
             {
               directory,
-              request: mapPermission(
-                request,
-                previousPermissions.get(request.id)?.request.time ?? Date.now(),
-              ),
+              request: {
+                ...request,
+                time: previousPermissions.get(request.id)?.request.time ??
+                  request.time,
+              },
             },
           );
         });
@@ -1202,6 +1217,9 @@ export class OpencodeV1Adapter implements Harness {
           });
         });
         knownQuestionDirectories.add(directory);
+        await each(byDirectory.get(directory) ?? [], (entry) => {
+          entry.activityAuthority = "current";
+        });
       } catch (error) {
         if (!this.#current(controller)) return;
         this.diagnostic(
@@ -1210,8 +1228,8 @@ export class OpencodeV1Adapter implements Harness {
           error,
         );
         // A failed inventory is not evidence that previous work/input ended.
-        await each(entries.values(), (entry) => {
-          if (entry.directory !== directory) return;
+        await each(byDirectory.get(directory) ?? [], (entry) => {
+          entry.activityAuthority = "stale";
           const previous = this.#index.getMetadata(entry.id);
           if (previous) {
             entry.status = previous.status;
@@ -1230,7 +1248,7 @@ export class OpencodeV1Adapter implements Harness {
     };
     const remaining = directories.values();
     await Promise.all(
-      Array.from({ length: Math.min(4, directories.size) }, async () => {
+      Array.from({ length: Math.min(1, directories.size) }, async () => {
         for (const directory of remaining) {
           if (!this.#current(controller)) return;
           await inventory(directory);
@@ -1265,6 +1283,7 @@ export class OpencodeV1Adapter implements Harness {
     if (this.digest) {
       await each(entries.values(), (entry) => sink.indexUpsert(entry));
     } else sink.indexReset([...entries.values()]);
+    sink.projectAuthority?.(hints ? "current" : "unknown");
   }
   #question(
     id: string,
@@ -1550,6 +1569,7 @@ export class OpencodeV1Adapter implements Harness {
       }
       if (entry) {
         entry.status = status.type as IndexEntry["status"];
+        entry.activityAuthority = "current";
         entry.retry = entry.status === "retry"
           ? {
             attempt: status.attempt!,

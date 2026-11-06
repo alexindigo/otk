@@ -236,10 +236,12 @@ Before publishing connection readiness, bootstrap inventories status,
 permissions and questions only in directories hinted as possibly running by
 compatible read-only SQLite. An authoritative empty hint list makes no native
 inventory requests: directory reads create native instances and touch project
-visit clocks. Missing, unreadable, incompatible or failed SQLite reads instead
-use every distinct directory in the paginated, index-window session snapshot,
-with at most four directories in flight. This fallback keeps already-running and
-blocked sessions visible without a database, on connection or instance resync.
+visit clocks. Scalar candidate discovery uses bounded identity chunks. Missing,
+unreadable, incompatible or failed SQLite authority reconciles only previously
+observed active directories; it never loads every discovered native instance or
+point-reads sessions to obtain activity. Other facts remain explicitly unknown
+or stale. One candidate directory at a time borrows attention-priority status,
+permission and question reads from the existing worker/read-admission owner.
 
 Each start owns one reconnect loop; a repeated start rejects without replacing
 its sink, including while stop is pending. Stop cancels and joins that lifetime

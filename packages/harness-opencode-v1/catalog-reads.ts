@@ -7,7 +7,10 @@ import { mapCommands } from "./commands.ts";
 import { mapModels, type Providers } from "./models.ts";
 import { mapResources, type NativeResource } from "./resources.ts";
 import { mapQuestion } from "./questions.ts";
-import type { RawQuestion } from "./types.ts";
+import type { RawPermission, RawQuestion } from "./types.ts";
+import { mapPermission } from "./map.ts";
+import { opencodeV1SessionID as ids } from "./ids.ts";
+import type { SessionMetadata } from "@otk/protocol";
 import { readCatalogFiles } from "./catalog-files.ts";
 import { NativeReadiness } from "./readiness.ts";
 
@@ -18,6 +21,37 @@ export function catalogReaders(
 ): ProviderReaders {
   const metadata = new NativeReadiness(client.wait, metadataAdmission);
   return {
+    "activity.status": async ({ directory }, signal) => {
+      const statuses = await client.json<
+        Record<
+          string,
+          {
+            type: SessionMetadata["status"];
+            attempt?: number;
+            message?: string;
+            next?: number;
+          }
+        >
+      >("/session/status", { query: { directory }, signal });
+      return Object.entries(statuses).map(([id, status]) => ({
+        id: ids.encode(id),
+        status: status.type,
+        ...(status.type === "retry"
+          ? {
+            retry: {
+              attempt: status.attempt!,
+              message: status.message!,
+              next: status.next!,
+            },
+          }
+          : {}),
+      }));
+    },
+    "activity.permissions": async ({ directory }, signal) =>
+      (await client.json<RawPermission[]>("/permission", {
+        query: { directory },
+        signal,
+      })).map((request) => mapPermission(request, Date.now())),
     "catalog.agents": async ({ directory }, signal) => {
       const raw = await client.json<Agent[]>("/agent", {
         query: { directory },

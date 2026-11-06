@@ -46,6 +46,37 @@ export class BootstrapDb {
       return;
     }
   }
+  async activityCandidates(
+    since: number,
+    rows: number,
+    signal: AbortSignal,
+  ): Promise<string[] | undefined> {
+    if (!this.#db) return;
+    try {
+      const directories = new Set<string>();
+      let after = "";
+      for (;;) {
+        signal.throwIfAborted();
+        const page = this.#db.prepare(
+          "SELECT id FROM session WHERE id>? ORDER BY id LIMIT ?",
+        ).all(after, rows).map((row) => String(row.id));
+        if (!page.length) return [...directories];
+        for (const directory of runningDirectories(this.#db, since, page)) {
+          directories.add(directory);
+        }
+        after = page.at(-1)!;
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      }
+    } catch (error) {
+      signal.throwIfAborted();
+      this.diagnostic(
+        "warn",
+        "harness db: activity authority unavailable",
+        error,
+      );
+      return;
+    }
+  }
   /** Undefined = unavailable; null = no following native message. */
   nextMessageID(id: string, through: string): string | null | undefined {
     id = ids.decode(id);

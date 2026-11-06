@@ -2,6 +2,7 @@
 import { test } from "../../../tests/support/resources.ts";
 import { assert, assertEquals, assertRejects } from "@std/assert";
 import { join } from "@std/path";
+import { DatabaseSync } from "node:sqlite";
 import type { HarnessSink } from "@otk/harness";
 import { SessionIndex } from "@otk/harness";
 import { cfg, fixture } from "../../../tests/support/config.ts";
@@ -40,7 +41,23 @@ const retiredColor = "#123456", currentColor = "#abcdef";
 
 async function recording(stage?: Stage, watchdog = false, failStatus = false) {
   const root = await fixture(), settings = cfg();
-  settings.harness.db = join(root, "missing.db");
+  settings.harness.db = join(root, "activity.db");
+  // Lifecycle barriers exercise an admitted candidate, not directory discovery.
+  const db = new DatabaseSync(settings.harness.db);
+  db.exec(
+    "CREATE TABLE session(id TEXT,directory TEXT,time_updated INTEGER); CREATE TABLE message(id TEXT,session_id TEXT,data TEXT)",
+  );
+  db.prepare("INSERT INTO session VALUES(?,?,?)").run(
+    "root",
+    "/project",
+    Date.now(),
+  );
+  db.prepare("INSERT INTO message VALUES(?,?,?)").run(
+    "message",
+    "root",
+    JSON.stringify({ role: "user" }),
+  );
+  db.close();
   if (watchdog) settings.harness.heartbeattimeout = 0.1;
   const held = Promise.withResolvers<void>();
   const reached = Promise.withResolvers<void>();
@@ -442,17 +459,20 @@ test("native finite read deadline remains active with an owner signal", async ()
   }
 });
 
-test("failed directory aborts and joins sibling reads without retiring the connection", async () => {
-  const record = await recording("permission", false, true);
+test("failed candidate status settles before readiness and never admits later inventory reads", async () => {
+  const record = await recording("status", false, true);
   try {
     await record.reached;
-    await wait(() => record.signals[0]?.aborted === true);
     const joined = !record.published.includes("connected");
-    const aborted = record.signals[0]?.aborted;
     record.release();
     await wait(() => record.published.includes("resync"));
-    assertEquals(joined, true, "Failed bootstrap detached its sibling reads");
-    assertEquals(aborted, true, "Failed inventory left its siblings alive");
+    assertEquals(
+      joined,
+      true,
+      "Readiness overtook the unsettled candidate read",
+    );
+    assertEquals(record.paths.includes("/permission"), false);
+    assertEquals(record.paths.includes("/question"), false);
     assertEquals(record.streamAborts(), 0);
     assertEquals(record.published, [
       "connecting",

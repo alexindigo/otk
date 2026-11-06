@@ -498,6 +498,8 @@ try {
             cooling = { a, b, directory: fixture.oc.directory };
           }
           if (profile === "transport-bootstrap") {
+            // Existing-work visibility needs this fixture's real scalar native
+            // authority. Candidate-only unavailable authority has its own units.
             const busy = await fixture.oc.session<
               { id: string; nativeID: string }
             >("/session", {
@@ -587,7 +589,6 @@ try {
                   harness: {
                     url: transport.url,
                     ...([
-                        "transport-bootstrap",
                         "transport-enrichment",
                         "transport-deleted-seen",
                         "messages-helper-pages",

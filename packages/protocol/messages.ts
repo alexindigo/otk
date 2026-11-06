@@ -63,6 +63,14 @@ export type ServerFrame =
   | { t: "prefs"; prefs: Preferences }
   | ({ t: "inbox.snapshot" } & InboxBaseline)
   | {
+    t: "inbox.summaries";
+    generation: string;
+    from: number;
+    revision: number;
+    summaries: import("./inbox.ts").ProjectSummary[];
+    remove?: string[];
+  }
+  | {
     t: "inbox.patch";
     generation: string;
     from: number;

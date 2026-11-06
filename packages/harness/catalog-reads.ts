@@ -5,8 +5,10 @@ import type {
   CatalogModelItem,
   CommandOption,
   ModelCatalog,
+  PermissionRequest,
   QuestionRequest,
   ResourceOption,
+  SessionMetadata,
   SkillOption,
 } from "@otk/protocol";
 import type { ProviderReadCodec } from "./provider-reads.ts";
@@ -45,6 +47,16 @@ export interface ResourceReadKinds {
   };
 }
 export interface QuestionReadKinds {
+  "activity.status": {
+    input: { directory: string };
+    result: (Pick<SessionMetadata, "id" | "status" | "retry">)[];
+    chunk: (Pick<SessionMetadata, "id" | "status" | "retry">)[];
+  };
+  "activity.permissions": {
+    input: { directory: string };
+    result: PermissionRequest[];
+    chunk: PermissionRequest[];
+  };
   "catalog.questions": {
     input: { directory: string };
     result: QuestionRequest[];

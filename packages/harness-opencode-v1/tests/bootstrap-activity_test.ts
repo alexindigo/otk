@@ -18,7 +18,7 @@ for (
     "query failure",
   ] as const
 ) {
-  test(`bootstrap inventories paged session directories before readiness with ${database} SQLite`, async () => {
+  test(`bootstrap reconciles candidates or reports unknown activity with ${database} SQLite`, async () => {
     const settings = cfg(), root = await fixture();
     settings.harness.db = join(root, "native.db");
     if (database !== "missing") {
@@ -149,6 +149,18 @@ for (
       });
       await waitFor(() => ready, (count) => count === 1);
       const check = async () => {
+        if (database !== "hints" && database !== "no hints") {
+          assertEquals(
+            reads,
+            [],
+            "Unavailable hints must not load every discovered instance",
+          );
+          assertEquals(
+            index.getMetadata("opcv1-busy")?.activityAuthority,
+            resets === 1 ? "unknown" : "stale",
+          );
+          return;
+        }
         if (database === "no hints") {
           assertEquals(
             reads,
@@ -199,7 +211,7 @@ for (
       await check();
       assertEquals(
         snapshots[0].find((entry) => entry.id === "opcv1-busy")?.status,
-        database === "no hints" ? "idle" : "busy",
+        database === "hints" ? "busy" : "idle",
         "Readiness preceded activity reconciliation",
       );
       stream.enqueue(new TextEncoder().encode(
@@ -217,7 +229,7 @@ for (
 for (const failed of ["/session/status", "/permission", "/question"]) {
   test(`bounded directory inventories retain failed ${failed} activity across resync`, async () => {
     const settings = cfg(), root = await fixture();
-    settings.harness.db = join(root, "missing.db");
+    settings.harness.db = join(root, "native.db");
     const seeds = Array.from({ length: 8 }, (_, i) => ({
       id: `s${i}`,
       directory: `/p${i}`,
@@ -226,6 +238,23 @@ for (const failed of ["/session/status", "/permission", "/question"]) {
       time: { created: Date.now(), updated: Date.now() },
     }));
     const gates = seeds.map(() => Promise.withResolvers<void>());
+    const db = new DatabaseSync(settings.harness.db);
+    db.exec(
+      "CREATE TABLE session(id TEXT,directory TEXT,time_updated INTEGER); CREATE TABLE message(id TEXT,session_id TEXT,data TEXT)",
+    );
+    for (const seed of seeds) {
+      db.prepare("INSERT INTO session VALUES(?,?,?)").run(
+        seed.id,
+        seed.directory,
+        seed.time.updated,
+      );
+      db.prepare("INSERT INTO message VALUES(?,?,?)").run(
+        `m-${seed.id}`,
+        seed.id,
+        JSON.stringify({ role: "assistant", time: {} }),
+      );
+    }
+    db.close();
     const started = new Set<string>();
     const index = new SessionIndex();
     let stream!: ReadableStreamDefaultController<Uint8Array>,
@@ -312,15 +341,15 @@ for (const failed of ["/session/status", "/permission", "/question"]) {
         bootstrapComplete() {},
         invalidate() {},
       });
-      await waitFor(() => started.size, (count) => count >= 4);
+      await waitFor(() => started.size, (count) => count === 1);
       assertEquals(
         started.size,
-        4,
-        "Fallback did not bound directory concurrency",
+        1,
+        "Candidate inventories must share one reconciliation budget",
       );
       assertEquals(ready, 0);
       gates[0].resolve();
-      await waitFor(() => started.size, (count) => count === 5);
+      await waitFor(() => started.size, (count) => count === 2);
       assertEquals(ready, 0, "Readiness preceded all inventories");
       for (const gate of gates) gate.resolve();
       await waitFor(() => ready, (count) => count === 1);

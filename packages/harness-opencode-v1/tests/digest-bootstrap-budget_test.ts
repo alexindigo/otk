@@ -64,6 +64,9 @@ test("selected digest bootstrap prepares attention and publishes metadata within
     detail: () => Promise.reject(new Error("Not requested")),
     transcriptMetadata: () => Promise.reject(new Error("Not requested")),
     read: ((kind: string) => {
+      if (kind === "activity.status" || kind === "activity.permissions") {
+        return Promise.resolve([]);
+      }
       assertEquals(kind, "catalog.questions");
       return Promise.resolve([{
         id: "q",

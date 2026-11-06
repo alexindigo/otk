@@ -83,6 +83,13 @@ Inbox baselines carry `{generation,revision,inbox}` in `inbox.snapshot` and
 index owner alone reduces `IndexOp`. Gaps retain last-good metadata and acquire
 a complete baseline rather than inventing missing state.
 
+An additive `summaries` map and `summaryRevision` baseline field publish scalar
+`ProjectSummary` facts. The additive `inbox.summaries` message carries keyed
+replacements under an independent from/revision sequence; older consumers can
+ignore it. Status/count/recency authority is current, stale or unknown, and
+unknown values are nullable. Session entries continue unchanged until scoped
+publication is selected.
+
 The optional `catalogs` capability contributes `catalogs.watch {directory}` and
 `catalogs.refresh {directory}`. A watch is a connection-bound, explicitly
 releasable request lease. `DirectoryCatalogKinds` and `CatalogChunkKinds`
