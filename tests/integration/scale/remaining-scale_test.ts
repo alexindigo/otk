@@ -186,6 +186,7 @@ test("ten real provider attachments across two isolated origins are batched, ord
       const server = await SidecarTest.start(native),
         client = new WsClient(server.url);
       origins.push({ fake, native, server, client });
+      client.lease({ directory: native.directory, crumbs: [], rows: [] });
       await client.connect();
       const history = await client.rpc<HistoryEntry[]>("history.list", {});
       const refs = history.flatMap((entry) => entry.parts).filter((part) =>

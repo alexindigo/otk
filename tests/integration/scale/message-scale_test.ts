@@ -219,6 +219,12 @@ test("real scale reports cursor reserve at 75ms collection latency across 1525 m
     },
   );
   resources().defer("reserve connection", () => connection.stop());
+  connection.view({
+    directory: selected.directory,
+    selected: selected.id,
+    crumbs: [],
+    rows: native.manifest.sessions.slice(0, 251).map((session) => session.id),
+  });
   await connection.connect();
   await waitFor(
     () => connection.messages && index.get("scale", selected.id),
