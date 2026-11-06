@@ -290,7 +290,13 @@ test(
     await expect(panel.getByRole("alert")).toHaveCount(1);
     await expect(action).toBeFocused();
     expect((await panel.boundingBox())!.width).toBe(before.width);
-    expect((await panel.boundingBox())!.height).toBe(before.height);
+    const feedbackHeight = await panel.getByRole("alert").evaluate((el) =>
+      el.getBoundingClientRect().height +
+      parseFloat(getComputedStyle(el.parentElement!).rowGap)
+    );
+    expect((await panel.boundingBox())!.height).toBe(
+      before.height + feedbackHeight,
+    );
     await page.keyboard.press("Escape");
     await expect(panel).toHaveCount(0);
     await page.evaluate("styleTest.holdMenu(false)");

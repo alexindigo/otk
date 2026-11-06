@@ -5,12 +5,15 @@ import { type Element, Show } from "solid-js";
 
 /** Internal boundary and flow owner. Only overlay specialisations use this. */
 export default function Surface(props: {
+  density?: "menu";
   title?: Element;
   actions?: Element;
   children: Element;
 }): Element {
   return (
-    <div class="otk-surface">
+    <div
+      class={["otk-surface", { "otk-surface-menu": props.density === "menu" }]}
+    >
       <Show when={props.title}>
         <header class="otk-surface-title">{props.title}</header>
       </Show>

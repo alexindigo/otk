@@ -19,7 +19,7 @@ import { useCommandPorts } from "../keyboard/context.tsx";
 import Menu from "./surface/Menu.tsx";
 import type { PopoverControl } from "./surface/Popover.tsx";
 import { commandRows } from "./list-presentation.ts";
-import FieldFeedback from "./FieldFeedback.tsx";
+import FeedbackStatus from "./FeedbackStatus.tsx";
 import ActionSlot from "./ActionSlot.tsx";
 import "./CommandMenu.css" with { type: "text" };
 
@@ -179,13 +179,12 @@ export default function CommandMenu(props: {
       onClose={clear}
       onItemChange={() => setArmed(undefined)}
       status={
-        <FieldFeedback
-          id={errorId}
-          action
-          feedback={error() && !props.onError
-            ? { kind: "error", text: error()!.text }
-            : undefined}
-        />
+        <Show when={error() && !props.onError}>
+          <FeedbackStatus
+            id={errorId}
+            feedback={{ kind: "error", text: error()!.text }}
+          />
+        </Show>
       }
     >
       <For each={rows()} keyed={false}>

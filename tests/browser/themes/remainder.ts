@@ -194,12 +194,16 @@ export async function remainder(
       await expect(menu.locator("[role=alert]")).toHaveText(
         "Could not finish this action. Try again",
       );
+      const feedbackHeight = await menu.getByRole("alert").evaluate((el) =>
+        el.getBoundingClientRect().height +
+        parseFloat(getComputedStyle(el.parentElement!).rowGap)
+      );
       expect(
         await menu.evaluate((el) => {
           const r = el.getBoundingClientRect();
           return [r.width, r.height];
         }),
-      ).toEqual(size);
+      ).toEqual([size[0], size[1] + feedbackHeight]);
       await expect(menu.locator('[data-context-command="list.one"]'))
         .toBeFocused();
       await shot(`public-menu-error-${theme.id}`);

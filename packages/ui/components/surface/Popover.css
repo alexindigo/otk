@@ -14,9 +14,9 @@
   position-try-order: most-height;
   /* The native inset rectangle owns both placement and available size. Anchor
      edges stay flush; only edges outside the viewport gutter are clamped. */
-  top: 0;
+  top: var(--popover-block-start, 0);
   right: 0;
-  bottom: max(var(--popover-gutter), anchor(top));
+  bottom: var(--popover-block-end, max(var(--popover-gutter), anchor(top)));
   left: var(--popover-inline-start, max(var(--popover-gutter), anchor(left)));
   align-self: end;
   justify-self: start;
@@ -64,4 +64,11 @@
   margin-left: 0;
   margin-right: var(--popover-gutter);
   justify-self: end;
+}
+.otk-popover-point {
+  --popover-block-start: max(var(--popover-gutter), anchor(bottom));
+  --popover-block-end: 0;
+  align-self: start;
+  margin: 0 var(--popover-gutter) var(--popover-gutter) 0;
+  position-try-order: normal;
 }

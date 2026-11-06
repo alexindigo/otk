@@ -25,6 +25,7 @@
 }
 .otk-menu-items + [role="alert"] {
   max-width: 28rem;
+  contain: inline-size;
   margin: 0;
 }
 .otk-menu-items .is-armed {

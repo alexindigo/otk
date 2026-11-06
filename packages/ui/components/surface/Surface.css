@@ -48,3 +48,10 @@
 .otk-surface-body > :last-child {
   margin-bottom: 0;
 }
+.otk-surface-menu {
+  padding: var(--menu-block-inset) var(--menu-item-inset);
+}
+.otk-surface-menu > .otk-surface-body {
+  padding: 0;
+  gap: var(--menu-block-inset);
+}

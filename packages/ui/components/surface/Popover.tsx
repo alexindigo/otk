@@ -43,6 +43,7 @@ export default function Popover(props: {
   triggerClass?: string;
   title?: string;
   size?: "wide" | "content";
+  density?: "menu";
   class?: string;
   dismissOnAction?: boolean;
   /** Non-modal detail previews, available on hover and keyboard focus. */
@@ -270,6 +271,8 @@ export default function Popover(props: {
             class={["otk-popover-panel", {
               "otk-popover-wide": props.size === "wide",
               "otk-popover-content": props.size === "content",
+              "otk-popover-point": !!point() && !point()!.width &&
+                !point()!.height,
             }]}
             id={anchor}
             popover="auto"
@@ -297,7 +300,10 @@ export default function Popover(props: {
               }
             }}
           >
-            <Surface title={props.title ? <h2>{props.title}</h2> : undefined}>
+            <Surface
+              density={props.density}
+              title={props.title ? <h2>{props.title}</h2> : undefined}
+            >
               {props.children}
             </Surface>
           </div>

@@ -51,6 +51,7 @@ export default function Menu(props: {
       trigger={props.trigger}
       triggerClass={props.triggerClass}
       size="content"
+      density="menu"
       class={`otk-menu ${props.class ?? ""}`}
       dismissOnAction={props.dismissOnAction ?? true}
       control={(control) => {
