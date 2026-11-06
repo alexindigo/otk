@@ -34,6 +34,7 @@ const bridge = new DigestBridge({
   diagnostic: (error) => console.error(error.message),
 });
 try {
+  bridge.scope("consumer", { sessions: [target] });
   await bridge.start();
   await bridge.catalog(1, new AbortController().signal);
   for await (const chunk of Deno.stdin.readable) {

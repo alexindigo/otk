@@ -26,6 +26,8 @@ export async function sessionsCoreScenario(profile: Profile) {
   }
   progress.complete();
   const port = {
+    scope() {},
+    release() {},
     progress: () => progress.values(wait),
     observeProgress(listener: (values: ProgressFacts[]) => void) {
       listeners.add(listener);

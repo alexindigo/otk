@@ -32,6 +32,11 @@ export interface DigestPressure {
   active: number;
   sliceMs: number;
   nativeReads?: Record<string, number>;
+  nativeActive?: number;
+  publicationWaiting?: number;
+  heldCredits?: number;
+  sliceReads?: Record<string, number>;
+  headerRows?: { limit: number; rows: number }[];
 }
 export interface DigestWorkerValue {
   sessionID: string;
@@ -66,7 +71,13 @@ export type ToWorker =
         metadata?: SessionMetadata;
       }[];
     }
-    | { t: "scope"; owner: string; directory?: string; sessions: string[] }
+    | {
+      t: "scope";
+      owner: string;
+      directory?: string;
+      sessions: string[];
+      released?: boolean;
+    }
     | { t: "interactive"; owner: string; active: boolean }
     | { t: "detail"; sessionID: string; turnID: string }
     | { t: "transcript"; sessionID: string; turns: string[]; cutoff?: string }
@@ -77,14 +88,17 @@ export type ToWorker =
       phase: "begin" | "confirmed" | "failed";
       connection: number;
     }
-    | { t: "credit"; publications: number }
+    | { t: "credit"; publications: number; workms?: number }
     | { t: "cancel"; request: number }
+    | { t: "native.acquire" }
+    | { t: "native.release"; request: number }
     | { t: "stop" }
   );
 export type FromWorker =
   & { run: string; id: number }
   & (
     | { t: "accepted" }
+    | { t: "native.granted" }
     | ProviderReadResult
     | {
       t: "read.failure";

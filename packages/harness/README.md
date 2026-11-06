@@ -145,6 +145,11 @@ session work. `tick()` executes one runnable turn: interactive reads (`execute`)
 precede attention, visible scope and background. Owner-keyed scopes form a
 union; `release` drops an owner's scope and interactive demand. Background
 pauses under memory pressure or interactive demand; essential reads still run.
+Viewer-aware compositions initially call `viewers(false)`; the first scope,
+including an empty one, resumes optional work and the last release parks it.
+Indexed heaps repair changed priorities at admission/scope changes rather than
+scanning the pending population per tick. Bounded finishing continuations retain
+their inherited rank while draining committed publication and I/O cleanup.
 Continuations retain cursors, fine-grained keys collapse to retained
 full-session markers, and observed active work controls the duty limiter. `stop`
 aborts and joins active work and closes every selected sink.

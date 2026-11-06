@@ -518,6 +518,26 @@ stale. No row requires session metadata to render its lamp or counts.
 
 ## Worker-backed digest services
 
+Socket view lifetimes retain viewer presence even for an empty view. Without a
+viewer the worker parks optional digest/helper jobs and cached replay at bounded
+boundaries; interruptible reads join cancellation before parking. Scalar catalog
+facts and SSE activity/permission updates remain independent so lamps stay live.
+The existing native permission is also borrowed by serving-isolate finite reads;
+essential page demand preempts optional I/O without adding a SQLite owner.
+
+Indexed ready queues order interactive, attention, visible and background work.
+Catalog metadata uses attention priority; rebuildable replay uses background.
+Committed bounded publications inherit their producer's rank and drain as
+finishing continuations, preserving ordering even under interactive pressure.
+Cached replay instead parks between credited chunks. An essential successor
+donates its rank and readiness only along its identity's predecessor chain;
+unrelated replay remains parked, and canceled successors withdraw their
+donation. Row/time quotas and measured serving reduction costs share the duty
+budget. Adaptive row quotas retain a floor of `ceil(digest.batch / 8)` (at least
+one); the same floor applies when a native keyset stops at its time boundary.
+This limits time-budget subdivision to eight slices instead of per-row native
+reads.
+
 The worker's incremental DigestProgress owns scalar scope generations, bounded
 enumeration denominators, completion/queue/chunk/message counts, active work
 time and actual wait reasons. Its one-second fact stream crosses the bridge

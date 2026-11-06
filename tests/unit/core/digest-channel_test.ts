@@ -69,6 +69,7 @@ test("dirty channel has one acknowledged batch in flight and retains full-sessio
     publish: () => {},
   });
   try {
+    bridge.scope("viewer", { sessions: [] });
     await bridge.start();
     await bridge.catalog(1, new AbortController().signal);
     bridge.observe(

@@ -228,9 +228,10 @@ export class DigestBridge implements DigestPort {
         data.t === "digest" || data.t === "digests" || data.t === "catalog" ||
         data.t === "detail" || data.t === "read.result"
       ) {
+        const workms = performance.now() - start;
         this.#task(() => {
           if (worker === this.#worker) {
-            this.#post({ t: "credit", publications: 1 });
+            this.#post({ t: "credit", publications: 1, workms });
           }
         });
       }
@@ -376,6 +377,25 @@ export class DigestBridge implements DigestPort {
     return gate.promise.finally(() =>
       signal.removeEventListener("abort", abort)
     );
+  }
+  async admission(signal: AbortSignal): Promise<() => void> {
+    await this.start();
+    const worker = this.#worker, run = this.#run;
+    const request = this.#id + 1;
+    await this.#request(
+      { t: "native.acquire" },
+      signal,
+      (value) =>
+        value.t === "native.granted" ? { value: undefined } : undefined,
+    );
+    let released = false;
+    return () => {
+      if (released) return;
+      released = true;
+      if (worker === this.#worker && run === this.#run && !this.#stop) {
+        this.#post({ t: "native.release", request });
+      }
+    };
   }
   async catalog(
     connection: number,
@@ -806,7 +826,7 @@ export class DigestBridge implements DigestPort {
     this.#scopes.delete(owner);
     this.#interactive.delete(owner);
     if (this.#worker && !this.#stop) {
-      this.#post({ t: "scope", owner, sessions: [] });
+      this.#post({ t: "scope", owner, sessions: [], released: true });
       this.#post({ t: "interactive", owner, active: false });
     }
   }

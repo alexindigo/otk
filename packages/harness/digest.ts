@@ -21,6 +21,11 @@ export interface DigestPolicy {
   retryms: number;
   busyms: number;
 }
+/** The configured batch remains the owner; at most eight time-budget subdivisions
+ * retain amortized native reads instead of degenerating into one query per row. */
+export function digestRowFloor(policy: Pick<DigestPolicy, "batch">): number {
+  return Math.max(1, Math.ceil(policy.batch / 8));
+}
 export interface DirtySession {
   sessionID: string;
   revision: number;
@@ -34,6 +39,8 @@ export interface DirtySession {
   messages?: string[];
 }
 export interface DigestPort extends ProviderReadPort {
+  /** Aggregate native permission shared with serving-isolate finite reads. */
+  admission?(signal: AbortSignal): Promise<() => void>;
   /** Optional publication budget for a consumer's live metadata reconciliation. */
   readonly publishrows?: number;
   start(): Promise<void>;

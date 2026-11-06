@@ -97,6 +97,7 @@ test("accepted deletions survive a worker restart, coalesce in bounded batches a
     },
   });
   try {
+    bridge.scope("viewer", { sessions: [] });
     await bridge.catalog(1, new AbortController().signal);
     await waitFor(() => ready.size, (n) => n === 3);
     await bridge.deleteIntent("opcv1-ses_0", "owned", "begin", 1);
@@ -120,6 +121,7 @@ test("accepted deletions survive a worker restart, coalesce in bounded batches a
     deleted.clear();
     const restarted = new DigestBridge(options);
     try {
+      restarted.scope("viewer", { sessions: [] });
       await restarted.start();
       await waitFor(() => deleted.size, (n) => n === 3);
       assertEquals(deleted.size, 3);

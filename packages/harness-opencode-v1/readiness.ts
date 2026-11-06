@@ -5,9 +5,13 @@ export class NativeReadiness {
     readonly wait: <T>(readiness: Promise<T>, join?: boolean) => Promise<T>,
     readonly admission?: (signal: AbortSignal) => Promise<() => void>,
   ) {}
-  async run<T>(signal: AbortSignal, work: () => Promise<T>): Promise<T> {
+  async run<T>(
+    signal: AbortSignal,
+    work: () => Promise<T>,
+    admit = true,
+  ): Promise<T> {
     let release: (() => void) | undefined;
-    if (this.admission) {
+    if (this.admission && admit) {
       const permission = this.admission(signal);
       try {
         release = await this.wait(permission);

@@ -9,6 +9,8 @@ import { resources, tempDir, test } from "../../support/resources.ts";
 import { SCALE, SessionScale } from "../../support/session-scale.ts";
 import { servingProbe } from "../../support/serving-probe.ts";
 import { WsClient } from "../../support/ws-client.ts";
+import { digestRowFloor } from "@otk/harness";
+import type { DigestPressure } from "../../../core/digest/protocol.ts";
 
 test("real-version scale summaries match independent totals with bounded serving-isolate work", async () => {
   const root = await tempDir("sc-"), fake = new FakeLlm();
@@ -36,6 +38,7 @@ test("real-version scale summaries match independent totals with bounded serving
   resources().defer("serving probe", () => probe.stop());
   const pressure: unknown[] = [];
   let nativeReads: Record<string, number> = {};
+  const slices: DigestPressure[] = [];
   resources().evidence(
     "worker pressure",
     () =>
@@ -50,6 +53,7 @@ test("real-version scale summaries match independent totals with bounded serving
     section: probe.section,
     pressure: (value) => {
       nativeReads = value.nativeReads ?? {};
+      if (value.sliceReads) slices.push(value);
       const sample = {
         ...value,
         memory: Deno.systemMemoryInfo(),
@@ -151,9 +155,30 @@ test("real-version scale summaries match independent totals with bounded serving
   );
   assert(
     (nativeReads.headers ?? 0) <=
-      SCALE.sessions + Math.ceil(messages / config.digest.batch) + 10,
+      SCALE.sessions + Math.ceil(messages / digestRowFloor(config.digest)) + 10,
     JSON.stringify(nativeReads),
   );
+  assert(slices.some((slice) => (slice.sliceReads?.headers ?? 0) > 0));
+  for (const slice of slices) {
+    const queries = slice.sliceReads?.headers ?? 0;
+    assert(
+      queries <= 1,
+      "An admitted slice must issue at most one native header query",
+    );
+    assertEquals(slice.headerRows?.length ?? 0, queries);
+    for (const sample of slice.headerRows ?? []) {
+      assert(
+        sample.limit >= digestRowFloor(config.digest) &&
+          sample.limit <= config.digest.batch,
+      );
+      assert(sample.rows <= sample.limit);
+      assert(
+        sample.rows >= digestRowFloor(config.digest) ||
+          sample.rows < sample.limit,
+        "Only a terminal native page may have fewer rows than the floor",
+      );
+    }
+  }
   assertEquals(
     nativeReads.tools ?? 0,
     0,

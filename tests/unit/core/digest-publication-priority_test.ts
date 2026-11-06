@@ -98,6 +98,7 @@ test("interactive reads cannot pause an ordered publication needed by a newer de
   });
   const controller = new AbortController();
   try {
+    bridge.scope("viewer", { sessions: [] });
     await bridge.start();
     await bridge.catalog(1, controller.signal);
     await bounded("first multipart publication", entered.promise);
@@ -183,6 +184,7 @@ test("fresh catalog replacement publishes tombstones left by a cancelled cached 
   });
   const controller = new AbortController();
   try {
+    first.scope("viewer", { sessions: [] });
     await first.start();
     await first.catalog(1, controller.signal);
     await waitFor(() => ready.size, (n) => n === entries.length);
@@ -207,6 +209,7 @@ test("fresh catalog replacement publishes tombstones left by a cancelled cached 
     },
   });
   try {
+    restarted.scope("viewer", { sessions: [] });
     await restarted.start();
     assertEquals(replacement !== undefined, true);
     await bounded("replacement catalog", replacement!);
@@ -217,6 +220,139 @@ test("fresh catalog replacement publishes tombstones left by a cancelled cached 
     );
   } finally {
     controller.abort();
+    await restarted.stop();
+  }
+});
+
+test("a disconnected multipart cached replay parks; deletion donates only to its ordered predecessor", async () => {
+  const root = await tempDir("digest-donation-");
+  const entries = ["a", "b"].map((id) => ({
+    id: `ses_${id}`,
+    projectID: "p",
+    directory: "/p",
+    title: id,
+    time: { created: 1, updated: 2 },
+  }));
+  const native = Deno.serve(
+    { hostname: "127.0.0.1", port: 0, onListen() {} },
+    (request) => {
+      const path = new URL(request.url).pathname;
+      if (path === "/global/health") return Response.json({ healthy: true });
+      if (path === "/experimental/session") return Response.json(entries);
+      const id = path.split("/")[2];
+      return Response.json(Array.from({ length: 100 }, (_, i) => ({
+        info: {
+          id: `msg_${i}`,
+          sessionID: id,
+          parentID: `turn_${i}`,
+          role: "assistant",
+          agent: "build",
+          providerID: "p",
+          modelID: "m",
+          time: { created: i + 1, completed: i + 2 },
+          cost: 0,
+          tokens: {
+            input: 1,
+            output: 1,
+            reasoning: 0,
+            cache: { read: 0, write: 0 },
+          },
+        },
+        parts: [],
+      })));
+    },
+  );
+  resources().defer("donation native", () => native.shutdown());
+  const settings = cfg();
+  settings.harness.url = `http://127.0.0.1:${native.addr.port}`;
+  settings.harness.db = root + "/absent.db";
+  const options = {
+    statePath: root,
+    provider: "opencode-v1",
+    native: settings,
+    policy: {
+      ...settings.digest,
+      batch: 200,
+      publishrows: 1,
+      cpu: 1,
+      memoryreserve: 1,
+    },
+  };
+  const ready = new Set<string>();
+  const first = new DigestBridge({
+    ...options,
+    publish: (value) => {
+      if (value.delta.summary.state === "ready") ready.add(value.sessionID);
+    },
+  });
+  first.scope("seed", { sessions: [] });
+  try {
+    await first.catalog(1, new AbortController().signal);
+    await waitFor(() => ready.size, (n) => n === 2);
+  } finally {
+    await first.stop();
+  }
+  const seen: string[] = [];
+  let closed = false;
+  let pressure:
+    | import("../../../core/digest/protocol.ts").DigestPressure
+    | undefined;
+  const restarted = new DigestBridge({
+    ...options,
+    pressure: (value) => pressure = value,
+    publish: (value) => {
+      for (const _turn of Object.keys(value.delta.turns.upsert)) {
+        seen.push(value.sessionID);
+      }
+      if (value.delta.deleted) seen.push("deleted:" + value.sessionID);
+      if (!closed && seen.length) {
+        closed = true;
+        restarted.release("viewer");
+      }
+    },
+  });
+  restarted.scope("viewer", { sessions: [] });
+  try {
+    await restarted.start();
+    await waitFor(() => closed, Boolean);
+    // Fence receipt of the scope release, then observe a fresh drained state;
+    // a pressure frame sent before the first publication is not pause evidence.
+    await restarted.deleteIntent("opcv1-ses_b", "fence", "begin", 0);
+    pressure = undefined;
+    await waitFor(
+      () => pressure,
+      (value) =>
+        closed && value?.active === 0 && value.heldCredits === 0 &&
+        value.publicationWaiting === 0,
+    );
+    const paused = [...seen];
+    // Socket release crosses an isolate boundary: one already-started credited
+    // chunk may settle after the callback closes the final viewer.
+    assertEquals(paused.every((id) => id === "opcv1-ses_a"), true);
+    assertEquals(paused.length >= 1 && paused.length <= 2, true);
+    await restarted.deleteIntent("opcv1-ses_b", "barrier", "begin", 0);
+    assertEquals(
+      seen,
+      paused,
+      "An essential turn must not resume unrelated optional chunks",
+    );
+    await bounded(
+      "deletion priority donation",
+      restarted.deleted(0, "opcv1-ses_a", 1),
+      5000,
+    );
+    assertEquals(seen, [
+      ...Array.from({ length: 100 }, () => "opcv1-ses_a"),
+      "deleted:opcv1-ses_a",
+    ]);
+    await restarted.deleteIntent("opcv1-ses_b", "barrier", "failed", 0);
+    assertEquals(seen.includes("opcv1-ses_b"), false);
+    restarted.scope("reconnected", { sessions: [] });
+    await waitFor(
+      () => seen.filter((id) => id === "opcv1-ses_b").length,
+      (n) => n === 100,
+    );
+  } finally {
     await restarted.stop();
   }
 });

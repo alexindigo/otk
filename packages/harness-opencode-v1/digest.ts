@@ -20,6 +20,7 @@ import type {
   DigestPublication,
   DigestSink,
 } from "@otk/harness";
+import { digestRowFloor } from "@otk/harness";
 import type { OpencodeV1Config } from "./config.ts";
 import { harnessDb } from "./config.ts";
 import { Client, NativeRequestFailure } from "./client.ts";
@@ -1243,7 +1244,20 @@ export class OpencodeV1DigestSink implements DigestSink {
     }
     let rows: Baseline[];
     try {
-      const values = raw.map(header);
+      const values: ReturnType<typeof header>[] = [];
+      for (const row of raw) {
+        // SQL keysets can stop within a fetched page. API cursors are opaque:
+        // those pages instead retain their bounded row quota intact.
+        if (
+          native && !targeted &&
+          values.length >= Math.min(budget.rows, digestRowFloor(this.policy)) &&
+          performance.now() >= budget.until
+        ) {
+          next = raw[values.length - 1].message_id;
+          break;
+        }
+        values.push(header(row));
+      }
       const hashes = await this.#compute.run(signal, () => {
         const started = performance.now();
         return Promise.all(
@@ -1516,7 +1530,17 @@ export class OpencodeV1DigestSink implements DigestSink {
           next = page.next;
         }
       }
-      for (const row of rows) {
+      for (let index = 0; index < rows.length; index++) {
+        if (
+          native &&
+          index >= Math.min(budget.rows, digestRowFloor(this.policy)) &&
+          performance.now() >= budget.until
+        ) {
+          rows = rows.slice(0, index);
+          next = rows.at(-1)!.part_id;
+          break;
+        }
+        const row = rows[index];
         if (
           typeof row.name !== "string" ||
           !["pending", "running", "completed", "error"].includes(row.status) ||

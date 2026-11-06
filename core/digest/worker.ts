@@ -38,9 +38,11 @@ import { DigestBatch } from "./batch.ts";
 import { DigestProgress } from "./progress.ts";
 
 let progress: DigestProgress | undefined;
+let diagnostics = false;
 let progressTimer: ReturnType<typeof setInterval> | undefined;
 let nativeWaiting = 0;
 let nativeUnavailable = false;
+const nativeReads: Record<string, number> = {};
 
 let run: string | undefined,
   db: DigestDb | undefined,
@@ -60,6 +62,8 @@ const execution = new AsyncLocalStorage<{
   signal: AbortSignal;
   turn: DigestExecution;
   catalogPublications?: Map<string, DigestPublicationReservation>;
+  nativeReads?: Record<string, number>;
+  headerRows?: { limit: number; rows: number }[];
 }>();
 function wait<T>(readiness: Promise<T>): Promise<T> {
   return execution.getStore()?.turn.wait(readiness) ?? readiness;
@@ -71,14 +75,29 @@ function yieldChunk(
 }
 const publicationOrder = new DigestPublicationOrder(
   wait,
-  (signal, publish) =>
+  (signal, publish, reservation) =>
     wait(scheduler!.execute(
       (signal, turn) => execution.run({ signal, turn }, publish),
       signal,
+      () => reservation.priority(),
+      false,
+      () => reservation.required(),
     )),
+  () => scheduler?.reconsider(),
 );
 const publishedRevisions = new Map<string, number>();
-const nativeReadsGate = new DigestReadGate(() => scheduler?.interruptIO());
+const nativeReadsGate = new DigestReadGate();
+const servingReads = new Map<
+  number,
+  { controller: AbortController; release?: () => void }
+>();
+function releaseServing(id: number): void {
+  const value = servingReads.get(id);
+  if (!value) return;
+  servingReads.delete(id);
+  value.controller.abort();
+  value.release?.();
+}
 function nativeWait<T>(readiness: Promise<T>, join = false): Promise<T> {
   nativeWaiting++;
   readiness = readiness.finally(() => {
@@ -206,7 +225,10 @@ async function publish(value: DigestPublication): Promise<void> {
     return;
   }
   const signal = context?.signal ?? lifetime.signal;
-  await publicationOrder.reserve(value.sessionID).run(signal, async () => {
+  await publicationOrder.reserve(
+    value.sessionID,
+    context?.turn.priority ?? "attention",
+  ).run(signal, async () => {
     if (value.revision < (publishedRevisions.get(value.sessionID) ?? -1)) {
       return;
     }
@@ -263,7 +285,7 @@ async function publish(value: DigestPublication): Promise<void> {
 async function publishStored(
   sessionID: string,
   cached = false,
-  reserved = publicationOrder.reserve(sessionID),
+  reserved = publicationOrder.reserve(sessionID, "background", true),
 ): Promise<void> {
   const signal = execution.getStore()?.signal ?? lifetime.signal;
   await reserved.run(signal, async () => {
@@ -318,6 +340,30 @@ async function publishStored(
       return;
     }
   });
+}
+/** Rebuildable digest replay parks between identities without a native permit. */
+function replayStored(signal: AbortSignal, cached: boolean): Promise<void> {
+  return scheduler!.execute(
+    (signal, turn) =>
+      execution.run({ signal, turn }, async () => {
+        let after = "";
+        for (;;) {
+          const rows = store!.catalog(
+            sink!.identity,
+            after,
+            policy.publishrows,
+          );
+          if (!rows.length) return;
+          for (const row of rows) {
+            await publishStored(row.id, cached);
+            await yieldChunk(signal);
+          }
+          after = rows.at(-1)!.id;
+        }
+      }),
+    signal,
+    "background",
+  );
 }
 function kick(): void {
   wakeGeneration++;
@@ -389,12 +435,7 @@ async function admitCatalog(
 async function idle(generation: number): Promise<void> {
   if (generation !== wakeGeneration || lifetime.signal.aborted) return;
   await new Promise<void>((resolve) => {
-    const timer = setTimeout(() => {
-      wake = undefined;
-      resolve();
-    }, policy.retryms);
     wake = () => {
-      clearTimeout(timer);
       resolve();
     };
   });
@@ -410,6 +451,20 @@ async function pump(): Promise<void> {
         continue;
       }
       if (batches?.flush()) continue;
+      if (diagnostics) {
+        post({
+          t: "pressure",
+          run: run!,
+          id: 0,
+          queued: scheduler!.queued,
+          active: scheduler!.executing,
+          sliceMs: 0,
+          nativeActive: nativeReadsGate.optionalActive,
+          publicationWaiting: waitingCredit.size,
+          heldCredits: Math.max(0, 1 - credits),
+          nativeReads: { ...nativeReads },
+        });
+      }
       await idle(generation);
     } catch (error) {
       if (lifetime.signal.aborted) break;
@@ -429,6 +484,7 @@ async function start(
   if (run) throw new Error("Digest worker already started");
   run = message.run;
   policy = message.policy;
+  diagnostics = !!message.diagnostics;
   progress = new DigestProgress(`${message.run}:0`);
   progressTimer = setInterval(() => {
     post({
@@ -445,7 +501,6 @@ async function start(
       ),
     });
   }, 1000);
-  const nativeReads: Record<string, number> = {};
   try {
     const contributions = new Map([["opencode-v1", {
       migrations: opencodeV1DigestMigrations,
@@ -500,8 +555,15 @@ async function start(
             new DigestNativeDb(
               file,
               message.diagnostics
-                ? (operation) =>
-                  nativeReads[operation] = (nativeReads[operation] ?? 0) + 1
+                ? (operation, sample) => {
+                  nativeReads[operation] = (nativeReads[operation] ?? 0) + 1;
+                  const context = execution.getStore();
+                  if (context?.nativeReads) {
+                    context.nativeReads[operation] =
+                      (context.nativeReads[operation] ?? 0) + 1;
+                  }
+                  if (sample) context?.headerRows?.push(sample);
+                }
                 : undefined,
             ),
           {
@@ -512,6 +574,7 @@ async function start(
               nativeReadsGate.acquire(
                 signal,
                 execution.getStore()?.turn.priority === "interactive",
+                () => scheduler!.interruptIO(signal),
               ),
             work: (ms) => execution.getStore()?.turn.charge(ms),
           },
@@ -541,6 +604,7 @@ async function start(
       sleep,
       wake: kick,
     });
+    scheduler.viewers(false);
     batches = new DigestBatch({
       rows: policy.publishrows,
       signal: lifetime.signal,
@@ -549,6 +613,9 @@ async function start(
         scheduler!.execute(
           (signal, turn) => execution.run({ signal, turn }, write),
           lifetime.signal,
+          execution.getStore()?.turn.priority ?? "background",
+          false,
+          true,
         ),
       send: (values) => sendRaw({ t: "digests", run: run!, id: 0, values }),
     });
@@ -558,78 +625,88 @@ async function start(
       detail: (id, turnID, signal) => selectedSink.detail(id, turnID, signal),
       close: () => selectedSink.close(),
       step: (job, budget, signal, turn) =>
-        execution.run({ signal, turn }, () =>
-          sqliteRetry(
-            async () => {
-              try {
-                if (inventoryRevision > inventoryComplete) {
-                  // Every dependent step joins admission. Only the revision
-                  // captured by this refresh is satisfied when it completes.
-                  const admitted = inventoryRevision;
-                  const catalog = await sink!.catalog(signal, false);
-                  await admitCatalog(catalog.entries, signal, {
-                    invalidate: false,
-                    helpers: false,
-                  });
-                  inventoryComplete = Math.max(inventoryComplete, admitted);
-                }
-                const start = performance.now();
-                const work = turn.workms;
-                const cursor = await sink!.step(job, budget, signal);
-                nativeUnavailable = false;
-                progress?.chunk(job.directory, turn.workms - work);
-                if (message.diagnostics) {
+        execution.run(
+          { signal, turn, nativeReads: {}, headerRows: [] },
+          () =>
+            sqliteRetry(
+              async () => {
+                try {
+                  if (inventoryRevision > inventoryComplete) {
+                    // Every dependent step joins admission. Only the revision
+                    // captured by this refresh is satisfied when it completes.
+                    const admitted = inventoryRevision;
+                    const catalog = await sink!.catalog(signal, false);
+                    await admitCatalog(catalog.entries, signal, {
+                      invalidate: false,
+                      helpers: false,
+                    });
+                    inventoryComplete = Math.max(inventoryComplete, admitted);
+                  }
+                  const start = performance.now();
+                  const work = turn.workms;
+                  const cursor = await sink!.step(job, budget, signal);
+                  nativeUnavailable = false;
+                  progress?.chunk(job.directory, turn.workms - work);
+                  if (message.diagnostics) {
+                    post({
+                      t: "pressure",
+                      run: run!,
+                      id: 0,
+                      queued: scheduler!.queued,
+                      active: 1,
+                      sliceMs: performance.now() - start,
+                      nativeReads: { ...nativeReads },
+                      sliceReads: { ...execution.getStore()!.nativeReads },
+                      headerRows: execution.getStore()!.headerRows,
+                    });
+                  }
+                  return cursor;
+                } catch (error) {
+                  signal.throwIfAborted();
+                  if (sqliteBusy(error)) throw error;
+                  nativeUnavailable = true;
+                  const row = store!.summary([job.sessionID])[0];
+                  if (row) {
+                    const saved = snapshot(row);
+                    const delta: DigestDelta = {
+                      summary: {
+                        ...saved.summary,
+                        state: "unavailable",
+                        revision: saved.summary.revision + 1,
+                      },
+                      turns: { upsert: {}, remove: [] },
+                      deleted: saved.deleted,
+                    };
+                    db!.transaction(() =>
+                      write(
+                        store!,
+                        selectedSink.identity,
+                        saved.metadata,
+                        delta,
+                      )
+                    );
+                    await publish({
+                      sessionID: job.sessionID,
+                      revision: delta.summary.revision,
+                      delta,
+                    });
+                  }
                   post({
-                    t: "pressure",
+                    t: "error",
                     run: run!,
                     id: 0,
-                    queued: scheduler!.queued,
-                    active: 1,
-                    sliceMs: performance.now() - start,
-                    nativeReads: { ...nativeReads },
-                  });
-                }
-                return cursor;
-              } catch (error) {
-                signal.throwIfAborted();
-                if (sqliteBusy(error)) throw error;
-                nativeUnavailable = true;
-                const row = store!.summary([job.sessionID])[0];
-                if (row) {
-                  const saved = snapshot(row);
-                  const delta: DigestDelta = {
-                    summary: {
-                      ...saved.summary,
-                      state: "unavailable",
-                      revision: saved.summary.revision + 1,
-                    },
-                    turns: { upsert: {}, remove: [] },
-                    deleted: saved.deleted,
-                  };
-                  db!.transaction(() =>
-                    write(store!, selectedSink.identity, saved.metadata, delta)
-                  );
-                  await publish({
+                    scope: "session",
                     sessionID: job.sessionID,
-                    revision: delta.summary.revision,
-                    delta,
+                    message: errorMessage(error),
                   });
+                  return;
                 }
-                post({
-                  t: "error",
-                  run: run!,
-                  id: 0,
-                  scope: "session",
-                  sessionID: job.sessionID,
-                  message: errorMessage(error),
-                });
-                return;
-              }
-            },
-            signal,
-            policy,
-            wait,
-          )),
+              },
+              signal,
+              policy,
+              wait,
+            ),
+        ),
     });
     requests = new DigestRequests(run, scheduler);
     loop = pump();
@@ -661,14 +738,28 @@ async function start(
               authoritative: false,
             });
             seeded.resolve();
+            // Retire cached identities independently of optional summary replay:
+            // otherwise a disconnected restart would revive a deleted lamp.
             for (const row of rows) {
-              await publishStored(row.id, true);
+              if (!row.deleted_at) continue;
+              const saved = snapshot(row);
+              await publish({
+                sessionID: row.id,
+                revision: saved.summary.revision,
+                delta: {
+                  summary: saved.summary,
+                  deleted: saved.deleted,
+                  turns: { upsert: {}, remove: [] },
+                },
+              });
             }
             cachedAfter = rows.at(-1)!.id;
           }
           seeded.resolve();
+          await wait(replayStored(signal, true));
         }),
       AbortSignal.any([controller.signal, lifetime.signal]),
+      "attention",
     );
     cachedReplay = { controller, task };
     void task.catch((error) => {
@@ -697,6 +788,7 @@ async function start(
 async function stop(message: ToWorker): Promise<void> {
   clearInterval(progressTimer);
   lifetime.abort();
+  for (const id of servingReads.keys()) releaseServing(id);
   kick();
   for (const ready of waitingCredit) ready();
   waitingCredit.clear();
@@ -741,7 +833,29 @@ function handle(message: ToWorker): void {
     return;
   }
   if (!requests || !scheduler || !sink) return;
+  if (message.t === "native.acquire") {
+    const controller = new AbortController(),
+      value = { controller } as {
+        controller: AbortController;
+        release?: () => void;
+      };
+    servingReads.set(message.id, value);
+    void nativeReadsGate.acquire(controller.signal, true).then((release) => {
+      if (controller.signal.aborted) {
+        release();
+        return;
+      }
+      value.release = release;
+      post({ t: "native.granted", run: run!, id: message.id });
+    }, () => {});
+    return;
+  }
+  if (message.t === "native.release") {
+    releaseServing(message.request);
+    return;
+  }
   if (message.t === "cancel" || message.t === "read.cancel") {
+    if (message.t === "cancel") releaseServing(message.request);
     requests.cancel(
       message.run,
       message.t === "cancel" ? message.request : message.id,
@@ -750,13 +864,14 @@ function handle(message: ToWorker): void {
     return;
   }
   if (message.t === "credit") {
+    if (message.workms) scheduler.charge(message.workms);
     credits += message.publications;
     for (const ready of waitingCredit) ready();
     waitingCredit.clear();
     return;
   }
   if (message.t === "scope") {
-    if (!message.sessions.length && message.directory === undefined) {
+    if (message.released) {
       scheduler.release(message.owner);
     } else scheduler.setScope(message.owner, message);
     kick();
@@ -961,12 +1076,13 @@ function handle(message: ToWorker): void {
                   helpers: true,
                 });
                 progress?.complete();
-                for (
-                  const [sessionID, reserved] of changed
-                ) {
-                  current();
-                  await publishStored(sessionID, false, reserved);
-                }
+                const controller = new AbortController();
+                const task = replayStored(
+                  AbortSignal.any([controller.signal, lifetime.signal]),
+                  false,
+                );
+                cachedReplay = { controller, task };
+                observeTask(task, message);
               } finally {
                 for (const reserved of changed.values()) reserved.release();
               }
@@ -1076,7 +1192,9 @@ function handle(message: ToWorker): void {
           policy,
           wait,
         )),
-    message.t === "read" && message.priority !== "user"
+    message.t === "catalog"
+      ? "attention"
+      : message.t === "read" && message.priority !== "user"
       ? message.priority
       : "interactive",
     message.t === "read",

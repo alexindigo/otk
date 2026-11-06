@@ -235,6 +235,7 @@ test("selected worker catalog contributions publish complete values through boun
     publish() {},
   });
   const adapter = new OpencodeV1Adapter(settings, undefined, fetch, bridge);
+  bridge.scope("viewer", { sessions: [] });
   const lease = adapter.catalogs.acquire(oc.directory);
   try {
     const [agents, models, files] = await Promise.all([

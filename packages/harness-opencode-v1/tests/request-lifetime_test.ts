@@ -10,6 +10,45 @@ import { files } from "../files.ts";
 import { resources } from "../resources.ts";
 import { questions } from "../questions.ts";
 import { sessionDirectory } from "../directory.ts";
+import { ReadAdmission } from "@otk/harness";
+import { bounded } from "../../../tests/support/resources.ts";
+
+Deno.test("native effects do not capture read admission while their response is held", async () => {
+  const held = Promise.withResolvers<Response>(),
+    entered = Promise.withResolvers<void>();
+  const gate = new ReadAdmission();
+  const client = new Client(
+    {
+      url: "http://fixture",
+      username: "",
+      password: "",
+      db: "",
+      heartbeattimeout: 25,
+      reconnectmax: 30,
+      requestms: 1000,
+    },
+    (input) => {
+      if (new URL(String(input)).pathname === "/effect") {
+        entered.resolve();
+        return held.promise;
+      }
+      return Promise.resolve(Response.json("independent read"));
+    },
+    undefined,
+    (signal) => gate.acquire(signal, true),
+  );
+  const effect = client.json("/effect", { method: "POST" });
+  try {
+    await entered.promise;
+    assertEquals(
+      await bounded("read during native effect", client.json("/read"), 1000),
+      "independent read",
+    );
+  } finally {
+    held.resolve(Response.json("effect settled"));
+    await effect;
+  }
+});
 
 Deno.test("classified native effect fences before I/O and reports ambiguous abort separately from rejection", async () => {
   const calls: string[] = [];

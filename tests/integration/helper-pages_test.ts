@@ -91,7 +91,19 @@ test("real native helper summaries decorate pages, removals patch only progress 
     }
     server = await SidecarTest.start(oc, { state: { path } });
     client = new WsClient(server.url);
+    client.lease({
+      directory: oc.directory,
+      selected: parent.id,
+      crumbs: [],
+      rows: [child.id],
+    });
     await client.connect();
+    // Cached helper replay is optional startup work. Reacquire its actual view
+    // and observe readiness rather than making the first page a global barrier.
+    await waitFor(
+      () => client!.entry(child.id)?.digest.helper,
+      (value) => value?.state === "ready",
+    );
     const reloaded = await client.rpc<MessagePage>("session.messages", {
       sessionID: parent.id,
     });

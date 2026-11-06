@@ -181,7 +181,12 @@ export class OpencodeV1Adapter implements Harness {
       nonce: () => crypto.randomUUID(),
       emit: (id, event, clock) => this.#target?.content(id, event, clock),
     });
-    this.client = new Client(cfg.harness, fetcher);
+    this.client = new Client(
+      cfg.harness,
+      fetcher,
+      undefined,
+      digest?.admission ? (signal) => digest.admission!(signal) : undefined,
+    );
     this.#questions = new PendingQuestions(
       cfg.catalogs.pending,
       (before, after) => {
@@ -1080,13 +1085,15 @@ export class OpencodeV1Adapter implements Harness {
     // an inventory-sized synchronous section on reconnect.
     const budget = this.digest?.publishrows ?? this.cfg.digest.publishrows;
     let quota = budget;
+    let until = performance.now() + this.cfg.digest.slicems;
     const each = async <T>(values: Iterable<T>, apply: (value: T) => void) => {
       for (const value of values) {
         if (!this.#current(controller)) return;
         apply(value);
-        if (quota !== undefined && --quota === 0) {
+        if (--quota === 0 || performance.now() >= until) {
           quota = budget;
           await new Promise<void>((resolve) => setTimeout(resolve, 0));
+          until = performance.now() + this.cfg.digest.slicems;
         }
       }
     };

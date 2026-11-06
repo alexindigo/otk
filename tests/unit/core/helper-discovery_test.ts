@@ -118,6 +118,7 @@ test("live catalog discovery resumes helper demand admitted before its metadata 
     },
   });
   try {
+    bridge.scope("viewer", { sessions: [] });
     await bridge.start();
     await bridge.catalog(1, new AbortController().signal);
     await waitFor(

@@ -1,38 +1,90 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import type { DigestPriority } from "@otk/harness";
 export interface DigestPublicationReservation {
   run<T>(signal: AbortSignal, publish: () => Promise<T>): Promise<T>;
   release(): void;
+  priority(): DigestPriority;
+  required(): boolean;
 }
-/** Source-free identity ordering; committed publications own their execution. */
+interface Node {
+  previous?: Node;
+  tail: Promise<void>;
+  retired: boolean;
+  optional: boolean;
+  priority: DigestPriority;
+  effective: DigestPriority;
+  required: boolean;
+}
+const ranks: DigestPriority[] = [
+  "interactive",
+  "attention",
+  "visible",
+  "background",
+];
+/** Source-free identity ordering and dependency-local priority donation. */
 export class DigestPublicationOrder {
-  #tails = new Map<string, Promise<void>>();
+  #tails = new Map<string, Node>();
   constructor(
     readonly wait: <T>(readiness: Promise<T>) => Promise<T>,
     readonly schedule: <T>(
       signal: AbortSignal,
       publish: () => Promise<T>,
+      reservation: DigestPublicationReservation,
     ) => Promise<T> = (_signal, publish) => publish(),
+    readonly changed: () => void = () => {},
   ) {}
-  reserve(identity: string): DigestPublicationReservation {
-    const previous = this.#tails.get(identity) ?? Promise.resolve();
+  #refresh(identity: string): void {
+    let donation: DigestPriority | undefined;
+    for (let node = this.#tails.get(identity); node; node = node.previous) {
+      if (
+        !node.retired && !node.optional &&
+        (donation === undefined ||
+          ranks.indexOf(node.priority) < ranks.indexOf(donation))
+      ) donation = node.priority;
+      node.required = !node.optional || donation !== undefined;
+      node.effective = donation !== undefined &&
+          ranks.indexOf(donation) < ranks.indexOf(node.priority)
+        ? donation
+        : node.priority;
+    }
+    this.changed();
+  }
+  reserve(
+    identity: string,
+    priority: DigestPriority = "interactive",
+    optional = false,
+  ): DigestPublicationReservation {
+    const previous = this.#tails.get(identity);
     const done = Promise.withResolvers<void>();
-    const tail = previous.then(() => done.promise);
-    this.#tails.set(identity, tail);
-    let retired = false, started = false;
+    const tail = (previous?.tail ?? Promise.resolve()).then(() => done.promise);
+    const node: Node = {
+      previous,
+      tail,
+      retired: false,
+      optional,
+      priority,
+      effective: priority,
+      required: !optional,
+    };
+    this.#tails.set(identity, node);
+    this.#refresh(identity);
+    let started = false;
     const release = () => {
-      if (retired) return;
-      retired = true;
+      if (node.retired) return;
+      node.retired = true;
       done.resolve();
-      // A canceled middle reservation still waits for its predecessor. It cannot
-      // sever the chain and let a successor publish through the old producer.
+      this.#refresh(identity);
+      // A canceled middle node cannot sever its predecessor's ordering fence.
       void tail.then(() => {
-        if (this.#tails.get(identity) === tail) this.#tails.delete(identity);
+        if (this.#tails.get(identity) === node) this.#tails.delete(identity);
       });
     };
-    return {
+    const reservation: DigestPublicationReservation = {
       release,
+      priority: () => node.effective,
+      required: () => node.required,
       run: async (signal, publish) => {
-        if (started || retired) {
+        if (started || node.retired) {
           throw new Error("Publication reservation is retired");
         }
         started = true;
@@ -41,20 +93,18 @@ export class DigestPublicationOrder {
           return await this.schedule(signal, async () => {
             executing = true;
             try {
-              await this.wait(previous);
+              await this.wait(previous?.tail ?? Promise.resolve());
               signal.throwIfAborted();
               return await publish();
             } finally {
-              // Release from the publication's execution, before its producer
-              // resumes. Interactive pressure may have paused that producer.
               release();
             }
-          });
+          }, reservation);
         } finally {
-          // Scheduling can reject before the publication acquires execution.
           if (!executing) release();
         }
       },
     };
+    return reservation;
   }
 }

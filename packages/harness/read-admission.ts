@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 interface Waiting {
   essential: boolean;
+  preempt?: () => void;
   signal: AbortSignal;
   resolve(release: () => void): void;
   reject(error: unknown): void;
@@ -8,18 +9,26 @@ interface Waiting {
 }
 /** I/O permission is distinct from executing work in the shared scheduler. */
 export class ReadAdmission {
-  #active = new Set<{ essential: boolean }>();
+  #active = new Set<{ essential: boolean; preempt?: () => void }>();
   #waiting: Waiting[] = [];
   constructor(readonly preempt?: () => void, readonly maximum = 1) {
     if (!Number.isSafeInteger(maximum) || maximum <= 0) {
       throw new TypeError("Invalid read admission limit");
     }
   }
-  acquire(signal: AbortSignal, essential: boolean): Promise<() => void> {
+  get optionalActive(): number {
+    return [...this.#active].filter((value) => !value.essential).length;
+  }
+  acquire(
+    signal: AbortSignal,
+    essential: boolean,
+    preempt?: () => void,
+  ): Promise<() => void> {
     if (signal.aborted) return Promise.reject(signal.reason);
     return new Promise((resolve, reject) => {
       const request: Waiting = {
         essential,
+        preempt,
         signal,
         resolve,
         reject,
@@ -35,7 +44,9 @@ export class ReadAdmission {
         essential && this.#active.size >= this.maximum &&
         [...this.#active].some((value) => !value.essential)
       ) {
-        this.preempt?.();
+        for (const active of this.#active) {
+          if (!active.essential) (active.preempt ?? this.preempt)?.();
+        }
       }
       this.#pump();
     });
@@ -49,7 +60,7 @@ export class ReadAdmission {
         request.reject(request.signal.reason);
         continue;
       }
-      const active = { essential: request.essential };
+      const active = { essential: request.essential, preempt: request.preempt };
       this.#active.add(active);
       request.resolve(() => {
         if (this.#active.delete(active)) this.#pump();

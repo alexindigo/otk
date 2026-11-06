@@ -71,7 +71,10 @@ export class DigestNativeDb {
   readonly identity: string;
   constructor(
     readonly file: string,
-    readonly observe?: (operation: string) => void,
+    readonly observe?: (
+      operation: string,
+      sample?: { limit: number; rows: number },
+    ) => void,
   ) {
     this.identity = this.fileIdentity();
     const db = this.db = new DatabaseSync(file, { readOnly: true });
@@ -158,8 +161,7 @@ export class DigestNativeDb {
     afterMessage: string,
     limit: number,
   ): DigestHeader[] {
-    this.observe?.("headers");
-    return this.db.prepare(
+    const rows = this.db.prepare(
       `SELECT m.session_id,m.id AS message_id,${projection} FROM message m JOIN json_each(?) wanted ON wanted.value=m.session_id WHERE (m.session_id,m.id)>(?,?) ORDER BY m.session_id,m.id LIMIT ?`,
     ).all(
       JSON.stringify(sessions.map(ids.decode)),
@@ -167,6 +169,8 @@ export class DigestNativeDb {
       afterMessage,
       limit,
     ) as unknown as DigestHeader[];
+    this.observe?.("headers", { limit, rows: rows.length });
+    return rows;
   }
   replacements(
     keys: { sessionID: string; messageID: string }[],

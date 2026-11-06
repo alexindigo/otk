@@ -78,6 +78,7 @@ test("public worker port publishes real native totals and recovers committed met
   };
   const bridge = new DigestBridge(options);
   try {
+    bridge.scope("viewer", { sessions: [] });
     await bridge.start();
     const catalog = await bridge.catalog(1, new AbortController().signal);
     assertEquals(
@@ -140,6 +141,7 @@ test("public worker port publishes real native totals and recovers committed met
     },
   });
   try {
+    restarted.scope("viewer", { sessions: [] });
     await restarted.start();
     await restarted.catalog(2, new AbortController().signal);
     await waitFor(
@@ -371,6 +373,7 @@ test("a malformed aggregate is scoped to its session and cannot starve another d
     },
   });
   try {
+    bridge.scope("viewer", { sessions: [] });
     await bridge.catalog(1, new AbortController().signal);
     await waitFor(
       () => [...states],

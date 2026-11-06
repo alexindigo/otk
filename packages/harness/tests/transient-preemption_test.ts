@@ -26,7 +26,7 @@ test("essential native admission preempts and retries a revocable transient read
     freeMemory: () => 100,
     sleep: () => Promise.resolve(),
   });
-  const admission = new ReadAdmission(() => scheduler.interruptIO());
+  const admission = new ReadAdmission();
   const source = Promise.withResolvers<void>();
   const owner = new AbortController();
   let attempts = 0, entered = false, aborted = 0, joined = false;
@@ -34,7 +34,9 @@ test("essential native admission preempts and retries a revocable transient read
   const optional = scheduler.execute(
     async (signal, turn) => {
       attempts++;
-      const release = await turn.wait(admission.acquire(signal, false));
+      const release = await turn.wait(
+        admission.acquire(signal, false, () => scheduler.interruptIO(signal)),
+      );
       entered = true;
       const body = Promise.withResolvers<void>();
       const abort = () => {
@@ -44,7 +46,9 @@ test("essential native admission preempts and retries a revocable transient read
       signal.addEventListener("abort", abort, { once: true });
       void source.promise.then(body.resolve);
       try {
-        await turn.wait(body.promise, "io");
+        // Permission ownership, not a transient wait marker, identifies the
+        // read that must settle before essential admission can proceed.
+        await turn.wait(body.promise);
         return "scalar result";
       } finally {
         signal.removeEventListener("abort", abort);

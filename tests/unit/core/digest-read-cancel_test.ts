@@ -148,6 +148,7 @@ test("closing the last breakdown cancels actual worker detail; finished cancels 
     turnID: "user",
   };
   try {
+    bridge.scope("viewer", { sessions: [] });
     await bridge.catalog(1, new AbortController().signal);
     await waitFor(() => ready, Boolean);
     holding = true;

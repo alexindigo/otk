@@ -127,6 +127,7 @@ test("bulk digest row credit reaches the index consumer as bounded multi-session
     },
   });
   resources().defer("batch bridge", () => bridge.stop());
+  bridge.scope("viewer", { sessions: [] });
   await bridge.start();
   const catalog = await bridge.catalog(1, new AbortController().signal);
   for (const entry of catalog.entries) index.upsertMetadata(entry);

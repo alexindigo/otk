@@ -47,3 +47,17 @@ test("retiring a reserved publisher cannot let its successor overtake an earlier
   await Promise.all([first, third]);
   assertEquals(seen, ["first", "third"]);
 });
+test("canceling a dependent reservation withdraws only its predecessor donation", () => {
+  const order = new DigestPublicationOrder((value) => value);
+  const replay = order.reserve("same", "background", true);
+  const unrelated = order.reserve("other", "background", true);
+  const deletion = order.reserve("same", "interactive");
+  assertEquals(replay.priority(), "interactive");
+  assertEquals(replay.required(), true);
+  assertEquals(unrelated.required(), false);
+  deletion.release();
+  assertEquals(replay.priority(), "background");
+  assertEquals(replay.required(), false);
+  replay.release();
+  unrelated.release();
+});

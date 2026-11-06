@@ -202,6 +202,7 @@ export class Client {
       : this.readiness.run(
         options.signal ?? new AbortController().signal,
         read,
+        options.classification === "read",
       );
     const response =
       await (options.operation?.wait

@@ -64,6 +64,7 @@ test("sessions admitted behind a held native catalog all publish ready digests",
     diagnostic: (error) => diagnostics.push(String(error)),
   });
   try {
+    bridge.scope("viewer", { sessions: [] });
     await bridge.start();
     await bridge.catalog(1, new AbortController().signal);
     holding = true;

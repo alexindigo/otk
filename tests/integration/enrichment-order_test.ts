@@ -23,6 +23,7 @@ test("worker-native completion clocks cross only the transient scalar read chann
     publish() {},
   });
   try {
+    bridge.scope("viewer", { sessions: [] });
     const session = await oc.session<{ id: string }>("/session", {
       method: "POST",
       body: { title: "Scalar clock" },

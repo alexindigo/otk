@@ -8,6 +8,8 @@ import type {
   DigestSink,
   DirtySession,
 } from "./digest.ts";
+import { ReadyQueue } from "./ready-queue.ts";
+import { digestRowFloor } from "./digest.ts";
 const rank: Record<DigestPriority, number> = {
   interactive: 0,
   attention: 1,
@@ -26,11 +28,15 @@ interface Turn {
   order: number;
   signal: AbortSignal;
   resume(): Promise<void>;
+  finishing(): boolean;
 }
 interface Lifetime {
+  signal: AbortSignal;
   done: Promise<void>;
   reading(): boolean;
   priority(): number;
+  running(): boolean;
+  optional: boolean;
   preempt?: AbortController;
 }
 /** One cooperative executor. Waiting lifetimes have no executing turn. */
@@ -46,6 +52,26 @@ export class DigestScheduler {
   #order = 0;
   #stopping?: Promise<void>;
   #ready = new Set<Turn>();
+  #turns = new ReadyQueue<Turn>((a, b) =>
+    (a.signal.aborted ? -1 : a.priority()) <
+      (b.signal.aborted ? -1 : b.priority()) ||
+    (a.signal.aborted ? -1 : a.priority()) ===
+          (b.signal.aborted ? -1 : b.priority()) && a.order < b.order
+  );
+  #finishing = new ReadyQueue<Turn>((a, b) =>
+    (a.signal.aborted ? -1 : a.priority()) <
+      (b.signal.aborted ? -1 : b.priority()) ||
+    (a.signal.aborted ? -1 : a.priority()) ===
+          (b.signal.aborted ? -1 : b.priority()) && a.order < b.order
+  );
+  #jobs = new ReadyQueue<Pending>((a, b) =>
+    this.#priority(a) < this.#priority(b) ||
+    this.#priority(a) === this.#priority(b) &&
+      (a.job.updated > b.job.updated ||
+        a.job.updated === b.job.updated && a.order < b.order)
+  );
+  #viewers = true;
+  #rows?: number;
   #lifetimes = new Set<Lifetime>();
   #errors: unknown[] = [];
   #backoffs = new Set<Promise<void>>();
@@ -103,7 +129,10 @@ export class DigestScheduler {
         pending.job.messages = undefined;
       }
       pending.changed = true;
-    } else {this.#pending.set(key, {
+      if (!pending.active) this.#jobs.add(pending);
+      this.#reindexTurns();
+    } else {
+      const value: Pending = {
         job: {
           ...identity,
           revision: dirty?.revision ?? 0,
@@ -116,13 +145,18 @@ export class DigestScheduler {
         order: this.#order++,
         changed: false,
         active: false,
-      });}
+      };
+      this.#pending.set(key, value);
+      this.#jobs.add(value);
+    }
     this.#wake();
   }
   promote(identity: DigestIdentity, priority: DigestPriority): boolean {
     const pending = this.#pending.get(this.#key(identity));
     if (!pending) return false;
     if (rank[priority] < rank[pending.priority]) pending.priority = priority;
+    if (!pending.active) this.#jobs.add(pending);
+    this.#reindexTurns();
     this.#wake();
     return true;
   }
@@ -132,6 +166,7 @@ export class DigestScheduler {
   ): void {
     if (!this.#controller.signal.aborted) {
       this.#scopes.set(owner, structuredClone(scope));
+      this.#viewers = true;
       this.#visibility();
     }
   }
@@ -144,12 +179,55 @@ export class DigestScheduler {
         this.#visibleDirectories.add(scope.directory);
       }
     }
+    for (const pending of this.#pending.values()) {
+      if (!pending.active) this.#jobs.add(pending);
+    }
+    this.#reindexTurns();
     this.#wake();
+  }
+  #reindexTurns(): void {
+    for (const turn of this.#ready) this.#indexTurn(turn);
+  }
+  #indexTurn(turn: Turn): void {
+    this.#turns.delete(turn);
+    this.#finishing.delete(turn);
+    (turn.finishing() || turn.signal.aborted ? this.#finishing : this.#turns)
+      .add(
+        turn,
+      );
+  }
+  /** Presence is independent of scope: even an empty welcome view is a viewer. */
+  viewers(active: boolean): void {
+    this.#viewers = active;
+    this.#reindexTurns();
+    this.#wake();
+  }
+  /** A dependency owner changed a queued continuation's inherited priority. */
+  reconsider(): void {
+    this.#reindexTurns();
+    this.#wake();
+  }
+  /** Serving-isolate reduction/encoding belongs to the same background duty bill. */
+  charge(elapsed: number): void {
+    if (!Number.isFinite(elapsed) || elapsed < 0) {
+      throw new TypeError("Invalid digest work measurement");
+    }
+    this.#dutyUntil = Math.max(this.#now(), this.#dutyUntil) +
+      elapsed * (1 / this.policy.cpu - 1);
+    this.#sleepDuty();
   }
   release(owner: string): void {
     this.#scopes.delete(owner);
+    this.#viewers = this.#scopes.size > 0;
     this.#interactive.delete(owner);
     this.#visibility();
+    if (!this.#viewers) {
+      for (const life of this.#lifetimes) {
+        if (life.optional) {
+          life.preempt?.abort(new DOMException("No viewers", "AbortError"));
+        }
+      }
+    }
   }
   interactive(owner: string, active: boolean): void {
     if (active && !this.#controller.signal.aborted) {
@@ -160,7 +238,11 @@ export class DigestScheduler {
   get queued(): number {
     return this.#pending.size;
   }
+  get executing(): number {
+    return [...this.#lifetimes].filter((life) => life.running()).length;
+  }
   get waitReason(): string | undefined {
+    if (!this.#viewers) return "paused with no viewers";
     if (this.#interactive.size) return "queued behind current work";
     if (this.resources.freeMemory() < this.policy.memoryreserve) {
       return "paused for memory capacity";
@@ -171,6 +253,9 @@ export class DigestScheduler {
     return undefined;
   }
   #priority(pending: Pending): number {
+    // An admitted slice drains its bounded commit/publication and I/O cleanup.
+    // Only its source-free cursor is parked, never a permission or credit.
+    if (!this.#viewers && pending.active) return rank.attention;
     const priority = rank[pending.priority];
     return priority > rank.visible &&
         (this.#visibleSessions.has(pending.job.sessionID) ||
@@ -182,18 +267,22 @@ export class DigestScheduler {
   execute<T>(
     run: (signal: AbortSignal, execution: DigestExecution) => Promise<T>,
     signal: AbortSignal,
-    priority: DigestPriority = "interactive",
+    priority: DigestPriority | (() => DigestPriority) = "interactive",
     interruptible = false,
+    finishing: boolean | (() => boolean) = false,
   ): Promise<T> {
     if (signal.aborted || this.#controller.signal.aborted) {
       return Promise.reject(signal.reason ?? this.#controller.signal.reason);
     }
-    if (priority === "interactive") {
+    const current = () =>
+      typeof priority === "function" ? priority() : priority;
+    if (current() === "interactive") {
       this.#dutyWait?.abort();
     }
-    return interruptible && priority !== "interactive"
+    return interruptible && typeof priority === "string" &&
+        priority !== "interactive"
       ? this.#read(run, signal, priority)
-      : this.#job(run, signal, () => rank[priority]);
+      : this.#job(run, signal, () => rank[current()], undefined, finishing);
   }
   /** Only explicitly revocable read callbacks may restart after I/O preemption. */
   async #read<T>(
@@ -225,9 +314,12 @@ export class DigestScheduler {
     }
   }
   /** The I/O-permission owner requests preemption only when a read needs it. */
-  interruptIO(): void {
+  interruptIO(signal?: AbortSignal): void {
     for (const life of this.#lifetimes) {
-      if (life.reading() && life.priority() > rank.interactive) {
+      if (
+        (signal ? life.signal === signal : life.reading()) &&
+        life.priority() > rank.interactive
+      ) {
         life.preempt?.abort(
           new DOMException("Essential digest I/O demand", "AbortError"),
         );
@@ -239,16 +331,21 @@ export class DigestScheduler {
     signal: AbortSignal,
     priority: () => number,
     preempt?: AbortController,
+    finishing: boolean | (() => boolean) = false,
+    optional = false,
   ): Promise<T> {
     const combined = AbortSignal.any([signal, this.#controller.signal]);
     const result = Promise.withResolvers<T>(),
       settled = Promise.withResolvers<void>();
     let waitKind: "readiness" | "io" | undefined;
     const lifetime = {
+      signal: combined,
       done: settled.promise,
       priority,
+      optional: optional || priority() >= rank.visible,
       preempt,
       reading: () => waitKind === "io",
+      running: () => phase === "running",
     };
     this.#lifetimes.add(lifetime);
     let phase: "queued" | "running" | "waiting" | "done" = "queued",
@@ -272,7 +369,11 @@ export class DigestScheduler {
     };
     const finish = () => {
       release("done");
-      if (turn) this.#ready.delete(turn);
+      if (turn) {
+        this.#ready.delete(turn);
+        this.#turns.delete(turn);
+        this.#finishing.delete(turn);
+      }
       combined.removeEventListener("abort", cancel);
       this.#lifetimes.delete(lifetime);
       settled.resolve();
@@ -281,6 +382,8 @@ export class DigestScheduler {
     const queue = (resume: () => void) => {
       phase = "queued";
       turn = {
+        finishing: () =>
+          typeof finishing === "function" ? finishing() : finishing,
         priority,
         order: this.#order++,
         signal: combined,
@@ -295,9 +398,11 @@ export class DigestScheduler {
         },
       };
       this.#ready.add(turn);
+      this.#indexTurn(turn);
       this.#wake();
     };
     const cancel = () => {
+      if (turn) this.#indexTurn(turn);
       if (!started) {
         result.reject(combined.reason);
         finish();
@@ -392,6 +497,7 @@ export class DigestScheduler {
   #eligible(priority: number, signal?: AbortSignal): boolean {
     if (signal?.aborted) return true; // Canceled continuations still join their cleanup.
     if (priority === rank.interactive) return true;
+    if (priority >= rank.visible && !this.#viewers) return false;
     if (this.#controller.signal.aborted) return false;
     if (this.#dutyUntil > this.#now()) {
       this.#sleepDuty();
@@ -407,52 +513,50 @@ export class DigestScheduler {
   }
   async #tick(): Promise<boolean> {
     if (this.#errors.length) throw this.#errors.shift();
-    let turn: Turn | undefined;
-    for (const candidate of this.#ready) {
-      if (
-        !turn ||
-        (candidate.signal.aborted ? -1 : candidate.priority()) <
-          (turn.signal.aborted ? -1 : turn.priority()) ||
-        candidate.priority() === turn.priority() && candidate.order < turn.order
-      ) turn = candidate;
-    }
-    let next: Pending | undefined;
-    if (!this.#controller.signal.aborted) {
-      for (const pending of this.#pending.values()) {
-        if (pending.active) {
-          continue;
-        }
-        if (
-          !next || this.#priority(pending) < this.#priority(next) ||
-          this.#priority(pending) === this.#priority(next) &&
-            (pending.job.updated > next.job.updated ||
-              pending.job.updated === next.job.updated &&
-                pending.order < next.order)
-        ) next = pending;
-      }
-    }
+    let turn = this.#turns.peek();
+    if (turn && !this.#eligible(turn.priority(), turn.signal)) turn = undefined;
+    const finishing = this.#finishing.peek();
+    if (
+      finishing &&
+      (!turn || finishing.signal.aborted ||
+        finishing.priority() < turn.priority())
+    ) turn = finishing;
+    const next = this.#controller.signal.aborted || !this.#viewers
+      ? undefined
+      : this.#jobs.peek();
     if (
       next &&
       (!turn ||
-        this.#priority(next) < (turn.signal.aborted ? -1 : turn.priority()))
+        this.#priority(next) < (turn.signal.aborted ? -1 : turn.priority())) &&
+      this.#eligible(this.#priority(next))
     ) {
-      if (!this.#eligible(this.#priority(next))) return false;
       const pending = next;
       const slice = new AbortController();
       let failed = false;
       pending.active = true;
+      this.#jobs.delete(pending);
       pending.changed = false;
       void this.#job(
         async (signal, execution) => {
           const cursor = await this.#sinks.get(pending.job.provider)!.step(
             structuredClone(pending.job),
             {
-              rows: this.policy.batch,
+              rows: this.#rows ?? this.policy.batch,
               until: this.#now() + this.policy.slicems,
             },
             signal,
             execution,
           );
+          // Adapt the next row quota to observed executing work, not I/O waits.
+          if (execution.workms > this.policy.slicems) {
+            this.#rows = Math.max(
+              digestRowFloor(this.policy),
+              Math.floor(
+                (this.#rows ?? this.policy.batch) * this.policy.slicems /
+                  execution.workms,
+              ),
+            );
+          }
           signal.throwIfAborted();
           if (pending.changed || cursor !== undefined) {
             if (cursor) pending.job.cursor = cursor;
@@ -462,6 +566,8 @@ export class DigestScheduler {
         AbortSignal.any([this.#controller.signal, slice.signal]),
         () => this.#priority(pending),
         slice,
+        false,
+        true,
       ).catch((error) => {
         if (!this.#controller.signal.aborted && !slice.signal.aborted) {
           failed = true;
@@ -478,18 +584,27 @@ export class DigestScheduler {
             if (!this.#controller.signal.aborted) this.#errors.push(error);
           }).finally(() => {
             pending.active = false;
+            if (this.#pending.has(this.#key(pending.job))) {
+              this.#jobs.add(pending);
+            }
             this.#backoffs.delete(backoff);
             this.#wake();
           });
           this.#backoffs.add(backoff);
-        } else pending.active = false;
+        } else {
+          pending.active = false;
+          if (this.#pending.has(this.#key(pending.job))) {
+            this.#jobs.add(pending);
+          }
+        }
         this.#wake();
       });
       return await this.#tick();
     }
     if (!turn) return false;
-    if (!this.#eligible(turn.priority(), turn.signal)) return false;
     this.#ready.delete(turn);
+    this.#turns.delete(turn);
+    this.#finishing.delete(turn);
     await turn.resume();
     return true;
   }
