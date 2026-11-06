@@ -992,7 +992,7 @@ export default function SharedControls(
         <div style={{ display: "flex", height: "220px" }}>
           <ProjectInbox
             projects={[]}
-            entries={[]}
+            duplicateName={() => false}
             servers={[]}
             prefs={prefs()}
             ready={ready()}

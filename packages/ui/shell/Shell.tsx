@@ -497,7 +497,7 @@ export default function Shell(
           </Show>
           <ProjectInbox
             projects={projects()}
-            entries={resources.metadataEntries()}
+            duplicateName={resources.duplicateProjectName}
             servers={sidecars.state.list}
             selected={project()}
             prefs={toggles.state.prefs}

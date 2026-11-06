@@ -4,6 +4,7 @@ import {
   approvalAttention,
   createAttentionProjection,
   createIndex,
+  createState,
   type EntryChanges,
 } from "@otk/client";
 import type { IndexEntry } from "@otk/protocol";
@@ -158,4 +159,36 @@ Deno.test("attention deltas match the full contract across nested policies, cycl
       `turn ${n}`,
     );
   }
+});
+
+Deno.test("digest-only updates preserve attention reader clocks while full keyed values remain current", () => {
+  const index = createIndex();
+  let keys: Record<string, number> = {};
+  const owner = createAttentionProjection({
+    entry: (id) => index.get("s", id),
+    ids: () => index.ids("s"),
+    children: (id) => index.children("s", id),
+    factory(initial) {
+      keys = (initial as { keys: Record<string, number> }).keys;
+      return createState(initial);
+    },
+  });
+  index.receive("s", { t: "index.snapshot", rev: 0, entries: [row("root")] });
+  owner.update(index.changes("s")!.ids, true);
+  const before = { ...keys };
+  index.receive("s", {
+    t: "index.patch",
+    rev: 1,
+    ops: [{
+      op: "digest",
+      id: "root",
+      revision: 1,
+      summary: { state: "ready", revision: 1 },
+      turns: { upsert: {}, remove: [] },
+      deleted: null,
+    }],
+  });
+  owner.update(index.changes("s")!.ids);
+  assertEquals(keys, before);
+  assertEquals(owner.get("root")?.digest.state, "ready");
 });

@@ -17,7 +17,9 @@ import type { Operation } from "./requests.ts";
 export function requestAttention(
   operations: readonly Operation<unknown>[],
   metadata: RequestMetadataRegistry,
-  entries: readonly IndexMetadata[],
+  entries:
+    | readonly IndexMetadata[]
+    | ((id: string) => IndexMetadata | undefined),
   tasks: readonly TaskRecord[],
 ): {
   entries<T extends IndexMetadata>(
@@ -25,8 +27,13 @@ export function requestAttention(
   ): (T & OperationAttention)[];
   projects(values: readonly InboxProject[]): InboxProject[];
   tasks: Readonly<Record<string, InboxStatus>>;
+  sessions: ReadonlyMap<string, InboxStatus>;
+  projectStates: ReadonlyMap<string, InboxStatus>;
 } {
-  const sessions = new Map(entries.map((entry) => [entry.id, entry]));
+  const lookup = typeof entries === "function" ? entries : (() => {
+    const sessions = new Map(entries.map((entry) => [entry.id, entry]));
+    return (id: string) => sessions.get(id);
+  })();
   const byTask = new Map(tasks.map((task) => [task.id, task]));
   const sessionStates = new Map<string, InboxStatus>(),
     projectStates = new Map<string, InboxStatus>();
@@ -37,7 +44,7 @@ export function requestAttention(
     status: InboxStatus,
   ) => map.set(key, attentionStatus(map.get(key), status));
   const addSession = (id: string, status: InboxStatus) => {
-    if (!sessions.get(id)?.deleted) add(sessionStates, id, status);
+    if (!lookup(id)?.deleted) add(sessionStates, id, status);
   };
   for (const operation of operations) {
     const state = operation.state, owner = state.owner;
@@ -48,7 +55,7 @@ export function requestAttention(
     // Automatic bookkeeping has diagnostics, but never work for the user to
     // supervise. Its failure must not promote a session/project into attention.
     if (metadata.get(state.method)?.presentation === "bookkeeping") continue;
-    const session = sessions.get(owner), task = byTask.get(owner);
+    const session = lookup(owner), task = byTask.get(owner);
     // Authoritative lifetime facts outrank every retained operation receipt,
     // regardless of whether the operation settles before or after deletion.
     if (session?.deleted) continue;
@@ -66,12 +73,14 @@ export function requestAttention(
       for (
         const id of [
           owner,
-          ...sessionAncestors(owner, (id) => sessions.get(id)),
+          ...sessionAncestors(owner, lookup),
         ]
       ) addSession(id, status);
     }
   }
   return {
+    sessions: sessionStates,
+    projectStates,
     entries: (values) =>
       values.map((entry) =>
         sessionStates.has(entry.id)

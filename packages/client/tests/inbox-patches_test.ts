@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assertEquals, assertStrictEquals } from "@std/assert";
 import type { InboxBaseline, InboxSnapshot } from "@otk/protocol";
-import { createInbox, type InboxRpc } from "../inbox.ts";
+import { createInbox, type InboxChanges, type InboxRpc } from "../inbox.ts";
+import { createState, type StateFactory } from "../state.ts";
 
 const snapshot = (): InboxSnapshot => ({
   projects: [{
@@ -16,6 +17,53 @@ const snapshot = (): InboxSnapshot => ({
   finishes: {},
   pathTemplates: [],
 });
+Deno.test("accepted inbox facts and keyed observers are current before a deferred binding publishes", () => {
+  const pending: (() => void)[] = [];
+  const factory: StateFactory = (initial) => {
+    const visible = structuredClone(initial);
+    const store = createState(initial);
+    return {
+      ...store,
+      state: visible,
+      update(change) {
+        store.update(change);
+        pending.push(() => Object.assign(visible, structuredClone(initial)));
+      },
+    };
+  };
+  const model = createInbox(
+    { call: () => Promise.reject(new Error("unused")) },
+    factory,
+  );
+  const observed: boolean[] = [];
+  model.observeChanges(() =>
+    observed.push(model.state.inbox.projects[0]?.inactive ?? false)
+  );
+  model.receive({
+    t: "inbox.snapshot",
+    generation: "a",
+    revision: 0,
+    inbox: snapshot(),
+  });
+  while (pending.length) pending.shift()!();
+  model.receive({
+    t: "inbox.patch",
+    generation: "a",
+    from: 0,
+    revision: 2,
+    ops: [
+      {
+        op: "project.upsert",
+        project: { ...snapshot().projects[0], inactive: true },
+      },
+      { op: "finish", sessionID: "s", time: 20 },
+    ],
+  });
+  assertEquals(model.state.inbox.projects[0].inactive, true);
+  assertEquals(model.state.inbox.finishes.s, 20);
+  assertEquals(observed, [false, true]);
+  model.stop();
+});
 Deno.test("inbox patches preserve unrelated identities and coalesce gap recovery", async () => {
   let calls = 0, resolve!: (value: InboxBaseline) => void;
   const model = createInbox({
@@ -26,6 +74,8 @@ Deno.test("inbox patches preserve unrelated identities and coalesce gap recovery
       });
     },
   } as InboxRpc);
+  const changes: InboxChanges[] = [];
+  model.observeChanges((change) => changes.push(change));
   model.receive({
     t: "inbox.snapshot",
     generation: "a",
@@ -44,6 +94,13 @@ Deno.test("inbox patches preserve unrelated identities and coalesce gap recovery
   assertEquals(model.state.inbox.seen, { "opcv1-ses_a": 10 });
   assertStrictEquals(model.state.inbox.tasks[0], task);
   assertStrictEquals(model.state.inbox.projects[0], project);
+  assertEquals(changes.at(-1), {
+    baseline: false,
+    projects: [],
+    sessions: ["opcv1-ses_a"],
+    tasks: false,
+    discovery: false,
+  });
   for (let i = 0; i < 10; i++) {
     model.receive({
       t: "inbox.patch",
@@ -54,6 +111,7 @@ Deno.test("inbox patches preserve unrelated identities and coalesce gap recovery
     });
   }
   assertEquals(calls, 1);
+  assertEquals(changes.length, 2, "rejected gaps cannot dirty projection keys");
   assertEquals(model.state.inbox.finishes, {});
   model.receive({
     t: "inbox.snapshot",

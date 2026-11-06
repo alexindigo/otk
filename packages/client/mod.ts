@@ -29,6 +29,7 @@ export * from "./message-policy.ts";
 export * from "./transcript-scopes.ts";
 export * from "./sidecars.ts";
 export * from "./server-resources.ts";
+export type { ProjectProjectionRow } from "./project-projection.ts";
 export * from "./messages.ts";
 export * from "./timeline.ts";
 export * from "./permissions.ts";

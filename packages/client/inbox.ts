@@ -172,10 +172,18 @@ export interface InboxState {
   ready: boolean;
   inbox: InboxSnapshot;
 }
+export interface InboxChanges {
+  baseline: boolean;
+  projects: readonly string[];
+  sessions: readonly string[];
+  tasks: boolean;
+  discovery: boolean;
+}
 export interface InboxModel {
   stop(): void;
   state: InboxState;
   subscribe(listener: (state: InboxState) => void): () => void;
+  observeChanges(listener: (changes: InboxChanges) => void): () => void;
   receive(frame: ServerFrame): void;
   promote(session: TabSession, options?: RequestOptions): Promise<TaskRecord>;
   openProject(directory: string): Promise<void>;
@@ -193,7 +201,9 @@ export function createInbox(
   report: (error: unknown) => void = (error) =>
     console.error("Visit bookkeeping failed after successful action", error),
 ): InboxModel {
-  const store = factory<InboxState>({
+  // Accepted metadata is invocation-current, like ClientIndex. Framework state
+  // publishes a dependency clock; deferred binding cannot govern reduced facts.
+  const current: InboxState = {
     ready: false,
     inbox: {
       projects: [],
@@ -202,19 +212,48 @@ export function createInbox(
       finishes: {},
       pathTemplates: [],
     },
-  });
+  };
+  const clock = factory({ revision: 0 });
+  const state: InboxState = {
+    get ready() {
+      void clock.state.revision;
+      return current.ready;
+    },
+    get inbox() {
+      void clock.state.revision;
+      return current.inbox;
+    },
+  };
   let generation: string | undefined, revision = -1, epoch = 0, alive = true;
   let recoveryController: AbortController | undefined;
   let recovering: Promise<void> | undefined;
   let observed: { generation: string; revision: number } | undefined;
+  const listeners = new Set<(changes: InboxChanges) => void>();
+  const publish = (changes: InboxChanges) => {
+    for (const listener of listeners) listener(changes);
+  };
   const baseline = (value: InboxBaseline) => {
     if (generation !== undefined && value.generation !== generation) return;
     if (value.generation === generation && value.revision < revision) return;
     generation = value.generation;
     revision = value.revision;
-    store.update((draft) => {
-      store.reconcile(draft.inbox, value.inbox);
-      draft.ready = true;
+    current.inbox = {
+      ...value.inbox,
+      projects: [...value.inbox.projects],
+      tasks: [...value.inbox.tasks],
+      seen: { ...value.inbox.seen },
+      finishes: { ...value.inbox.finishes },
+    };
+    current.ready = true;
+    clock.update((draft) => {
+      draft.revision++;
+    });
+    publish({
+      baseline: true,
+      projects: [],
+      sessions: [],
+      tasks: true,
+      discovery: true,
     });
   };
   const recover = () => {
@@ -303,13 +342,20 @@ export function createInbox(
   return {
     stop() {
       alive = false;
+      listeners.clear();
       epoch++;
       recoveryController?.abort();
       recoveryController = undefined;
       recovering = undefined;
     },
-    state: store.state,
-    subscribe: store.subscribe,
+    state,
+    subscribe: (listener) => clock.subscribe(() => listener(state)),
+    observeChanges(listener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
     /** Atomic server-side promotion, suitable as createTabs' injected port. */
     promote(session: TabSession, options?: RequestOptions) {
       return rpc.call("tasks.create", {
@@ -350,8 +396,47 @@ export function createInbox(
           return;
         }
         revision = frame.revision;
-        store.update((draft) => {
-          for (const op of frame.ops) apply(draft.inbox, op);
+        for (const op of frame.ops) apply(current.inbox, op);
+        clock.update((draft) => {
+          draft.revision++;
+        });
+        const projects = new Set<string>(), sessions = new Set<string>();
+        let tasks = false, discovery = false;
+        for (const op of frame.ops) {
+          switch (op.op) {
+            case "project.upsert":
+              projects.add(op.project.directory);
+              break;
+            case "project.remove":
+              projects.add(op.directory);
+              break;
+            case "seen":
+            case "finish":
+              sessions.add(op.sessionID);
+              break;
+            case "task.upsert":
+            case "task.remove":
+              tasks = true;
+              break;
+            case "discovery":
+              discovery = true;
+              break;
+            case "templates":
+              break;
+            default: {
+              const unhandled: never = op;
+              throw new Error(
+                `Unhandled inbox operation: ${JSON.stringify(unhandled)}`,
+              );
+            }
+          }
+        }
+        publish({
+          baseline: false,
+          projects: [...projects],
+          sessions: [...sessions],
+          tasks,
+          discovery,
         });
       }
     },

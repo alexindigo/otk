@@ -21,12 +21,11 @@ import type {
   MergedEntry,
   MergedMetadata,
 } from "./index.ts";
+import { createInbox, type InboxModel } from "./inbox.ts";
 import {
-  createInbox,
-  type InboxModel,
-  type InboxProject,
-  inboxProjects,
-} from "./inbox.ts";
+  createProjectProjection,
+  type ProjectProjectionRow,
+} from "./project-projection.ts";
 import type { Selection } from "./session.ts";
 import { projectName, type ProjectSelection } from "./project-navigation.ts";
 import {
@@ -84,10 +83,16 @@ export interface ServerResources {
   indexEntries(sidecar: string): readonly IndexEntry[];
   indexChanges(sidecar: string): IndexChanges | undefined;
   projectEntries(project: ProjectSelection): MergedEntry[];
+  projectRow(
+    project: ProjectSelection,
+    now: number,
+    ageing?: readonly number[],
+  ): ProjectProjectionRow | undefined;
+  duplicateProjectName(name: string): boolean;
   projects(
     now: number,
     ageing?: readonly number[],
-  ): (InboxProject & { sidecarId: string; label: string })[];
+  ): (ProjectProjectionRow & { sidecarId: string; label: string })[];
   tabSnapshot(project: ProjectSelection): TabInput;
   syncTabs(
     project: ProjectSelection,
@@ -168,9 +173,32 @@ export function createServerResources(o: {
   };
   const approvalModels = new Map<string, ApprovalModel>();
   const projections = new Map<string, AttentionProjection>();
+  const projectOwners = new Map<
+    string,
+    ReturnType<typeof createProjectProjection>
+  >();
+  const operationCache = new Map<string, ReturnType<typeof requestAttention>>();
+  const projectReleases = new Map<string, (() => void)[]>();
+  const names = new Map<string, number>();
+  const nameClock = factory({ keys: {} as Record<string, number> });
+  const nameMembership = (directory: string, present: boolean) => {
+    const name = projectName(directory), before = names.get(name) ?? 0;
+    const after = before + (present ? 1 : -1);
+    if (after) names.set(name, after);
+    else names.delete(name);
+    if ((before > 1) !== (after > 1)) {
+      nameClock.update((state) => {
+        state.keys[name] = (state.keys[name] ?? 0) + 1;
+      });
+    }
+  };
+  const labelledRows = new WeakMap<
+    ProjectProjectionRow,
+    { sidecarId: string; label: string } & ProjectProjectionRow
+  >();
   const tabModels = new Map<string, ClientTabs>();
   const requestObservers = new Map<string, () => void>();
-  const requestClock = factory({ revision: 0 });
+  const requestClock = factory({ keys: {} as Record<string, number> });
   const observers = new Set<FrameObserver>();
   let stopped = false;
   let visible: { project: ProjectSelection; sessions: string[] } | undefined;
@@ -248,20 +276,80 @@ export function createServerResources(o: {
     if (!requestObservers.has(id) && !stopped) {
       requestObservers.set(
         id,
-        rpc.requests.subscribe(() =>
+        rpc.requests.subscribe(() => {
+          const previous = operationCache.get(id);
+          operationCache.delete(id);
+          refreshOperations(id, previous);
           requestClock.update((state) => {
-            state.revision++;
-          })
-        ),
+            state.keys[id] = (state.keys[id] ?? 0) + 1;
+          });
+        }),
       );
     }
-    void requestClock.state.revision;
-    return requestAttention(
+    void requestClock.state.keys[id];
+    let value = operationCache.get(id);
+    if (value) return value;
+    value = requestAttention(
       rpc.requests.operations(),
       rpc.metadata,
-      o.index.catalog(id),
+      (sessionID) => o.index.getMetadata(id, sessionID),
       inbox(id).state.inbox.tasks,
     );
+    operationCache.set(id, value);
+    return value;
+  };
+  const refreshOperations = (
+    id: string,
+    previous?: ReturnType<typeof requestAttention>,
+  ) => {
+    const owner = projectOwners.get(id);
+    if (!owner) return;
+    const next = operationAttention(id);
+    owner.update(
+      new Set([...previous?.sessions.keys() ?? [], ...next.sessions.keys()]),
+    );
+    owner.operations(next.projectStates);
+  };
+  const projectOwner = (id: string) => {
+    let owner = projectOwners.get(id);
+    if (owner) return owner;
+    const decorated = new WeakMap<MergedMetadata, MergedMetadata>();
+    owner = createProjectProjection({
+      factory,
+      membership: nameMembership,
+      entry: (sessionID) => {
+        const raw = o.index.getMetadata(id, sessionID);
+        if (!raw) return undefined;
+        const attention = projection(id).get(sessionID)?.attention ??
+          raw.attention;
+        const operationStatus = operationAttention(id).sessions.get(sessionID);
+        if (attention === raw.attention && !operationStatus) return raw;
+        const previous = decorated.get(raw);
+        if (
+          previous?.attention === attention &&
+          previous.operationStatus === operationStatus
+        ) return previous;
+        const value = { ...raw, attention, operationStatus };
+        decorated.set(raw, value);
+        return value;
+      },
+    });
+    projectOwners.set(id, owner);
+    owner.inbox(inbox(id).state.inbox);
+    owner.update(o.index.ids(id));
+    owner.operations(operationAttention(id).projectStates);
+    projectReleases.set(id, [
+      projection(id).subscribe((changes) =>
+        owner!.update(changes.changes.map((c) => c.id))
+      ),
+      inbox(id).observeChanges((changes) => {
+        const previous = operationCache.get(id);
+        if (changes.tasks) operationCache.delete(id);
+        owner!.inbox(inbox(id).state.inbox, changes);
+        if (changes.tasks) refreshOperations(id, previous);
+      }),
+    ]);
+    return owner;
   };
   const entries = (): MergedEntry[] =>
     sidecars.state.list.flatMap((s) =>
@@ -318,10 +406,18 @@ export function createServerResources(o: {
     if (frame.t === "index.snapshot" || frame.t === "index.patch") {
       accepted = o.index.receive(id, frame);
       if (!accepted) sidecars.connection(id).send({ t: "resnapshot" });
-      else {projection(id).update(
+      else {
+        const previous = operationCache.get(id);
+        if (o.index.changes(id)!.metadata.length) operationCache.delete(id);
+        projection(id).update(
           o.index.changes(id)!.ids,
           frame.t === "index.snapshot",
-        );}
+        );
+        projectOwners.get(id)?.update(o.index.changes(id)!.metadata);
+        if (o.index.changes(id)!.metadata.length) {
+          refreshOperations(id, previous);
+        }
+      }
     }
     if (frame.t === "welcome") projections.get(id)?.reset();
     if (frame.t === "approvals" || frame.t === "harness") projection(id);
@@ -393,11 +489,7 @@ export function createServerResources(o: {
     observeEntries: (id, listener) => projection(id).subscribe(listener),
     entries,
     metadataEntries: () =>
-      sidecars.state.list.flatMap((s) =>
-        operationAttention(s.id).entries(
-          attention(s.id).entries(o.index.catalog(s.id)),
-        )
-      ),
+      sidecars.state.list.flatMap((s) => projectOwner(s.id).metadata()),
     indexEntries: (id) => o.index.partition(id),
     indexChanges: (id) => o.index.changes(id),
     receive,
@@ -412,16 +504,26 @@ export function createServerResources(o: {
           o.index.partition(p.sidecarId, p.directory),
         ),
       ),
-    projects: (now, ageing) =>
-      sidecars.state.list.flatMap((s) =>
-        operationAttention(s.id).projects(inboxProjects(
-          attention(s.id).entries(o.index.catalog(s.id)),
-          inbox(s.id).state.inbox,
-          now,
-          ageing,
-        ))
-          .map((p) => ({ ...p, sidecarId: s.id, label: s.label }))
-      ).sort((a, b) => {
+    projectRow: (p, now, ageing) =>
+      projectOwner(p.sidecarId).row(p.directory, now, ageing),
+    duplicateProjectName: (name) => {
+      for (const s of sidecars.state.list) projectOwner(s.id);
+      void nameClock.state.keys[name];
+      return (names.get(name) ?? 0) > 1;
+    },
+    projects: (now, ageing) => {
+      const rows = sidecars.state.list.flatMap((s) => {
+        const owner = projectOwner(s.id);
+        return owner.directories().map((directory) => {
+          const row = owner.row(directory, now, ageing)!;
+          let labelled = labelledRows.get(row);
+          if (!labelled || labelled.label !== s.label) {
+            labelled = { ...row, sidecarId: s.id, label: s.label };
+            labelledRows.set(row, labelled);
+          }
+          return labelled;
+        }).sort((a, b) => a.order - b.order);
+      }).sort((a, b) => {
         const rank = { tracked: 0, index: 1, template: 2 };
         if (a.source === "tracked" && b.source === "tracked") return 0;
         return rank[a.source ?? "tracked"] - rank[b.source ?? "tracked"] ||
@@ -429,7 +531,9 @@ export function createServerResources(o: {
           projectName(a.directory).localeCompare(projectName(b.directory)) ||
           a.directory.localeCompare(b.directory) ||
           a.label.localeCompare(b.label);
-      }),
+      });
+      return rows;
+    },
     tabSnapshot(p) {
       const input = tabInput(p);
       void input.entries;
@@ -458,6 +562,13 @@ export function createServerResources(o: {
     },
     add: (url, label) => sidecars.add(url, label),
     remove(id) {
+      for (const release of projectReleases.get(id) ?? []) release();
+      projectReleases.delete(id);
+      for (const directory of projectOwners.get(id)?.directories() ?? []) {
+        nameMembership(directory, false);
+      }
+      projectOwners.delete(id);
+      operationCache.delete(id);
       catalogs.get(id)?.stop();
       catalogs.delete(id);
       frecencies.get(id)?.stop();
@@ -504,6 +615,14 @@ export function createServerResources(o: {
       if (stopped) return;
       stopped = true;
       stopLinks();
+      for (const releases of projectReleases.values()) {
+        for (const release of releases) {
+          release();
+        }
+      }
+      projectReleases.clear();
+      projectOwners.clear();
+      operationCache.clear();
       visibleCatalog?.directory.release();
       visibleCatalog?.frecency.release();
       visibleCatalog = undefined;

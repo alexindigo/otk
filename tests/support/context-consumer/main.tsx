@@ -144,8 +144,10 @@ function ProjectProbe() {
           unread: false,
           visitText: "now",
           ageing: 0,
+          sessionIDs: "",
+          sessionCount: 0,
         }]}
-        entries={[]}
+        duplicateName={() => false}
         servers={[]}
         prefs={DEFAULT_PREFS}
         ready={ready()}

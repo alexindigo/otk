@@ -165,7 +165,7 @@ export function createAttentionProjection(o: {
     }
     initialized = true;
     clock.update((state) => {
-      for (const id of affected) state.keys[id] = (state.keys[id] ?? 0) + 1;
+      for (const { id } of changes) state.keys[id] = (state.keys[id] ?? 0) + 1;
     });
     if (changes.length || rebuild) {
       const event = {

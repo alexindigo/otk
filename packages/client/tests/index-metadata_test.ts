@@ -58,3 +58,25 @@ Deno.test("metadata and membership projections stay stable through digest-only c
   assertEquals(index.catalog("server")[0].deleted?.how, "provider");
   assertEquals(index.changes("server")?.metadata, ["a"]);
 });
+
+Deno.test("a digest-only full upsert preserves semantic metadata clocks and borrowed values", () => {
+  const index = createIndex();
+  index.receive("server", {
+    t: "index.snapshot",
+    rev: 0,
+    entries: [shellEntry("a")],
+  });
+  const catalog = index.catalog("server"),
+    metadata = index.getMetadata("server", "a");
+  const current = structuredClone(index.get("server", "a")!);
+  current.digest = { state: "ready", revision: 1, turns: {} };
+  index.receive("server", {
+    t: "index.patch",
+    rev: 1,
+    ops: [{ op: "upsert", entry: current }],
+  });
+  assertStrictEquals(index.catalog("server"), catalog);
+  assertStrictEquals(index.getMetadata("server", "a"), metadata);
+  assertEquals(index.changes("server")?.metadata, []);
+  assertEquals(index.get("server", "a")?.digest.state, "ready");
+});

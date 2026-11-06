@@ -113,7 +113,9 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
     const changedMetadata = !previous || !next ||
       Object.keys({ ...previous, ...next }).some((field) =>
         field !== "digest" &&
-        Reflect.get(previous, field) !== Reflect.get(next, field)
+        Reflect.get(previous, field) !== Reflect.get(next, field) &&
+        JSON.stringify(Reflect.get(previous, field)) !==
+          JSON.stringify(Reflect.get(next, field))
       );
     if (changedMetadata) metadataChanged.add(key);
     else if (next && previous) {

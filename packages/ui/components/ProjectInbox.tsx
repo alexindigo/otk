@@ -6,9 +6,8 @@ import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, createUniqueId, For, Show } from "solid-js";
 import {
-  type InboxProject,
-  type MergedMetadata,
   projectName,
+  type ProjectProjectionRow,
   type ProjectSelection,
   type SidecarState,
 } from "@otk/client";
@@ -38,13 +37,13 @@ import {
 import CommandMenu from "./CommandMenu.tsx";
 import SidebarRail from "./SidebarRail.tsx";
 import { contextTarget } from "./context-target.ts";
-export interface ProjectRow extends InboxProject {
+export interface ProjectRow extends ProjectProjectionRow {
   sidecarId: string;
   label: string;
 }
 export default function ProjectInbox(props: {
   projects: ProjectRow[];
-  entries: MergedMetadata[];
+  duplicateName(name: string): boolean;
   servers: SidecarState[];
   selected?: ProjectSelection;
   prefs: Preferences;
@@ -138,9 +137,7 @@ export default function ProjectInbox(props: {
       },
     });
     const name = () => projectName(project().directory);
-    const duplicate = () =>
-      props.projects.filter((p) => projectName(p.directory) === name()).length >
-        1;
+    const duplicate = () => props.duplicateName(name());
     return (
       <div
         ref={contextTarget(target)}
@@ -153,10 +150,7 @@ export default function ProjectInbox(props: {
         data-otk-selection="vertical"
         data-project={project().directory}
         data-server={project().sidecarId}
-        data-project-sessions={props.entries.filter((e) =>
-          e.sidecarId === project().sidecarId &&
-          e.directory === project().directory
-        ).map((e) => e.id).join(" ")}
+        data-project-sessions={project().sessionIDs}
         data-inactive={project().inactive ? "true" : "false"}
         data-source={project().source}
         data-rollup={project().status}

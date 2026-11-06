@@ -17,7 +17,7 @@ export default function Scene() {
     <div class="style-chrome">
       <ProjectInbox
         projects={[]}
-        entries={[]}
+        duplicateName={() => false}
         servers={[{
           id: "local",
           label: "Serving server",

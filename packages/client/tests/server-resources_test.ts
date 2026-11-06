@@ -14,6 +14,7 @@ import {
   NotificationTriggers,
   SidecarConnection,
   type SidecarState,
+  type StateFactory,
 } from "@otk/client";
 import type { InboxSnapshot, IndexEntry, ServerFrame } from "@otk/protocol";
 
@@ -57,7 +58,7 @@ function metadata(): InboxSnapshot {
     pathTemplates: [],
   };
 }
-function fixture() {
+function fixture(factory?: StateFactory) {
   const calls: unknown[] = [], order: string[] = [];
   const store = createState<{ list: SidecarState[] }>({
     list: ["local", "remote"].map((id) => ({
@@ -127,13 +128,251 @@ function fixture() {
   };
   const resources = createServerResources({
     index,
+    factory,
     sidecars: (listener) => {
       receive = listener;
       return sidecars;
     },
   });
-  return { resources, index, calls, order, receive, store, sidecars };
+  return {
+    resources,
+    index,
+    calls,
+    order,
+    receive,
+    store,
+    sidecars,
+    connections,
+  };
 }
+
+Deno.test("digest-only patches do zero project-row recomputations and zero attention-map rebuilds", () => {
+  const revisions: { revision: number }[] = [];
+  const factory: StateFactory = (initial) => {
+    if ("revision" in initial && "keys" in initial) {
+      revisions.push(initial as { revision: number });
+    }
+    return createState(initial);
+  };
+  const f = fixture(factory);
+  f.receive("local", {
+    t: "index.snapshot",
+    rev: 0,
+    entries: [entry(), entry("other", "/other")],
+  });
+  f.receive("local", {
+    t: "inbox.snapshot",
+    generation: "fixture",
+    revision: 0,
+    inbox: metadata(),
+  });
+  f.receive("local", {
+    t: "approvals",
+    approvals: { enabled: ["session"], revision: 1 },
+  });
+  const rows = f.resources.projects(100);
+  const metadataRows = f.resources.metadataEntries();
+  let attentionBuilds = 0;
+  const requests = f.connections.get("local")!.rpc.requests;
+  const operations = requests.operations.bind(requests);
+  requests.operations = () => {
+    attentionBuilds++;
+    return operations();
+  };
+  const before = revisions.map((r) => r.revision);
+  f.receive("local", {
+    t: "index.patch",
+    rev: 1,
+    ops: [{
+      op: "digest",
+      id: "session",
+      revision: 1,
+      summary: { state: "ready", revision: 1 },
+      turns: { upsert: {}, remove: [] },
+      deleted: null,
+    }],
+  });
+  const after = f.resources.projects(100);
+  f.resources.metadataEntries();
+  f.resources.tabSnapshot({ sidecarId: "local", directory: "/p" });
+  assertEquals(
+    revisions.map((r) => r.revision),
+    before,
+    "owner revisions count project-row recomputations",
+  );
+  assertEquals(attentionBuilds, 0, "the request attention map is not rebuilt");
+  after.forEach((row, i) => assertStrictEquals(row, rows[i]));
+  f.resources.metadataEntries().forEach((row, i) =>
+    assertStrictEquals(row, metadataRows[i])
+  );
+  assertEquals(f.resources.entry("local", "session")?.digest.state, "ready");
+  const upsert = structuredClone(f.resources.entry("local", "session")!);
+  upsert.digest.revision = 2;
+  f.receive("local", {
+    t: "index.patch",
+    rev: 2,
+    ops: [{ op: "upsert", entry: upsert }],
+  });
+  f.resources.projects(100);
+  assertEquals(revisions.map((r) => r.revision), before);
+  assertEquals(attentionBuilds, 0);
+  f.resources.stop();
+});
+
+Deno.test("project keys maintain membership, lamps, unread, name collisions and unaffected row identity", () => {
+  const f = fixture();
+  const a = {
+    ...entry("a", "/one/shared"),
+    status: "idle" as const,
+    attention: { ...entry().attention, permissions: 0 },
+  };
+  const b = { ...a, id: "b", directory: "/two/shared" };
+  f.receive("local", { t: "index.snapshot", rev: 0, entries: [a, b] });
+  f.receive("local", {
+    t: "inbox.snapshot",
+    generation: "fixture",
+    revision: 0,
+    inbox: {
+      ...metadata(),
+      projects: [],
+      tasks: [],
+      seen: {},
+      finishes: { a: 2 },
+      discovered: ["/empty"],
+    },
+  });
+  const rows = f.resources.projects(100),
+    other = rows.find((r) => r.directory === b.directory)!;
+  assertEquals(f.resources.duplicateProjectName("shared"), true);
+  assertEquals(
+    rows.find((r) => r.directory === a.directory)?.status,
+    "finished",
+  );
+  assertEquals(rows.find((r) => r.directory === a.directory)?.sessionCount, 1);
+  f.receive("local", {
+    t: "inbox.patch",
+    generation: "fixture",
+    from: 0,
+    revision: 1,
+    ops: [{ op: "seen", sessionID: "a", time: 3 }],
+  });
+  assertEquals(
+    f.resources.projectRow({ sidecarId: "local", directory: a.directory }, 100)
+      ?.status,
+    "idle",
+  );
+  assertStrictEquals(
+    f.resources.projects(100).find((r) => r.directory === b.directory),
+    other,
+  );
+  f.receive("local", {
+    t: "index.patch",
+    rev: 1,
+    ops: [{
+      op: "upsert",
+      entry: { ...a, directory: "/moved", status: "busy" },
+    }],
+  });
+  const moved = f.resources.projects(100);
+  assertEquals(moved.some((r) => r.directory === a.directory), false);
+  assertEquals(f.resources.duplicateProjectName("shared"), false);
+  assertEquals(moved.find((r) => r.directory === "/moved")?.sessionIDs, "a");
+  assertEquals(moved.find((r) => r.directory === "/moved")?.status, "working");
+  f.receive("local", {
+    t: "index.patch",
+    rev: 2,
+    ops: [{ op: "remove", id: "a" }],
+  });
+  assertEquals(
+    f.resources.projects(100).some((r) => r.directory === "/moved"),
+    false,
+  );
+  f.resources.stop();
+});
+
+Deno.test("keyed project attention follows operation lifetimes, task membership, policy and native link", () => {
+  const f = fixture();
+  const session = {
+    ...entry(),
+    status: "idle" as const,
+    attention: { ...entry().attention, permissions: 0 },
+  };
+  f.receive("local", {
+    t: "index.snapshot",
+    rev: 0,
+    entries: [session, { ...session, id: "other" }],
+  });
+  f.receive("local", {
+    t: "inbox.snapshot",
+    generation: "fixture",
+    revision: 0,
+    inbox: { ...metadata(), finishes: {} },
+  });
+  const p = { sidecarId: "local", directory: "/p" };
+  f.resources.projects(100);
+  const rpc = f.connections.get("local")!.rpc;
+  rpc.requests.connect({ id: "window", expiresAt: Date.now() + 60_000 }, 64);
+  const operation = rpc.start("session.rename", {
+    sessionID: "session",
+    title: "New",
+  }, { owner: "task" });
+  void operation.result.catch(() => {});
+  assertEquals(f.resources.projectRow(p, 100)?.status, "working");
+  assertEquals(
+    f.resources.metadataEntries().find((e) => e.id === "session")
+      ?.operationStatus,
+    "working",
+  );
+  f.receive("local", {
+    t: "inbox.patch",
+    generation: "fixture",
+    from: 0,
+    revision: 1,
+    ops: [{
+      op: "task.upsert",
+      task: { ...metadata().tasks[0], sessions: ["other"] },
+    }],
+  });
+  assertEquals(
+    f.resources.metadataEntries().find((e) => e.id === "session")
+      ?.operationStatus,
+    undefined,
+  );
+  assertEquals(
+    f.resources.metadataEntries().find((e) => e.id === "other")
+      ?.operationStatus,
+    "working",
+  );
+  rpc.receive({
+    t: "request.result",
+    ref: operation.state.ref,
+    seq: 1,
+    outcome: { ok: true, result: null },
+  });
+  assertEquals(f.resources.projectRow(p, 100)?.status, "idle");
+  f.receive("local", {
+    t: "index.patch",
+    rev: 1,
+    ops: [{
+      op: "upsert",
+      entry: {
+        ...session,
+        attention: { ...session.attention, permissions: 1 },
+      },
+    }],
+  });
+  assertEquals(f.resources.projectRow(p, 100)?.status, "blocked");
+  f.receive("local", {
+    t: "approvals",
+    approvals: { enabled: ["session"], revision: 1 },
+  });
+  assertEquals(f.resources.projectRow(p, 100)?.status, "idle");
+  f.store.update((state) => {
+    state.list[0].harness = "reconnecting";
+  });
+  assertEquals(f.resources.projectRow(p, 100)?.status, "blocked");
+  f.resources.stop();
+});
 
 Deno.test("server resources stage frames and expose acceptance after approvals, index and inbox", () => {
   const f = fixture(), seen: unknown[] = [];

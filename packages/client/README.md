@@ -190,6 +190,21 @@ digest changes do not reorder identities or replace unaffected partitions.
 ServerResources projects each server/project from these partitions, including
 the complete activity inputs independently of mounted views.
 
+One per-sidecar project projection maintains keyed membership, session counts,
+status/unread contributions and request/approval attention. `projects` retains
+unchanged row identities; `projectRow` borrows one project's selector, including
+its cached `sessionIDs` and `sessionCount`. Project membership updates the
+shared name-collision keys used by `duplicateProjectName`. Views do not scan
+session populations. Accepted inbox changes publish their project/mark keys from
+the inbox reducer; rejected gaps publish none. Digest patches and digest-only
+full upserts leave metadata, project and attention reader clocks unchanged.
+Request attention borrows keyed session lookups and is cached until request or
+metadata changes.
+
+The inbox owns accepted metadata synchronously and publishes a binding clock,
+matching the keyed index: projection observers and commands never wait for a
+framework to expose an accepted mark, task or project update.
+
 `catalog(server, directory?)` and `getMetadata(server, id)` borrow stable
 `MergedMetadata` projections without digest/turn history. Membership, metadata
 and complete-entry reads use separate dependency clocks in that same keyed
