@@ -43,15 +43,18 @@ their current measured width; other values use their inert measurement frames.
 More occupies a separate trailing grid track, so editor blur cannot move its
 pointer target between press and release as the live chip width changes.
 ResizeObserver and font completion belong to this component. The client owns
-`fitOverflow` and ancestry preference. Task tabs reuse this owner with
-`wrapRequired`: selected and working/blocked/unseen-finished tabs remain pinned;
-idle overflow enters one More menu. When pins alone exceed the lane, only those
-pins wrap and all optional tabs stay in More. This mode uses intrinsic sizing
-frames rather than shrink-to-fit live widths. Breadcrumbs retain their default
-single-line required-frame shrinking. TitleEditor can receive an external
-`feedbackID`, with the same shared TitleFeedback rendered in the owner's in-flow
-track, so a compact editing field and its feedback do not compete for one
-control-height lane.
+`fitOverflow` and ancestry preference. Breadcrumbs retain single-line
+required-frame shrinking. Task tabs instead use the horizontal `ScrollRegion`:
+one chrome-header-height row, equal flex widths with a 90px minimum, ellipsized
+labels and a thin hover scrollbar. Vertical wheel deltas scroll horizontally
+unless Ctrl/Meta is held. Selection and lane resize reveal the active tab.
+`EdgeTriangle` owns a centred control-height slot and renders only available
+navigation. Paging aligns the last fully visible tab to the leading edge,
+mirrored going back. The client model alone orders tabs; no More or measurement
+frames are used for tabs. TitleEditor can receive an external `feedbackID`, with
+the same shared TitleFeedback rendered in the owner's in-flow track, so a
+compact editing field and its feedback do not compete for one control-height
+lane.
 
 PaneState also accepts injected content for empty panes, centring one
 left-aligned content group in the region left below chrome. Diff's automatic
@@ -396,14 +399,13 @@ server-owned approval resource for session ports, tabs and panels.
 Mod+Shift+A binding and remains discoverable in palette/Keys; enabling asks
 before superseding dirty permission feedback. The browser never runs an approval
 loop or clears the form optimistically. Helpers remain read-only and inherit
-their session's policy. One AutoMark component presents enabled policy in
-task/session tabs, breadcrumbs and session rows independently of Show cost.
-Parent controls include the policy in their accessible names; the visible Auto
-span is decorative. The shared client attention projection keeps covered pending
-requests quiet while linked: an in-flow “Auto-approving…” status accompanies the
-ordinary composer, with no takeover or manual reply actions. Losing the serving
-or native link restores user attention through the same projection used by
-notifications and chrome counts.
+their session's policy. Auto policy is shown only by the composer footer, with
+no marks or accessible-name suffixes on tabs, breadcrumbs or Sessions rows. The
+shared client attention projection keeps covered pending requests quiet while
+linked: an in-flow “Auto-approving…” status accompanies the ordinary composer,
+with no takeover or manual reply actions. Losing the serving or native link
+restores user attention through the same projection used by notifications and
+chrome counts.
 
 `registerActivityPanel` contributes the session Activity view through the open
 panel registry. Its thin adapter forwards idempotent selection to the client

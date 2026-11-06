@@ -550,8 +550,6 @@ export default function Shell(
                           ? session.models.state.value
                           : undefined}
                         showCost={toggles.state.prefs.showCost}
-                        auto={(id) =>
-                          !!approvals(project()!.sidecarId).owner(id)}
                         session={info()}
                         rename={rename}
                         displayMenu={
@@ -770,9 +768,10 @@ export default function Shell(
                   />
                 }
                 sidecars={sidecars.state.list}
-                onAdd={(url, label) => resources.add(url, label).then(() => {
-                  notifications.info("Server added");
-                })}
+                onAdd={(url, label) =>
+                  resources.add(url, label).then(() => {
+                    notifications.info("Server added");
+                  })}
                 onRemove={(id) => navigation.removeServer(id)}
                 onLogin={(id, input) => sidecars.connection(id).login(input)}
                 onSetup={(input) =>

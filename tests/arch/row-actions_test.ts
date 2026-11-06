@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { assert, assertEquals } from "@std/assert";
 import { Source } from "./analysis.ts";
-import { nodes, type t } from "./syntax.ts";
+import { nodes } from "./syntax.ts";
 import { rules } from "./styles.ts";
 import { tabBypasses } from "./bypasses.ts";
 tabBypasses(tabErrors);
@@ -20,31 +20,16 @@ export function tabErrors(source: string): string[] {
   if (lists.length !== 1) {
     return ["tab chrome requires one unambiguous tablist"];
   }
-  const allowed = new Set<t.Node>();
-  for (const node of nodes(lists[0])) {
-    if (
-      node.type !== "JSXOpeningElement" || node.name.type !== "JSXIdentifier" ||
-      parsed.binding(node.name.name, node.name)?.module !== "./OverflowRow.tsx"
-    ) continue;
-    const more = parsed.value(parsed.attr(node, "more"));
-    if (
-      more?.type !== "ArrowFunctionExpression" ||
-      more.body.type !== "JSXElement" ||
-      parsed.name(more.body.openingElement.name) !== "Menu"
-    ) continue;
-    allowed.add(more.body.openingElement);
-  }
-  if (allowed.size > 1) return ["one More menu per task strip"];
   return [...nodes(lists[0])].some((node) =>
       node.type === "JSXOpeningElement" &&
         ["Menu", "Popover", "CommandMenu"].includes(
           parsed.name(node.name) ?? "",
-        ) && !allowed.has(node) ||
+        ) ||
       node.type === "JSXText" && /⋯|···/.test(node.value) ||
       node.type === "StringLiteral" &&
         node.value.split(/\s+/).includes("otk-tab-actions")
     )
-    ? ["tab menus belong only to the shared overflow More slot"]
+    ? ["task tabs scroll in one row without menus"]
     : [];
 }
 function rowErrors(css: string): string[] {
@@ -63,7 +48,7 @@ function rowErrors(css: string): string[] {
   }
   return errors;
 }
-Deno.test("tab chrome shares overflow More and project row actions share an in-flow trailing cell", async () => {
+Deno.test("tab chrome has no menus and project row actions share an in-flow trailing cell", async () => {
   const ui = new URL("../../packages/ui/", import.meta.url);
   const tabs = await Deno.readTextFile(
     new URL("components/ProjectTabs.tsx", ui),
@@ -121,18 +106,18 @@ Deno.test("tab chrome shares overflow More and project row actions share an in-f
   );
 });
 
-Deno.test("tab overflow permits one canonical More slot and rejects per-tab or counterfeit menu owners", () => {
+Deno.test("scrolling tabs reject overflow and per-tab menus", () => {
   const good =
-    'import OverflowRow from "./OverflowRow.tsx"; import Menu from "./surface/Menu.tsx"; const tabs=<div role="tablist"><OverflowRow more={keys=><Menu label="More tasks" trigger="…">{keys()}</Menu>}>{tab=><button>{tab().title}</button>}</OverflowRow></div>';
+    'const tabs=<ScrollRegion role="tablist" axis="x"><For each={tabs()}>{tab=><button>{tab().title}</button>}</For></ScrollRegion>';
   assertEquals(tabErrors(good), []);
   for (
     const bad of [
-      good.replace("./OverflowRow.tsx", "./FakeOverflow.tsx"),
+      good.replace("<For", '<Menu label="More tasks"/><For'),
       good.replace(
         "tab=><button>{tab().title}</button>",
         'tab=><Menu label="Per tab"/>',
       ),
-      good.replace("{keys()}", '<Menu label="Nested menu"/>'),
+      good.replace("<For", "<Popover/><For"),
     ]
   ) assert(tabErrors(bad).length > 0, bad);
 });

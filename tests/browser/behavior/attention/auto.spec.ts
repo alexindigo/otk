@@ -38,17 +38,19 @@ hiddenTest(
       "aria-pressed",
       "true",
     );
-    await expect(observer.locator(".otk-auto-mark").first()).toBeVisible();
-    const ax = async (name: string) => {
-      await expect(page.getByRole("tab", { name, exact: false })).toBeVisible();
+    await expect(observer.locator(".otk-auto-mark")).toHaveCount(0);
+    const ax = async () => {
+      await expect(
+        page.getByRole("tab", { name: "Quiet automatic session", exact: true }),
+      ).toBeVisible();
       await expect(
         page.getByRole("button", {
-          name: "Quiet automatic session, Auto-approve on",
+          name: "Quiet automatic session",
           exact: true,
         }),
       ).toBeVisible();
     };
-    await ax("Quiet automatic session, Auto-approve on");
+    await ax();
     for (const target of [page, observer]) {
       await target.evaluate(`(() => {
     globalThis.autoAttentionEvidence=[];
@@ -98,7 +100,7 @@ hiddenTest(
       "auto",
       "confirmed",
     ]]);
-    await ax("Auto-approve is on for a session in this task");
+    await ax();
     await page.locator('[data-panel-view="activity"]').click();
     const activity = page.locator(".otk-permission-activity");
     await expect(activity).toContainText("quiet-auto.txt");
@@ -164,10 +166,10 @@ test(
     );
     for (const id of [root.id, child.id]) {
       await expect(page.locator(`[data-session="${id}"] .otk-auto-mark`))
-        .toBeVisible();
+        .toHaveCount(0);
     }
     await expect(page.locator(`[data-tab="${root.id}"] .otk-auto-mark`))
-      .toBeVisible();
+      .toHaveCount(0);
     await expect(page.locator(`[data-session="${other.id}"] .otk-auto-mark`))
       .toHaveCount(0);
     await openSession(state, second, other.id);

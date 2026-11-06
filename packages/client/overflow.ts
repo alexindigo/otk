@@ -23,8 +23,7 @@ export function fitOverflow(input: {
   preferred?: readonly string[];
   moreWidth: number;
   gap: number;
-  wrapRequired?: boolean;
-}): { visible: string[]; overflow: string[]; wrapRequired?: true } {
+}): { visible: string[]; overflow: string[] } {
   const { keys, widths, available, gap } = input;
   const width = (key: string) => widths.get(key) ?? 0;
   if (
@@ -34,7 +33,6 @@ export function fitOverflow(input: {
   const visible = new Set(input.required.filter((key) => keys.includes(key)));
   let used = [...visible].reduce((sum, key) => sum + width(key), 0) +
     visible.size * gap + input.moreWidth;
-  const wrapRequired = input.wrapRequired && used > available;
   for (const key of [...(input.preferred ?? []), ...keys]) {
     if (visible.has(key) || !keys.includes(key)) continue;
     if (used + width(key) + gap <= available) {
@@ -45,6 +43,5 @@ export function fitOverflow(input: {
   return {
     visible: keys.filter((key) => visible.has(key)),
     overflow: keys.filter((key) => !visible.has(key)),
-    ...(wrapRequired ? { wrapRequired: true as const } : {}),
   };
 }

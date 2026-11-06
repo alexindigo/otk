@@ -63,23 +63,21 @@ Deno.test("overflow preference follows ancestry rather than adjacent unrelated c
   );
 });
 
-Deno.test("required overflow wraps only pins and omits every optional identity", () => {
+Deno.test("required crumbs remain available to shrink when their widths exceed the lane", () => {
   const input = {
-    keys: ["idle", "selected", "working", "blocked", "finished", "tail"],
+    keys: ["other", "root", "parent", "selected", "editing", "tail"],
     widths: new Map(
-      ["idle", "selected", "working", "blocked", "finished", "tail"].map(
+      ["other", "root", "parent", "selected", "editing", "tail"].map(
         (key) => [key, 120],
       ),
     ),
     available: 300,
-    required: ["selected", "working", "blocked", "finished"],
+    required: ["root", "parent", "selected", "editing"],
     moreWidth: 28,
     gap: 4,
-    wrapRequired: true,
   };
   assertEquals<unknown>(fitOverflow(input), {
-    visible: ["selected", "working", "blocked", "finished"],
-    overflow: ["idle", "tail"],
-    wrapRequired: true,
+    visible: ["root", "parent", "selected", "editing"],
+    overflow: ["other", "tail"],
   });
 });

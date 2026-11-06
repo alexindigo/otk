@@ -12,6 +12,7 @@ import { remainder } from "./remainder.ts";
 import { nativeStates } from "./native-states.ts";
 import { supplemental } from "./supplemental.ts";
 import { capture, restoreViewport } from "./capture.ts";
+import { stripGeometry } from "../pages/task-strip.ts";
 
 test.use({ profile: "contract-themes" });
 interface Theme {
@@ -296,13 +297,7 @@ test(
       await page.goto(state.url + "/#/local/tstv1-otk");
       await expect(page.locator(".otk-session-view")).toBeVisible();
       await test.step("1/empty-project-session-panes", async () => {
-        if (!await page.locator(`[data-tab="${empty.id}"]`).isVisible()) {
-          await page.getByRole("button", { name: "More tasks", exact: true })
-            .click();
-          await page.locator(`[data-overflow-tab="${empty.id}"]`).click();
-        } else {
-          await page.locator(`[data-tab="${empty.id}"]`).click();
-        }
+        await page.locator(`[data-tab="${empty.id}"]`).click();
         await expect(page.locator(".otk-welcome h1")).toBeVisible();
         for (const theme of manifest.themes) {
           await test.step(theme.id, async () => {
@@ -1306,7 +1301,7 @@ test(
           });
         }
       });
-      await test.step("3/task-pins-and-overflow", async () => {
+      await test.step("3/task-scrolling-strip", async () => {
         const corpus = await state.controller.call<
           { ids: string[]; tasks: string[] }
         >("scenario", {
@@ -1316,23 +1311,7 @@ test(
         }, 120_000);
         await page.goto(state.url + "/#/local/" + corpus.ids[0]);
         await layout(state, page, true, true);
-        const geometry = () =>
-          page.locator(".otk-task-strip").evaluate((el) => ({
-            height: el.getBoundingClientRect().height,
-            expected: parseFloat(
-              getComputedStyle(el).getPropertyValue("--chrome-header-height"),
-            ),
-            visible: Array.from(
-              el.querySelectorAll(
-                ".otk-overflow-item:not([hidden]) [data-tab]",
-              ),
-            ).map((e) => e.getAttribute("data-tab")!),
-            pinned: Array.from(
-              el.querySelectorAll(
-                ".otk-overflow-item[data-pinned=true] [data-tab]",
-              ),
-            ).map((e) => e.getAttribute("data-tab")!),
-          }));
+        const geometry = () => stripGeometry(page);
         for (const theme of manifest.themes) {
           await test.step("idle/" + theme.id, async () => {
             await paint(theme);
@@ -1342,8 +1321,22 @@ test(
                 await settled(page);
                 const g = await geometry();
                 expect(Math.abs(g.height - g.expected)).toBeLessThanOrEqual(1);
-                await expect(page.locator(".otk-task-list .otk-overflow-more"))
-                  .toHaveCount(1);
+                expect(g.tabs).toHaveLength(300);
+                expect(Math.min(...g.tabs.map((tab) => tab.width)))
+                  .toBeGreaterThanOrEqual(90);
+                expect(g.total).toBeGreaterThan(g.width);
+                expect(g.previous).toBe(g.left > 1);
+                expect(g.next).toBe(g.left + g.width < g.total - 1);
+                for (const gaps of g.gaps) {
+                  expect(Math.max(...gaps) - Math.min(...gaps))
+                    .toBeLessThanOrEqual(1);
+                }
+                await expect(
+                  page.locator(
+                    ".otk-task-list .otk-overflow-more,.otk-auto-mark",
+                  ),
+                )
+                  .toHaveCount(0);
                 await shot(`task-idle-${theme.id}-${width}`);
               });
             }
@@ -1360,25 +1353,13 @@ test(
         for (const theme of manifest.themes) {
           await test.step("required/" + theme.id, async () => {
             await paint(theme);
-            await expect(page.locator(".otk-task-list .otk-overflow-row"))
-              .toHaveClass(/wraps-required/);
             await settled(page);
             const g = await geometry();
-            expect(g.height).toBeGreaterThan(g.expected);
-            expect(g.visible.slice().sort()).toEqual(g.pinned.slice().sort());
-            for (
-              const id of [
-                ...corpus.tasks.slice(200, 220),
-                corpus.tasks[240],
-                corpus.tasks[241],
-                corpus.tasks[242],
-                corpus.tasks[250],
-              ]
-            ) {
-              await expect(page.locator(`[data-tab="${id}"]`)).toBeInViewport({
-                ratio: 1,
-              });
-            }
+            expect(g.height).toBe(g.expected);
+            expect(g.full).toContain(corpus.tasks[250]);
+            expect(g.tabs.slice(0, 23).map((tab) => tab.id)).toContain(
+              corpus.tasks[241],
+            );
             await shot(`task-required-${theme.id}-800`);
           });
         }

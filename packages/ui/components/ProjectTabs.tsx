@@ -4,11 +4,13 @@ import "./ProjectTabs.css" with { type: "text" };
 import { selection, sessionState } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import {
+  createEffect,
   createMemo,
   createSignal,
   createUniqueId,
   type Element,
   For,
+  onSettled,
   Show,
 } from "solid-js";
 import { dynamic } from "@solidjs/web";
@@ -34,7 +36,8 @@ import {
   taskBreadcrumbs,
 } from "@otk/client";
 import StatusLight from "./StatusLight.tsx";
-import AutoMark from "./AutoMark.tsx";
+import EdgeTriangle from "./EdgeTriangle.tsx";
+import ScrollRegion from "./ScrollRegion.tsx";
 import UsageCost from "./UsageCost.tsx";
 import { ChevronIcon, PlusIcon } from "./ChromeIcons.tsx";
 import {
@@ -65,7 +68,6 @@ export default function ProjectTabs(props: {
   entry?: IndexEntry;
   eligible?(target: import("@otk/client").Selection): boolean;
   showCost?: boolean;
-  auto?(sessionID: string): boolean;
   session?: ContentSession;
   rename?: SessionRename;
   displayMenu?: Element;
@@ -81,8 +83,7 @@ export default function ProjectTabs(props: {
   const [error, setError] = createSignal("");
   const crumbFeedbackID = createUniqueId();
   const tasks = () =>
-    props.inbox.tasks.filter((t) => t.directory === props.project.directory)
-      .sort((a, b) => a.order - b.order);
+    props.inbox.tasks.filter((t) => t.directory === props.project.directory);
   const active = () =>
     tasks().find((t) =>
       props.model.state.selected?.kind === "task" &&
@@ -211,15 +212,54 @@ export default function ProjectTabs(props: {
   const tabRows = createMemo(() =>
     props.model.tabs().map((tab) => ({ ...tab, key: `${tab.kind}/${tab.id}` }))
   );
-  const requiredTabs = () =>
-    tabRows().filter((tab) =>
-      tab.status !== "idle" ||
-      tab.id === props.model.state.selected?.id || tab.kind === "phantom" &&
-        props.rename?.matches({
-          sidecarId: props.project.sidecarId,
-          sessionID: tab.id,
-        }, "tab")
-    ).map((tab) => tab.key);
+  let lane!: HTMLDivElement;
+  const [edges, setEdges] = createSignal({ previous: false, next: false });
+  const updateEdges = () =>
+    setEdges({
+      previous: lane.scrollLeft > 1,
+      next: lane.scrollLeft + lane.clientWidth < lane.scrollWidth - 1,
+    });
+  const revealActive = () => {
+    lane.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]')
+      ?.scrollIntoView({ inline: "nearest", block: "nearest" });
+    updateEdges();
+  };
+  createEffect(
+    () =>
+      `${props.model.state.selected?.kind}/${props.model.state.selected?.id}`,
+    () =>
+      onSettled(() => {
+        if (lane?.isConnected) revealActive();
+      }),
+  );
+  onSettled(() => {
+    const observer = new ResizeObserver(revealActive);
+    observer.observe(lane);
+    revealActive();
+    return () => observer.disconnect();
+  });
+  const pageTabs = (direction: "previous" | "next") => {
+    const bounds = lane.getBoundingClientRect();
+    const tabs = [...lane.querySelectorAll<HTMLElement>(".otk-tab")];
+    const visible = tabs.filter((tab) => {
+      const box = tab.getBoundingClientRect();
+      return box.left >= bounds.left - 1 && box.right <= bounds.right + 1;
+    });
+    const target = direction === "next" ? visible.at(-1) : visible[0];
+    if (target) {
+      const box = target.getBoundingClientRect();
+      lane.scrollBy({
+        left: direction === "next"
+          ? box.left - bounds.left
+          : box.right - bounds.right,
+      });
+    } else {
+      lane.scrollBy({
+        left: direction === "next" ? lane.clientWidth : -lane.clientWidth,
+      });
+    }
+    updateEdges();
+  };
   const title = (id: string) =>
     props.session?.id === id
       ? props.session.title
@@ -259,78 +299,34 @@ export default function ProjectTabs(props: {
         >
           {projectName(props.project.directory)}
         </span>
-        <div
+        <EdgeTriangle
+          direction="previous"
+          visible={edges().previous}
+          onClick={() => pageTabs("previous")}
+        />
+        <ScrollRegion
+          ref={lane}
+          axis="x"
           class="otk-task-list"
           role="tablist"
           aria-label="Tasks and active sessions"
+          onScroll={updateEdges}
+          onWheel={(event: WheelEvent) => {
+            if (
+              !event.ctrlKey && !event.metaKey &&
+              Math.abs(event.deltaY) > Math.abs(event.deltaX)
+            ) {
+              event.preventDefault();
+              const unit = event.deltaMode === 1
+                ? 16
+                : event.deltaMode === 2
+                ? lane.clientWidth
+                : 1;
+              lane.scrollBy({ left: event.deltaY * unit });
+            }
+          }}
         >
-          <OverflowRow
-            items={tabRows()}
-            required={requiredTabs()}
-            wrapRequired
-            measure={(tab) => (
-              <span class="otk-tab-measure">
-                <SelectionContent>
-                  <StatusLight small state={tab.status} />
-                  <span class="otk-control-label">
-                    {tab.title || "Session"}
-                  </span>
-                  <AutoMark
-                    active={tab.sessions.some((id) => !!props.auto?.(id))}
-                  />
-                  <Show when={tab.preview}>
-                    <span class="otk-preview-label">Preview</span>
-                  </Show>
-                </SelectionContent>
-              </span>
-            )}
-            more={(keys) => (
-              <Menu
-                class="otk-folded-tasks"
-                triggerClass="otk-overflow-trigger"
-                label="More tasks"
-                trigger="…"
-              >
-                <For
-                  each={tabRows().filter((tab) => keys().includes(tab.key))}
-                  keyed={(tab) => tab.key}
-                >
-                  {(tab) => (
-                    <button
-                      type="button"
-                      data-overflow-tab={tab().id}
-                      ref={contextTarget<
-                        SessionContextTarget | TaskContextTarget
-                      >(() => {
-                        const value = tab();
-                        return value.kind === "task"
-                          ? {
-                            kind: "task",
-                            data: { ...props.project, taskID: value.id },
-                          }
-                          : sessionTarget(value.id, "tab");
-                      })}
-                      data-otk-selection="vertical"
-                      {...selection({
-                        kind: "selected",
-                        selected: props.model.state.selected?.id === tab().id,
-                      })}
-                      onClick={() => run(select(tab()))}
-                    >
-                      <SelectionContent>
-                        {tab().title || "Session"}
-                        <AutoMark
-                          active={tab().sessions.some((id) =>
-                            !!props.auto?.(id)
-                          )}
-                        />
-                      </SelectionContent>
-                    </button>
-                  )}
-                </For>
-              </Menu>
-            )}
-          >
+          <For each={tabRows()} keyed={(tab) => tab.key}>
             {(tab) => {
               const editing = () =>
                 tab().kind === "phantom" &&
@@ -376,13 +372,7 @@ export default function ProjectTabs(props: {
                     })}
                     data-otk-selection="horizontal"
                     title={tab().title}
-                    aria-label={`${tab().title || "Session"}${
-                      tab().sessions.some((id) => !!props.auto?.(id))
-                        ? tab().kind === "task"
-                          ? ", Auto-approve is on for a session in this task"
-                          : ", Auto-approve on"
-                        : ""
-                    }`}
+                    aria-label={tab().title || "Session"}
                     data-tab={tab().id}
                     data-status={entry(props.model.state.sessionID ?? "")
                       ?.status}
@@ -398,12 +388,6 @@ export default function ProjectTabs(props: {
                           <TitleEditor owner={props.rename!} />
                         </Show>
                       </span>
-                      <AutoMark
-                        active={tab().sessions.some((id) => !!props.auto?.(id))}
-                        label={tab().kind === "task"
-                          ? "Auto-approve is on for a session in this task"
-                          : undefined}
-                      />
                       <Show when={tab().preview}>
                         <span class="otk-preview-label">Preview</span>
                       </Show>
@@ -412,8 +396,13 @@ export default function ProjectTabs(props: {
                 </div>
               );
             }}
-          </OverflowRow>
-        </div>
+          </For>
+        </ScrollRegion>
+        <EdgeTriangle
+          direction="next"
+          visible={edges().next}
+          onClick={() => pageTabs("next")}
+        />
         <Show when={props.ready}>
           <button
             type="button"
@@ -445,7 +434,6 @@ export default function ProjectTabs(props: {
                 <span class="otk-crumb-measure-content">
                   <StatusLight small state="idle" />
                   {title(item.id)}
-                  <AutoMark active={!!props.auto?.(item.id)} />
                 </span>
               </span>
             )}
@@ -471,7 +459,6 @@ export default function ProjectTabs(props: {
                     >
                       <SelectionContent>
                         {title(id())}
-                        <AutoMark active={!!props.auto?.(id())} />
                       </SelectionContent>
                     </button>
                   )}
@@ -527,8 +514,6 @@ export default function ProjectTabs(props: {
                               ? props.session.title
                               : entry(crumb().id)?.title ??
                                 "Session unavailable"
-                          }${
-                            props.auto?.(crumb().id) ? ", Auto-approve on" : ""
                           }`}
                           {...native.attributes}
                         >
@@ -553,7 +538,6 @@ export default function ProjectTabs(props: {
                                 />
                               </Show>
                             </span>
-                            <AutoMark active={!!props.auto?.(crumb().id)} />
                           </SelectionContent>
                         </Control>
                       </span>
@@ -624,10 +608,12 @@ export default function ProjectTabs(props: {
         </output>
       </div>
       <Show
-        when={crumbs().some((crumb) => props.rename?.matches({
-          sidecarId: props.project.sidecarId,
-          sessionID: crumb.id,
-        }, "chip"))}
+        when={crumbs().some((crumb) =>
+          props.rename?.matches({
+            sidecarId: props.project.sidecarId,
+            sessionID: crumb.id,
+          }, "chip")
+        )}
       >
         <div class="otk-crumb-feedback">
           <TitleFeedback owner={props.rename!} id={crumbFeedbackID} />

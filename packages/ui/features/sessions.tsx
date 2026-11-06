@@ -43,7 +43,6 @@ export function registerSessionsPanel(
                 selected={shell.selection()}
                 rename={shell.rename}
                 showCost={shell.toggles.state.prefs.showCost}
-                auto={(id) => !!shell.approvals(project.sidecarId).owner(id)}
                 inbox={(id) => shell.inbox(id).state.inbox}
                 connected={(id) =>
                   shell.servers().some((s) =>

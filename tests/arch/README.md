@@ -92,18 +92,17 @@ and in-flight work. Browser tests count one catalog watch and frecency load per
 accepted directory/connection generation, with no per-session discovery reads,
 and preserve the composer loading/error/retry outcomes.
 
-Task tabs use the same measured overflow owner as breadcrumbs. One More slot
-contains omitted idle tasks; selected and attention tasks stay visible, wrapping
-only that pinned set when necessary. Per-tab action menus remain absent; task
-handlers and scoped commands remain independent of presentation. Project rows
-reserve visit time and their menu trigger in a shared flowing trailing cell.
-Negative fixtures reject per-tab menus and counterfeit overflow owners and
-positioning or offsets in row content; overlay content has no project-menu
-exception. Browser tests measure stable row/cell geometry on hover/focus and
-keyboard menu access. Task outcome tests use the public client owners while the
-tab menu is absent; package-local units cover the UI handlers and their captured
-project ownership. Those browser drivers return to the UI when replacement
-tab-menu wiring is specified.
+Task tabs use one horizontal scroll lane, with equal widths down to 90px and
+available-only edge triangles. Breadcrumbs retain their measured overflow owner.
+Tab action and overflow menus remain absent; task handlers and scoped commands
+remain independent of presentation. Project rows reserve visit time and their
+menu trigger in a shared flowing trailing cell. Negative fixtures reject tab
+menus and positioning or offsets in row content; overlay content has no
+project-menu exception. Browser tests measure stable row/cell geometry on
+hover/focus and keyboard menu access. Task outcome tests use the public client
+owners while the tab menu is absent; package-local units cover the UI handlers
+and their captured project ownership. Those browser drivers return to the UI
+when replacement tab-menu wiring is specified.
 
 The visual-system check enforces token-only font selection, minimum 12px text
 and the 4px spacing grid across reusable UI styles and application chrome.

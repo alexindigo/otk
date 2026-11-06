@@ -16,7 +16,6 @@ export default function OverflowRow<T extends { key: string }>(props: {
   items: readonly T[];
   required: readonly string[];
   preferred?: readonly string[];
-  wrapRequired?: boolean;
   measure(item: T): Element;
   children(item: () => T): Element;
   more(keys: () => readonly string[]): Element;
@@ -38,11 +37,9 @@ export default function OverflowRow<T extends { key: string }>(props: {
         [key, element],
       ) => [key, element.getBoundingClientRect().width]),
     );
-    if (!props.wrapRequired) {
-      for (const key of props.required) {
-        const current = liveFrames.get(key)?.getBoundingClientRect().width;
-        if (current) widths.set(key, current);
-      }
+    for (const key of props.required) {
+      const current = liveFrames.get(key)?.getBoundingClientRect().width;
+      if (current) widths.set(key, current);
     }
     const css = getComputedStyle(root);
     const next = {
@@ -97,12 +94,10 @@ export default function OverflowRow<T extends { key: string }>(props: {
         keys: items.map((item) => item.key),
         required: props.required,
         preferred: props.preferred,
-        wrapRequired: props.wrapRequired,
       });
     return {
       visible: items.filter((item) => fit.visible.includes(item.key)),
       overflow: fit.overflow,
-      wrapRequired: fit.wrapRequired,
     };
   };
   const fitted = createMemo(fitSnapshot);
@@ -111,7 +106,6 @@ export default function OverflowRow<T extends { key: string }>(props: {
     <div
       class={["otk-overflow-row", {
         "has-overflow": snapshot().overflow.length > 0,
-        "wraps-required": !!snapshot().wrapRequired,
       }]}
       ref={(e) => root = e}
       onPointerDown={() => setGesture(fitted())}

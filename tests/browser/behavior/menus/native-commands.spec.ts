@@ -60,10 +60,18 @@ test("menus.native-area-picker-approval-and-activity-consumers", {
   }
   await rightClick(page, ".otk-messages", true);
   await pick(page, "Turn auto-approve on");
-  await expect(page.locator("[data-crumb] .otk-auto-mark")).toBeVisible();
+  await expect(page.locator(".otk-auto-approve-toggle")).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  await expect(page.locator("[data-crumb] .otk-auto-mark")).toHaveCount(0);
   await rightClick(page, ".otk-messages", true);
   expect((await groups(page))[0]).toContain("Turn auto-approve off");
   await pick(page, "Turn auto-approve off");
+  await expect(page.locator(".otk-auto-approve-toggle")).toHaveAttribute(
+    "aria-pressed",
+    "false",
+  );
   await expect(page.locator("[data-crumb] .otk-auto-mark")).toHaveCount(0);
   await page.locator("[data-panel-view=activity]").click();
   await expect(page.locator("#otk-panel-content")).toHaveAttribute(
@@ -105,7 +113,7 @@ test("menus.native-background-auto-approve-target-and-real-reply-usage", {
   ]);
   await pick(page, "Turn auto-approve on");
   await expect(page.locator(`[data-session="${other.id}"] .otk-auto-mark`))
-    .toBeVisible();
+    .toHaveCount(0);
   await expect(page.locator(`[data-session="${first.id}"] .otk-auto-mark`))
     .toHaveCount(0);
   await expect(page).toHaveURL(new RegExp(first.id + "$"));

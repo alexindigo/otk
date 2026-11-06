@@ -539,10 +539,10 @@ remaining original order, with cycle protection. These owners know no DOM,
 framework or item count folding threshold. The UI retains stable frames and
 supplies measured widths.
 
-The optional `wrapRequired` mode reports when mandatory identities alone need
-multiple rows. Task strips use it to keep selected and attention tasks visible;
-all optional tasks then enter More. Breadcrumbs retain their one-line shrinking
-contract, and More renders independent controls for omitted identities.
+Breadcrumbs use the one-line shrinking contract, with independent More controls
+for omitted identities. Task strips render the client-owned urgency/recency
+order directly in a horizontal scroll lane, without overflow fitting or
+wrapping.
 
 `createInputGuard({drafts, key, confirm})` owns dirty-input marks and
 confirmation policy. Release reads the invocation-current draft through

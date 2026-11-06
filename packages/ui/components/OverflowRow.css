@@ -52,17 +52,6 @@
 .otk-overflow-measure > span:last-child {
   inline-size: var(--control-size);
 }
-.otk-overflow-row.wraps-required {
-  block-size: auto;
-  min-block-size: var(--row-compact);
-  align-items: start;
-}
-.otk-overflow-row.wraps-required .otk-overflow-items {
-  flex-wrap: wrap;
-}
-.otk-overflow-row.wraps-required .otk-overflow-item[data-pinned=true] {
-  flex-shrink: 0;
-}
 .otk-overflow-trigger {
   cursor: pointer;
   inline-size: var(--control-size);

@@ -722,7 +722,7 @@ export async function themeScenario() {
             }
             const directory = join(root, "projects", "overflow");
             await Deno.mkdir(directory);
-            for (let n = 0; n < 251; n++) {
+            for (let n = 0; n < 300; n++) {
               const id = `tstv1-task-${n}`;
               overflow.ids.push(id);
               f.add({ ...base, id, directory, title: `Session ${n}` });

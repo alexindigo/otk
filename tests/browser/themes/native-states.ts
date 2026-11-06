@@ -56,16 +56,7 @@ export async function nativeStates({
       const mark = page.locator(
         `[data-session="${native.automaticID}"] .otk-auto-mark`,
       );
-      await expect(mark).toBeVisible();
-      expect(
-        await mark.evaluate((el) => {
-          const a = el.getBoundingClientRect(),
-            b = el.closest(".otk-session-row")!.querySelector(".otk-row-title")!
-              .getBoundingClientRect();
-          return Math.abs(a.y + a.height / 2 - b.y - b.height / 2) < .5 &&
-            a.width > 0 && getComputedStyle(el).position === "static";
-        }),
-      ).toBe(true);
+      await expect(mark).toHaveCount(0);
       await shot(`native-auto-pending-${theme.id}`);
     }
     await state.controller.call("scenario", {

@@ -316,12 +316,13 @@ not track it; creating a session or interacting with one does. Add servers and
 path templates in Settings; Add project creates an initial session. The centre
 provides ordered task tabs, always-visible active-session phantom tabs and a
 single replaceable session preview. Pin, double-click or send in a phantom to
-make a task. Idle, unselected task tabs that do not fit enter one More menu;
-selected and working, blocked or unseen-finished tasks stay visible. If those
-required tasks alone need more space, only that set wraps. Task breadcrumbs
-switch sessions and their helpers in one measured row with their own More menu;
-the selected or editing chip stays in place. The meter shows reported token
-usage and whole-session reported cost. The collapsible right panel hosts
+make a task. Tasks share one row equally down to 90px, then scroll sideways.
+Wheel over the strip to scroll; edge triangles page with the last fully visible
+tab becoming the first (mirrored going back). Selection and resizing keep the
+active tab in view. Tasks follow attention priority, then newest activity. Task
+breadcrumbs switch sessions and their helpers in one measured row with their own
+More menu; the selected or editing chip stays in place. The meter shows reported
+token usage and whole-session reported cost. The collapsible right panel hosts
 feature-registered views; its collapsed rail keeps their icons available and
 clicking an icon opens that view. Sessions shows the selected project's
 task-grouped parent/child tree with status lights and title search. Switching
@@ -371,13 +372,13 @@ session.
 The composer's Auto-approve shield toggles server-owned permission replies for
 that session and its helpers. It is off by default, persists in `otk.db` and
 continues with no browser open; each request receives Allow once, not a
-permanent backend grant. Auto marks in tabs, breadcrumbs and session rows show
-the active policy. The Activity panel records manual and automatic replies,
-their exact targets and confirmed, failed or unconfirmed outcomes. The command
-palette and `Ctrl/Cmd+Shift+A` expose the same session toggle. While linked,
-pending covered requests show a quiet Auto-approving status instead of asking
-the browser for a competing reply. Helpers inherit policy; only the parent
-session can enable it. Deleting a session removes its saved policy.
+permanent backend grant. Its state is shown only in the composer footer. The
+Activity panel records manual and automatic replies, their exact targets and
+confirmed, failed or unconfirmed outcomes. The command palette and
+`Ctrl/Cmd+Shift+A` expose the same session toggle. While linked, pending covered
+requests show a quiet Auto-approving status instead of asking the browser for a
+competing reply. Helpers inherit policy; only the parent session can enable it.
+Deleting a session removes its saved policy.
 
 Transcript prose, code, diffs and the rounded composer share a centred 46rem
 lane. User messages are right-aligned bubbles without role labels. Expandable

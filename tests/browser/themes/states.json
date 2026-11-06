@@ -852,9 +852,9 @@
       "legacy": "legacy.task-overflow.74ea8d4b9f64c82e",
       "state": "task-idle",
       "checks": [
-        "251 idle tasks one row at 600/800/1280/1920",
-        "one More",
-        "selected/working/blocked/finished pins only wrap at 800"
+        "300 equal-width tabs in one scrolling row at 600/800/1280/1920",
+        "edge triangles only beyond lane edges; equal icon gaps within 1px",
+        "active tab revealed after selection and resize; no More or Auto marks"
       ]
     },
     {

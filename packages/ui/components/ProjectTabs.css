@@ -10,7 +10,6 @@
 .otk-task-list,
 .otk-tab,
 .otk-tab-open,
-.otk-tab-measure,
 .otk-breadcrumb-row,
 .otk-task-crumbs,
 .otk-session-crumb,
@@ -21,7 +20,7 @@
   min-width: 0;
 }
 .otk-task-strip {
-  min-height: var(--chrome-header-height);
+  height: var(--chrome-header-height);
   padding: 0 12px 0 16px;
   gap: var(--chrome-gap);
 }
@@ -30,21 +29,29 @@
 }
 .otk-tabs-project {
   flex: 0 1 auto;
+  max-width: 25%;
   font-weight: 600;
   margin-right: 8px;
 }
 .otk-task-list {
-  flex: 1 1 auto;
-  display: block;
+  flex: 1 1 0;
+  height: 100%;
   gap: var(--chrome-gap);
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+.otk-task-list:hover,
+.otk-task-list:focus-within {
+  scrollbar-color: var(--otk-fg-3) transparent;
 }
 .otk-tab {
+  flex: 1 1 0;
+  min-width: 90px;
   gap: 0;
-  max-width: 100%;
   border-radius: var(--radius-row);
 }
-.otk-tab-open,
-.otk-tab-measure {
+.otk-tab-open {
+  width: 100%;
   --selection-padding: 0 var(--chrome-inset);
   height: var(--control-size);
   max-width: 100%;
