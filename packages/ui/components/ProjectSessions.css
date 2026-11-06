@@ -105,6 +105,9 @@
 }
 .otk-session-digest-state {
   white-space: nowrap;
+  inline-size: 15ch;
+  text-align: end;
+  color: var(--otk-fg-3);
 }
 .otk-session-summary-status {
   position: absolute;

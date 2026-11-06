@@ -31,6 +31,7 @@ import { ForkFact } from "./ForkNote.tsx";
 import ComposerNotice from "./ComposerNotice.tsx";
 import OperationFeedback from "./OperationFeedback.tsx";
 import PaneState from "./PaneState.tsx";
+import ProgressStatus from "./ProgressStatus.tsx";
 import { bindFeedback } from "../state/feedback.ts";
 import { useSessionPorts } from "../registries/session.tsx";
 import SessionError from "./SessionError.tsx";
@@ -318,8 +319,15 @@ export default function SessionView(props: {
                         run: () => void retry(),
                       },
                     }
-                    : { kind: "pending", text: "Loading messages…" }}
-                />
+                    : undefined}
+                >
+                  <Show when={!props.error}>
+                    <ProgressStatus
+                      text={props.transcript?.progress?.().text ||
+                        "Loading messages..."}
+                    />
+                  </Show>
+                </PaneState>
               </Show>
               <Show
                 when={!props.loading && !count() && !props.error &&
@@ -333,11 +341,10 @@ export default function SessionView(props: {
                 when={!!count() &&
                   (props.loading || props.continuity === "missing")}
               >
-                <p role="status">
-                  {count() || props.continuity === "missing"
-                    ? "Refreshing messages…"
-                    : "Loading messages…"}
-                </p>
+                <ProgressStatus
+                  text={props.transcript?.progress?.().text ||
+                    "Loading messages..."}
+                />
               </Show>
               <div
                 class="otk-message-flow"
@@ -347,12 +354,12 @@ export default function SessionView(props: {
                 }}
               >
                 <Show when={props.paging}>
-                  <PaneState
-                    feedback={{
-                      kind: "pending",
-                      text: "Loading earlier messages…",
-                    }}
-                  />
+                  <PaneState>
+                    <ProgressStatus
+                      text={props.transcript?.progress?.().text ||
+                        "Loading earlier messages..."}
+                    />
+                  </PaneState>
                 </Show>
                 <Show
                   when={!props.exhausted && count() &&

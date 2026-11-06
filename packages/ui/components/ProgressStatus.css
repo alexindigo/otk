@@ -1,0 +1,12 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-progress-status {
+  display: block;
+  min-width: 0;
+  flex-shrink: 1;
+  font-size: var(--text-meta);
+  line-height: var(--line-meta);
+  color: var(--otk-fg-3);
+}
+.otk-progress-status:empty {
+  display: none;
+}

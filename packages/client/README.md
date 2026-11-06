@@ -1,5 +1,12 @@
 # @otk/client
 
+ProgressEstimate derives EWMA completion rate and variance-aware ETA from worker
+active-work facts, resetting at scope/generation replacement. createProgress
+owns the coalesced one-second publication clock, stopping it when work is ready
+or released. Transcript request owners supply queued/reading stages through that
+same owner. A 45-second no-advancement fallback reports elapsed/last progress
+and the real wait reason, never a failure or invented ETA.
+
 ## View leases (protocol 18)
 
 ServerResources owns project/selection/crumb demand and visible Sessions keys.

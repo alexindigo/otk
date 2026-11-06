@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+export { default as ProgressStatus } from "./components/ProgressStatus.tsx";
 export { default as ControlValue } from "./components/ControlValue.tsx";
 export { default as Select } from "./components/Select.tsx";
 export { default as OverflowRow } from "./components/OverflowRow.tsx";

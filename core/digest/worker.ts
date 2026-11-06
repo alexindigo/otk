@@ -35,6 +35,12 @@ import {
   type DigestPublicationReservation,
 } from "./publication-order.ts";
 import { DigestBatch } from "./batch.ts";
+import { DigestProgress } from "./progress.ts";
+
+let progress: DigestProgress | undefined;
+let progressTimer: ReturnType<typeof setInterval> | undefined;
+let nativeWaiting = 0;
+let nativeUnavailable = false;
 
 let run: string | undefined,
   db: DigestDb | undefined,
@@ -74,6 +80,10 @@ const publicationOrder = new DigestPublicationOrder(
 const publishedRevisions = new Map<string, number>();
 const nativeReadsGate = new DigestReadGate(() => scheduler?.interruptIO());
 function nativeWait<T>(readiness: Promise<T>, join = false): Promise<T> {
+  nativeWaiting++;
+  readiness = readiness.finally(() => {
+    nativeWaiting--;
+  });
   const turn = execution.getStore()?.turn;
   return turn
     ? (join ? turn.join(readiness) : turn.wait(readiness, "io"))
@@ -179,6 +189,12 @@ async function publishRead<K extends keyof ProviderReadKinds>(
   }
 }
 async function publish(value: DigestPublication): Promise<void> {
+  progress?.update(
+    value.sessionID,
+    value.delta.summary.state === "ready",
+    value.delta.summary.messageCount ?? 0,
+    value.metadata?.directory,
+  );
   const context = execution.getStore();
   if (context?.catalogPublications) {
     if (!context.catalogPublications.has(value.sessionID)) {
@@ -326,6 +342,15 @@ async function admitCatalog(
         row,
       ) => [row.id, row]),
     );
+    for (const entry of chunk) {
+      const row = saved.get(entry.id);
+      progress?.row(
+        entry.id,
+        entry.directory,
+        row?.state === "ready",
+        row?.message_count ?? 0,
+      );
+    }
     const pending = chunk.filter((entry) => {
       const row = saved.get(entry.id);
       return row && !row.deleted_at && row.state !== "ready";
@@ -404,6 +429,22 @@ async function start(
   if (run) throw new Error("Digest worker already started");
   run = message.run;
   policy = message.policy;
+  progress = new DigestProgress(`${message.run}:0`);
+  progressTimer = setInterval(() => {
+    post({
+      t: "progress",
+      run: run!,
+      id: 0,
+      values: progress!.values(
+        nativeUnavailable
+          ? "native unavailable"
+          : waitingCredit.size
+          ? "waiting for publication credit"
+          : scheduler?.waitReason ??
+            (nativeWaiting ? "waiting for native data" : undefined),
+      ),
+    });
+  }, 1000);
   const nativeReads: Record<string, number> = {};
   try {
     const contributions = new Map([["opencode-v1", {
@@ -533,7 +574,10 @@ async function start(
                   inventoryComplete = Math.max(inventoryComplete, admitted);
                 }
                 const start = performance.now();
+                const work = turn.workms;
                 const cursor = await sink!.step(job, budget, signal);
+                nativeUnavailable = false;
+                progress?.chunk(job.directory, turn.workms - work);
                 if (message.diagnostics) {
                   post({
                     t: "pressure",
@@ -549,6 +593,7 @@ async function start(
               } catch (error) {
                 signal.throwIfAborted();
                 if (sqliteBusy(error)) throw error;
+                nativeUnavailable = true;
                 const row = store!.summary([job.sessionID])[0];
                 if (row) {
                   const saved = snapshot(row);
@@ -650,6 +695,7 @@ async function start(
   }
 }
 async function stop(message: ToWorker): Promise<void> {
+  clearInterval(progressTimer);
   lifetime.abort();
   kick();
   for (const ready of waitingCredit) ready();
@@ -838,6 +884,9 @@ function handle(message: ToWorker): void {
                 }));
               }
               connection = message.connection;
+              progress = new DigestProgress(
+                `${run}:${connection}:${message.id}`,
+              );
               sink!.connection(connection);
               const current = () => {
                 signal.throwIfAborted();
@@ -869,6 +918,14 @@ function handle(message: ToWorker): void {
                     policy.batch,
                   );
                   if (!rows.length) break;
+                  for (const row of rows) {
+                    progress?.row(
+                      row.id,
+                      row.directory,
+                      row.state === "ready",
+                      row.message_count ?? 0,
+                    );
+                  }
                   entries.push(...rows.map((row) => snapshot(row).metadata));
                   // This catalog supersedes cached replay, including unchanged
                   // tombstones whose digest chunks may not have arrived yet.
@@ -903,6 +960,7 @@ function handle(message: ToWorker): void {
                   invalidate: true,
                   helpers: true,
                 });
+                progress?.complete();
                 for (
                   const [sessionID, reserved] of changed
                 ) {

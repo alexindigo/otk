@@ -79,7 +79,7 @@ test("readiness.transcript-route", {
   await expect(transcript).toHaveAttribute("aria-busy", "true");
   const sessions = page.getByRole("navigation", { name: "Project sessions" });
   await expect(sessions).toHaveAttribute("aria-busy", "true");
-  await expect(sessions.getByRole("status")).toHaveText("Loading sessions…");
+  await expect(sessions.getByRole("status")).toHaveText("Loading sessions...");
   await expect(sessions.getByText("No matching sessions")).toHaveCount(0);
   gate.release("inbox");
   await expect(

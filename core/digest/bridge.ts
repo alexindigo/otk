@@ -57,6 +57,21 @@ type Command = ToWorker extends infer T
   : never;
 /** Serving-isolate transport only. All native and derived SQLite stays in the worker. */
 export class DigestBridge implements DigestPort {
+  #progress: import("@otk/protocol").ProgressFacts[] = [];
+  #progressListeners = new Set<
+    (values: import("@otk/protocol").ProgressFacts[]) => void
+  >();
+  progress(): import("@otk/protocol").ProgressFacts[] {
+    return this.#progress;
+  }
+  observeProgress(
+    listener: (values: import("@otk/protocol").ProgressFacts[]) => void,
+  ): () => void {
+    this.#progressListeners.add(listener);
+    return () => {
+      this.#progressListeners.delete(listener);
+    };
+  }
   #worker?: Worker;
   #run = "";
   #id = 0;
@@ -191,6 +206,9 @@ export class DigestBridge implements DigestPort {
               this.#intents.delete(data.sessionID);
             }
           }
+        } else if (data.t === "progress") {
+          this.#progress = data.values;
+          for (const listener of this.#progressListeners) listener(data.values);
         } else if (data.t === "pressure") {
           this.options.pressure?.(data);
         } else if (data.t === "error") {

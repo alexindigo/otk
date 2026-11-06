@@ -50,6 +50,7 @@ export type Profile =
   | "contract-sessions-resurrection"
   | "contract-sessions-unknown"
   | "contract-sessions-summary"
+  | "contract-sessions-progress"
   | "contract-sessions-window"
   | "contract-sessions-catalog"
   | "contract-sessions-merge"
@@ -318,6 +319,7 @@ export function request(value: unknown): ControlRequest {
           "contract-sessions-resurrection",
           "contract-sessions-unknown",
           "contract-sessions-summary",
+          "contract-sessions-progress",
           "contract-sessions-window",
           "contract-sessions-catalog",
           "contract-sessions-merge",

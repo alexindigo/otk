@@ -136,7 +136,9 @@ export default function ProjectSessions(props: {
       aria-busy={props.ready === false || progress().busy ? "true" : "false"}
     >
       <span class="otk-session-summary-status" role="status" aria-live="polite">
-        {props.ready === false ? "Loading sessions…" : progress().announcement}
+        {props.ready === false
+          ? "Loading sessions..."
+          : progress().announcement}
       </span>
       <Show when={error()}>
         <p class="otk-error" role="alert">{error()}</p>
@@ -236,11 +238,10 @@ export default function ProjectSessions(props: {
                     : undefined,
                 };
               };
-              const editing = () =>
-                props.rename?.matches({
-                  sidecarId: props.project!.sidecarId,
-                  sessionID: row().session.id,
-                }, "row");
+              const editing = () => props.rename?.matches({
+                sidecarId: props.project!.sidecarId,
+                sessionID: row().session.id,
+              }, "row");
               return (
                 <Show
                   when={!!merged(key)}

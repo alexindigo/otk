@@ -160,6 +160,16 @@ export class DigestScheduler {
   get queued(): number {
     return this.#pending.size;
   }
+  get waitReason(): string | undefined {
+    if (this.#interactive.size) return "queued behind current work";
+    if (this.resources.freeMemory() < this.policy.memoryreserve) {
+      return "paused for memory capacity";
+    }
+    if (this.#dutyUntil > this.#now()) {
+      return "waiting for the background work budget";
+    }
+    return undefined;
+  }
   #priority(pending: Pending): number {
     const priority = rank[pending.priority];
     return priority > rank.visible &&

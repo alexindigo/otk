@@ -518,6 +518,12 @@ stale. No row requires session metadata to render its lamp or counts.
 
 ## Worker-backed digest services
 
+The worker's incremental DigestProgress owns scalar scope generations, bounded
+enumeration denominators, completion/queue/chunk/message counts, active work
+time and actual wait reasons. Its one-second fact stream crosses the bridge
+through a view-scoped FrameSource; it opens no progress-only SQL reader or
+history scan.
+
 `core/digest/worker.ts` is an application composition root over public store,
 harness and native entries. It alone opens `digest.db` and the digest's
 read-only native connection. `DigestBridge` owns the lazy module Worker,

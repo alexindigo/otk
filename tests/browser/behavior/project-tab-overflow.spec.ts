@@ -43,7 +43,7 @@ test(
     const composer = page.locator("textarea[name=prompt]");
     await composer.fill("Editable while project choices load");
     await expect(composer).toHaveValue("Editable while project choices load");
-    await expect(page.getByText("Loading messages…", { exact: true }))
+    await expect(page.getByText(/^Loading messages\.\.\./))
       .toBeHidden();
     await page.evaluate(() => document.fonts.ready);
     const label = tabs.locator(".otk-tabs-project");

@@ -62,6 +62,7 @@ type ServerMessage =
     };
   }
   | { t: "harness"; state: HarnessState }
+  | { t: "digest.progress"; values: import("./progress.ts").ProgressFacts[] }
   | { t: "ping" }
   | { t: "prefs"; prefs: Preferences }
   | ({ t: "inbox.snapshot" } & InboxBaseline)

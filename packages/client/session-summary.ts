@@ -54,7 +54,7 @@ export function digestLabel(entry: IndexEntry | undefined): string {
     ? "Usage unavailable"
     : entry?.digest.state === "unavailable"
     ? "Usage unavailable"
-    : "Digesting…";
+    : "Pending";
 }
 export function digestProgress(
   entries: readonly IndexEntry[],

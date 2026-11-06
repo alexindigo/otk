@@ -9,6 +9,7 @@ import {
   type TranscriptVersion,
 } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
+import { createProgress, type ProgressDisplay } from "./progress.ts";
 import { failureText } from "./failure-features.ts";
 import type { ContentOp, ContentSession, Message, Part } from "@otk/protocol";
 import { isAttentionOp } from "@otk/protocol";
@@ -94,6 +95,7 @@ export type ToolCompletionSource = (
   listener: (part: ToolPart) => void,
 ) => () => void;
 export interface TranscriptOwner {
+  progress?(): ProgressDisplay;
   state: TranscriptState;
   readonly projection: TranscriptProjection;
   readonly interaction: TranscriptInteraction;
@@ -129,6 +131,34 @@ export function createTranscript(
     connection(target.sidecarId).messages,
 ): TranscriptOwner {
   const projection = createTranscriptProjection();
+  const readProgress = createProgress(factory);
+  let readFacts: import("@otk/protocol").ProgressFacts | undefined;
+  let readLabel = "Loading messages";
+  const readStage = (
+    phase: "queued" | "reading" | "ready",
+    generation: string,
+    messages = 0,
+  ) => {
+    const now = Date.now();
+    readFacts = {
+      generation,
+      phase,
+      eligible: null,
+      completed: 0,
+      queued: phase === "queued" ? 1 : 0,
+      chunks: phase === "ready" ? 1 : 0,
+      messages,
+      activeMs: 0,
+      started: readFacts?.generation === generation ? readFacts.started : now,
+      advanced: now,
+      wait: phase === "reading"
+        ? (readLabel === "Loading messages"
+          ? "waiting for the newest page"
+          : "waiting for an earlier page")
+        : undefined,
+    };
+    readProgress.receive("page", readFacts);
+  };
   const interaction = createTranscriptInteraction();
   const helper = (
     id: string,
@@ -421,6 +451,9 @@ export function createTranscript(
     const recovering = missing;
     initialResync = false;
     const target = selected, id = generation, request = ++load;
+    const progressGeneration = `${id}:${request}`;
+    readLabel = "Loading messages";
+    readStage("queued", progressGeneration);
     controller?.abort();
     const abort = controller = new AbortController();
     fetching = true;
@@ -449,12 +482,15 @@ export function createTranscript(
         }
       };
       refreshAttention(false);
-      const page = await acquire(() =>
-        rpc.call("session.messages", {
+      const page = await acquire(() => {
+        readStage("reading", progressGeneration);
+        return rpc.call("session.messages", {
           sessionID: target.sessionID,
-        }, abort.signal), abort.signal);
+        }, abort.signal);
+      }, abort.signal);
       const info = page.session, messages = page.items;
       if (!current(id, request)) return;
+      readStage("ready", progressGeneration, messages.length);
       if (minimum && compareTranscriptVersion(page.version, minimum) < 0) {
         initialResync = retriedVersion === undefined ||
           compareTranscriptVersion(retriedVersion, minimum) < 0;
@@ -719,6 +755,7 @@ export function createTranscript(
     }
   };
   const owner: TranscriptOwner = {
+    progress: () => readProgress.display("page", readLabel),
     projection,
     interaction,
     async source(messageID, text) {
@@ -783,6 +820,7 @@ export function createTranscript(
         draft.temperature = value;
       });
       if (value === "cold") {
+        readProgress.stop();
         open();
         cursor = null;
         setState((draft) => {
@@ -873,6 +911,18 @@ export function createTranscript(
     usesMetadata: (ids) =>
       ids.has(target.sessionID) || projection.usesMetadata(ids),
     receive(sidecarId: string, frame: ServerFrame): void {
+      if (
+        sidecarId === target.sidecarId && frame.t === "harness" && readFacts &&
+        readFacts.phase !== "ready"
+      ) {
+        readFacts = {
+          ...readFacts,
+          wait: frame.state === "connected"
+            ? "waiting for the newest page"
+            : "native unavailable",
+        };
+        readProgress.receive("page", readFacts);
+      }
       if (!selected || selected.sidecarId !== sidecarId) return;
       if (frame.t === "index.snapshot" || frame.t === "index.patch") {
         const known = entry(sidecarId, selected.sessionID);
@@ -1072,16 +1122,24 @@ export function createTranscript(
       const read = async () => {
         try {
           for (;;) {
+            const progressGeneration = `${id}:${request}:older:${
+              before ?? "tail"
+            }`;
+            readLabel = "Loading earlier messages";
+            readStage("queued", progressGeneration);
             const page = await acquire(
-              () =>
-                connection(target.sidecarId).rpc.call(
+              () => {
+                readStage("reading", progressGeneration);
+                return connection(target.sidecarId).rpc.call(
                   "session.messages",
                   { sessionID: target.sessionID, before },
                   controller?.signal,
-                ),
+                );
+              },
               controller!.signal,
             );
             if (!current(id, request)) return;
+            readStage("ready", progressGeneration, page.items.length);
             if (
               page.sessionID !== target.sessionID ||
               page.clock.epoch !== clock?.epoch
@@ -1152,6 +1210,7 @@ export function createTranscript(
       return work;
     },
     stop(): void {
+      readProgress.stop();
       interaction.clear();
       owner.temperature("cold");
     },

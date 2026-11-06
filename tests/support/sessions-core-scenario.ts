@@ -4,6 +4,9 @@ import { fixture } from "./config.ts";
 import { resources } from "./resources.ts";
 import { WsClient } from "./ws-client.ts";
 import { nativeBinary, nativeVersion } from "./native.ts";
+import { DigestProgress } from "../../core/digest/progress.ts";
+import { digestProgressSource } from "../../core/features/digest-progress.ts";
+import type { ProgressFacts } from "@otk/protocol";
 import type {
   ControlRequest,
   Json,
@@ -14,6 +17,23 @@ import type {
 export async function sessionsCoreScenario(profile: Profile) {
   const root = await fixture();
   const unknown = profile === "contract-sessions-unknown";
+  const progressing = profile === "contract-sessions-progress";
+  const progress = new DigestProgress("held-worker-generation");
+  const listeners = new Set<(values: ProgressFacts[]) => void>();
+  let completed = 80, wait: string | undefined;
+  for (let i = 0; i < 251; i++) {
+    progress.row(`fixture-${i}`, root, i < completed, i < completed ? 10 : 0);
+  }
+  progress.complete();
+  const port = {
+    progress: () => progress.values(wait),
+    observeProgress(listener: (values: ProgressFacts[]) => void) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+  };
   const f = await coreBackendFixture(
     root,
     unknown
@@ -26,11 +46,13 @@ export async function sessionsCoreScenario(profile: Profile) {
         },
       }
       : {},
+    "tstv1-core",
+    progressing ? { sources: [digestProgressSource(port)] } : {},
   );
   let reads = 0;
   const held = Promise.withResolvers<void>();
   resources().defer("sessions held initial transcript", () => held.resolve());
-  if (profile === "contract-sessions-direct") {
+  if (profile === "contract-sessions-direct" || progressing) {
     const read = f.app.backend.core.listMessages;
     f.app.backend.core.listMessages = async (...args) => {
       reads++;
@@ -115,6 +137,18 @@ export async function sessionsCoreScenario(profile: Profile) {
           return await c.rpc(frame.params.method, frame.params.params);
         case "scenario": {
           const { action } = frame.params;
+          if (progressing) {
+            if (action === "succeed") {
+              for (let i = 0; i < 3; i++) {
+                progress.row(`fixture-${completed++}`, root, true, 10);
+              }
+              progress.chunk(root, 1000);
+            } else if (action === "hold") wait = "queued behind current work";
+            else if (action === "release") held.resolve();
+            else throw new Error("Unknown progress scenario action");
+            for (const listener of listeners) listener(port.progress());
+            return null;
+          }
           if (profile === "contract-sessions-direct" && action === "release") {
             held.resolve();
             return null;

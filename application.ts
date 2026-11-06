@@ -72,6 +72,7 @@ export function startApplication(
     diagnostics?: SectionObserver;
     diagnostic?: DiagnosticSink;
     signal?: AbortSignal;
+    sources?: readonly FrameSource[];
   } = {},
 ): Promise<CoreServer> {
   const store = new OtkDb(cfg.state.path, [
@@ -86,7 +87,7 @@ export function startApplication(
     sessionReferenceMigrations,
     requestsMigrations,
   ], cfg.storage);
-  const sources: FrameSource[] = [];
+  const sources: FrameSource[] = [...options.sources ?? []];
   try {
     options.upgrade?.(store);
     const prefs = new Prefs(store, prefsOptions);

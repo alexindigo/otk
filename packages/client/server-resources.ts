@@ -35,6 +35,7 @@ import {
   type SidecarState,
 } from "./sidecars.ts";
 import { createState, type StateFactory } from "./state.ts";
+import { createProgress, type ProgressDisplay } from "./progress.ts";
 import { type ClientTabs, createTabs, type TabInput } from "./tabs.ts";
 import { createTaskActions, type TaskActions } from "./task-actions.ts";
 import { requestAttention } from "./request-attention.ts";
@@ -55,6 +56,7 @@ export interface FrameObserver {
   removed?(id: string): void;
 }
 export interface ServerResources {
+  progress(server: string, directory?: string): ProgressDisplay;
   ownsFailure?(cause: unknown): boolean;
   scope(
     project?: ProjectSelection,
@@ -147,6 +149,12 @@ export function createServerResources(o: {
   error?: (error: unknown) => void;
 }): ServerResources {
   const factory = o.factory ?? createState;
+  const progressOwners = new Map<string, ReturnType<typeof createProgress>>();
+  const progressOwner = (id: string) => {
+    let owner = progressOwners.get(id);
+    if (!owner) progressOwners.set(id, owner = createProgress(factory));
+    return owner;
+  };
   const inboxes = new Map<string, InboxModel>();
   const catalogs = new Map<string, ClientDirectoryCatalogs>();
   const frecencies = new Map<
@@ -489,6 +497,11 @@ export function createServerResources(o: {
     if (frame.t === "welcome") projections.get(id)?.reset();
     if (frame.t === "approvals" || frame.t === "harness") projection(id);
     inbox(id).receive(frame);
+    if (frame.t === "digest.progress") {
+      for (const facts of frame.values) {
+        progressOwner(id).receive(facts.directory ?? "", facts);
+      }
+    }
     catalogs.get(id)?.receive(frame);
     frecencies.get(id)?.receive(frame);
     if (frame.t === "welcome") bindVisibleCatalog();
@@ -531,6 +544,12 @@ export function createServerResources(o: {
     for (const id of projections.keys()) projection(id);
   });
   const api: ServerResources = {
+    progress: (id, directory) => {
+      const owner = progressOwner(id),
+        label = "Indexing sessions";
+      const local = owner.display(directory ?? "", label);
+      return local.text ? local : owner.display("", label);
+    },
     ownsFailure: (cause) =>
       sidecars.state.list.some((server) =>
         sidecars.connection(server.id).rpc.ownsFailure(cause)
@@ -547,6 +566,13 @@ export function createServerResources(o: {
       ) return;
       if (visible && visible.project.sidecarId !== project?.sidecarId) {
         sendScope(visible.project.sidecarId, { sessions: [] });
+      }
+      if (
+        project &&
+        (visible?.project.directory !== project.directory ||
+          visible.project.sidecarId !== project.sidecarId)
+      ) {
+        progressOwner(project.sidecarId).reset(project.directory);
       }
       visible = project && { project, sessions: [...new Set(sessions)] };
       selected = selection;
@@ -738,6 +764,8 @@ export function createServerResources(o: {
     add: (url, label) => sidecars.add(url, label),
     remove(id) {
       rowCatalogs.delete(id);
+      progressOwners.get(id)?.stop();
+      progressOwners.delete(id);
       for (const release of projectReleases.get(id) ?? []) release();
       projectReleases.delete(id);
       for (const directory of projectOwners.get(id)?.directories() ?? []) {
@@ -791,6 +819,8 @@ export function createServerResources(o: {
       if (stopped) return;
       for (const waiter of projectWaiters) waiter.finish();
       stopped = true;
+      for (const owner of progressOwners.values()) owner.stop();
+      progressOwners.clear();
       stopLinks();
       for (const releases of projectReleases.values()) {
         for (const release of releases) {

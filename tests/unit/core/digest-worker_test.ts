@@ -89,6 +89,12 @@ test("public worker port publishes real native totals and recovers committed met
       (value) => value?.delta.summary.state === "ready",
     );
     assertEquals(summaries.get(session.id)?.delta.summary.messageCount, 0);
+    await waitFor(
+      () => bridge.progress().find((value) => value.directory === undefined),
+      (value) => value?.phase === "ready",
+    );
+    assertEquals(bridge.progress()[0].eligible, catalog.entries.length);
+    assertEquals(bridge.progress()[0].completed, catalog.entries.length);
     for (let round = 0; round < 3; round++) {
       fake.queue({ chunks: ["Digest reply"] });
       await oc.request(`/session/${session.id}/message`, {

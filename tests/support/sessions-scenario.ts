@@ -33,6 +33,7 @@ export async function sessionsScenario(profile: Profile) {
       "contract-sessions-resurrection",
       "contract-sessions-unknown",
       "contract-sessions-summary",
+      "contract-sessions-progress",
     ].includes(profile)
   ) return await sessionsCoreScenario(profile);
   const root = await fixture();

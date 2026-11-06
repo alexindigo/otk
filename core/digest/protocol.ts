@@ -103,6 +103,7 @@ export type FromWorker =
     }
     | ({ t: "digest" } & DigestWorkerValue)
     | { t: "digests"; values: DigestWorkerValue[] }
+    | { t: "progress"; values: import("@otk/protocol").ProgressFacts[] }
     | {
       t: "detail";
       sessionID: string;

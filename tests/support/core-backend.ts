@@ -13,7 +13,7 @@ export async function coreBackendFixture(
   identity = "tstv1-core",
   options: Pick<
     NonNullable<Parameters<typeof startApplication>[3]>,
-    "diagnostics"
+    "diagnostics" | "sources"
   > = {},
 ) {
   const scope = resources();

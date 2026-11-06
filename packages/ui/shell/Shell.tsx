@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import PaneState from "../components/PaneState.tsx";
+import ProgressStatus from "../components/ProgressStatus.tsx";
 import "./Shell.css" with { type: "text" };
 import { scrollRegion } from "../components/ScrollRegion.tsx";
 import {
@@ -583,6 +584,12 @@ export default function Shell(
                             task,
                           )}
                         actions={resources.taskActions(project()!)}
+                      />
+                      <ProgressStatus
+                        class="otk-shell-progress"
+                        text={resources.progress(project()!.sidecarId).busy
+                          ? resources.progress(project()!.sidecarId).text
+                          : ""}
                       />
                     </Show>
                     <Show

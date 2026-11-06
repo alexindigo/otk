@@ -18,6 +18,7 @@ import { createSessionReferenceUpgrade } from "./core/features/session-ids.ts";
 import { StreamBuffers } from "@otk/content";
 import { IndexStore } from "./core/index/store.ts";
 import { DigestBridge } from "./core/digest/bridge.ts";
+import { digestProgressSource } from "./core/features/digest-progress.ts";
 import type { ServingDiagnostics } from "./core/diagnostics.ts";
 import { diagnosticsLog } from "./core/diagnostics-log.ts";
 let memo: ServiceConfig | undefined;
@@ -119,6 +120,7 @@ export async function start(
       diagnostics: diagnostics?.section,
       diagnostic,
       signal,
+      sources: [digestProgressSource(digest)],
     },
   );
 }
