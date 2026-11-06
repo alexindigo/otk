@@ -56,7 +56,7 @@ export function inboxStatus(
     entry.operationStatus,
     entry.status !== "idle"
       ? "working"
-      : unread(entry.id, inbox)
+      : !entry.parentID && unread(entry.id, inbox)
       ? "finished"
       : "idle",
   );
@@ -107,7 +107,7 @@ export function inboxProjects(
         source: "tracked" as const,
         inactive,
         status,
-        unread: sessions.some((s) => unread(s.id, inbox)),
+        unread: sessions.some((s) => !s.parentID && unread(s.id, inbox)),
         visitText: visitTime(project.lastVisit, clock),
         ageing: ageing(project.lastVisit, clock, thresholds),
       };
@@ -137,7 +137,7 @@ export function inboxProjects(
       inactive: false,
       lastVisit: 0,
       status: rollup(sessions, inbox),
-      unread: sessions.some((s) => unread(s.id, inbox)),
+      unread: sessions.some((s) => !s.parentID && unread(s.id, inbox)),
       visitText: "",
       ageing: 0,
     };

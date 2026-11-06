@@ -61,7 +61,7 @@ Deno.test("session actions act uses its target directory and returns the success
   f.resources.stop();
 });
 
-Deno.test("session rename captures the target server and uses act without promotion", async () => {
+Deno.test("non-phantom session rename captures the target server and uses act without promotion", async () => {
   const f = shellFixture(), actions = client.createSessionActions(f);
   const action = actions.rename({
     sidecarId: "remote",
@@ -77,6 +77,64 @@ Deno.test("session rename captures the target server and uses act without promot
     }],
     ["remote", "projects.visit", { directory: "/resolved", active: true }],
   ]);
+  f.resources.stop();
+});
+
+Deno.test("renaming a phantom promotes once with the captured new name and retains idle seen membership after reload", async () => {
+  const f = shellFixture(), actions = client.createSessionActions(f);
+  const root = { ...shellEntry("renamed"), status: "busy" as const };
+  f.entries("local", [root, shellEntry("other")]);
+  const project = { sidecarId: "local", directory: "/p" };
+  const tabs = f.resources.tabs(project);
+  tabs.preview(root.id);
+  const held = Promise.withResolvers<unknown>();
+  const entered = Promise.withResolvers<void>();
+  f.reply((_server, method, params) => {
+    if (method === "session.rename") {
+      entered.resolve();
+      return held.promise;
+    }
+    if (method === "tasks.create") {
+      return Promise.resolve({
+        ...shellTask("persisted", [root.id]),
+        name: (params as { name: string }).name,
+      });
+    }
+    return Promise.resolve(null);
+  });
+  const renaming = actions.rename(
+    { sidecarId: "local", sessionID: root.id },
+    "New task name",
+  );
+  await entered.promise;
+  tabs.preview("other");
+  held.resolve({ ...shellInfo(root.id), title: "New task name" });
+  await renaming;
+  assertEquals(f.calls.filter((call) => call[1] === "tasks.create"), [[
+    "local",
+    "tasks.create",
+    { directory: "/p", name: "New task name", sessions: [root.id] },
+  ]]);
+  assertEquals(tabs.state.sessionID, "other");
+  const restored = client.createTabs(() => {
+    throw Error("No further promotion");
+  });
+  restored.update({
+    directory: "/p",
+    entries: [{ ...root, status: "idle" }],
+    inbox: {
+      projects: [],
+      tasks: [{ ...shellTask("persisted", [root.id]), name: "New task name" }],
+      seen: { [root.id]: 20 },
+      finishes: { [root.id]: 20 },
+      pathTemplates: [],
+    },
+  });
+  assertEquals(
+    restored.tabs().map((tab) => [tab.kind, tab.title, tab.status]),
+    [["task", "New task name", "idle"]],
+  );
+  restored.stop();
   f.resources.stop();
 });
 

@@ -42,7 +42,8 @@ test("sessions.close-surfaces-membership-and-mandatory-phantom", {
   await expect(page.locator(`[data-tab="${task.id}"]`)).toBeVisible();
   await page.locator('[data-session="tstv1-child"]').click();
   await expect(page).toHaveURL(/tstv1-otk\/tstv1-child$/);
-  await sessionContext(page, '[data-crumb="tstv1-child"]', "session.close");
+  await expect(page.locator('[data-crumb="tstv1-child"]')).toHaveCount(0);
+  await sessionContext(page, '[data-session="tstv1-child"]', "session.close");
   await expect(page).toHaveURL(/tstv1-otk$/);
   await expect(page.locator('[data-crumb="tstv1-child"]')).toHaveCount(0);
   await expect(page.locator('[data-session="tstv1-child"]')).toBeVisible();

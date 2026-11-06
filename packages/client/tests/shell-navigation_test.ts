@@ -752,8 +752,6 @@ Deno.test("close helper returns to its immediate parent without removing inherit
       client.taskBreadcrumbs(
         shellTask("task", ["tstv1-selected"]),
         f.resources.projectEntries({ sidecarId: "local", directory: "/p" }),
-        "tstv1-selected",
-        tabs.state.closed,
       ).map((c) => c.id),
       ["tstv1-selected"],
     );

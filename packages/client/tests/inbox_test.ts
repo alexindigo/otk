@@ -239,10 +239,10 @@ Deno.test("phantom rule 1: all ungrouped working, blocked and unseen-finished se
     });
     tabs.update({ directory: "/p", entries, inbox });
     assertEquals(tabs.tabs().map((t) => t.id), [
-      "task",
-      "busy",
       "blocked",
       "finished",
+      "busy",
+      "task",
     ]);
   }
 });
@@ -265,14 +265,14 @@ Deno.test("phantom rule 2: a single preview replaces idle previews but cannot re
   });
   tabs.preview("a");
   tabs.preview("b");
-  assertEquals(tabs.tabs().map((t) => t.id), ["task", "b", "busy"]);
+  assertEquals(tabs.tabs().map((t) => t.id), ["busy", "b", "task"]);
   tabs.preview("busy");
   tabs.preview("a");
   assertEquals(tabs.tabs().filter((t) => t.preview).map((t) => t.id), ["a"]);
   assert(tabs.tabs().some((t) => t.id === "busy"));
   tabs.preview("grouped");
   assertEquals(tabs.state.selected, { kind: "task", id: "task" });
-  assertEquals(tabs.tabs().map((t) => t.id), ["task", "busy"]);
+  assertEquals(tabs.tabs().map((t) => t.id), ["busy", "task"]);
 });
 Deno.test("phantom rule 3: pin, double-click and sending promote to a title-named task through an injected port", async () => {
   for (const action of ["pin", "double-click", "send"]) {
@@ -385,7 +385,7 @@ Deno.test("task selection remembers its session and publishes input invalidation
   assertEquals(tabs.tabs().map((t) => t.id), ["task"]);
 });
 
-Deno.test("helper URLs select their owning task and removed membership preserves the viewed session as a phantom", () => {
+Deno.test("helper URLs select their owning task and removed membership preserves the viewed session under its parent phantom", () => {
   const inbox = snapshot(),
     tabs = createTabs(() => {
       throw new Error("unused");
@@ -409,7 +409,7 @@ Deno.test("helper URLs select their owning task and removed membership preserves
   assertEquals(tabs.sessionFor("task"), "helper");
   task.sessions = [];
   tabs.update(input);
-  assertEquals(tabs.state.selected, { kind: "session", id: "helper" });
+  assertEquals(tabs.state.selected, { kind: "session", id: "a" });
   assertEquals(tabs.state.sessionID, "helper");
   task.sessions = ["a"];
   inbox.tasks.push({
@@ -447,7 +447,10 @@ Deno.test("selected helpers reconcile task ownership and remembered identity whe
     const input = { directory: "/p", entries: [root, helper, nested], inbox };
     tabs.update(input);
     tabs.preview("nested");
-    assertEquals(tabs.state.selected, { kind: "session", id: "nested" });
+    assertEquals(tabs.state.selected, {
+      kind: "session",
+      id: late === "ancestry" ? "helper" : "root",
+    });
     if (late === "tasks") inbox.tasks.push(task);
     else helper.parentID = "root";
     tabs.update(input);
@@ -467,7 +470,7 @@ Deno.test("selected helpers reconcile task ownership and remembered identity whe
     inbox.tasks = [task];
     helper.parentID = undefined;
     tabs.update(input);
-    assertEquals(tabs.state.selected, { kind: "session", id: "nested" });
+    assertEquals(tabs.state.selected, { kind: "session", id: "helper" });
     assertEquals(tabs.state.sessionID, "nested");
     tabs.stop();
   }

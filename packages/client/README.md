@@ -607,8 +607,11 @@ with the UI.
 
 SessionActions `rename(target, title)` captures the target's server and performs
 the typed mutation inside `act`, preserving directory and successful-action
-bookkeeping without promoting a task. `createSessionRename` owns one
-identity-and-origin-scoped editor (`tab`, `chip` or `row`),
+bookkeeping. A phantom task's rename reserves the tab owner's existing promotion
+with the captured new name, commits it only after native rename succeeds, and
+does not select a late result. Pin and send share that same reservation; helpers
+and already-grouped sessions retain their membership. `createSessionRename` owns
+one identity-and-origin-scoped editor (`tab`, `chip` or `row`),
 trimmed/empty/unchanged admission, pending state and retryable errors.
 Replacement editors retire late results. With a title lookup, `observe()` keeps
 the typed editor mounted until the authoritative index catches up to a
@@ -757,17 +760,22 @@ distinguishes these rows; discovery sorts index-first by newest activity, then
 name, without backend queries. Template-only rows have no visit clock or light.
 `INBOX_STATUS_PRIORITY` owns aggregate light priority: needs you, finished but
 unseen, working, idle. Project and task lights both use `rollup`; presentation
-does not rank states. Task order, phantom index order and discovery recency/name
-order remain independent of light priority.
+does not rank states. Finished subsessions do not raise unseen attention. Task
+tabs sort by this priority, then newest family `timeUpdated`, with identity as a
+stable tie-break. Stored task order remains available for future pinning; it
+does not drive the strip. Discovery retains its recency/name order.
 
 `createTabs(inbox.promote, factory?)` takes
 `update({directory, entries, inbox})` and exposes task, mandatory phantom and
-single-preview tabs. `select`, `preview`, `pin` (also the double-click action)
-and `send(sessionID, callback)` own tab transitions. Required activity tabs
-never disappear when a preview is replaced; an idle/seen selected phantom
-remains until selection leaves. Inputs remain owned by their index/metadata
-models, and tabs never delete sessions. Concurrent pins share promotion; late
-completion cannot steal a newer selection.
+single-preview tabs. Only top-level no-task sessions can be phantom tasks;
+helpers roll work and attention into their nearest task or top-level parent.
+Helper navigation retains the viewed session under that tab's identity.
+`select`, `preview`, `pin` (also the double-click action),
+`rename(sessionID, title, callback)` and `send(sessionID, callback)` own tab
+transitions. Required activity tabs never disappear when a preview is replaced;
+an idle/seen selected phantom remains until selection leaves. Inputs remain
+owned by their index/metadata models, and tabs never delete sessions. Concurrent
+pins share promotion; late completion cannot steal a newer selection.
 
 An optional third `sources` argument supplies `input()` (owner-current tab
 inputs) and `session(sessionID)` (authoritative identity/title/directory
@@ -792,11 +800,12 @@ it also supplies the limit and a clamped fill fraction; unknown windows stay
 unknown. The session's shared catalog loads independently of the transcript and
 rejects stale results; refresh errors retain last good metadata. The meter binds
 the owner's whole-session reported cost directly, independently of its
-latest-context footprint. `taskBreadcrumbs(task, entries, selected)` preserves
-explicit membership order, expands the selected helper path and prevents cycles
-or duplicate grouped helpers. Helper URLs retain their owning task; removing
-membership preserves the viewed session as an ungrouped tab rather than leaving
-transcript and task inconsistent.
+latest-context footprint. `taskBreadcrumbs(task, entries, tasks?)` preserves
+explicit membership order and adds working/blocked phantom descendants of every
+member. Finished helpers disappear even while selected and remain reachable in
+Sessions. Traversal is iterative, cycle-safe and stops at another task's
+explicit membership. Helper URLs retain their owning task; removing membership
+preserves the viewed helper under its top-level parent's phantom task.
 
 Task actions `add(task, sessionID)` and `remove(task, sessionID)` need only the
 task's ID. They send `tasks.addSession` / `tasks.removeSession` intents;

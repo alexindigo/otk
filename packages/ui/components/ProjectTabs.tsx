@@ -182,22 +182,27 @@ export default function ProjectTabs(props: {
     () => props.onCreateSession(active()),
   );
   const crumbs = createMemo(() => {
-    const task = active();
-    if (!task) {
-      return props.session
-        ? [{ id: props.session.id, helper: !!props.session.parentID, depth: 0 }]
-        : [];
-    }
+    const tab = props.model.tabs().find((tab) =>
+      tab.id === props.model.state.selected?.id
+    );
+    const task = active() ??
+      (tab
+        ? {
+          id: tab.id,
+          directory: props.project.directory,
+          sessions: tab.sessions,
+        }
+        : undefined);
+    if (!task) return [];
     return taskBreadcrumbs(
       task,
       props.entries,
-      props.model.state.sessionID,
-      props.model.state.closed,
+      tasks(),
     );
   });
   const required = () =>
     crumbs().filter((c) =>
-      c.id === props.model.state.sessionID ||
+      c.helper || c.id === props.model.state.sessionID ||
       props.rename?.matches({
         sidecarId: props.project.sidecarId,
         sessionID: c.id,
@@ -222,10 +227,8 @@ export default function ProjectTabs(props: {
   const openCrumb = ownedAction("task.session.open", (id: string) => {
     const task = active();
     if (props.onOpen(id)) {
-      props.model.select(
-        task ? { kind: "task", id: task.id } : { kind: "session", id },
-        id,
-      );
+      if (task) props.model.select({ kind: "task", id: task.id }, id);
+      else props.model.preview(id);
     }
   });
   const meter = createMemo(() => summaryMeter(props.entry, props.catalog));

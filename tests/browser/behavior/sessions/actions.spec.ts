@@ -292,7 +292,17 @@ test(
     const s = await state.native<{ id: string }>("/session", "POST", {
       title: "Session actions",
     });
+    const finishing = await state.queue(["Renamed completion"], "held");
+    await state.product("session.prompt", {
+      sessionID: s.id,
+      mode: "normal",
+      parts: [{ kind: "text", text: "Work while this phantom is renamed" }],
+    });
     await openSession(state, page, s.id);
+    await expect(page.locator(`[data-session="${s.id}"]`)).toHaveAttribute(
+      "data-status",
+      "busy",
+    );
     for (
       const [origin, selector] of [["tab", `[data-tab="${s.id}"]`], [
         "chip",
@@ -318,6 +328,24 @@ test(
         .toHaveText(`Renamed from ${origin}`);
       expect((await state.native<{ title: string }>(`/session/${s.id}`)).title)
         .toBe(`Renamed from ${origin}`);
+      if (origin === "tab") {
+        const task = (await state.product("tasks.list", {})).find((task) =>
+          task.sessions.includes(s.id)
+        )!;
+        expect(task.name).toBe("Renamed from tab");
+        await state.release(finishing.gate);
+        await expect(page.locator(`[data-session="${s.id}"]`)).toHaveAttribute(
+          "data-status",
+          "idle",
+        );
+        await state.product("sessions.seen", { sessionID: s.id });
+        await page.reload();
+        await expect(page.locator(`[data-tab="${task.id}"]`)).toBeVisible();
+        await expect(page.locator(`[data-tab="${task.id}"]`)).toContainText(
+          "Renamed from tab",
+        );
+        await expect(page.locator(`[data-tab="${s.id}"]`)).toHaveCount(0);
+      }
     }
     await sessionContext(page, `[data-session="${s.id}"]`, "session.rename");
     await page.locator(".otk-title-editor input").fill("Cancelled title");

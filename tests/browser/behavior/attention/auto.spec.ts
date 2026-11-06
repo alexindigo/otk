@@ -194,8 +194,11 @@ test(
     expect(
       frames.sent.filter(({ frame }) => frame.method === "permission.activity"),
     ).toHaveLength(1);
-    await page.locator(`[data-crumb="${child.id}"]`).click();
+    await expect(page.locator(`[data-crumb="${child.id}"]`)).toHaveCount(0);
+    await page.locator('[data-panel-view="sessions"]').click();
+    await page.locator(`[data-session="${child.id}"]`).click();
     await expect(page).toHaveURL(new RegExp(`${child.id}$`));
+    await page.locator('[data-panel-view="activity"]').click();
     await expect(activity).toContainText(
       "Permission replies will appear here.",
     );

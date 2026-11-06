@@ -103,6 +103,9 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
     child.title,
   );
   await expect(page.locator(".otk-permission-command")).toHaveText("echo otk");
+  await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
+  await expect(page.locator(`[data-crumb="${child.id}"] .otk-status-light`))
+    .toHaveAttribute("data-state", "blocked");
   await expect(
     page.locator(`[data-session="${child.id}"]`).locator(
       "xpath=ancestor::*[@data-parent][1]",
@@ -111,6 +114,8 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
   await page.getByRole("button", { name: "Allow once", exact: true }).click();
   await expect(page.locator(".otk-permission-dock")).toHaveCount(0);
   await reply(page, session.id, "Parent completed");
+  await expect(page.locator(`[data-crumb="${child.id}"]`)).toHaveCount(0);
+  await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
   expect(
     frames.sent.some(({ frame }) =>
       frame.method === "permission.reply" &&
@@ -130,6 +135,69 @@ test("attention.permission-child-routes-real-parent-dock-to-native-child", {
       )
     ),
   ).toBe(true);
+});
+test.describe("native helper lifecycle", () => {
+  test.use({ profile: "isolated" });
+  test("sessions.native-helper-phantom-parent-task-rollup-and-crumb-lifetime", {
+    tag: ["@sessions", "@attention", "@isolated"],
+  }, async ({ isolatedState: state, page }) => {
+    const parent = await seed(state, "No-task parent"),
+      child = await seed(state, "Live helper", parent.id),
+      other = await seed(state, "Other session");
+    await openSession(state, page, other.id);
+    await tool(state, "bash", {
+      command: "echo otk",
+      description: "Helper permission",
+    });
+    const gate = await state.queue(["Helper finished"], "held");
+    await state.native(`/session/${child.id}/prompt_async`, "POST", {
+      parts: [{ type: "text", text: "Run the helper probe" }],
+    });
+    const parentTab = page.locator(`[data-tab="${parent.id}"]`);
+    await expect(parentTab.locator(".otk-status-light"))
+      .toHaveAttribute("data-state", "blocked");
+    await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
+    await parentTab.click();
+    const crumb = page.locator(`[data-crumb="${child.id}"]`);
+    await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
+      "data-state",
+      "blocked",
+    );
+    const task = await state.product("tasks.create", {
+      directory: state.directory,
+      name: "Supervised task",
+      sessions: [parent.id],
+    });
+    const tab = page.locator(`[data-tab="${task.id}"]`);
+    await expect(tab.locator(".otk-status-light")).toHaveAttribute(
+      "data-state",
+      "blocked",
+    );
+    await expect(parentTab).toHaveCount(0);
+    await page.getByRole("button", { name: "Allow once", exact: true }).click();
+    await expect(crumb.locator(".otk-status-light")).toHaveAttribute(
+      "data-state",
+      "working",
+    );
+    await expect(tab.locator(".otk-status-light")).toHaveAttribute(
+      "data-state",
+      "working",
+    );
+    await crumb.click();
+    await expect(page).toHaveURL(new RegExp(`${child.id}$`));
+    await state.release(gate.gate);
+    await expect(crumb).toHaveCount(0);
+    await expect(page.locator(`[data-session="${child.id}"]`)).toBeVisible();
+    await expect(tab.locator(".otk-status-light")).toHaveAttribute(
+      "data-state",
+      "idle",
+    );
+    await expect(tab).toHaveAttribute("aria-selected", "true");
+    await page.reload();
+    await expect(crumb).toHaveCount(0);
+    await expect(tab).toHaveAttribute("aria-selected", "true");
+    await expect(page.locator(`[data-tab="${child.id}"]`)).toHaveCount(0);
+  });
 });
 test(
   "attention.permission-reopen-always-confirmation-covered-command-and-dirty-reject",

@@ -434,6 +434,7 @@ export async function themeScenario() {
     id: "tstv1-child",
     parentID: base.id,
     title: "Explore callers",
+    status: "busy",
   });
   f.add({
     ...base,

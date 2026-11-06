@@ -5,7 +5,7 @@ import type {
   IndexMetadata,
   TaskRecord,
 } from "@otk/protocol";
-import { type InboxStatus, inboxStatus, rollup } from "./inbox.ts";
+import { INBOX_STATUS_PRIORITY, type InboxStatus, rollup } from "./inbox.ts";
 import { createState, type StateFactory } from "./state.ts";
 import { familyTask, sessionFamily } from "./session-tree.ts";
 import type { RequestOptions } from "./requests.ts";
@@ -53,6 +53,12 @@ export interface ClientTabs {
   preview(sessionID: string): void;
   close(sessionID: string): void;
   pin(sessionID: string, options?: RequestOptions): Promise<TaskRecord>;
+  rename<T>(
+    sessionID: string,
+    title: string,
+    action: () => Promise<T>,
+    options?: RequestOptions,
+  ): Promise<T>;
   send<T>(
     sessionID: string,
     action: () => Promise<T>,
@@ -91,13 +97,29 @@ export function createTabs(
   function tabs(): InboxTab[] {
     // Inputs are not owned by the state factory; expose their invalidation too.
     void store.state.revision;
-    const tasks = input.inbox.tasks.filter((task) =>
-      task.directory === input.directory
-    ).sort((a, b) => a.order - b.order);
+    // These are live resource getters, not cheap fields. Borrow one coherent
+    // snapshot before walking the population or ancestry.
+    const { directory, entries: allEntries, inbox, taskActivity } = input;
+    const tasks = inbox.tasks.filter((task) => task.directory === directory);
+    const entries = allEntries.filter((e) => e.directory === directory);
+    const byID = new Map(entries.map((entry) => [entry.id, entry]));
     const grouped = new Set(tasks.flatMap((task) => task.sessions));
-    const entries = input.entries.filter((e) =>
-      e.directory === input.directory
-    );
+    // Nearest explicit membership owns the whole inherited family. Helpers can
+    // contribute work/attention, but cannot create a competing phantom tab.
+    const families = new Map<string, typeof entries>();
+    for (const entry of entries) {
+      const ancestry = sessionFamily(entry.id, (id) => byID.get(id));
+      const key = familyTask(tasks, ancestry, directory)?.id ??
+        ancestry.at(-1)!;
+      const family = families.get(key) ?? [];
+      family.push(entry);
+      families.set(key, family);
+    }
+    const activity = (id: string) =>
+      (families.get(id) ?? []).reduce(
+        (time, entry) => Math.max(time, entry.timeUpdated),
+        0,
+      );
     const result: InboxTab[] = tasks.map((task) => ({
       kind: "task",
       id: task.id,
@@ -105,16 +127,16 @@ export function createTabs(
       sessions: [...task.sessions],
       preview: false,
       status: attentionStatus(
-        input.taskActivity?.[task.id],
+        taskActivity?.[task.id],
         rollup(
-          entries.filter((e) => task.sessions.includes(e.id)),
-          input.inbox,
+          families.get(task.id) ?? [],
+          inbox,
         ),
       ),
     }));
     for (const entry of entries) {
-      if (grouped.has(entry.id)) continue;
-      const status = inboxStatus(entry, input.inbox);
+      if (entry.parentID || grouped.has(entry.id)) continue;
+      const status = rollup(families.get(entry.id) ?? [entry], inbox);
       if (
         status !== "idle" || store.state.preview === entry.id ||
         (store.state.selected?.kind === "session" &&
@@ -130,15 +152,19 @@ export function createTabs(
         });
       }
     }
-    return result;
+    return result.sort((a, b) =>
+      INBOX_STATUS_PRIORITY.indexOf(a.status) -
+        INBOX_STATUS_PRIORITY.indexOf(b.status) ||
+      activity(b.id) - activity(a.id) || a.id.localeCompare(b.id)
+    );
   }
+  const lookup = (id: string) =>
+    input.entries.find((e) => e.id === id && e.directory === input.directory);
+  const rootFor = (id: string) => sessionFamily(id, lookup).at(-1)!;
   const taskFor = (id: string) =>
     familyTask(
       input.inbox.tasks,
-      sessionFamily(id, (id) =>
-        input.entries.find((e) =>
-          e.id === id && e.directory === input.directory
-        )),
+      sessionFamily(id, lookup),
       input.directory,
     );
   const contains = (task: TaskRecord, id: string) =>
@@ -148,6 +174,40 @@ export function createTabs(
     const saved = remembered.get(taskID);
     if (task && saved && contains(task, saved)) return saved;
     return task?.sessions[0];
+  }
+  function persist(
+    sessionID: string,
+    options?: RequestOptions,
+    named?: TabSession,
+    ready?: Promise<unknown>,
+  ): Promise<TaskRecord> {
+    const directory = named?.directory ?? input.directory;
+    const entry = named ??
+      input.entries.find((e) =>
+        e.id === sessionID && e.directory === directory
+      );
+    const existing = input.inbox.tasks.find((t) =>
+      t.directory === directory && t.sessions.includes(sessionID)
+    );
+    if (existing) return Promise.resolve(existing);
+    if (!promotions.has(sessionID)) {
+      // One reservation owns pin, send and rename, independently of index or
+      // inbox publication. Rename supplies its captured name and native result.
+      const pending = Promise.resolve().then(async () => {
+        if (ready) await ready;
+        const session = entry ?? await sources?.session(sessionID);
+        if (stopped) throw new Error("Project tabs are stopped");
+        if (session?.id !== sessionID || session.directory !== directory) {
+          throw new Error("Unknown project session");
+        }
+        return await promote(session, options);
+      });
+      promotions.set(sessionID, pending);
+      void pending.catch(() => {
+        if (promotions.get(sessionID) === pending) promotions.delete(sessionID);
+      });
+    }
+    return promotions.get(sessionID)!;
   }
   const model: ClientTabs = {
     state: store.state,
@@ -188,12 +248,12 @@ export function createTabs(
           const task = taskFor(id);
           draft.selected = {
             kind: task ? "task" : "session",
-            id: task?.id ?? id,
+            id: task?.id ?? rootFor(id),
           };
           if (task) {
             remembered.set(task.id, id);
             delete draft.preview;
-          }
+          } else if (draft.preview) draft.preview = rootFor(id);
         }
         if (
           draft.selected?.kind === "session" &&
@@ -224,7 +284,12 @@ export function createTabs(
         : undefined;
       const selectedID = sessionID ??
         (task ? sessionFor(task.id) : selection.id);
-      if (task && selectedID && !contains(task, selectedID)) {
+      if (
+        selectedID &&
+        (task
+          ? !contains(task, selectedID)
+          : rootFor(selectedID) !== selection.id)
+      ) {
         throw new Error("Unknown task session");
       }
       if (task && selectedID) remembered.set(task.id, selectedID);
@@ -248,13 +313,13 @@ export function createTabs(
       store.update((draft) => {
         draft.selected = {
           kind: task ? "task" : "session",
-          id: task?.id ?? sessionID,
+          id: task?.id ?? rootFor(sessionID),
         };
         draft.sessionID = sessionID;
         draft.closed = draft.closed?.filter((id) => id !== sessionID);
         if (task) remembered.set(task.id, sessionID);
         if (task) delete draft.preview;
-        else draft.preview = sessionID;
+        else draft.preview = rootFor(sessionID);
       });
     },
     async pin(
@@ -262,33 +327,8 @@ export function createTabs(
       options?: RequestOptions,
     ): Promise<TaskRecord> {
       refresh();
-      const directory = input.directory;
-      const entry = input.entries.find((e) =>
-        e.id === sessionID && e.directory === directory
-      );
       const revision = selectionRevision;
-      const existing = input.inbox.tasks.find((t) =>
-        t.directory === directory && t.sessions.includes(sessionID)
-      );
-      if (!existing && !promotions.has(sessionID)) {
-        // Index delivery and UI projection are not command acknowledgements.
-        // Share the whole resolution/promotion, retaining its invocation scope.
-        const pending = Promise.resolve().then(async () => {
-          const session = entry ?? await sources?.session(sessionID);
-          if (stopped) throw new Error("Project tabs are stopped");
-          if (session?.id !== sessionID || session.directory !== directory) {
-            throw new Error("Unknown project session");
-          }
-          return await promote(session, options);
-        });
-        promotions.set(sessionID, pending);
-        void pending.catch(() => {
-          if (promotions.get(sessionID) === pending) {
-            promotions.delete(sessionID);
-          }
-        });
-      }
-      const task = existing ?? await promotions.get(sessionID)!;
+      const task = await persist(sessionID, options);
       if (!stopped && revision === selectionRevision) {
         selectionRevision++;
         store.update((draft) => {
@@ -299,6 +339,26 @@ export function createTabs(
         });
       }
       return task;
+    },
+    async rename<T>(
+      sessionID: string,
+      title: string,
+      action: () => Promise<T>,
+      options?: RequestOptions,
+    ): Promise<T> {
+      refresh();
+      const phantom = tabs().some((tab) =>
+        tab.kind === "phantom" && tab.id === sessionID
+      );
+      if (!phantom) return await action();
+      const named = { id: sessionID, directory: input.directory, title };
+      const renamed = Promise.resolve().then(action);
+      const promoting = persist(sessionID, options, named, renamed);
+      const result = await renamed;
+      await promoting;
+      // Only authoritative membership reconciles selection. A late rename must
+      // not select a task after the reader has moved to another session.
+      return result;
     },
     close(sessionID) {
       refresh();
@@ -312,6 +372,7 @@ export function createTabs(
         if (draft.sessionID === sessionID) {
           delete draft.selected;
           delete draft.sessionID;
+          delete draft.preview;
         }
       });
     },

@@ -25,6 +25,8 @@ test.describe("task tabs", () => {
         id: exec.id,
         sessions: ["tstv1-otk", "tstv1-second"],
       });
+      await activity(state, "tstv1-helper", "hold");
+      await activity(state, "tstv1-nested", "hold");
       await page.locator(`[data-tab="${exec.id}"]`).click();
       await expect(page.locator("[data-crumb=tstv1-otk]")).toHaveAttribute(
         "aria-current",
@@ -97,7 +99,7 @@ test.describe("task tabs", () => {
         });
         await expect(page.locator(".otk-tab-open").first()).toHaveAttribute(
           "data-tab",
-          ids[0],
+          exec.id,
         );
       }
       expect(
@@ -105,6 +107,16 @@ test.describe("task tabs", () => {
           a.order - b.order
         ).map((t) => t.id),
       ).toEqual([exec.id, plan.id]);
+      await activity(state, "tstv1-helper", "release");
+      await activity(state, "tstv1-nested", "release");
+      await expect(
+        page.locator("[data-crumb=tstv1-helper], [data-crumb=tstv1-nested]"),
+      )
+        .toHaveCount(0);
+      await expect(
+        page.locator("[data-tab=tstv1-helper], [data-tab=tstv1-nested]"),
+      )
+        .toHaveCount(0);
       await page.locator(".otk-new-session").click();
       await expect(page.locator("[data-crumb]")).toHaveCount(3);
       expect(

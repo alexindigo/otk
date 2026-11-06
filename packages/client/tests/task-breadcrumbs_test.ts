@@ -2,7 +2,7 @@
 import { assertEquals } from "@std/assert";
 import { taskBreadcrumbs } from "@otk/client";
 import type { IndexEntry } from "@otk/protocol";
-Deno.test("breadcrumbs keep member order, expand the selected nested helper path and cannot duplicate grouped children", () => {
+Deno.test("breadcrumbs keep member order, include active nested helpers and cannot duplicate grouped children or cycles", () => {
   const make = (id: string, parentID?: string): IndexEntry => ({
     id,
     parentID,
@@ -12,7 +12,7 @@ Deno.test("breadcrumbs keep member order, expand the selected nested helper path
     timeCreated: 1,
     timeUpdated: 1,
     archived: false,
-    status: "idle",
+    status: "busy",
     digest: { state: "digesting", revision: 0, turns: {} },
     attention: {
       permissions: 0,
@@ -35,17 +35,18 @@ Deno.test("breadcrumbs keep member order, expand the selected nested helper path
     make("b", "a"),
   ];
   assertEquals(
-    taskBreadcrumbs(task, entries, "helper").map((c) => [c.id, c.depth]),
+    taskBreadcrumbs(task, entries).map((c) => [c.id, c.depth]),
     [["a", 0], ["helper", 1], ["nested", 2], ["b", 0]],
   );
-  assertEquals(taskBreadcrumbs(task, entries, "a").map((c) => c.id), [
+  assertEquals(taskBreadcrumbs(task, entries).map((c) => c.id), [
     "a",
     "helper",
+    "nested",
     "b",
   ]);
   entries[0].parentID = "nested";
   assertEquals(
-    new Set(taskBreadcrumbs(task, entries, "helper").map((c) => c.id)).size,
+    new Set(taskBreadcrumbs(task, entries).map((c) => c.id)).size,
     4,
   );
 });

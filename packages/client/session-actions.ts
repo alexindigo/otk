@@ -92,7 +92,7 @@ export function createSessionActions(o: {
   };
   const act = async <T>(
     target: Selection,
-    action: () => Promise<T>,
+    action: (directory: string) => Promise<T>,
     options?: RequestOptions,
   ): Promise<T> => {
     const visit = options ??
@@ -107,7 +107,7 @@ export function createSessionActions(o: {
       if (resources.entry(target.sidecarId, target.sessionID)?.deleted) {
         throw new Error("This session was deleted from the agent service");
       }
-      return action();
+      return action(path);
     }, visit);
   };
   const submission = (target: Selection): SessionSubmission =>
@@ -262,11 +262,19 @@ export function createSessionActions(o: {
     },
     rename(target, title) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
-      return act(target, () =>
-        rpc.call("session.rename", {
-          sessionID: target.sessionID,
-          title,
-        }));
+      return act(
+        target,
+        (directory) =>
+          resources.tabs({ sidecarId: target.sidecarId, directory }).rename(
+            target.sessionID,
+            title,
+            () =>
+              rpc.call("session.rename", {
+                sessionID: target.sessionID,
+                title,
+              }),
+          ),
+      );
     },
     revert(target, messageID, options) {
       const rpc = resources.sidecars.connection(target.sidecarId).rpc;
