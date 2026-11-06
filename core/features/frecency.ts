@@ -77,6 +77,26 @@ export function register(
     },
   });
   return {
+    open(view) {
+      return {
+        listen(listener) {
+          const receive = (frame: ServerFrame) => {
+            const scope = view();
+            const directory = scope.directory ??
+              (scope.selected
+                ? rpc.context.sessionMetadata?.(scope.selected)?.directory
+                : undefined);
+            if (frame.t === "frecency.patch" && frame.directory === directory) {
+              listener(frame);
+            }
+          };
+          listeners.add(receive);
+          return () => {
+            listeners.delete(receive);
+          };
+        },
+      };
+    },
     listen(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);

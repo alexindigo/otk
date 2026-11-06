@@ -24,6 +24,8 @@ export interface RpcContext {
 }
 /** Socket-owned leases are distinct from a single read's execution signal. */
 export interface RequestLifetime {
+  view?(): import("@otk/protocol").ViewLease;
+  entries?(): ReadonlySet<string>;
   id: string;
   signal: AbortSignal;
   defer(release: () => void): void | (() => void);

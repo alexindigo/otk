@@ -3,6 +3,7 @@ import {
   capabilityNames,
   checkClientFrameSize,
   isAttentionOp,
+  isSessionID,
   MAX_UPLOAD_BYTES,
   PROTOCOL_VERSION,
   requestFingerprint,
@@ -15,16 +16,19 @@ import type {
   ContentClock,
   ContentOp,
   HarnessState,
+  IndexEntry,
   MessagePolicy,
   Preferences,
   RequestControl,
   RequestEvent,
   RequestRef,
   ServerFrame,
+  ViewLease,
 } from "@otk/protocol";
 import { type Harness, HarnessError } from "@otk/harness";
 import type { Prefs } from "@otk/store";
 import type { IndexStore } from "../index/store.ts";
+import { IndexView } from "../index/view.ts";
 import { object, sessionID } from "./params.ts";
 import type { RpcRegistry } from "./registry.ts";
 import type { SectionObserver } from "../diagnostics.ts";
@@ -35,9 +39,20 @@ interface Connection {
   ws: WebSocket;
   welcomed: boolean;
   sessions: Set<string>;
+  view: ViewLease;
+  index: IndexView;
+  sources: readonly FrameSource[];
   close(): void;
 }
 export interface FrameSource {
+  /** Feature-owned connection projection, with its own local revisions. */
+  open?(
+    view: () => ViewLease,
+    id: string,
+    entries: () => ReadonlySet<string>,
+  ): FrameSource;
+  keys?(view: ViewLease): readonly string[];
+  project?(entry: IndexEntry, view: ViewLease): IndexEntry;
   snapshot?(signal?: AbortSignal): ServerFrame | Promise<ServerFrame>;
   listen(listener: (frame: ServerFrame) => void): () => void;
   close?(): void;
@@ -68,11 +83,16 @@ export class Connections {
     readonly diagnostics?: SectionObserver,
   ) {
     try {
-      this.#stops.push(index.listen((frame) => this.broadcast(frame)));
+      this.#stops.push(index.listen((frame) => {
+        for (const c of this.#connections) {
+          if (c.welcomed) c.index.refresh(frame);
+        }
+      }));
       this.#stops.push(
         prefs.listen((prefs) => this.broadcast({ t: "prefs", prefs })),
       );
       for (const source of sources) {
+        if (source.open) continue;
         this.#stops.push(source.listen((frame) => this.broadcast(frame)));
       }
     } catch (error) {
@@ -127,6 +147,9 @@ export class Connections {
     this.broadcast({ t: "harness", state });
   }
   content(sessionID: string, event: ContentOp, clock?: ContentClock): void {
+    // Attention routed to an ancestor depends on the child's metadata. Publish
+    // that authority before the event, including newly acquired scoped entries.
+    if (isAttentionOp(event)) this.index.flush();
     const recipients = isAttentionOp(event)
       ? [sessionID, ...this.index.ancestors(sessionID)]
       : [sessionID];
@@ -155,12 +178,79 @@ export class Connections {
       ws,
       welcomed: false,
       sessions: new Set(),
+      view: { epoch: 0, crumbs: [], rows: [] },
+      index: undefined as unknown as IndexView,
+      sources: [],
       close: () => dispose(),
     };
     this.#connections.add(c);
     const controller = new AbortController(), releases = new Set<() => void>();
+    c.index = new IndexView(
+      this.index,
+      () => c.view,
+      (view) => this.sources.flatMap((source) => source.keys?.(view) ?? []),
+      (frame) => this.#send(c, frame),
+      (entry, view) =>
+        this.sources.reduce(
+          (value, source) => source.project?.(value, view) ?? value,
+          entry,
+        ),
+    );
+    releases.add(() => c.index.close());
+    const socketID = crypto.randomUUID();
+    c.sources = this.sources.map((source) =>
+      source.open?.(() => c.view, socketID, () => c.index.ids()) ?? source
+    );
+    for (let n = 0; n < c.sources.length; n++) {
+      if (!this.sources[n].open) continue;
+      const source = c.sources[n];
+      releases.add(source.listen((frame) => {
+        if (!c.welcomed) return;
+        c.index.refresh();
+        this.#send(c, { ...frame, epoch: c.view.epoch });
+      }));
+      if (source.close) releases.add(() => source.close!());
+    }
+    const view = (raw: Record<string, unknown>): ViewLease => {
+      const list = (value: unknown): string[] => {
+        if (!Array.isArray(value) || value.some((id) => !isSessionID(id))) {
+          throw new HarnessError(
+            "params",
+            "Expected qualified view identities",
+          );
+        }
+        return [...new Set(value)] as string[];
+      };
+      if (
+        !Number.isSafeInteger(raw.epoch) || Number(raw.epoch) < 0 ||
+        raw.directory !== undefined && typeof raw.directory !== "string" ||
+        raw.selected !== undefined && !isSessionID(raw.selected) ||
+        raw.query !== undefined && typeof raw.query !== "string"
+      ) {
+        throw new HarnessError("params", "Invalid view lease");
+      }
+      return {
+        epoch: Number(raw.epoch),
+        directory: raw.directory as string | undefined,
+        selected: raw.selected as string | undefined,
+        crumbs: list(raw.crumbs),
+        rows: list(raw.rows),
+        query: raw.query as string | undefined,
+      };
+    };
+    const snapshots = async () => {
+      const epoch = c.view.epoch;
+      for (const source of c.sources) {
+        if (!source.snapshot) continue;
+        const frame = await source.snapshot(controller.signal);
+        if (controller.signal.aborted || c.view.epoch !== epoch) return;
+        this.#send(c, { ...frame, epoch });
+      }
+    };
     const lease = {
-      id: crypto.randomUUID(),
+      id: socketID,
+      view: () => c.view,
+      entries: () => c.index.ids(),
       signal: controller.signal,
       defer(release: () => void) {
         if (controller.signal.aborted) release();
@@ -247,7 +337,8 @@ export class Connections {
           principal = this.requests.identity();
           const identity = await requestFingerprint(`principal:${principal}`);
           if (!this.#connections.has(c)) return;
-          const snapshot = this.index.snapshot();
+          if (raw.view) c.view = view(object(raw.view));
+          this.index.flush();
           c.welcomed = true;
           clearTimeout(helloDeadline);
           this.#send(c, {
@@ -278,21 +369,33 @@ export class Connections {
             },
           });
           this.#send(c, { t: "harness", state: this.harnessState });
-          this.#send(c, snapshot);
+          c.index.snapshot();
           this.#send(c, { t: "prefs", prefs: this.prefs.get() });
-          for (const source of this.sources) {
-            if (!source.snapshot) continue;
-            const frame = await source.snapshot(controller.signal);
-            if (controller.signal.aborted) return;
-            this.#send(c, frame);
-          }
+          await snapshots();
           return;
         }
         if (frame.t === "pong") return;
-        if (frame.t === "subscribe" || frame.t === "unsubscribe") {
+        if (frame.t === "index.applied") {
+          if (
+            !Number.isSafeInteger(frame.epoch) ||
+            !Number.isSafeInteger(frame.rev) || frame.epoch < 0 || frame.rev < 0
+          ) {
+            throw new HarnessError("params", "Invalid applied index revision");
+          }
+          c.index.applied(frame.epoch, frame.rev);
+          return;
+        }
+        if (frame.t === "view") {
+          const next = view(raw);
+          if (next.epoch <= c.view.epoch) return;
+          this.index.flush();
+          c.view = next;
+          c.index.refresh();
+          await snapshots();
+        } else if (frame.t === "subscribe" || frame.t === "unsubscribe") {
           this.#subscribe(c, sessionID(raw)!, frame.t === "subscribe");
         } else if (frame.t === "resnapshot") {
-          this.#send(c, this.index.snapshot());
+          c.index.snapshot();
         } else if (
           ["request", "request.resume", "request.release", "request.received"]
             .includes(frame.t)

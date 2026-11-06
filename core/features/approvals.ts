@@ -11,6 +11,7 @@ import {
   type PermissionRequest,
   type PermissionsCapability,
   type ServerFrame,
+  type ViewLease,
 } from "@otk/protocol";
 import type { PermissionStore } from "@otk/store";
 import type { IndexStore } from "../index/store.ts";
@@ -41,6 +42,52 @@ const policyReceipt = metadataReceipt("approval-policy", (value) => {
 
 /** Server-owned approvals, independent of browser connections/subscriptions. */
 export class PermissionFeature implements FrameSource {
+  #inView(id: string, view: ViewLease): boolean {
+    if (
+      id === view.selected || view.crumbs.includes(id) || view.rows.includes(id)
+    ) return true;
+    const directory = view.directory ??
+      (view.selected && this.index.getMetadata(view.selected)?.directory);
+    return !!directory && this.index.getMetadata(id)?.directory === directory;
+  }
+  #scoped(
+    snapshot: ApprovalSnapshot,
+    view?: ViewLease,
+    entries?: ReadonlySet<string>,
+  ): ApprovalSnapshot {
+    return view
+      ? {
+        ...snapshot,
+        enabled: snapshot.enabled.filter((id) =>
+          entries ? entries.has(id) : this.#inView(id, view)
+        ),
+      }
+      : snapshot;
+  }
+  open(
+    view: () => ViewLease,
+    _id: string,
+    entries: () => ReadonlySet<string>,
+  ): FrameSource {
+    return {
+      snapshot: () => ({
+        t: "approvals",
+        approvals: this.#scoped(this.get(), view(), entries()),
+      }),
+      listen: (listener) =>
+        this.listen((frame) => {
+          if (frame.t === "approvals") {
+            listener({
+              ...frame,
+              approvals: this.#scoped(frame.approvals, view(), entries()),
+            });
+          } else if (frame.t === "approval.activity") {
+            const sessions = frame.sessions.filter((id) => entries().has(id));
+            if (sessions.length) listener({ ...frame, sessions });
+          }
+        }),
+    };
+  }
   #listeners = new Set<(frame: ServerFrame) => void>();
   #flights = new Set<string>();
   #failed = new Map<string, string>();
@@ -420,15 +467,19 @@ export class PermissionFeature implements FrameSource {
           }
           const changed = this.#enabled.has(input.sessionID) !== input.enabled;
           this.store.setAuto(input.sessionID, input.enabled, tx);
-          return {
-            enabled: [
-              ...new Set(
-                [...this.#enabled].filter((id) => id !== input.sessionID)
-                  .concat(input.enabled ? [input.sessionID] : []),
-              ),
-            ].sort(),
-            revision: this.#revision + (changed ? 1 : 0),
-          };
+          return this.#scoped(
+            {
+              enabled: [
+                ...new Set(
+                  [...this.#enabled].filter((id) => id !== input.sessionID)
+                    .concat(input.enabled ? [input.sessionID] : []),
+                ),
+              ].sort(),
+              revision: this.#revision + (changed ? 1 : 0),
+            },
+            ctx.request?.view?.(),
+            ctx.request?.entries?.(),
+          );
         }, policyReceipt);
         return result;
       },

@@ -146,6 +146,92 @@ function fixture(factory?: StateFactory) {
   };
 }
 
+Deno.test("project acquisition waits for scoped rows and validates a remembered session before restoring it", async () => {
+  const f = fixture(), p = { sidecarId: "local", directory: "/unleased" };
+  f.resources.scope(p);
+  const loading = f.resources.projectSession(p, "remembered");
+  const epoch = f.connections.get("local")!.viewEpoch;
+  f.receive("local", {
+    t: "index.snapshot",
+    epoch,
+    rev: 0,
+    entries: [entry("remembered", p.directory)],
+  });
+  f.receive("local", {
+    t: "view.rows",
+    epoch,
+    directory: p.directory,
+    first: "first",
+    catalog: [{
+      id: "remembered",
+      title: "Remembered",
+      directory: p.directory,
+    }],
+  });
+  assertEquals(await loading, "remembered");
+  f.resources.scope({ ...p, directory: "/different" });
+  const stale = f.resources.projectSession({ ...p, directory: "/different" });
+  f.resources.scope(p);
+  assertEquals(await stale, undefined);
+  const missing = f.resources.projectSession(p, "missing");
+  f.receive("local", {
+    t: "view.rows",
+    epoch: f.connections.get("local")!.viewEpoch,
+    directory: p.directory,
+    first: "first",
+    catalog: [],
+  });
+  assertEquals(await missing, "first");
+  f.resources.stop();
+});
+
+Deno.test("Sessions hierarchy waits for matching catalog and inbox but survives same-project row lease churn", () => {
+  const f = fixture(), project = { sidecarId: "local", directory: "/p" };
+  f.resources.scope(project);
+  const epoch = f.connections.get("local")!.viewEpoch;
+  assertEquals(f.resources.sessionRowsReady(project), false);
+  f.receive("local", {
+    t: "inbox.snapshot",
+    generation: "fixture",
+    revision: 0,
+    inbox: metadata(),
+    epoch: epoch - 1,
+  });
+  f.receive("local", {
+    t: "view.rows",
+    epoch,
+    directory: "/p",
+    catalog: [{ id: "session", title: "Session", directory: "/p" }],
+  });
+  assertEquals(f.resources.sessionRowsReady(project), false);
+  f.receive("local", {
+    t: "inbox.snapshot",
+    generation: "fixture",
+    revision: 0,
+    inbox: metadata(),
+    epoch,
+  });
+  assertEquals(f.resources.sessionRowsReady(project), true);
+  assertEquals(f.resources.sessionRows(project)[0].key, "heading:task");
+  f.receive("local", {
+    t: "view.rows",
+    epoch: epoch + 1,
+    directory: "/p",
+    catalog: [{ id: "session", title: "Session", directory: "/p" }],
+  });
+  assertEquals(f.resources.sessionRowsReady(project), true);
+  const other = { ...project, directory: "/other" };
+  f.receive("local", {
+    t: "view.rows",
+    epoch: epoch + 2,
+    directory: other.directory,
+    catalog: [],
+  });
+  assertEquals(f.resources.sessionRowsReady(other), false);
+  assertEquals(f.resources.sessionRowsReady(project), false);
+  f.resources.stop();
+});
+
 Deno.test("digest-only patches do zero project-row recomputations and zero attention-map rebuilds", () => {
   const revisions: { revision: number }[] = [];
   const factory: StateFactory = (initial) => {
@@ -692,10 +778,9 @@ Deno.test("shared projected deltas preserve manual sibling notes and fence rejec
 Deno.test("server resource capability policies and RPC ports stay live and server scoped", async () => {
   const f = fixture(), p = { sidecarId: "remote", directory: "/p" };
   assert(f.resources.connected("local") && f.resources.linked("local"));
-  assertEquals(f.resources.historySources().map((s) => s.id), [
-    "local",
-    "remote",
-  ]);
+  assertEquals(f.resources.historySources(), []);
+  f.resources.scope(p);
+  assertEquals(f.resources.historySources().map((s) => s.id), ["remote"]);
   f.store.update((s) => {
     for (const server of s.list) server.status = "connecting";
     s.list[0].connectionVersion = 2;

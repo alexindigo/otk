@@ -22,6 +22,12 @@ test("real native helper summaries decorate pages, removals patch only progress 
       digest: { cpu: 1, retryms: 10 },
     });
     client = new WsClient(server.url);
+    client.lease({
+      directory: oc.directory,
+      selected: parent.id,
+      crumbs: [],
+      rows: [child.id],
+    });
     await client.connect();
     const index = createIndex();
     let cursor = 0;

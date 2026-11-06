@@ -26,6 +26,7 @@ test("history RPC includes prompts across sessions and user shell entries direct
     });
     const server = await f.sidecar();
     client = new WsClient(server.url);
+    client.lease({ directory: f.oc.directory, crumbs: [], rows: [] });
     await client.connect();
     await client.rpc("session.shell", {
       sessionID: b.id,

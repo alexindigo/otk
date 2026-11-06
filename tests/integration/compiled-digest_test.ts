@@ -56,10 +56,17 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     });
     await waitFor(async () => (await fetch(url + "/api/health")).ok, Boolean);
     const client = new WsClient(url);
+    client.lease({
+      directory: oc.directory,
+      selected: session.id,
+      crumbs: [],
+      rows: [],
+    });
     await client.connect();
     const index = createIndex();
     let cursor = 0;
     const entry = (id = session.id) => {
+      client.entry(id);
       for (const frame of client.frames.slice(cursor)) {
         if (frame.t === "index.snapshot" || frame.t === "index.patch") {
           assertEquals(index.receive("compiled", frame), true);

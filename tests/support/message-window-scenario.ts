@@ -100,7 +100,7 @@ export async function messageWindowScenario(profile: Profile) {
     }));
   const f = await inboxBrowserFixture(root, [], { [sessionID]: messages });
   const client = new WsClient(f.url);
-  await client.connect();
+  await client.connect(f.entries[0].directory);
   await client.rpc("prefs.set", { key: "theme", value: "otk-dark" });
   await client.rpc("prefs.set", { key: "animationsOff", value: true });
   const baseline = await client.rpc<Record<string, Json>>("prefs.get", {});

@@ -2,7 +2,7 @@
 import { failureText } from "@otk/client";
 import "./ProjectSessions.css" with { type: "text" };
 import ListRow from "./ListRow.tsx";
-import { createMemo, createSignal, Show } from "solid-js";
+import { createMemo, createSignal, onCleanup, Show } from "solid-js";
 import VirtualList from "./VirtualList.tsx";
 import TitleEditor from "./TitleEditor.tsx";
 import type { InboxSnapshot, IndexEntry } from "@otk/protocol";
@@ -34,6 +34,7 @@ import { digestLabel, digestProgress } from "@otk/client";
 export default function ProjectSessions(props: {
   entries?: readonly MergedEntry[];
   rows?(query: string): SessionListRow[];
+  onRows?(keys: readonly string[], query: string): void;
   progress?: { busy: boolean; announcement: string };
   metadata?(id: string): MergedMetadata | undefined;
   entry?(id: string): IndexEntry | undefined;
@@ -52,6 +53,8 @@ export default function ProjectSessions(props: {
 }): import("solid-js").Element {
   const [query, setQuery] = createSignal(props.interaction?.query ?? "");
   const [error, setError] = createSignal("");
+  let visibleKeys: readonly string[] = [];
+  onCleanup(() => props.onRows?.([], query()));
   let search!: HTMLInputElement;
   ownedCommand(useCommandPorts(), {
     id: "session.find",
@@ -159,6 +162,7 @@ export default function ProjectSessions(props: {
                 const value = event.currentTarget.value;
                 if (props.interaction) props.interaction.query = value;
                 setQuery(value);
+                props.onRows?.(visibleKeys, value);
               }}
             />
           </label>
@@ -179,6 +183,10 @@ export default function ProjectSessions(props: {
             class="otk-project-session-tree"
             label="Task groups and sessions"
             keys={keys()}
+            onRange={(keys) => {
+              visibleKeys = keys;
+              props.onRows?.(keys, query());
+            }}
             samples={[{ role: "session", class: "otk-list-row" }, {
               role: "heading",
               class: "otk-session-group-heading",
@@ -234,151 +242,158 @@ export default function ProjectSessions(props: {
                   sessionID: row().session.id,
                 }, "row");
               return (
-                <div
-                  role="group"
-                  aria-label={item().title}
-                  data-depth={row().depth}
-                  data-parent={row().parentID}
+                <Show
+                  when={!!merged(key)}
+                  fallback={
+                    <div class="otk-list-row otk-muted">Loading session...</div>
+                  }
                 >
-                  <ListRow
-                    editing={editing()}
-                    ref={contextTarget(() => ({
-                      kind: "session",
-                      data: {
-                        ...props.project!,
-                        sessionID: row().session.id,
-                        title: row().session.title,
-                        origin: "row" as const,
-                      },
-                    }))}
-                    class={`otk-session-row ${sessionState(row().session)}`}
-                    selected={props.selected?.sidecarId ===
-                        props.project!.sidecarId &&
-                      props.selected.sessionID === row().session.id}
-                    attributes={{
-                      "data-session": row().session.id,
-                      "data-status": row().session.status,
-                      style: { "--session-depth": row().depth },
-                      title: row().session.title,
-                      "aria-description": costDescription(
-                        row().session.id,
-                      ),
-                      "aria-label": `${
-                        row().session.deleted ? "Deleted session, " : ""
-                      }${row().session.title}${
-                        row().parentID
-                          ? `, child of ${
-                            merged(row().parentID!)?.title ?? row().parentID
-                          }`
-                          : ""
-                      }${
-                        costLabel(row().session.id) === undefined
-                          ? ""
-                          : `, session cost ${costLabel(row().session.id)}`
-                      }`,
-                      onClick: () => run(open(merged(row().session.id))),
-                      onDblClick: () => {
-                        if (!row().session.deleted) {
-                          run(
-                            pin(merged(row().session.id)),
-                          );
-                        }
-                      },
-                    }}
-                    leading={
-                      <span class="otk-session-leading">
-                        <Show when={row().depth > 0}>
-                          <span
-                            class="otk-session-indent"
-                            aria-hidden="true"
-                          >
-                            <svg
-                              class="otk-session-branch"
-                              viewBox="0 0 20 30"
-                              fill="none"
-                              stroke="currentColor"
-                            >
-                              <path d="M4 0v10a5 5 0 0 0 5 5h7" />
-                            </svg>
-                          </span>
-                        </Show>
-                        <StatusLight
-                          small
-                          state={inboxStatus(
-                            row().session,
-                            props.inbox(props.project!.sidecarId),
-                          )}
-                          event={row().session.timeUpdated}
-                        />
-                      </span>
-                    }
-                    labelClass="otk-row-title"
-                    trailing={
-                      <>
-                        <Show when={row().session.status === "retry"}>
-                          <span>
-                            retry {row().session.retry?.attempt}
-                          </span>
-                        </Show>
-                        <Show
-                          when={row().session.attention.permissions +
-                            row().session.attention.childPermissions}
-                        >
-                          <span title="Pending permissions">
-                            P {row().session.attention.permissions +
-                              row().session.attention.childPermissions}
-                          </span>
-                        </Show>
-                        <Show
-                          when={row().session.attention.questions +
-                            row().session.attention.childQuestions}
-                        >
-                          <span title="Pending questions">
-                            Q {row().session.attention.questions +
-                              row().session.attention.childQuestions}
-                          </span>
-                        </Show>
-                        <Show when={row().session.attention.error}>
-                          <span
-                            title="The agent reported a session failure"
-                            aria-label="Session error"
-                          >
-                            Error
-                          </span>
-                        </Show>
-                        <Show when={costLabel(row().session.id)}>
-                          <span
-                            class="otk-session-cost"
-                            aria-hidden="true"
-                            title="Session cost"
-                          >
-                            <UsageCost
-                              value={cost(row().session.id)!}
-                            />
-                          </span>
-                        </Show>
-                        <Show
-                          when={row().session.digest.state !==
-                              "ready" ||
-                            (props.showCost &&
-                              costLabel(row().session.id) ===
-                                undefined)}
-                        >
-                          <span class="otk-session-digest-state">
-                            {digestLabel(row().session)}
-                          </span>
-                        </Show>
-                      </>
-                    }
+                  <div
+                    role="group"
+                    aria-label={item().title}
+                    data-depth={row().depth}
+                    data-parent={row().parentID}
                   >
-                    <Show
-                      when={editing()}
-                      fallback={row().session.title}
+                    <ListRow
+                      editing={editing()}
+                      ref={contextTarget(() => ({
+                        kind: "session",
+                        data: {
+                          ...props.project!,
+                          sessionID: row().session.id,
+                          title: row().session.title,
+                          origin: "row" as const,
+                        },
+                      }))}
+                      class={`otk-session-row ${sessionState(row().session)}`}
+                      selected={props.selected?.sidecarId ===
+                          props.project!.sidecarId &&
+                        props.selected.sessionID === row().session.id}
+                      attributes={{
+                        "data-session": row().session.id,
+                        "data-status": row().session.status,
+                        style: { "--session-depth": row().depth },
+                        title: row().session.title,
+                        "aria-description": costDescription(
+                          row().session.id,
+                        ),
+                        "aria-label": `${
+                          row().session.deleted ? "Deleted session, " : ""
+                        }${row().session.title}${
+                          row().parentID
+                            ? `, child of ${
+                              merged(row().parentID!)?.title ?? row().parentID
+                            }`
+                            : ""
+                        }${
+                          costLabel(row().session.id) === undefined
+                            ? ""
+                            : `, session cost ${costLabel(row().session.id)}`
+                        }`,
+                        onClick: () => run(open(merged(row().session.id))),
+                        onDblClick: () => {
+                          if (!row().session.deleted) {
+                            run(
+                              pin(merged(row().session.id)),
+                            );
+                          }
+                        },
+                      }}
+                      leading={
+                        <span class="otk-session-leading">
+                          <Show when={row().depth > 0}>
+                            <span
+                              class="otk-session-indent"
+                              aria-hidden="true"
+                            >
+                              <svg
+                                class="otk-session-branch"
+                                viewBox="0 0 20 30"
+                                fill="none"
+                                stroke="currentColor"
+                              >
+                                <path d="M4 0v10a5 5 0 0 0 5 5h7" />
+                              </svg>
+                            </span>
+                          </Show>
+                          <StatusLight
+                            small
+                            state={inboxStatus(
+                              row().session,
+                              props.inbox(props.project!.sidecarId),
+                            )}
+                            event={row().session.timeUpdated}
+                          />
+                        </span>
+                      }
+                      labelClass="otk-row-title"
+                      trailing={
+                        <>
+                          <Show when={row().session.status === "retry"}>
+                            <span>
+                              retry {row().session.retry?.attempt}
+                            </span>
+                          </Show>
+                          <Show
+                            when={row().session.attention.permissions +
+                              row().session.attention.childPermissions}
+                          >
+                            <span title="Pending permissions">
+                              P {row().session.attention.permissions +
+                                row().session.attention.childPermissions}
+                            </span>
+                          </Show>
+                          <Show
+                            when={row().session.attention.questions +
+                              row().session.attention.childQuestions}
+                          >
+                            <span title="Pending questions">
+                              Q {row().session.attention.questions +
+                                row().session.attention.childQuestions}
+                            </span>
+                          </Show>
+                          <Show when={row().session.attention.error}>
+                            <span
+                              title="The agent reported a session failure"
+                              aria-label="Session error"
+                            >
+                              Error
+                            </span>
+                          </Show>
+                          <Show when={costLabel(row().session.id)}>
+                            <span
+                              class="otk-session-cost"
+                              aria-hidden="true"
+                              title="Session cost"
+                            >
+                              <UsageCost
+                                value={cost(row().session.id)!}
+                              />
+                            </span>
+                          </Show>
+                          <Show
+                            when={row().session.digest.state !==
+                                "ready" ||
+                              (props.showCost &&
+                                costLabel(row().session.id) ===
+                                  undefined)}
+                          >
+                            <span class="otk-session-digest-state">
+                              {digestLabel(row().session)}
+                            </span>
+                          </Show>
+                        </>
+                      }
                     >
-                      <TitleEditor owner={props.rename!} />
-                    </Show>
-                  </ListRow>
-                </div>
+                      <Show
+                        when={editing()}
+                        fallback={row().session.title}
+                      >
+                        <TitleEditor owner={props.rename!} />
+                      </Show>
+                    </ListRow>
+                  </div>
+                </Show>
               );
             }}
           />

@@ -7,7 +7,7 @@ import {
 import type { ServerFrame } from "@otk/protocol";
 import { solidState } from "./binding.ts";
 export function createSidecars(
-  onFrame: (id: string, frame: ServerFrame) => void,
+  onFrame: (id: string, frame: ServerFrame) => boolean | void,
   options: SidecarsOptions = {},
 ): ClientSidecars {
   return clientSidecars(onFrame, options, solidState);

@@ -107,7 +107,9 @@ test(
     ) {
       await expect(
         page.locator(
-          `[data-project-sessions~="${id}"] .otk-status-light[data-state="${status}"]`,
+          `[data-project$="/projects/${
+            id.slice(6)
+          }"] .otk-status-light[data-state="${status}"]`,
         ),
       ).toBeVisible();
     }
@@ -130,7 +132,7 @@ test(
     await openSession(state, page, "tstv1-otk");
     await expect(page.locator('[data-tab="tstv1-row-action-phantom"]'))
       .toBeVisible();
-    const row = page.locator('[data-project-sessions~="tstv1-otk"]'),
+    const row = page.locator('[data-project$="/projects/otk"]'),
       menu = row.locator(".otk-project-menu"),
       trigger = row.locator(".otk-popover-trigger");
     await page.mouse.move(600, 500);

@@ -193,6 +193,7 @@ export function createInbox(
   factory: StateFactory = createState,
   report: (error: unknown) => void = (error) =>
     console.error("Visit bookkeeping failed after successful action", error),
+  currentEpoch?: () => number,
 ): InboxModel {
   // Accepted metadata is invocation-current, like ClientIndex. Framework state
   // publishes a dependency clock; deferred binding cannot govern reduced facts.
@@ -228,6 +229,7 @@ export function createInbox(
     for (const listener of listeners) listener(changes);
   };
   const baseline = (value: InboxBaseline) => {
+    if ((value.epoch ?? 0) < (currentEpoch?.() ?? 0)) return;
     if (generation !== undefined && value.generation !== generation) return;
     if (
       value.generation === generation && (value.revision < revision ||

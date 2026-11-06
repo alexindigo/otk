@@ -347,8 +347,7 @@ export function createProjectProjection(o: {
       if (!p) return undefined;
       const summary = p.summary;
       const summaryReady = summary?.authority === "current" &&
-        summary.status !== null && summary.sessionCount !== null &&
-        summary.unseenCount !== null;
+        summary.status !== null;
       // P3 still receives session facts. Borrow them until the summary's own
       // authority is ready, without replacing its explicit unknown scalars.
       const fallbackCurrent = p.members.size > 0 && p.unknownActivity === 0;
@@ -390,7 +389,8 @@ export function createProjectProjection(o: {
           }),
           source: record
             ? "tracked"
-            : (p.summary?.sessionCount ?? p.members.size) > 0
+            : (p.summary?.sessionCount ?? p.members.size) > 0 ||
+                (p.summary?.sessionCount === null && summaryReady)
             ? "index"
             : "template",
           inactive,

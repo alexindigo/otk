@@ -104,6 +104,7 @@ async function fixture() {
     },
     async client(server: SidecarTest, cookie?: string) {
       const client = new WsClient(server.url, cookie);
+      client.lease({ directory: oc.directory, crumbs: [], rows: [] });
       clients.push(client);
       await client.connect();
       await client.wait((frame) =>
@@ -488,10 +489,19 @@ test("I8 compatible idle projects bootstrap without loading native inventories",
         harness: { url: `http://127.0.0.1:${proxy.addr.port}`, db: f.oc.db },
       }),
       client = await f.client(server);
-    const entries = await waitFor(
-      () => sessions.map((session) => client.entry(session.id)),
-      (entries) => entries.every((entry) => entry !== undefined),
-    );
+    const entries: IndexEntry[] = [];
+    for (const directory of directories) {
+      const ids = sessions.filter((_, i) =>
+        (i === 1 ? second : f.oc.directory) === directory
+      ).map((session) => session.id);
+      client.lease({ directory, selected: ids[0], crumbs: [], rows: ids });
+      entries.push(
+        ...await waitFor(
+          () => ids.map((id) => client.entry(id)),
+          (values) => values.every((entry) => entry !== undefined),
+        ) as IndexEntry[],
+      );
+    }
     for (const session of sessions) {
       const entry = entries.find((entry) => entry?.id === session.id)!;
       assertEquals(entry.status, "idle");

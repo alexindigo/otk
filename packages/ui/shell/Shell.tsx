@@ -443,6 +443,8 @@ export default function Shell(
           projectMetadata: resources.projectMetadata,
           metadataEntry: resources.metadataEntry,
           sessionRows: resources.sessionRows,
+          sessionRowsReady: resources.sessionRowsReady,
+          visibleRows: resources.visibleRows,
           projectProgress: resources.projectProgress,
           listInteraction,
           selection: () => session.state.selection,

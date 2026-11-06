@@ -98,8 +98,8 @@ test(
       ])
     });globalThis.scale={snapshots:[],calls:[],cancels:[],results:[],paints:[]};
     globalThis.WebSocket=class extends Native{
-      constructor(...args){super(...args);this.addEventListener('message',event=>{const f=JSON.parse(event.data),at=performance.now();if(f.t==='request.result')scale.results.push({at,wall:Date.now(),...f,id:f.ref.key,ok:f.outcome.ok});if(f.t!=='index.snapshot'||f.entries.length<4615||!location.hash.endsWith('/${selected.id}'))return;
-      const snapshot={at,ready:f.entries.every(e=>e.digest.state==='ready'),count:f.entries.length,unready:f.entries.filter(e=>e.digest.state!=='ready').slice(0,20).map(e=>({id:e.id,state:e.digest.state,revision:e.digest.revision}))};scale.snapshots.push(snapshot);
+      constructor(...args){super(...args);this.addEventListener('message',event=>{const f=JSON.parse(event.data),at=performance.now();if(f.t==='request.result')scale.results.push({at,wall:Date.now(),...f,id:f.ref.key,ok:f.outcome.ok});const entries=f.t==='index.snapshot'?f.entries:f.t==='index.patch'?f.ops.filter(op=>op.op==='upsert').map(op=>op.entry):[];if(!entries.some(e=>e.id==='${selected.id}')||!location.hash.endsWith('/${selected.id}'))return;
+      const snapshot={at,ready:entries.every(e=>e.digest.state==='ready'),count:entries.length,unready:entries.filter(e=>e.digest.state!=='ready').slice(0,20).map(e=>({id:e.id,state:e.digest.state,revision:e.digest.revision}))};scale.snapshots.push(snapshot);
       const paint=()=>{const rows=[...document.querySelectorAll('.otk-session-row')],v=document.querySelector('${viewport}'),chosen=document.querySelector('[data-session="${selected.id}"]'),boxes=rows.map(r=>r.getBoundingClientRect()),bound=v?Math.ceil(v.clientHeight/Math.min(...boxes.map(r=>r.height)))+12:0;const valid=rows.length>0&&rows.length<=bound&&v&&chosen?.getAttribute('aria-current')==='page'&&rows.every((row,i)=>boxes[i].width>0&&boxes[i].height>0&&row.querySelector('.otk-status-light')&&titles.has(row.querySelector('.otk-row-title')?.textContent));if(valid)scale.paints.push({snapshot,at:performance.now(),elapsed:performance.now()-at,rows:rows.length,bound});else requestAnimationFrame(paint)};requestAnimationFrame(paint);});}
       send(data){const f=JSON.parse(data);if(f.t==='request')scale.calls.push({at:performance.now(),wall:Date.now(),...f,id:f.ref.key});if(f.t==='request.release')scale.cancels.push(...f.refs.map(ref=>({at:performance.now(),id:ref.key,ref})));super.send(data);}
     };
@@ -178,9 +178,9 @@ test(
       await expect(page.locator(".otk-project-tabs")).toContainText(
         "Scale pending task",
       );
-      const actionTask = (await state.product("tasks.list", {})).find((t) =>
-        t.name === "Scale pending task"
-      );
+      const actionTask =
+        (await state.product("tasks.list", { directory: state.directory }))
+          .find((t) => t.name === "Scale pending task");
       expect(actionTask).toBeTruthy();
       await page.locator(`[data-tab="${actionTask!.id}"]`).click({
         button: "right",
@@ -195,9 +195,8 @@ test(
         "Scale saved task",
       );
       expect(
-        (await state.product("tasks.list", {})).find((t) =>
-          t.id === actionTask!.id
-        )?.name,
+        (await state.product("tasks.list", { directory: state.directory }))
+          .find((t) => t.id === actionTask!.id)?.name,
       ).toBe("Scale saved task");
       const live = await state.native<{ id: string }>("/session", "POST", {
           title: "Scale interactive outcome",
@@ -287,7 +286,7 @@ test(
       await begin(finished, "Background first work");
       await status(finished.id, "busy");
       await providerRequests("Background first work");
-      const project = `[data-project-sessions~="${finished.id}"]`;
+      const project = `[data-project=${JSON.stringify(background)}]`;
       await light(page, `${project} .otk-status-light[data-state=working]`);
       await state.product("session.abort", { sessionID: finished.id });
       await status(finished.id, "idle");

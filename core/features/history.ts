@@ -11,7 +11,16 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
   rpc.register("history.list", {
     execution: readExecution(() => ({ resource: "prompt-history" })),
     params: () => undefined,
-    handler: (ctx) => capability.listHistory(ctx.execution?.signal),
+    handler: (ctx) => {
+      const view = ctx.request?.view?.();
+      const directory = view?.directory ??
+        (view?.selected
+          ? ctx.sessionMetadata?.(view.selected)?.directory
+          : undefined);
+      // An unopened/discovered project is never an implicit history source.
+      if (ctx.request && !directory) return [];
+      return capability.listHistory(ctx.execution?.signal, directory);
+    },
   });
   rpc.register("history.attachments", {
     execution: readExecution((refs: HistoryAttachmentRef[]) => ({

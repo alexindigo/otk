@@ -129,9 +129,14 @@ test(
     expect(policy.coolms).toBeGreaterThan(0);
     expect(policy.preloadms).toBeGreaterThan(0);
     await page.setViewportSize({ width: 1280, height: 800 });
-    await page.locator(`[data-project-sessions~="${b.id}"] .otk-project-open`)
-      .click();
-    await page.locator(`[data-session="${b.id}"]`).click();
+    const beta = await state.product("session.get", { sessionID: b.id });
+    await tick(() =>
+      page.locator(
+        `[data-project=${JSON.stringify(beta.directory)}] .otk-project-open`,
+      )
+        .click()
+    );
+    await tick(() => page.locator(`[data-session="${b.id}"]`).click());
     await page.clock.runFor(32);
     await expect(page).toHaveURL(new RegExp(b.id + "$"));
     await paint("Beta prompt 24");
@@ -141,9 +146,14 @@ test(
     );
     const start = performance.now();
     // Warm source is the intended readiness while new page results stay held.
-    await page.locator(`[data-project-sessions~="${a.id}"] .otk-project-open`)
-      .click();
-    await page.locator(`[data-session="${a.id}"]`).click();
+    const alpha = await state.product("session.get", { sessionID: a.id });
+    await tick(() =>
+      page.locator(
+        `[data-project=${JSON.stringify(alpha.directory)}] .otk-project-open`,
+      )
+        .click()
+    );
+    await tick(() => page.locator(`[data-session="${a.id}"]`).click());
     await page.clock.runFor(32);
     await expect(page).toHaveURL(new RegExp(a.id + "$"));
     await expect(page.locator("textarea[name=prompt]")).toHaveValue(

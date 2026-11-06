@@ -875,14 +875,16 @@ export function createTranscript(
     receive(sidecarId: string, frame: ServerFrame): void {
       if (!selected || selected.sidecarId !== sidecarId) return;
       if (frame.t === "index.snapshot" || frame.t === "index.patch") {
-        if (projection.helpers(helper)) {
+        const known = entry(sidecarId, selected.sessionID);
+        const busyChanged = projection.busy(
+          known?.status !== undefined && known.status !== "idle",
+        );
+        if (projection.helpers(helper) || busyChanged) {
           setState((draft) => {
             draft.content = attach(contentMetadata(draft.content));
           });
         }
-        const known = entry(sidecarId, selected.sessionID);
         if (known?.deleted) interaction.clear();
-        projection.busy(known?.status !== undefined && known.status !== "idle");
         if (
           !!known?.deleted !== (view === "deleted") ||
           (!subscribed && view !== "deleted")

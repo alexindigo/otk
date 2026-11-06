@@ -1,5 +1,34 @@
 # @otk/client
 
+## View leases (protocol 18)
+
+ServerResources owns project/selection/crumb demand and visible Sessions keys.
+SidecarConnection retains that view across reconnects, sends it with hello and
+fences older scoped frames. Project changes incrementally acquire their entries
+and evict retired entries without deleting native or user metadata. Sessions
+borrows the project's structural catalog, keeps hierarchy/task grouping in its
+shared client owner and reports its VirtualList range; rows acquire scalar
+digests while only selection receives turn summaries. Standalone connections
+call `view({selected, crumbs: [], rows: []})` before connecting. Other projects
+remain visible through P3 summaries. Prompt recall uses only the currently
+viewed server/project.
+
+Sessions mounts its measured hierarchy only after the structural catalog and
+inbox baseline for that view agree. Same-project visible-row lease changes keep
+that readiness and keyed row DOM, including focus and retained scroll anchors.
+
+After synchronous consumer acceptance, SidecarConnection acknowledges the index
+epoch/revision. Consumers return `false` for rejected frames. Epoch replacement
+patches rebase from the last acknowledged revision and correct unacknowledged
+keys; older epochs never reduce or return credit.
+
+Pending user permissions/questions retain minimal routing metadata across
+servers through the same socket view owner. A newly acquired live pending root
+can create its existing actionable notification without first acquiring the
+unseen session population. Request settlement releases that metadata. Project
+lamp authority is independent of whether population counts have finished
+becoming known.
+
 ## Directory and keyed metadata resources (protocol17)
 
 `createDirectoryCatalogs({watch,refresh,codecs,factory?})` owns one demanded

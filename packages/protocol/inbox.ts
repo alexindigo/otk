@@ -76,6 +76,7 @@ export interface InboxVersion {
   revision: number;
 }
 export interface InboxBaseline extends InboxVersion {
+  epoch?: number;
   inbox: InboxSnapshot;
   summaryRevision?: number;
 }

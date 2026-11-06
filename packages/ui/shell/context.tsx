@@ -40,6 +40,8 @@ export interface ShellPorts {
   projectMetadata: import("@otk/client").ServerResources["projectMetadata"];
   metadataEntry: import("@otk/client").ServerResources["metadataEntry"];
   sessionRows: import("@otk/client").ServerResources["sessionRows"];
+  sessionRowsReady: import("@otk/client").ServerResources["sessionRowsReady"];
+  visibleRows: import("@otk/client").ServerResources["visibleRows"];
   projectProgress: import("@otk/client").ServerResources["projectProgress"];
   listInteraction(project: ProjectSelection, task?: string): ListInteraction;
   selection(): Selection | undefined;

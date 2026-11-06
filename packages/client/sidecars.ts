@@ -87,7 +87,7 @@ export interface ClientSidecars {
   remove(id: string): void;
 }
 export function createSidecars(
-  onFrame: (id: string, frame: ServerFrame) => void,
+  onFrame: (id: string, frame: ServerFrame) => boolean | void,
   options: SidecarsOptions = {},
   factory: StateFactory = createState,
 ): ClientSidecars {
@@ -147,7 +147,7 @@ export function createSidecars(
             if (item) item.harness = frame.state;
           });
         }
-        onFrame(spec.id, frame);
+        return onFrame(spec.id, frame);
       },
     }, spec.id === LOCAL_SIDECAR ? options.connection : undefined);
     connections.set(spec.id, connection);

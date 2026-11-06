@@ -10,7 +10,10 @@ export interface HistoryAttachment {
   part: Extract<PromptPart, { source: "upload" }>;
 }
 export interface HistoryCapability {
-  listHistory(signal?: AbortSignal): Promise<HistoryEntry[]>;
+  listHistory(
+    signal?: AbortSignal,
+    directory?: string,
+  ): Promise<HistoryEntry[]>;
   attachments(
     refs: HistoryAttachmentRef[],
     signal?: AbortSignal,

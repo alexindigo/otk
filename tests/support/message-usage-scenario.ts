@@ -222,7 +222,7 @@ export async function messageUsageScenario(profile: Profile) {
   };
   publishUsage(f.app.index, ledger.snapshot());
   const client = new WsClient(f.url);
-  await client.connect();
+  await client.connect(root);
   await client.rpc("prefs.set", { key: "theme", value: "otk-dark" });
   await client.rpc("prefs.set", { key: "animationsOff", value: true });
   const baseline = await client.rpc<Record<string, Json>>("prefs.get", {});

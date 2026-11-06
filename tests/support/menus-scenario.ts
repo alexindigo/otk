@@ -107,7 +107,10 @@ export async function menusScenario(profile: Profile) {
     }
   }
   const c = new WsClient(f.url);
-  await c.connect();
+  await c.connect(
+    "entries" in f ? f.entries[0].directory : root,
+    "entries" in f ? f.entries[0].id : f.session.id,
+  );
   resources().defer("menus control client", () => c.close());
   await c.rpc("prefs.set", { key: "theme", value: "otk-dark" });
   const baseline = await c.rpc<Record<string, Json>>("prefs.get", {});

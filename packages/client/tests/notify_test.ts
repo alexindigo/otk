@@ -34,6 +34,25 @@ const note = (change: Partial<Note> = {}): Note => ({
   actions: [{ label: "Open", command: "open", default: true }],
   ...change,
 });
+Deno.test("newly acquired live pending attention alerts without acquiring unrelated working sessions", () => {
+  const emitted: Note[] = [];
+  const triggers = new NotificationTriggers((n) => emitted.push(n), () => {});
+  triggers.receive("s", { t: "index.snapshot", rev: 0, entries: [] });
+  triggers.receive("s", {
+    t: "index.patch",
+    rev: 1,
+    ops: [{
+      op: "upsert",
+      entry: entry("pending", {
+        attention: { ...entry().attention, childPermissions: 1 },
+      }),
+    }],
+  });
+  assertEquals(emitted.map((n) => [n.id, n.kind]), [[
+    "s/pending",
+    "permission",
+  ]]);
+});
 Deno.test("notification triggers baseline per connection, batched root roll-up, priority, replay and resolution", () => {
   const emitted: Note[] = [], removed: string[] = [];
   const triggers = new NotificationTriggers(

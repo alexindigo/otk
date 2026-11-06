@@ -73,7 +73,25 @@ async function connectionFixture() {
   const socket = {
     readyState: WebSocket.OPEN,
     send(value: string) {
-      frames.push(JSON.parse(value));
+      const frame: ServerFrame = JSON.parse(value);
+      frames.push(frame);
+      if (
+        (frame.t === "index.snapshot" || frame.t === "index.patch") &&
+        frame.epoch !== undefined
+      ) {
+        queueMicrotask(() =>
+          void socket.onmessage!.call(
+            socket,
+            new MessageEvent("message", {
+              data: JSON.stringify({
+                t: "index.applied",
+                epoch: frame.epoch,
+                rev: frame.rev,
+              }),
+            }),
+          )
+        );
+      }
     },
     close() {},
     onmessage: null,
@@ -83,7 +101,21 @@ async function connectionFixture() {
   let cursor = 0;
   return {
     index,
+    connections,
+    frames,
     async send(value: unknown) {
+      if ((value as { t: string }).t === "hello") {
+        value = {
+          ...(value as object),
+          view: {
+            epoch: 1,
+            directory: "/p",
+            selected: metadata.id,
+            crumbs: [],
+            rows: [],
+          },
+        };
+      }
       await socket.onmessage!.call(
         socket,
         new MessageEvent("message", { data: JSON.stringify(value) }),
@@ -109,6 +141,54 @@ async function connectionFixture() {
     },
   };
 }
+
+test("ancestor-routed attention follows its newly leased child metadata", async () => {
+  const f = await connectionFixture();
+  try {
+    f.index.upsertMetadata(metadata);
+    await f.send({ t: "hello", protocol: PROTOCOL_VERSION });
+    await f.send({ t: "subscribe", sessionID: metadata.id });
+    await f.send({
+      t: "view",
+      epoch: 2,
+      directory: "/p",
+      selected: metadata.id,
+      crumbs: ["tstv1-child"],
+      rows: [],
+    });
+    const at = f.frames.length;
+    f.index.upsertMetadata({
+      ...metadata,
+      id: "tstv1-child",
+      parentID: metadata.id,
+    });
+    f.connections.content("tstv1-child", {
+      op: "permission.upsert",
+      request: {
+        id: "request",
+        sessionID: "tstv1-child",
+        kind: "bash",
+        title: "Child permission",
+        patterns: [],
+        alwaysPatterns: [],
+        detail: { kind: "bash", command: "true" },
+        time: 1,
+      },
+    });
+    const frames = f.frames.slice(at);
+    assertEquals(frames.map((frame) => frame.t), ["index.patch", "content"]);
+    const patch = frames[0];
+    assertEquals(
+      patch.t === "index.patch" &&
+        patch.ops.some((op) =>
+          op.op === "upsert" && op.entry.id === "tstv1-child"
+        ),
+      true,
+    );
+  } finally {
+    await f.close();
+  }
+});
 
 test("hello establishes an index baseline after already queued publications", async () => {
   const f = await connectionFixture();

@@ -70,6 +70,7 @@ test("passive sidecar reports the native version, leaves approvals manual and re
       (health) => health.harness.version === nativeVersion,
     );
     client = new WsClient(sidecar.url);
+    client.lease({ directory: oc.directory, crumbs: [], rows: [] });
     await client.connect();
     await client.wait((frame) =>
       frame.t === "harness" && frame.state === "connected"

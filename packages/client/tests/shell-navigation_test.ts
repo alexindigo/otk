@@ -341,7 +341,15 @@ Deno.test("shell navigation opens existing project roots or project-only hashes 
   f.navigation.openProject({ sidecarId: "local", directory: "/empty" });
   assertEquals(f.location.hash, "#project/local/%2Fempty");
   assertEquals(f.navigation.state.settings, false);
+  f.resources.receive("local", {
+    t: "view.rows",
+    epoch: 1,
+    directory: "/p",
+    first: "tstv1-selected",
+    catalog: [shellEntry("tstv1-selected"), shellEntry("tstv1-other")],
+  });
   f.navigation.openProject({ sidecarId: "local", directory: "/p" });
+  await settled();
   assertEquals(f.location.hash, "#/local/tstv1-selected");
   f.navigation.showSettings();
   const count = f.pushes.length;
@@ -353,7 +361,7 @@ Deno.test("shell navigation opens existing project roots or project-only hashes 
   await settled();
   f.stop();
 });
-Deno.test("project memory restores helpers through guarded navigation and rejects stale project identities", () => {
+Deno.test("project memory restores helpers through guarded navigation and rejects stale project identities", async () => {
   const f = fixture();
   try {
     f.entries("local", [
@@ -379,7 +387,15 @@ Deno.test("project memory restores helpers through guarded navigation and reject
         },
       },
     });
+    f.resources.receive("local", {
+      t: "view.rows",
+      epoch: 1,
+      directory: "/away",
+      first: "tstv1-away",
+      catalog: [shellEntry("tstv1-away", "/away")],
+    });
     f.navigation.openProject({ sidecarId: "local", directory: "/away" });
+    await settled();
     assertEquals(f.location.hash, "#/local/tstv1-away");
     f.guard.mark("permissions", true);
     f.consent(false);

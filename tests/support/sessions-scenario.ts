@@ -67,7 +67,7 @@ export async function sessionsScenario(profile: Profile) {
       : undefined,
   );
   const c = new WsClient(f.url);
-  await c.connect();
+  await c.connect(f.entries[0].directory, f.entries[0].id);
   resources().defer("sessions control client", () => c.close());
   const gate = Promise.withResolvers<void>();
   resources().defer("sessions creation gate", () => gate.resolve());
@@ -78,7 +78,7 @@ export async function sessionsScenario(profile: Profile) {
     remote = await inboxBrowserFixture(join(root, "second"), [f.url]);
     for (const owner of [f, remote]) {
       const client = owner === f ? c : new WsClient(owner.url);
-      if (client !== c) await client.connect();
+      if (client !== c) await client.connect(owner.entries[0].directory);
       for (const entry of owner.entries.slice(0, 4)) {
         await client.rpc("projects.visit", {
           directory: entry.directory,

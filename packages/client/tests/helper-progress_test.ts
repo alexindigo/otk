@@ -42,6 +42,74 @@ const linked = (): AssistantMessage => ({
   parts: [task("one"), task("two")],
 });
 
+Deno.test("metadata-only idle publishes final pending state to the transcript consumer", async () => {
+  const index = createIndex(),
+    initial = { ...shellEntry("tstv1-parent"), status: "busy" as const };
+  index.receive("server", { t: "index.snapshot", rev: 0, entries: [initial] });
+  const requests: Extract<ClientFrame, { t: "request" }>[] = [];
+  const connection = new SidecarConnection("http://example.test", {
+    status() {},
+    frame() {},
+  }, { messages: fixtureMessagePolicy });
+  connection.subscribe = () => {};
+  connection.send = (frame) => {
+    if (frame.t === "request") requests.push(frame);
+  };
+  connectRequests(connection.rpc);
+  const owner = createTranscripts({
+    connection: () => connection,
+    entry: (server, id) => index.get(server, id),
+    changes: (server) => index.changes(server),
+  });
+  const target = { sidecarId: "server", sessionID: initial.id };
+  try {
+    owner.setDemand({
+      scope: { sidecarId: "server", directory: "/p" },
+      sessions: [target],
+      selected: target,
+    });
+    replyRequest(
+      connection.rpc,
+      requests.find((f) => f.method === "session.messages")!,
+      fixturePage(initial.id, [
+        {
+          id: "u",
+          sessionID: initial.id,
+          role: "user",
+          time: { created: 1 },
+          parts: [{ kind: "compaction", id: "compact" }],
+        },
+      ]),
+    );
+    for (let n = 0; n < 15; n++) await Promise.resolve();
+    const transcript = owner.get(target)!;
+    assertEquals(transcript.state.repliesByID.u.pending, true);
+    const seen: (boolean | undefined)[] = [];
+    const stop = transcript.subscribe((state) => {
+      seen.push(state.repliesByID.u.pending);
+    });
+    const frame = {
+      t: "index.patch" as const,
+      rev: 1,
+      ops: [{
+        op: "upsert" as const,
+        entry: { ...initial, status: "idle" as const },
+      }],
+    };
+    index.receive("server", frame);
+    owner.receive("server", frame, true);
+    assertEquals(seen.at(-1), false);
+    assertEquals(
+      requests.filter((f) => f.method === "session.messages").length,
+      1,
+    );
+    stop();
+  } finally {
+    owner.stop();
+    connection.stop();
+  }
+});
+
 Deno.test("helper metadata dependency counts survive partial removal and retire on clear or deletion", () => {
   const projection = createTranscriptProjection(),
     ids = new Set(["tstv1-child"]);

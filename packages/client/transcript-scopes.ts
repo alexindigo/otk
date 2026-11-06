@@ -48,7 +48,7 @@ export function createTranscriptScopes(
     const tabs = project && input ? resources.tabs(project) : undefined;
     if (tabs && input) tabs.update(input);
     const task = selected && tabs?.taskFor(selected.sessionID);
-    active = project && input
+    active = project && input && selected
       ? { ...project, ...(task ? { taskID: task.id } : {}) }
       : undefined;
     const target =
@@ -61,7 +61,12 @@ export function createTranscriptScopes(
       selected: screen ? selected : undefined,
     });
     // Crumbs borrow metadata from the same selector; they never acquire transcripts.
-    if (project) resources.scope(project, target ? [target.sessionID] : []);
+    resources.scope(
+      project,
+      selected ? [selected.sessionID] : [],
+      selected,
+      tabs?.crumbs().map((crumb) => crumb.id) ?? [],
+    );
   };
   const release = resources.observe({
     frame(server, frame, accepted) {

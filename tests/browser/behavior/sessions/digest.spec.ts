@@ -52,9 +52,9 @@ test(
     await expect(page.locator(".otk-prompt")).toHaveCount(0);
     await expect(page).toHaveURL(new RegExp(`#\/local/${s.id}$`));
     expect(
-      (await state.product("tasks.list", {})).some((task) =>
-        task.sessions.includes(s.id)
-      ),
+      (await state.product("tasks.list", { directory: state.directory })).some((
+        task,
+      ) => task.sessions.includes(s.id)),
     ).toBe(true);
     await expect.poll(async () => {
       const o = await state.observe<
@@ -101,7 +101,10 @@ test(
       ),
     ).toEqual([]);
     const removal = frames.sent.length;
-    await page.locator(".otk-deleted-session .otk-control-row button").nth(1)
+    await page.locator(".otk-deleted-session").getByRole("button", {
+      name: "Remove from task",
+      exact: true,
+    })
       .click();
     await expect(
       page.locator(`.otk-tab[data-preview="true"] [data-tab="${s.id}"]`),

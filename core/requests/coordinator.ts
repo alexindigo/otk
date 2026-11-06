@@ -840,6 +840,8 @@ export class RequestCoordinator {
       ]),
       signal: controller.signal,
       publish: recipient.lease.publish,
+      view: recipient.lease.view,
+      entries: recipient.lease.entries,
       defer(release) {
         if (controller.signal.aborted) release();
         else releases.add(release);

@@ -136,7 +136,11 @@ test("raw test clients expose the public keyed index contract and recover revisi
       (value) =>
         value?.deleted?.how === "provider" && value.title === "Renamed",
     );
-    assertEquals(received.map((frame) => frame.t), ["hello", "resnapshot"]);
+    assertEquals(received.map((frame) => frame.t), [
+      "hello",
+      "view",
+      "resnapshot",
+    ]);
   } finally {
     await client.close();
   }

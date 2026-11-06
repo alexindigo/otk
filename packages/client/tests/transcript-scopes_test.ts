@@ -9,6 +9,49 @@ import {
 } from "../mod.ts";
 import { shellEntry, shellFixture, shellTask } from "./shell-fixture.ts";
 
+Deno.test("project acquisition without selection cannot replace a retained warm body scope with empty membership", () => {
+  const f = shellFixture(), demands: TranscriptDemand[] = [];
+  const session = {
+    demand: (value: TranscriptDemand) => demands.push(value),
+    transcripts: {},
+  } as unknown as ClientSession;
+  const owner = createTranscriptScopes({ resources: f.resources, session });
+  try {
+    f.resources.receive("local", {
+      t: "index.snapshot",
+      rev: 0,
+      entries: [shellEntry("a")],
+    });
+    f.resources.receive("local", {
+      t: "inbox.snapshot",
+      generation: "one",
+      revision: 0,
+      inbox: {
+        projects: [],
+        tasks: [],
+        seen: {},
+        finishes: {},
+        pathTemplates: [],
+      },
+    });
+    owner.update({
+      project: { sidecarId: "local", directory: "/p" },
+      selected: { sidecarId: "local", sessionID: "a" },
+      screen: true,
+    });
+    assertEquals(demands.at(-1)?.scope?.directory, "/p");
+    owner.update({
+      project: { sidecarId: "local", directory: "/q" },
+      screen: true,
+    });
+    assertEquals(demands.at(-1)?.scope, undefined);
+    assertEquals(demands.at(-1)?.sessions, []);
+  } finally {
+    owner.stop();
+    f.resources.stop();
+  }
+});
+
 Deno.test("pending inbox readiness cannot conflate different project scope keys", () => {
   const f = shellFixture(), scopes: string[] = [];
   f.resources.scope = (project) => {

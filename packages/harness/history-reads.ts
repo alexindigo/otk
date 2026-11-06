@@ -12,7 +12,7 @@ export interface HistoryAttachment {
 }
 export interface HistoryReadKinds {
   "history.list": {
-    input: Record<string, never>;
+    input: { directory?: string };
     result: HistoryEntry[];
     chunk: HistoryEntry[];
   };

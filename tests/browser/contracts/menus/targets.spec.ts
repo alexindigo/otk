@@ -168,7 +168,7 @@ test("menus.captured-session-task-and-project-effects", {
     ),
   ).toBe(false);
   await expect(page).toHaveURL(/\/tstv1-second$/);
-  const project = '[data-project-sessions~="tstv1-otk"] .otk-project-open';
+  const project = '[data-project$="/projects/otk"] .otk-project-open';
   await rightClick(page, project);
   expect(await menuLabels(page)).toEqual([
     "Mark inactive",
@@ -177,7 +177,7 @@ test("menus.captured-session-task-and-project-effects", {
   ]);
   await pick(page, "Mark inactive");
   await page.locator(".otk-inactive-toggle").click();
-  await expect(page.locator('[data-project-sessions~="tstv1-otk"]'))
+  await expect(page.locator('[data-project$="/projects/otk"]'))
     .toHaveAttribute("data-inactive", "true");
   await rightClick(page, project);
   expect(await menuLabels(page)).toEqual([
@@ -187,7 +187,7 @@ test("menus.captured-session-task-and-project-effects", {
     "Collapse projects",
   ]);
   await pick(page, "Mark active");
-  await expect(page.locator('[data-project-sessions~="tstv1-otk"]'))
+  await expect(page.locator('[data-project$="/projects/otk"]'))
     .toHaveAttribute("data-inactive", "false");
 });
 
@@ -278,7 +278,7 @@ test("menus.shared-menu-pointer-keyboard-focus-and-selection-isolation", {
   for (
     const [trigger, menu, arrow, last] of [
       [
-        '[data-project-sessions~="tstv1-otk"] .otk-project-menu > button',
+        '[data-project$="/projects/otk"] .otk-project-menu > button',
         ".otk-project-menu :popover-open [role=menu]",
         "ArrowDown",
         false,

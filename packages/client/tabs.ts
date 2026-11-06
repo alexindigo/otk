@@ -315,6 +315,7 @@ export function createTabs(
       }
       store.update((draft) => {
         draft.revision++;
+        const wasTask = draft.selected?.kind === "task";
         if (changedProject) {
           delete draft.selected;
           delete draft.preview;
@@ -344,7 +345,7 @@ export function createTabs(
           if (task) {
             remembered.set(task.id, id);
             delete draft.preview;
-          } else if (draft.preview) draft.preview = rootFor(id);
+          } else if (draft.preview || wasTask) draft.preview = rootFor(id);
         }
         if (
           draft.selected?.kind === "session" &&

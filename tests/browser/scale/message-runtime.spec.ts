@@ -264,7 +264,8 @@ test.describe("stream", () => {
       expect(result.historicalReads).toBe(0);
       expect(result.frames.every((f) => f.historicalReads === 0)).toBe(true);
       expect(
-        (await state.product("tasks.list", {})).find((t) => t.id === task.id)
+        (await state.product("tasks.list", { directory: state.directory }))
+          .find((t) => t.id === task.id)
           ?.name,
       ).toBe("Scale live actions saved");
       const native = await state.native<

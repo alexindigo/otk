@@ -110,7 +110,7 @@ test(
       .toHaveText(["connected", "connected"]);
     await page.locator(".otk-view-header button").click();
     await page.locator(
-      `[data-project-sessions~="${remote.session.id}"] .otk-project-open`,
+      `[data-server]:not([data-server=local]) .otk-project-open`,
     ).click();
     await page.getByRole("button", { name: "Open right panel", exact: true })
       .click();

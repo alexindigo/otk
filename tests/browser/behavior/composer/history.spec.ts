@@ -2,7 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { type Frame, openSession, wire } from "../../fixtures/wire.ts";
-import { chips, messages, prompt, reply } from "../../pages/composer.ts";
+import { chips, prompt } from "../../pages/composer.ts";
 import type { Json } from "../../../support/fixture-control.ts";
 import type { Page } from "@playwright/test";
 
@@ -22,7 +22,7 @@ async function connect(page: Page, url: string) {
   await page.locator(".otk-settings .otk-view-header button").click();
 }
 test(
-  "composer.multi-sidecar-time-ordered-recall-shell-dirty-guard-and-return",
+  "composer.project-scoped-time-ordered-recall-shell-dirty-guard-and-return",
   { tag: ["@composer", "@isolated"] },
   async ({ isolatedState: state, page }) => {
     const first = await state.native<{ id: string }>("/session", "POST", {
@@ -34,6 +34,10 @@ test(
     await state.native(`/session/${first.id}/message`, "POST", {
       noReply: true,
       parts: [{ type: "text", text: "local older prompt" }],
+    });
+    await state.product("session.shell", {
+      sessionID: first.id,
+      command: "echo local-history-shell",
     });
     const remote = await state.controller.call<
       { url: string; session: { id: string } }
@@ -58,9 +62,7 @@ test(
     await connect(page, remote.url);
     await openSession(state, page, first.id);
     await prompt(page).press("ArrowUp");
-    await expect(prompt(page)).toHaveValue("remote newest prompt");
-    await prompt(page).press("ArrowUp");
-    await expect(prompt(page)).toHaveValue("echo remote-history-shell");
+    await expect(prompt(page)).toHaveValue("echo local-history-shell");
     await expect(page.locator(".otk-prompt > label")).toHaveText("Shell");
     await prompt(page).press("ArrowUp");
     await expect(prompt(page)).toHaveValue("local older prompt");
@@ -73,7 +75,7 @@ test(
     await prompt(page).fill("");
     await openSession(state, page, blank.id);
     await prompt(page).press("ArrowUp");
-    await expect(prompt(page)).toHaveValue("remote newest prompt");
+    await expect(prompt(page)).toHaveValue("echo local-history-shell");
     await prompt(page).press("Control+End");
     await prompt(page).press("ArrowDown");
     await expect(prompt(page)).toHaveValue("");
@@ -84,7 +86,7 @@ test("composer.remote-image-recall-resolves-origin-bytes-only-on-send", {
 }, async ({ isolatedState: state, page }) => {
   const bytes =
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
-  const blank = await state.native<{ id: string }>("/session", "POST", {
+  await state.native<{ id: string }>("/session", "POST", {
     title: "Recall image here",
   });
   const remote = await state.controller.call<
@@ -108,7 +110,13 @@ test("composer.remote-image-recall-resolves-origin-bytes-only-on-send", {
   const frames = await wire(page);
   await page.goto(state.url);
   await connect(page, remote.url);
-  await openSession(state, page, blank.id);
+  await page.locator("[data-server]:not([data-server=local]) .otk-project-open")
+    .click();
+  await page.getByRole("button", { name: "Open right panel", exact: true })
+    .click();
+  await page.locator(`[data-session="${remote.session.id}"]`).click();
+  await expect(page.getByRole("region", { name: "Transcript", exact: true }))
+    .toHaveAttribute("aria-busy", "false");
   await prompt(page).press("ArrowUp");
   await expect(chips(page)).toHaveCount(1);
   await expect(chips(page).locator("button").first()).toHaveText("[Image 1]");
@@ -119,21 +127,37 @@ test("composer.remote-image-recall-resolves-origin-bytes-only-on-send", {
   expect(
     frames.sent.filter(({ frame }) => frame.method === "history.attachments"),
   ).toHaveLength(0);
+  const historyKeys = new Set(
+    frames.sent.filter(({ frame }) => frame.method === "history.list").map((
+      { frame },
+    ) => frame.ref!.key),
+  );
   const histories = frames.received.filter((frame) =>
-    frame.t === "request.result" &&
+    frame.t === "request.result" && historyKeys.has(frame.ref?.key ?? "") &&
     (frame.outcome as { ok: boolean; value?: unknown } | undefined)?.ok
   );
+  expect(histories.length).toBeGreaterThan(0);
   // The browser received only lazy metadata before the explicit send.
   expect(JSON.stringify(histories)).not.toContain(bytes);
   expect(JSON.stringify(histories)).not.toContain("dataBase64");
-  await state.queue(["Remote image received."]);
+  await state.controller.call("queueScript", {
+    lease: state.lease.lease,
+    target: "remote",
+    chunks: ["Remote image received."],
+  });
   await prompt(page).press("Enter");
   await expect.poll(async () =>
-    (await messages(state, blank.id)).flatMap((row) => row.parts).find((p) =>
-      p.filename === "pixel.png"
-    )?.url
+    (await state.controller.call<
+      { parts: { filename?: string; url?: string }[] }[]
+    >("nativeRequest", {
+      lease: state.lease.lease,
+      target: "remote",
+      path: `/session/${remote.session.id}/message`,
+      method: "GET",
+    })).flatMap((row) => row.parts).find((p) => p.filename === "pixel.png")?.url
   ).toBe(`data:image/png;base64,${bytes}`);
-  await reply(state, page, blank.id, "Remote image received.");
+  await expect(page.getByText("Remote image received.", { exact: true }))
+    .toBeVisible();
   const requests = frames.sent.filter(({ frame }) =>
     frame.method === "history.attachments"
   );
@@ -143,7 +167,7 @@ test("composer.remote-image-recall-resolves-origin-bytes-only-on-send", {
   await expect(chips(page)).toHaveCount(0);
 });
 test(
-  "composer.valid-local-recall-survives-definitive-connected-sibling-rejection",
+  "composer.local-recall-never-reads-an-unleased-connected-sibling",
   { tag: ["@composer", "@isolated"] },
   async ({ isolatedState: state, page }) => {
     const source = await state.native<{ id: string }>("/session", "POST", {
@@ -163,51 +187,36 @@ test(
     await wire(page);
     await page.goto(state.url);
     await connect(page, remote.url);
-    await page.locator(`[data-project-sessions~="${blank.id}"]`).getByRole(
+    await page.locator(
+      `[data-server=local][data-project=${JSON.stringify(state.directory)}]`,
+    ).getByRole(
       "button",
       { name: / on This server$/ },
     ).click();
     await openSession(state, page, blank.id);
-    // Fault only this sibling's request, preserving the actual server rejection.
-    const siblingSent: Frame[] = [], siblingReceived: Frame[] = [];
+    const siblingSent: Frame[] = [];
     await page.routeWebSocket(
       remote.url.replace("http:", "ws:") + "/api/ws*",
       (socket) => {
         const server = socket.connectToServer();
         socket.onMessage((message) => {
           const frame = JSON.parse(message.toString()) as Frame;
-          if (frame.method === "history.list") {
-            frame.method = "fixture.history.unavailable";
-          }
           siblingSent.push(frame);
           server.send(JSON.stringify(frame));
         });
         server.onMessage((message) => {
-          siblingReceived.push(JSON.parse(message.toString()) as Frame);
           socket.send(message);
         });
       },
     );
-    // Routing must precede socket creation; reload installs the sibling fault route.
+    // Routing precedes socket creation; reload observes the real sibling socket.
     await page.reload();
     await expect(prompt(page)).toBeVisible();
     await expect(page.getByRole("region", { name: "Transcript", exact: true }))
       .toHaveAttribute("aria-busy", "false");
     await prompt(page).press("ArrowUp");
     await expect(prompt(page)).toHaveValue("valid local history");
-    await expect.poll(() =>
-      siblingSent.some((frame) =>
-        frame.method === "fixture.history.unavailable"
-      )
-    ).toBe(true);
-    const request = siblingSent.find((frame) =>
-      frame.method === "fixture.history.unavailable"
-    )!;
-    expect(typeof request.ref?.key).toBe("string");
-    await expect.poll(() =>
-      siblingReceived.some((frame) =>
-        frame.t === "request.rejected" && frame.ref?.key === request.ref!.key
-      )
-    ).toBe(true);
+    expect(siblingSent.filter((frame) => frame.method === "history.list"))
+      .toHaveLength(0);
   },
 );

@@ -13,6 +13,7 @@ import type {
   MessagePolicy,
   RequestControl,
   ServerFrame,
+  ViewLease,
 } from "@otk/protocol";
 import { apiBase, type AuthStatus, bootstrapRequestMetadata } from "./auth.ts";
 import { Rpc } from "./rpc.ts";
@@ -29,7 +30,7 @@ export type ConnectionState =
   | "protocol mismatch";
 export interface ConnectionSink {
   status(state: ConnectionState, error?: string, authType?: string): void;
-  frame(frame: ServerFrame): void;
+  frame(frame: ServerFrame): boolean | void;
 }
 export interface ConnectionOptions {
   attachments?: import("@otk/protocol").AttachmentPolicy;
@@ -70,6 +71,24 @@ export class SidecarConnection {
   #capabilities = new Set<CapabilityName>();
   #messages?: MessagePolicy;
   #attachments?: import("@otk/protocol").AttachmentPolicy;
+  #view: ViewLease = { epoch: 0, crumbs: [], rows: [] };
+  get viewEpoch(): number {
+    return this.#view.epoch;
+  }
+  /** Retain demand across reconnects, independently of request admission. */
+  view(value: Omit<ViewLease, "epoch">): void {
+    if (
+      JSON.stringify({ ...this.#view, epoch: undefined }) ===
+        JSON.stringify({ ...value, epoch: undefined })
+    ) return;
+    this.#view = {
+      ...value,
+      crumbs: [...value.crumbs],
+      rows: [...value.rows],
+      epoch: this.#view.epoch + 1,
+    };
+    if (this.#welcomed) this.send({ t: "view", ...this.#view });
+  }
   get attachments(): import("@otk/protocol").AttachmentPolicy | undefined {
     return this.#attachments ?? this.options.attachments;
   }
@@ -185,13 +204,18 @@ export class SidecarConnection {
       socket.onopen = () => {
         if (current() && socket === this.#socket) {
           socket.send(
-            JSON.stringify({ t: "hello", protocol: PROTOCOL_VERSION }),
+            JSON.stringify({
+              t: "hello",
+              protocol: PROTOCOL_VERSION,
+              view: this.#view,
+            }),
           );
         }
       };
       socket.onmessage = ({ data }) => {
         if (!current() || socket !== this.#socket) return;
         const frame: ServerFrame = JSON.parse(data);
+        if (frame.epoch !== undefined && frame.epoch < this.#view.epoch) return;
         if (this.#policy) {
           clearTimeout(this.#silence);
           this.#silence = setTimeout(() => {
@@ -237,7 +261,13 @@ export class SidecarConnection {
           return;
         }
         this.rpc.receive(frame);
-        this.sink.frame(frame);
+        const accepted = this.sink.frame(frame);
+        if (
+          accepted !== false && frame.epoch !== undefined &&
+          (frame.t === "index.snapshot" || frame.t === "index.patch")
+        ) {
+          this.send({ t: "index.applied", epoch: frame.epoch, rev: frame.rev });
+        }
       };
       socket.onclose = () => {
         if (current() && socket === this.#socket) {

@@ -123,7 +123,7 @@ test(
     await pick(page, "Show inactive projects");
     await expect(
       page.locator(
-        '.otk-inactive-projects [data-project-sessions~="tstv1-luch"]',
+        '.otk-inactive-projects [data-project$="/projects/luch"]',
       ),
     ).toBeVisible();
     await rightClick(page, ".otk-inbox-scroll", true);
@@ -136,7 +136,7 @@ test(
     await expect(page.locator(".otk-inactive-projects")).toHaveCount(0);
     await rightClick(
       page,
-      '[data-project-sessions~="tstv1-otk"] .otk-project-open',
+      '[data-project$="/projects/otk"] .otk-project-open',
     );
     expect(await groups(page)).toEqual([["Mark inactive"], projects]);
     await dismiss(page);

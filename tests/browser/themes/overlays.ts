@@ -687,7 +687,7 @@ export async function surfaces(
           ".otk-panel-content",
           ".otk-messages",
           ".otk-prompt-actions",
-          '[data-project-sessions~="tstv1-otk"] .otk-project-open',
+          '[data-project$="/projects/otk"] .otk-project-open',
           '[data-crumb="tstv1-otk"]',
           '[data-session="tstv1-otk"]',
           ".otk-user-bubble",

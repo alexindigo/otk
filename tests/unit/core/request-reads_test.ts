@@ -128,7 +128,12 @@ test("every body/catalog read has volatile recovery, target scope and caller can
     const events: RequestEvent[] = [];
     const recipient = {
       send: (event: RequestEvent) => events.push(event),
-      lease: { id: "socket", signal: new AbortController().signal, defer() {} },
+      lease: {
+        id: "socket",
+        signal: new AbortController().signal,
+        defer() {},
+        view: () => ({ epoch: 1, directory: "/p", crumbs: [], rows: [] }),
+      },
     };
     try {
       assertEquals(registry.policy(method)?.kind, "read", method);

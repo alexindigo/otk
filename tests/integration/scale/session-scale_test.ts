@@ -63,6 +63,15 @@ test("real-version scale summaries match independent totals with bounded serving
   });
   resources().defer("scale application", () => app.stop());
   const client = new WsClient(`http://127.0.0.1:${config.server.port}`);
+  const requested = fixture.manifest.sessions.filter((row) =>
+    row.directory === fixture.directory
+  );
+  client.lease({
+    directory: fixture.directory,
+    selected: requested[0].id,
+    crumbs: [],
+    rows: requested.map((row) => row.id),
+  });
   await client.connect();
   const present = new Set<string>(), ready = new Set<string>();
   const observe = (entry: import("@otk/protocol").IndexEntry) => {
@@ -173,8 +182,10 @@ test("real-version scale summaries match independent totals with bounded serving
     const entry = app.index.get(row.id)!;
     assertEquals(
       wire.get(row.id)?.digest,
-      entry.digest,
-      "Complete wire snapshot must carry all consumer summaries",
+      row.id === requested[0].id
+        ? entry.digest
+        : { ...entry.digest, turns: {} },
+      "The scoped wire snapshot must carry every explicitly requested scalar summary",
     );
     assertEquals(entry.digest.messageCount, row.expected.messages, row.id);
     assertEquals(entry.digest.total?.calls, row.expected.calls, row.id);

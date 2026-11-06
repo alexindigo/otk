@@ -248,6 +248,7 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
     });
   };
   const revisions = new Map<string, number>();
+  const epochs = new Map<string, number>();
   return {
     state,
     ids,
@@ -290,7 +291,19 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
     },
     subscribe: (listener) => clock.subscribe(() => listener(state)),
     receive(sidecarId: string, frame: IndexFrame): boolean {
-      if (!acceptsPatch(revisions.get(sidecarId), frame)) return false;
+      const epoch = epochs.get(sidecarId);
+      if (
+        frame.epoch !== undefined && epoch !== undefined && frame.epoch < epoch
+      ) return false;
+      const replacement = frame.t === "index.patch" &&
+        frame.from !== undefined &&
+        frame.epoch !== undefined && frame.epoch !== epoch &&
+        frame.from <= (revisions.get(sidecarId) ?? 0) &&
+        frame.rev === frame.from + frame.ops.length;
+      if (!replacement && !acceptsPatch(revisions.get(sidecarId), frame)) {
+        return false;
+      }
+      if (frame.epoch !== undefined) epochs.set(sidecarId, frame.epoch);
       structural = false;
       const changed = new Set<string>();
       if (frame.t === "index.snapshot") {
@@ -369,7 +382,7 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
             if (op.deleted) next.deleted = structuredClone(op.deleted);
             else delete next.deleted;
             put(key, next);
-          } else if (op.op === "remove") put(key);
+          } else if (op.op === "remove" || op.op === "evict") put(key);
           else {
             const unhandled: never = op;
             throw new Error(
@@ -392,6 +405,7 @@ export function createIndex(factory: StateFactory = createState): ClientIndex {
     },
     remove(sidecarId: string): void {
       revisions.delete(sidecarId);
+      epochs.delete(sidecarId);
       changes.delete(sidecarId);
       const changed = new Set<string>();
       for (const id of ids(sidecarId)) {

@@ -18,7 +18,9 @@ test.describe("task tabs", () => {
         await page.locator("dialog button[type=submit]").click();
         await expect(page.locator("dialog")).toHaveCount(0);
       }
-      const tasks = await state.product("tasks.list", {}),
+      const tasks = await state.product("tasks.list", {
+          directory: state.directory,
+        }),
         plan = tasks.find((t) => t.name === "Plan")!,
         exec = tasks.find((t) => t.name === "Execution")!;
       await state.product("tasks.sessions", {
@@ -84,7 +86,8 @@ test.describe("task tabs", () => {
         "Build",
       );
       expect(
-        (await state.product("tasks.list", {})).find((t) => t.id === exec.id)!
+        (await state.product("tasks.list", { directory: state.directory }))
+          .find((t) => t.id === exec.id)!
           .name,
       ).toBe("Build");
       for (
@@ -103,9 +106,8 @@ test.describe("task tabs", () => {
         );
       }
       expect(
-        (await state.product("tasks.list", {})).sort((a, b) =>
-          a.order - b.order
-        ).map((t) => t.id),
+        (await state.product("tasks.list", { directory: state.directory }))
+          .sort((a, b) => a.order - b.order).map((t) => t.id),
       ).toEqual([exec.id, plan.id]);
       await activity(state, "tstv1-helper", "release");
       await activity(state, "tstv1-nested", "release");
@@ -120,7 +122,8 @@ test.describe("task tabs", () => {
       await page.locator(".otk-new-session").click();
       await expect(page.locator("[data-crumb]")).toHaveCount(3);
       expect(
-        (await state.product("tasks.list", {})).find((t) => t.id === exec.id)!
+        (await state.product("tasks.list", { directory: state.directory }))
+          .find((t) => t.id === exec.id)!
           .sessions,
       ).toHaveLength(3);
       await page.reload();
@@ -135,7 +138,8 @@ test.describe("task tabs", () => {
           .toBeTruthy();
       }
       expect(
-        (await state.product("tasks.list", {})).some((t) => t.id === plan.id),
+        (await state.product("tasks.list", { directory: state.directory }))
+          .some((t) => t.id === plan.id),
       ).toBe(true);
     },
   );
@@ -272,16 +276,17 @@ test.describe("phantom ownership", () => {
       ).toBeVisible();
       await expect(page.locator("textarea[name=prompt]")).toHaveValue("");
       await openSession(state, page, "tstv1-pin");
-      const task = (await state.product("tasks.list", {})).find((t) =>
-        t.name === "send"
-      )!;
+      const task =
+        (await state.product("tasks.list", { directory: state.directory }))
+          .find((t) => t.name === "send")!;
       await state.product("tasks.addSession", {
         id: task.id,
         sessionID: "tstv1-pin",
       });
       await expect(page.locator("[data-tab=tstv1-pin]")).toHaveCount(0);
       expect(
-        (await state.product("tasks.list", {})).find((t) => t.id === task.id)!
+        (await state.product("tasks.list", { directory: state.directory }))
+          .find((t) => t.id === task.id)!
           .sessions,
       ).toContain("tstv1-pin");
       await page.locator("[data-tab=tstv1-otk]").click();

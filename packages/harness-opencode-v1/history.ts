@@ -46,16 +46,25 @@ export class HistoryReader {
       new Promise((resolve) => setTimeout(resolve, 0)),
     readonly diagnostic: DiagnosticSink = () => {},
   ) {}
-  async list(signal?: AbortSignal): Promise<HistoryEntry[]> {
+  async list(
+    signal?: AbortSignal,
+    directory?: string,
+  ): Promise<HistoryEntry[]> {
     const selected: Row[] = [];
     let cursor: Row | undefined;
     while (selected.length < PROMPT_HISTORY_LIMIT) {
       signal?.throwIfAborted();
       const rows = this.database().prepare(
-        `SELECT id,session_id,time_created,${validRole} AS role FROM message ${
-          cursor ? "WHERE (time_created,id)<(?,?)" : ""
-        } ORDER BY time_created DESC,id DESC LIMIT ?`,
+        `SELECT id,session_id,time_created,${validRole} AS role FROM message WHERE
+          ${
+          directory === undefined
+            ? "1"
+            : "session_id IN (SELECT id FROM session WHERE directory=?)"
+        }
+          ${cursor ? "AND (time_created,id)<(?,?)" : ""}
+          ORDER BY time_created DESC,id DESC LIMIT ?`,
       ).all(
+        ...(directory === undefined ? [] : [directory]),
         ...(cursor
           ? [Number(cursor.time_created), String(cursor.id), SCAN_ROWS]
           : [SCAN_ROWS]),
@@ -225,7 +234,7 @@ export class HistoryReader {
   }
   readers(): ProviderReaders {
     return {
-      "history.list": (_input, signal) => this.list(signal),
+      "history.list": (input, signal) => this.list(signal, input.directory),
       "history.entries": (input, signal) =>
         Promise.resolve(this.entries(input.keys, signal)),
       "history.attachments": (input, signal) =>
@@ -317,8 +326,11 @@ export class History implements HistoryCapability {
       this.#owners.delete(owner);
     }
   }
-  listHistory(signal?: AbortSignal): Promise<HistoryEntry[]> {
-    return this.#read("history.list", {}, signal);
+  listHistory(
+    signal?: AbortSignal,
+    directory?: string,
+  ): Promise<HistoryEntry[]> {
+    return this.#read("history.list", { directory }, signal);
   }
   entries(
     keys: { sessionID: string; messageID: string }[],

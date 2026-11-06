@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 // @deno-types="npm:@types/ws@8.18.1"
 import WebSocket from "ws";
-import type { ServerFrame } from "@otk/protocol";
+import type { ServerFrame, ViewLease } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
 import { PROTOCOL_VERSION } from "@otk/protocol";
 import { type ClientIndex, createIndex, RequestFailure } from "@otk/client";
@@ -29,10 +29,15 @@ export class WsClient {
   frames: ServerFrame[] = [];
   ws: WebSocket;
   #clientID = crypto.randomUUID();
-  #index?: ClientIndex;
+  #index: ClientIndex = createIndex();
   #indexed = 0;
   #close: () => Promise<void>;
   #welcome?: Extract<ServerFrame, { t: "welcome" }>;
+  #view: ViewLease = { epoch: 0, crumbs: [], rows: [] };
+  lease(value: Omit<ViewLease, "epoch">): void {
+    this.#view = { ...value, epoch: this.#view.epoch + 1 };
+    if (this.#welcome) this.send({ t: "view", ...this.#view });
+  }
   constructor(readonly base: string, cookie?: string, origin = base) {
     resources();
     this.ws = new WebSocket(base.replace(/^http/, "ws") + "/api/ws", {
@@ -40,6 +45,7 @@ export class WsClient {
     });
     this.ws.on("message", (data) => {
       const frame: ServerFrame = JSON.parse(data.toString());
+      if (frame.epoch !== undefined && frame.epoch < this.#view.epoch) return;
       if (frame.t === "welcome") this.#welcome = frame;
       this.frames.push(frame);
       this.#reduceIndex();
@@ -48,7 +54,8 @@ export class WsClient {
     this.ws.on("error", () => {});
     this.#close = ownSocket(this.ws);
   }
-  async connect(): Promise<void> {
+  async connect(directory?: string, selected?: string): Promise<void> {
+    if (directory) this.lease({ directory, selected, crumbs: [], rows: [] });
     if (this.ws.readyState !== WebSocket.OPEN) {
       await new Promise<void>((resolve, reject) => {
         if (this.ws.readyState !== WebSocket.CONNECTING) {
@@ -74,7 +81,7 @@ export class WsClient {
         this.ws.once("close", closed);
       });
     }
-    this.send({ t: "hello", protocol: PROTOCOL_VERSION });
+    this.send({ t: "hello", protocol: PROTOCOL_VERSION, view: this.#view });
     await this.wait((frame) => frame.t === "welcome");
   }
   send(value: unknown): void {
@@ -82,17 +89,27 @@ export class WsClient {
   }
   /** Lazy so raw-wire/timing consumers do not acquire another projection. */
   entry(sessionID: string): IndexEntry | undefined {
-    this.#index ??= createIndex();
+    if (
+      !this.#view.rows.includes(sessionID) && this.#view.selected !== sessionID
+    ) {
+      this.lease({
+        ...this.#view,
+        selected: this.#view.selected ?? sessionID,
+        rows: [...this.#view.rows, sessionID],
+      });
+    }
     this.#reduceIndex();
     return this.#index.get("test", sessionID);
   }
   #reduceIndex(): void {
-    if (!this.#index) return;
     const frames = this.frames.slice(this.#indexed);
     this.#indexed = this.frames.length;
     for (const frame of frames) {
       if (frame.t === "index.snapshot" || frame.t === "index.patch") {
         if (!this.#index.receive("test", frame)) this.send({ t: "resnapshot" });
+        else if (frame.epoch !== undefined) {
+          this.send({ t: "index.applied", epoch: frame.epoch, rev: frame.rev });
+        }
       }
     }
   }

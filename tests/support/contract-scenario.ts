@@ -181,7 +181,10 @@ export async function contractScenario(profile: Profile) {
     };
   }
   const client = new WsClient(f.url);
-  await client.connect();
+  await client.connect(
+    "entries" in f ? f.entries[0].directory : root,
+    "entries" in f ? f.entries[0].id : f.session.id,
+  );
   resources().defer("contract control client", () => client.close());
   await client.rpc("prefs.set", { key: "theme", value: "otk-dark" });
   const baseline = await client.rpc<Record<string, Json>>("prefs.get", {});

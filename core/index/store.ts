@@ -1,9 +1,30 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import type { DigestIndexDelta, IndexEntry, IndexOp } from "@otk/protocol";
+import type {
+  DigestIndexDelta,
+  IndexEntry,
+  IndexMetadata,
+  IndexOp,
+} from "@otk/protocol";
 import type { ServerFrame } from "@otk/protocol";
 import { SessionIndex } from "@otk/harness";
 import type { SectionObserver } from "../diagnostics.ts";
 export class IndexStore extends SessionIndex {
+  #catalogs = new Map<string, readonly IndexMetadata[]>();
+  /** Project-local structural inputs; never copy digests or retained turns. */
+  catalog(directory: string): readonly IndexMetadata[] {
+    let value = this.#catalogs.get(directory);
+    if (!value) {
+      value = this.snapshotEntries().filter((entry) =>
+        entry.directory === directory
+      )
+        .map(({ digest: _digest, ...metadata }) => metadata);
+      this.#catalogs.set(directory, value);
+    }
+    return value;
+  }
+  flush(): void {
+    this.#flush();
+  }
   #authority = new Set<(value: "current" | "stale" | "unknown") => void>();
   observeAuthority(
     listener: (value: "current" | "stale" | "unknown") => void,
@@ -66,6 +87,7 @@ export class IndexStore extends SessionIndex {
     previous: ReadonlyMap<string, IndexEntry>,
   ): void {
     const start = performance.now();
+    this.#catalogs.clear();
     this.#pending = [];
     const changes = entries.map((entry) => ({
       entry,
@@ -88,6 +110,13 @@ export class IndexStore extends SessionIndex {
     delta?: DigestIndexDelta,
   ): void {
     const start = performance.now();
+    if (
+      !delta ||
+      JSON.stringify(entry.deleted) !== JSON.stringify(previous?.deleted)
+    ) {
+      this.#catalogs.delete(entry.directory);
+      if (previous) this.#catalogs.delete(previous.directory);
+    }
     const copy = structuredClone(entry);
     for (const listener of this.#observers) {
       listener(
@@ -102,6 +131,7 @@ export class IndexStore extends SessionIndex {
     this.diagnostics?.("index:observers", performance.now() - start);
   }
   protected override removed(id: string): void {
+    this.#catalogs.clear();
     for (const listener of this.#removals) listener(id);
     this.#queue({ op: "remove", id });
   }

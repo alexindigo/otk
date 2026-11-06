@@ -66,6 +66,7 @@ async function consumer(url: string) {
       }]) as WebSocket,
   });
   try {
+    connection.view({ selected: "tstv1-core", crumbs: [], rows: [] });
     await connection.connect();
     await waitFor(() => connected && !!prefs, Boolean);
   } catch (error) {

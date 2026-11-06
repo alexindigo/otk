@@ -10,7 +10,7 @@ export async function visualScenario() {
   const root = await fixture(),
     f = await inboxBrowserFixture(root),
     c = new WsClient(f.url);
-  await c.connect();
+  await c.connect(f.entries[0].directory, f.entries[0].id);
   resources().defer("visual control client", () => c.close());
   for (let n = 1; n < 12; n++) {
     f.add({

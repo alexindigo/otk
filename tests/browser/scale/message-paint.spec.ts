@@ -17,16 +17,18 @@ for (let repetition = 0; repetition < 5; repetition++) {
         {
           counts: unknown;
           expectedCounts: unknown;
-          manifest: { sessions: { id: string }[] };
+          manifest: { sessions: { id: string; directory: string }[] };
         }
       >();
       expect(initial.counts).toEqual(initial.expectedCounts);
       const selected = initial.manifest.sessions[0],
         landing = initial.manifest.sessions[251],
-        openMain =
-          `[data-project-sessions~="${selected.id}"] .otk-project-open`,
-        openLanding =
-          `[data-project-sessions~="${landing.id}"] .otk-project-open`;
+        openMain = `[data-project=${
+          JSON.stringify(selected.directory)
+        }] .otk-project-open`,
+        openLanding = `[data-project=${
+          JSON.stringify(landing.directory)
+        }] .otk-project-open`;
       await page.setViewportSize({ width: 1280, height: 900 });
       await measureMessagePaint(
         { send: (_method, { source }) => page.addInitScript(source) },
@@ -36,7 +38,12 @@ for (let repetition = 0; repetition < 5; repetition++) {
       await page.goto(`${state.url}/#/local/${landing.id}`);
       await expect(page.locator("textarea[name=prompt]")).toBeVisible();
       await expect.poll(() =>
-        page.evaluate("messageMeasurements.snapshots.some(s=>s.count===4615)")
+        page.evaluate("messageMeasurements.snapshots.length > 0")
+      ).toBe(true);
+      expect(
+        await page.evaluate(
+          "messageMeasurements.snapshots.every(s=>s.count===0 || s.count===1)",
+        ),
       ).toBe(true);
       expect(await page.evaluate("messageMeasurements.requests.length")).toBe(
         0,

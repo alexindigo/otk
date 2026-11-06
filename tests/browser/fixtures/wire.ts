@@ -83,7 +83,12 @@ export async function openSession(state: TestState, page: Page, id: string) {
     await page.goto(`${state.url}/#/local/${id}`);
   } else {
     if (!await page.locator(`[data-session="${id}"]`).count()) {
-      await page.locator(`[data-project-sessions~="${id}"] .otk-project-open`)
+      const session = await state.product("session.get", { sessionID: id });
+      await page.locator(
+        `[data-server=local][data-project=${
+          JSON.stringify(session.directory)
+        }] .otk-project-open`,
+      )
         .click();
     }
     await page.locator(`[data-session="${id}"]`).click();

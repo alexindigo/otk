@@ -113,11 +113,13 @@ test(
     await expect(page.locator(".otk-agent-picker [role=status]")).toHaveCount(
       0,
     );
-    expect(
-      (await state.observe<{ frames: { t: string }[] }>()).frames.filter(
-        (frame) => frame.t === "inbox.snapshot",
-      ),
-    ).toHaveLength(1);
+    const baselines =
+      (await state.observe<{ frames: { t: string; epoch?: number }[] }>())
+        .frames.filter((frame) => frame.t === "inbox.snapshot");
+    expect(baselines.length).toBeGreaterThan(0);
+    expect(new Set(baselines.map((frame) => frame.epoch)).size).toBe(
+      baselines.length,
+    );
     await page.reload();
     await expect(page.locator(".otk-task-list")).toContainText(
       "Shared keyed task",

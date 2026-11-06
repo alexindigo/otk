@@ -48,6 +48,74 @@ class Socket {
     });
   }
 }
+Deno.test("view epochs survive reconnect and retire late scoped publications before reduction", async () => {
+  const sockets: Socket[] = [], frames: unknown[] = [];
+  const connection = new SidecarConnection("http://example.test", {
+    status() {},
+    frame: (frame) => {
+      frames.push(frame);
+    },
+  }, {
+    fetcher: bootstrapFetch(),
+    socket() {
+      const socket = new Socket();
+      sockets.push(socket);
+      return socket as unknown as WebSocket;
+    },
+  });
+  try {
+    connection.view({
+      directory: "/x",
+      selected: "tstv1-x",
+      crumbs: [],
+      rows: [],
+    });
+    await connection.connect();
+    sockets[0].open();
+    sockets[0].welcome();
+    assertEquals(JSON.parse(sockets[0].sent[0]).view.selected, "tstv1-x");
+    connection.view({
+      directory: "/y",
+      selected: "tstv1-y",
+      crumbs: [],
+      rows: [],
+    });
+    const at = frames.length;
+    sockets[0].onmessage!({
+      data: JSON.stringify({
+        t: "index.snapshot",
+        epoch: 1,
+        rev: 0,
+        entries: [],
+      }),
+    });
+    assertEquals(frames.length, at);
+    assertEquals(
+      sockets[0].sent.some((value) => JSON.parse(value).t === "index.applied"),
+      false,
+    );
+    sockets[0].onmessage!({
+      data: JSON.stringify({
+        t: "index.snapshot",
+        epoch: 2,
+        rev: 0,
+        entries: [],
+      }),
+    });
+    assertEquals(frames.length, at + 1);
+    assertEquals(JSON.parse(sockets[0].sent.at(-1)!), {
+      t: "index.applied",
+      epoch: 2,
+      rev: 0,
+    });
+    await connection.connect();
+    sockets[1].open();
+    assertEquals(JSON.parse(sockets[1].sent[0]).view.epoch, 2);
+    assertEquals(JSON.parse(sockets[1].sent[0]).view.selected, "tstv1-y");
+  } finally {
+    connection.stop();
+  }
+});
 Deno.test("invalid sidecar additions reject through their asynchronous API boundary", async () => {
   const collection = createSidecars(() => {}, {
     storage: { getItem: () => "[]", setItem() {} },
@@ -77,7 +145,9 @@ Deno.test("replacement connections retire sockets RPCs availability and every ol
   globalThis.fetch = bootstrapFetch();
   const connection = new SidecarConnection("http://example.test", {
     status() {},
-    frame: (frame) => frames.push(frame),
+    frame: (frame) => {
+      frames.push(frame);
+    },
   }, {
     socket() {
       const socket = new Socket();

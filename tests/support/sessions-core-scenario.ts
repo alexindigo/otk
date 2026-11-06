@@ -78,7 +78,7 @@ export async function sessionsCoreScenario(profile: Profile) {
     });
   }
   const c = new WsClient(f.url);
-  await c.connect();
+  await c.connect(root);
   resources().defer("sessions core client", () => c.close());
   await c.rpc("prefs.set", { key: "theme", value: "otk-dark" });
   const baseline = await c.rpc<Record<string, Json>>("prefs.get", {});

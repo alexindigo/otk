@@ -104,7 +104,7 @@ export async function themeScenario() {
     },
   });
   const nc = new WsClient(sidecar.url);
-  await nc.connect();
+  await nc.connect(native.oc.directory);
   await nc.rpc("layout.patch", {
     rightCollapsed: false,
     rightView: "sessions",
@@ -210,7 +210,7 @@ export async function themeScenario() {
   });
   registerSessionActions(f.app.connections.rpc, f.app.backend);
   const c = new WsClient(f.url);
-  await c.connect();
+  await c.connect(f.entries[0].directory);
   const base = f.entries[0];
   const corpus = await themeContent(base.directory);
   let contentState: keyof typeof corpus.collections = "reading";

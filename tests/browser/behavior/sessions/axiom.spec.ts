@@ -90,7 +90,7 @@ test.describe("filtered and unmounted supervision", () => {
         name: "Search sessions by title",
       });
       await search.fill("no matching title");
-      const project = "[data-project-sessions~=tstv1-atmosphera]";
+      const project = '[data-project$="/projects/atmosphera"]';
       for (const stage of ["filtered", "offscreen", "unmounted", "collapsed"]) {
         if (stage === "offscreen") {
           await search.fill("");

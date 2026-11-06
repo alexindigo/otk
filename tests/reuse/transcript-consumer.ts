@@ -35,6 +35,16 @@ export async function transcriptConsumer(base: string, clock: TranscriptClock) {
         headers: { Origin: new URL(base).origin },
       }]) as WebSocket,
   });
+  const setDemand = owner.setDemand.bind(owner);
+  owner.setDemand = (value) => {
+    connection.view({
+      directory: value.scope?.directory,
+      selected: value.selected?.sessionID,
+      crumbs: [],
+      rows: value.sessions.map((target) => target.sessionID),
+    });
+    setDemand(value);
+  };
   await connection.connect();
   return {
     owner,

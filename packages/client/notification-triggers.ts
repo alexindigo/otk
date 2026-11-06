@@ -118,14 +118,23 @@ export class NotificationTriggers {
     baseline: boolean,
   ): void {
     const state = this.#connections.get(sidecar)!;
-    const old = state.roots.get(session), id = sessionKey(sidecar, session);
+    const previous = state.roots.get(session),
+      id = sessionKey(sidecar, session);
+    const old = previous ??
+      {
+        status: "idle",
+        permissions: 0,
+        questions: 0,
+        errorIdentity: "",
+        title: "",
+      };
     if (entry) state.roots.set(session, entry);
     else state.roots.delete(session);
     if (!entry) {
       if (this.#kinds.delete(id)) this.retract(id);
       return;
     }
-    if (baseline || !old) return;
+    if (baseline || !previous && !entry.permissions && !entry.questions) return;
     const pending = this.#kinds.get(id);
     const resolved = (pending === "permission" && !entry.permissions) ||
       (pending === "question" && !entry.questions) ||

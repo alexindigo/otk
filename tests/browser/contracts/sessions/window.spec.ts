@@ -226,12 +226,12 @@ test.describe("measured Sessions", () => {
           Math.abs(a.offset - before.offset) < 1;
       }).toBe(true);
       await page.locator(
-        "[data-project-sessions~=tstv1-atmosphera] .otk-project-open",
+        '[data-project$="/projects/atmosphera"] .otk-project-open',
       ).click();
       await expect(search).toHaveValue("");
       await expect(page.locator("[data-session=tstv1-w-99]")).toHaveCount(0);
       await search.fill("Approval");
-      await page.locator("[data-project-sessions~=tstv1-otk] .otk-project-open")
+      await page.locator('[data-project$="/projects/otk"] .otk-project-open')
         .click();
       await expect(search).toHaveValue("");
       await expect.poll(() =>

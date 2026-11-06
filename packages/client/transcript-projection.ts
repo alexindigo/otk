@@ -51,7 +51,7 @@ export interface TranscriptProjection {
   retain(ids: Set<string>): void;
   boundaries(values: readonly ReplyBoundary[]): void;
   boundary(turnID: string): ReplyBoundary | undefined;
-  busy(value: boolean): void;
+  busy(value: boolean): boolean;
   apply(op: ContentOp): boolean;
   helpers(
     read: (id: string) => import("@otk/protocol").HelperSummary | undefined,
@@ -436,6 +436,7 @@ export function createTranscriptProjection(): TranscriptProjection {
       }
     },
     busy(value: boolean) {
+      const changed = busy !== value;
       if (busy !== value) {
         busy = value;
         for (const id of pendingUsers) touched.add(id);
@@ -449,6 +450,7 @@ export function createTranscriptProjection(): TranscriptProjection {
         }
         queues();
       }
+      return changed;
     },
     apply(op: ContentOp): boolean {
       if (op.op === "agent.colors") {

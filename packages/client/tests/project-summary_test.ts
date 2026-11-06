@@ -169,3 +169,29 @@ Deno.test("unknown project summaries retain explicit scalars and borrow current 
   assertEquals(rows.row(entry.directory, 0)?.sessionCount, 7);
   model.stop();
 });
+
+Deno.test("known idle authority renders without session metadata or known population counts", () => {
+  const rows = createProjectProjection({ entry: () => undefined });
+  rows.inbox({
+    projects: [],
+    tasks: [],
+    seen: {},
+    finishes: {},
+    pathTemplates: [],
+    summaries: {
+      "/idle": {
+        directory: "/idle",
+        status: "idle",
+        authority: "current",
+        sessionCount: null,
+        unseenCount: null,
+        lastActivity: null,
+      },
+    },
+  });
+  assertEquals(rows.row("/idle", 0)?.activityKnown, true);
+  assertEquals(rows.row("/idle", 0)?.status, "idle");
+  assertEquals(rows.row("/idle", 0)?.sessionCount, null);
+  assertEquals(rows.row("/idle", 0)?.unreadKnown, false);
+  assertEquals(rows.row("/idle", 0)?.source, "index");
+});

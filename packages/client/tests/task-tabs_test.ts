@@ -40,6 +40,28 @@ const model = () =>
     throw Error("No promotion");
   });
 
+Deno.test("authoritative task removal retains the viewed tombstone as a preview", () => {
+  const tabs = model(),
+    deleted = {
+      ...entry("session"),
+      deleted: { at: 1, how: "provider" as const },
+    };
+  tabs.update({
+    directory: "/p",
+    entries: [deleted],
+    inbox: inbox([task("task", [deleted.id])]),
+  });
+  tabs.preview(deleted.id);
+  tabs.update({
+    directory: "/p",
+    entries: [deleted],
+    inbox: inbox([task("task", [])]),
+  });
+  assertEquals(tabs.state.sessionID, deleted.id);
+  assertEquals(tabs.state.preview, deleted.id);
+  assertEquals(tabs.tabs().find((row) => row.id === deleted.id)?.preview, true);
+});
+
 Deno.test("tab and crumb reads share cached keyed inputs instead of borrowing the population again", () => {
   const entries = Array.from({ length: 300 }, (_, i) => entry(`session-${i}`));
   const meta = inbox([task("task", [entries[0].id])]);

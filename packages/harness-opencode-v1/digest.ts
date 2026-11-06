@@ -224,8 +224,11 @@ export class OpencodeV1DigestSink implements DigestSink {
         );
       },
       "identity.batch": (input, signal) => this.identities(input.ids, signal),
-      "history.list": (_input, signal) =>
-        this.#historyRead(signal, (reader) => reader.list(signal)),
+      "history.list": (input, signal) =>
+        this.#historyRead(
+          signal,
+          (reader) => reader.list(signal, input.directory),
+        ),
       "history.entries": (input, signal) =>
         this.#historyRead(
           signal,

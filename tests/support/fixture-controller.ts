@@ -625,7 +625,7 @@ try {
             );
           }
           client = new WsClient(server.url);
-          await client.connect();
+          await client.connect(fixture.oc.directory);
           await client.rpc("prefs.set", { key: "theme", value: "otk-dark" });
           baseline = await client.rpc<Record<string, Json>>("prefs.get", {});
           if (cooling) {
@@ -650,6 +650,12 @@ try {
               else subscriptions.delete(id);
               subscribe(id, enabled);
             };
+            lifecycle.connection.view({
+              directory: cooling.directory,
+              selected: cooling.a.id,
+              crumbs: [],
+              rows: [cooling.b.id],
+            });
             await waitFor(
               () => lifecycle!.index.get("consumer", cooling!.a.id),
               Boolean,
@@ -986,7 +992,7 @@ try {
               state: { path: join(fixture!.oc.root, `otk-${server.port}`) },
             });
             client = new WsClient(replacement.url);
-            await client.connect();
+            await client.connect(fixture!.oc.directory);
             await recordOwnership();
           }
           return null;
@@ -1116,7 +1122,7 @@ try {
           fixture.fake.strict();
           const server = await fixture.sidecar();
           client = new WsClient(server.url);
-          await client.connect();
+          await client.connect(fixture.oc.directory);
           baseline = await client.rpc<Record<string, Json>>("prefs.get", {});
           lease = {
             lease: crypto.randomUUID(),

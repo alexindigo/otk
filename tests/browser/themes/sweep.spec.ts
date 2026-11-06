@@ -488,7 +488,7 @@ test(
                   ) {
                     await expect(
                       page.locator(
-                        `[data-project-sessions~=tstv1-${id}] [data-state=${status}]`,
+                        `[data-project$="/projects/${id}"] [data-state=${status}]`,
                       ),
                     ).toBeVisible();
                   }
@@ -688,7 +688,7 @@ test(
             ]);
             await layout(state, page, false, false);
             expect(
-              await page.locator("[data-project-sessions~=tstv1-atmosphera]")
+              await page.locator('[data-project$="/projects/atmosphera"]')
                 .evaluate((row) => {
                   const sample = document.createElement("span");
                   sample.style.color = "var(--otk-fg-2)";
@@ -806,7 +806,7 @@ test(
             el.getBoundingClientRect().width
           )
         ).toBe(312);
-        const hover = page.locator("[data-project-sessions~=tstv1-atmosphera]");
+        const hover = page.locator('[data-project$="/projects/atmosphera"]');
         await hover.hover();
         await expect.poll(() =>
           hover.locator(".otk-project-menu").evaluate((el) =>
@@ -977,7 +977,7 @@ test(
               ".otk-status-light",
               "time",
             );
-            const row = page.locator("[data-project-sessions~=tstv1-otk]"),
+            const row = page.locator('[data-project$="/projects/otk"]'),
               menu = row.locator(".otk-project-menu");
             const geometry = () =>
               row.evaluate((row) => {

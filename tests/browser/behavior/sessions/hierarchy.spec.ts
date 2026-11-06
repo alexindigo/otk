@@ -82,7 +82,8 @@ test("sessions.task-hierarchy-filter-preview-draft-promotion-and-reload", {
       hasText: "Idle preview",
     }),
   ).toBeVisible();
-  expect(await state.product("tasks.list", {})).toHaveLength(2);
+  expect(await state.product("tasks.list", { directory: state.directory }))
+    .toHaveLength(2);
   await page.locator("[data-session=tstv1-nested]").click();
   await expect(page).toHaveURL(/#\/local\/tstv1-otk\/tstv1-nested$/);
   await expect(page.locator(`[data-tab="${task.id}"]`)).toHaveAttribute(

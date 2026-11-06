@@ -115,6 +115,12 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
     });
     await waitFor(async () => (await fetch(url + "/api/health")).ok, Boolean);
     const client = new WsClient(url);
+    client.lease({
+      directory: native.directory,
+      selected: session.id,
+      crumbs: [],
+      rows: [unknown.id],
+    });
     await client.connect();
     return {
       client,
@@ -230,6 +236,16 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
       lease.release();
       catalog.stop();
     }
+    // Historical task metadata belongs to the preserved beta.1 project.
+    first.client.lease({
+      directory: "/project",
+      selected: session.id,
+      crumbs: [],
+      rows: [],
+    });
+    await first.client.wait((frame) =>
+      frame.t === "view.rows" && frame.directory === "/project"
+    );
     await first.client.rpc("tasks.rename", {
       id: "task-main",
       name: "Compiled keyed outcome",
@@ -248,6 +264,12 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
         .length,
       baselineCount,
     );
+    first.client.lease({
+      directory: native.directory,
+      selected: session.id,
+      crumbs: [],
+      rows: [unknown.id],
+    });
     // A digest counts headers, not completed replies. Force the count to arrive
     // before any output so this contract cannot depend on provider timing.
     const reply = fake.queueStepped({
@@ -329,7 +351,7 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
   try {
     const tasks = await second.client.rpc<
       { name: string; sessions: string[] }[]
-    >("tasks.list", {});
+    >("tasks.list", { directory: "/project" });
     assertEquals(tasks[0].name, "Compiled keyed outcome");
     assertEquals(tasks[0].sessions, [session.id, "opcv1-ses_other"]);
     assertEquals(await Deno.readTextFile(authPath), authText);

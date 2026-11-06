@@ -1,5 +1,31 @@
 # OTK application core
 
+## View-scoped publication (protocol 18)
+
+Connections own a generation-fenced socket view (project, selection, crumbs and
+visible Sessions keys). IndexView publishes local revisions, incremental scope
+acquisition and explicit eviction, separately from authoritative deletion. Only
+selection retains turn summaries; other leased entries carry scalar digest
+summaries. Feature-owned connection projections scope inbox tasks/marks and
+approval metadata. All projects retain their server-owned row/lamp summaries.
+The current-project structural catalog supplies row discovery; hierarchy and
+task grouping remain with the shared client owner. Visible rows acquire entries
+through the same view, without preloading transcripts. Recall defaults to the
+leased project, never discovered sources.
+
+Index publication has one outstanding bounded chunk per socket. `index.applied`
+returns credit only after client reduction. Updates coalesce by key while credit
+is held. A replacement epoch replays unacknowledged keys from current authority;
+its `from` revision rebases local sequencing without a full resnapshot.
+
+RequestAttention contributes a feature-owned lease for pending manual
+permissions and questions on every connected server. Outside the ordinary view
+it publishes only routing identities, titles, project/parent links and pending
+counts, with no digest, usage or activity history. Existing permission/question
+reads deliver the pending request through their request-owned lifetime.
+Settlement evicts this metadata unless another view still owns it; automatic
+permissions do not acquire the user-attention lease.
+
 ## Beta.2 startup and upgrade
 
 The release advertises `0.1.0-beta.2` with protocol 17. Before backend startup,

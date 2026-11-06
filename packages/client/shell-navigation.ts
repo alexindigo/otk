@@ -324,17 +324,24 @@ export function createShellNavigation(o: {
       }
       const remembered = lastLocation(target)?.sessionID;
       const saved = remembered && resources.entry(target.sidecarId, remembered);
+      // A scoped index is not a project catalog. An incidental attention row
+      // cannot replace the remembered selection or the catalog's first root.
       const existing = saved && saved.directory === target.directory
         ? saved
-        : resources.entries().find((entry) =>
-          entry.sidecarId === target.sidecarId &&
-          entry.directory === target.directory && !entry.parentID
-        );
+        : undefined;
       if (existing) {
         navigate({ sidecarId: target.sidecarId, sessionID: existing.id });
         return;
       }
-      if (navigation.open(projectHash(target))) closeSettings();
+      if (navigation.open(projectHash(target))) {
+        closeSettings();
+        const at = revision;
+        void resources.projectSession(target, remembered).then((id) => {
+          if (id && revision === at) {
+            navigate({ sidecarId: target.sidecarId, sessionID: id });
+          }
+        }).catch(fail);
+      }
     },
     openChild: (id) => {
       navigate(actions.child(id));

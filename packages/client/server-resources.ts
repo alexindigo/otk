@@ -5,6 +5,7 @@ import type {
   Preferences,
   ProjectLocation,
   ServerFrame,
+  SessionStructure,
   ShellLayout,
 } from "@otk/protocol";
 import { type ApprovalModel, createApprovals } from "./approvals.ts";
@@ -37,7 +38,7 @@ import { createState, type StateFactory } from "./state.ts";
 import { type ClientTabs, createTabs, type TabInput } from "./tabs.ts";
 import { createTaskActions, type TaskActions } from "./task-actions.ts";
 import { requestAttention } from "./request-attention.ts";
-import type { SessionListRow } from "./session-tree.ts";
+import { createSessionTree, type SessionListRow } from "./session-tree.ts";
 import { createCatalogCodecs } from "@otk/protocol";
 import {
   type ClientDirectoryCatalogs,
@@ -55,7 +56,21 @@ export interface FrameObserver {
 }
 export interface ServerResources {
   ownsFailure?(cause: unknown): boolean;
-  scope(project?: ProjectSelection, sessions?: string[]): void;
+  scope(
+    project?: ProjectSelection,
+    sessions?: string[],
+    selected?: Selection,
+    crumbs?: string[],
+  ): void;
+  visibleRows(
+    project: ProjectSelection,
+    rows: readonly string[],
+    query?: string,
+  ): void;
+  projectSession(
+    project: ProjectSelection,
+    preferred?: string,
+  ): Promise<string | undefined>;
   sidecars: ClientSidecars;
   inbox(id: string): InboxModel;
   directoryCatalog(id: string, directory: string): DirectoryCatalogLease;
@@ -90,6 +105,7 @@ export interface ServerResources {
     sessionID: string,
   ): MergedMetadata | undefined;
   sessionRows(project: ProjectSelection, query?: string): SessionListRow[];
+  sessionRowsReady(project: ProjectSelection): boolean;
   projectProgress(
     project: ProjectSelection,
   ): { busy: boolean; announcement: string };
@@ -123,7 +139,9 @@ export interface ServerResources {
 
 /** Connection-local resources and projections; consumers observe frames after reduction. */
 export function createServerResources(o: {
-  sidecars(receive: (id: string, frame: ServerFrame) => void): ClientSidecars;
+  sidecars(
+    receive: (id: string, frame: ServerFrame) => boolean | void,
+  ): ClientSidecars;
   index: ClientIndex;
   factory?: StateFactory;
   error?: (error: unknown) => void;
@@ -212,6 +230,51 @@ export function createServerResources(o: {
   const observers = new Set<FrameObserver>();
   let stopped = false;
   let visible: { project: ProjectSelection; sessions: string[] } | undefined;
+  let selected: Selection | undefined, crumbs: string[] = [];
+  let rowDemand:
+    | { project: ProjectSelection; rows: string[]; query: string }
+    | undefined;
+  const rowClock = factory({ revision: 0 });
+  const rowCatalogs = new Map<
+    string,
+    {
+      directory: string;
+      epoch: number;
+      ready: boolean;
+      first?: string;
+      entries: SessionStructure[];
+      tree: ReturnType<typeof createSessionTree>;
+    }
+  >();
+  const projectWaiters = new Set<
+    { project: ProjectSelection; started: boolean; finish(id?: string): void }
+  >();
+  const sendView = () => {
+    for (const waiter of projectWaiters) {
+      const matching =
+        waiter.project.sidecarId === visible?.project.sidecarId &&
+        waiter.project.directory === visible?.project.directory;
+      if (matching) waiter.started = true;
+      else if (waiter.started) waiter.finish();
+    }
+    const id = visible?.project.sidecarId ?? selected?.sidecarId;
+    for (const sidecar of sidecars.state.list) {
+      const active = sidecar.id === id;
+      const rows = active && visible && rowDemand?.project.sidecarId === id &&
+          rowDemand.project.directory === visible.project.directory
+        ? rowDemand
+        : undefined;
+      sidecars.connection(sidecar.id).view({
+        directory: active ? visible?.project.directory : undefined,
+        selected: active
+          ? selected?.sessionID ?? visible?.sessions[0]
+          : undefined,
+        crumbs: active ? crumbs : [],
+        rows: rows?.rows ?? [],
+        query: rows?.query,
+      });
+    }
+  };
   const sendScope = (
     id: string,
     value: { directory?: string; sessions: string[] },
@@ -371,7 +434,12 @@ export function createServerResources(o: {
     live();
     let model = inboxes.get(id);
     if (!model) {
-      model = createInbox(sidecars.connection(id).rpc, factory, o.error);
+      model = createInbox(
+        sidecars.connection(id).rpc,
+        factory,
+        o.error,
+        () => sidecars.connection(id).viewEpoch,
+      );
       inboxes.set(id, model);
     }
     return model;
@@ -398,8 +466,8 @@ export function createServerResources(o: {
     }
     return model;
   };
-  const receive = (id: string, frame: ServerFrame): void => {
-    if (stopped) return;
+  const receive = (id: string, frame: ServerFrame): boolean => {
+    if (stopped) return false;
     approvals(id).receive(frame);
     let accepted = true;
     if (frame.t === "index.snapshot" || frame.t === "index.patch") {
@@ -424,6 +492,31 @@ export function createServerResources(o: {
     catalogs.get(id)?.receive(frame);
     frecencies.get(id)?.receive(frame);
     if (frame.t === "welcome") bindVisibleCatalog();
+    if (frame.t === "view.rows") {
+      rowCatalogs.set(id, {
+        directory: frame.directory,
+        epoch: frame.epoch,
+        ready: rowCatalogs.get(id)?.directory === frame.directory &&
+          rowCatalogs.get(id)!.ready,
+        first: frame.first,
+        entries: frame.catalog,
+        tree: rowCatalogs.get(id)?.directory === frame.directory
+          ? rowCatalogs.get(id)!.tree
+          : createSessionTree(),
+      });
+      rowClock.update((draft) => {
+        draft.revision++;
+      });
+    }
+    if (frame.t === "inbox.snapshot") {
+      const catalog = rowCatalogs.get(id);
+      if (catalog && catalog.epoch === frame.epoch && !catalog.ready) {
+        catalog.ready = true;
+        rowClock.update((draft) => {
+          draft.revision++;
+        });
+      }
+    }
     if (frame.t === "welcome" && visible?.project.sidecarId === id) {
       sendScope(id, {
         directory: visible.project.directory,
@@ -431,27 +524,34 @@ export function createServerResources(o: {
       });
     }
     for (const observer of observers) observer.frame?.(id, frame, accepted);
+    return accepted;
   };
   const sidecars = o.sidecars(receive);
   const stopLinks = sidecars.subscribe(() => {
     for (const id of projections.keys()) projection(id);
   });
-  return {
+  const api: ServerResources = {
     ownsFailure: (cause) =>
       sidecars.state.list.some((server) =>
         sidecars.connection(server.id).rpc.ownsFailure(cause)
       ),
     sidecars,
-    scope(project, sessions = []) {
+    scope(project, sessions = [], selection, nextCrumbs = []) {
       if (
         visible?.project.sidecarId === project?.sidecarId &&
         visible?.project.directory === project?.directory &&
-        JSON.stringify(visible?.sessions) === JSON.stringify(sessions)
+        JSON.stringify(visible?.sessions) === JSON.stringify(sessions) &&
+        selected?.sidecarId === selection?.sidecarId &&
+        selected?.sessionID === selection?.sessionID &&
+        JSON.stringify(crumbs) === JSON.stringify(nextCrumbs)
       ) return;
       if (visible && visible.project.sidecarId !== project?.sidecarId) {
         sendScope(visible.project.sidecarId, { sessions: [] });
       }
       visible = project && { project, sessions: [...new Set(sessions)] };
+      selected = selection;
+      crumbs = nextCrumbs;
+      sendView();
       bindVisibleCatalog();
       if (visible) {
         sendScope(visible.project.sidecarId, {
@@ -459,6 +559,59 @@ export function createServerResources(o: {
           sessions: visible.sessions,
         });
       }
+    },
+    visibleRows(project, rows, query = "") {
+      const next = {
+        project,
+        rows: [...rows].filter((id) => !id.startsWith("heading:")),
+        query,
+      };
+      if (JSON.stringify(next) === JSON.stringify(rowDemand)) return;
+      rowDemand = next;
+      sendView();
+    },
+    projectSession(project, preferred) {
+      for (const waiter of projectWaiters) waiter.finish();
+      const value = () => {
+        const catalog = rowCatalogs.get(project.sidecarId);
+        if (catalog?.directory !== project.directory) {
+          return;
+        }
+        const known = preferred &&
+          catalog.entries.some((entry) => entry.id === preferred);
+        return {
+          id: known ? preferred : catalog.first,
+        };
+      };
+      const current = value();
+      if (current) return Promise.resolve(current.id);
+      return new Promise((resolve) => {
+        const waiter = {
+          project,
+          started: visible?.project.sidecarId === project.sidecarId &&
+            visible.project.directory === project.directory,
+          finish(id?: string) {
+            observers.delete(observer);
+            projectWaiters.delete(waiter);
+            resolve(id);
+          },
+        };
+        const observer: FrameObserver = {
+          frame(id, frame) {
+            if (id !== project.sidecarId || frame.t !== "view.rows") return;
+            const next = value();
+            if (!next) return;
+            waiter.finish(next.id);
+          },
+          removed(id) {
+            if (id === project.sidecarId) {
+              waiter.finish();
+            }
+          },
+        };
+        projectWaiters.add(waiter);
+        observers.add(observer);
+      });
     },
     inbox,
     directoryCatalog: (id, directory) => {
@@ -507,8 +660,23 @@ export function createServerResources(o: {
       projectOwner(p.sidecarId).row(p.directory, now, ageing),
     projectMetadata: (p) => tabInput(p).entries as readonly MergedMetadata[],
     metadataEntry: (id, sessionID) => projectOwner(id).entry(sessionID),
-    sessionRows: (p, query) =>
-      projectOwner(p.sidecarId).rows(p.directory, query),
+    sessionRowsReady: (p) => {
+      void rowClock.state.revision;
+      const catalog = rowCatalogs.get(p.sidecarId);
+      return catalog?.directory === p.directory && catalog.ready;
+    },
+    sessionRows: (p, query) => {
+      void rowClock.state.revision;
+      const catalog = rowCatalogs.get(p.sidecarId);
+      return catalog?.directory === p.directory
+        ? catalog.tree.rows(
+          catalog.entries,
+          inbox(p.sidecarId).state.inbox.tasks,
+          p.directory,
+          query,
+        )
+        : projectOwner(p.sidecarId).rows(p.directory, query);
+    },
     projectProgress: (p) => o.index.progress(p.sidecarId, p.directory),
     duplicateProjectName: (name) => {
       for (const s of sidecars.state.list) projectOwner(s.id);
@@ -557,7 +725,9 @@ export function createServerResources(o: {
       ) model.preview(id);
     },
     historySources: () =>
-      sidecars.state.list.filter((s) => advertised(s.id, "history"))
+      sidecars.state.list.filter((s) =>
+        s.id === visible?.project.sidecarId && advertised(s.id, "history")
+      )
         .map((s) => ({ id: s.id, connection: sidecars.connection(s.id) })),
     observe(observer) {
       observers.add(observer);
@@ -567,6 +737,7 @@ export function createServerResources(o: {
     },
     add: (url, label) => sidecars.add(url, label),
     remove(id) {
+      rowCatalogs.delete(id);
       for (const release of projectReleases.get(id) ?? []) release();
       projectReleases.delete(id);
       for (const directory of projectOwners.get(id)?.directories() ?? []) {
@@ -618,6 +789,7 @@ export function createServerResources(o: {
     },
     stop() {
       if (stopped) return;
+      for (const waiter of projectWaiters) waiter.finish();
       stopped = true;
       stopLinks();
       for (const releases of projectReleases.values()) {
@@ -649,4 +821,5 @@ export function createServerResources(o: {
       sidecars.stop();
     },
   };
+  return api;
 }

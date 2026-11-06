@@ -22,6 +22,7 @@ test("U9 stock session auto-approve executes bash and helpers with every OTK con
   let server: SidecarTest | undefined, client: WsClient | undefined;
   const connect = async () => {
     const c = new WsClient(server!.url);
+    c.lease({ directory: oc.directory, crumbs: [], rows: [] });
     await c.connect();
     await c.wait((frame) =>
       frame.t === "harness" && frame.state === "connected"

@@ -32,11 +32,14 @@ export function checkClientFrameSize(serialized: string): void {
 export type HarnessState = "connecting" | "connected" | "reconnecting";
 export type ClientFrame =
   | RequestControl
-  | { t: "hello"; protocol: number }
+  | { t: "hello"; protocol: number; view?: import("./view.ts").ViewLease }
+  | ({ t: "view" } & import("./view.ts").ViewLease)
+  | { t: "index.applied"; epoch: number; rev: number }
   | { t: "pong" }
   | { t: "subscribe" | "unsubscribe"; sessionID: string }
   | { t: "resnapshot" };
-export type ServerFrame =
+export type ServerFrame = ServerMessage & { epoch?: number };
+type ServerMessage =
   | RequestEvent
   | {
     t: "welcome";
@@ -88,8 +91,21 @@ export type ServerFrame =
   }
   | { t: "approvals"; approvals: ApprovalSnapshot }
   | { t: "approval.activity"; sessions: string[] }
-  | { t: "index.snapshot"; rev: number; entries: IndexEntry[] }
-  | { t: "index.patch"; rev: number; ops: IndexOp[] }
+  | { t: "index.snapshot"; rev: number; entries: IndexEntry[]; epoch?: number }
+  | {
+    t: "index.patch";
+    rev: number;
+    from?: number;
+    ops: IndexOp[];
+    epoch?: number;
+  }
+  | {
+    t: "view.rows";
+    epoch: number;
+    directory: string;
+    first?: string;
+    catalog: import("./session-list.ts").SessionStructure[];
+  }
   | { t: "content"; sessionID: string; event: ContentOp; clock?: ContentClock }
   | { t: "bootstrap.complete" }
   | ({ t: "transcript.invalidated" } & TranscriptInvalidation)

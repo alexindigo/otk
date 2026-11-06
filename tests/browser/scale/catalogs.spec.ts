@@ -250,7 +250,7 @@ test(
       >();
       const snapshots = frames.filter((f) => f.t === "index.snapshot");
       return snapshots.length > baselineCount &&
-        snapshots.at(-1)?.entries?.length === 4615;
+        snapshots.at(-1)?.entries?.length === 0;
     }).toBe(true);
     const final = await state.observe<{ frames: { t: string }[] }>();
     expect(final.frames.filter((f) => f.t === "inbox.snapshot")).toHaveLength(

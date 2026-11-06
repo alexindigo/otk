@@ -72,6 +72,7 @@ export async function observeReply(
       "session.create",
       { directory },
     );
+    connection.view({ directory, selected: created.id, crumbs: [], rows: [] });
     session.open({ sidecarId: "core", sessionID: created.id });
     await wait(() => !session.state.loading);
     if (session.state.error) throw new Error(session.state.error);

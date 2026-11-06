@@ -10,6 +10,7 @@ import {
   type ProjectSummary,
   type ServerFrame,
   type TaskRecord,
+  type ViewLease,
 } from "@otk/protocol";
 import { HarnessError } from "@otk/harness";
 import type {
@@ -66,14 +67,178 @@ interface InboxAssembly {
   dirty: Map<string, { kind: keyof InboxMaps; id: string }>;
   overflow: boolean;
 }
+interface InboxPublication {
+  value: InboxOp;
+  directory?: string;
+  sessionID?: string;
+}
 /** Application-owned metadata only; the index remains the sole session owner. */
 export class InboxFeature implements FrameSource {
+  #taskProjects = new Map<string, readonly TaskRecord[]>();
+  #projectTasks(directory: string): readonly TaskRecord[] {
+    let value = this.#taskProjects.get(directory);
+    if (!value) {
+      value = [...this.#tasks.values()].filter((task) =>
+        task.directory === directory
+      );
+      this.#taskProjects.set(directory, value);
+    }
+    return value;
+  }
+  #views = new Map<string, () => InboxBaseline>();
+  #directory(view: ViewLease): string | undefined {
+    return view.directory ??
+      (view.selected
+        ? this.index.getMetadata(view.selected)?.directory
+        : undefined);
+  }
+  keys(view: ViewLease): string[] {
+    const directory = this.#directory(view);
+    if (!directory) return [];
+    const ids = new Set<string>();
+    for (const task of this.#projectTasks(directory)) {
+      for (const id of task.sessions) ids.add(id);
+    }
+    for (const entry of this.index.catalog(directory)) {
+      if (entry.deleted) continue;
+      const a = entry.attention;
+      if (
+        entry.status !== "idle" || a.error ||
+        a.permissions + a.questions + a.childPermissions + a.childQuestions >
+          0 ||
+        !entry.parentID && (this.#finishes.get(entry.id) ?? 0) >
+            (this.#seen.get(this.user)?.get(entry.id) ?? 0)
+      ) ids.add(entry.id);
+    }
+    return [...ids];
+  }
+  open(
+    view: () => ViewLease,
+    id: string,
+    entries: () => ReadonlySet<string>,
+  ): FrameSource {
+    const listeners = new Set<(frame: ServerFrame) => void>();
+    let revision = 0,
+      rowsEpoch = -1,
+      rowsJSON = "",
+      closed = false,
+      scheduled = false;
+    const emit = (frame: ServerFrame) => {
+      for (const listener of listeners) listener(frame);
+    };
+    const rows = () => {
+      const scope = view(), directory = this.#directory(scope);
+      if (!directory) return;
+      const values = this.index.catalog(directory).map((
+        { id, parentID, title },
+      ) => ({ id, parentID, title, directory }));
+      const serialized = JSON.stringify(values);
+      if (rowsEpoch === scope.epoch && rowsJSON === serialized) return;
+      rowsEpoch = scope.epoch;
+      rowsJSON = serialized;
+      const first = this.index.catalog(directory).find((entry) =>
+        !entry.parentID
+      )?.id;
+      emit({
+        t: "view.rows",
+        epoch: scope.epoch,
+        directory,
+        first,
+        catalog: values,
+      });
+    };
+    const scheduleRows = () => {
+      if (scheduled) return;
+      scheduled = true;
+      queueMicrotask(() => {
+        scheduled = false;
+        if (!closed) rows();
+      });
+    };
+    const baseline = (): InboxBaseline => {
+      this.#flush();
+      rows();
+      return {
+        generation: this.#generation,
+        revision,
+        epoch: view().epoch,
+        summaryRevision: this.#summaryRevision,
+        inbox: this.get(view(), entries()),
+      };
+    };
+    this.#views.set(id, baseline);
+    const stop = this.listen((frame) => {
+      if (frame.t !== "inbox.patch") emit(frame);
+    });
+    const publish = (changes: readonly InboxPublication[]) => {
+      const scope = view(),
+        directory = this.#directory(scope),
+        leased = entries();
+      const ops = changes.filter((change) =>
+        change.directory !== undefined
+          ? change.directory === directory
+          : change.sessionID !== undefined
+          ? leased.has(change.sessionID)
+          : true
+      ).map((change) => change.value);
+      if (!ops.length) return;
+      const from = revision;
+      revision += ops.length;
+      emit({
+        t: "inbox.patch",
+        generation: this.#generation,
+        from,
+        revision,
+        ops,
+      });
+    };
+    this.#publications.add(publish);
+    const stopIndex = this.index.observe((entry, previous, delta) => {
+      if (
+        delta ||
+        entry.directory !== this.#directory(view()) &&
+          previous?.directory !== this.#directory(view())
+      ) return;
+      if (
+        !previous || entry.title !== previous.title ||
+        entry.parentID !== previous.parentID ||
+        entry.directory !== previous.directory
+      ) scheduleRows();
+    });
+    const stopReset = this.index.listen((frame) => {
+      if (frame.t === "index.snapshot") scheduleRows();
+    });
+    const stopRemoval = this.index.observeRemoval(scheduleRows);
+    return {
+      snapshot: () => {
+        const value = baseline();
+        return { t: "inbox.snapshot", ...value };
+      },
+      listen: (listener) => {
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+      close: () => {
+        closed = true;
+        stop();
+        this.#publications.delete(publish);
+        stopIndex();
+        stopReset();
+        stopRemoval();
+        listeners.clear();
+        this.#views.delete(id);
+      },
+    };
+  }
   #listeners = new Set<(frame: ServerFrame) => void>();
+  #publications = new Set<(changes: readonly InboxPublication[]) => void>();
   #stops: (() => void)[] = [];
   #scheduled = false;
   #generation = crypto.randomUUID();
   #revision = 0;
-  #pending = new Map<string, InboxOp>();
+  #pending = new Map<string, InboxPublication>();
   #summaryPending = new Map<string, ProjectSummary | null>();
   #summaryRevision = 0;
   #projects = new Map<string, ProjectRecord>();
@@ -193,7 +358,7 @@ export class InboxFeature implements FrameSource {
           op: "finish",
           sessionID: session,
           time,
-        });
+        }, { sessionID: session });
       }),
       stores.seen.listen(({ user, session, time }) => {
         this.#identity();
@@ -207,19 +372,26 @@ export class InboxFeature implements FrameSource {
             op: "seen",
             sessionID: session,
             time,
-          });
+          }, { sessionID: session });
         }
       }),
       stores.tasks.listen((change) => {
         for (const task of change.upsert) {
+          this.#taskProjects.delete(task.directory);
           this.#tasks.set(task.id, task);
           this.#capture("tasks", task.id);
-          this.#queue(`task:${task.id}`, { op: "task.upsert", task });
+          this.#queue(`task:${task.id}`, { op: "task.upsert", task }, {
+            directory: task.directory,
+          });
         }
         for (const id of change.remove) {
+          const task = this.#tasks.get(id);
+          if (task) this.#taskProjects.delete(task.directory);
           this.#tasks.delete(id);
           this.#capture("tasks", id);
-          this.#queue(`task:${id}`, { op: "task.remove", id });
+          this.#queue(`task:${id}`, { op: "task.remove", id }, {
+            directory: task?.directory ?? "",
+          });
         }
       }),
       stores.templates.listen(({ templates }) => {
@@ -260,17 +432,37 @@ export class InboxFeature implements FrameSource {
     this.#summaryRevision = 0;
     this.summaries?.refresh();
   }
-  get(): InboxSnapshot {
+  get(view?: ViewLease, leased?: ReadonlySet<string>): InboxSnapshot {
     this.#identity();
+    const directory = view && this.#directory(view);
+    if (view && !leased) leased = new Set();
     return {
       projects: [...this.#projects.values()].sort((a, b) =>
         a.order - b.order || a.directory.localeCompare(b.directory)
       ).map((p) => ({ ...p })),
-      tasks: [...this.#tasks.values()].sort((a, b) =>
-        a.order - b.order || a.id.localeCompare(b.id)
-      ).map((t) => ({ ...t, sessions: [...t.sessions] })),
-      seen: Object.fromEntries(this.#seen.get(this.user) ?? []),
-      finishes: Object.fromEntries(this.#finishes),
+      tasks: [
+        ...(view
+          ? directory ? this.#projectTasks(directory) : []
+          : this.#tasks.values()),
+      ].sort((a, b) => a.order - b.order || a.id.localeCompare(b.id)).map((
+        t,
+      ) => ({ ...t, sessions: [...t.sessions] })),
+      seen: Object.fromEntries(
+        leased
+          ? [...leased].flatMap((id) => {
+            const time = this.#seen.get(this.user)?.get(id);
+            return time === undefined ? [] : [[id, time]];
+          })
+          : this.#seen.get(this.user) ?? [],
+      ),
+      finishes: Object.fromEntries(
+        leased
+          ? [...leased].flatMap((id) => {
+            const time = this.#finishes.get(id);
+            return time === undefined ? [] : [[id, time]];
+          })
+          : this.#finishes,
+      ),
       pathTemplates: [...this.#templates],
       discovered: [...this.#discovered],
       summaries: Object.fromEntries(this.summaries.values),
@@ -392,9 +584,14 @@ export class InboxFeature implements FrameSource {
     this.#closed = true;
     for (const stop of this.#stops.splice(0)) stop();
     this.#listeners.clear();
+    this.#publications.clear();
   }
-  #queue(key: string, op: InboxOp): void {
-    this.#pending.set(key, op);
+  #queue(
+    key: string,
+    op: InboxOp,
+    scope: Omit<InboxPublication, "value"> = {},
+  ): void {
+    this.#pending.set(key, { value: op, ...scope });
     this.#schedule();
   }
   #schedule(): void {
@@ -427,7 +624,8 @@ export class InboxFeature implements FrameSource {
       for (const listener of this.#listeners) listener(structuredClone(frame));
     }
     if (!this.#pending.size || this.#closed) return;
-    const ops = [...this.#pending.values()];
+    const changes = [...this.#pending.values()],
+      ops = changes.map((change) => change.value);
     this.#pending.clear();
     const from = this.#revision;
     this.#revision += ops.length;
@@ -439,6 +637,7 @@ export class InboxFeature implements FrameSource {
       ops,
     };
     for (const listener of this.#listeners) listener(structuredClone(frame));
+    for (const listener of this.#publications) listener(changes);
   }
   #observe(entry: IndexEntry, previous?: IndexEntry, tx?: StoreWrite): void {
     const s = this.stores;
@@ -546,7 +745,9 @@ export class InboxFeature implements FrameSource {
     rpc.register("inbox.get", {
       execution: readExecution(() => ({ resource: "inbox" })),
       params: () => undefined,
-      handler: (ctx) => this.baseline(ctx.execution?.signal),
+      handler: (ctx) =>
+        this.#views.get(ctx.request?.id ?? "")?.() ??
+          this.baseline(ctx.execution?.signal),
     });
     rpc.register("projects.list", {
       execution: readExecution(() => ({ resource: "projects" })),
@@ -674,7 +875,11 @@ export class InboxFeature implements FrameSource {
         p.directory === undefined
           ? undefined
           : projectPath(text(p, "directory")!),
-      handler: (_ctx, directory) => s.tasks.list(directory),
+      handler: (ctx, directory) => {
+        const selected = ctx.request?.view?.();
+        const project = directory ?? (selected && this.#directory(selected));
+        return ctx.request && !project ? [] : s.tasks.list(project);
+      },
     });
     rpc.register("tasks.create", {
       execution: preparedLocalExecution(
@@ -840,7 +1045,14 @@ export class InboxFeature implements FrameSource {
     rpc.register("sessions.finishes", {
       execution: readExecution(() => ({ resource: "session-finishes" })),
       params: () => undefined,
-      handler: () => s.finishes.list(),
+      handler: (ctx) => {
+        const ids = ctx.request?.entries?.();
+        return ids
+          ? Object.fromEntries(
+            [...this.#finishes].filter(([id]) => ids.has(id)),
+          )
+          : s.finishes.list();
+      },
     });
   }
 }

@@ -16,7 +16,7 @@ import { WsClient } from "../support/ws-client.ts";
 import { startApplication } from "../../application.ts";
 import { originFetch } from "../support/request-wire.ts";
 
-async function consumer(url: string) {
+async function consumer(url: string, directory: string) {
   let latest: InboxSnapshot | undefined, socket: WebSocket | undefined;
   const connection = new SidecarConnection(url, {
     status() {},
@@ -32,6 +32,7 @@ async function consumer(url: string) {
       }]) as WebSocket,
   });
   const model = createInbox(connection.rpc);
+  connection.view({ directory, selected: "tstv1-core", crumbs: [], rows: [] });
   await connection.connect();
   await waitFor(() => latest, Boolean);
   return {
@@ -63,7 +64,7 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
   const root = await fixture();
   let app = await coreBackendFixture(root);
   projectCreation(app);
-  let a = await consumer(app.url), b = await consumer(app.url);
+  let a = await consumer(app.url, root), b = await consumer(app.url, root);
   try {
     const rpc = a.connection.rpc;
     assertEquals(
@@ -174,8 +175,8 @@ test("inbox RPCs broadcast persisted projects, task ordering, seen and same-batc
     await b.stop();
     await app.app.stop();
     app = await coreBackendFixture(root);
-    a = await consumer(app.url);
-    b = await consumer(app.url);
+    a = await consumer(app.url, root);
+    b = await consumer(app.url, root);
     assertEquals(a.inbox(), b.inbox());
     assertEquals(a.inbox().finishes["tstv1-core"], finish);
     assert(a.inbox().seen["tstv1-core"] >= finish);
@@ -204,7 +205,8 @@ test("server path-template scanning reads only matching directories, supports su
   await Deno.mkdir(join(projects, "two"));
   await Deno.mkdir(join(root, "unrelated"));
   await Deno.writeTextFile(join(projects, "file"), "not a directory");
-  const app = await coreBackendFixture(root), client = await consumer(app.url);
+  const app = await coreBackendFixture(root),
+    client = await consumer(app.url, root);
   try {
     const rpc = client.connection.rpc;
     await rpc.call("projects.templates", {
@@ -291,6 +293,12 @@ test("first-run setup and restart retain the same user's inbox metadata", async 
     );
     assert(cookie, "successful login must deliver its cookie with the result");
     const first = new WsClient(url, cookie);
+    first.lease({
+      directory: root,
+      selected: "tstv1-core",
+      crumbs: [],
+      rows: [],
+    });
     clients.push(first);
     await first.connect();
     projectCreation(seeded);
@@ -308,6 +316,12 @@ test("first-run setup and restart retain the same user's inbox metadata", async 
       cookie,
     );
     clients.push(second);
+    second.lease({
+      directory: root,
+      selected: "tstv1-core",
+      crumbs: [],
+      rows: [],
+    });
     await second.connect();
     const inbox =
       (await second.rpc<{ inbox: InboxSnapshot }>("inbox.get", {})).inbox;

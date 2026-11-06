@@ -51,6 +51,7 @@ import {
 } from "./core/mod.ts";
 import { InboxFeature } from "./core/features/inbox.ts";
 import { PermissionFeature } from "./core/features/approvals.ts";
+import { RequestAttention } from "./core/features/request-attention.ts";
 import { registerDigests } from "./core/features/digests.ts";
 import {
   createCatalogCodecs,
@@ -152,6 +153,7 @@ export function startApplication(
       )
       : undefined;
     if (approvals) sources.push(approvals);
+    sources.push(new RequestAttention(index, (id) => !!approvals?.owner(id)));
     if (approvals) {
       inbox.approvalAttention((id) => {
         const entry = index.getMetadata(id);

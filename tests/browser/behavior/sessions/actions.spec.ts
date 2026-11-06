@@ -329,9 +329,9 @@ test(
       expect((await state.native<{ title: string }>(`/session/${s.id}`)).title)
         .toBe(`Renamed from ${origin}`);
       if (origin === "tab") {
-        const task = (await state.product("tasks.list", {})).find((task) =>
-          task.sessions.includes(s.id)
-        )!;
+        const task =
+          (await state.product("tasks.list", { directory: state.directory }))
+            .find((task) => task.sessions.includes(s.id))!;
         expect(task.name).toBe("Renamed from tab");
         await state.release(finishing.gate);
         await expect(page.locator(`[data-session="${s.id}"]`)).toHaveAttribute(

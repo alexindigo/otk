@@ -5,7 +5,7 @@ import { DigestNativeDb } from "@otk/harness-opencode-v1";
 import type { TaskRecord } from "@otk/protocol";
 import { DigestBridge } from "../../core/digest/bridge.ts";
 import { FakeLlm } from "../support/fake-llm.ts";
-import { OpencodeTest } from "../support/opencode.ts";
+import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { SidecarTest } from "../support/sidecar.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { cfg } from "../support/config.ts";
@@ -68,6 +68,12 @@ test("stock native batch identity consumer, task grouping, tombstone seen and un
   }
   const sidecar = await SidecarTest.start(oc),
     client = new WsClient(sidecar.url);
+  client.lease({
+    directory: oc.directory,
+    selected: parent.id,
+    crumbs: [],
+    rows: [child.id],
+  });
   try {
     await client.connect();
     const task = await client.rpc<TaskRecord>("tasks.create", {
@@ -76,13 +82,9 @@ test("stock native batch identity consumer, task grouping, tombstone seen and un
       sessions: [parent.id, child.id],
     });
     assertEquals(task.sessions, [parent.id, child.id]);
+    await waitFor(() => client.entry(child.id), Boolean);
     await oc.request(`/session/${child.id}`, { method: "DELETE" });
-    await client.wait((frame) =>
-      frame.t === "index.patch" &&
-      frame.ops.some((op) =>
-        op.op === "digest" && op.id === child.id && !!op.deleted
-      )
-    );
+    await waitFor(() => client.entry(child.id)?.deleted, Boolean);
     await client.rpc("sessions.seen", { sessionID: child.id });
     assertEquals(
       (await client.rpc<TaskRecord[]>("tasks.list", {}))[0].sessions,

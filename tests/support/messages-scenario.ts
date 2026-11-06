@@ -538,7 +538,7 @@ export async function messagesScenario(profile: Profile) {
     Promise.resolve(f.page([...prefix, ...messages], options.before));
   if (ledger) publishUsage(f.app.index, ledger.snapshot());
   const client = new WsClient(f.url);
-  await client.connect();
+  await client.connect(root);
   resources().defer("message contract client", () => client.close());
   await client.rpc("prefs.set", { key: "theme", value: "otk-dark" });
   await client.rpc("prefs.set", { key: "animationsOff", value: true });

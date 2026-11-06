@@ -16,6 +16,38 @@ const captured = fromFileUrl(
   ),
 );
 
+test("project recall excludes discovered-directory headers before materializing parts", async () => {
+  const root = await tempDir("history-scope-");
+  const file = join(root, "native.db");
+  await Deno.copyFile(captured, file);
+  const db = new DatabaseSync(file), statements: string[] = [];
+  const reader = new HistoryReader(() => ({
+    prepare(sql: string) {
+      statements.push(sql);
+      return db.prepare(sql);
+    },
+  }), cfg().attachments);
+  try {
+    db.prepare("UPDATE session SET directory=?").run("/discovered");
+    assert((await reader.list()).length > 0);
+    statements.length = 0;
+    assertEquals(await reader.list(undefined, "/leased"), []);
+    assertEquals(
+      statements.length,
+      1,
+      "Unleased prompt parts must never be read",
+    );
+    assert(
+      statements[0].includes(
+        "session_id IN (SELECT id FROM session WHERE directory=?)",
+      ),
+    );
+    assert((await reader.list(undefined, "/discovered")).length > 0);
+  } finally {
+    db.close();
+  }
+});
+
 Deno.test("bounded native MIME signatures preserve unknown binaries and validate complete UTF-8", () => {
   const text = (value: string) => new TextEncoder().encode(value);
   assertEquals(attachmentMime(Uint8Array.of(255, 216, 255, 0)), "image/jpeg");

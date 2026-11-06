@@ -33,7 +33,11 @@ export interface DigestIndexDelta extends DigestDelta {
   id: string;
   revision: number;
 }
-export type IndexOp = { op: "upsert"; entry: IndexEntry } | {
-  op: "remove";
-  id: string;
-} | ({ op: "digest" } & DigestIndexDelta);
+export type IndexOp =
+  | { op: "upsert"; entry: IndexEntry }
+  | {
+    op: "remove";
+    id: string;
+  }
+  | { op: "evict"; id: string }
+  | ({ op: "digest" } & DigestIndexDelta);

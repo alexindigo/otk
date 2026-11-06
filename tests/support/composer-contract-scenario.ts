@@ -153,7 +153,7 @@ export async function composerContractScenario(profile: Profile) {
     () => pending.resolve({ providers: [], defaultState: "unknown" }),
   );
   const client = new WsClient(f.url);
-  await client.connect();
+  await client.connect(root);
   resources().defer("composer contract client", () => client.close());
   await client.rpc("prefs.set", { key: "theme", value: "otk-dark" });
   const baseline = await client.rpc<Record<string, Json>>("prefs.get", {});

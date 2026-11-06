@@ -38,5 +38,6 @@ if (import.meta.main) {
     stop();
     Deno.exit();
   });
+  connection.view({ selected: sessionID, crumbs: [], rows: [] });
   await connection.connect();
 }

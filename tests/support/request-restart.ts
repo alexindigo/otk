@@ -88,6 +88,7 @@ export async function qualifyRequestRestart(compiled: boolean): Promise<void> {
     process.child.stderr!.on("data", (chunk) => log += chunk.toString());
     await waitFor(async () => (await fetch(url + "/api/health")).ok, Boolean);
     const client = new WsClient(url);
+    client.lease({ directory: f.oc.directory, crumbs: [], rows: [] });
     await client.connect();
     return {
       client,

@@ -2,10 +2,12 @@
 import {
   type IndexMetadata,
   sessionAncestors,
+  type SessionListRow,
   type SessionLookup,
+  type SessionStructure,
   type TaskRecord,
 } from "@otk/protocol";
-import type { Selection } from "./session.ts";
+export type { SessionListRow } from "@otk/protocol";
 
 export function sessionFamily(id: string, lookup: SessionLookup): string[] {
   return [id, ...sessionAncestors(id, lookup)];
@@ -23,39 +25,39 @@ export function familyTask(
     if (task) return task;
   }
 }
-export function familySelection(
-  selection: Selection,
+export function familySelection<T extends { sessionID: string }>(
+  selection: T,
   lookup: SessionLookup,
-): Selection {
+): T {
   const ancestors = sessionAncestors(selection.sessionID, lookup);
   return ancestors.length
     ? { ...selection, rootID: ancestors.at(-1) }
     : selection;
 }
 
-export interface SessionTreeRow {
-  session: IndexMetadata;
+export interface SessionTreeRow<T extends SessionStructure = IndexMetadata> {
+  session: T;
   depth: number;
   parentID?: string;
 }
-export interface SessionTreeGroup {
+export interface SessionTreeGroup<T extends SessionStructure = IndexMetadata> {
   id: string;
   title: string;
-  rows: SessionTreeRow[];
+  rows: SessionTreeRow<T>[];
 }
 /** Project-local hierarchy. Explicit membership wins; otherwise helpers inherit
  * their nearest grouped ancestor. Missing parents and cycles cannot hide rows.
  * Search keeps the ancestry of matching titles for orientation. */
-export function sessionTree(
-  entries: readonly IndexMetadata[],
+export function sessionTree<T extends SessionStructure>(
+  entries: readonly T[],
   tasks: readonly TaskRecord[],
   directory: string,
   query = "",
-): SessionTreeGroup[] {
+): SessionTreeGroup<T>[] {
   const sessions = entries.filter((e) => e.directory === directory);
   const byID = new Map(sessions.map((e) => [e.id, e]));
   const ordered = tasks.filter((t) => t.directory === directory)
-    .toSorted((a, b) => a.order - b.order);
+    .sort((a, b) => a.order - b.order);
   const explicit = new Map<string, string>();
   for (const task of ordered) {
     for (const id of task.sessions) {
@@ -64,7 +66,7 @@ export function sessionTree(
   }
   const parents = new Map(sessions.map((e) => [e.id, e.parentID]));
   const ownership = new Map(explicit);
-  const groupFor = (entry: IndexMetadata): string => {
+  const groupFor = (entry: T): string => {
     const path: string[] = [], seen = new Set<string>();
     let id: string | undefined = entry.id;
     while (id && byID.has(id) && !ownership.has(id) && !seen.has(id)) {
@@ -76,7 +78,7 @@ export function sessionTree(
     for (const key of path) ownership.set(key, group);
     return group;
   };
-  const buckets = new Map<string, IndexMetadata[]>();
+  const buckets = new Map<string, T[]>();
   for (const session of sessions) {
     const id = groupFor(session);
     if (!buckets.has(id)) buckets.set(id, []);
@@ -90,7 +92,7 @@ export function sessionTree(
   }].map((group) => {
     const members = buckets.get(group.id) ?? [];
     const ids = new Set(members.map((e) => e.id));
-    const children = new Map<string, IndexMetadata[]>();
+    const children = new Map<string, T[]>();
     for (const entry of members) {
       const parent = parents.get(entry.id);
       if (!parent || !ids.has(parent)) continue;
@@ -101,15 +103,15 @@ export function sessionTree(
     const visible = new Set<string>();
     for (const entry of members) {
       if (needle && !entry.title.toLocaleLowerCase().includes(needle)) continue;
-      let current: IndexMetadata | undefined = entry;
+      let current: T | undefined = entry;
       while (current && ids.has(current.id) && !visible.has(current.id)) {
         visible.add(current.id);
         current = byID.get(parents.get(current.id) ?? "");
       }
     }
-    const rows: SessionTreeRow[] = [], visited = new Set<string>();
-    const walk = (entry: IndexMetadata) => {
-      const stack: SessionTreeRow[] = [{ session: entry, depth: 0 }];
+    const rows: SessionTreeRow<T>[] = [], visited = new Set<string>();
+    const walk = (entry: T) => {
+      const stack: SessionTreeRow<T>[] = [{ session: entry, depth: 0 }];
       while (stack.length) {
         const row = stack.pop()!, id = row.session.id;
         if (visited.has(id) || !visible.has(id)) continue;
@@ -139,30 +141,16 @@ export function sessionTree(
   }).filter((group) => !needle || group.rows.length > 0);
 }
 
-export type SessionListRow =
-  | { key: string; kind: "heading"; group: string; title: string }
-  | {
-    key: string;
-    kind: "session";
-    group: string;
-    title: string;
-    id: string;
-    depth: number;
-    parentID?: string;
-    position: number;
-    size: number;
-  };
-
 /** Structural cache only: live status, attention and summaries stay in ClientIndex. */
 export function createSessionTree(): {
   rows(
-    entries: readonly IndexMetadata[],
+    entries: readonly SessionStructure[],
     tasks: readonly TaskRecord[],
     directory: string,
     query?: string,
   ): SessionListRow[];
 } {
-  let previousEntries: readonly IndexMetadata[] | undefined;
+  let previousEntries: readonly SessionStructure[] | undefined;
   let previousTasks: readonly TaskRecord[] | undefined;
   let previousDirectory = "", previousQuery = "", result: SessionListRow[] = [];
   return {

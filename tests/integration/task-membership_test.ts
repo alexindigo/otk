@@ -11,6 +11,9 @@ for (const change of ["add", "remove"]) {
   test(`captured task actions preserve concurrent ${change} from another connection`, async () => {
     const root = await fixture(), f = await inboxBrowserFixture(root);
     const a = new WsClient(f.url), b = new WsClient(f.url);
+    for (const client of [a, b]) {
+      client.lease({ directory: f.entries[0].directory, crumbs: [], rows: [] });
+    }
     try {
       await a.connect();
       await b.connect();
@@ -67,6 +70,7 @@ for (const change of ["add", "remove"]) {
 test("task member operations are idempotent, ordered, exclusive, validated and durable", async () => {
   const root = await fixture();
   let f = await inboxBrowserFixture(root), c = new WsClient(f.url);
+  c.lease({ directory: f.entries[0].directory, crumbs: [], rows: [] });
   try {
     await c.connect();
     const base = f.entries[0];
@@ -137,6 +141,7 @@ test("task member operations are idempotent, ordered, exclusive, validated and d
     await f.app.stop();
     f = await inboxBrowserFixture(root);
     c = new WsClient(f.url);
+    c.lease({ directory: f.entries[0].directory, crumbs: [], rows: [] });
     await c.connect();
     assertEquals(await c.rpc("tasks.list", {}), saved);
   } finally {
@@ -148,6 +153,9 @@ test("task member operations are idempotent, ordered, exclusive, validated and d
 test("task membership validation cannot publish into a task closed while awaiting the backend", async () => {
   const root = await fixture(), f = await inboxBrowserFixture(root);
   const a = new WsClient(f.url), b = new WsClient(f.url);
+  for (const client of [a, b]) {
+    client.lease({ directory: f.entries[0].directory, crumbs: [], rows: [] });
+  }
   const entered = Promise.withResolvers<void>(),
     release = Promise.withResolvers<void>();
   const get = f.app.backend.core.identities;

@@ -56,6 +56,10 @@ export class SessionIndex {
   snapshotEntries(): readonly IndexEntry[] {
     return Object.freeze([...this.#entries.values()]);
   }
+  /** Same immutable publication contract, for one demanded identity. */
+  snapshotEntry(id: string): IndexEntry | undefined {
+    return this.#entries.get(id);
+  }
   ancestors(id: string): string[] {
     return sessionAncestors(id, (id) => this.#entries.get(id));
   }

@@ -19,6 +19,12 @@ test("shipped source rebuilds only derived digests and serves cached deleted met
   const run = async () => {
     const server = await SidecarTest.start(oc, { state: { path: state } });
     const client = new WsClient(server.url);
+    client.lease({
+      directory: oc.directory,
+      selected: session.id,
+      crumbs: [],
+      rows: [],
+    });
     await client.connect();
     const index = createIndex();
     let cursor = 0;

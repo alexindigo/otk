@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
-import { openSession } from "../../fixtures/wire.ts";
+import { openSession, wire } from "../../fixtures/wire.ts";
 import type { ProjectSummary } from "@otk/protocol";
 
 test.use({ profile: "isolated" });
@@ -11,6 +11,7 @@ test(
     tag: ["@sessions", "@attention", "@transport"],
   },
   async ({ isolatedState: state, page }, info) => {
+    const capture = await wire(page);
     const selected = await state.native<{ id: string }>("/session", "POST", {
       title: "Selected project",
     });
@@ -112,5 +113,63 @@ test(
     });
     await state.product("sessions.seen", { sessionID: background.id });
     await check("idle", 0);
+    const entries = capture.received.flatMap((frame) => {
+      if (frame.t === "index.snapshot") {
+        return frame.entries as import("@otk/protocol").IndexEntry[];
+      }
+      if (frame.t === "index.patch") {
+        return (frame.ops as {
+          op: string;
+          entry?: import("@otk/protocol").IndexEntry;
+        }[])
+          .flatMap((op) => op.entry ?? []);
+      }
+      return [];
+    });
+    const pending = entries.filter((entry) => entry.id === background.id);
+    expect(pending.length).toBeGreaterThan(0);
+    for (const entry of pending) {
+      expect(
+        entry.attention.permissions + entry.attention.questions +
+          entry.attention.childPermissions + entry.attention.childQuestions,
+      ).toBeGreaterThan(0);
+      expect(entry.status).toBe("idle");
+      expect(entry.timeUpdated).toBe(0);
+      expect(entry.digest).toEqual({
+        state: "digesting",
+        revision: 0,
+        turns: {},
+      });
+    }
+    expect(capture.received.some((frame) =>
+      frame.t === "index.patch" &&
+      (frame.ops as { op: string; id?: string }[]).some((op) =>
+        op.op === "evict" && op.id === background.id
+      )
+    )).toBe(true);
+    const task = await state.product("tasks.create", {
+      directory: background.directory,
+      name: "Acquired background task",
+      sessions: [background.id],
+    });
+    await page.getByRole("button", { name: "Expand projects", exact: true })
+      .click();
+    await row.locator(".otk-project-open").click();
+    await page.getByRole("button", { name: "Open right panel", exact: true })
+      .click();
+    await expect(page.locator(`[data-tab=${JSON.stringify(task.id)}]`))
+      .toBeVisible();
+    await expect(
+      page.locator(`[data-session=${JSON.stringify(background.id)}]`),
+    ).toBeVisible();
+    await page.locator(`[data-session=${JSON.stringify(background.id)}]`)
+      .click();
+    await expect(page).toHaveURL(new RegExp(`${background.id}$`));
+    await expect(page.getByRole("region", { name: "Transcript", exact: true }))
+      .toHaveAttribute("aria-busy", "false");
+    await page.screenshot({
+      path: info.outputPath("view-acquired-project.png"),
+      fullPage: true,
+    });
   },
 );

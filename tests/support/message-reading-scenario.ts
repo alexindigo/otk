@@ -176,7 +176,7 @@ export async function messageReadingScenario() {
   registerUsage(f.app.connections.rpc, f.app.backend);
   publishUsage(f.app.index, usage);
   const client = new WsClient(f.url);
-  await client.connect();
+  await client.connect(f.entries[0].directory);
   await client.rpc("prefs.set", { key: "theme", value: "otk-dark" });
   const baseline = await client.rpc<Record<string, Json>>("prefs.get", {});
   let lease: TestLease | undefined;
