@@ -9,6 +9,11 @@ export { default as PaneState } from "./components/PaneState.tsx";
 export { default as FeedbackStatus } from "./components/FeedbackStatus.tsx";
 export { default as ActionSlot } from "./components/ActionSlot.tsx";
 export { default as ContentSlot } from "./components/ContentSlot.tsx";
+export {
+  default as ScrollRegion,
+  type ScrollAxis,
+  scrollRegion,
+} from "./components/ScrollRegion.tsx";
 export { feedbackState } from "./components/feedback-state.ts";
 export { bindFeedback } from "./state/feedback.ts";
 export {

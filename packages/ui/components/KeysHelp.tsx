@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { failureText } from "@otk/client";
 import "./KeysHelp.css" with { type: "text" };
+import { scrollRegion } from "./ScrollRegion.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
 import { comboFromEvent, type Keymap } from "../keyboard/keys.ts";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
@@ -115,7 +116,9 @@ export default function KeysHelp(props: {
         keeps the browser menu. ContextMenu or Shift+F10 opens the focused
         item's menu. Arrow keys, Home, End and typing navigate app menu actions.
       </p>
-      <div class={["otk-keys-list", { "is-pending": pending() }]}>
+      <div
+        class={[scrollRegion(), "otk-keys-list", { "is-pending": pending() }]}
+      >
         <For each={rows()} keyed={(row) => row.id}>
           {(row) => (
             <div class="otk-keys-row" data-binding={row().id}>

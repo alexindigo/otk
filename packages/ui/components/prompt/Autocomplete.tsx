@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Autocomplete.css" with { type: "text" };
+import { scrollRegion } from "../ScrollRegion.tsx";
 import { selection } from "../selection.ts";
 import SelectionContent from "../SelectionContent.tsx";
 import { For } from "solid-js";
@@ -13,7 +14,7 @@ export default function Autocomplete(
 ) {
   return (
     <div
-      class="otk-autocomplete"
+      class={[scrollRegion(), "otk-autocomplete"]}
       role="listbox"
       aria-label="Prompt completions"
     >

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { EmptyState } from "./View.tsx";
 import "./SessionView.css" with { type: "text" };
+import { scrollRegion } from "./ScrollRegion.tsx";
 import { isCancellation } from "@otk/protocol";
 import {
   createEffect,
@@ -282,7 +283,7 @@ export default function SessionView(props: {
               role="region"
               aria-label="Transcript"
               aria-busy={transcriptBusy() ? "true" : "false"}
-              class={["otk-messages", {
+              class={[scrollRegion(), "otk-messages", {
                 "otk-scrollbar-hidden": !props.prefs.scrollbar,
                 "is-empty": !count(),
               }]}

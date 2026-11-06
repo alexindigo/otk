@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./TurnUsage.css" with { type: "text" };
+import { scrollRegion } from "./ScrollRegion.tsx";
 import { For, Show } from "solid-js";
 import { exactCount, type TurnUsage as Usage, usageTokens } from "@otk/client";
 import { elapsed } from "./work-log.ts";
@@ -48,7 +49,7 @@ export default function UsageDetail(
         </Show>
       </dl>
       <div
-        class="otk-usage-scroll"
+        class={[scrollRegion(), "otk-usage-scroll"]}
         tabindex={0}
         role="region"
         aria-label="Model calls"

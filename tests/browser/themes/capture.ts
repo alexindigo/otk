@@ -6,6 +6,7 @@ import {
   type TestInfo,
 } from "@playwright/test";
 import { writeFile } from "node:fs/promises";
+import { shellContained, sidebarWheelContained } from "./containment.ts";
 
 /** Return emulation ownership to Playwright. Its Chromium delegate memoizes the
  * metrics tuple, so an unchanged size cannot reinstall an override cleared by
@@ -36,6 +37,13 @@ export async function capture(
     )
   );
   const before = await cdp.send("Page.getLayoutMetrics");
+  await shellContained(page);
+  if (
+    name.startsWith("chrome-left-") &&
+    await page.locator(".otk-project-inbox .otk-rail-body").count()
+  ) {
+    await sidebarWheelContained(page);
+  }
   const scale = await page.evaluate(() => devicePixelRatio);
   const { data } = await cdp.send("Page.captureScreenshot", {
     format: "png",

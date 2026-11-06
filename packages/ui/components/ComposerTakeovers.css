@@ -13,7 +13,6 @@
   max-width: var(--lane-width);
   margin-inline: auto;
   min-height: 0;
-  overflow: auto;
   background: var(--otk-bg-elevated);
   border: 1px solid var(--otk-border);
   border-radius: var(--radius-composer);

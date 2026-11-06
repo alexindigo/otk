@@ -6,7 +6,6 @@
   min-height: 0;
 }
 .otk-settings-content {
-  overflow: auto;
   padding: 24px;
 }
 .otk-sidecar-card {

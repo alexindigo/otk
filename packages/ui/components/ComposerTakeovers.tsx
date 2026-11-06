@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ComposerTakeovers.css" with { type: "text" };
+import { scrollRegion } from "./ScrollRegion.tsx";
 import { type Element, For } from "solid-js";
 import { useUiRegistries } from "../registries/context.tsx";
 import { useSessionPorts } from "../registries/session.tsx";
@@ -29,7 +30,7 @@ export default function ComposerTakeovers(
           })}
       </For>
       <div
-        class="otk-composer"
+        class={[scrollRegion(), "otk-composer"]}
         data-takeover={active() ? "true" : "false"}
         hidden={active()}
       >

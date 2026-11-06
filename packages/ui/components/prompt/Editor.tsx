@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Editor.css" with { type: "text" };
+import { scrollRegion } from "../ScrollRegion.tsx";
 import { ownedAction } from "../../keyboard/context.tsx";
 export default function Editor(
   props: {
@@ -16,6 +17,7 @@ export default function Editor(
     <div class="otk-editor">
       <p>Save to keep changes</p>
       <textarea
+        class={scrollRegion()}
         autofocus
         name="editor"
         aria-label="Editor text"

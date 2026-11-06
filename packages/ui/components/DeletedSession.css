@@ -3,7 +3,6 @@
   width: min(var(--lane-width), 100% - 48px);
   margin-inline: auto;
   padding-block: 24px;
-  overflow: auto;
   container-type: inline-size;
 }
 .otk-deleted-session h1 {

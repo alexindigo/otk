@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { ViewHeader } from "./View.tsx";
 import "./Settings.css" with { type: "text" };
+import { scrollRegion } from "./ScrollRegion.tsx";
 import { For, Show } from "solid-js";
 import { LOCAL_SIDECAR, type SidecarState } from "@otk/client";
 import Form, { FormInput } from "./Form.tsx";
@@ -41,7 +42,7 @@ export default function Settings(props: {
           </button>
         }
       />
-      <div class="otk-settings-content">
+      <div class={[scrollRegion(), "otk-settings-content"]}>
         {props.appearance}
         {props.notifications}
         <p class="otk-muted">

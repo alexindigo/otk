@@ -1,6 +1,10 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { isolatedTest as test } from "../fixtures/isolated.ts";
 import { expect } from "../fixtures/evidence.ts";
+import {
+  shellContained,
+  sidebarWheelContained,
+} from "../themes/containment.ts";
 
 test.use({ profile: "contract-scale-overflow" });
 test(
@@ -10,8 +14,8 @@ test(
     const { ids, tasks } = await state.observe<
       { ids: string[]; tasks: string[] }
     >();
-    expect(ids).toHaveLength(251);
-    expect(tasks).toHaveLength(251);
+    expect(ids).toHaveLength(300);
+    expect(tasks).toHaveLength(300);
     await page.goto(`${state.url}/#/local/${ids[0]}`);
     await expect(page.locator("textarea[name=prompt]")).toBeVisible();
     const visible = async (n: number) => {
@@ -98,8 +102,57 @@ test(
     }
     await page.keyboard.press("Escape");
     await info.attach("population-control-measurements", {
-      body: JSON.stringify({ tasks: 251, samples }),
+      body: JSON.stringify({ tasks: 300, samples }),
       contentType: "application/json",
     });
   },
 );
+
+test("scale.shell-contained-with-300-required-tabs", {
+  tag: ["@scale", "@sessions"],
+}, async ({ isolatedState: state, page }, info) => {
+  const { ids, tasks } = await state.observe<
+    { ids: string[]; tasks: string[] }
+  >();
+  expect(tasks).toHaveLength(300);
+  await state.controller.call("scenario", {
+    lease: state.lease.lease,
+    action: "thaw",
+  });
+  await state.product("layout.patch", {
+    leftCollapsed: false,
+    rightCollapsed: true,
+  });
+  await page.goto(`${state.url}/#/local/${ids[0]}`);
+  await expect(page.locator("[data-tab] .otk-status-light[data-state=working]"))
+    .toHaveCount(300);
+  const measurements = [];
+  for (const width of [400, 600, 800, 1280, 1920]) {
+    await page.setViewportSize({ width, height: 800 });
+    await page.evaluate(() =>
+      document.fonts.ready.then(() =>
+        new Promise<void>((resolve) =>
+          requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+        )
+      )
+    );
+    await shellContained(page);
+    await sidebarWheelContained(page);
+    measurements.push(
+      await page.evaluate(() => ({
+        width: innerWidth,
+        height: innerHeight,
+        document: [
+          document.scrollingElement!.scrollWidth,
+          document.scrollingElement!.scrollHeight,
+        ],
+        chrome: document.querySelector(".otk-project-tabs")!
+          .getBoundingClientRect().toJSON(),
+      })),
+    );
+  }
+  await info.attach("shell-containment-300-tabs", {
+    body: JSON.stringify(measurements),
+    contentType: "application/json",
+  });
+});

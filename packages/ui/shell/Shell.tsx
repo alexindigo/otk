@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import PaneState from "../components/PaneState.tsx";
 import "./Shell.css" with { type: "text" };
+import { scrollRegion } from "../components/ScrollRegion.tsx";
 import {
   createEffect,
   createMemo,
@@ -515,7 +516,7 @@ export default function Shell(
                 <Show
                   when={local().status !== "setup required"}
                   fallback={
-                    <div class="otk-auth-view">
+                    <div class={[scrollRegion(), "otk-auth-view"]}>
                       <Setup
                         onSetup={(input) =>
                           sidecars.connection(LOCAL_SIDECAR).setup(input)}
@@ -526,7 +527,7 @@ export default function Shell(
                   <Show
                     when={local().status !== "login required"}
                     fallback={
-                      <div class="otk-auth-view">
+                      <div class={[scrollRegion(), "otk-auth-view"]}>
                         <Login
                           label={local().label}
                           authType={local().authType}

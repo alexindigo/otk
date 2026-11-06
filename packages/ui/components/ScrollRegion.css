@@ -1,0 +1,15 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+:where(.otk-scroll) {
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+:where(.otk-scroll-x) {
+  overflow-y: hidden;
+  overscroll-behavior-y: auto;
+}
+:where(.otk-scroll-y) {
+  overflow-x: hidden;
+  overscroll-behavior-x: auto;
+}

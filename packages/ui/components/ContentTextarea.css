@@ -2,5 +2,4 @@
 .otk-content-textarea {
   field-sizing: content;
   resize: none;
-  overflow-y: auto;
 }

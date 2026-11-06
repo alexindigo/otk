@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Toasts.css" with { type: "text" };
+import { scrollRegion } from "./ScrollRegion.tsx";
 import { createSignal, type Element, For, onCleanup, Show } from "solid-js";
 import type { Note } from "@otk/client";
 import type { ToastsModel } from "../features/notify/toast.ts";
@@ -10,11 +11,14 @@ export default function Toasts(
   const [items, setItems] = createSignal(props.model.state.items);
   onCleanup(props.model.subscribe((state) => setItems(state.items)));
   return (
-    <section class="otk-toasts" aria-label="Notifications" aria-live="polite">
+    <section
+      class={[scrollRegion(), "otk-toasts"]}
+      aria-label="Notifications"
+      aria-live="polite"
+    >
       <For
         each={items()}
-        keyed={(item) =>
-          item.note.id}
+        keyed={(item) => item.note.id}
       >
         {(item) => (
           <Toast id={item().note.id} kind={item().note.kind}>

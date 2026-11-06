@@ -23,7 +23,6 @@
   display: grid;
   min-height: 0;
   flex: 1 1 auto;
-  overflow: auto;
 }
 .otk-tabs-panel {
   grid-area: 1 / 1;

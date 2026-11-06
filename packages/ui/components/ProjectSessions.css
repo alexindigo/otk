@@ -50,7 +50,6 @@
 .otk-project-session-tree {
   flex: 1;
   min-height: 0;
-  overflow: auto;
 }
 .otk-session-group-heading {
   height: var(--row-project);

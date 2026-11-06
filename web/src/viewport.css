@@ -1,0 +1,8 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+html,
+body,
+#app {
+  width: 100%;
+  height: 100%;
+  overflow: clip;
+}

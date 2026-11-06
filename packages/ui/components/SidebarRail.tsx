@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./SidebarRail.css" with { type: "text" };
 import type { Element } from "solid-js";
+import ScrollRegion from "./ScrollRegion.tsx";
 
 /** Shared column/rail geometry. Consumers supply content and actions only. */
 export default function SidebarRail(props: {
@@ -28,9 +29,9 @@ export default function SidebarRail(props: {
     >
       <header class="otk-rail-header">{props.header}</header>
       {props.leading}
-      <div class={`otk-rail-body ${props.bodyClass ?? ""}`}>
+      <ScrollRegion class={`otk-rail-body ${props.bodyClass ?? ""}`}>
         {props.children}
-      </div>
+      </ScrollRegion>
       {props.footer}
       {props.resizer}
     </aside>

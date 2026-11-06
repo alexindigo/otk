@@ -4,7 +4,6 @@
   flex-direction: column;
   gap: 4px;
   max-height: 280px;
-  overflow: auto;
   padding: 16px;
 }
 .otk-template-paths > strong {

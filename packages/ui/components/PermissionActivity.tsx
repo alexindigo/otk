@@ -6,6 +6,7 @@ import type {
 } from "@otk/protocol";
 import PermissionSummary from "./PermissionSummary.tsx";
 import "./PermissionActivity.css" with { type: "text" };
+import { scrollRegion } from "./ScrollRegion.tsx";
 import FeedbackStatus from "./FeedbackStatus.tsx";
 
 const action = (entry: Activity) =>
@@ -21,7 +22,10 @@ export default function PermissionActivity(props: {
   onRetry(): Promise<void>;
 }) {
   return (
-    <section class="otk-permission-activity" aria-label="Permission activity">
+    <section
+      class={[scrollRegion(), "otk-permission-activity"]}
+      aria-label="Permission activity"
+    >
       <FeedbackStatus
         feedback={props.value.error
           ? {
@@ -29,8 +33,7 @@ export default function PermissionActivity(props: {
             text: props.value.error,
             action: {
               label: "Retry activity",
-              run: () =>
-                void props.onRetry(),
+              run: () => void props.onRetry(),
             },
           }
           : props.value.loading
@@ -46,8 +49,7 @@ export default function PermissionActivity(props: {
       <ol class="otk-activity-list">
         <For
           each={props.value.entries}
-          keyed={(entry) =>
-            entry.id}
+          keyed={(entry) => entry.id}
         >
           {(entry) => (
             <li class="otk-activity-entry" data-activity={entry().id}>

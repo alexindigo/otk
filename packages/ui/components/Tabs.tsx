@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./Tabs.css" with { type: "text" };
+import { scrollRegion } from "./ScrollRegion.tsx";
 import { type Element, For } from "solid-js";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
@@ -36,7 +37,7 @@ export default function Tabs(
           )}
         </For>
       </div>
-      <div class="otk-tabs-panels">
+      <div class={[scrollRegion(), "otk-tabs-panels"]}>
         <For each={props.tabs} keyed={false}>
           {(tab, i) => (
             <div

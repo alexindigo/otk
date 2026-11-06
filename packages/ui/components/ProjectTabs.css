@@ -1,6 +1,10 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
 .otk-project-tabs {
   flex: none;
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
+  overflow: clip;
 }
 .otk-task-strip,
 .otk-task-list,

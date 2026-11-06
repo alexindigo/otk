@@ -19,6 +19,7 @@ import { ownedAction } from "../keyboard/context.tsx";
 import FieldFeedback from "./FieldFeedback.tsx";
 import ActionSlot from "./ActionSlot.tsx";
 import Select from "./Select.tsx";
+import { scrollRegion } from "./ScrollRegion.tsx";
 const FormContext = createContext<
   { pending(): boolean; feedback(): Feedback | undefined } | null
 >(null);
@@ -149,6 +150,7 @@ export function FormTextarea(props: ComponentProps<"textarea">): Element {
       <textarea
         {...native.attributes}
         ref={[props.ref, native.ref]}
+        class={[scrollRegion(), props.class]}
         readonly={field.form?.pending() || props.readonly}
         aria-describedby={field.description}
         aria-invalid={field.invalid}

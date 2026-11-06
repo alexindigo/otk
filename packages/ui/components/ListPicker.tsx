@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ListPicker.css" with { type: "text" };
+import { scrollRegion } from "./ScrollRegion.tsx";
 import {
   createEffect,
   createSignal,
@@ -197,7 +198,7 @@ export default function ListPicker<T = string>(props: {
           {props.status}
           <div
             id={id}
-            class="otk-picker-groups"
+            class={[scrollRegion(), "otk-picker-groups"]}
             role="listbox"
             aria-label={props.label}
           >

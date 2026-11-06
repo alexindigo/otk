@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import "../../../web/src/viewport.css" with { type: "text" };
 import { render } from "@solidjs/web";
 import { Shell, UiProvider, useShellPorts } from "@otk/ui";
 import { applicationTheme, applicationUi } from "../../../web/src/features.ts";

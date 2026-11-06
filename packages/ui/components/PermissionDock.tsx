@@ -3,6 +3,7 @@ import FeedbackStatus from "./FeedbackStatus.tsx";
 import { bindFeedback } from "../state/feedback.ts";
 import { failureText } from "@otk/client";
 import "./PermissionDock.css" with { type: "text" };
+import { scrollRegion } from "./ScrollRegion.tsx";
 import Takeover from "./surface/Takeover.tsx";
 import type { DockRegistry } from "../registries/renderers.ts";
 export function registerPermissionDock(docks: DockRegistry): void {
@@ -362,6 +363,7 @@ function RequestDock(
           >
             <label>
               Optional rejection message<textarea
+                class={scrollRegion()}
                 name="rejection"
                 value={message()}
                 onInput={(event) => {

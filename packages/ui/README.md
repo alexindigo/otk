@@ -7,6 +7,21 @@ imports and knows no native backend.
 
 ## Composition and API
 
+`ScrollRegion` is the shared native scrolling boundary. Its `otk-scroll` class
+owns `overflow: auto`, shrinkable minima and contained overscroll. Pass `axis`
+(`both`, `x` or `y`) to restrict a lane. Containment follows the owned axes:
+horizontal code, diff and table lanes delegate vertical wheels to their bounded
+enclosing viewport. Native fields, semantic elements and borrowed viewport roots
+use the exported `scrollRegion(axis)` class binding without another wrapper.
+Layout, content and scroll-position owners stay with their components. Borrowed
+VirtualLists do not create another scrollport. Component CSS never redeclares
+scrolling or overscroll policy; the architecture gate enforces this with no
+exceptions, including code and table content. Full-shell application
+compositions import `web/src/viewport.css` to own their hosting document's
+viewport boundary. The shell keeps its existing 600px minimum below narrow
+viewports and clips within that document. Chrome is bounded by its owning
+region; standalone component galleries retain their hosting page's flow.
+
 `ControlValue` owns the flexible label and square trailing accessory slot. Its
 size follows the control's height/border role; icons have equal inner-edge gaps.
 `Select` retains one native value/focus target under a noninteractive decorative

@@ -49,7 +49,7 @@ export async function scaleScenario(profile: Profile) {
       // it once before the application subscribes, as other scale fixtures do.
       const owner = new Tasks(store), base = entries[0];
       store.write((tx) => {
-        for (let n = 0; n < 251; n++) {
+        for (let n = 0; n < 300; n++) {
           const id = `tstv1-task-${n}`;
           ids.push(id);
           entries.push({ ...base, id, title: `Session ${n}` });
@@ -159,6 +159,8 @@ export async function scaleScenario(profile: Profile) {
               ids[242],
               { status: "idle" },
             );
+          } else if (frame.params.action === "thaw" && inbox) {
+            for (const id of ids) inbox.update(id, { status: "busy" });
           } else if (frame.params.action === "freeze" && inbox) {
             for (
               let n = 200;

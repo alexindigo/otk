@@ -30,7 +30,6 @@
     line-height: 1.6;
   }
   .otk-sidebar-scroll {
-    overflow-y: auto;
     flex: 1;
     min-height: 0;
   }

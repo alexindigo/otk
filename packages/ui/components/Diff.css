@@ -15,7 +15,6 @@
 }
 .otk-diff-content {
   font: 400 var(--text-ui)/var(--line-ui) var(--font-mono);
-  overflow: auto;
 }
 .otk-hunk-header {
   color: var(--secondary);

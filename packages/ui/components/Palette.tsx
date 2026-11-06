@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { failureText } from "@otk/client";
 import "./Palette.css" with { type: "text" };
+import { scrollRegion } from "./ScrollRegion.tsx";
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
 import { createSignal, For, onSettled, Show } from "solid-js";
@@ -56,7 +57,7 @@ export default function Palette(
           }
         }}
       />
-      <ul class="otk-palette-list">
+      <ul class={[scrollRegion(), "otk-palette-list"]}>
         <For each={rows()} keyed={(row) => row.cmd.id}>
           {(row) => (
             <li>

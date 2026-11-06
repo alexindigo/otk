@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./ContentTextarea.css" with { type: "text" };
+import { scrollRegion } from "./ScrollRegion.tsx";
 import type { Element } from "solid-js";
 import type { ComponentProps } from "@solidjs/web";
 import { nativeAttributes } from "./native-attributes.ts";
@@ -14,7 +15,7 @@ export default function ContentTextarea(
     <textarea
       {...native.attributes}
       ref={[props.ref, native.ref]}
-      class={["otk-content-textarea", props.class]}
+      class={[scrollRegion(), "otk-content-textarea", props.class]}
     />
   );
 }
