@@ -81,8 +81,12 @@ test(
       capture.sent.filter(({ frame }) =>
         frame.method === "session.messages" && frame.params?.sessionID === id
       );
-    const settled = (id: string) => {
-      const keys = new Set(pages(id).map(({ frame }) => frame.ref!.key));
+    const settled = (id: string, since = 0) => {
+      // Released reads have no successful result. Correlate the new lifetime's
+      // responses by request identity rather than comparing unlike totals.
+      const keys = new Set(
+        pages(id).slice(since).map(({ frame }) => frame.ref!.key),
+      );
       return capture.received.filter((frame) =>
         frame.t === "request.result" && keys.has(frame.ref?.key ?? "") &&
         (frame.outcome as { ok: boolean; result?: { items?: unknown[] } })
@@ -169,8 +173,8 @@ test(
       parts: [{ type: "text", text: "Wake the cold project" }],
     });
     await tick(() =>
-      expect.poll(() => settled(a.id).length).toBeGreaterThanOrEqual(
-        before + 2,
+      expect.poll(() => settled(a.id, before).length).toBeGreaterThanOrEqual(
+        2,
       )
     );
     const initialReads = () =>
@@ -211,9 +215,10 @@ test(
     const beforeFinish = pages(a.id).length;
     await state.release(held.gate);
     await tick(() =>
-      expect.poll(() => settled(a.id).length).toBeGreaterThanOrEqual(
-        beforeFinish + 2,
-      )
+      expect.poll(() => settled(a.id, beforeFinish).length)
+        .toBeGreaterThanOrEqual(
+          2,
+        )
     );
     const finishedInitial = initialReads();
     await page.clock.fastForward(policy.preloadms + 1);

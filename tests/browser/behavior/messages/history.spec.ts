@@ -153,8 +153,14 @@ isolatedTest.describe("configured message details", () => {
       .toBeAttached();
     await prompt(page, "Queued prompt");
     await expect(page.locator(".otk-queued")).toBeVisible();
-    await page.locator(".otk-message-agent").click();
-    await expect(page.locator(".otk-message-agent")).toHaveCSS(
+    const agent = page.locator(".otk-message-agent");
+    // Streaming can move the footer away from a stationary pointer. Keyboard
+    // focus retains the same reveal state independently of that layout change.
+    await agent.focus();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(agent).toBeFocused();
+    await expect(agent).toHaveCSS(
       "color",
       "rgb(107, 172, 255)",
     );
