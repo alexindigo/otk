@@ -11,11 +11,12 @@ export function register(rpc: RpcRegistry, harness: Harness): void {
   rpc.register("history.list", {
     execution: readExecution(() => ({ resource: "prompt-history" })),
     params: () => undefined,
-    handler: (ctx) => {
+    handler: async (ctx) => {
       const view = ctx.request?.view?.();
       const directory = view?.directory ??
         (view?.selected
-          ? ctx.sessionMetadata?.(view.selected)?.directory
+          ? ctx.sessionMetadata?.(view.selected)?.directory ??
+            await ctx.sessionDirectory(view.selected)
           : undefined);
       // An unopened/discovered project is never an implicit history source.
       if (ctx.request && !directory) return [];

@@ -52,6 +52,8 @@ const backend = (permissions: PermissionsCapability): Harness => ({
         })
         : Promise.reject(new Error("Unknown session")),
     listChildren: () => Promise.resolve([]),
+    listSessions: () =>
+      Promise.resolve({ items: [], older: null, generation: "fixture" }),
     listMessages: (id) => Promise.resolve(fixturePage(id)),
     createSession: () =>
       Promise.reject(new Error("Not part of the approval fixture")),

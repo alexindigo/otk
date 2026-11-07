@@ -137,11 +137,15 @@ export async function sessionsScenario(profile: Profile) {
   }
   await Deno.mkdir(join(root, "empty-project"));
   if (profile === "contract-sessions-window") {
+    // Stable, explicit recency preserves the measured row order under paging.
+    base.timeUpdated = 1000;
+    f.update(base.id, {});
     for (let i = 0; i < 300; i++) {
       f.add({
         ...base,
         id: `tstv1-w-${i}`,
         title: `Window session ${String(i).padStart(3, "0")}`,
+        timeUpdated: 301 - i,
       });
     }
     f.add({
@@ -233,6 +237,8 @@ export async function sessionsScenario(profile: Profile) {
   }
   if (profile === "contract-sessions-memory") {
     f.add({ ...base, id: "tstv1-remembered", title: "Last session" });
+    // The fallback is the newest root, independently of a remembered location.
+    f.update(base.id, {});
   }
   if (profile === "contract-sessions-hierarchy") {
     f.add({
@@ -261,7 +267,12 @@ export async function sessionsScenario(profile: Profile) {
   }
   if (profile === "contract-sessions-axiom") {
     for (let i = 0; i < 100; i++) {
-      f.add({ ...base, id: `tstv1-axiom-${i}`, title: `Quiet ${i}` });
+      f.add({
+        ...base,
+        id: `tstv1-axiom-${i}`,
+        title: `Quiet ${i}`,
+        timeUpdated: 101 - i,
+      });
     }
   }
   if (profile === "contract-sessions-phantom") {

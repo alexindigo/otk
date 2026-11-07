@@ -85,7 +85,7 @@ export default function SessionView(props: {
   displayMenu?: Element;
   prefs: Preferences;
   permissions: PermissionRequest[];
-  siblings: ContentSession[];
+  siblings: import("@otk/protocol").SessionStructure[];
   onOpenChild(id: string): void;
   child: boolean;
   revert: RevertInfo | null;
@@ -277,6 +277,12 @@ export default function SessionView(props: {
               <SubagentBar
                 info={props.info!}
                 siblings={props.siblings}
+                onMove={props.transcript
+                  ? async (delta) => {
+                    const id = await props.transcript!.sibling(delta);
+                    if (id) props.onOpenChild(id);
+                  }
+                  : undefined}
                 onOpen={props.onOpenChild}
               />
             </Show>

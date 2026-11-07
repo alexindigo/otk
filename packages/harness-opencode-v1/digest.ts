@@ -32,6 +32,7 @@ import type { HelperToolRow } from "./digest-db.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
 import { reportedNumber } from "./usage-values.ts";
 import { NativeReadiness } from "./readiness.ts";
+import { SessionLists } from "./session-lists.ts";
 
 export interface DigestSnapshot {
   helper?: HelperSummary;
@@ -66,6 +67,14 @@ export interface OpencodeV1DigestReadiness {
   retryable?(error: unknown): boolean;
   admission?(signal: AbortSignal): Promise<() => void>;
   work?(elapsedMs: number): void;
+  listed?(
+    entries: readonly SessionMetadata[],
+    signal: AbortSignal,
+  ): Promise<void>;
+  prefetchList?(
+    input: import("@otk/protocol").SessionListInput,
+    read: (signal: AbortSignal) => Promise<void>,
+  ): void;
 }
 const categories = [
   "cost",
@@ -188,6 +197,7 @@ export class OpencodeV1DigestSink implements DigestSink {
       { entries: SessionMetadata[]; authoritative: boolean; hints?: string[] }
     >;
   };
+  #lists: SessionLists;
   readonly wait: <T>(readiness: Promise<T>, join?: boolean) => Promise<T>;
   readonly retryable: (error: unknown) => boolean;
   constructor(
@@ -207,7 +217,49 @@ export class OpencodeV1DigestSink implements DigestSink {
       readiness.ioWait ?? this.wait,
       readiness.admission,
     );
+    this.#lists = new SessionLists(
+      this.#client,
+      (signal) => this.#metadataSource(signal),
+      this.wait,
+    );
     this.readers = {
+      "sessions.list": async (input, signal) => {
+        const health = await this.#client.json<{ healthy: boolean }>(
+          "/global/health",
+          { signal },
+        );
+        if (!health.healthy) {
+          throw new NativeRequestFailure(
+            "unavailable",
+            new Error("Native provider is unavailable"),
+            "native.unavailable",
+          );
+        }
+        const result = await this.#lists.read(input, signal);
+        for (const metadata of result.items) {
+          signal.throwIfAborted();
+          const previous = this.storage.read(metadata.id);
+          if (previous?.deleted) continue;
+          if (!previous) {
+            const delta = emptyDelta();
+            this.storage.transaction(() => this.storage.write(metadata, delta));
+            await this.storage.publish({
+              sessionID: metadata.id,
+              revision: 0,
+              delta,
+              metadata,
+            });
+          }
+        }
+        await readiness.listed?.(result.items, signal);
+        if (result.older) {
+          const next = { ...input, before: result.older };
+          readiness.prefetchList?.(next, async (signal) => {
+            await this.#lists.read(next, signal);
+          });
+        }
+        return result;
+      },
       ...catalogReaders(this.#client),
       "message.clock": async (input, signal) => {
         const connection = this.#connection;
@@ -263,6 +315,7 @@ export class OpencodeV1DigestSink implements DigestSink {
   connection(value: number): void {
     if (value < this.#connection) return;
     if (!this.#connected || value !== this.#connection) {
+      this.#lists.reset();
       this.#nativeVerified = false;
       this.#observed.clear();
       this.#observation = 0;
@@ -810,6 +863,7 @@ export class OpencodeV1DigestSink implements DigestSink {
     };
   }
   invalidate(id: string, revision: number): void {
+    this.#lists.invalidate();
     const native = ids.decode(id);
     this.storage.sql.prepare(
       "INSERT INTO opcv1_scan VALUES(?,?,NULL,0,?,NULL,1) ON CONFLICT(session_id) DO UPDATE SET observed_revision=max(observed_revision,excluded.observed_revision),dirty=1",

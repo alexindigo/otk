@@ -2,7 +2,17 @@
 import { type Harness, HarnessError } from "@otk/harness";
 import type { RpcRegistry } from "../ws/registry.ts";
 import { sessionID, text } from "../ws/params.ts";
-import { MAX_MESSAGE_CURSOR_LENGTH } from "@otk/protocol";
+import {
+  isSessionID,
+  type LoadCoverage,
+  MAX_MESSAGE_CURSOR_LENGTH,
+  MAX_SESSION_LIST_SIZE,
+  SESSION_LIST_SIZE,
+  type SessionListInput,
+  sessionListKey,
+  type SessionListPage,
+} from "@otk/protocol";
+import { projectPath } from "./project-scan.ts";
 import {
   nativeEffect,
   nativeExecution,
@@ -17,7 +27,135 @@ export function register(
   rpc: RpcRegistry,
   _harness: Harness,
   created?: (directory: string, tx?: StoreWrite) => void,
+  publishrows = SESSION_LIST_SIZE,
 ): void {
+  const lists = new Map<string, SessionListPage>();
+  const parseList = (p: Record<string, unknown>): SessionListInput => {
+    if (
+      Object.keys(p).some((key) =>
+        !["directory", "parentID", "query", "before", "limit"].includes(key)
+      )
+    ) {
+      throw new HarnessError("params", "Unknown session list parameter");
+    }
+    const limit = p.limit ?? SESSION_LIST_SIZE;
+    if (
+      !Number.isSafeInteger(limit) || Number(limit) < 1 ||
+      Number(limit) > MAX_SESSION_LIST_SIZE
+    ) {
+      throw new HarnessError("params", "Invalid session list size");
+    }
+    const before = text(p, "before", true);
+    if (
+      before !== undefined &&
+      (!before.length || before.length > MAX_MESSAGE_CURSOR_LENGTH)
+    ) {
+      throw new HarnessError("params", "Invalid session list cursor");
+    }
+    return {
+      directory: projectPath(text(p, "directory")!),
+      parentID: p.parentID === null ? null : sessionID(p, "parentID", true),
+      query: text(p, "query", true),
+      before,
+      limit: Number(limit),
+    };
+  };
+  rpc.register("sessions.identities", {
+    execution: readExecution(() => ({ resource: "session-identities" })),
+    params(p) {
+      if (
+        !Array.isArray(p.ids) || p.ids.length > MAX_SESSION_LIST_SIZE ||
+        !p.ids.every(isSessionID)
+      ) {
+        throw new HarnessError(
+          "params",
+          "Expected bounded qualified session identities",
+        );
+      }
+      return [...new Set(p.ids)] as string[];
+    },
+    handler: (ctx, ids) =>
+      ctx.harness.core.identities(ids, ctx.execution?.signal),
+  });
+  const serveList = async (
+    ctx: RpcContext,
+    input: SessionListInput,
+  ): Promise<SessionListPage> => {
+    const signal = ctx.execution?.signal ?? ctx.request?.signal ??
+      new AbortController().signal;
+    const key = sessionListKey(input), cached = lists.get(key);
+    const epoch = ctx.request?.view?.().epoch ?? 0;
+    const identity = ctx.execution?.key;
+    const load: LoadCoverage = {
+      id: identity?.key ?? crypto.randomUUID(),
+      scope: typeof input.parentID === "string"
+        ? {
+          kind: "parent-children",
+          directory: input.directory,
+          parentID: input.parentID,
+        }
+        : {
+          kind: "project-sessions",
+          directory: input.directory,
+          query: input.query,
+          ...(input.parentID === null ? { parentID: null } : {}),
+        },
+      boundary: { kind: "page", before: input.before, limit: input.limit! },
+      generation: cached?.load.generation ?? "pending",
+      revision: 0,
+      state: "loading",
+    };
+    signal.throwIfAborted();
+    let revision = 0;
+    const items = cached?.items ?? [];
+    if (identity) {
+      for (
+        let offset = 0;
+        offset < items.length || offset === 0;
+        offset += publishrows
+      ) {
+        signal.throwIfAborted();
+        ctx.request?.publish?.({
+          t: "load.chunk",
+          request: identity,
+          epoch,
+          load: { ...load, revision: revision++ },
+          data: {
+            kind: "session-list",
+            items: items.slice(offset, offset + publishrows),
+            older: cached?.older ?? null,
+            offset,
+          },
+        });
+      }
+    }
+    const value = await ctx.harness.core.listSessions(input, signal);
+    signal.throwIfAborted();
+    const result: SessionListPage = {
+      items: value.items.map(({ id, directory, parentID, title }) => ({
+        id,
+        directory,
+        parentID,
+        title,
+      })),
+      older: value.older,
+      load: {
+        ...load,
+        generation: value.generation,
+        revision: revision + 1,
+        state: "complete",
+      },
+    };
+    lists.set(key, result);
+    return result;
+  };
+  rpc.register("sessions.list", {
+    execution: readExecution((p: SessionListInput) => ({
+      directory: p.directory,
+    })),
+    params: parseList,
+    handler: serveList,
+  });
   const finish = (ctx: RpcContext, value: ContentSession): ContentSession =>
     ctx.execution
       ? ctx.execution.local((tx) => {
@@ -32,10 +170,22 @@ export function register(
       ctx.harness.core.getSession(id, ctx.execution?.signal),
   });
   rpc.register("session.children", {
-    execution: readExecution((id: string) => ({ sessionID: id })),
-    params: (p) => sessionID(p)!,
-    handler: (ctx, id) =>
-      ctx.harness.core.listChildren(id, ctx.execution?.signal),
+    execution: readExecution((p: { sessionID: string }) => ({
+      sessionID: p.sessionID,
+    })),
+    params: (p) => ({
+      sessionID: sessionID(p)!,
+      before: text(p, "before", true),
+    }),
+    handler: async (ctx, p) =>
+      serveList(
+        ctx,
+        parseList({
+          directory: await ctx.sessionDirectory(p.sessionID),
+          parentID: p.sessionID,
+          before: p.before,
+        }),
+      ),
   });
   rpc.register("session.messages", {
     execution: readExecution((p: { sessionID: string }) => ({

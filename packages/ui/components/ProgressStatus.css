@@ -3,8 +3,7 @@
   display: block;
   min-width: 0;
   flex-shrink: 1;
-  font-size: var(--text-meta);
-  line-height: var(--line-meta);
+  font: 400 var(--text-meta)/var(--line-meta) var(--font-ui);
   color: var(--otk-fg-3);
 }
 .otk-progress-status:empty {

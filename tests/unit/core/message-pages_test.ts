@@ -53,6 +53,8 @@ test("message page registration preserves opaque cursors and per-call cancellati
       identities: () => Promise.resolve([]),
       getSession: (id) => Promise.resolve(fixturePage(id).session),
       listChildren: () => Promise.resolve([]),
+      listSessions: () =>
+        Promise.resolve({ items: [], older: null, generation: "fixture" }),
       createSession: () => Promise.reject(new Error("read only")),
       listMessages(id, opts, signal) {
         calls.push([id, opts, signal]);

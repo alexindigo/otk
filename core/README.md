@@ -1,6 +1,6 @@
 # OTK application core
 
-## View-scoped publication (protocol 19)
+## View-scoped publication (protocol 20)
 
 A selected socket view parks optional work until the first message page settles.
 The client acknowledges accepted state after rendering; failures and
@@ -15,10 +15,14 @@ acquisition and explicit eviction, separately from authoritative deletion. Only
 selection retains turn summaries; other leased entries carry scalar digest
 summaries. Feature-owned connection projections scope inbox tasks/marks and
 approval metadata. All projects retain their server-owned row/lamp summaries.
-The current-project structural catalog supplies row discovery; hierarchy and
-task grouping remain with the shared client owner. Visible rows acquire entries
-through the same view, without preloading transcripts. Recall defaults to the
-leased project, never discovered sources.
+`sessions.list` supplies bounded project/query pages (20 by default, at most
+200), independently of catalog completeness. Cached rows publish through a
+request-correlated `load.chunk`; the ordinary result completes only that page's
+boundary under its source generation. Visible rows acquire entries through the
+same view, without preloading transcripts. Hierarchy and task grouping remain
+with the shared client owner. Remembered selection uses authoritative keyed
+identity validation; fallback requests one newest root. Recall resolves the
+selected identity before reading its project, never discovered sources.
 
 Index publication has one outstanding bounded chunk per socket. `index.applied`
 returns credit only after client reduction. Updates coalesce by key while credit

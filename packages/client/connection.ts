@@ -242,7 +242,10 @@ export class SidecarConnection {
       socket.onmessage = ({ data }) => {
         if (!current() || socket !== this.#socket) return;
         const frame: ServerFrame = JSON.parse(data);
-        if (frame.epoch !== undefined && frame.epoch < this.#view.epoch) return;
+        if (
+          frame.t !== "load.chunk" && frame.epoch !== undefined &&
+          frame.epoch < this.#view.epoch
+        ) return;
         if (this.#policy) {
           clearTimeout(this.#silence);
           this.#silence = setTimeout(() => {

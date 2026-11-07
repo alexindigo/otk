@@ -445,6 +445,7 @@ export default function Shell(
           metadataEntry: resources.metadataEntry,
           sessionRows: resources.sessionRows,
           sessionRowsReady: resources.sessionRowsReady,
+          sessionRowsLoading: resources.sessionRowsLoading,
           visibleRows: resources.visibleRows,
           projectProgress: resources.projectProgress,
           listInteraction,

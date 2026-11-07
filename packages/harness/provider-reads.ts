@@ -2,6 +2,7 @@
 import type { SessionIdentity } from "./types.ts";
 import type { HistoryReadKinds } from "./history-reads.ts";
 import type { ClockReadKinds } from "./clock-reads.ts";
+import type { SessionListReadKinds } from "./session-lists.ts";
 import type {
   AgentReadKinds,
   CommandReadKinds,
@@ -22,6 +23,7 @@ export interface IdentityReadKinds {
 export interface ProviderReadKinds
   extends
     IdentityReadKinds,
+    SessionListReadKinds,
     HistoryReadKinds,
     ClockReadKinds,
     AgentReadKinds,

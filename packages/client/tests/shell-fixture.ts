@@ -107,6 +107,31 @@ export function shellFixture(
       params: RpcParams<M>,
     ): Promise<RpcResult<M>> => {
       calls.push([id, method, params]);
+      if (method === "sessions.identities") {
+        return Promise.resolve(
+          index.partition(id).filter((entry) =>
+            (params as { ids: string[] }).ids.includes(entry.id)
+          ).map(({ id, directory, parentID }) => ({ id, directory, parentID })),
+        ) as Promise<RpcResult<M>>;
+      }
+      if (method === "sessions.list") {
+        const input = params as import("@otk/protocol").SessionListInput;
+        const items = index.partition(id, input.directory).filter((entry) =>
+          input.parentID !== null || !entry.parentID
+        ).slice(0, input.limit ?? 20);
+        return Promise.resolve({
+          items,
+          older: null,
+          load: {
+            id: "fixture",
+            state: "complete",
+            generation: "fixture",
+            revision: 1,
+            scope: { kind: "project-sessions", directory: input.directory },
+            boundary: { kind: "page", limit: input.limit ?? 20 },
+          },
+        }) as Promise<RpcResult<M>>;
+      }
       return reply(id, method, params) as Promise<RpcResult<M>>;
     };
     return [id, connection] as const;

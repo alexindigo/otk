@@ -86,6 +86,27 @@ export async function inboxBrowserFixture(
         Promise.resolve(content(entries.find((e) => e.id === id)!)),
       listChildren: (id) =>
         Promise.resolve(entries.filter((e) => e.parentID === id).map(content)),
+      listSessions: (input) => {
+        const values = entries.filter((entry) =>
+          entry.directory === input.directory &&
+          (input.parentID === undefined ||
+            (input.parentID === null
+              ? !entry.parentID
+              : entry.parentID === input.parentID)) &&
+          (!input.query ||
+            entry.title.toLowerCase().includes(input.query.toLowerCase()))
+        )
+          .sort((a, b) =>
+            b.timeUpdated - a.timeUpdated || b.id.localeCompare(a.id)
+          );
+        const offset = input.before ? Number(input.before) : 0,
+          limit = input.limit ?? 20;
+        return Promise.resolve({
+          items: values.slice(offset, offset + limit),
+          older: offset + limit < values.length ? String(offset + limit) : null,
+          generation: "fixture",
+        });
+      },
       listMessages: (id, opts) =>
         Promise.resolve(
           fixturePage(

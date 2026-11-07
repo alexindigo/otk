@@ -33,7 +33,7 @@ test("sessions.task-hierarchy-filter-preview-draft-promotion-and-reload", {
     ids: ["tstv1-otk", "tstv1-helper", "tstv1-nested"],
   }, {
     title: "Not in a task",
-    ids: ["tstv1-preview", "tstv1-blocked", "tstv1-finished"],
+    ids: ["tstv1-finished", "tstv1-preview", "tstv1-blocked"],
   }]);
   await expect(
     page.locator("[data-session=tstv1-nested]").locator(

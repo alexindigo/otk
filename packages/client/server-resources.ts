@@ -22,7 +22,7 @@ import type {
   MergedEntry,
   MergedMetadata,
 } from "./index.ts";
-import { createInbox, type InboxModel } from "./inbox.ts";
+import { createInbox, type InboxModel, inboxStatus } from "./inbox.ts";
 import {
   createProjectProjection,
   type ProjectProjectionRow,
@@ -50,6 +50,7 @@ import {
   createFrecencyCatalogs,
   type FrecencyCatalogLease,
 } from "./frecency-catalogs.ts";
+import { createSessionLists } from "./session-lists.ts";
 
 export interface FrameObserver {
   frame?(id: string, frame: ServerFrame, accepted: boolean): void;
@@ -108,6 +109,7 @@ export interface ServerResources {
   ): MergedMetadata | undefined;
   sessionRows(project: ProjectSelection, query?: string): SessionListRow[];
   sessionRowsReady(project: ProjectSelection): boolean;
+  sessionRowsLoading(project: ProjectSelection): boolean;
   projectProgress(
     project: ProjectSelection,
   ): { busy: boolean; announcement: string };
@@ -242,29 +244,93 @@ export function createServerResources(o: {
   let rowDemand:
     | { project: ProjectSelection; rows: string[]; query: string }
     | undefined;
-  const rowClock = factory({ revision: 0 });
-  const rowCatalogs = new Map<
-    string,
-    {
-      directory: string;
-      epoch: number;
-      ready: boolean;
-      first?: string;
-      entries: SessionStructure[];
-      tree: ReturnType<typeof createSessionTree>;
+  const listOwners = new Map<string, ReturnType<typeof createSessionLists>>();
+  const listOwner = (id: string) => {
+    let owner = listOwners.get(id);
+    if (!owner) {
+      const connection = sidecars.connection(id);
+      listOwners.set(
+        id,
+        owner = createSessionLists(
+          connection.rpc,
+          () => connection.viewEpoch,
+          factory,
+        ),
+      );
     }
-  >();
-  const projectWaiters = new Set<
-    { project: ProjectSelection; started: boolean; finish(id?: string): void }
-  >();
+    return owner;
+  };
+  const listFor = (project: ProjectSelection, query?: string) =>
+    listOwner(project.sidecarId).get({
+      directory: project.directory,
+      query: query ?? "",
+    });
+  const trees = new Map<string, ReturnType<typeof createSessionTree>>();
+  const listContexts = new WeakMap<TabInput, {
+    scope: string;
+    values: (SessionStructure & { retained: boolean })[];
+  }>();
+  const listContext = (p: ProjectSelection) => {
+    const input = tabInput(p);
+    const scope = JSON.stringify([
+      selected?.sidecarId === p.sidecarId ? selected.sessionID : null,
+      visible?.project.sidecarId === p.sidecarId &&
+        visible.project.directory === p.directory
+        ? [visible.sessions, crumbs]
+        : null,
+      rowDemand?.project.sidecarId === p.sidecarId &&
+        rowDemand.project.directory === p.directory
+        ? rowDemand.rows
+        : null,
+    ]);
+    const previous = listContexts.get(input);
+    if (previous?.scope === scope) return previous.values;
+    const values = new Map(input.entries.map((entry) => [entry.id, entry]));
+    const required = new Set(
+      input.inbox.tasks.filter((task) => task.directory === p.directory)
+        .flatMap((task) => task.sessions),
+    );
+    if (selected?.sidecarId === p.sidecarId) required.add(selected.sessionID);
+    if (
+      visible?.project.sidecarId === p.sidecarId &&
+      visible.project.directory === p.directory
+    ) {
+      for (const id of [...visible.sessions, ...crumbs]) required.add(id);
+    }
+    if (
+      rowDemand?.project.sidecarId === p.sidecarId &&
+      rowDemand.project.directory === p.directory
+    ) {
+      for (const id of rowDemand.rows) required.add(id);
+    }
+    for (const entry of input.entries) {
+      if (entry.deleted || inboxStatus(entry, input.inbox) !== "idle") {
+        required.add(entry.id);
+      }
+    }
+    for (const id of required) {
+      const entry = values.get(id);
+      if (entry?.parentID && values.has(entry.parentID)) {
+        required.add(entry.parentID);
+      }
+    }
+    const context = [...required].flatMap((id) => {
+      const entry = values.get(id);
+      return entry
+        ? [{
+          id: entry.id,
+          directory: entry.directory,
+          title: entry.title,
+          parentID: entry.parentID,
+          retained: !!entry.deleted,
+        }]
+        : [];
+    });
+    listContexts.set(input, { scope, values: context });
+    return context;
+  };
+  const inboxDirectories = new Map<string, string>();
   const sendView = () => {
-    for (const waiter of projectWaiters) {
-      const matching =
-        waiter.project.sidecarId === visible?.project.sidecarId &&
-        waiter.project.directory === visible?.project.directory;
-      if (matching) waiter.started = true;
-      else if (waiter.started) waiter.finish();
-    }
     const id = visible?.project.sidecarId ?? selected?.sidecarId;
     for (const sidecar of sidecars.state.list) {
       const active = sidecar.id === id;
@@ -497,6 +563,13 @@ export function createServerResources(o: {
     if (frame.t === "welcome") projections.get(id)?.reset();
     if (frame.t === "approvals" || frame.t === "harness") projection(id);
     inbox(id).receive(frame);
+    if (
+      frame.t === "inbox.snapshot" &&
+      frame.epoch === sidecars.connection(id).viewEpoch &&
+      visible?.project.sidecarId === id
+    ) {
+      inboxDirectories.set(id, visible.project.directory);
+    }
     if (frame.t === "digest.progress") {
       for (const facts of frame.values) {
         progressOwner(id).receive(facts.directory ?? "", facts);
@@ -505,31 +578,8 @@ export function createServerResources(o: {
     catalogs.get(id)?.receive(frame);
     frecencies.get(id)?.receive(frame);
     if (frame.t === "welcome") bindVisibleCatalog();
-    if (frame.t === "view.rows") {
-      rowCatalogs.set(id, {
-        directory: frame.directory,
-        epoch: frame.epoch,
-        ready: rowCatalogs.get(id)?.directory === frame.directory &&
-          rowCatalogs.get(id)!.ready,
-        first: frame.first,
-        entries: frame.catalog,
-        tree: rowCatalogs.get(id)?.directory === frame.directory
-          ? rowCatalogs.get(id)!.tree
-          : createSessionTree(),
-      });
-      rowClock.update((draft) => {
-        draft.revision++;
-      });
-    }
-    if (frame.t === "inbox.snapshot") {
-      const catalog = rowCatalogs.get(id);
-      if (catalog && catalog.epoch === frame.epoch && !catalog.ready) {
-        catalog.ready = true;
-        rowClock.update((draft) => {
-          draft.revision++;
-        });
-      }
-    }
+    listOwners.get(id)?.receive(frame);
+    if (frame.t === "welcome") listOwners.get(id)?.refresh();
     if (frame.t === "welcome" && visible?.project.sidecarId === id) {
       sendScope(id, {
         directory: visible.project.directory,
@@ -579,6 +629,9 @@ export function createServerResources(o: {
       crumbs = nextCrumbs;
       sendView();
       bindVisibleCatalog();
+      if (project) {
+        listOwner(project.sidecarId).activate({ directory: project.directory });
+      }
       if (visible) {
         sendScope(visible.project.sidecarId, {
           directory: visible.project.directory,
@@ -595,49 +648,31 @@ export function createServerResources(o: {
       if (JSON.stringify(next) === JSON.stringify(rowDemand)) return;
       rowDemand = next;
       sendView();
-    },
-    projectSession(project, preferred) {
-      for (const waiter of projectWaiters) waiter.finish();
-      const value = () => {
-        const catalog = rowCatalogs.get(project.sidecarId);
-        if (catalog?.directory !== project.directory) {
-          return;
-        }
-        const known = preferred &&
-          catalog.entries.some((entry) => entry.id === preferred);
-        return {
-          id: known ? preferred : catalog.first,
-        };
-      };
-      const current = value();
-      if (current) return Promise.resolve(current.id);
-      return new Promise((resolve) => {
-        const waiter = {
-          project,
-          started: visible?.project.sidecarId === project.sidecarId &&
-            visible.project.directory === project.directory,
-          finish(id?: string) {
-            observers.delete(observer);
-            projectWaiters.delete(waiter);
-            resolve(id);
-          },
-        };
-        const observer: FrameObserver = {
-          frame(id, frame) {
-            if (id !== project.sidecarId || frame.t !== "view.rows") return;
-            const next = value();
-            if (!next) return;
-            waiter.finish(next.id);
-          },
-          removed(id) {
-            if (id === project.sidecarId) {
-              waiter.finish();
-            }
-          },
-        };
-        projectWaiters.add(waiter);
-        observers.add(observer);
+      listOwner(project.sidecarId).activate({
+        directory: project.directory,
+        query,
       });
+      const list = listFor(project, query);
+      listOwner(project.sidecarId).viewport(list, rows);
+    },
+    async projectSession(project, preferred) {
+      const connection = sidecars.connection(project.sidecarId);
+      if (preferred) {
+        const identities = await connection.rpc.call("sessions.identities", {
+          ids: [preferred],
+        });
+        if (
+          identities.some((row) =>
+            row.id === preferred && row.directory === project.directory
+          )
+        ) return preferred;
+      }
+      const page = await connection.rpc.call("sessions.list", {
+        directory: project.directory,
+        parentID: null,
+        limit: 1,
+      });
+      return page.items[0]?.id;
     },
     inbox,
     directoryCatalog: (id, directory) => {
@@ -687,21 +722,36 @@ export function createServerResources(o: {
     projectMetadata: (p) => tabInput(p).entries as readonly MergedMetadata[],
     metadataEntry: (id, sessionID) => projectOwner(id).entry(sessionID),
     sessionRowsReady: (p) => {
-      void rowClock.state.revision;
-      const catalog = rowCatalogs.get(p.sidecarId);
-      return catalog?.directory === p.directory && catalog.ready;
+      const page = listFor(
+        p,
+        rowDemand?.project.directory === p.directory &&
+          rowDemand.project.sidecarId === p.sidecarId
+          ? rowDemand.query
+          : "",
+      );
+      return (page.ready || listContext(p).length > 0) &&
+        inbox(p.sidecarId).state.ready &&
+        inboxDirectories.get(p.sidecarId) === p.directory;
     },
+    sessionRowsLoading: (p) =>
+      listFor(
+        p,
+        rowDemand?.project.directory === p.directory &&
+          rowDemand.project.sidecarId === p.sidecarId
+          ? rowDemand.query
+          : "",
+      ).loading,
     sessionRows: (p, query) => {
-      void rowClock.state.revision;
-      const catalog = rowCatalogs.get(p.sidecarId);
-      return catalog?.directory === p.directory
-        ? catalog.tree.rows(
-          catalog.entries,
-          inbox(p.sidecarId).state.inbox.tasks,
-          p.directory,
-          query,
-        )
-        : projectOwner(p.sidecarId).rows(p.directory, query);
+      const list = listFor(p, query),
+        key = JSON.stringify([p.sidecarId, p.directory]);
+      let tree = trees.get(key);
+      if (!tree) trees.set(key, tree = createSessionTree());
+      return tree.rows(
+        listOwner(p.sidecarId).structures(list, listContext(p)),
+        inbox(p.sidecarId).state.inbox.tasks,
+        p.directory,
+        query,
+      );
     },
     projectProgress: (p) => o.index.progress(p.sidecarId, p.directory),
     duplicateProjectName: (name) => {
@@ -763,7 +813,9 @@ export function createServerResources(o: {
     },
     add: (url, label) => sidecars.add(url, label),
     remove(id) {
-      rowCatalogs.delete(id);
+      listOwners.get(id)?.stop();
+      listOwners.delete(id);
+      inboxDirectories.delete(id);
       progressOwners.get(id)?.stop();
       progressOwners.delete(id);
       for (const release of projectReleases.get(id) ?? []) release();
@@ -817,8 +869,9 @@ export function createServerResources(o: {
     },
     stop() {
       if (stopped) return;
-      for (const waiter of projectWaiters) waiter.finish();
       stopped = true;
+      for (const owner of listOwners.values()) owner.stop();
+      listOwners.clear();
       for (const owner of progressOwners.values()) owner.stop();
       progressOwners.clear();
       stopLinks();

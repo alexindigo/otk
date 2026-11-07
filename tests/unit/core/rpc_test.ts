@@ -181,6 +181,8 @@ export function stub(
         calls.push(["children", id]);
         return Promise.resolve([]);
       },
+      listSessions: () =>
+        Promise.resolve({ items: [], older: null, generation: "fixture" }),
       listMessages: (id, opts) => {
         calls.push(["messages", id, opts]);
         return Promise.resolve(fixturePage(id, [], undefined, session));

@@ -7,7 +7,7 @@ or released. Transcript request owners supply queued/reading stages through that
 same owner. A 45-second no-advancement fallback reports elapsed/last progress
 and the real wait reason, never a failure or invented ETA.
 
-## View leases (protocol 19)
+## View leases (protocol 20)
 
 The transcript owner acknowledges its accepted first page through the
 connection's generation-fenced settlement callback. UI adapters inject an
@@ -26,9 +26,14 @@ call `view({selected, crumbs: [], rows: []})` before connecting. Other projects
 remain visible through P3 summaries. Prompt recall uses only the currently
 viewed server/project.
 
-Sessions mounts its measured hierarchy only after the structural catalog and
-inbox baseline for that view agree. Same-project visible-row lease changes keep
-that readiness and keyed row DOM, including focus and retained scroll anchors.
+Sessions mounts its measured hierarchy after its demanded list page and the
+project's inbox baseline agree. Its page/query resource requests source-wide
+search and older pages near the acquired end, retains last-good rows while
+loading, and acquires necessary ancestor context by key. Same-project
+visible-row lease changes keep readiness and keyed row DOM, including focus and
+retained scroll anchors. Query replacement and reconnect fence retired request
+identities, epochs and revisions. Child navigation follows the same bounded list
+cursor.
 
 After synchronous consumer acceptance, SidecarConnection acknowledges the index
 epoch/revision. Consumers return `false` for rejected frames. Epoch replacement

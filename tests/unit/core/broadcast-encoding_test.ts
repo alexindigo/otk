@@ -32,6 +32,8 @@ test("shared broadcasts and subscribed content encode once for sixteen consumers
       getSession: () => Promise.reject(new Error("not requested")),
       createSession: () => Promise.reject(new Error("not requested")),
       listChildren: () => Promise.resolve([]),
+      listSessions: () =>
+        Promise.resolve({ items: [], older: null, generation: "fixture" }),
       listMessages: (id) => Promise.resolve(fixturePage(id)),
     },
     capabilities: {},

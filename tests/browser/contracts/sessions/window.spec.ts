@@ -8,23 +8,30 @@ import type { Page } from "@playwright/test";
 const viewport = ".otk-project-session-tree";
 async function scroll(page: Page, top: number | "end") {
   const pane = page.locator(viewport);
-  const delta = await pane.evaluate(
-    (e, top) =>
-      (top === "end" ? e.scrollHeight - e.clientHeight : top) - e.scrollTop,
-    top,
-  );
-  if (Math.abs(delta) < 1) return;
   await pane.hover();
-  await page.mouse.wheel(0, delta);
-  await expect.poll(() =>
-    pane.evaluate(
+  // Acquiring another page can extend the physical end. Keep requesting the
+  // original target through real wheel input instead of assuming full catalog
+  // geometry was present before the first gesture.
+  await expect.poll(async () => {
+    const delta = await pane.evaluate(
       (e, top) =>
-        Math.abs(
-          e.scrollTop - (top === "end" ? e.scrollHeight - e.clientHeight : top),
-        ),
+        (top === "end" ? e.scrollHeight - e.clientHeight : top) - e.scrollTop,
       top,
-    )
-  ).toBeLessThan(1);
+    );
+    if (Math.abs(delta) >= 1) await page.mouse.wheel(0, delta);
+    return pane.evaluate(
+      (e, top) =>
+        e.closest(".otk-project-sessions")?.querySelector(
+            ".otk-session-loading-row",
+          )
+          ? Infinity
+          : Math.abs(
+            e.scrollTop -
+              (top === "end" ? e.scrollHeight - e.clientHeight : top),
+          ),
+      top,
+    );
+  }).toBeLessThan(1);
 }
 const anchor = (page: Page) =>
   page.locator(viewport).evaluate((v) => {

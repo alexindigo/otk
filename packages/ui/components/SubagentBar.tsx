@@ -1,15 +1,18 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import "./SubagentBar.css" with { type: "text" };
 import type { ContentSession } from "@otk/protocol";
+import { Show } from "solid-js";
 import { ownedCommand, useCommandPorts } from "../keyboard/context.tsx";
 export default function SubagentBar(
   props: {
     info: ContentSession;
-    siblings: ContentSession[];
+    siblings: import("@otk/protocol").SessionStructure[];
+    onMove?(delta: number): void | Promise<void>;
     onOpen(id: string): void;
   },
 ) {
   const move = (delta: number) => {
+    if (props.onMove) return props.onMove(delta);
     const at = props.siblings.findIndex((s) => s.id === props.info.id),
       n = props.siblings.length;
     if (n) props.onOpen(props.siblings[(at + delta + n) % n].id);
@@ -27,14 +30,14 @@ export default function SubagentBar(
     id: "subagent.previous",
     title: "Previous subagent",
     category: "Session",
-    enabled: () => !!props.siblings.length,
+    enabled: () => props.siblings.length > 1,
     run: () => move(-1),
   });
   const next = ownedCommand(ports, {
     id: "subagent.next",
     title: "Next subagent",
     category: "Session",
-    enabled: () => !!props.siblings.length,
+    enabled: () => props.siblings.length > 1,
     run: () => move(1),
   });
   return (
@@ -47,20 +50,20 @@ export default function SubagentBar(
         >
           Parent
         </button>
-        <button
-          type="button"
-          disabled={!props.siblings.length}
-          onClick={() => void previous()}
-        >
-          Prev
-        </button>
-        <button
-          type="button"
-          disabled={!props.siblings.length}
-          onClick={() => void next()}
-        >
-          Next
-        </button>
+        <Show when={props.siblings.length > 1}>
+          <button
+            type="button"
+            onClick={() => void previous()}
+          >
+            Prev
+          </button>
+          <button
+            type="button"
+            onClick={() => void next()}
+          >
+            Next
+          </button>
+        </Show>
       </div>
     </nav>
   );

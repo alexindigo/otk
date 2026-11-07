@@ -29,6 +29,13 @@ metadata and latest-prompt context travel with the page. `HarnessSink.content`
 accepts the producer's optional third `ContentClock` argument; paged producers
 must supply aligned clocks, including standalone integrations.
 
+`HarnessCore.listSessions(input, signal?)` returns bounded metadata, an opaque
+continuation and source generation. `sessions.list` contributes the same read to
+the existing provider-read channel. List coverage is independent of index
+membership. Consumed rows join normal digest work; exactly one successor list
+page joins idle-gated high-priority work. Prefetch never recursively enumerates
+successor pages, and shares optional batch admission with session work.
+
 `ContentReplay` owns per-session epochs/sequences and bounded
 capture/seal/release. Its constructor receives operation/UTF-8 byte budgets, a
 nonce source and an emit port. Overflow invalidates a capture and releases its

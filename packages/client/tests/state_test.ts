@@ -183,10 +183,26 @@ Deno.test("web RPC owns pending calls through disconnect and releases cancelled 
   const frames: ClientFrame[] = [],
     rpc = new Rpc((frame) => frames.push(frame));
   connectRequests(rpc);
+  const page = {
+    items: [],
+    older: null,
+    load: {
+      id: "list",
+      scope: {
+        kind: "parent-children" as const,
+        directory: "/p",
+        parentID: "x",
+      },
+      boundary: { kind: "page" as const, limit: 20 },
+      generation: "source",
+      revision: 1,
+      state: "complete" as const,
+    },
+  };
   const promise = rpc.call("session.children", { sessionID: "x" });
   assert(frames[0].t === "request");
-  replyRequest(rpc, frames[0], []);
-  assertEquals(await promise, []);
+  replyRequest(rpc, frames[0], page);
+  assertEquals(await promise, page);
   const abort = new AbortController();
   const cancelled = rpc.call("session.get", { sessionID: "x" }, abort.signal)
     .catch((e) => e);
@@ -204,6 +220,6 @@ Deno.test("web RPC owns pending calls through disconnect and releases cancelled 
     ref: disconnected.state.ref,
     method: "session.children",
     params: { sessionID: "x" },
-  }, []);
-  assertEquals(await disconnected.result, []);
+  }, page);
+  assertEquals(await disconnected.result, page);
 });

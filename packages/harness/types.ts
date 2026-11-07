@@ -60,6 +60,10 @@ export interface HarnessCore {
     signal?: AbortSignal,
   ): Promise<SessionIdentity[]>;
   getSession(id: string, signal?: AbortSignal): Promise<ContentSession>;
+  listSessions(
+    input: import("@otk/protocol").SessionListInput,
+    signal?: AbortSignal,
+  ): Promise<import("./session-lists.ts").SessionListResult>;
   listChildren(id: string, signal?: AbortSignal): Promise<ContentSession[]>;
   listMessages(
     id: string,

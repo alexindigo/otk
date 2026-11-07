@@ -251,6 +251,8 @@ test("the shipped registry inventory matches all feature conformance rows and ev
     "session.abort",
     "session.get",
     "session.children",
+    "sessions.list",
+    "sessions.identities",
     "session.messages",
     "permission.reply",
     "permission.auto",
@@ -309,7 +311,7 @@ test("the shipped registry inventory matches all feature conformance rows and ev
       );
     }
     assertEquals(counts, {
-      read: 22,
+      read: 24,
       native: 15,
       local: 10,
       "prepared-local": 6,

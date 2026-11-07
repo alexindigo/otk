@@ -1,4 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { sessionListKey } from "@otk/protocol";
 import type {
   DigestExecution,
   DigestIdentity,
@@ -92,6 +93,41 @@ export class DigestScheduler {
   #idleUntil = -Infinity;
   #idleWait?: AbortController;
   #batches = 0;
+  #lists = new Map<string, Promise<void>>();
+  /** One typed, idle-class successor per demanded list boundary, not a session ID. */
+  prefetchList(
+    input: import("@otk/protocol").SessionListInput,
+    read: (signal: AbortSignal, execution: DigestExecution) => Promise<void>,
+  ): void {
+    const key = sessionListKey(input);
+    if (this.#lists.has(key)) return;
+    const task = this.execute(
+      async (signal, execution) => {
+        while (this.#batches >= this.policy.parallel) {
+          await execution.wait(this.#changed.promise);
+          signal.throwIfAborted();
+        }
+        this.#batches++;
+        try {
+          await read(signal, execution);
+        } finally {
+          this.#batches--;
+          this.#wake();
+        }
+      },
+      this.#controller.signal,
+      "attention",
+      true,
+      false,
+      true,
+    )
+      .catch((error) => {
+        if (!this.#controller.signal.aborted) this.#errors.push(error);
+      }).finally(() => {
+        if (this.#lists.get(key) === task) this.#lists.delete(key);
+      });
+    this.#lists.set(key, task);
+  }
   constructor(
     readonly policy: DigestPolicy,
     readonly resources: {

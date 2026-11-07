@@ -125,6 +125,7 @@ export function startApplication(
       rpc,
       backend,
       (directory, tx) => inbox.activate(directory, tx),
+      cfg.digest.publishrows,
     );
     registerSessionActions(
       rpc,

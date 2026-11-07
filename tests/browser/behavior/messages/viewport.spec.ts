@@ -34,7 +34,7 @@ test(
     const children = await state.product("session.children", {
       sessionID: session.id,
     });
-    const first = children.find((child) =>
+    const first = children.items.find((child) =>
       child.title.includes("First reveal")
     )!;
     expect(first).toBeTruthy();

@@ -100,6 +100,8 @@ test("every native feature fences its backend effect, checkpoints only metadata 
           return { id, directory: s.directory, parentID: s.parentID };
         })),
       listChildren: () => Promise.resolve([]),
+      listSessions: () =>
+        Promise.resolve({ items: [], older: null, generation: "fixture" }),
       listMessages: () => Promise.reject(new Error("No body read needed")),
       createSession: (_input, operation) =>
         effect("session.create", operation, { ...base, id: "tstv1-created" }),

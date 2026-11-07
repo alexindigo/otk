@@ -24,6 +24,7 @@ test("every body/catalog read has volatile recovery, target scope and caller can
   const cases = [
     ["session.get", { sessionID: "tstv1-one" }],
     ["session.children", { sessionID: "tstv1-one" }],
+    ["sessions.list", { directory: "/p" }],
     ["session.messages", { sessionID: "tstv1-one", before: "opaque" }],
     ["models.list", { sessionID: "tstv1-one" }],
     ["agents.list", { sessionID: "tstv1-one", primary: true }],
@@ -56,6 +57,9 @@ test("every body/catalog read has volatile recovery, target scope and caller can
       core: {
         getSession: (_id: string, signal?: AbortSignal) => read(signal),
         listChildren: (_id: string, signal?: AbortSignal) => read(signal),
+        identities: (ids: string[]) =>
+          Promise.resolve(ids.map((id) => ({ id, directory: "/p" }))),
+        listSessions: (_input: unknown, signal?: AbortSignal) => read(signal),
         listMessages: (_id: string, _opts: unknown, signal?: AbortSignal) =>
           read(signal),
       },

@@ -124,6 +124,34 @@ export class DigestNativeDb {
     ).all(after, limit).map(metadata);
   }
   /** Ownership proofs read the API's current identities, not an older paged list. */
+  listSessions(
+    input: import("@otk/protocol").SessionListInput,
+    before: { updated: number; id: string } | undefined,
+    limit: number,
+  ): SessionMetadata[] {
+    const filters = ["directory=?"],
+      values: (string | number | null)[] = [input.directory];
+    if (input.parentID !== undefined) {
+      filters.push("parent_id IS ?");
+      values.push(input.parentID === null ? null : ids.decode(input.parentID));
+    }
+    if (input.query) {
+      filters.push("instr(lower(title),lower(?))>0");
+      values.push(input.query);
+    }
+    if (before) {
+      filters.push("(time_updated,id)<(?,?)");
+      values.push(before.updated, before.id);
+    }
+    const rows = this.db.prepare(
+      `SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived FROM session WHERE ${
+        filters.join(" AND ")
+      } ORDER BY time_updated DESC,id DESC LIMIT ?`,
+    ).all(...values, limit).map(metadata);
+    this.observe?.("session-list", { limit, rows: rows.length });
+    return rows;
+  }
+  /** Ownership proofs read the API's current identities, not an older paged list. */
   identities(sessions: readonly string[]): SessionIdentity[] {
     if (!sessions.length) return [];
     this.observe?.("identities");

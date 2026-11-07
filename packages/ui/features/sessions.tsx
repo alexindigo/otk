@@ -38,6 +38,7 @@ export function registerSessionsPanel(
                 project={project}
                 ready={shell.inbox(sidecarId).state.ready &&
                   shell.sessionRowsReady(project)}
+                loading={shell.sessionRowsLoading(project)}
                 metadata={(id) => shell.metadataEntry(sidecarId, id)}
                 rows={(query) => shell.sessionRows(project, query)}
                 onRows={(keys, query) =>

@@ -53,6 +53,8 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
           ids.map((id) => ({ id, directory: session.directory })),
         ),
       listChildren: () => Promise.resolve([]),
+      listSessions: () =>
+        Promise.resolve({ items: [], older: null, generation: "fixture" }),
       listMessages: (id) => Promise.resolve(fixturePage(id)),
       createSession: () => Promise.resolve(session),
     },

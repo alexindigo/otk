@@ -69,6 +69,28 @@ export async function coreBackendFixture(
       getSession: () => Promise.resolve(session),
       createSession: () => Promise.resolve(session),
       listChildren: () => Promise.resolve([]),
+      listSessions: (input) => {
+        // These external-backend scenes publish their provider facts through the
+        // shared fixture index. Demand must include later scenario additions.
+        const values = app.index.catalog(input.directory).filter((entry) =>
+          (input.parentID === undefined ||
+            (input.parentID === null
+              ? !entry.parentID
+              : entry.parentID === input.parentID)) &&
+          (!input.query ||
+            entry.title.toLowerCase().includes(input.query.toLowerCase()))
+        )
+          .sort((a, b) =>
+            b.timeUpdated - a.timeUpdated || b.id.localeCompare(a.id)
+          );
+        const offset = input.before ? Number(input.before) : 0,
+          limit = input.limit ?? 20;
+        return Promise.resolve({
+          items: values.slice(offset, offset + limit),
+          older: offset + limit < values.length ? String(offset + limit) : null,
+          generation: "fixture",
+        });
+      },
       listMessages: () =>
         Promise.resolve(page([{
           id: "message",

@@ -116,6 +116,8 @@ for (
         identities: () => Promise.resolve([]),
         createSession: () => Promise.reject(new Error("No sessions")),
         listChildren: () => Promise.resolve([]),
+        listSessions: () =>
+          Promise.resolve({ items: [], older: null, generation: "fixture" }),
         listMessages: (id) => Promise.resolve(fixturePage(id)),
       },
       capabilities: {},

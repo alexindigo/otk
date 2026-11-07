@@ -116,3 +116,16 @@
   overflow: hidden;
   clip-path: inset(50%);
 }
+.otk-session-loading-row {
+  flex: none;
+}
+.otk-project-session-content {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+.otk-session-loading-slot {
+  flex: none;
+  block-size: var(--row-compact);
+}

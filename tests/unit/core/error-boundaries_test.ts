@@ -34,6 +34,8 @@ function backend(get: (id: string) => never = () => {
         return Promise.resolve([]);
       },
       listChildren: () => Promise.resolve([]),
+      listSessions: () =>
+        Promise.resolve({ items: [], older: null, generation: "fixture" }),
       listMessages: (id) => Promise.resolve(fixturePage(id)),
       createSession: () => Promise.reject(new Error("unused")),
     },

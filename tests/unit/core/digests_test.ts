@@ -25,6 +25,8 @@ test("visible scopes are validated, optional, connection-owned replacements and 
         Promise.reject(new Error("Scope must not hydrate a session")),
       createSession: () => Promise.reject(new Error("Not used")),
       listChildren: () => Promise.resolve([]),
+      listSessions: () =>
+        Promise.resolve({ items: [], older: null, generation: "fixture" }),
       listMessages: (id) => Promise.resolve(fixturePage(id)),
     },
     capabilities: {

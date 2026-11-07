@@ -16,6 +16,7 @@ export function sessions(
     "kind" | "version" | "start" | "stop" | "subscriptions"
   >,
   transcript: Transcript,
+  lists: HarnessCore["listSessions"],
 ): HarnessCore {
   return {
     get kind() {
@@ -32,6 +33,7 @@ export function sessions(
     },
     identities: (ids, signal) => directory.validate(ids, signal),
     getSession: (id, signal) => transcript.session(id, signal),
+    listSessions: lists,
     listMessages: (id, opts, signal) =>
       transcript.page(id, opts.before, signal),
     async listChildren(id, signal): Promise<ContentSession[]> {

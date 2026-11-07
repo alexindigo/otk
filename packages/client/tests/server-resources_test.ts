@@ -60,6 +60,11 @@ function metadata(): InboxSnapshot {
 }
 function fixture(factory?: StateFactory) {
   const calls: unknown[] = [], order: string[] = [];
+  const listReads: {
+    input: import("@otk/protocol").SessionListInput;
+    intent?: import("@otk/protocol").IntentIdentity;
+    resolve(page: import("@otk/protocol").SessionListPage): void;
+  }[] = [];
   const store = createState<{ list: SidecarState[] }>({
     list: ["local", "remote"].map((id) => ({
       id,
@@ -76,8 +81,25 @@ function fixture(factory?: StateFactory) {
       status() {},
       frame() {},
     });
-    connection.rpc.call = (method, params) => {
+    connection.rpc.call = (method, params, options) => {
       calls.push([id, method, params]);
+      if (method === "sessions.identities") {
+        return Promise.resolve(
+          (params as { ids: string[] }).ids.filter((id) => id === "remembered")
+            .map((id) => ({ id, directory: "/unleased" })),
+        ) as never;
+      }
+      if (method === "sessions.list") {
+        return new Promise((resolve) => {
+          listReads.push({
+            input: params as import("@otk/protocol").SessionListInput,
+            intent: options && !(options instanceof AbortSignal)
+              ? options.intent
+              : undefined,
+            resolve: resolve as never,
+          });
+        }) as never;
+      }
       if (method === "session.get") {
         return Promise.resolve(entry("missing")) as never;
       }
@@ -143,49 +165,44 @@ function fixture(factory?: StateFactory) {
     store,
     sidecars,
     connections,
+    listReads,
   };
 }
 
-Deno.test("project acquisition waits for scoped rows and validates a remembered session before restoring it", async () => {
+Deno.test("project acquisition point-validates remembered sessions outside the acquired page and uses a bounded newest-root fallback", async () => {
   const f = fixture(), p = { sidecarId: "local", directory: "/unleased" };
   f.resources.scope(p);
   const loading = f.resources.projectSession(p, "remembered");
-  const epoch = f.connections.get("local")!.viewEpoch;
-  f.receive("local", {
-    t: "index.snapshot",
-    epoch,
-    rev: 0,
-    entries: [entry("remembered", p.directory)],
-  });
-  f.receive("local", {
-    t: "view.rows",
-    epoch,
-    directory: p.directory,
-    first: "first",
-    catalog: [{
-      id: "remembered",
-      title: "Remembered",
-      directory: p.directory,
-    }],
-  });
   assertEquals(await loading, "remembered");
-  f.resources.scope({ ...p, directory: "/different" });
-  const stale = f.resources.projectSession({ ...p, directory: "/different" });
-  f.resources.scope(p);
-  assertEquals(await stale, undefined);
+  assertEquals(
+    f.listReads.length,
+    0,
+    "remembered identity does not enumerate a page",
+  );
   const missing = f.resources.projectSession(p, "missing");
-  f.receive("local", {
-    t: "view.rows",
-    epoch: f.connections.get("local")!.viewEpoch,
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assertEquals(f.listReads[0].input, {
     directory: p.directory,
-    first: "first",
-    catalog: [],
+    parentID: null,
+    limit: 1,
+  });
+  f.listReads[0].resolve({
+    items: [{ id: "first", title: "First", directory: p.directory }],
+    older: null,
+    load: {
+      id: "fallback",
+      scope: { kind: "project-sessions", directory: p.directory },
+      boundary: { kind: "page", limit: 1 },
+      generation: "source",
+      revision: 1,
+      state: "complete",
+    },
   });
   assertEquals(await missing, "first");
   f.resources.stop();
 });
 
-Deno.test("Sessions hierarchy waits for matching catalog and inbox but survives same-project row lease churn", () => {
+Deno.test("Sessions hierarchy waits for its requested page and coherent inbox but survives same-project row lease churn", async () => {
   const f = fixture(), project = { sidecarId: "local", directory: "/p" };
   f.resources.scope(project);
   const epoch = f.connections.get("local")!.viewEpoch;
@@ -197,12 +214,20 @@ Deno.test("Sessions hierarchy waits for matching catalog and inbox but survives 
     inbox: metadata(),
     epoch: epoch - 1,
   });
-  f.receive("local", {
-    t: "view.rows",
-    epoch,
-    directory: "/p",
-    catalog: [{ id: "session", title: "Session", directory: "/p" }],
+  const read = f.listReads[0];
+  read.resolve({
+    items: [{ id: "session", title: "Session", directory: "/p" }],
+    older: "page-2",
+    load: {
+      id: read.intent!.key,
+      scope: { kind: "project-sessions", directory: "/p" },
+      boundary: { kind: "page", limit: 20 },
+      generation: "source",
+      revision: 1,
+      state: "complete",
+    },
   });
+  await new Promise((resolve) => setTimeout(resolve, 0));
   assertEquals(f.resources.sessionRowsReady(project), false);
   f.receive("local", {
     t: "inbox.snapshot",
@@ -213,22 +238,39 @@ Deno.test("Sessions hierarchy waits for matching catalog and inbox but survives 
   });
   assertEquals(f.resources.sessionRowsReady(project), true);
   assertEquals(f.resources.sessionRows(project)[0].key, "heading:task");
-  f.receive("local", {
-    t: "view.rows",
-    epoch: epoch + 1,
-    directory: "/p",
-    catalog: [{ id: "session", title: "Session", directory: "/p" }],
-  });
+  f.resources.visibleRows(project, ["session"]);
   assertEquals(f.resources.sessionRowsReady(project), true);
   const other = { ...project, directory: "/other" };
-  f.receive("local", {
-    t: "view.rows",
-    epoch: epoch + 2,
-    directory: other.directory,
-    catalog: [],
-  });
+  f.resources.scope(other);
   assertEquals(f.resources.sessionRowsReady(other), false);
-  assertEquals(f.resources.sessionRowsReady(project), false);
+  assertEquals(
+    f.resources.sessionRowsReady(project),
+    true,
+    "same-directory retained inbox and page remain coherent",
+  );
+  f.resources.stop();
+});
+
+Deno.test("mandatory and task context paints with a coherent inbox while its list boundary is still loading", () => {
+  const f = fixture(), project = { sidecarId: "local", directory: "/p" };
+  f.resources.scope(project);
+  const epoch = f.connections.get("local")!.viewEpoch;
+  f.receive("local", {
+    t: "index.snapshot",
+    epoch,
+    rev: 0,
+    entries: [entry()],
+  });
+  f.receive("local", {
+    t: "inbox.snapshot",
+    epoch,
+    generation: "fixture",
+    revision: 0,
+    inbox: metadata(),
+  });
+  assertEquals(f.resources.sessionRowsReady(project), true);
+  assertEquals(f.resources.sessionRowsLoading(project), true);
+  assert(f.resources.sessionRows(project).some((row) => row.key === "session"));
   f.resources.stop();
 });
 

@@ -434,6 +434,27 @@ export class OpencodeV1Adapter implements Harness {
         subscriptions: (id, count) => this.#subscriptions(id, count),
       },
       this.#transcript,
+      async (input, signal) => {
+        const value = await this.#catalogReads.read("sessions.list", input, {
+          owner: `session-list:${crypto.randomUUID()}`,
+          priority: "user",
+          signal,
+        });
+        for (const entry of value.items) {
+          const current = this.#index.getMetadata(entry.id);
+          this.#sink.indexUpsert(
+            current
+              ? {
+                ...entry,
+                status: current.status,
+                retry: current.retry,
+                attention: current.attention,
+              }
+              : entry,
+          );
+        }
+        return value;
+      },
     );
     const registry = new CapabilityRegistry();
     const launch: Launch = (...args) => this.#launch(...args);
@@ -1492,6 +1513,7 @@ export class OpencodeV1Adapter implements Harness {
       type !== "session.deleted"
     ) return;
     if (type === "session.created" || type === "session.updated") {
+      this.#catalogExecutor?.invalidateSessionLists();
       if (typeof info?.id !== "string" || !info.id) {
         throw new Error(`Malformed ${type}: session id missing`);
       }

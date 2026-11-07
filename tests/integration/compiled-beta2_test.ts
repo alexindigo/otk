@@ -244,9 +244,7 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
       crumbs: [],
       rows: [],
     });
-    await first.client.wait((frame) =>
-      frame.t === "view.rows" && frame.directory === "/project"
-    );
+    await first.client.rpc("inbox.get", {});
     await first.client.rpc("tasks.rename", {
       id: "task-main",
       name: "Compiled keyed outcome",

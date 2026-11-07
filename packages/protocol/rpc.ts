@@ -25,6 +25,8 @@ import type {
 export const coreRequestMetadata: Readonly<Record<string, RequestMetadata>> = {
   "session.get": { kind: "read", pending: "Loading conversation" },
   "session.children": { kind: "read", pending: "Loading sessions" },
+  "sessions.list": { kind: "read", pending: "Loading sessions" },
+  "sessions.identities": { kind: "read", pending: "Checking session" },
   "session.messages": { kind: "read", pending: "Loading messages" },
   "session.create": { kind: "mutation", pending: "Creating session" },
   "session.prompt": { kind: "mutation", pending: "Sending prompt" },
@@ -159,9 +161,17 @@ export interface RpcMethods
     ApprovalRpcMethods,
     CatalogRpcMethods {
   "session.get": { params: { sessionID: string }; result: ContentSession };
+  "sessions.list": {
+    params: import("./session-list.ts").SessionListInput;
+    result: import("./session-list.ts").SessionListPage;
+  };
+  "sessions.identities": {
+    params: { ids: string[] };
+    result: { id: string; directory: string; parentID?: string }[];
+  };
   "session.children": {
-    params: { sessionID: string };
-    result: ContentSession[];
+    params: { sessionID: string; before?: string };
+    result: import("./session-list.ts").SessionListPage;
   };
   "session.messages": {
     params: import("./transcript.ts").MessagePageInput;

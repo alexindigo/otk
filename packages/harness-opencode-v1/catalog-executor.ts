@@ -14,6 +14,7 @@ import { HistoryDatabase } from "./history.ts";
 import { catalogReaders } from "./catalog-reads.ts";
 import { Messages } from "./messages.ts";
 import { messageOutput } from "./message-clock.ts";
+import { SessionLists } from "./session-lists.ts";
 
 /** Standalone integrations inject the same scheduler policy; no derived DB is needed. */
 export class CatalogExecutor implements ProviderReadPort {
@@ -70,6 +71,7 @@ export class CatalogExecutor implements ProviderReadPort {
   #admission?: ReadAdmission;
   #metadata?: ReadAdmission;
   #history?: HistoryDatabase;
+  #lists?: SessionLists;
   async read<K extends keyof ProviderReadKinds>(
     kind: K,
     input: ProviderReadKinds[K]["input"],
@@ -105,6 +107,18 @@ export class CatalogExecutor implements ProviderReadPort {
             harnessDb(this.cfg),
           );
           const readers: ProviderReaders = {
+            "sessions.list": (input, signal) => {
+              const lists = this.#lists ??= new SessionLists(
+                client,
+                () => Promise.resolve(undefined),
+              );
+              return lists.read(
+                input,
+                signal,
+                client,
+                (value) => execution.wait(value),
+              );
+            },
             "message.clock": async (input, signal) =>
               messageOutput(
                 (await new Messages(client, this.directory).get(
@@ -144,6 +158,9 @@ export class CatalogExecutor implements ProviderReadPort {
     for (const controller of this.#owners.get(owner) ?? []) controller.abort();
     this.#owners.delete(owner);
   }
+  invalidateSessionLists(): void {
+    this.#lists?.invalidate();
+  }
   async stop(): Promise<void> {
     for (const owner of this.#owners.keys()) this.release(owner);
     await this.#scheduler?.stop();
@@ -153,5 +170,6 @@ export class CatalogExecutor implements ProviderReadPort {
     this.#metadata = undefined;
     this.#history?.close();
     this.#history = undefined;
+    this.#lists = undefined;
   }
 }

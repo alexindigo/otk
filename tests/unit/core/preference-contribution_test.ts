@@ -64,6 +64,7 @@ test("feature contribution owns default, validation, display metadata and execut
       identities: unavailable,
       createSession: unavailable,
       listChildren: unavailable,
+      listSessions: unavailable,
       listMessages: unavailable,
     },
     capabilities: {},

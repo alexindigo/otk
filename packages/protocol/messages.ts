@@ -42,6 +42,8 @@ export type ClientFrame =
 export type ServerFrame = ServerMessage & { epoch?: number };
 type ServerMessage =
   | RequestEvent
+  | import("./session-list.ts").LoadChunk
+  | { t: "sessions.changed"; directory: string }
   | {
     t: "welcome";
     protocol: number;
@@ -100,13 +102,6 @@ type ServerMessage =
     from?: number;
     ops: IndexOp[];
     epoch?: number;
-  }
-  | {
-    t: "view.rows";
-    epoch: number;
-    directory: string;
-    first?: string;
-    catalog: import("./session-list.ts").SessionStructure[];
   }
   | { t: "content"; sessionID: string; event: ContentOp; clock?: ContentClock }
   | { t: "bootstrap.complete" }

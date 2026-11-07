@@ -118,46 +118,12 @@ export class InboxFeature implements FrameSource {
     entries: () => ReadonlySet<string>,
   ): FrameSource {
     const listeners = new Set<(frame: ServerFrame) => void>();
-    let revision = 0,
-      rowsEpoch = -1,
-      rowsJSON = "",
-      closed = false,
-      scheduled = false;
+    let revision = 0;
     const emit = (frame: ServerFrame) => {
       for (const listener of listeners) listener(frame);
     };
-    const rows = () => {
-      const scope = view(), directory = this.#directory(scope);
-      if (!directory) return;
-      const values = this.index.catalog(directory).map((
-        { id, parentID, title },
-      ) => ({ id, parentID, title, directory }));
-      const serialized = JSON.stringify(values);
-      if (rowsEpoch === scope.epoch && rowsJSON === serialized) return;
-      rowsEpoch = scope.epoch;
-      rowsJSON = serialized;
-      const first = this.index.catalog(directory).find((entry) =>
-        !entry.parentID
-      )?.id;
-      emit({
-        t: "view.rows",
-        epoch: scope.epoch,
-        directory,
-        first,
-        catalog: values,
-      });
-    };
-    const scheduleRows = () => {
-      if (scheduled) return;
-      scheduled = true;
-      queueMicrotask(() => {
-        scheduled = false;
-        if (!closed) rows();
-      });
-    };
     const baseline = (): InboxBaseline => {
       this.#flush();
-      rows();
       return {
         generation: this.#generation,
         revision,
@@ -193,7 +159,22 @@ export class InboxFeature implements FrameSource {
       });
     };
     this.#publications.add(publish);
-    const stopIndex = this.index.observe((entry, previous, delta) => {
+    let rowsScheduled = false;
+    const rowsChanged = () => {
+      if (rowsScheduled) return;
+      rowsScheduled = true;
+      const directory = this.#directory(view());
+      queueMicrotask(() => {
+        rowsScheduled = false;
+        if (
+          directory && this.#views.has(id) &&
+          directory === this.#directory(view())
+        ) {
+          emit({ t: "sessions.changed", directory });
+        }
+      });
+    };
+    const stopRows = this.index.observe((entry, previous, delta) => {
       if (
         delta ||
         entry.directory !== this.#directory(view()) &&
@@ -202,13 +183,12 @@ export class InboxFeature implements FrameSource {
       if (
         !previous || entry.title !== previous.title ||
         entry.parentID !== previous.parentID ||
-        entry.directory !== previous.directory
-      ) scheduleRows();
+        entry.directory !== previous.directory ||
+        entry.timeUpdated !== previous.timeUpdated ||
+        JSON.stringify(entry.deleted) !== JSON.stringify(previous.deleted)
+      ) rowsChanged();
     });
-    const stopReset = this.index.listen((frame) => {
-      if (frame.t === "index.snapshot") scheduleRows();
-    });
-    const stopRemoval = this.index.observeRemoval(scheduleRows);
+    const stopRemoval = this.index.observeRemoval(rowsChanged);
     return {
       snapshot: () => {
         const value = baseline();
@@ -221,11 +201,9 @@ export class InboxFeature implements FrameSource {
         };
       },
       close: () => {
-        closed = true;
         stop();
         this.#publications.delete(publish);
-        stopIndex();
-        stopReset();
+        stopRows();
         stopRemoval();
         listeners.clear();
         this.#views.delete(id);

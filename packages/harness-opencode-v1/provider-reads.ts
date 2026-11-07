@@ -7,10 +7,12 @@ import {
   historyAttachmentCodec,
   identityReadCodec,
   type ProviderReadCodecs,
+  sessionListReadCodec,
 } from "@otk/harness";
 /** Codecs matching this native sink's selected transient readers. */
 export const opencodeV1ReadCodecs: ProviderReadCodecs = {
   "identity.batch": identityReadCodec,
+  "sessions.list": sessionListReadCodec,
   "message.clock": clockReadCodec,
   "history.list": arrayReadCodec(),
   "history.entries": arrayReadCodec(),

@@ -572,13 +572,23 @@ async function start(
             ),
           {
             wait,
+            listed: (entries, signal) =>
+              admitCatalog(entries, signal, {
+                invalidate: false,
+                helpers: false,
+              }),
+            prefetchList: (input, read) =>
+              scheduler!.prefetchList(input, (signal, turn) =>
+                execution.run({ signal, turn }, () =>
+                  read(signal))),
             ioWait: nativeWait,
             retryable: sqliteBusy,
             admission: (signal) =>
               nativeReadsGate.acquire(
                 signal,
                 execution.getStore()?.turn.priority === "interactive",
-                () => scheduler!.interruptIO(signal),
+                () =>
+                  scheduler!.interruptIO(signal),
               ),
             work: (ms) => execution.getStore()?.turn.charge(ms),
           },

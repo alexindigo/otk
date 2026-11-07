@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../support/resources.ts";
 import { assert, assertEquals } from "@std/assert";
-import type { ContentSession } from "@otk/protocol";
+import type { SessionListPage } from "@otk/protocol";
 import { nativeFixture } from "../support/native-fixture.ts";
 import { WsClient } from "../support/ws-client.ts";
 test("children RPC returns sorted normalized sessions without harness fields", async () => {
@@ -21,11 +21,13 @@ test("children RPC returns sorted normalized sessions without harness fields", a
     const server = await f.sidecar();
     client = new WsClient(server.url);
     await client.connect();
-    const children = await client.rpc<ContentSession[]>("session.children", {
+    const page = await client.rpc<SessionListPage>("session.children", {
       sessionID: root.id,
     });
+    const children = page.items;
     assertEquals(children.length, 2);
-    assertEquals(children.map((c) => c.id), children.map((c) => c.id).sort());
+    assertEquals(page.load.state, "complete");
+    assertEquals(page.older, null);
     assert(children.every((child) => child.parentID === root.id));
     assert(
       !JSON.stringify(children).includes('"summary"') &&
