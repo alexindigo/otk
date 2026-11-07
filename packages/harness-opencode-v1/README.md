@@ -63,6 +63,8 @@ const harness: Harness = new OpencodeV1Adapter({
   catalogs: { concurrency: 2, statconcurrency: 8, pending: 128 },
   attachments: { concurrency: 4, maxrefs: 64, maxbytes: 33554432 },
   messages: {
+    prefetchms: 300000,
+    prefetchbytes: 67108864,
     coolms: 300000,
     preloadms: 30000,
     concurrency: 4,
@@ -377,6 +379,15 @@ carry full replacement catchup independently of their historical collection
 items. User agent/model/variant metadata is read through the digest worker even
 when the latest prompt lies outside the page. Standalone integrations supply
 replay policy explicitly and use bounded API pages when no worker is composed.
+
+After a demanded page, the same transcript owner queues only its next older
+native page through the existing idle-gated provider-read scheduler. One
+adapter-wide memory-only FIFO cache holds raw bodies plus scalar transcript
+metadata, charged by complete encoded key/payload bytes. `messages.prefetchms`
+expires entries from insertion and `messages.prefetchbytes` bounds their total;
+oversized entries are not retained. Hits skip both body and metadata source
+reads and seal fresh replay clocks. Mutation, metadata replacement, cutoff,
+epoch retirement, source reset and stop retire cached/in-flight authority.
 
 Pages and turn detail also carry an ordered `{generation, revision}` version.
 When a caller supplies the page-publication port, a complete clocked body page

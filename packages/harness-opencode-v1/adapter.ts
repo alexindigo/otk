@@ -186,7 +186,11 @@ export class OpencodeV1Adapter implements Harness {
       cfg.harness,
       fetcher,
       undefined,
-      digest?.admission ? (signal) => digest.admission!(signal) : undefined,
+      digest?.admission
+        ? (signal) => digest.admission!(signal)
+        : !digest
+        ? (signal) => this.#catalogExecutor!.admission(signal)
+        : undefined,
     );
     this.#questions = new PendingQuestions(
       cfg.catalogs.pending,
@@ -373,6 +377,15 @@ export class OpencodeV1Adapter implements Harness {
       retryRecovery: (id) => this.#recovery.retry(id),
       buffers: this.buffers,
       reader: this.#messages,
+      policy: cfg.messages,
+      requested: () => this.#catalogExecutor?.requested(),
+      prefetch: (input, signal) =>
+        this.#catalogReads.read("opcv1.message.prefetch", input, {
+          owner: `message-prefetch:${crypto.randomUUID()}`,
+          priority: "background",
+          optional: true,
+          signal,
+        }),
       raw: (id, signal) =>
         this.client.json<Session>(
           `/session/${encodeURIComponent(ids.decode(id))}`,
@@ -1538,6 +1551,9 @@ export class OpencodeV1Adapter implements Harness {
       ? (p.info as Session)?.id
       : p.sessionID ?? (p.info as Info)?.sessionID ??
         (p.part as RawPart)?.sessionID;
+    if (typeof nativeID === "string" && type.startsWith("message.")) {
+      this.#transcript.changed(ids.encode(nativeID));
+    }
     if (this.digest && typeof nativeID === "string") {
       const id = ids.encode(nativeID), revision = ++this.#digestRevision;
       if (type === "session.deleted") {

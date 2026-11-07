@@ -71,6 +71,8 @@ busyms = 100 # OTK_DIGEST_BUSYMS — cooperative derived SQLite lock-readiness w
 
 # Memory-only transcript snapshot/replay policy (server and browser).
 [messages]
+prefetchms = 300000 # OTK_MESSAGES_PREFETCHMS - insertion lifetime of memory-only older pages
+prefetchbytes = 67108864 # OTK_MESSAGES_PREFETCHBYTES - aggregate encoded cache bytes; oldest evicted first
 coolms = 300000 # OTK_MESSAGES_COOLMS — milliseconds after an inactive scope's last interaction before unloading bodies
 preloadms = 30000 # OTK_MESSAGES_PRELOADMS — attention-edge warm lease in milliseconds
 concurrency = 4 # OTK_MESSAGES_CONCURRENCY — simultaneous body-page reads per connected server in one browser

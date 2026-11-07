@@ -81,6 +81,8 @@ export interface MessagePageInput {
 }
 /** Values come only from the composing application's layered config. */
 export interface MessagePolicy {
+  prefetchms: number;
+  prefetchbytes: number;
   coolms: number;
   preloadms: number;
   concurrency: number;
@@ -96,6 +98,8 @@ export function messagePolicy(value: unknown): MessagePolicy {
   }
   const object = value as Record<string, unknown>;
   const keys = [
+    "prefetchms",
+    "prefetchbytes",
     "coolms",
     "preloadms",
     "concurrency",
@@ -123,6 +127,8 @@ export function messagePolicy(value: unknown): MessagePolicy {
     );
   }
   return {
+    prefetchms: Number(object.prefetchms),
+    prefetchbytes: Number(object.prefetchbytes),
     coolms: Number(object.coolms),
     preloadms: Number(object.preloadms),
     concurrency: Number(object.concurrency),

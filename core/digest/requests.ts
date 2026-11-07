@@ -22,6 +22,7 @@ export class DigestRequests {
     read: (signal: AbortSignal, execution: DigestExecution) => Promise<T>,
     priority: DigestPriority = "interactive",
     interruptible = false,
+    optional = false,
   ): Promise<T> {
     if (
       this.#closed || generation !== this.generation ||
@@ -34,6 +35,8 @@ export class DigestRequests {
       controller.signal,
       priority,
       interruptible,
+      false,
+      optional,
     )
       .finally(() => {
         this.#active.delete(id);

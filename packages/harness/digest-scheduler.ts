@@ -118,17 +118,7 @@ export class DigestScheduler {
     if (this.#lists.has(key)) return;
     const task = this.execute(
       async (signal, execution) => {
-        while (this.#batches >= this.policy.parallel) {
-          await execution.wait(this.#changed.promise);
-          signal.throwIfAborted();
-        }
-        this.#batches++;
-        try {
-          await read(signal, execution);
-        } finally {
-          this.#batches--;
-          this.#wake();
-        }
+        await read(signal, execution);
       },
       this.#controller.signal,
       "attention",
@@ -427,10 +417,24 @@ export class DigestScheduler {
       try {
         return await this.#job(
           async (signal, execution) => {
+            if (optional) {
+              while (this.#batches >= this.policy.parallel) {
+                await execution.wait(this.#changed.promise);
+                signal.throwIfAborted();
+              }
+              this.#batches++;
+            }
             admitted = true;
-            const value = await run(signal, execution);
-            signal.throwIfAborted();
-            return value;
+            try {
+              const value = await run(signal, execution);
+              signal.throwIfAborted();
+              return value;
+            } finally {
+              if (optional) {
+                this.#batches--;
+                this.#wake();
+              }
+            }
           },
           AbortSignal.any([signal, slice.signal]),
           () => rank[priority],
@@ -769,14 +773,7 @@ export class DigestScheduler {
             // Demand may arrive after this source-free discovery turn was queued.
             if (this.#discovered) return false;
             if (this.#pending.size || this.#lists.size) return true;
-            if (this.#batches >= this.policy.parallel) return true;
-            this.#batches++;
-            try {
-              return await this.resources.discover!(signal, execution);
-            } finally {
-              this.#batches--;
-              this.#wake();
-            }
+            return await this.resources.discover!(signal, execution);
           },
           this.#controller.signal,
           "background",

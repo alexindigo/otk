@@ -9,8 +9,10 @@ import {
   type ProviderReadCodecs,
   sessionListReadCodec,
 } from "@otk/harness";
+import { messagePrefetchCodec } from "./message-prefetch.ts";
 /** Codecs matching this native sink's selected transient readers. */
 export const opencodeV1ReadCodecs: ProviderReadCodecs = {
+  "opcv1.message.prefetch": messagePrefetchCodec,
   "identity.batch": identityReadCodec,
   "sessions.list": sessionListReadCodec,
   "message.clock": clockReadCodec,

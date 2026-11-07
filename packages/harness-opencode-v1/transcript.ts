@@ -21,6 +21,11 @@ import type { Messages, NativeMessage } from "./messages.ts";
 import type { Session } from "./types.ts";
 import { mapMessage, mapPart } from "./map.ts";
 import { opencodeV1SessionID as ids } from "./ids.ts";
+import {
+  MessagePrefetchCache,
+  type PrefetchInput,
+  type PrefetchPage,
+} from "./message-prefetch.ts";
 
 interface Cursor {
   v: 1;
@@ -76,6 +81,11 @@ function prompt(message: Message | undefined): LatestPrompt | undefined {
 }
 /** Exact continuation, raw session/cutoff and event-aligned page authority. */
 export class Transcript {
+  #cache?: MessagePrefetchCache;
+  #prefetch = new Map<
+    string,
+    { session: string; controller: AbortController }
+  >();
   #baselines = new Map<string, Baseline>();
   #opening = new Map<
     string,
@@ -97,6 +107,12 @@ export class Transcript {
       retryRecovery?(id: string): void;
       buffers: StreamBuffers;
       reader: Messages;
+      requested?(): void;
+      policy?: { prefetchms: number; prefetchbytes: number };
+      prefetch?(
+        input: PrefetchInput,
+        signal: AbortSignal,
+      ): Promise<PrefetchPage>;
       raw(id: string, signal?: AbortSignal): Promise<Session>;
       info(raw: Session, signal?: AbortSignal): Promise<ContentSession>;
       metadata?(
@@ -116,9 +132,59 @@ export class Transcript {
         turns: readonly string[],
       ): Record<string, import("@otk/protocol").UsageSummary>;
     },
-  ) {}
+  ) {
+    if (options.policy) this.#cache = new MessagePrefetchCache(options.policy);
+  }
+  /** Mutations retire cached payloads without replacing the body epoch. */
+  changed(id?: string): void {
+    this.#cache?.clear(id);
+    for (const [key, work] of this.#prefetch) {
+      if (id !== undefined && work.session !== id) continue;
+      this.#prefetch.delete(key);
+      work.controller.abort();
+    }
+  }
+  #key(id: string, baseline: Baseline, before: string): string {
+    return JSON.stringify([
+      this.options.replay.version(id),
+      id,
+      baseline.epoch,
+      baseline.raw.revert?.messageID ?? null,
+      before,
+      MESSAGE_PAGE_SIZE,
+    ]);
+  }
+  #next(id: string, baseline: Baseline, before?: string): void {
+    if (!before || !this.#cache || !this.options.prefetch) return;
+    const key = this.#key(id, baseline, before);
+    if (this.#cache.get(key) || this.#prefetch.has(key)) return;
+    const work = { session: id, controller: new AbortController() };
+    this.#prefetch.set(key, work);
+    void this.options.prefetch({
+      sessionID: id,
+      directory: baseline.raw.directory,
+      before,
+      limit: MESSAGE_PAGE_SIZE,
+      cutoff: baseline.raw.revert?.messageID,
+    }, work.controller.signal).then((value) => {
+      if (
+        this.#prefetch.get(key) !== work ||
+        baseline !== this.#baselines.get(id) ||
+        key !== this.#key(id, baseline, before)
+      ) return;
+      this.#cache!.put(id, key, {
+        ...value,
+        metadata: value.metadata ?? { boundaries: [], prompt: baseline.prompt },
+      });
+    }).catch(() => {
+      // Speculation has no requested result; a miss retains ordinary read errors.
+    }).finally(() => {
+      if (this.#prefetch.get(key) === work) this.#prefetch.delete(key);
+    });
+  }
   observe(raw: Session): void {
     const id = ids.encode(raw.id), previous = this.#baselines.get(id);
+    this.changed(id);
     const opening = this.#opening.get(id);
     if (!previous && !opening) return;
     if (!previous && opening) {
@@ -160,6 +226,7 @@ export class Transcript {
     this.options.invalidated?.(value);
   }
   #retire(id?: string): void {
+    this.changed(id);
     this.options.retire?.(id);
     for (const [key, opening] of this.#opening) {
       if (id !== undefined && key !== id) continue;
@@ -242,6 +309,7 @@ export class Transcript {
   }
   async session(id: string, signal?: AbortSignal): Promise<ContentSession> {
     ids.decode(id);
+    this.options.requested?.();
     // Point metadata has an independent caller lifetime. Body retirement must
     // fence its old response, not turn an accepted revert/restore into failure.
     while (true) {
@@ -289,6 +357,7 @@ export class Transcript {
   ): Promise<MessagePage> {
     ids.decode(id);
     signal.throwIfAborted();
+    this.options.requested?.();
     const { replay, buffers, reader } = this.options;
     const token = before === undefined ? undefined : decode(before);
     let baseline = this.#baselines.get(id);
@@ -319,7 +388,20 @@ export class Transcript {
             .created;
         native = reader.cursor(cutoff, created);
       }
-      const page = await reader.page(
+      const cached = native
+        ? this.#cache?.get(this.#key(id, owner, native))
+        : undefined;
+      // A requested miss cancels only speculative ownership, never another caller.
+      if (!cached && native) {
+        const key = this.#key(id, owner, native),
+          work = this.#prefetch.get(key);
+        if (work) {
+          this.#prefetch.delete(key);
+          work.controller.abort();
+        }
+      }
+      metadata = cached?.metadata ?? metadata;
+      const page = cached?.page ?? await reader.page(
         id,
         MESSAGE_PAGE_SIZE,
         native,
@@ -351,6 +433,7 @@ export class Transcript {
         ),
       ];
       const acquireMetadata = async () => {
+        if (cached?.metadata) return;
         if (this.options.metadata) {
           const oldest = page.items.reduce<NativeMessage | undefined>(
             (oldest, row) =>
@@ -563,6 +646,7 @@ export class Transcript {
       }
       owner.prompt = result.prompt;
       owner.promptReady = true;
+      this.#next(id, owner, page.next);
       return result;
     } finally {
       capture.release();

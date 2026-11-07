@@ -117,7 +117,8 @@ License: LGPL-3.0-only. Workspace validation: `deno task test:unit` and
 `ProviderReadPort` extends the same worker/scheduler lifetime with transient,
 feature-contributed reads. `identity.batch` contributes its input/result/chunk
 types and `identityReadCodec`; application composition selects the matching
-reader and codec. Reads carry an owner, priority and cancellation signal,
+reader and codec. Reads carry an owner, priority and cancellation signal, and
+may explicitly opt into optional idle/parallel admission for speculation,
 publish bounded ordered chunks, and assemble one complete result. Releasing the
 owner cancels its pending reads. These results are not digest commits or durable
 request receipts.

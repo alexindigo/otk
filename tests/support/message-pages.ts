@@ -8,6 +8,8 @@ import {
   type MessagePolicy,
 } from "@otk/protocol";
 export const fixtureMessagePolicy: MessagePolicy = {
+  prefetchms: 300000,
+  prefetchbytes: 67108864,
   coolms: 300000,
   recoveryconcurrency: 2,
   recoverypending: 128,

@@ -12,6 +12,128 @@ import type { DigestPressure } from "../../core/digest/protocol.ts";
 import { DigestBridge } from "../../core/digest/bridge.ts";
 import { sessionListReadCodec } from "@otk/harness";
 import { coreBackendFixture } from "../support/core-backend.ts";
+import {
+  OpencodeV1Adapter,
+  opencodeV1ReadCodecs,
+} from "@otk/harness-opencode-v1";
+import { StreamBuffers } from "@otk/content";
+
+test("@load @messages @transport idle prefetch serves the next older batch with zero native HTTP or SQL reads", async () => {
+  const native = await nativeFixture(1, true, 30);
+  native.settings.messages.prefetchms = 1000;
+  native.release();
+  const insert = native.db!.prepare("INSERT INTO message VALUES(?,?,?)");
+  for (let i = 0; i < 30; i++) {
+    insert.run(
+      `msg_${String(i).padStart(3, "0")}`,
+      "ses_idle0",
+      JSON.stringify({ role: "user", time: { created: i + 1 } }),
+    );
+  }
+  const errors: string[] = [], samples: DigestPressure[] = [];
+  const bridge = new DigestBridge({
+    statePath: join(native.root, "prefetch-state"),
+    provider: "opencode-v1",
+    reads: opencodeV1ReadCodecs,
+    native: {
+      harness: native.settings.harness,
+      index: native.settings.index,
+      attachments: native.settings.attachments,
+    },
+    policy: {
+      ...native.settings.digest,
+      idlems: 100,
+      batch: 100,
+      slicems: 1000,
+    },
+    publish() {},
+    pressure: (value) => samples.push(value),
+    diagnostic: (error) => errors.push(String(error)),
+  });
+  let metadataReads = 0;
+  const observed = new Proxy(bridge, {
+    get(target, key) {
+      const value = Reflect.get(target, key, target);
+      if (key === "transcriptMetadata") {
+        return (...args: Parameters<typeof bridge.transcriptMetadata>) => {
+          metadataReads++;
+          return bridge.transcriptMetadata(...args);
+        };
+      }
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+  const adapter = new OpencodeV1Adapter(
+    native.settings,
+    new StreamBuffers(),
+    fetch,
+    observed,
+  );
+  try {
+    bridge.scope("prefetch-viewer", { sessions: [] });
+    bridge.requested();
+    await bridge.start();
+    await bridge.projects(1, new AbortController().signal);
+    const first = await adapter.core.listMessages("opcv1-ses_idle0", {});
+    assertEquals(first.session.id, "opcv1-ses_idle0");
+    assertEquals(
+      first.items.map((m) => m.id),
+      Array.from(
+        { length: 10 },
+        (_, i) => `msg_${String(i + 20).padStart(3, "0")}`,
+      ),
+    );
+    await waitFor(() => native.reads(), (n) => n === 2);
+    // A following essential read joins all prior bounded native/metadata work.
+    await bridge.transcriptMetadata(
+      "opcv1-ses_idle0",
+      [],
+      new AbortController().signal,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    bridge.requested();
+    const before = native.reads();
+    const httpBefore = [...native.requests];
+    const metadataBefore = metadataReads;
+    const sqlBefore = JSON.stringify(samples.at(-1)?.nativeReads);
+    const second = await adapter.core.listMessages("opcv1-ses_idle0", {
+      before: first.older!,
+    });
+    assertEquals(
+      second.items.map((m) => m.id),
+      Array.from(
+        { length: 10 },
+        (_, i) => `msg_${String(i + 10).padStart(3, "0")}`,
+      ),
+    );
+    assertEquals(native.reads(), before);
+    assertEquals([...native.requests], httpBefore);
+    assertEquals(
+      metadataReads,
+      metadataBefore,
+      "cached scalar metadata must skip the worker SQL read",
+    );
+    assertEquals(JSON.stringify(samples.at(-1)?.nativeReads), sqlBefore);
+    assertEquals(second.prompt, first.prompt);
+    assertEquals(errors, []);
+    console.info("Q6: newest=10, older=10, cache-hit native HTTP=0, SQL=0");
+    bridge.release("prefetch-viewer");
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+    const expiredBefore = native.reads();
+    const expired = await adapter.core.listMessages("opcv1-ses_idle0", {
+      before: first.older!,
+    });
+    assertEquals(expired.items.map((m) => m.id), second.items.map((m) => m.id));
+    assertEquals(
+      native.reads(),
+      expiredBefore + 1,
+      "expired entries require a fresh native batch",
+    );
+  } finally {
+    await adapter.core.stop();
+    await bridge.stop();
+  }
+});
 
 test("@load @sessions @messages @transport replies complete only their requested boundary after held-source loading", async () => {
   const root = await tempDir("boundary-replies-");
@@ -64,7 +186,11 @@ test("@load @sessions @messages @transport replies complete only their requested
   assertEquals(replies[1].items[0].id, "message");
 });
 
-async function nativeFixture(population = 6, sql = false) {
+async function nativeFixture(
+  population = 6,
+  sql = false,
+  messageCount?: number,
+) {
   const root = await tempDir("demand-idle-");
   const sessions = Array.from({ length: population }, (_, i) => ({
     id: `ses_idle${i}`,
@@ -174,6 +300,26 @@ async function nativeFixture(population = 6, sql = false) {
                 });}
             }),
           ]);
+        }
+        if (messageCount !== undefined) {
+          const end = Number(url.searchParams.get("before") ?? messageCount),
+            limit = Number(url.searchParams.get("limit"));
+          const begin = Math.max(0, end - limit);
+          return Response.json(
+            Array.from(
+              { length: end - begin },
+              (_, i) => ({
+                info: {
+                  id: `msg_${String(begin + i).padStart(3, "0")}`,
+                  sessionID: session.id,
+                  role: "user",
+                  time: { created: begin + i + 1 },
+                },
+                parts: [],
+              }),
+            ),
+            { headers: begin ? { "x-next-cursor": String(begin) } : {} },
+          );
         }
         return url.searchParams.has("before")
           ? Response.json([])

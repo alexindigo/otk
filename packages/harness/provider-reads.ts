@@ -34,6 +34,7 @@ export interface ProviderReadKinds
     FileReadKinds,
     QuestionReadKinds {}
 export interface ProviderReadOptions {
+  optional?: boolean;
   owner: string;
   priority: "user" | "attention" | "visible" | "background";
   signal?: AbortSignal;

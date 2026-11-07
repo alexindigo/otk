@@ -612,6 +612,7 @@ export class DigestBridge implements DigestPort {
           kind,
           input,
           priority: options.priority,
+          optional: options.optional,
         } as ProviderReadCommand,
         signal,
         (message) => {

@@ -57,6 +57,8 @@ export const SERVICE_SCHEMA: Schema = {
   catalogs: { concurrency: "int", statconcurrency: "int", pending: "int" },
   attachments: { concurrency: "int", maxrefs: "int", maxbytes: "int" },
   messages: {
+    prefetchms: "int",
+    prefetchbytes: "int",
     coolms: "int",
     preloadms: "int",
     concurrency: "int",

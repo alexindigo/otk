@@ -1313,6 +1313,7 @@ function handle(message: ToWorker): void {
       ? message.priority
       : "interactive",
     message.t === "read",
+    message.t === "read" && message.optional === true,
   );
   observeTask(task, message);
   kick();

@@ -261,6 +261,34 @@ export class OpencodeV1DigestSink implements DigestSink {
       this.wait,
     );
     this.readers = {
+      "opcv1.message.prefetch": async (input, signal) => {
+        const page = await this.#messages.page(
+          input.sessionID,
+          input.limit,
+          input.before,
+          input.directory,
+          signal,
+        );
+        const turns = [
+          ...new Set(
+            page.items.filter((m) => m.info.role === "assistant").map((m) =>
+              m.info.role === "assistant"
+                ? m.info.parentID ?? m.info.id
+                : m.info.id
+            ),
+          ),
+        ];
+        const oldest = page.items[0];
+        const metadata = await this.transcriptMetadata(
+          input.sessionID,
+          turns,
+          signal,
+          input.cutoff,
+          oldest &&
+            { messageID: oldest.info.id, created: oldest.info.time.created },
+        );
+        return { page, metadata };
+      },
       "sessions.list": async (input, signal) => {
         const health = await this.#client.json<{ healthy: boolean }>(
           "/global/health",

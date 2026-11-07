@@ -16,6 +16,7 @@ export type ProviderReadCommand = {
     kind: K;
     input: ProviderReadKinds[K]["input"];
     priority: ProviderReadOptions["priority"];
+    optional?: boolean;
   };
 }[keyof ProviderReadKinds];
 export type ProviderReadResult = {

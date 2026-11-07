@@ -67,6 +67,8 @@ httpms = 15000
 retrybase = 1000
 retrymax = 30000
 [messages]
+prefetchms = 300000
+prefetchbytes = 67108864
 coolms = 300000
 preloadms = 30000
 concurrency = 4

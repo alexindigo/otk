@@ -134,6 +134,36 @@ test("config explicit inputs leave process env untouched and retain shipped defa
   assertEquals(cfg().server.port, 1502);
   assertEquals(Deno.env.toObject(), before);
 });
+test("message prefetch policy layers TOML and env with positive safe-integer bounds", async () => {
+  assertEquals([cfg().messages.prefetchms, cfg().messages.prefetchbytes], [
+    300000,
+    67108864,
+  ]);
+  const overlayPath = join(await fixture(), "prefetch.toml");
+  await Deno.writeTextFile(
+    overlayPath,
+    "[messages]\nprefetchms=10\nprefetchbytes=100\n",
+  );
+  const settings = loadServiceConfig({
+    defaultsPath,
+    overlayPath,
+    env: { OTK_MESSAGES_PREFETCHMS: "20", OTK_MESSAGES_PREFETCHBYTES: "200" },
+  }).config.messages;
+  assertEquals([settings.prefetchms, settings.prefetchbytes], [20, 200]);
+  for (const key of ["PREFETCHMS", "PREFETCHBYTES"]) {
+    for (const value of ["0", "-1", "1.5", "9007199254740992"]) {
+      const error = assertThrows(
+        () =>
+          loadServiceConfig({
+            defaultsPath,
+            env: { [`OTK_MESSAGES_${key}`]: value },
+          }),
+        ConfigError,
+      );
+      assert(error.problems.some((p) => p.includes(`OTK_MESSAGES_${key}`)));
+    }
+  }
+});
 test("config rejects inherited property names as unknown schema nodes", () => {
   const error = assertThrows(
     () =>

@@ -72,12 +72,26 @@ export class CatalogExecutor implements ProviderReadPort {
   #metadata?: ReadAdmission;
   #history?: HistoryDatabase;
   #lists?: SessionLists;
+  requested(): void {
+    this.#start().requested();
+  }
+  #readAdmission(): ReadAdmission {
+    return this.#admission ??= new ReadAdmission(
+      () => this.#start().interruptIO(),
+      this.concurrency,
+    );
+  }
+  /** Serving reads borrow the same permission and joined preemption owner. */
+  admission(signal: AbortSignal): Promise<() => void> {
+    return this.#readAdmission().acquire(signal, true);
+  }
   async read<K extends keyof ProviderReadKinds>(
     kind: K,
     input: ProviderReadKinds[K]["input"],
     options: ProviderReadOptions,
   ): Promise<ProviderReadKinds[K]["result"]> {
     const scheduler = this.#start();
+    if (!options.optional) scheduler.requested();
     const controller = new AbortController();
     const signal = options.signal
       ? AbortSignal.any([controller.signal, options.signal])
@@ -85,10 +99,7 @@ export class CatalogExecutor implements ProviderReadPort {
     let owned = this.#owners.get(options.owner);
     if (!owned) this.#owners.set(options.owner, owned = new Set());
     owned.add(controller);
-    const admission = this.#admission ??= new ReadAdmission(
-      () => scheduler.interruptIO(),
-      this.concurrency,
-    );
+    const admission = this.#readAdmission();
     try {
       return await scheduler.execute(
         async (signal, execution) => {
@@ -107,6 +118,15 @@ export class CatalogExecutor implements ProviderReadPort {
             harnessDb(this.cfg),
           );
           const readers: ProviderReaders = {
+            "opcv1.message.prefetch": async (input, signal) => ({
+              page: await new Messages(client, this.directory).page(
+                input.sessionID,
+                input.limit,
+                input.before,
+                input.directory,
+                signal,
+              ),
+            }),
             "sessions.list": (input, signal) => {
               const lists = this.#lists ??= new SessionLists(
                 client,
@@ -146,6 +166,8 @@ export class CatalogExecutor implements ProviderReadPort {
         signal,
         options.priority === "user" ? "interactive" : options.priority,
         true,
+        false,
+        options.optional === true,
       );
     } finally {
       owned.delete(controller);

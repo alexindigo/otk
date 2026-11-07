@@ -20,6 +20,54 @@ const policy: DigestPolicy = {
   retryms: 10,
   busyms: 100,
 };
+test("optional transient reads share the idle and parallel entry-batch budget", async () => {
+  let now = 0, starts = 0;
+  const release = Promise.withResolvers<void>();
+  const scheduler = new DigestScheduler({ ...policy, cpu: 1, parallel: 2 }, {
+    now: () => now,
+    freeMemory: () => 1000,
+    sleep: (_ms, signal) =>
+      new Promise<void>((resolve) =>
+        signal.addEventListener("abort", () => resolve(), { once: true })
+      ),
+  });
+  scheduler.requested();
+  const reads = Array.from(
+    { length: 4 },
+    () =>
+      scheduler.execute(
+        async (_signal, execution) => {
+          starts++;
+          await execution.wait(release.promise, "io");
+        },
+        new AbortController().signal,
+        "background",
+        true,
+        false,
+        true,
+      ),
+  );
+  try {
+    while (await scheduler.tick()) { /* idle gate parks speculation */ }
+    assertEquals(starts, 0);
+    now = 20;
+    while (await scheduler.tick()) { /* only two admitted I/O lifetimes */ }
+    assertEquals(starts, 2);
+    scheduler.requested();
+    release.resolve();
+    await Promise.resolve();
+    while (await scheduler.tick()) { /* admitted settlement drains */ }
+    assertEquals(starts, 2);
+    now = 40;
+    while (await scheduler.tick()) { /* successor batches now eligible */ }
+    await Promise.all(reads);
+    assertEquals(starts, 4);
+  } finally {
+    release.resolve();
+    await scheduler.stop();
+    await Promise.allSettled(reads);
+  }
+});
 test("high membership upgrades normal work, yields one batch at a break and retires before source discovery", async () => {
   let now = 0;
   const seen: string[] = [];

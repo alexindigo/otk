@@ -26,6 +26,8 @@ const policy = {
   concurrency: 4,
   replayops: 128,
   replaybytes: 4194304,
+  prefetchms: 300000,
+  prefetchbytes: 67108864,
   retryms: 1000,
 };
 const header = (input: number, completed = false): UsageMessage => ({

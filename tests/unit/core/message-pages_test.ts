@@ -23,6 +23,8 @@ Deno.test("message replay policy is layered and rejects unsafe budgets with prec
     concurrency: 4,
     replayops: 7,
     replaybytes: 4194304,
+    prefetchms: 300000,
+    prefetchbytes: 67108864,
     retryms: 2500,
   });
 });

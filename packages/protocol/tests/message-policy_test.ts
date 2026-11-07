@@ -3,6 +3,8 @@ import { assertEquals, assertThrows } from "@std/assert";
 import { messagePolicy } from "../mod.ts";
 Deno.test("welcome message policy has no defaults or unknown fields and preserves operator values", () => {
   const policy = {
+    prefetchms: 300000,
+    prefetchbytes: 67108864,
     coolms: 999999999,
     preloadms: 1,
     concurrency: 17,
@@ -18,6 +20,8 @@ Deno.test("welcome message policy has no defaults or unknown fields and preserve
       undefined,
       {},
       { ...policy, replayops: 0 },
+      { ...policy, prefetchms: 0 },
+      { ...policy, prefetchbytes: Number.MAX_SAFE_INTEGER + 1 },
       { ...policy, coolms: 0 },
       { ...policy, preloadms: -1 },
       { ...policy, concurrency: 1.5 },

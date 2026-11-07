@@ -16,6 +16,8 @@ const policy = {
   concurrency: 4,
   replayops: 2,
   replaybytes: 4096,
+  prefetchms: 300000,
+  prefetchbytes: 67108864,
   retryms: 1000,
 };
 const clock = { epoch: "test", seq: 0 };
