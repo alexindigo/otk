@@ -126,6 +126,12 @@ function Consumer() {
     })
     : undefined;
   const open = (target: BodyTarget) => {
+    connection.view({
+      directory,
+      selected: target.sessionID,
+      crumbs: [],
+      rows: [a.sessionID, b.sessionID],
+    });
     owner.setDemand({
       scope: scope(target),
       sessions: [target],
@@ -178,6 +184,12 @@ function Consumer() {
     return owner.get(a)?.interaction.disclosure("heap-choice", "fixture")
       .value() ?? false;
   };
+  connection.view({
+    directory,
+    selected: b.sessionID,
+    crumbs: [],
+    rows: [a.sessionID, b.sessionID],
+  });
   void connection.connect().catch((error) => setError(String(error)));
   onCleanup(() => {
     probe?.stop();
