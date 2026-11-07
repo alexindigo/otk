@@ -1,6 +1,11 @@
 {
   "schema": 1,
   "integration": {
+    "load": [
+      "first-page_test.ts",
+      "background-viewers_test.ts",
+      "view-lease_test.ts"
+    ],
     "composer": [
       "attachment-mime_test.ts",
       "commands_test.ts",
@@ -43,6 +48,7 @@
       "first-page_test.ts",
       "background-viewers_test.ts",
       "view-lease_test.ts",
+      "view-epoch_test.ts",
       "beta2-upgrade_test.ts",
       "bootstrap-cost_test.ts",
       "catalog-native_test.ts",
@@ -71,6 +77,7 @@
     ]
   },
   "areas": [
+    "load",
     "composer",
     "messages",
     "sessions",
@@ -138,6 +145,16 @@
       "id": 10,
       "pattern": "^(docs/.*\\.md|[^/]+\\.md|LICENSE)$",
       "areas": []
+    },
+    {
+      "id": 11,
+      "pattern": "^packages/client/(index|server-resources|project-projection|transcript-projection|tabs|task-breadcrumbs|session-tree|transcript-scopes|request-attention|approval-attention|inbox)\\.ts$|^core/(index|ws|digest)/|^core/features/digest[^/]*\\.ts$|^packages/harness/digest(-scheduler)?\\.ts$",
+      "areas": ["load"]
+    },
+    {
+      "id": 12,
+      "pattern": "^packages/client/(index|server-resources)\\.ts$",
+      "broad": true
     }
   ]
 }

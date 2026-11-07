@@ -232,7 +232,7 @@ Deno.test("Sessions hierarchy waits for matching catalog and inbox but survives 
   f.resources.stop();
 });
 
-Deno.test("digest-only patches do zero project-row recomputations and zero attention-map rebuilds", () => {
+Deno.test("@load @sessions digest-only patches do zero project-row recomputations and zero attention-map rebuilds", () => {
   const revisions: { revision: number }[] = [];
   const factory: StateFactory = (initial) => {
     if ("revision" in initial && "keys" in initial) {

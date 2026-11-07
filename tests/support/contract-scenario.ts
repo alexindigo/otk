@@ -9,6 +9,7 @@ import { publicUiScenario } from "./public-ui-scenario.ts";
 import { visualScenario } from "./visual-scenario.ts";
 import { themeScenario } from "./theme-scenario.ts";
 import { loadPriorityScenario } from "./load-priority-scenario.ts";
+import { loadPopulationScenario } from "./load-population-scenario.ts";
 import { scaleScenario } from "./scale-scenario.ts";
 import { inboxBrowserFixture } from "./inbox-browser.ts";
 import { fixture } from "./config.ts";
@@ -31,6 +32,9 @@ import type {
 /** Checked external-backend compositions: no native stack for absent-capability proofs. */
 export async function contractScenario(profile: Profile) {
   if (profile === "contract-load-priority") return await loadPriorityScenario();
+  if (profile === "contract-load-small" || profile === "contract-load-large") {
+    return await loadPopulationScenario(profile === "contract-load-large");
+  }
   if (profile === "contract-themes") return await themeScenario();
   if (profile.startsWith("contract-scale-")) {
     return await scaleScenario(profile);

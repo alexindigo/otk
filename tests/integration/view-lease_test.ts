@@ -7,7 +7,7 @@ import { coreBackendFixture } from "../support/core-backend.ts";
 import { WsClient } from "../support/ws-client.ts";
 import { waitFor } from "../support/opencode.ts";
 
-test("attention leases contain only pending user requests and routing metadata when unrelated population doubles", async () => {
+test("@load @attention attention leases contain only pending user requests and routing metadata when unrelated population doubles", async () => {
   const permission = {
     id: "ask",
     sessionID: "tstv1-pending",
@@ -247,7 +247,7 @@ test("project and visible-row acquisition scopes inbox marks, policies and retai
   }
 });
 
-test("view leases exclude unrelated sessions and fence replacements", async () => {
+test("@load @transport view leases exclude unrelated sessions and fence replacements", async () => {
   const app = await coreBackendFixture(await fixture());
   const client = new WsClient(app.url);
   try {

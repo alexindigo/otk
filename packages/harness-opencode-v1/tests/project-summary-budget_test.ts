@@ -6,7 +6,7 @@ import { test } from "../../../tests/support/resources.ts";
 import { waitFor } from "../../../tests/support/opencode.ts";
 import { OpencodeV1Adapter } from "../adapter.ts";
 
-test("project activity reconciliation reads stay constant with 10 versus 130 discovered directories", async () => {
+test("@load @transport project activity reconciliation reads stay constant with 10 versus 130 discovered directories", async () => {
   const counts: number[] = [];
   for (const population of [10, 130]) {
     const root = await fixture(), settings = cfg();

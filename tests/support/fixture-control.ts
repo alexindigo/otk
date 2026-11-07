@@ -7,6 +7,8 @@ export type Json = null | boolean | number | string | Json[] | {
 export type Profile =
   | "ordinary"
   | "contract-load-priority"
+  | "contract-load-small"
+  | "contract-load-large"
   | "contract-scale-request"
   | "contract-scale-overflow"
   | "contract-scale-remaining"
@@ -277,6 +279,8 @@ export function request(value: unknown): ControlRequest {
         ![
           "ordinary",
           "contract-load-priority",
+          "contract-load-small",
+          "contract-load-large",
           "contract-scale-request",
           "contract-scale-overflow",
           "contract-scale-remaining",

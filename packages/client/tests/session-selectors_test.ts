@@ -18,7 +18,7 @@ import {
   fixturePage,
 } from "../../../tests/support/message-pages.ts";
 
-Deno.test("digest-only and unrelated-project patches do zero tab/crumb/Sessions derivation work", () => {
+Deno.test("@load @sessions digest-only and unrelated-project patches do zero tab/crumb/Sessions derivation work", () => {
   const f = shellFixture(), project = { sidecarId: "local", directory: "/p" };
   f.resources.receive("local", {
     t: "index.snapshot",

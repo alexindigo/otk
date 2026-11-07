@@ -37,6 +37,35 @@ Deno.test("SEL1: NUL names, old/new rename, deletions and broad fallback", () =>
   assert(select([], [], "missing").broad);
   assertThrows(() => pathsFromNul(new TextEncoder().encode("x\n")));
 });
+Deno.test("@load @harness SEL1: acquisition, publication, projection and scheduling changes select permanent load contracts", () => {
+  for (
+    const path of [
+      "packages/client/index.ts",
+      "packages/client/server-resources.ts",
+      "packages/client/project-projection.ts",
+      "packages/client/transcript-projection.ts",
+      "packages/client/tabs.ts",
+      "packages/client/task-breadcrumbs.ts",
+      "packages/client/session-tree.ts",
+      "core/index/store.ts",
+      "core/ws/connections.ts",
+      "core/digest/worker.ts",
+      "packages/harness/digest-scheduler.ts",
+    ]
+  ) {
+    const selection = select([path], [], "HEAD");
+    assert(selection.areas.includes("load"), path);
+    assert(selection.smoke, path);
+    if (!selection.broad) {
+      for (const file of map.integration.load) {
+        assert(
+          selection.integration.includes(`tests/integration/${file}`),
+          `${path}: ${file}`,
+        );
+      }
+    } else assertEquals(selection.integration, ["*"]);
+  }
+});
 Deno.test("SEL1: exact map contracts and explicit union", () => {
   for (
     const [path, expected] of [
