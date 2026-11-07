@@ -4,6 +4,9 @@ import { DigestScheduler } from "@otk/harness";
 import { bounded, test } from "../../../tests/support/resources.ts";
 
 const policy = {
+  idlems: 1,
+  parallel: 3,
+  background: false,
   batch: 2,
   slicems: 8,
   cpu: 1,

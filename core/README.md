@@ -525,12 +525,20 @@ stale. No row requires session metadata to render its lamp or counts.
 
 ## Worker-backed digest services
 
-Socket view lifetimes retain viewer presence even for an empty view. Without a
-viewer the worker parks optional digest/helper jobs and cached replay at bounded
-boundaries; interruptible reads join cancellation before parking. Scalar catalog
-facts and SSE activity/permission updates remain independent so lamps stay live.
-The existing native permission is also borrowed by serving-isolate finite reads;
-essential page demand preempts optional I/O without adding a SQLite owner.
+Socket view lifetimes retain viewer presence even for an empty welcomed view.
+Optional digest/helper batches and cached replay require a request-free
+`digest.idlems` interval. HTTP ingress and validated WS acquisition requests
+reset that interval independently of executing pressure; passive
+acknowledgements and server events do not. Priority promotion never changes idle
+eligibility. `digest.parallel` bounds admitted optional entry-batches, including
+I/O waits; the single native permission and SQLite owner remain unchanged. A
+request parks the next batch while bounded commit/publication cleanup drains.
+Without a viewer, optional work parks unless `digest.background` is enabled
+(default off); interruptible reads join cancellation before parking. Scalar
+catalog facts and SSE activity/permission updates remain independent so lamps
+stay live. The existing native permission is also borrowed by serving-isolate
+finite reads; essential page demand preempts optional I/O without adding a
+SQLite owner.
 
 Indexed ready queues order interactive, attention, visible and background work.
 Catalog metadata uses attention priority; rebuildable replay uses background.

@@ -31,6 +31,7 @@ export interface CoreOptions {
   diagnostics?: SectionObserver;
   diagnostic?: DiagnosticSink;
   signal?: AbortSignal;
+  requested?: () => void;
 }
 export interface CoreServer {
   server: Deno.HttpServer<Deno.NetAddr>;
@@ -121,7 +122,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
   try {
     check();
     const auth = new AuthState(cfg);
-    const listener = bind(cfg, undefined, diagnostic);
+    const listener = bind(cfg, undefined, diagnostic, options.requested);
     server = listener.server;
     const transport = connections = new Connections(
       backend,
@@ -136,6 +137,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
         policy: clientRequestPolicy(cfg),
         helloms: cfg.connection.helloms,
         attachments: cfg.attachments,
+        requested: options.requested,
       },
       options.sources,
       options.diagnostics,

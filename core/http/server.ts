@@ -10,6 +10,7 @@ export function bind(
   cfg: ServiceConfig,
   signal?: AbortSignal,
   diagnostic?: DiagnosticSink,
+  requested?: () => void,
 ) {
   let handler: Deno.ServeHandler<Deno.NetAddr> = () =>
     new Response("Starting", { status: 503 });
@@ -20,7 +21,10 @@ export function bind(
       port: cfg.server.port,
       signal,
       onListen() {},
-    }, (request, info) => handler(request, info));
+    }, (request, info) => {
+      requested?.();
+      return handler(request, info);
+    });
   } catch (error) {
     if (error instanceof Deno.errors.AddrInUse) {
       throw new Error(

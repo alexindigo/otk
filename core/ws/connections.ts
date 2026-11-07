@@ -64,6 +64,7 @@ export interface ConnectionRequests {
   identity(): string;
   policy: ClientRequestPolicy;
   helloms: number;
+  requested?: () => void;
   attachments?: import("@otk/protocol").AttachmentPolicy;
 }
 /** Socket recipients own delivery and leases, never action execution. */
@@ -357,6 +358,7 @@ export class Connections {
           const identity = await requestFingerprint(`principal:${principal}`);
           if (!this.#connections.has(c)) return;
           if (raw.view) c.view = view(object(raw.view));
+          this.requests.requested?.();
           selectionGeneration++;
           changed();
           this.index.flush();
@@ -419,6 +421,7 @@ export class Connections {
         }
         if (frame.t === "view") {
           const next = view(raw);
+          this.requests.requested?.();
           if (next.epoch <= c.view.epoch) return;
           this.index.flush();
           if (next.selected !== c.view.selected) selectionGeneration++;
@@ -431,13 +434,40 @@ export class Connections {
           c.index.refresh();
           await snapshots();
         } else if (frame.t === "subscribe" || frame.t === "unsubscribe") {
-          this.#subscribe(c, sessionID(raw)!, frame.t === "subscribe");
+          const id = sessionID(raw)!;
+          this.requests.requested?.();
+          this.#subscribe(c, id, frame.t === "subscribe");
         } else if (frame.t === "resnapshot") {
+          this.requests.requested?.();
           c.index.snapshot();
         } else if (
           ["request", "request.resume", "request.release", "request.received"]
             .includes(frame.t)
         ) {
+          if (frame.t !== "request.received") {
+            if (frame.t === "request") {
+              if (typeof raw.method !== "string") {
+                throw new HarnessError("frame", "Invalid request method");
+              }
+            } else {
+              const refs = frame.t === "request.resume" ? raw.items : raw.refs;
+              if (
+                !Array.isArray(refs) ||
+                refs.length > this.requests.policy.resumebatch
+              ) {
+                throw new HarnessError(
+                  "frame",
+                  "Invalid request control batch",
+                );
+              }
+              for (const item of refs) {
+                requestRef(
+                  frame.t === "request.resume" ? object(item).ref : item,
+                );
+              }
+            }
+            this.requests.requested?.();
+          }
           await this.requests.coordinator.accept(
             principal,
             frame as RequestControl,

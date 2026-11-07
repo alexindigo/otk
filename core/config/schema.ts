@@ -67,6 +67,9 @@ export const SERVICE_SCHEMA: Schema = {
     retryms: "int",
   },
   digest: {
+    idlems: "int",
+    parallel: "int",
+    background: "bool",
     batch: "int",
     slicems: "int",
     cpu: "float",

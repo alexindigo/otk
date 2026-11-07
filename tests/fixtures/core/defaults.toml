@@ -38,6 +38,9 @@ concurrency = 4
 maxrefs = 64
 maxbytes = 33554432
 [digest]
+idlems = 2000
+parallel = 3
+background = false
 batch = 100
 slicems = 8
 cpu = 0.25

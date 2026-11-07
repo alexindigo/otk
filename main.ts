@@ -116,6 +116,7 @@ export async function start(
       upgrade: createSessionReferenceUpgrade(opencodeV1SessionID.legacy),
       index,
       interactive: (owner, active) => digest.interactive(owner, active),
+      requested: () => digest.requested(),
       attention: (sessionID) => digest.attention(sessionID),
       diagnostics: diagnostics?.section,
       diagnostic,

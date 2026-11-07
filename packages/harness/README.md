@@ -145,14 +145,20 @@ session work. `tick()` executes one runnable turn: interactive reads (`execute`)
 precede attention, visible scope and background. Owner-keyed scopes form a
 union; `release` drops an owner's scope and interactive demand. Background
 pauses under memory pressure or interactive demand; essential reads still run.
-Viewer-aware compositions initially call `viewers(false)`; the first scope,
-including an empty one, resumes optional work and the last release parks it.
-Indexed heaps repair changed priorities at admission/scope changes rather than
-scanning the pending population per tick. Bounded finishing continuations retain
-their inherited rank while draining committed publication and I/O cleanup.
-Continuations retain cursors, fine-grained keys collapse to retained
-full-session markers, and observed active work controls the duty limiter. `stop`
-aborts and joins active work and closes every selected sink.
+Viewer-aware compositions initially call `viewers(false)`; a welcomed scope,
+including an empty one, supplies presence. `requested()` resets the idle gate
+independently of executing pressure. Queued digest batches are explicitly idle
+work regardless of priority; `execute` callbacks are requested/essential unless
+their owner explicitly classifies them as optional. Idle work also needs
+presence or `policy.background`, and `policy.parallel` bounds admitted
+entry-batches, including waiting ones. Last-viewer release parks optional work
+only when background is disabled. Admitted batches drain bounded cleanup before
+parking. Indexed heaps repair changed priorities at admission/scope changes
+rather than scanning the pending population per tick. Bounded finishing
+continuations retain their inherited rank while draining committed publication
+and I/O cleanup. Continuations retain cursors, fine-grained keys collapse to
+retained full-session markers, and observed active work controls the duty
+limiter. `stop` aborts and joins active work and closes every selected sink.
 
 Essential reads interrupt the actual duty wait. Its remaining quota still gates
 the next background slice, so yielding cannot turn a slow background read into a

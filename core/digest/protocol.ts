@@ -80,6 +80,7 @@ export type ToWorker =
       released?: boolean;
     }
     | { t: "interactive"; owner: string; active: boolean }
+    | { t: "requested"; elapsed: number }
     | { t: "detail"; sessionID: string; turnID: string }
     | { t: "transcript"; sessionID: string; turns: string[]; cutoff?: string }
     | {

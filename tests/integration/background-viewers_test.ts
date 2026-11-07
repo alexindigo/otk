@@ -10,7 +10,7 @@ import { freePort, OpencodeTest, waitFor } from "../support/opencode.ts";
 import { resources, test } from "../support/resources.ts";
 import { WsClient } from "../support/ws-client.ts";
 
-test("@load @transport view leases park unfinished backfill without holding execution, native permission or credit; SSE lamps and resume survive", async () => {
+test("@load @transport background=false view leases park unfinished backfill without holding execution, native permission or credit; SSE lamps and resume survive", async () => {
   const fake = new FakeLlm(), oc = await OpencodeTest.start(fake);
   const session = await oc.session<{ id: string; nativeID: string }>(
     "/session",

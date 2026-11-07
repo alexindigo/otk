@@ -17,6 +17,7 @@ const rank: Record<DigestPriority, number> = {
   background: 3,
 };
 interface Pending {
+  optional: boolean;
   job: DigestJob;
   priority: DigestPriority;
   order: number;
@@ -24,6 +25,7 @@ interface Pending {
   active: boolean;
 }
 interface Turn {
+  optional: boolean;
   priority(): number;
   order: number;
   signal: AbortSignal;
@@ -62,6 +64,10 @@ export class DigestScheduler {
     (a.signal.aborted ? -1 : a.priority()) ===
           (b.signal.aborted ? -1 : b.priority()) && a.order < b.order
   );
+  #idleTurns = new ReadyQueue<Turn>((a, b) =>
+    a.priority() < b.priority() ||
+    a.priority() === b.priority() && a.order < b.order
+  );
   #finishing = new ReadyQueue<Turn>((a, b) =>
     (a.signal.aborted ? -1 : a.priority()) <
       (b.signal.aborted ? -1 : b.priority()) ||
@@ -69,10 +75,11 @@ export class DigestScheduler {
           (b.signal.aborted ? -1 : b.priority()) && a.order < b.order
   );
   #jobs = new ReadyQueue<Pending>((a, b) =>
-    this.#priority(a) < this.#priority(b) ||
-    this.#priority(a) === this.#priority(b) &&
-      (a.job.updated > b.job.updated ||
-        a.job.updated === b.job.updated && a.order < b.order)
+    !a.optional && b.optional || a.optional === b.optional &&
+      (this.#priority(a) < this.#priority(b) ||
+        this.#priority(a) === this.#priority(b) &&
+          (a.job.updated > b.job.updated ||
+            a.job.updated === b.job.updated && a.order < b.order))
   );
   #viewers = true;
   #rows?: number;
@@ -82,6 +89,9 @@ export class DigestScheduler {
   #dutyUntil = 0;
   #dutyWait?: AbortController;
   #changed = Promise.withResolvers<void>();
+  #idleUntil = -Infinity;
+  #idleWait?: AbortController;
+  #batches = 0;
   constructor(
     readonly policy: DigestPolicy,
     readonly resources: {
@@ -113,6 +123,7 @@ export class DigestScheduler {
     identity: DigestIdentity,
     priority: DigestPriority,
     dirty?: DirtySession,
+    optional = true,
   ): void {
     if (this.#controller.signal.aborted) return;
     if (!this.#sinks.has(identity.provider)) {
@@ -120,6 +131,7 @@ export class DigestScheduler {
     }
     const key = this.#key(identity), pending = this.#pending.get(key);
     if (pending) {
+      if (!optional) pending.optional = false;
       if (rank[priority] < rank[pending.priority]) pending.priority = priority;
       pending.job.updated = Math.max(pending.job.updated, identity.updated);
       pending.job.revision = Math.max(
@@ -137,6 +149,7 @@ export class DigestScheduler {
       this.#reindexTurns();
     } else {
       const value: Pending = {
+        optional,
         job: {
           ...identity,
           revision: dirty?.revision ?? 0,
@@ -197,8 +210,13 @@ export class DigestScheduler {
   }
   #indexTurn(turn: Turn): void {
     this.#turns.delete(turn);
+    this.#idleTurns.delete(turn);
     this.#finishing.delete(turn);
-    (turn.finishing() || turn.signal.aborted ? this.#finishing : this.#turns)
+    (turn.finishing() || turn.signal.aborted
+      ? this.#finishing
+      : turn.optional
+      ? this.#idleTurns
+      : this.#turns)
       .add(
         turn,
       );
@@ -206,6 +224,7 @@ export class DigestScheduler {
   /** Presence is independent of scope: even an empty welcome view is a viewer. */
   viewers(active: boolean): void {
     this.#viewers = active;
+    this.#pauseDisconnected();
     this.#reindexTurns();
     this.#wake();
   }
@@ -223,18 +242,45 @@ export class DigestScheduler {
       elapsed * (1 / this.policy.cpu - 1);
     this.#sleepDuty();
   }
-  release(owner: string): void {
-    this.#scopes.delete(owner);
-    this.#viewers = this.#scopes.size > 0;
-    this.#interactive.delete(owner);
-    this.#visibility();
-    if (!this.#viewers) {
+  /** Client ingress, independent of executing pressure and passive acknowledgements. */
+  requested(elapsed = 0): void {
+    if (this.#controller.signal.aborted) return;
+    this.#idleUntil = this.#now() + Math.max(0, this.policy.idlems - elapsed);
+    this.#sleepIdle();
+    this.#wake();
+  }
+  #sleepIdle(): void {
+    if (this.#idleWait || this.#controller.signal.aborted) return;
+    const remaining = this.#idleUntil - this.#now();
+    if (remaining <= 0) return;
+    const controller = this.#idleWait = new AbortController();
+    void this.resources.sleep(
+      remaining,
+      AbortSignal.any([controller.signal, this.#controller.signal]),
+    ).catch((error) => {
+      if (!controller.signal.aborted && !this.#controller.signal.aborted) {
+        this.#errors.push(error);
+      }
+    }).finally(() => {
+      if (this.#idleWait === controller) this.#idleWait = undefined;
+      this.#wake();
+    });
+  }
+  #pauseDisconnected(): void {
+    if (!this.#viewers && !this.policy.background) {
       for (const life of this.#lifetimes) {
         if (life.optional) {
           life.preempt?.abort(new DOMException("No viewers", "AbortError"));
         }
       }
     }
+  }
+  release(owner: string): void {
+    this.#scopes.delete(owner);
+    this.#viewers = this.#scopes.size > 0;
+    this.#interactive.delete(owner);
+    this.#visibility();
+    this.#pauseDisconnected();
   }
   interactive(owner: string, active: boolean): void {
     if (active && !this.#controller.signal.aborted) {
@@ -249,7 +295,10 @@ export class DigestScheduler {
     return [...this.#lifetimes].filter((life) => life.running()).length;
   }
   get waitReason(): string | undefined {
-    if (!this.#viewers) return "paused with no viewers";
+    if (!this.#viewers && !this.policy.background) {
+      return "paused with no viewers";
+    }
+    if (this.#now() < this.#idleUntil) return "waiting for idle clients";
     if (this.#pendingPages) return "waiting for the current page";
     if (this.#interactive.size) return "queued behind current work";
     if (this.resources.freeMemory() < this.policy.memoryreserve) {
@@ -280,6 +329,7 @@ export class DigestScheduler {
     priority: DigestPriority | (() => DigestPriority) = "interactive",
     interruptible = false,
     finishing: boolean | (() => boolean) = false,
+    optional = false,
   ): Promise<T> {
     if (signal.aborted || this.#controller.signal.aborted) {
       return Promise.reject(signal.reason ?? this.#controller.signal.reason);
@@ -291,14 +341,22 @@ export class DigestScheduler {
     }
     return interruptible && typeof priority === "string" &&
         priority !== "interactive"
-      ? this.#read(run, signal, priority)
-      : this.#job(run, signal, () => rank[current()], undefined, finishing);
+      ? this.#read(run, signal, priority, optional)
+      : this.#job(
+        run,
+        signal,
+        () => rank[current()],
+        undefined,
+        finishing,
+        optional,
+      );
   }
   /** Only explicitly revocable read callbacks may restart after I/O preemption. */
   async #read<T>(
     run: (signal: AbortSignal, execution: DigestExecution) => Promise<T>,
     signal: AbortSignal,
     priority: DigestPriority,
+    optional: boolean,
   ): Promise<T> {
     while (true) {
       signal.throwIfAborted();
@@ -314,6 +372,8 @@ export class DigestScheduler {
           AbortSignal.any([signal, slice.signal]),
           () => rank[priority],
           slice,
+          false,
+          optional,
         );
       } catch (error) {
         if (
@@ -352,7 +412,7 @@ export class DigestScheduler {
       signal: combined,
       done: settled.promise,
       priority,
-      optional: optional || priority() >= rank.visible,
+      optional,
       preempt,
       reading: () => waitKind === "io",
       running: () => phase === "running",
@@ -382,6 +442,7 @@ export class DigestScheduler {
       if (turn) {
         this.#ready.delete(turn);
         this.#turns.delete(turn);
+        this.#idleTurns.delete(turn);
         this.#finishing.delete(turn);
       }
       combined.removeEventListener("abort", cancel);
@@ -392,6 +453,7 @@ export class DigestScheduler {
     const queue = (resume: () => void) => {
       phase = "queued";
       turn = {
+        optional,
         finishing: () =>
           typeof finishing === "function" ? finishing() : finishing,
         priority,
@@ -504,11 +566,18 @@ export class DigestScheduler {
       this.#wake();
     });
   }
-  #eligible(priority: number, signal?: AbortSignal): boolean {
+  #eligible(priority: number, signal?: AbortSignal, optional = false): boolean {
     if (signal?.aborted) return true; // Canceled continuations still join their cleanup.
+    if (optional) {
+      if ((!this.#viewers && !this.policy.background) || this.#pendingPages) {
+        return false;
+      }
+      if (this.#now() < this.#idleUntil) {
+        this.#sleepIdle();
+        return false;
+      }
+    }
     if (priority === rank.interactive) return true;
-    if (priority >= rank.visible && this.#pendingPages) return false;
-    if (priority >= rank.visible && !this.#viewers) return false;
     if (this.#controller.signal.aborted) return false;
     if (this.#dutyUntil > this.#now()) {
       this.#sleepDuty();
@@ -525,26 +594,37 @@ export class DigestScheduler {
   async #tick(): Promise<boolean> {
     if (this.#errors.length) throw this.#errors.shift();
     let turn = this.#turns.peek();
-    if (turn && !this.#eligible(turn.priority(), turn.signal)) turn = undefined;
+    if (turn && !this.#eligible(turn.priority(), turn.signal, turn.optional)) {
+      turn = undefined;
+    }
+    const idleTurn = this.#idleTurns.peek();
+    if (
+      idleTurn && (!turn || idleTurn.priority() < turn.priority()) &&
+      this.#eligible(idleTurn.priority(), idleTurn.signal, true)
+    ) turn = idleTurn;
     const finishing = this.#finishing.peek();
     if (
       finishing &&
       (!turn || finishing.signal.aborted ||
         finishing.priority() < turn.priority())
     ) turn = finishing;
-    const next = this.#controller.signal.aborted || !this.#viewers
+    const next = this.#controller.signal.aborted
       ? undefined
       : this.#jobs.peek();
     if (
       next &&
+      (!next.optional || this.#batches < this.policy.parallel) &&
       (!turn ||
         this.#priority(next) < (turn.signal.aborted ? -1 : turn.priority())) &&
-      this.#eligible(this.#priority(next))
+      this.#eligible(this.#priority(next), undefined, next.optional)
     ) {
       const pending = next;
+      // Admission belongs to this batch, even if later demand upgrades its key.
+      const optional = pending.optional;
       const slice = new AbortController();
       let failed = false;
       pending.active = true;
+      if (optional) this.#batches++;
       this.#jobs.delete(pending);
       pending.changed = false;
       void this.#job(
@@ -577,14 +657,15 @@ export class DigestScheduler {
         AbortSignal.any([this.#controller.signal, slice.signal]),
         () => this.#priority(pending),
         slice,
-        false,
-        true,
+        () => pending.active,
+        optional,
       ).catch((error) => {
         if (!this.#controller.signal.aborted && !slice.signal.aborted) {
           failed = true;
           this.#errors.push(error);
         }
       }).finally(() => {
+        if (optional) this.#batches--;
         if (failed && !this.#controller.signal.aborted) {
           // Only this identity waits after failure. Its backoff cannot suspend
           // the dispatcher or consume execution needed by essential callers.
@@ -615,6 +696,7 @@ export class DigestScheduler {
     if (!turn) return false;
     this.#ready.delete(turn);
     this.#turns.delete(turn);
+    this.#idleTurns.delete(turn);
     this.#finishing.delete(turn);
     await turn.resume();
     return true;
@@ -625,6 +707,7 @@ export class DigestScheduler {
   async #stop(): Promise<void> {
     this.#controller.abort();
     this.#dutyWait?.abort();
+    this.#idleWait?.abort();
     const errors: unknown[] = [];
     try {
       await this.#executing;

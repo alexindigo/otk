@@ -57,6 +57,9 @@ days = 30 # OTK_INDEX_DAYS — recent-background priority horizon in days; older
 
 # Worker digest scheduling and publication policy.
 [digest]
+idlems = 2000 # OTK_DIGEST_IDLEMS - request-free milliseconds before optional work
+parallel = 3 # OTK_DIGEST_PARALLEL - maximum admitted optional entry-batches, including waits
+background = false # OTK_DIGEST_BACKGROUND - allow idle backfill without a welcomed client
 batch = 100 # OTK_DIGEST_BATCH — header/identity rows per slice, maximum 200
 slicems = 8 # OTK_DIGEST_SLICEMS — cooperative budget in milliseconds
 cpu = 0.25 # OTK_DIGEST_CPU — maximum observed duty fraction, 0 < value <= 1

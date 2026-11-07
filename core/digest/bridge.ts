@@ -95,6 +95,7 @@ export class DigestBridge implements DigestPort {
     { directory?: string; sessions: string[]; pendingPage?: boolean }
   >();
   #interactive = new Set<string>();
+  #requestedAt = -Infinity;
   #running = false;
   #readOwners = new Map<string, Set<AbortController>>();
   #deletions = new Map<string, QueuedDeletion>();
@@ -260,6 +261,12 @@ export class DigestBridge implements DigestPort {
         if (value.t === "accepted") {
           this.#pending.delete(id);
           void (async () => {
+            if (Number.isFinite(this.#requestedAt)) {
+              this.#post({
+                t: "requested",
+                elapsed: performance.now() - this.#requestedAt,
+              });
+            }
             for (const [owner, value] of this.#scopes) {
               this.#post({ t: "scope", owner, ...value });
             }
@@ -838,6 +845,11 @@ export class DigestBridge implements DigestPort {
     if (active) this.#interactive.add(owner);
     else this.#interactive.delete(owner);
     if (this.#worker) this.#post({ t: "interactive", owner, active });
+  }
+  requested(): void {
+    if (this.#stop) return;
+    this.#requestedAt = performance.now();
+    if (this.#worker) this.#post({ t: "requested", elapsed: 0 });
   }
   stop(): Promise<void> {
     return this.#stop ??= this.#close();

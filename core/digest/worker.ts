@@ -82,6 +82,7 @@ const publicationOrder = new DigestPublicationOrder(
       () => reservation.priority(),
       false,
       () => reservation.required(),
+      true,
     )),
   () => scheduler?.reconsider(),
 );
@@ -363,6 +364,9 @@ function replayStored(signal: AbortSignal, cached: boolean): Promise<void> {
       }),
     signal,
     "background",
+    false,
+    false,
+    true,
   );
 }
 function kick(): void {
@@ -880,6 +884,10 @@ function handle(message: ToWorker): void {
   if (message.t === "interactive") {
     scheduler.interactive(message.owner, message.active);
     kick();
+    return;
+  }
+  if (message.t === "requested") {
+    scheduler.requested(message.elapsed);
     return;
   }
   if (message.t === "dirty") {

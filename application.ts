@@ -68,6 +68,7 @@ export function startApplication(
     upgrade?: (store: OtkDb) => void;
     index?: IndexStore;
     interactive?: (owner: string, active: boolean) => void;
+    requested?: () => void;
     attention?: (sessionID: string) => void;
     diagnostics?: SectionObserver;
     diagnostic?: DiagnosticSink;
@@ -198,6 +199,7 @@ export function startApplication(
       diagnostics: options.diagnostics,
       diagnostic: options.diagnostic,
       signal: options.signal,
+      requested: options.requested,
     });
   } catch (error) {
     const failures: unknown[] = [error];

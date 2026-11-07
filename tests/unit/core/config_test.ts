@@ -81,6 +81,49 @@ test("digest policy bounds aggregate actionable node and environment errors", ()
     );
   }
 });
+test("digest idle policy layers exact keys and rejects unsafe integers and non-booleans", async () => {
+  const defaults = cfg().digest;
+  assertEquals([defaults.idlems, defaults.parallel, defaults.background], [
+    2000,
+    3,
+    false,
+  ]);
+  const overlayPath = join(await fixture(), "idle.toml");
+  await Deno.writeTextFile(
+    overlayPath,
+    "[digest]\nidlems=500\nparallel=2\nbackground=true\n",
+  );
+  const layered = loadServiceConfig({
+    defaultsPath,
+    overlayPath,
+    env: {
+      OTK_DIGEST_IDLEMS: "1000",
+      OTK_DIGEST_PARALLEL: "4",
+      OTK_DIGEST_BACKGROUND: "false",
+    },
+  }).config.digest;
+  assertEquals([layered.idlems, layered.parallel, layered.background], [
+    1000,
+    4,
+    false,
+  ]);
+  for (
+    const [key, value] of [["IDLEMS", "0"], ["PARALLEL", "9007199254740992"], [
+      "BACKGROUND",
+      "yes",
+    ]]
+  ) {
+    const error = assertThrows(
+      () =>
+        loadServiceConfig({
+          defaultsPath,
+          env: { [`OTK_DIGEST_${key}`]: value },
+        }),
+      ConfigError,
+    );
+    assert(error.problems.some((p) => p.includes(`OTK_DIGEST_${key}`)));
+  }
+});
 test("config explicit inputs leave process env untouched and retain shipped defaults", () => {
   const before = Deno.env.toObject();
   const overridden =

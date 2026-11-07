@@ -12,6 +12,9 @@ export interface TranscriptMetadata {
   cutoffCreated?: number;
 }
 export interface DigestPolicy {
+  idlems: number;
+  parallel: number;
+  background: boolean;
   batch: number;
   slicems: number;
   cpu: number;
