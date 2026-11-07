@@ -2,6 +2,7 @@
 import { isolatedTest as test } from "../fixtures/isolated.ts";
 import { expect } from "../fixtures/evidence.ts";
 import { scaleWire } from "../fixtures/scale-wire.ts";
+import { sendPrompt } from "../pages/composer.ts";
 import type { Page } from "@playwright/test";
 
 interface Session {
@@ -77,7 +78,8 @@ test(
     expect(initial.counts).toEqual(initial.expectedCounts);
     const sessions = initial.manifest.sessions,
       selected = sessions[0],
-      background = sessions[251].directory;
+      background = sessions[251].directory,
+      last = sessions[2];
     await state.product("layout.patch", {
       rightCollapsed: false,
       rightView: "sessions",
@@ -99,7 +101,9 @@ test(
     });globalThis.scale={snapshots:[],calls:[],cancels:[],results:[],paints:[]};
     globalThis.WebSocket=class extends Native{
       constructor(...args){super(...args);this.addEventListener('message',event=>{const f=JSON.parse(event.data),at=performance.now();if(f.t==='request.result')scale.results.push({at,wall:Date.now(),...f,id:f.ref.key,ok:f.outcome.ok});const entries=f.t==='index.snapshot'?f.entries:f.t==='index.patch'?f.ops.filter(op=>op.op==='upsert').map(op=>op.entry):[];if(!entries.some(e=>e.id==='${selected.id}')||!location.hash.endsWith('/${selected.id}'))return;
-      const snapshot={at,ready:entries.every(e=>e.digest.state==='ready'),count:entries.length,unready:entries.filter(e=>e.digest.state!=='ready').slice(0,20).map(e=>({id:e.id,state:e.digest.state,revision:e.digest.revision}))};scale.snapshots.push(snapshot);
+      const scoped=entries.filter(e=>e.directory===${
+      JSON.stringify(selected.directory)
+    }),snapshot={at,ready:scoped.every(e=>e.digest.state==='ready'),count:entries.length,ids:entries.map(e=>e.id),unready:scoped.filter(e=>e.digest.state!=='ready').slice(0,20).map(e=>({id:e.id,state:e.digest.state,revision:e.digest.revision}))};scale.snapshots.push(snapshot);
       const paint=()=>{const rows=[...document.querySelectorAll('.otk-session-row')],v=document.querySelector('${viewport}'),chosen=document.querySelector('[data-session="${selected.id}"]'),boxes=rows.map(r=>r.getBoundingClientRect()),bound=v?Math.ceil(v.clientHeight/Math.min(...boxes.map(r=>r.height)))+12:0;const valid=rows.length>0&&rows.length<=bound&&v&&chosen?.getAttribute('aria-current')==='page'&&rows.every((row,i)=>boxes[i].width>0&&boxes[i].height>0&&row.querySelector('.otk-status-light')&&titles.has(row.querySelector('.otk-row-title')?.textContent));if(valid)scale.paints.push({snapshot,at:performance.now(),elapsed:performance.now()-at,rows:rows.length,bound});else requestAnimationFrame(paint)};requestAnimationFrame(paint);});}
       send(data){const f=JSON.parse(data);if(f.t==='request')scale.calls.push({at:performance.now(),wall:Date.now(),...f,id:f.ref.key});if(f.t==='request.release')scale.cancels.push(...f.refs.map(ref=>({at:performance.now(),id:ref.key,ref})));super.send(data);}
     };
@@ -132,6 +136,22 @@ test(
       expect(r).toBeTruthy();
       await page.mouse.move(r!.x + r!.width / 2, r!.y + r!.height / 2);
       await page.mouse.wheel(0, delta);
+      // A paged list extends its end as demand is answered; one wheel is not full-population acquisition.
+      await expect.poll(async () => {
+        if (delta > 0) {
+          if (
+            await page.locator(`[data-session="${last.id}"]`).count()
+          ) {
+            return true;
+          }
+        } else if (
+          await page.locator(viewport).evaluate((e) => e.scrollTop < 1)
+        ) {
+          return true;
+        }
+        await page.mouse.wheel(0, delta);
+        return false;
+      }).toBe(true);
     };
     const anchor = () =>
       page.locator(viewport).evaluate((v) => {
@@ -149,7 +169,11 @@ test(
         timeout: 120_000,
       }).toBeGreaterThan(0);
       const cold = await page.evaluate<
-        { elapsed: number; snapshot: { ready: boolean; count: number } }
+        {
+          elapsed: number;
+          bound: number;
+          snapshot: { ready: boolean; count: number; ids: string[] };
+        }
       >("scale.paints[0]");
       expect(cold.snapshot.ready).toBe(false);
       observations.cold = cold;
@@ -209,7 +233,7 @@ test(
       await page.locator("textarea[name=prompt]").fill(
         "Scale interactive prompt",
       );
-      await page.keyboard.press("Enter");
+      await sendPrompt(page);
       await status(liveID, "busy");
       await expect(page.locator(".otk-messages")).toContainText(
         "Scale accepted reply",
@@ -233,7 +257,7 @@ test(
       await page.locator("textarea[name=prompt]").fill(
         "Approval during scale backfill",
       );
-      await page.keyboard.press("Enter");
+      await sendPrompt(page);
       await page.locator(".otk-permission-actions > button").first().click();
       await expect(page.locator(".otk-messages")).toContainText(
         "Scale approval confirmed",
@@ -410,8 +434,18 @@ test(
         timeout: 120_000,
       }).toBeGreaterThan(0);
       const warm = await page.evaluate<typeof cold>("scale.paints[0]");
+      // Readiness belongs to this view; cross-project attention routes intentionally carry no digest.
       expect(warm.snapshot.ready).toBe(true);
-      expect(warm.snapshot.count).toBe(target);
+      expect(warm.snapshot.ids).toContain(selected.id);
+      expect(warm.snapshot.count).toBeLessThanOrEqual(
+        warm.bound + taskMembers.size + 2,
+      );
+      expect(
+        warm.snapshot.ids.filter((id) =>
+          !sessions.slice(0, 251).some((session) => session.id === id) &&
+          ![liveID, finished.id, working.id, blocked.id].includes(id)
+        ),
+      ).toEqual([]);
       await status(working.id, "busy");
       const warmState = await state.observe<Observation>();
       expect(warmState.requests.filter((r) => {
@@ -430,6 +464,8 @@ test(
           ) - selected.expected.cost,
         ),
       ).toBeLessThan(1e-8);
+      // Newest-first paging does not mount old rows until their list is demanded.
+      await page.locator(search).fill("Scale session 000");
       for (const i of [2, 3]) {
         await expect(
           page.locator(`[data-session="${sessions[i].id}"] .otk-session-cost`),
@@ -440,6 +476,11 @@ test(
           "[data-session=opcv1-ses_scale000001] .otk-session-digest-state",
         ),
       ).toHaveText("Usage unavailable");
+      await page.locator(search).fill(sessions[250].title);
+      await expect(
+        page.locator(`[data-session="${sessions[250].id}"] .otk-session-cost`),
+      ).toHaveText(warmState.expectedCosts[sessions[250].id]);
+      await page.locator(search).fill("");
       const allCalls = calls();
       expect(allCalls.filter((f) => f.method === "usage.get")).toHaveLength(0);
       const attention = new Set([finished.id, blocked.id]),
@@ -470,7 +511,6 @@ test(
         ]),
         attention,
       );
-      const last = sessions[250];
       await wheel(100000);
       await expect(page.locator(`[data-session="${last.id}"]`)).toBeAttached();
       expect(await page.locator(".otk-session-row").count()).toBeLessThan(45);
@@ -481,6 +521,7 @@ test(
       await page.evaluate(
         `globalThis.pinnedScale=document.querySelector('[data-session="${last.id}"]');pinnedScale.focus()`,
       );
+      await expect(page.locator(`[data-session="${last.id}"]`)).toBeFocused();
       await page.evaluate(framesAhead);
       await wheel(-100000);
       await expect.poll(() =>

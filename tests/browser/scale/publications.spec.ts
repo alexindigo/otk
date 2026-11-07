@@ -90,6 +90,7 @@ test(
     await page.goto(`${state.url}/#/local/tstv1-core`);
     await expect(page.locator(".otk-text")).toHaveText("Core transcript");
     const cdp = await context.newCDPSession(page),
+      attempts: string[] = [],
       transfers: string[] = [],
       cycles: unknown[] = [];
     try {
@@ -97,7 +98,13 @@ test(
       const baseline = await cdp.send("Memory.getDOMCounters");
       page.on("request", (request) => {
         if (/\.(?:js|css|woff2?)(?:\?|$)/.test(request.url())) {
-          transfers.push(request.url());
+          attempts.push(request.url());
+        }
+      });
+      // Retired capability workers can attempt startup; only a delivered asset is a warm reload.
+      page.on("response", (response) => {
+        if (/\.(?:js|css|woff2?)(?:\?|$)/.test(response.url())) {
+          transfers.push(response.url());
         }
       });
       for (let n = 0; n < 10; n++) {
@@ -107,9 +114,14 @@ test(
         await expect(page.locator(".otk-text")).toHaveCount(0);
         await page.goto(`${state.url}/#/local/tstv1-core`);
         await expect(page.locator(".otk-text")).toHaveText("Core transcript");
+        await expect.poll(() => page.workers().length).toBe(0);
         await cdp.send("HeapProfiler.collectGarbage");
         cycles.push(await cdp.send("Memory.getDOMCounters"));
       }
+      expect(
+        attempts.filter((url) => !/\/assets\/worker-[\w-]+\.js$/.test(url)),
+      )
+        .toEqual([]);
       expect(transfers).toEqual([]);
       const entries = await page.evaluate(
         "performance.getEntriesByType('resource').map(e=>({name:e.name,transferSize:e.transferSize,encodedBodySize:e.encodedBodySize,duration:e.duration,initiatorType:e.initiatorType}))",
@@ -118,6 +130,7 @@ test(
         body: JSON.stringify({
           baseline,
           cycles,
+          assetRequestAttempts: attempts,
           repeatedAssetRequests: transfers,
           entries,
           after: await cdp.send("Memory.getDOMCounters"),

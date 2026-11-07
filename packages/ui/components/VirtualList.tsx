@@ -148,6 +148,8 @@ export default function VirtualList(props: {
     elements = new Map<string, HTMLElement>();
   const samples = new Map<string, HTMLElement>();
   let container!: HTMLDivElement, observer: ResizeObserver | undefined;
+  let focusMoves: MutationObserver | undefined;
+  let focusedControl: HTMLElement | undefined;
   let currentKeys: readonly string[] | undefined, disposed = false;
   let positionOwner: ViewportPosition | undefined;
   const measuring = new Map<string, number>();
@@ -383,6 +385,25 @@ export default function VirtualList(props: {
       element = element.parentElement;
     }
   };
+  const acceptFocus = (target: EventTarget | null) => {
+    const key = keyFor(target);
+    focusedControl = key && target instanceof HTMLElement ? target : undefined;
+    setFocus(key);
+  };
+  const retainMovedFocus = (records: readonly MutationRecord[]) => {
+    const control = focusedControl;
+    if (
+      !container.isConnected || !control?.isConnected ||
+      document.activeElement !== document.body
+    ) return;
+    // Keyed reconciliation can move a retained row and natively blur its control.
+    // A connected move keeps the focus lease; deletion and explicit focus do not.
+    if (
+      records.some((record) =>
+        Array.from(record.removedNodes).some((node) => node.contains(control))
+      )
+    ) control.focus({ preventScroll: true });
+  };
   async function navigateKey(
     key: string,
     align: "center" | "nearest" | "start",
@@ -556,6 +577,8 @@ export default function VirtualList(props: {
     container.addEventListener("otk-context-retain", retain);
     container.addEventListener("keydown", selectAll);
     document.addEventListener("selectionchange", selection);
+    focusMoves = new MutationObserver(retainMovedFocus);
+    focusMoves.observe(container, { childList: true });
     sync();
     remember();
     setReady(true);
@@ -563,6 +586,9 @@ export default function VirtualList(props: {
     return () => {
       remember();
       observer?.disconnect();
+      focusMoves?.disconnect();
+      focusMoves = undefined;
+      focusedControl = undefined;
       unregister();
       releasePosition();
       lease.release();
@@ -650,10 +676,12 @@ export default function VirtualList(props: {
         role="list"
         aria-label={props.label}
         data-acquired-count={props.keys.length}
-        onFocusIn={(event) => setFocus(keyFor(event.target))}
+        onFocusIn={(event) => acceptFocus(event.target)}
         onFocusOut={() =>
           queueMicrotask(() => {
-            if (container.isConnected) setFocus(keyFor(document.activeElement));
+            if (!container.isConnected) return;
+            retainMovedFocus(focusMoves?.takeRecords() ?? []);
+            acceptFocus(document.activeElement);
           })}
       >
         <div class="otk-virtual-measure" aria-hidden="true">
