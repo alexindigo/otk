@@ -36,7 +36,7 @@ async function command(page: Page, id: string, query: string) {
   await page.locator("input[name=command-search]").fill(query);
   await page.locator(`[data-command="${id}"]`).click();
 }
-async function surface(page: Page) {
+export async function surface(page: Page) {
   const owner = page.locator(
     "dialog[open] .otk-surface,:popover-open .otk-surface",
   );
@@ -79,7 +79,9 @@ async function surface(page: Page) {
         const b = focused.getBoundingClientRect(),
           c = clip.getBoundingClientRect(),
           s = getComputedStyle(focused),
-          ring = parseFloat(s.outlineWidth) + parseFloat(s.outlineOffset);
+          ring = s.outlineStyle === "none"
+            ? 0
+            : parseFloat(s.outlineWidth) + parseFloat(s.outlineOffset);
         if (
           b.left - ring < c.left - .5 || b.right + ring > c.right + .5 ||
           b.top - ring < c.top - .5 || b.bottom + ring > c.bottom + .5
