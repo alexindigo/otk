@@ -306,9 +306,12 @@ test.describe("real hover intent", () => {
     await expect(page.locator("textarea[name=prompt]")).toBeFocused();
     await page.locator(scroll).hover();
     await hoverInterval(page, 200, true);
+    // Resolve the re-entry point before leaving. Locator actionability checks
+    // themselves can consume the entire real 150ms grace interval.
+    const reentry = await point(page, scroll);
     await away();
     await hoverInterval(page, 60, true);
-    await page.locator(scroll).hover();
+    await page.mouse.move(reentry.x, reentry.y);
     await hoverInterval(page, 200, true);
     await away();
     await expect(page.locator(panel)).toHaveCount(0);
