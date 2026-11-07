@@ -118,7 +118,9 @@ test("menus.native-background-auto-approve-target-and-real-reply-usage", {
     .toHaveCount(0);
   await expect(page).toHaveURL(new RegExp(first.id + "$"));
   await rightClick(page, `[data-session="${other.id}"]`);
-  expect(await menuLabels(page)).toContain("Turn auto-approve off");
+  // Background sessions have no auto mark in either policy state. Join the
+  // authoritative menu projection, rather than using marker absence as readiness.
+  await expect.poll(() => menuLabels(page)).toContain("Turn auto-approve off");
   await pick(page, "Turn auto-approve off");
   await expect(page.locator(`[data-session="${other.id}"] .otk-auto-mark`))
     .toHaveCount(0);
