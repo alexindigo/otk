@@ -3,7 +3,7 @@ import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { expect } from "../../fixtures/evidence.ts";
 test.use({ profile: "contract-sessions-progress" });
 test("progress.count-rate-eta-and-stalled-wait", {
-  tag: ["@sessions", "@messages", "@transport", "@visual"],
+  tag: ["@load", "@sessions", "@messages", "@transport", "@visual"],
 }, async ({ isolatedState: state, page }, info) => {
   await page.setViewportSize({ width: 1280, height: 800 });
   await page.clock.install();

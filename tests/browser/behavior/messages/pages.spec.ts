@@ -123,7 +123,7 @@ test("messages.native-newest10-offpage-undo-cursors-live-reload", {
 
 test(
   "messages.native-102-step-ledger-offpage-copy",
-  { tag: ["@messages"] },
+  { tag: ["@load", "@messages"] },
   async ({ isolatedState: state, page }) => {
     test.setTimeout(180000);
     const session = await state.native<{ id: string }>("/session", "POST", {
@@ -187,9 +187,6 @@ test(
       })
     ).toBe(true);
     const trigger = page.locator(".otk-turn-usage > button");
-    await expect(trigger).toContainText("102 model calls");
-    expect(capture.sent.filter(({ frame }) => frame.method === "usage.get"))
-      .toHaveLength(0);
     for (const method of ["layout.location", "sessions.seen"]) {
       await expect.poll(() => {
         const request = capture.sent.find(({ frame }) =>
@@ -203,6 +200,11 @@ test(
           );
       }).toBe(true);
     }
+    // Rules 3/6 finish full-turn totals after request traffic yields to idle,
+    // rather than requiring the digest to finish during active page acquisition.
+    await expect(trigger).toContainText("102 model calls", { timeout: 30000 });
+    expect(capture.sent.filter(({ frame }) => frame.method === "usage.get"))
+      .toHaveLength(0);
     await expect(page.locator(".otk-composer-notice")).toHaveCount(0);
     await trigger.hover();
     await expect(page.locator(".otk-usage-breakdown tbody tr")).toHaveCount(

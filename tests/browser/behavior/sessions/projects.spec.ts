@@ -9,7 +9,7 @@ import { activity, visibleOnScreen } from "../../pages/sessions.ts";
 test.describe("project catalog", () => {
   test.use({ profile: "contract-sessions-catalog" });
   test("sessions.project-catalog-discovery-activity-creation-and-collapse", {
-    tag: ["@sessions", "@contracts", "@isolated"],
+    tag: ["@load", "@sessions", "@contracts", "@isolated"],
   }, async ({ isolatedState: state, page }, info) => {
     const { root, entries } = await state.observe<
       { root: string; entries: { id: string; directory: string }[] }

@@ -2,6 +2,7 @@
 import { expect, test } from "../../fixtures/evidence.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 import { prompt } from "../../pages/transcript.ts";
+import { acquireOlderHistory } from "../../pages/history.ts";
 
 test("sessions.timeline-reveal-focus-actions-copy-rollback-restore-reload", {
   tag: ["@sessions", "@revert"],
@@ -110,13 +111,7 @@ test(
       Number(await pane.getAttribute("data-prompt-count"))
     ).toBeGreaterThanOrEqual(20);
     const before = frames.sent.length;
-    while (Number(await pane.getAttribute("data-prompt-count")) < 105) {
-      const n = Number(await pane.getAttribute("data-prompt-count"));
-      await page.locator(".otk-timeline-older").click();
-      await expect.poll(async () =>
-        Number(await pane.getAttribute("data-prompt-count"))
-      ).toBeGreaterThan(n);
-    }
+    await acquireOlderHistory(page, 105, page.locator(".otk-timeline-older"));
     await expect(pane).toHaveAttribute("data-prompt-count", "105");
     await expect(page.locator(".otk-message-flow")).toHaveAttribute(
       "data-message-count",

@@ -2,6 +2,7 @@
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
+import { acquireOlderHistory } from "../../pages/history.ts";
 import {
   expandTool,
   revealAcquired,
@@ -105,14 +106,7 @@ test("messages.project-and-outside-tool-paths-reload", {
     (await state.native<unknown[]>(`/session/${session.id}/message`)).length;
   await page.reload();
   await openSession(state, page, session.id);
-  const count = () =>
-    page.locator(".otk-message-flow").getAttribute("data-message-count").then(
-      (value) => Number(value),
-    );
-  await expect.poll(count).toBeGreaterThan(0);
-  // The canonical reserve can finish this fixture while its older-page control
-  // retires. The setup needs the exact acquired source boundary.
-  await expect.poll(count).toBe(nativeCount);
+  await acquireOlderHistory(page, nativeCount);
   for (const check of checks) {
     await revealAcquired(page, check.selector);
     await expect(page.locator(check.selector)).toHaveAttribute(

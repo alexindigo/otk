@@ -124,12 +124,28 @@ test("transport.load-requests-do-not-scale-with-unseen-population", {
           values.filter((row) => row.at >= start && row.at <= until).map((
             row,
           ) => row.value);
-        await page.goto(`${state.url}/#/local/${initial.selected}`);
-        await expect(page.locator("textarea[name=prompt]")).toBeVisible();
-        await expect(page.locator(".otk-messages [data-message]").first())
-          .toBeVisible();
-        // Observe the full first 30 seconds, rather than a quietness heuristic.
-        await page.waitForTimeout(Math.max(0, until - Date.now()));
+        // Rule 6 permits unrelated idle fill: exact demand budgets belong to an
+        // active-request window, not the superseded connected-but-idle window.
+        let active = true;
+        const requests = (async () => {
+          while (active) {
+            const response = await context.request.get(
+              `${state.url}/manifest.json`,
+            );
+            expect(response.ok()).toBe(true);
+            await new Promise((resolve) => setTimeout(resolve, 100));
+          }
+        })();
+        try {
+          await page.goto(`${state.url}/#/local/${initial.selected}`);
+          await expect(page.locator("textarea[name=prompt]")).toBeVisible();
+          await expect(page.locator(".otk-messages [data-message]").first())
+            .toBeVisible();
+          await page.waitForTimeout(Math.max(0, until - Date.now()));
+        } finally {
+          active = false;
+          await requests;
+        }
         const end = await state.observe<NativeObservation>();
         const received = incoming.filter((row) =>
           row.at >= start && row.at <= until

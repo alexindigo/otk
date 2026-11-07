@@ -3,6 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
 import { copySelection, wheelTranscript } from "../../pages/transcript.ts";
+import { acquireOlderHistory } from "../../pages/history.ts";
 
 test.describe("acquired transcript", () => {
   test.use({ profile: "contract-messages-window" });
@@ -16,13 +17,7 @@ test.describe("acquired transcript", () => {
     await expect.poll(() =>
       timeline.getAttribute("data-prompt-count").then(Number)
     ).toBeGreaterThanOrEqual(20);
-    while (Number(await timeline.getAttribute("data-prompt-count")) < 105) {
-      const before = Number(await timeline.getAttribute("data-prompt-count"));
-      await page.locator(".otk-timeline-older").click();
-      await expect.poll(() =>
-        timeline.getAttribute("data-prompt-count").then(Number)
-      ).toBeGreaterThan(before);
-    }
+    await acquireOlderHistory(page, 105, page.locator(".otk-timeline-older"));
     await expect(page.locator(".otk-timeline-older")).toHaveCount(0);
     expect(await page.locator("[data-role=user]").count()).toBeLessThan(20);
     await page.locator(".otk-timeline-list").hover();
