@@ -26,6 +26,7 @@ export function ownSocket(socket: WebSocket): () => Promise<void> {
   });
 }
 export class WsClient {
+  autoAcceptPages = true;
   frames: ServerFrame[] = [];
   ws: WebSocket;
   #clientID = crypto.randomUUID();
@@ -87,15 +88,22 @@ export class WsClient {
   send(value: unknown): void {
     this.ws.send(JSON.stringify(value));
   }
+  acceptPage(sessionID: string): void {
+    if (this.#view.selected === sessionID) {
+      this.send({ t: "view.settled", epoch: this.#view.epoch, sessionID });
+    }
+  }
   /** Lazy so raw-wire/timing consumers do not acquire another projection. */
   entry(sessionID: string): IndexEntry | undefined {
     if (
-      !this.#view.rows.includes(sessionID) && this.#view.selected !== sessionID
+      !this.#view.rows.includes(sessionID) &&
+      !this.#view.crumbs.includes(sessionID) &&
+      this.#view.selected !== sessionID
     ) {
       this.lease({
         ...this.#view,
-        selected: this.#view.selected ?? sessionID,
-        rows: [...this.#view.rows, sessionID],
+        selected: this.#view.selected,
+        crumbs: [...this.#view.crumbs, sessionID],
       });
     }
     this.#reduceIndex();
@@ -143,6 +151,14 @@ export class WsClient {
     this.send({ t: "request.received", refs: [{ ref, seq: frame.seq }] });
     if (!frame.outcome.ok) {
       throw new RequestFailure(frame.outcome.error);
+    }
+    if (
+      this.autoAcceptPages && method === "session.messages" && params &&
+      typeof params === "object" &&
+      "sessionID" in params && typeof params.sessionID === "string" &&
+      !("before" in params)
+    ) {
+      this.acceptPage(params.sessionID);
     }
     return frame.outcome.result as T;
   }

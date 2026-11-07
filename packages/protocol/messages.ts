@@ -34,6 +34,7 @@ export type ClientFrame =
   | RequestControl
   | { t: "hello"; protocol: number; view?: import("./view.ts").ViewLease }
   | ({ t: "view" } & import("./view.ts").ViewLease)
+  | { t: "view.settled"; epoch: number; sessionID: string }
   | { t: "index.applied"; epoch: number; rev: number }
   | { t: "pong" }
   | { t: "subscribe" | "unsubscribe"; sessionID: string }

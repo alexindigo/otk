@@ -43,7 +43,11 @@ interface Lifetime {
 export class DigestScheduler {
   #sinks = new Map<string, DigestSink>();
   #pending = new Map<string, Pending>();
-  #scopes = new Map<string, { directory?: string; sessions: string[] }>();
+  #scopes = new Map<
+    string,
+    { directory?: string; sessions: string[]; pendingPage?: boolean }
+  >();
+  #pendingPages = false;
   #visibleSessions = new Set<string>();
   #visibleDirectories = new Set<string>();
   #interactive = new Set<string>();
@@ -162,7 +166,7 @@ export class DigestScheduler {
   }
   setScope(
     owner: string,
-    scope: { directory?: string; sessions: string[] },
+    scope: { directory?: string; sessions: string[]; pendingPage?: boolean },
   ): void {
     if (!this.#controller.signal.aborted) {
       this.#scopes.set(owner, structuredClone(scope));
@@ -171,6 +175,9 @@ export class DigestScheduler {
     }
   }
   #visibility(): void {
+    this.#pendingPages = [...this.#scopes.values()].some((scope) =>
+      scope.pendingPage
+    );
     this.#visibleSessions.clear();
     this.#visibleDirectories.clear();
     for (const scope of this.#scopes.values()) {
@@ -243,6 +250,7 @@ export class DigestScheduler {
   }
   get waitReason(): string | undefined {
     if (!this.#viewers) return "paused with no viewers";
+    if (this.#pendingPages) return "waiting for the current page";
     if (this.#interactive.size) return "queued behind current work";
     if (this.resources.freeMemory() < this.policy.memoryreserve) {
       return "paused for memory capacity";
@@ -255,7 +263,9 @@ export class DigestScheduler {
   #priority(pending: Pending): number {
     // An admitted slice drains its bounded commit/publication and I/O cleanup.
     // Only its source-free cursor is parked, never a permission or credit.
-    if (!this.#viewers && pending.active) return rank.attention;
+    if ((!this.#viewers || this.#pendingPages) && pending.active) {
+      return rank.attention;
+    }
     const priority = rank[pending.priority];
     return priority > rank.visible &&
         (this.#visibleSessions.has(pending.job.sessionID) ||
@@ -497,6 +507,7 @@ export class DigestScheduler {
   #eligible(priority: number, signal?: AbortSignal): boolean {
     if (signal?.aborted) return true; // Canceled continuations still join their cleanup.
     if (priority === rank.interactive) return true;
+    if (priority >= rank.visible && this.#pendingPages) return false;
     if (priority >= rank.visible && !this.#viewers) return false;
     if (this.#controller.signal.aborted) return false;
     if (this.#dutyUntil > this.#now()) {

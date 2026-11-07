@@ -29,6 +29,7 @@ test("real native helper summaries decorate pages, removals patch only progress 
       rows: [child.id],
     });
     await client.connect();
+    await client.rpc("session.messages", { sessionID: parent.id });
     const index = createIndex();
     let cursor = 0;
     const entry = () => {
@@ -98,8 +99,8 @@ test("real native helper summaries decorate pages, removals patch only progress 
       rows: [child.id],
     });
     await client.connect();
-    // Cached helper replay is optional startup work. Reacquire its actual view
-    // and observe readiness rather than making the first page a global barrier.
+    await client.rpc("session.messages", { sessionID: parent.id });
+    // Accept the first page before waiting for optional cached helper replay.
     await waitFor(
       () => client!.entry(child.id)?.digest.helper,
       (value) => value?.state === "ready",

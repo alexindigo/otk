@@ -10,5 +10,12 @@ export function createSidecars(
   onFrame: (id: string, frame: ServerFrame) => boolean | void,
   options: SidecarsOptions = {},
 ): ClientSidecars {
-  return clientSidecars(onFrame, options, solidState);
+  return clientSidecars(onFrame, {
+    ...options,
+    connection: {
+      ...options.connection,
+      afterRender: (accepted) =>
+        requestAnimationFrame(() => requestAnimationFrame(accepted)),
+    },
+  }, solidState);
 }

@@ -77,14 +77,15 @@ test("view leases park unfinished backfill without holding execution, native per
       rows: [],
     });
     await client.connect();
-    await waitFor(() => entered, (n) => n > 0);
-    // The selected native page must preempt the held optional I/O and be
-    // admitted before any restarted background request.
+    // Selection parks backfill until the first page is accepted by its consumer.
+    await client.rpc("prefs.get", {});
+    assertEquals(entered, 0);
     const at = requests.length;
     const page = await client.rpc<{ items: unknown[] }>("session.messages", {
       sessionID: session.id,
     });
     assert(page.items.length > 0);
+    await waitFor(() => entered, (n) => n > 0);
     const since = requests.slice(at);
     assert(since.findIndex((path) => path.endsWith("/message")) >= 0);
     const firstPage = since.findIndex((path) => path.endsWith("/message"));
@@ -154,6 +155,7 @@ test("view leases park unfinished backfill without holding execution, native per
       rows: [],
     });
     await next.connect();
+    await next.rpc("session.messages", { sessionID: session.id });
     await waitFor(
       () => app.index.get(session.id)?.digest.state,
       (state) => state === "ready",

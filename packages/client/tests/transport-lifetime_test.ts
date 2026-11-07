@@ -48,6 +48,64 @@ class Socket {
     });
   }
 }
+Deno.test("@load @transport first-page acceptance waits for the consumer and fences selection ABA and reconnect", async () => {
+  const sockets: Socket[] = [], renders: (() => void)[] = [];
+  const connection = new SidecarConnection("http://example.test", {
+    status() {},
+    frame() {},
+  }, {
+    fetcher: bootstrapFetch(),
+    afterRender: (accepted) => renders.push(accepted),
+    socket() {
+      const socket = new Socket();
+      sockets.push(socket);
+      return socket as unknown as WebSocket;
+    },
+  });
+  const select = (id: string) =>
+    connection.view({ selected: id, crumbs: [], rows: [] });
+  const settlements = () =>
+    sockets.flatMap((s) => s.sent.map((f) => JSON.parse(f))).filter((f) =>
+      f.t === "view.settled"
+    );
+  try {
+    select("tstv1-a");
+    await connection.connect();
+    sockets[0].open();
+    sockets[0].welcome();
+    const stale = connection.firstPage("tstv1-a");
+    stale();
+    assertEquals(settlements(), []);
+    select("tstv1-b");
+    select("tstv1-a");
+    renders.shift()!();
+    assertEquals(settlements(), []);
+    const accepted = connection.firstPage("tstv1-a");
+    accepted();
+    // Same selection's row changes retain the barrier and use the current epoch.
+    connection.view({ selected: "tstv1-a", crumbs: [], rows: ["tstv1-row"] });
+    renders.shift()!();
+    assertEquals(settlements(), [{
+      t: "view.settled",
+      epoch: connection.viewEpoch,
+      sessionID: "tstv1-a",
+    }]);
+    accepted();
+    renders.shift()!();
+    assertEquals(settlements().length, 1);
+    await connection.connect();
+    sockets[1].open();
+    sockets[1].welcome();
+    accepted();
+    renders.shift()!();
+    assertEquals(settlements().length, 1);
+    connection.firstPage("tstv1-a")();
+    renders.shift()!();
+    assertEquals(settlements().length, 2);
+  } finally {
+    connection.stop();
+  }
+});
 Deno.test("view epochs survive reconnect and retire late scoped publications before reduction", async () => {
   const sockets: Socket[] = [], frames: unknown[] = [];
   const connection = new SidecarConnection("http://example.test", {

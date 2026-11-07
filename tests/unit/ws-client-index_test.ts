@@ -32,7 +32,7 @@ test("raw test clients expose the public keyed index contract and recover revisi
   };
   index.upsertMetadata(metadata);
   let socket: WebSocket | undefined;
-  const received: { t: string }[] = [];
+  const received: { t: string; selected?: string; crumbs?: string[] }[] = [];
   const server = serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     (request) => {
@@ -141,6 +141,13 @@ test("raw test clients expose the public keyed index contract and recover revisi
       "view",
       "resnapshot",
     ]);
+    const view = received.find((frame) => frame.t === "view")!;
+    assertEquals(view.crumbs, [metadata.id]);
+    assertEquals(
+      view.selected,
+      undefined,
+      "Metadata inspection cannot invent a selected-page lifetime",
+    );
   } finally {
     await client.close();
   }

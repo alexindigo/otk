@@ -16,16 +16,19 @@ test("shipped source rebuilds only derived digests and serves cached deleted met
     body: { title: "Derived rebuild" },
   });
   const state = join(oc.root, "digest-state");
-  const run = async () => {
+  const run = async (deleted = false) => {
     const server = await SidecarTest.start(oc, { state: { path: state } });
     const client = new WsClient(server.url);
     client.lease({
       directory: oc.directory,
-      selected: session.id,
+      selected: deleted ? undefined : session.id,
       crumbs: [],
-      rows: [],
+      rows: deleted ? [session.id] : [],
     });
     await client.connect();
+    if (!deleted) {
+      await client.rpc("session.messages", { sessionID: session.id });
+    }
     const index = createIndex();
     let cursor = 0;
     const entry = () => {
@@ -109,7 +112,7 @@ test("shipped source rebuilds only derived digests and serves cached deleted met
     await rebuilt.stop();
   }
   await oc.stop();
-  const offline = await run();
+  const offline = await run(true);
   try {
     await waitFor(offline.entry, (entry) => entry?.deleted?.how === "provider");
     assertEquals(offline.entry()!.digest.total!.calls > 0, true);

@@ -55,11 +55,6 @@ export function createTranscriptScopes(
       selected && project?.sidecarId === selected.sidecarId && input
         ? { sidecarId: selected.sidecarId, sessionID: selected.sessionID }
         : undefined;
-    session.demand({
-      scope: active,
-      sessions: target ? [target] : [],
-      selected: screen ? selected : undefined,
-    });
     // Crumbs borrow metadata from the same selector; they never acquire transcripts.
     resources.scope(
       project,
@@ -67,6 +62,11 @@ export function createTranscriptScopes(
       selected,
       tabs?.crumbs().map((crumb) => crumb.id) ?? [],
     );
+    session.demand({
+      scope: active,
+      sessions: target ? [target] : [],
+      selected: screen ? selected : undefined,
+    });
   };
   const release = resources.observe({
     frame(server, frame, accepted) {

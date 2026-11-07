@@ -589,6 +589,7 @@ export function createTranscript(
         draft.exhausted = page.older === null;
       });
       queueMicrotask(reserve);
+      connection(target.sidecarId).firstPage?.(target.sessionID)();
     } catch (error) {
       if (!current(id, request)) return;
       buffer = [];
@@ -844,6 +845,9 @@ export function createTranscript(
       }
     },
     selected(value) {
+      if (value && hasBaseline) {
+        connection(target.sidecarId).firstPage?.(target.sessionID)();
+      }
       if (value === selectedForTools) return;
       selectedForTools = value;
       toolGeneration++;

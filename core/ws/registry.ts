@@ -24,6 +24,8 @@ export interface RpcContext {
 }
 /** Socket-owned leases are distinct from a single read's execution signal. */
 export interface RequestLifetime {
+  /** Captured view generation: failure/cancellation settles only its own first page. */
+  firstPage?(sessionID: string): () => void;
   view?(): import("@otk/protocol").ViewLease;
   entries?(): ReadonlySet<string>;
   id: string;

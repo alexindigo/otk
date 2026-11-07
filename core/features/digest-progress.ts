@@ -13,7 +13,6 @@ export function digestProgressSource(
     listen: () => () => {},
     open(view, socketID) {
       const owner = `view:${socketID}`;
-      bridge.scope(owner, { sessions: [] });
       const frame = (values = bridge.progress()) => ({
         t: "digest.progress" as const,
         values: values.filter((value) =>
@@ -21,6 +20,11 @@ export function digestProgressSource(
         ),
       });
       return {
+        viewChanged: () =>
+          bridge.scope(owner, {
+            sessions: [],
+            pendingPage: !!view().selected && !view().pageSettled,
+          }),
         close: () => bridge.release(owner),
         snapshot: () => frame(),
         listen: (listener) =>

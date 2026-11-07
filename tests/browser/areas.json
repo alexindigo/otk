@@ -40,6 +40,9 @@
     "menus": ["commands_test.ts", "prefs_test.ts"],
     "visual": ["prefs_test.ts", "compiled-static_test.ts"],
     "transport": [
+      "first-page_test.ts",
+      "background-viewers_test.ts",
+      "view-lease_test.ts",
       "beta2-upgrade_test.ts",
       "bootstrap-cost_test.ts",
       "catalog-native_test.ts",

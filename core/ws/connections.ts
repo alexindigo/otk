@@ -45,6 +45,8 @@ interface Connection {
   close(): void;
 }
 export interface FrameSource {
+  /** Refresh connection-owned demand before admitting work for a changed view. */
+  viewChanged?(): void;
   /** Feature-owned connection projection, with its own local revisions. */
   open?(
     view: () => ViewLease,
@@ -247,11 +249,28 @@ export class Connections {
         this.#send(c, { ...frame, epoch });
       }
     };
+    let selectionGeneration = 0;
+    const changed = () => {
+      for (const source of c.sources) source.viewChanged?.();
+    };
+    const settle = () => {
+      if (controller.signal.aborted || c.view.pageSettled) return;
+      c.view = { ...c.view, pageSettled: true };
+      changed();
+    };
     const lease = {
       id: socketID,
       view: () => c.view,
       entries: () => c.index.ids(),
       signal: controller.signal,
+      firstPage(sessionID: string) {
+        const generation = selectionGeneration;
+        return () => {
+          if (
+            generation === selectionGeneration && c.view.selected === sessionID
+          ) settle();
+        };
+      },
       defer(release: () => void) {
         if (controller.signal.aborted) release();
         else releases.add(release);
@@ -338,6 +357,8 @@ export class Connections {
           const identity = await requestFingerprint(`principal:${principal}`);
           if (!this.#connections.has(c)) return;
           if (raw.view) c.view = view(object(raw.view));
+          selectionGeneration++;
+          changed();
           this.index.flush();
           c.welcomed = true;
           clearTimeout(helloDeadline);
@@ -375,6 +396,17 @@ export class Connections {
           return;
         }
         if (frame.t === "pong") return;
+        if (frame.t === "view.settled") {
+          if (
+            !Number.isSafeInteger(frame.epoch) || !isSessionID(frame.sessionID)
+          ) {
+            throw new HarnessError("params", "Invalid first-page settlement");
+          }
+          if (
+            frame.epoch === c.view.epoch && frame.sessionID === c.view.selected
+          ) settle();
+          return;
+        }
         if (frame.t === "index.applied") {
           if (
             !Number.isSafeInteger(frame.epoch) ||
@@ -389,7 +421,13 @@ export class Connections {
           const next = view(raw);
           if (next.epoch <= c.view.epoch) return;
           this.index.flush();
-          c.view = next;
+          if (next.selected !== c.view.selected) selectionGeneration++;
+          c.view = {
+            ...next,
+            pageSettled: next.selected === c.view.selected &&
+              c.view.pageSettled,
+          };
+          changed();
           c.index.refresh();
           await snapshots();
         } else if (frame.t === "subscribe" || frame.t === "unsubscribe") {

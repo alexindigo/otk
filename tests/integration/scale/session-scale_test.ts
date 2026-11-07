@@ -77,6 +77,7 @@ test("real-version scale summaries match independent totals with bounded serving
     rows: requested.map((row) => row.id),
   });
   await client.connect();
+  await client.rpc("session.messages", { sessionID: requested[0].id });
   const present = new Set<string>(), ready = new Set<string>();
   const observe = (entry: import("@otk/protocol").IndexEntry) => {
     present.add(entry.id);

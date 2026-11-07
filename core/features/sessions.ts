@@ -55,10 +55,24 @@ export function register(
         before,
       };
     },
-    handler: (ctx, p) =>
-      ctx.harness.core.listMessages(p.sessionID, {
-        before: p.before,
-      }, ctx.execution?.signal),
+    async handler(ctx, p) {
+      const settle = p.before === undefined
+        ? ctx.request?.firstPage?.(p.sessionID)
+        : undefined;
+      const signal = ctx.execution?.signal;
+      if (settle) signal?.addEventListener("abort", settle, { once: true });
+      try {
+        signal?.throwIfAborted();
+        return await ctx.harness.core.listMessages(p.sessionID, {
+          before: p.before,
+        }, signal);
+      } catch (error) {
+        settle?.();
+        throw error;
+      } finally {
+        if (settle) signal?.removeEventListener("abort", settle);
+      }
+    },
   });
   rpc.register("session.create", {
     execution: {

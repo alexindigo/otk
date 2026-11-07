@@ -1,6 +1,13 @@
 # OTK application core
 
-## View-scoped publication (protocol 18)
+## View-scoped publication (protocol 19)
+
+A selected socket view parks optional work until the first message page settles.
+The client acknowledges accepted state after rendering; failures and
+cancellation settle through the page request owner. Selection replacement and
+disconnect fence late acknowledgements. Empty selections, essential/attention
+reads and effects remain independent of this barrier. View presence begins at
+hello, not TCP open.
 
 Connections own a generation-fenced socket view (project, selection, crumbs and
 visible Sessions keys). IndexView publishes local revisions, incremental scope

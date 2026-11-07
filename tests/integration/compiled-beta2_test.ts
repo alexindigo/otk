@@ -122,6 +122,7 @@ test("compiled beta.2 contracts upgrade beta.1 off-source and publish real catal
       rows: [unknown.id],
     });
     await client.connect();
+    await client.rpc("session.messages", { sessionID: session.id });
     return {
       client,
       stop: async () => {

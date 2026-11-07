@@ -76,6 +76,7 @@ export type ToWorker =
       owner: string;
       directory?: string;
       sessions: string[];
+      pendingPage?: boolean;
       released?: boolean;
     }
     | { t: "interactive"; owner: string; active: boolean }

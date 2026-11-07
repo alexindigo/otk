@@ -30,7 +30,7 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
       JSON.stringify(oc.db)
     }\n[digest]\nretryms=10\ncpu=1\nmemoryreserve=1\n`,
   );
-  const run = async () => {
+  const run = async (deleted = false) => {
     const env = Object.fromEntries(
       Object.entries(Deno.env.toObject()).filter(([key]) =>
         !key.startsWith("OTK_")
@@ -58,11 +58,14 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     const client = new WsClient(url);
     client.lease({
       directory: oc.directory,
-      selected: session.id,
+      selected: deleted ? undefined : session.id,
       crumbs: [],
-      rows: [],
+      rows: deleted ? [session.id, lostID] : [],
     });
     await client.connect();
+    if (!deleted) {
+      await client.rpc("session.messages", { sessionID: session.id });
+    }
     const index = createIndex();
     let cursor = 0;
     const entry = (id = session.id) => {
@@ -256,7 +259,7 @@ test("shipped binary digests off-source with empty caches, follows SSE, retains 
     }
   }
   await oc.restart();
-  const second = await run();
+  const second = await run(true);
   try {
     await waitFor(second.entry, (entry) => entry?.deleted?.how === "otk");
     assertEquals(second.entry()!.digest.total!.calls > 0, true);

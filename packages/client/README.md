@@ -7,7 +7,13 @@ or released. Transcript request owners supply queued/reading stages through that
 same owner. A 45-second no-advancement fallback reports elapsed/last progress
 and the real wait reason, never a failure or invented ETA.
 
-## View leases (protocol 18)
+## View leases (protocol 19)
+
+The transcript owner acknowledges its accepted first page through the
+connection's generation-fenced settlement callback. UI adapters inject an
+after-render callback; headless consumers acknowledge state acceptance. A
+selected warm baseline uses the same callback. No view component owns background
+admission.
 
 ServerResources owns project/selection/crumb demand and visible Sessions keys.
 SidecarConnection retains that view across reconnects, sends it with hello and

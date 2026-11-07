@@ -90,7 +90,10 @@ export class DigestBridge implements DigestPort {
   #connection = 0;
   #timers = new Set<ReturnType<typeof setTimeout>>();
   #retry?: ReturnType<typeof setTimeout>;
-  #scopes = new Map<string, { directory?: string; sessions: string[] }>();
+  #scopes = new Map<
+    string,
+    { directory?: string; sessions: string[]; pendingPage?: boolean }
+  >();
   #interactive = new Set<string>();
   #running = false;
   #readOwners = new Map<string, Set<AbortController>>();
@@ -810,7 +813,7 @@ export class DigestBridge implements DigestPort {
   }
   scope(
     owner: string,
-    value: { directory?: string; sessions: string[] },
+    value: { directory?: string; sessions: string[]; pendingPage?: boolean },
   ): void {
     if (this.#stop) return;
     this.#scopes.set(owner, structuredClone(value));

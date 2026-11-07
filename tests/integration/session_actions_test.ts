@@ -248,7 +248,7 @@ test("delete tombstones a real native family and retains task membership until e
     });
     const server = await f.sidecar();
     client = new WsClient(server.url);
-    await client.connect();
+    await client.connect(f.oc.directory);
     const task = await client.rpc<TaskRecord>("tasks.create", {
       directory: f.oc.directory,
       name: "Delete members",

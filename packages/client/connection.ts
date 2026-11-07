@@ -33,6 +33,8 @@ export interface ConnectionSink {
   frame(frame: ServerFrame): boolean | void;
 }
 export interface ConnectionOptions {
+  /** UI adapters acknowledge accepted state after its render opportunity. */
+  afterRender?(accepted: () => void): void;
   attachments?: import("@otk/protocol").AttachmentPolicy;
   messages?: MessagePolicy;
   api?: URL;
@@ -72,6 +74,27 @@ export class SidecarConnection {
   #messages?: MessagePolicy;
   #attachments?: import("@otk/protocol").AttachmentPolicy;
   #view: ViewLease = { epoch: 0, crumbs: [], rows: [] };
+  #selectionGeneration = 0;
+  #pageSettled = false;
+  /** Capture selection and transport generations before acquiring its first page. */
+  firstPage(sessionID: string): () => void {
+    if (this.#pageSettled || this.#view.selected !== sessionID) return () => {};
+    const generation = this.#selectionGeneration, controller = this.#controller;
+    return () => {
+      const accepted = () => {
+        if (
+          generation !== this.#selectionGeneration ||
+          controller !== this.#controller ||
+          this.#view.selected !== sessionID || !this.#welcomed ||
+          this.#pageSettled
+        ) return;
+        this.#pageSettled = true;
+        this.send({ t: "view.settled", epoch: this.#view.epoch, sessionID });
+      };
+      if (this.options.afterRender) this.options.afterRender(accepted);
+      else queueMicrotask(accepted);
+    };
+  }
   get viewEpoch(): number {
     return this.#view.epoch;
   }
@@ -81,6 +104,10 @@ export class SidecarConnection {
       JSON.stringify({ ...this.#view, epoch: undefined }) ===
         JSON.stringify({ ...value, epoch: undefined })
     ) return;
+    if (value.selected !== this.#view.selected) {
+      this.#selectionGeneration++;
+      this.#pageSettled = false;
+    }
     this.#view = {
       ...value,
       crumbs: [...value.crumbs],
@@ -297,6 +324,8 @@ export class SidecarConnection {
     this.sink.status("reconnecting");
   }
   #retire(): void {
+    this.#selectionGeneration++;
+    this.#pageSettled = false;
     this.#controller?.abort();
     this.#controller = undefined;
     clearTimeout(this.#retry);

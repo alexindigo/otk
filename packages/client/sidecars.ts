@@ -116,40 +116,46 @@ export function createSidecars(
       ),
     );
   const install = (spec: SidecarSpec) => {
-    const connection = new SidecarConnection(spec.baseUrl, {
-      status(status, error, authType) {
-        setState((draft) => {
-          const item = draft.list.find((item) => item.id === spec.id);
-          if (item) {
-            item.status = status;
-            if (status === "connected") {
-              item.connectionVersion = (item.connectionVersion ?? 0) + 1;
-            }
-            // Capabilities describe the backend, not transport liveness. Keep
-            // feature owners (and their unsent input) mounted while reconnecting.
-            item.error = error;
-            if (authType !== undefined) item.authType = authType;
-          }
-        });
-      },
-      frame(frame) {
-        if (frame.t === "welcome") {
+    const connection = new SidecarConnection(
+      spec.baseUrl,
+      {
+        status(status, error, authType) {
           setState((draft) => {
             const item = draft.list.find((item) => item.id === spec.id);
             if (item) {
-              item.capabilities = [...welcomeCapabilities(frame)];
+              item.status = status;
+              if (status === "connected") {
+                item.connectionVersion = (item.connectionVersion ?? 0) + 1;
+              }
+              // Capabilities describe the backend, not transport liveness. Keep
+              // feature owners (and their unsent input) mounted while reconnecting.
+              item.error = error;
+              if (authType !== undefined) item.authType = authType;
             }
           });
-        }
-        if (frame.t === "harness") {
-          setState((draft) => {
-            const item = draft.list.find((item) => item.id === spec.id);
-            if (item) item.harness = frame.state;
-          });
-        }
-        return onFrame(spec.id, frame);
+        },
+        frame(frame) {
+          if (frame.t === "welcome") {
+            setState((draft) => {
+              const item = draft.list.find((item) => item.id === spec.id);
+              if (item) {
+                item.capabilities = [...welcomeCapabilities(frame)];
+              }
+            });
+          }
+          if (frame.t === "harness") {
+            setState((draft) => {
+              const item = draft.list.find((item) => item.id === spec.id);
+              if (item) item.harness = frame.state;
+            });
+          }
+          return onFrame(spec.id, frame);
+        },
       },
-    }, spec.id === LOCAL_SIDECAR ? options.connection : undefined);
+      spec.id === LOCAL_SIDECAR
+        ? options.connection
+        : { afterRender: options.connection?.afterRender },
+    );
     connections.set(spec.id, connection);
   };
   for (const item of initial) install(item);

@@ -196,6 +196,9 @@ export function createSession(
         draft.error = undefined;
       }
     });
+    if (deleted && selected) {
+      connection(selected.sidecarId).firstPage?.(selected.sessionID)();
+    }
   };
   const bind = () => {
     if (stopped) return;
