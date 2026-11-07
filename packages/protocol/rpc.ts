@@ -160,7 +160,10 @@ export interface RpcMethods
     DigestsRpcMethods,
     ApprovalRpcMethods,
     CatalogRpcMethods {
-  "session.get": { params: { sessionID: string }; result: ContentSession };
+  "session.get": {
+    params: { sessionID: string };
+    result: ContentSession & { load: import("./session-list.ts").LoadCoverage };
+  };
   "sessions.list": {
     params: import("./session-list.ts").SessionListInput;
     result: import("./session-list.ts").SessionListPage;
@@ -175,7 +178,9 @@ export interface RpcMethods
   };
   "session.messages": {
     params: import("./transcript.ts").MessagePageInput;
-    result: import("./transcript.ts").MessagePage;
+    result: import("./transcript.ts").MessagePage & {
+      load: import("./session-list.ts").LoadCoverage;
+    };
   };
   "session.create": {
     params: { directory: string; title?: string; parentID?: string };

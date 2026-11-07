@@ -6,6 +6,12 @@ import type { SidecarConnection } from "../connection.ts";
 import { shellEntry } from "./shell-fixture.ts";
 import { createInputGuard } from "../input-guard.ts";
 import { createDrafts } from "../drafts.ts";
+// Q5 page reads carry a reserved intent and its cancellation in RequestOptions.
+const intent = () => ({
+  key: crypto.randomUUID(),
+  clientID: "fixture",
+  window: "fixture",
+});
 Deno.test("deleted selection is metadata-only, aborts live content, and resurrection acquires once", async () => {
   const entry = shellEntry("tstv1-one");
   entry.deleted = { at: 1, how: "provider" };
@@ -15,7 +21,13 @@ Deno.test("deleted selection is metadata-only, aborts live content, and resurrec
     subscribe: (...args: unknown[]) => calls.push(args),
     supports: () => false,
     rpc: {
-      call: (method: string, _p: unknown, signal?: AbortSignal) => {
+      intent,
+      call: (
+        method: string,
+        _p: unknown,
+        options?: { signal?: AbortSignal },
+      ) => {
+        const signal = options?.signal;
         calls.push(method);
         return new Promise((_resolve, reject) =>
           signal?.addEventListener("abort", () => reject(signal.reason))
@@ -74,7 +86,13 @@ Deno.test("removing a server retires its catalog readiness before a new direct s
     subscribe() {},
     supports: () => false,
     rpc: {
-      call: (method: string, _params: unknown, signal?: AbortSignal) => {
+      intent,
+      call: (
+        method: string,
+        _params: unknown,
+        options?: { signal?: AbortSignal },
+      ) => {
+        const signal = options?.signal;
         calls.push(method);
         return new Promise((_resolve, reject) =>
           signal?.addEventListener("abort", () => reject(signal.reason))

@@ -285,6 +285,7 @@ export class Transcript {
     id: string,
     before?: string,
     signal = new AbortController().signal,
+    publish?: (page: MessagePage) => void,
   ): Promise<MessagePage> {
     ids.decode(id);
     signal.throwIfAborted();
@@ -349,54 +350,57 @@ export class Transcript {
           ),
         ),
       ];
-      if (this.options.metadata) {
-        const oldest = page.items.reduce<NativeMessage | undefined>(
-          (oldest, row) =>
-            !oldest || row.info.time.created < oldest.info.time.created ||
-              row.info.time.created === oldest.info.time.created &&
-                row.info.id < oldest.info.id
-              ? row
-              : oldest,
-          undefined,
-        );
-        metadata = await this.options.metadata(
-          id,
-          turns,
-          signal,
-          cutoff,
-          oldest && {
-            messageID: oldest.info.id,
-            created: oldest.info.time.created,
-          },
-        );
-      } else if (token && owner.promptReady) {
-        metadata = { boundaries: [], prompt: owner.prompt };
-      } else {
-        const latest = items.findLast((m) => m.role === "user");
-        metadata = { boundaries: [], prompt: prompt(latest) };
-        // A standalone adapter has no worker: bounded native pages retain only
-        // the latest user's scalar header, never another transcript collection.
-        let continuation = page.next;
-        while (!latest && continuation) {
-          const scan = await reader.page(
+      const acquireMetadata = async () => {
+        if (this.options.metadata) {
+          const oldest = page.items.reduce<NativeMessage | undefined>(
+            (oldest, row) =>
+              !oldest || row.info.time.created < oldest.info.time.created ||
+                row.info.time.created === oldest.info.time.created &&
+                  row.info.id < oldest.info.id
+                ? row
+                : oldest,
+            undefined,
+          );
+          metadata = await this.options.metadata(
             id,
-            NATIVE_SCAN_ROWS,
-            continuation,
-            owner.raw.directory,
+            turns,
             signal,
+            cutoff,
+            oldest && {
+              messageID: oldest.info.id,
+              created: oldest.info.time.created,
+            },
           );
-          const row = scan.items.findLast(({ info }) =>
-            info.role === "user" && (!cutoff || info.id < cutoff)
-          );
-          if (row) {
-            metadata.prompt = prompt(mapMessage(row.info, []));
-            break;
+        } else if (token && owner.promptReady) {
+          metadata = { boundaries: [], prompt: owner.prompt };
+        } else {
+          const latest = items.findLast((m) => m.role === "user");
+          metadata = { boundaries: [], prompt: prompt(latest) };
+          // A standalone adapter has no worker: bounded native pages retain only
+          // the latest user's scalar header, never another transcript collection.
+          let continuation = page.next;
+          while (!latest && continuation) {
+            const scan = await reader.page(
+              id,
+              NATIVE_SCAN_ROWS,
+              continuation,
+              owner.raw.directory,
+              signal,
+            );
+            const row = scan.items.findLast(({ info }) =>
+              info.role === "user" && (!cutoff || info.id < cutoff)
+            );
+            if (row) {
+              metadata.prompt = prompt(mapMessage(row.info, []));
+              break;
+            }
+            continuation = scan.next;
           }
-          continuation = scan.next;
         }
-      }
-      owner.prompt = metadata?.prompt;
-      owner.promptReady = true;
+      };
+      // A complete clocked body page can paint while scalar coverage advances.
+      // Standalone callers retain their single fully coordinated response.
+      if (!publish) await acquireMetadata();
       const session = await (owner.info ??= this.options.info(
         owner.raw,
         owner.controller.signal,
@@ -506,7 +510,7 @@ export class Transcript {
         }
       }
       const summaries = this.options.summaries(id, turns);
-      return {
+      const result: MessagePage = {
         sessionID: id,
         version: replay.version(id),
         from: capture.from,
@@ -536,6 +540,30 @@ export class Transcript {
           }]),
         ),
       };
+      if (publish) {
+        signal.throwIfAborted();
+        publish(result);
+        await acquireMetadata();
+        signal.throwIfAborted();
+        if (
+          owner !== this.#baselines.get(id) ||
+          owner.epoch !== replay.clock(id).epoch
+        ) {
+          throw new HarnessError(
+            "cursor-stale",
+            "Message baseline was replaced",
+          );
+        }
+        result.prompt = metadata?.prompt;
+        for (const [turnID, turn] of Object.entries(result.turns)) {
+          turn.boundary = metadata?.boundaries.find((b) =>
+            b.turnID === turnID
+          ) ?? turn.boundary;
+        }
+      }
+      owner.prompt = result.prompt;
+      owner.promptReady = true;
+      return result;
     } finally {
       capture.release();
     }

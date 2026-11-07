@@ -54,12 +54,12 @@ const page = (older: string | null = null): MessagePage => ({
   helpers: {},
   recovering: [],
 });
-function fixture() {
+function fixture(concurrency = policy.concurrency) {
   const frames: FixtureRequest[] = [];
   const connection = new SidecarConnection("http://fixture.invalid", {
     status() {},
     frame() {},
-  }, { messages: policy });
+  }, { messages: { ...policy, concurrency } });
   connection.send = (frame) => {
     if (frame.t === "request") frames.push(frame);
   };
@@ -100,6 +100,136 @@ Deno.test("selected page installs coordinated metadata and latest prompt outside
     assertEquals(f.owner.latestPrompt()?.id, "outside-page");
     await f.owner.older();
     assertEquals(f.frames, []);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("@load @messages cancelled settled page releases admission for the next resource", async () => {
+  const f = fixture(1);
+  try {
+    const selection = { sidecarId: "server", sessionID: "opcv1-s" };
+    f.owner.open(selection);
+    f.reply(page());
+    // Retire between RPC settlement and the boundary owner's continuation.
+    f.owner.open();
+    f.owner.removeServer("server");
+    f.owner.open(selection);
+    await f.settle();
+    assertEquals(
+      f.frames.filter((frame) => frame.method === "session.messages").length,
+      1,
+    );
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("@load @messages page coverage rejects wrong boundaries, epochs and retired request completion", async () => {
+  const f = fixture();
+  try {
+    f.owner.open({ sidecarId: "server", sessionID: "opcv1-s" });
+    const request = f.frames.find((frame) =>
+      frame.method === "session.messages"
+    )!;
+    const load: import("@otk/protocol").LoadCoverage = {
+      id: request.ref.key,
+      scope: { kind: "session-messages", sessionID: "opcv1-s" },
+      boundary: { kind: "page", limit: 10 },
+      generation: "pending",
+      revision: 0,
+      state: "loading",
+    };
+    const chunk = {
+      t: "load.chunk" as const,
+      request: request.ref,
+      epoch: 0,
+      load,
+      data: { kind: "message-page" as const, page: null },
+    };
+    f.owner.receive("server", chunk);
+    assertEquals(f.owner.transcript?.state.load?.state, "loading");
+    f.owner.receive("server", {
+      ...chunk,
+      epoch: 99,
+      load: { ...load, state: "complete", revision: 1 },
+    });
+    f.owner.receive("server", {
+      ...chunk,
+      load: {
+        ...load,
+        state: "complete",
+        revision: 2,
+        boundary: { kind: "page", limit: 10, before: "other" },
+      },
+    });
+    f.owner.receive("server", {
+      ...chunk,
+      request: { ...request.ref, key: "retired" },
+      load: { ...load, state: "complete", revision: 3 },
+    });
+    assertEquals(f.owner.transcript?.state.load?.state, "loading");
+    f.reply(
+      {
+        ...page(),
+        load: { ...load, revision: 1, generation: "source", state: "complete" },
+      } as MessagePage,
+    );
+    await f.settle();
+    assertEquals(f.owner.transcript?.state.load?.state, "complete");
+    assertEquals(f.owner.state.content.messages.length, 10);
+  } finally {
+    f.stop();
+  }
+});
+
+Deno.test("@load @messages atomic page push paints before scalar completion without replaying bodies or clocks", async () => {
+  const f = fixture();
+  try {
+    f.owner.open({ sidecarId: "server", sessionID: "opcv1-s" });
+    const request = f.frames.find((frame) =>
+      frame.method === "session.messages"
+    )!;
+    const load: import("@otk/protocol").LoadCoverage = {
+      id: request.ref.key,
+      scope: { kind: "session-messages", sessionID: "opcv1-s" },
+      boundary: { kind: "page", limit: 10 },
+      generation: "source",
+      revision: 1,
+      state: "loading",
+    };
+    f.owner.receive("server", {
+      t: "load.chunk",
+      request: request.ref,
+      epoch: 0,
+      load,
+      data: { kind: "message-page", page: page() },
+    });
+    await f.settle();
+    assertEquals(f.owner.state.content.messages.length, 10);
+    assertEquals(f.owner.state.loading, false);
+    assertEquals(f.owner.transcript?.state.load?.state, "loading");
+    f.event({
+      op: "message.upsert",
+      message: {
+        id: "live",
+        sessionID: "opcv1-s",
+        role: "user",
+        time: { created: 30 },
+        parts: [],
+      },
+    }, { epoch: "test", seq: 1 });
+    f.reply(
+      {
+        ...page(),
+        load: { ...load, revision: 2, state: "complete" },
+      } as MessagePage,
+    );
+    await f.settle();
+    assertEquals(f.owner.state.content.messages.length, 11);
+    assertEquals(f.owner.state.clock?.seq, 1);
+    assertEquals(f.owner.latestPrompt()?.id, "live");
+    assertEquals(f.owner.transcript?.state.load?.state, "complete");
   } finally {
     f.stop();
   }

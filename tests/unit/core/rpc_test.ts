@@ -184,7 +184,10 @@ export function stub(
       listSessions: () =>
         Promise.resolve({ items: [], older: null, generation: "fixture" }),
       listMessages: (id, opts) => {
-        calls.push(["messages", id, opts]);
+        calls.push(["messages", id, {
+          before: opts.before,
+          publish: typeof opts.publish,
+        }]);
         return Promise.resolve(fixturePage(id, [], undefined, session));
       },
       createSession: (input) => {
@@ -285,10 +288,16 @@ test("each optional registration contributes only its present capability and cor
     for (const register of optional) register(rpc, core);
     assertEquals(rpc.methods(), []);
     registerSessions(rpc, core);
-    assertEquals(
-      await rpc.dispatch("session.get", { sessionID: "tstv1-session" }),
-      await core.core.getSession("tstv1-session"),
-    );
+    // Q5 adds boundary coverage; coordinated session metadata is unchanged.
+    const { load, ...value } = await rpc.dispatch("session.get", {
+      sessionID: "tstv1-session",
+    }) as import("@otk/protocol").RpcResult<"session.get">;
+    assertEquals(value, await core.core.getSession("tstv1-session"));
+    assertEquals(load.state, "complete");
+    assertEquals(load.scope, {
+      kind: "session-metadata",
+      sessionID: "tstv1-session",
+    });
     for (const group of methods) {
       for (const method of group) {
         assertEquals(
@@ -512,7 +521,8 @@ test("feature validators retain limits, optional strings, model/attachment, ques
       null,
     );
     assertEquals(calls, [
-      ["messages", "tstv1-s", { before: "opaque==" }],
+      // Q5 supplies the atomic-page publication port beside the unchanged cursor.
+      ["messages", "tstv1-s", { before: "opaque==", publish: "function" }],
       ["create", {
         directory: "/project",
         title: "",

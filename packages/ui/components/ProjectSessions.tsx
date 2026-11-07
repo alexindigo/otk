@@ -43,6 +43,7 @@ export default function ProjectSessions(props: {
   project?: ProjectSelection;
   ready?: boolean;
   loading?: boolean;
+  loadingText?: string;
   selected?: Selection;
   rename?: SessionRename;
   showCost?: boolean;
@@ -261,9 +262,9 @@ export default function ProjectSessions(props: {
                   <Show
                     when={!!merged(key)}
                     fallback={
-                      <div class="otk-list-row otk-muted">
-                        Loading session...
-                      </div>
+                      <ListRow as="div" selected={false}>
+                        {item().title}
+                      </ListRow>
                     }
                   >
                     <div
@@ -423,7 +424,9 @@ export default function ProjectSessions(props: {
         <div class="otk-session-loading-slot">
           <Show when={props.ready === false || props.loading}>
             <ListRow as="div" selected={false} class="otk-session-loading-row">
-              <ProgressStatus text="Loading sessions..." />
+              <ProgressStatus
+                text={props.loadingText || "Loading sessions..."}
+              />
             </ListRow>
           </Show>
         </div>

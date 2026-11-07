@@ -7,6 +7,7 @@ import {
   type LoadCoverage,
   MAX_MESSAGE_CURSOR_LENGTH,
   MAX_SESSION_LIST_SIZE,
+  MESSAGE_PAGE_SIZE,
   SESSION_LIST_SIZE,
   type SessionListInput,
   sessionListKey,
@@ -29,6 +30,33 @@ export function register(
   created?: (directory: string, tx?: StoreWrite) => void,
   publishrows = SESSION_LIST_SIZE,
 ): void {
+  const generation = crypto.randomUUID();
+  const begin = (
+    ctx: RpcContext,
+    scope: LoadCoverage["scope"],
+    boundary: LoadCoverage["boundary"],
+    data: import("@otk/protocol").LoadChunk["data"],
+  ): LoadCoverage => {
+    const load: LoadCoverage = {
+      id: ctx.execution?.key.key ?? crypto.randomUUID(),
+      scope,
+      boundary,
+      generation: scope.kind === "session-messages" ? "pending" : generation,
+      revision: 0,
+      state: "loading",
+    };
+    (ctx.execution?.signal ?? ctx.request?.signal)?.throwIfAborted();
+    if (ctx.execution?.key) {
+      ctx.request?.publish?.({
+        t: "load.chunk",
+        request: ctx.execution.key,
+        epoch: ctx.request.view?.().epoch ?? 0,
+        load,
+        data,
+      });
+    }
+    return load;
+  };
   const lists = new Map<string, SessionListPage>();
   const parseList = (p: Record<string, unknown>): SessionListInput => {
     if (
@@ -166,8 +194,20 @@ export function register(
   rpc.register("session.get", {
     execution: readExecution((id: string) => ({ sessionID: id })),
     params: (p) => sessionID(p)!,
-    handler: (ctx, id) =>
-      ctx.harness.core.getSession(id, ctx.execution?.signal),
+    handler: async (ctx, id) => {
+      const load = begin(ctx, { kind: "session-metadata", sessionID: id }, {
+        kind: "metadata",
+      }, { kind: "session-metadata", session: null });
+      const session = await ctx.harness.core.getSession(
+        id,
+        ctx.execution?.signal,
+      );
+      ctx.execution?.signal.throwIfAborted();
+      return {
+        ...session,
+        load: { ...load, revision: 1, state: "complete" as const },
+      };
+    },
   });
   rpc.register("session.children", {
     execution: readExecution((p: { sessionID: string }) => ({
@@ -210,12 +250,46 @@ export function register(
         ? ctx.request?.firstPage?.(p.sessionID)
         : undefined;
       const signal = ctx.execution?.signal;
+      const epoch = ctx.request?.view?.().epoch ?? 0;
       if (settle) signal?.addEventListener("abort", settle, { once: true });
       try {
         signal?.throwIfAborted();
-        return await ctx.harness.core.listMessages(p.sessionID, {
+        const load = begin(
+          ctx,
+          { kind: "session-messages", sessionID: p.sessionID },
+          { kind: "page", before: p.before, limit: MESSAGE_PAGE_SIZE },
+          { kind: "message-page", page: null },
+        );
+        const page = await ctx.harness.core.listMessages(p.sessionID, {
           before: p.before,
+          publish(page) {
+            signal?.throwIfAborted();
+            if (!ctx.execution?.key) return;
+            ctx.request?.publish?.({
+              t: "load.chunk",
+              request: ctx.execution.key,
+              epoch,
+              load: {
+                ...load,
+                revision: 1,
+                generation:
+                  `${page.version.generation}:${page.version.revision}:${page.clock.epoch}`,
+              },
+              data: { kind: "message-page", page },
+            });
+          },
         }, signal);
+        signal?.throwIfAborted();
+        return {
+          ...page,
+          load: {
+            ...load,
+            generation:
+              `${page.version.generation}:${page.version.revision}:${page.clock.epoch}`,
+            revision: 2,
+            state: "complete" as const,
+          },
+        };
       } catch (error) {
         settle?.();
         throw error;

@@ -7,6 +7,14 @@ or released. Transcript request owners supply queued/reading stages through that
 same owner. A 45-second no-advancement fallback reports elapsed/last progress
 and the real wait reason, never a failure or invented ETA.
 
+Session/list replies carry boundary-specific `load` coverage. Atomic page pushes
+paint through the ordinary content-clock reducer and acknowledge first paint;
+their final result advances scalar coverage without replaying bodies or clocks.
+The active request identity, original view epoch, boundary, source generation
+and revision fence late pushes. List waits borrow the same P5 estimator and
+reserved loading row; post-paint message coverage borrows the one shell status
+line.
+
 ## View leases (protocol 20)
 
 The transcript owner acknowledges its accepted first page through the

@@ -57,7 +57,11 @@ test("message page registration preserves opaque cursors and per-call cancellati
         Promise.resolve({ items: [], older: null, generation: "fixture" }),
       createSession: () => Promise.reject(new Error("read only")),
       listMessages(id, opts, signal) {
-        calls.push([id, opts, signal]);
+        calls.push([
+          id,
+          { before: opts.before, publish: typeof opts.publish },
+          signal,
+        ]);
         return Promise.resolve(fixturePage(id));
       },
     },
@@ -86,7 +90,8 @@ test("message page registration preserves opaque cursors and per-call cancellati
     );
     assertEquals(calls, [[
       "tstv1-s",
-      { before: "opaque-exact+==" },
+      // Q5 adds the atomic-page publication port; cursor and signal stay exact.
+      { before: "opaque-exact+==", publish: "function" },
       controller.signal,
     ]]);
   } finally {

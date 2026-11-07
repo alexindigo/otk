@@ -53,14 +53,26 @@ export async function sessionsCoreScenario(profile: Profile) {
   );
   let reads = 0;
   const held = Promise.withResolvers<void>();
+  const publishPages = new Set<() => void>();
   resources().defer("sessions held initial transcript", () => held.resolve());
   if (profile === "contract-sessions-direct" || progressing) {
     const read = f.app.backend.core.listMessages;
     f.app.backend.core.listMessages = async (...args) => {
       reads++;
+      const page = progressing ? await read(...args) : undefined;
+      if (page && args[1].publish) {
+        publishPages.add(() => args[1].publish!(page));
+      }
       await held.promise;
-      return await read(...args);
+      return page ?? await read(...args);
     };
+    if (progressing) {
+      const list = f.app.backend.core.listSessions;
+      f.app.backend.core.listSessions = async (...args) => {
+        await held.promise;
+        return await list(...args);
+      };
+    }
   }
   if (unknown || profile === "contract-sessions-summary") {
     f.app.backend.core.listMessages = () =>
@@ -145,6 +157,13 @@ export async function sessionsCoreScenario(profile: Profile) {
                 progress.row(`fixture-${completed++}`, root, true, 10);
               }
               progress.chunk(root, 1000);
+            } else if (action === "thaw") {
+              for (const publish of publishPages) publish();
+              publishPages.clear();
+            } else if (action === "freeze") {
+              while (completed < 251) {
+                progress.row(`fixture-${completed++}`, root, true, 10);
+              }
             } else if (action === "hold") wait = "queued behind current work";
             else if (action === "release") held.resolve();
             else throw new Error("Unknown progress scenario action");

@@ -110,6 +110,7 @@ export interface ServerResources {
   sessionRows(project: ProjectSelection, query?: string): SessionListRow[];
   sessionRowsReady(project: ProjectSelection): boolean;
   sessionRowsLoading(project: ProjectSelection): boolean;
+  sessionRowsStatus(project: ProjectSelection): ProgressDisplay;
   projectProgress(
     project: ProjectSelection,
   ): { busy: boolean; announcement: string };
@@ -741,6 +742,16 @@ export function createServerResources(o: {
           ? rowDemand.query
           : "",
       ).loading,
+    sessionRowsStatus: (p) =>
+      listOwner(p.sidecarId).progress(
+        listFor(
+          p,
+          rowDemand?.project.directory === p.directory &&
+            rowDemand.project.sidecarId === p.sidecarId
+            ? rowDemand.query
+            : "",
+        ),
+      ),
     sessionRows: (p, query) => {
       const list = listFor(p, query),
         key = JSON.stringify([p.sidecarId, p.directory]);

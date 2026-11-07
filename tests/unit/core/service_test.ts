@@ -145,7 +145,17 @@ test("core service with a composed backend/assets discovers HTTP routes and adve
       frame.t === "request.result" && frame.ref.key === owned.key
     );
     assert(result.t === "request.result");
-    assertEquals(result.outcome, { ok: true, result: session });
+    assert(result.outcome.ok);
+    // Q5 adds boundary coverage beside the unchanged coordinated session fields.
+    const { load, ...value } = result.outcome
+      .result as import("@otk/protocol").RpcResult<"session.get">;
+    assertEquals(value, session);
+    assertEquals(load.id, owned.key);
+    assertEquals(load.state, "complete");
+    assertEquals(load.scope, {
+      kind: "session-metadata",
+      sessionID: session.id,
+    });
     const absent = {
       ...owned,
       id: crypto.randomUUID(),

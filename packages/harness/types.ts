@@ -78,7 +78,7 @@ export interface HarnessCore {
   listChildren(id: string, signal?: AbortSignal): Promise<ContentSession[]>;
   listMessages(
     id: string,
-    opts: { before?: MessageCursor },
+    opts: { before?: MessageCursor; publish?(page: MessagePage): void },
     signal?: AbortSignal,
   ): Promise<MessagePage>;
   createSession(

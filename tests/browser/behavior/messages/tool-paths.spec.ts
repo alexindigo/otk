@@ -110,11 +110,9 @@ test("messages.project-and-outside-tool-paths-reload", {
       (value) => Number(value),
     );
   await expect.poll(count).toBeGreaterThan(0);
-  while (await count() < nativeCount) {
-    const before = await count();
-    await page.locator(".otk-load-older").click();
-    await expect.poll(count).toBeGreaterThan(before);
-  }
+  // The canonical reserve can finish this fixture while its older-page control
+  // retires. The setup needs the exact acquired source boundary.
+  await expect.poll(count).toBe(nativeCount);
   for (const check of checks) {
     await revealAcquired(page, check.selector);
     await expect(page.locator(check.selector)).toHaveAttribute(

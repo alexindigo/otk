@@ -379,6 +379,10 @@ when the latest prompt lies outside the page. Standalone integrations supply
 replay policy explicitly and use bounded API pages when no worker is composed.
 
 Pages and turn detail also carry an ordered `{generation, revision}` version.
+When a caller supplies the page-publication port, a complete clocked body page
+is sealed and published before scalar metadata acquisition. Its final response
+updates prompt/turn coverage under the same producer authority, without reading
+those bodies again. Standalone callers retain their single coordinated result.
 Actual reconnect/disposal and revert-boundary changes retire producer authority
 and emit `transcript.invalidated` at that boundary. Metadata bootstrap
 completion has its own `bootstrap.complete` event and does not retire pages

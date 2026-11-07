@@ -3,8 +3,12 @@ import {
   type ClockedContent,
   compareTranscriptVersion,
   type ContentClock,
+  type IntentIdentity,
   type LatestPrompt,
+  type LoadCoverage,
+  MESSAGE_PAGE_SIZE,
   type MessageCursor,
+  type MessagePage,
   type MessagePolicy,
   type TranscriptVersion,
 } from "@otk/protocol";
@@ -70,6 +74,7 @@ export interface TranscriptState {
   queuedIDs: Set<string>;
   olderCursor: MessageCursor | null;
   pageLoading: boolean;
+  load?: LoadCoverage;
   pageError?: string;
   session?: ContentSession;
   recovering: { messageID: string; partID: string; generation: number }[];
@@ -135,6 +140,37 @@ export function createTranscript(
   const readProgress = createProgress(factory);
   let readFacts: import("@otk/protocol").ProgressFacts | undefined;
   let readLabel = "Loading messages";
+  let boundaryRead: {
+    intent: IntentIdentity;
+    epoch: number;
+    before?: string;
+    revision: number;
+    generation?: string;
+    streamed?: boolean;
+    painted?: boolean;
+    prompt?: string;
+    complete?: MessagePage & { load: LoadCoverage };
+    deliver?(page: MessagePage & { load: LoadCoverage }): void;
+  } | undefined;
+  const coverage = (load: LoadCoverage): boolean => {
+    const pending = boundaryRead;
+    if (
+      !pending || load.id !== pending.intent.key ||
+      load.scope.kind !== "session-messages" ||
+      load.scope.sessionID !== target.sessionID ||
+      load.boundary.kind !== "page" ||
+      load.boundary.before !== pending.before ||
+      load.boundary.limit !== MESSAGE_PAGE_SIZE ||
+      load.revision <= pending.revision ||
+      pending.generation && load.generation !== pending.generation
+    ) return false;
+    pending.revision = load.revision;
+    if (load.generation !== "pending") pending.generation = load.generation;
+    setState((draft) => {
+      draft.load = load;
+    });
+    return true;
+  };
   const readStage = (
     phase: "queued" | "reading" | "ready",
     generation: string,
@@ -159,6 +195,68 @@ export function createTranscript(
         : undefined,
     };
     readProgress.receive("page", readFacts);
+  };
+  const finishCoverage = () => {
+    const pending = boundaryRead, page = pending?.complete;
+    if (!pending?.painted || !page) return;
+    pending.complete = undefined;
+    if (
+      !state.version ||
+      compareTranscriptVersion(page.version, state.version) !== 0
+    ) return;
+    if (!coverage(page.load)) return;
+    setState((draft) => {
+      // Completion advances scalar coverage only. Bodies and accepted live clocks
+      // already belong to the atomic page/live reducer.
+      projection.boundaries(
+        Object.values(page.turns).map((turn) => turn.boundary),
+      );
+      if (!draft.latestPrompt || draft.latestPrompt.id === pending.prompt) {
+        draft.latestPrompt = page.prompt ?? draft.latestPrompt;
+      }
+      draft.info = page.session;
+    });
+    if (readFacts) readStage("ready", readFacts.generation, page.items.length);
+    queueMicrotask(reserve);
+  };
+  const readBoundary = (before: string | undefined, signal: AbortSignal) => {
+    const sidecar = connection(target.sidecarId), rpc = sidecar.rpc;
+    const intent = rpc.intent();
+    const early = Promise.withResolvers<MessagePage & { load: LoadCoverage }>();
+    const pending: NonNullable<typeof boundaryRead> = {
+      intent,
+      epoch: sidecar.viewEpoch,
+      before,
+      revision: -1,
+      prompt: state.latestPrompt?.id,
+      deliver: early.resolve,
+    };
+    boundaryRead = pending;
+    void rpc.call("session.messages", { sessionID: target.sessionID, before }, {
+      intent,
+      signal,
+    }).then((page) => {
+      if (signal.aborted || boundaryRead !== pending) {
+        early.reject(
+          signal.reason ??
+            new DOMException("Message boundary was replaced", "AbortError"),
+        );
+        return;
+      }
+      if (!pending.streamed) early.resolve(page);
+      else {
+        pending.complete = page;
+        finishCoverage();
+      }
+    }).catch((error) => {
+      if (!pending.streamed) early.reject(error);
+      else if (!signal.aborted && boundaryRead === pending) {
+        setState((draft) => {
+          draft.pageError = failureText(error);
+        });
+      }
+    });
+    return early.promise;
   };
   const interaction = createTranscriptInteraction();
   const helper = (
@@ -351,6 +449,7 @@ export function createTranscript(
     bufferBytes = 0;
     load++;
     controller?.abort();
+    boundaryRead = undefined;
     fetching = false;
     attentionReads = undefined;
     setState((draft) => {
@@ -503,13 +602,17 @@ export function createTranscript(
       refreshAttention(false);
       const page = await acquire(() => {
         readStage("reading", progressGeneration);
-        return rpc.call("session.messages", {
-          sessionID: target.sessionID,
-        }, abort.signal);
+        return readBoundary(undefined, abort.signal);
       }, abort.signal);
       const info = page.session, messages = page.items;
+      if (boundaryRead) {
+        boundaryRead.deliver = undefined;
+        boundaryRead.prompt = page.prompt?.id;
+      }
       if (!current(id, request)) return;
-      readStage("ready", progressGeneration, messages.length);
+      if (page.load && !coverage(page.load)) {
+        throw new Error("Invalid message coverage");
+      }
       if (minimum && compareTranscriptVersion(page.version, minimum) < 0) {
         initialResync = retriedVersion === undefined ||
           compareTranscriptVersion(retriedVersion, minimum) < 0;
@@ -610,6 +713,11 @@ export function createTranscript(
       });
       queueMicrotask(reserve);
       connection(target.sidecarId).firstPage?.(target.sessionID)();
+      if (!page.load || page.load.state === "complete") {
+        readStage("ready", progressGeneration, messages.length);
+      }
+      if (boundaryRead) boundaryRead.painted = true;
+      finishCoverage();
     } catch (error) {
       if (!current(id, request)) return;
       buffer = [];
@@ -644,6 +752,7 @@ export function createTranscript(
     clearTimeout(retry);
     retry = undefined;
     load++;
+    boundaryRead = undefined;
     controller?.abort();
     attentionController?.abort();
     if (selected && subscribed) {
@@ -675,6 +784,7 @@ export function createTranscript(
       draft.view = nextView;
       draft.deleted = deleted?.deleted ? deleted : undefined;
       draft.info = undefined;
+      draft.load = undefined;
       draft.clock = undefined;
       draft.version = undefined;
       draft.latestPrompt = undefined;
@@ -759,7 +869,8 @@ export function createTranscript(
   const reserve = () => {
     if (
       !selected || state.loading || state.paging || state.exhausted ||
-      state.pageError || state.continuity !== "ready"
+      state.pageError || state.continuity !== "ready" ||
+      state.load?.state === "loading"
     ) return;
     const ids = state.content.messages.map((m) => m.id);
     const first = range ? ids.indexOf(range.first) : -1;
@@ -948,6 +1059,37 @@ export function createTranscript(
         readProgress.receive("page", readFacts);
       }
       if (!selected || selected.sidecarId !== sidecarId) return;
+      if (frame.t === "load.chunk") {
+        const pending = boundaryRead;
+        if (
+          !pending || frame.epoch !== pending.epoch ||
+          frame.request.key !== pending.intent.key ||
+          frame.request.clientID !== pending.intent.clientID ||
+          frame.request.window !== pending.intent.window ||
+          frame.data.kind !== "message-page"
+        ) return;
+        if (frame.data.page && !pending.streamed) {
+          if (
+            frame.load.id !== pending.intent.key ||
+            frame.load.scope.kind !== "session-messages" ||
+            frame.load.scope.sessionID !== target.sessionID ||
+            frame.load.boundary.kind !== "page" ||
+            frame.load.boundary.before !== pending.before ||
+            frame.load.boundary.limit !== MESSAGE_PAGE_SIZE ||
+            frame.load.revision <= pending.revision
+          ) return;
+          pending.streamed = true;
+          pending.deliver?.({ ...frame.data.page, load: frame.load });
+          return;
+        }
+        if (!coverage(frame.load)) return;
+        // Body pages are atomic. Progress cannot install partial source or retire
+        // a content clock; only the coordinated page result can do that.
+        if (frame.load.state === "complete" && readFacts) {
+          readStage("ready", readFacts.generation, state.messageIDs.length);
+        }
+        return;
+      }
       if (frame.t === "index.snapshot" || frame.t === "index.patch") {
         const known = entry(sidecarId, selected.sessionID);
         const busyChanged = projection.busy(
@@ -1189,16 +1331,15 @@ export function createTranscript(
             const page = await acquire(
               () => {
                 readStage("reading", progressGeneration);
-                return connection(target.sidecarId).rpc.call(
-                  "session.messages",
-                  { sessionID: target.sessionID, before },
-                  controller?.signal,
-                );
+                return readBoundary(before, controller!.signal);
               },
               controller!.signal,
             );
             if (!current(id, request)) return;
-            readStage("ready", progressGeneration, page.items.length);
+            if (boundaryRead) boundaryRead.deliver = undefined;
+            if (page.load && !coverage(page.load)) {
+              throw new Error("Invalid message coverage");
+            }
             if (
               page.sessionID !== target.sessionID ||
               page.clock.epoch !== clock?.epoch
@@ -1257,6 +1398,11 @@ export function createTranscript(
               draft.exhausted = page.older === null;
               draft.paging = !added.length && page.older !== null;
             });
+            if (!page.load || page.load.state === "complete") {
+              readStage("ready", progressGeneration, page.items.length);
+            }
+            if (boundaryRead) boundaryRead.painted = true;
+            finishCoverage();
             if (added.length || page.older === null) return;
             before = page.older;
           }

@@ -29,6 +29,11 @@ metadata and latest-prompt context travel with the page. `HarnessSink.content`
 accepts the producer's optional third `ContentClock` argument; paged producers
 must supply aligned clocks, including standalone integrations.
 
+The optional `listMessages` input `publish(page)` delivers one atomic
+coordinated body page before scalar metadata coverage finishes. The returned
+page completes that same boundary; it does not require another native body read.
+Cancellation and producer-version fences apply to both deliveries.
+
 `HarnessCore.listSessions(input, signal?)` returns bounded metadata, an opaque
 continuation and source generation. `sessions.list` contributes the same read to
 the existing provider-read channel. List coverage is independent of index

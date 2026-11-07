@@ -7,14 +7,16 @@ import type {
   SessionStructure,
 } from "@otk/protocol";
 import type { Rpc } from "./rpc.ts";
-import { sessionListKey } from "@otk/protocol";
+import { SESSION_LIST_SIZE, sessionListKey } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
+import { createProgress } from "./progress.ts";
 export function createSessionLists(
   rpc: Rpc,
   epoch: () => number,
   factory: StateFactory = createState,
 ) {
   const store = factory({ revision: 0 });
+  const progress = createProgress(factory);
   type List = {
     input: SessionListInput;
     items: SessionStructure[];
@@ -29,6 +31,7 @@ export function createSessionLists(
     dirty?: boolean;
     covered?: boolean;
     retained: Map<string, SessionStructure>;
+    started: number;
     replacement?: {
       items: SessionStructure[];
       older: string | null;
@@ -59,7 +62,14 @@ export function createSessionLists(
     const pending = list.pending;
     if (
       !pending || page.load.id !== pending.intent.key ||
-      page.load.revision <= pending.revision
+      page.load.revision <= pending.revision ||
+      page.load.boundary.kind !== "page" ||
+      page.load.boundary.before !== pending.before ||
+      page.load.boundary.limit !== (list.input.limit ?? SESSION_LIST_SIZE) ||
+      page.load.scope.kind !== "project-sessions" ||
+      page.load.scope.directory !== list.input.directory ||
+      (page.load.scope.query ?? "") !== (list.input.query ?? "") ||
+      page.load.scope.parentID !== list.input.parentID
     ) return;
     const expected = list.replacement?.generation ??
       (pending.before ? list.generation : undefined);
@@ -68,6 +78,19 @@ export function createSessionLists(
       page.load.generation !== "pending"
     ) return;
     pending.revision = page.load.revision;
+    progress.receive(sessionListKey(list.input), {
+      generation: pending.intent.key,
+      phase: page.load.state === "complete" ? "ready" : "reading",
+      eligible: null,
+      completed: page.items.length,
+      queued: 0,
+      chunks: page.load.revision,
+      messages: 0,
+      activeMs: 0,
+      started: list.started,
+      advanced: page.items.length ? Date.now() : list.started,
+      wait: "waiting for native data",
+    });
     const revision = list.revision;
     const replacing = !!list.replacement;
     if (page.load.state === "loading" && !page.items.length) {
@@ -158,6 +181,20 @@ export function createSessionLists(
     };
     list.revision++;
     list.pending = pending;
+    list.started = Date.now();
+    progress.receive(sessionListKey(list.input), {
+      generation: intent.key,
+      phase: "reading",
+      eligible: null,
+      completed: 0,
+      queued: 0,
+      chunks: 0,
+      messages: 0,
+      activeMs: 0,
+      started: list.started,
+      advanced: list.started,
+      wait: "waiting for native data",
+    });
     list.loading = true;
     changed();
     void rpc.call("sessions.list", { ...list.input, before: pending.before }, {
@@ -209,6 +246,7 @@ export function createSessionLists(
           active: true,
           revision: 0,
           retained: new Map(),
+          started: Date.now(),
         };
         lists.set(key, list);
         read(list);
@@ -222,6 +260,8 @@ export function createSessionLists(
       return list;
     },
     more: (list: List) => read(list, true),
+    progress: (list: List) =>
+      progress.display(sessionListKey(list.input), "Loading sessions"),
     structures(
       list: List,
       context: readonly (SessionStructure & { retained?: boolean })[],
@@ -258,6 +298,7 @@ export function createSessionLists(
           (list.input.query ?? "") === (input.query ?? "")
         ) continue;
         list.active = false;
+        progress.reset(sessionListKey(list.input));
         list.pending?.abort.abort();
         list.pending = undefined;
       }
@@ -279,7 +320,9 @@ export function createSessionLists(
         }
         return;
       }
-      if (frame.t !== "load.chunk") return;
+      if (frame.t !== "load.chunk" || frame.data.kind !== "session-list") {
+        return;
+      }
       for (const list of lists.values()) {
         if (!list.active) continue;
         const pending = list.pending;
@@ -311,6 +354,7 @@ export function createSessionLists(
     },
     stop() {
       stopped = true;
+      progress.stop();
       for (const list of lists.values()) list.pending?.abort.abort();
       lists.clear();
     },

@@ -10,6 +10,77 @@ import { Client } from "../client.ts";
 import { mapSession } from "../map.ts";
 import type { Session } from "../types.ts";
 
+Deno.test("@load @messages native page publishes atomic bodies before held metadata without another native read", async () => {
+  const settings = cfg(), held = Promise.withResolvers<void>();
+  let reads = 0;
+  const raw: Session = {
+    id: "s",
+    directory: "/p",
+    projectID: "p",
+    title: "S",
+    time: { created: 1, updated: 1 },
+  };
+  const published = Promise.withResolvers<
+    import("@otk/protocol").MessagePage
+  >();
+  const transcript = new Transcript({
+    replay: new ContentReplay({
+      ...settings.messages,
+      nonce: () => "epoch",
+      emit() {},
+    }),
+    buffers: new StreamBuffers(),
+    reader: new Messages(
+      new Client(settings.harness, () => {
+        reads++;
+        return Promise.resolve(
+          Response.json([{
+            info: {
+              id: "m",
+              sessionID: "s",
+              role: "user",
+              time: { created: 1 },
+            },
+            parts: [],
+          }]),
+        );
+      }),
+      () => "/p",
+    ),
+    raw: () => Promise.resolve(raw),
+    info: (value) => Promise.resolve(mapSession(value)),
+    decorate: (message) => message,
+    summaries: () => ({}),
+    metadata: async () => {
+      await held.promise;
+      return { prompt: { id: "m" }, boundaries: [] };
+    },
+  });
+  let settled = false;
+  const result = transcript.page(
+    "opcv1-s",
+    undefined,
+    undefined,
+    published.resolve,
+  )
+    .then((page) => {
+      settled = true;
+      return page;
+    });
+  try {
+    const page = await published.promise;
+    assertEquals(page.items.map((item) => item.id), ["m"]);
+    assertEquals(settled, false);
+    assertEquals(reads, 1);
+    held.resolve();
+    assertEquals((await result).prompt?.id, "m");
+    assertEquals(reads, 1);
+  } finally {
+    held.resolve();
+    await result;
+  }
+});
+
 function fixture() {
   const reads: URL[] = [];
   let cutoff: string | undefined;

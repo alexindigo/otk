@@ -11,6 +11,58 @@ import type { SessionListPage } from "@otk/protocol";
 import type { DigestPressure } from "../../core/digest/protocol.ts";
 import { DigestBridge } from "../../core/digest/bridge.ts";
 import { sessionListReadCodec } from "@otk/harness";
+import { coreBackendFixture } from "../support/core-backend.ts";
+
+test("@load @sessions @messages @transport replies complete only their requested boundary after held-source loading", async () => {
+  const root = await tempDir("boundary-replies-");
+  const f = await coreBackendFixture(root);
+  const release = Promise.withResolvers<void>();
+  resources().defer("held boundary source", () => release.resolve());
+  for (const key of ["getSession", "listMessages", "listSessions"] as const) {
+    const read = f.app.backend.core[key].bind(f.app.backend.core);
+    f.app.backend.core[key] = (async (...args: unknown[]) => {
+      await release.promise;
+      return await (read as (...args: unknown[]) => unknown)(...args);
+    }) as never;
+  }
+  const client = new WsClient(f.url);
+  await client.connect(root);
+  const metadata = client.rpc<import("@otk/protocol").RpcResult<"session.get">>(
+    "session.get",
+    { sessionID: f.session.id },
+  );
+  const messages = client.rpc<
+    import("@otk/protocol").RpcResult<"session.messages">
+  >("session.messages", { sessionID: f.session.id });
+  const list = client.rpc<SessionListPage>("sessions.list", {
+    directory: root,
+  });
+  await waitFor(
+    () => client.frames.filter((frame) => frame.t === "load.chunk").length,
+    (count) => count === 3,
+  );
+  const loading = client.frames.filter((frame) => frame.t === "load.chunk");
+  assertEquals(loading.map((frame) => frame.load.state), [
+    "loading",
+    "loading",
+    "loading",
+  ]);
+  assertEquals(
+    client.frames.filter((frame) => frame.t === "request.result").length,
+    0,
+  );
+  release.resolve();
+  const replies = await Promise.all([metadata, messages, list]);
+  for (const reply of replies) {
+    const first = loading.find((frame) => frame.load.id === reply.load.id)!;
+    assert(first);
+    assertEquals(reply.load.state, "complete");
+    assertEquals(reply.load.scope, first.load.scope);
+    assertEquals(reply.load.boundary, first.load.boundary);
+    assert(reply.load.revision > first.load.revision);
+  }
+  assertEquals(replies[1].items[0].id, "message");
+});
 
 async function nativeFixture(population = 6, sql = false) {
   const root = await tempDir("demand-idle-");
@@ -505,6 +557,7 @@ test("@load @sessions @transport project demand returns 20 of 500, bounded SQL i
     assert(page.older);
     const chunk = client.frames.find((frame) => frame.t === "load.chunk");
     assert(chunk?.t === "load.chunk");
+    assert(chunk.data.kind === "session-list");
     assertEquals(chunk.load.state, "loading");
     assertEquals(chunk.data.items, []);
     const reads = () => samples.at(-1)?.nativeReads?.["session-list"] ?? 0;

@@ -36,7 +36,7 @@ export function sessionListKey(input: SessionListInput): string {
 }
 export type LoadBoundary =
   | { kind: "page"; before?: string; limit: number }
-  | { kind: "metadata"; oldest: string };
+  | { kind: "metadata"; oldest?: string };
 export interface LoadCoverage {
   id: string;
   scope: LoadScope;
@@ -60,6 +60,12 @@ export interface LoadChunk {
     items: SessionStructure[];
     older: string | null;
     offset: number;
+  } | {
+    kind: "session-metadata";
+    session: import("./content.ts").ContentSession | null;
+  } | {
+    kind: "message-page";
+    page: import("./transcript.ts").MessagePage | null;
   };
 }
 /** Current-project row discovery has no status, marks, digests or history. */

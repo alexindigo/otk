@@ -85,11 +85,7 @@ export class ProgressEstimate {
       return {
         busy,
         text: page
-          ? `Still loading ${
-            label === "Loading earlier messages"
-              ? "earlier messages"
-              : "messages"
-          } (${elapsed}): ${
+          ? `Still loading ${label.replace(/^Loading /, "")} (${elapsed}): ${
             waiting(
               facts.wait ?? (facts.phase === "queued"
                 ? "queued behind current work"

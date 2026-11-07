@@ -95,7 +95,12 @@ test.describe("filtered and unmounted supervision", () => {
         if (stage === "offscreen") {
           await search.fill("");
           await page.locator(".otk-project-session-tree").hover();
-          await page.mouse.wheel(0, 100000);
+          // Q3 paging can extend the end after a gesture; reach the same exact
+          // offscreen setup through real input, without assuming a full catalog.
+          await expect.poll(async () => {
+            await page.mouse.wheel(0, 100000);
+            return page.locator("[data-session=tstv1-axiom-99]").count();
+          }).toBe(1);
           await expect(page.locator("[data-session=tstv1-axiom-99]"))
             .toBeAttached();
         }

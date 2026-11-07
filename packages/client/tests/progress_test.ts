@@ -50,6 +50,10 @@ Deno.test("progress estimates steady work from active time, never from waiting",
     page.display("Loading messages", 61000).text,
     "Still loading messages (61 s): waiting for opencode to respond",
   );
+  assertEquals(
+    page.display("Loading sessions", 61000).text,
+    "Still loading sessions (61 s): waiting for opencode to respond",
+  );
 });
 Deno.test("progress gives bursty rates a range and resets on generation replacement", () => {
   const owner = new ProgressEstimate();

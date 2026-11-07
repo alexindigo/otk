@@ -55,3 +55,9 @@
 .otk-shell-progress {
   padding: 4px var(--lane-gutter);
 }
+.otk-shell-progress:empty {
+  display: block;
+}
+.otk-shell-progress:empty::before {
+  content: "\00a0";
+}

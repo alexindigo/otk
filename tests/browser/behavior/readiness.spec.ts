@@ -22,7 +22,8 @@ async function holdReadiness(page: Page, sessionID?: string) {
     });
     server.onMessage((message) => {
       const frame = JSON.parse(message.toString());
-      const read = reads.get(frame.ref?.key);
+      // Q5 can deliver the atomic page before its terminal request result.
+      const read = reads.get(frame.ref?.key ?? frame.request?.key);
       const kind = frame.t.startsWith("inbox.")
         ? "inbox"
         : frame.t.startsWith("catalog.") || read?.method === "catalogs.watch"

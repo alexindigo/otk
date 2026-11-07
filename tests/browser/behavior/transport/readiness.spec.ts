@@ -63,6 +63,11 @@ test("transport.new-session-held-loads", {
   const hold = () =>
     frames.hold((frame, request) =>
       frame.t === "index.patch" || frame.t === "index.snapshot" ||
+      // Q5 publishes the coordinated page before its terminal result; both
+      // deliveries must be held to preserve this missing-metadata setup.
+      frame.t === "load.chunk" &&
+        (frame.data as { kind?: string } | undefined)?.kind ===
+          "message-page" ||
       frame.t === "request.result" &&
         (request?.method === "question.list" ||
           request?.method === "session.messages" ||

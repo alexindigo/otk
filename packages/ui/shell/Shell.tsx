@@ -446,6 +446,7 @@ export default function Shell(
           sessionRows: resources.sessionRows,
           sessionRowsReady: resources.sessionRowsReady,
           sessionRowsLoading: resources.sessionRowsLoading,
+          sessionRowsStatus: resources.sessionRowsStatus,
           visibleRows: resources.visibleRows,
           projectProgress: resources.projectProgress,
           listInteraction,
@@ -588,7 +589,12 @@ export default function Shell(
                       />
                       <ProgressStatus
                         class="otk-shell-progress"
-                        text={resources.progress(project()!.sidecarId).busy
+                        text={session.transcript?.state.load?.state ===
+                              "loading" &&
+                            !session.state.loading &&
+                            session.transcript.progress?.().busy
+                          ? session.transcript.progress().text
+                          : resources.progress(project()!.sidecarId).busy
                           ? resources.progress(project()!.sidecarId).text
                           : ""}
                       />
