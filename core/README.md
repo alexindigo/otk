@@ -545,6 +545,16 @@ finite reads; essential page demand preempts optional I/O without adding a
 SQLite owner.
 
 Indexed ready queues order interactive, attention, visible and background work.
+Session pages supply an inclusive oldest-message metadata boundary. Its scalar
+backfill runs newest-first at interactive priority to that boundary, then
+retains high membership for one bounded batch per idle break. Consumed list rows
+enter normal membership; completion retires either membership. Only after both
+sets drain does bounded most-recent discovery reach other Active projects. Inbox
+owns the project-policy input, including inactive exclusion and activity
+lifting. Boundary coverage is independent of full-history readiness and
+stale-row sweeping. Progress totals stay unknown while source enumeration
+remains incomplete.
+
 Catalog metadata uses attention priority; rebuildable replay uses background.
 Committed bounded publications inherit their producer's rank and drain as
 finishing continuations, preserving ordering even under interactive pressure.

@@ -44,6 +44,74 @@ test("identity reads require fresh provider reachability after a verified catalo
     f.close();
   }
 });
+test("requested metadata coverage is descending, inclusive and extensible without sweeping old baselines", async () => {
+  const f = await fixture();
+  try {
+    const signal = new AbortController().signal;
+    for (
+      const [id, created] of [["z", 1], ["a", 2], ["y", 3], ["b", 4], [
+        "x",
+        5,
+      ]] as const
+    ) {
+      f.seed(id, .25, 10);
+      f.native.prepare(
+        "UPDATE message SET data=json_set(data,'$.time.created',?) WHERE id=?",
+      ).run(created, id);
+    }
+    await f.sink.catalog(signal);
+    await f.sink.transcriptMetadata("opcv1-ses_one", [], signal, undefined, {
+      messageID: "b",
+      created: 4,
+    });
+    assertEquals(
+      f.derived.prepare(
+        "SELECT message_id FROM opcv1_messages ORDER BY time_created DESC,message_id DESC",
+      ).all().map((r) => r.message_id),
+      ["x", "b"],
+    );
+    assertEquals(f.values.get("opcv1-ses_one")!.summary.state, "digesting");
+    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, .5);
+    assertEquals(
+      f.derived.prepare("SELECT complete_revision FROM opcv1_scan").get()
+        ?.complete_revision,
+      null,
+    );
+    await f.sink.transcriptMetadata("opcv1-ses_one", [], signal, undefined, {
+      messageID: "a",
+      created: 2,
+    });
+    assertEquals(
+      f.derived.prepare(
+        "SELECT message_id FROM opcv1_messages ORDER BY time_created DESC,message_id DESC",
+      ).all().map((r) => r.message_id),
+      ["x", "b", "y", "a"],
+    );
+    assertEquals(
+      f.derived.prepare("SELECT requested_message FROM opcv1_scan").get()
+        ?.requested_message,
+      "a",
+    );
+    await f.scan();
+    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, 1.25);
+    assertEquals(f.values.get("opcv1-ses_one")!.summary.state, "ready");
+    f.native.prepare("DELETE FROM message WHERE id='z'").run();
+    f.sink.invalidate("opcv1-ses_one", 2);
+    await f.sink.transcriptMetadata("opcv1-ses_one", [], signal, undefined, {
+      messageID: "b",
+      created: 4,
+    });
+    assertEquals(
+      f.values.get("opcv1-ses_one")!.summary.total?.cost,
+      1.25,
+      "partial coverage cannot sweep retained older contributions",
+    );
+    await f.scan();
+    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, 1);
+  } finally {
+    f.close();
+  }
+});
 test("identity validation falls back to raw native authority when a verified file disappears", async () => {
   const f = await fixture();
   try {
@@ -54,6 +122,44 @@ test("identity validation falls back to raw native authority when a verified fil
       id: "opcv1-ses_one",
       directory: "/p",
     }]);
+  } finally {
+    f.close();
+  }
+});
+test("a time-budget subdivision cannot complete a short SQL boundary range before consuming it", async () => {
+  const f = await fixture();
+  try {
+    for (const id of ["a", "b", "c", "d", "e"]) f.seed(id, .25, 10);
+    const signal = new AbortController().signal,
+      boundary = { messageID: "b", created: 10 };
+    await f.sink.catalog(signal);
+    await f.sink.step(
+      {
+        provider: f.sink.identity,
+        sessionID: "opcv1-ses_one",
+        updated: 2,
+        revision: 1,
+        boundary,
+      },
+      { rows: 100, until: 0 },
+      signal,
+    );
+    assertEquals(
+      f.derived.prepare("SELECT message_id FROM opcv1_messages").all().map(
+        (row) => row.message_id,
+      ),
+      ["e"],
+    );
+    assertEquals(f.sink.covered("opcv1-ses_one", boundary), false);
+    await f.sink.transcriptMetadata(
+      "opcv1-ses_one",
+      [],
+      signal,
+      undefined,
+      boundary,
+    );
+    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, 1);
+    assertEquals(f.values.get("opcv1-ses_one")!.summary.state, "digesting");
   } finally {
     f.close();
   }
@@ -191,7 +297,11 @@ async function fixture(
     "CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,directory TEXT,project_id TEXT,title TEXT,time_created INTEGER,time_updated INTEGER,time_archived INTEGER); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,message_id TEXT,session_id TEXT,data TEXT)",
   );
   native.prepare("INSERT INTO session VALUES(?,NULL,'/p','p','One',1,2,NULL)")
+    // Native collection order now uses the indexed storage creation clock.
     .run("ses_one");
+  native.exec(
+    "ALTER TABLE message ADD COLUMN time_created INTEGER GENERATED ALWAYS AS (CASE WHEN json_valid(data) THEN json_extract(data,'$.time.created') ELSE 0 END) VIRTUAL; CREATE INDEX message_order ON message(session_id,time_created,id)",
+  );
   const derived = new DatabaseSync(":memory:");
   for (const migration of opencodeV1DigestMigrations.migrations) {
     derived.exec(Deno.readTextFileSync(migration.sql));
@@ -204,10 +314,13 @@ async function fixture(
   let apiCatalog = true;
   let catalogHook: (() => void | Promise<void>) | undefined;
   let failWrite = false;
+  let sqlUnavailable = false;
+  const apiPages: (string | null)[] = [];
   const queries = { scans: 0, replacements: 0 };
   class CountedDb extends DigestNativeDb {
     override headers(...args: Parameters<DigestNativeDb["headers"]>) {
       queries.scans++;
+      if (sqlUnavailable) throw new Error("native SQL lost");
       return super.headers(...args);
     }
     override replacements(...args: Parameters<DigestNativeDb["replacements"]>) {
@@ -308,6 +421,43 @@ async function fixture(
       if (path === "/session/ses_one") {
         return Response.json({ id: "ses_one", directory: "/p" });
       }
+      if (path === "/session/ses_one/message" && sqlUnavailable) {
+        const query = new URL(String(url)).searchParams;
+        const before = query.get("before");
+        apiPages.push(before);
+        const all = native.prepare(
+          "SELECT id,data FROM message ORDER BY time_created DESC,id DESC",
+        ).all();
+        const offset = !before
+          ? 0
+          : before.startsWith("api:")
+          ? Number(before.slice(4))
+          : (() => {
+            const cursor = JSON.parse(
+              atob(before.replaceAll("-", "+").replaceAll("_", "/")),
+            );
+            if (
+              typeof cursor.time !== "number" || typeof cursor.id !== "string"
+            ) throw new Error("SQL key leaked into API cursor");
+            return all.findIndex((row) => row.id === cursor.id) + 1;
+          })();
+        const limit = Number(query.get("limit"));
+        return Response.json(
+          all.slice(offset, offset + limit).reverse().map((row) => ({
+            info: {
+              ...JSON.parse(String(row.data)),
+              id: row.id,
+              sessionID: "ses_one",
+            },
+            parts: [],
+          })),
+          {
+            headers: offset + limit < all.length
+              ? { "x-next-cursor": `api:${offset + limit}` }
+              : {},
+          },
+        );
+      }
       throw new Error(`Unexpected native request ${path}`);
     }) as typeof fetch,
     (path) => new CountedDb(path),
@@ -366,6 +516,10 @@ async function fixture(
     seed,
     scan,
     queries,
+    apiPages,
+    loseSQL: () => {
+      sqlUnavailable = true;
+    },
     duringCatalog: (run: () => void | Promise<void>) => {
       catalogHook = run;
     },
@@ -385,6 +539,168 @@ async function fixture(
     },
   };
 }
+
+test("a descending SQL checkpoint restarts in the opaque API domain without double-counting retained totals", async () => {
+  const f = await fixture();
+  try {
+    for (const id of ["a", "b", "c", "d", "e"]) f.seed(id, .25, 10);
+    const signal = new AbortController().signal;
+    await f.sink.catalog(signal);
+    const job = {
+      provider: f.sink.identity,
+      sessionID: "opcv1-ses_one",
+      updated: 2,
+      revision: 1,
+    };
+    const cursor = await f.sink.step(job, { rows: 2, until: Infinity }, signal);
+    assertEquals(f.values.get(job.sessionID)?.summary.total?.cost, .5);
+    f.loseSQL();
+    assertEquals(
+      await f.sink.step(
+        { ...job, cursor },
+        { rows: 2, until: Infinity },
+        signal,
+      ),
+      "retry-api",
+    );
+    const api = await f.sink.step(job, { rows: 2, until: Infinity }, signal);
+    assertEquals(api, "api:2");
+    assertEquals(
+      f.derived.prepare(
+        "SELECT source_mode,after_created,after_message,api_cursor FROM opcv1_scan",
+      ).get(),
+      {
+        source_mode: "api",
+        after_created: null,
+        after_message: null,
+        api_cursor: "api:2",
+      },
+    );
+    assertEquals(f.apiPages, [null]);
+    assertEquals(f.values.get(job.sessionID)?.summary.total?.cost, .5);
+    await f.scan();
+    assertEquals(f.values.get(job.sessionID)?.summary.total?.cost, 1.25);
+    assertEquals(f.values.get(job.sessionID)?.summary.state, "ready");
+    assertEquals(f.apiPages, [null, "api:2", "api:4"]);
+  } finally {
+    f.close();
+  }
+});
+test("API demand stops inside a page and resumes through the native cursor owner without skipping older metadata", async () => {
+  const f = await fixture();
+  try {
+    for (const id of ["a", "b", "c", "d", "e"]) f.seed(id, .25, 10);
+    f.native.prepare(
+      "UPDATE message SET data=json_set(data,'$.role','user') WHERE id='e'",
+    ).run();
+    const signal = new AbortController().signal;
+    await f.sink.catalog(signal);
+    f.loseSQL();
+    await f.sink.step(
+      {
+        provider: f.sink.identity,
+        sessionID: "opcv1-ses_one",
+        updated: 2,
+        revision: 1,
+      },
+      { rows: 2, until: Infinity },
+      signal,
+    );
+    await f.sink.transcriptMetadata("opcv1-ses_one", [], signal, undefined, {
+      messageID: "e",
+      created: 10,
+    });
+    assertEquals(
+      f.derived.prepare("SELECT message_id FROM opcv1_messages").all().map(
+        (row) => row.message_id,
+      ),
+      ["e"],
+    );
+    assertEquals(
+      f.apiPages.length,
+      2,
+      "one bounded metadata page plus the bounded prompt projection",
+    );
+    await f.scan();
+    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, 1);
+    assertEquals(f.values.get("opcv1-ses_one")!.summary.messageCount, 5);
+  } finally {
+    f.close();
+  }
+});
+test("an API dirty sweep never persists its reconciliation phase as a native cursor", async () => {
+  const f = await fixture();
+  try {
+    f.seed("a", .1, 10);
+    f.seed("b", .2, 20);
+    f.seed("c", .3, 30);
+    const signal = new AbortController().signal;
+    await f.sink.catalog(signal);
+    f.loseSQL();
+    const job = {
+      provider: f.sink.identity,
+      sessionID: "opcv1-ses_one",
+      updated: 2,
+      revision: 1,
+    };
+    await f.sink.step(job, { rows: 2, until: Infinity }, signal);
+    const cursor = await f.sink.step(job, { rows: 2, until: Infinity }, signal);
+    f.seed("c", 5, 100);
+    f.sink.invalidate(job.sessionID, 2);
+    assertEquals(
+      await f.sink.step({ ...job, cursor, revision: 2 }, {
+        rows: 2,
+        until: Infinity,
+      }, signal),
+      "reconcile",
+    );
+    assertEquals(
+      f.derived.prepare("SELECT api_cursor FROM opcv1_scan").get()?.api_cursor,
+      null,
+    );
+    await f.scan();
+    assertEquals(
+      Math.round(f.values.get(job.sessionID)!.summary.total!.cost! * 100),
+      530,
+    );
+    assertEquals(f.apiPages, [null, "api:2", null, "api:2"]);
+  } finally {
+    f.close();
+  }
+});
+test("API boundary ties follow the source's binary message identity order", async () => {
+  const f = await fixture();
+  try {
+    for (const id of ["A", "B", "a"]) f.seed(id, .25, 10);
+    const signal = new AbortController().signal;
+    await f.sink.catalog(signal);
+    f.loseSQL();
+    await f.sink.step(
+      {
+        provider: f.sink.identity,
+        sessionID: "opcv1-ses_one",
+        updated: 2,
+        revision: 1,
+      },
+      { rows: 2, until: Infinity },
+      signal,
+    );
+    await f.sink.transcriptMetadata("opcv1-ses_one", [], signal, undefined, {
+      messageID: "a",
+      created: 10,
+    });
+    assertEquals(
+      f.derived.prepare("SELECT message_id FROM opcv1_messages").all().map(
+        (row) => row.message_id,
+      ),
+      ["a"],
+    );
+    await f.scan();
+    assertEquals(f.values.get("opcv1-ses_one")!.summary.total?.cost, .75);
+  } finally {
+    f.close();
+  }
+});
 
 test("yielded native hashing retains bounded resource admission instead of starting every queued batch", async () => {
   let busy = false, admissions = 0, active = 0, maximum = 0;
@@ -844,9 +1160,9 @@ test("a raced edit behind a scan cursor is reconciled before any ready publicati
   const f = await fixture();
   try {
     await f.sink.catalog(new AbortController().signal);
-    f.seed("a", 0.1, 10);
+    f.seed("a", 0.3, 30);
     f.seed("b", 0.2, 20);
-    f.seed("c", 0.3, 30);
+    f.seed("c", 0.1, 10);
     const job = {
       provider: f.sink.identity,
       sessionID: "opcv1-ses_one",
@@ -856,7 +1172,13 @@ test("a raced edit behind a scan cursor is reconciled before any ready publicati
     const budget = { rows: 2, until: performance.now() + 8 },
       signal = new AbortController().signal;
     let cursor = await f.sink.step(job, budget, signal);
-    f.seed("a", 5, 100);
+    // Descending acquisition makes c the already-consumed, behind-cursor edit.
+    assertEquals(
+      f.derived.prepare("SELECT cost FROM opcv1_messages WHERE message_id='c'")
+        .get()?.cost,
+      .1,
+    );
+    f.seed("c", 5, 100);
     f.sink.invalidate(job.sessionID, 2);
     f.publications.length = 0;
     let count = 0;

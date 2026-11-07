@@ -118,6 +118,8 @@ export async function start(
       interactive: (owner, active) => digest.interactive(owner, active),
       requested: () => digest.requested(),
       attention: (sessionID) => digest.attention(sessionID),
+      discoveryProject: (directory, active) =>
+        digest.discoveryProject(directory, active),
       diagnostics: diagnostics?.section,
       diagnostic,
       signal,

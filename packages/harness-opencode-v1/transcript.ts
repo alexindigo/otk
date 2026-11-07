@@ -104,6 +104,7 @@ export class Transcript {
         turns: readonly string[],
         signal: AbortSignal,
         cutoff?: string,
+        boundary?: import("@otk/harness").DigestBoundary,
       ): Promise<TranscriptMetadata>;
       decorate(
         message: Message,
@@ -349,7 +350,25 @@ export class Transcript {
         ),
       ];
       if (this.options.metadata) {
-        metadata = await this.options.metadata(id, turns, signal, cutoff);
+        const oldest = page.items.reduce<NativeMessage | undefined>(
+          (oldest, row) =>
+            !oldest || row.info.time.created < oldest.info.time.created ||
+              row.info.time.created === oldest.info.time.created &&
+                row.info.id < oldest.info.id
+              ? row
+              : oldest,
+          undefined,
+        );
+        metadata = await this.options.metadata(
+          id,
+          turns,
+          signal,
+          cutoff,
+          oldest && {
+            messageID: oldest.info.id,
+            created: oldest.info.time.created,
+          },
+        );
       } else if (token && owner.promptReady) {
         metadata = { boundaries: [], prompt: owner.prompt };
       } else {

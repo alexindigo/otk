@@ -37,6 +37,9 @@ for (const api of [false, true]) {
     for (const migration of opencodeV1DigestMigrations.migrations) {
       derived.exec(Deno.readTextFileSync(migration.sql));
     }
+    native.exec(
+      "ALTER TABLE message ADD COLUMN time_created INTEGER GENERATED ALWAYS AS (json_extract(data,'$.time.created')) VIRTUAL; CREATE INDEX message_order ON message(session_id,time_created,id)",
+    );
     const messages: { info: Info; parts: RawPart[] }[] = [];
     native.exec("BEGIN");
     for (let i = 0; i <= 1200; i++) {
@@ -204,8 +207,10 @@ for (const api of [false, true]) {
           derived.prepare("SELECT * FROM opcv1_helper_tools").all(),
         ).includes("do not persist"),
       );
-      if (api) assert(apiReads >= 48);
-      else assert(queries >= 12 && queries < 16);
+      // Independent helper cursors no longer exhaust headers before tools.
+      if (api) {
+        assertEquals(apiReads, Math.ceil(messages.length / policy.batch));
+      } else assert(queries >= 12 && queries < 16);
       // Duplicate scans never double-count, and stale rows survive a rejected commit.
       sink.invalidateHelper("opcv1-child");
       fail = true;

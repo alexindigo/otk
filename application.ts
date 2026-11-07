@@ -70,6 +70,7 @@ export function startApplication(
     interactive?: (owner: string, active: boolean) => void;
     requested?: () => void;
     attention?: (sessionID: string) => void;
+    discoveryProject?: (directory: string, active: boolean) => void;
     diagnostics?: SectionObserver;
     diagnostic?: DiagnosticSink;
     signal?: AbortSignal;
@@ -114,6 +115,7 @@ export function startApplication(
       cfg.digest.publishrows,
       cfg.digest.maxpending,
       backend.core.hydrate,
+      options.discoveryProject,
     );
     sources.push(inbox);
     inbox.register(rpc);

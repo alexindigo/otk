@@ -96,6 +96,14 @@ export class DigestBridge implements DigestPort {
   >();
   #interactive = new Set<string>();
   #requestedAt = -Infinity;
+  #discoveryProjects = new Map<string, boolean>();
+  discoveryProject(directory: string, active: boolean): void {
+    if (this.#discoveryProjects.get(directory) === active) return;
+    this.#discoveryProjects.set(directory, active);
+    if (this.#worker && this.#running) {
+      this.#post({ t: "discovery.project", directory, active });
+    }
+  }
   #running = false;
   #readOwners = new Map<string, Set<AbortController>>();
   #deletions = new Map<string, QueuedDeletion>();
@@ -268,6 +276,9 @@ export class DigestBridge implements DigestPort {
                 elapsed: performance.now() - this.#requestedAt,
               });
             }
+            for (const [directory, active] of this.#discoveryProjects) {
+              this.#post({ t: "discovery.project", directory, active });
+            }
             for (const [owner, value] of this.#scopes) {
               this.#post({ t: "scope", owner, ...value });
             }
@@ -296,6 +307,9 @@ export class DigestBridge implements DigestPort {
               }
             }
             this.#running = true;
+            for (const [directory, active] of this.#discoveryProjects) {
+              this.#post({ t: "discovery.project", directory, active });
+            }
             this.#reconcile = this.#connection > 0;
             gate.resolve();
             this.#scheduleDeleted();
@@ -628,14 +642,15 @@ export class DigestBridge implements DigestPort {
     turns: readonly string[],
     signal: AbortSignal,
     cutoff?: string,
+    boundary?: import("@otk/harness").DigestBoundary,
   ): Promise<import("@otk/harness").TranscriptMetadata> {
     await this.start();
     return await this.#lease(
-      `transcript:${JSON.stringify([sessionID, turns, cutoff])}`,
+      `transcript:${JSON.stringify([sessionID, turns, cutoff, boundary])}`,
       signal,
       (owned) =>
         this.#request(
-          { t: "transcript", sessionID, turns: [...turns], cutoff },
+          { t: "transcript", sessionID, turns: [...turns], cutoff, boundary },
           owned,
           (message) => {
             if (message.t !== "transcript") return;

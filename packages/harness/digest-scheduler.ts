@@ -77,10 +77,12 @@ export class DigestScheduler {
   );
   #jobs = new ReadyQueue<Pending>((a, b) =>
     !a.optional && b.optional || a.optional === b.optional &&
-      (this.#priority(a) < this.#priority(b) ||
-        this.#priority(a) === this.#priority(b) &&
-          (a.job.updated > b.job.updated ||
-            a.job.updated === b.job.updated && a.order < b.order))
+      (this.#membership(a) < this.#membership(b) ||
+        this.#membership(a) === this.#membership(b) &&
+          (this.#priority(a) < this.#priority(b) ||
+            this.#priority(a) === this.#priority(b) &&
+              (a.job.updated > b.job.updated ||
+                a.job.updated === b.job.updated && a.order < b.order)))
   );
   #viewers = true;
   #rows?: number;
@@ -94,6 +96,19 @@ export class DigestScheduler {
   #idleWait?: AbortController;
   #batches = 0;
   #lists = new Map<string, Promise<void>>();
+  #discovering = false;
+  #discovered = false;
+  #discoveryRevision = 0;
+  discoveryChanged(): void {
+    this.#discoveryRevision++;
+    this.#discovered = false;
+    this.#wake();
+  }
+  discoveryComplete(): void {
+    this.#discoveryRevision++;
+    this.#discovered = true;
+    this.#wake();
+  }
   /** One typed, idle-class successor per demanded list boundary, not a session ID. */
   prefetchList(
     input: import("@otk/protocol").SessionListInput,
@@ -135,6 +150,10 @@ export class DigestScheduler {
       sleep(ms: number, signal: AbortSignal): Promise<void>;
       now?: () => number;
       wake?(): void;
+      discover?(
+        signal: AbortSignal,
+        execution: DigestExecution,
+      ): Promise<boolean>;
     },
   ) {}
   #now(): number {
@@ -167,6 +186,7 @@ export class DigestScheduler {
     }
     const key = this.#key(identity), pending = this.#pending.get(key);
     if (pending) {
+      if (identity.backfill === "high") pending.job.backfill = "high";
       if (!optional) pending.optional = false;
       if (rank[priority] < rank[pending.priority]) pending.priority = priority;
       pending.job.updated = Math.max(pending.job.updated, identity.updated);
@@ -207,6 +227,7 @@ export class DigestScheduler {
   promote(identity: DigestIdentity, priority: DigestPriority): boolean {
     const pending = this.#pending.get(this.#key(identity));
     if (!pending) return false;
+    if (identity.backfill === "high") pending.job.backfill = "high";
     if (rank[priority] < rank[pending.priority]) pending.priority = priority;
     if (!pending.active) this.#jobs.add(pending);
     this.#reindexTurns();
@@ -351,6 +372,7 @@ export class DigestScheduler {
     if ((!this.#viewers || this.#pendingPages) && pending.active) {
       return rank.attention;
     }
+    if (pending.job.backfill === "high") return rank.attention;
     const priority = rank[pending.priority];
     return priority > rank.visible &&
         (this.#visibleSessions.has(pending.job.sessionID) ||
@@ -358,6 +380,9 @@ export class DigestScheduler {
             this.#visibleDirectories.has(pending.job.directory))
       ? rank.visible
       : priority;
+  }
+  #membership(pending: Pending): number {
+    return pending.optional && pending.job.backfill !== "high" ? 1 : 0;
   }
   execute<T>(
     run: (signal: AbortSignal, execution: DigestExecution) => Promise<T>,
@@ -398,9 +423,11 @@ export class DigestScheduler {
       signal.throwIfAborted();
       this.#controller.signal.throwIfAborted();
       const slice = new AbortController();
+      let admitted = false;
       try {
         return await this.#job(
           async (signal, execution) => {
+            admitted = true;
             const value = await run(signal, execution);
             signal.throwIfAborted();
             return value;
@@ -408,7 +435,7 @@ export class DigestScheduler {
           AbortSignal.any([signal, slice.signal]),
           () => rank[priority],
           slice,
-          false,
+          () => optional && admitted,
           optional,
         );
       } catch (error) {
@@ -729,7 +756,46 @@ export class DigestScheduler {
       });
       return await this.#tick();
     }
-    if (!turn) return false;
+    if (!turn) {
+      if (
+        !this.#pending.size && !this.#lists.size && !this.#discovering &&
+        !this.#discovered && this.resources.discover &&
+        !this.#controller.signal.aborted
+      ) {
+        this.#discovering = true;
+        const revision = this.#discoveryRevision;
+        void this.execute(
+          async (signal, execution) => {
+            // Demand may arrive after this source-free discovery turn was queued.
+            if (this.#discovered) return false;
+            if (this.#pending.size || this.#lists.size) return true;
+            if (this.#batches >= this.policy.parallel) return true;
+            this.#batches++;
+            try {
+              return await this.resources.discover!(signal, execution);
+            } finally {
+              this.#batches--;
+              this.#wake();
+            }
+          },
+          this.#controller.signal,
+          "background",
+          true,
+          false,
+          true,
+        ).then((more) => {
+          if (revision === this.#discoveryRevision) this.#discovered = !more;
+        }, (error) => {
+          if (!this.#controller.signal.aborted) this.#errors.push(error);
+          this.#discovered = true;
+        }).finally(() => {
+          this.#discovering = false;
+          this.#wake();
+        });
+        return await this.#tick();
+      }
+      return false;
+    }
     this.#ready.delete(turn);
     this.#turns.delete(turn);
     this.#idleTurns.delete(turn);

@@ -73,11 +73,19 @@ test("independent public-entry consumer composes native sink, scheduler and deri
   const reader = new DigestNativeDb(oc.db);
   const base = reader.catalog("", 2)[0];
   let expectedCalls = 0, after = "";
+  let position: { created: number; messageID: string } | undefined;
   while (true) {
-    const rows = reader.headers([session.id], session.nativeID, after, 2);
+    const rows = reader.headers(
+      [session.id],
+      session.nativeID,
+      after,
+      2,
+      position,
+    );
     if (!rows.length) break;
     expectedCalls += rows.filter((row) => row.role === "assistant").length;
     after = rows.at(-1)!.message_id;
+    position = { created: rows.at(-1)!.time_created, messageID: after };
   }
   reader.close();
   const db = new DigestDb(await tempDir("public-digest-"), [

@@ -8,23 +8,28 @@ import { FakeLlm } from "../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../support/opencode.ts";
 import { resources, tempDir, test } from "../support/resources.ts";
 
-test("sessions admitted behind a held native catalog all publish ready digests", async () => {
+test("unknown dirty sessions hydrate behind a bounded point proof without catalog admission", async () => {
   const oc = await OpencodeTest.start(new FakeLlm());
   const statePath = await tempDir("catalog-admission-");
   const release = Promise.withResolvers<void>();
   let holding = false, captured = false;
   const samples: string[] = [];
+  let catalogReads = 0, sqlCatalogReads = 0;
   const server = Deno.serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {
       const url = new URL(request.url);
+      if (
+        url.pathname === "/experimental/session" &&
+        url.searchParams.get("limit") !== "1"
+      ) catalogReads++;
       url.host = new URL(oc.url).host;
       const response = await fetch(url, { signal: request.signal });
       if (
         holding && !captured && url.pathname === "/experimental/session" &&
         url.searchParams.get("limit") === "1"
       ) {
-        // Hold delivery of the actual stock-native bytes after enumeration.
+        // Hold the actual one-row ownership proof, never a population catalog.
         const bytes = await response.arrayBuffer();
         samples.push(new TextDecoder().decode(bytes));
         captured = true;
@@ -62,11 +67,15 @@ test("sessions admitted behind a held native catalog all publish ready digests",
       else ready.delete(value.sessionID);
     },
     diagnostic: (error) => diagnostics.push(String(error)),
+    pressure: (value) => {
+      sqlCatalogReads = value.nativeReads?.catalog ?? sqlCatalogReads;
+    },
   });
   try {
     bridge.scope("viewer", { sessions: [] });
     await bridge.start();
-    await bridge.catalog(1, new AbortController().signal);
+    // Startup now seeds projects; dirty identities own bounded point hydration.
+    await bridge.projects(1, new AbortController().signal);
     holding = true;
     const trigger = await oc.session("/session", {
       method: "POST",
@@ -113,6 +122,8 @@ test("sessions admitted behind a held native catalog all publish ready digests",
         (value) => value.length === 2,
       );
       assertEquals(diagnostics, []);
+      assertEquals(catalogReads, 0);
+      assertEquals(sqlCatalogReads, 0);
     } finally {
       await Deno.writeTextFile(
         join(statePath, "catalog-admission.json"),

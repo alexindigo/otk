@@ -40,7 +40,9 @@ const projection = [
   ["tokens.cache.read", "cache_read"],
   ["tokens.cache.write", "cache_write"],
 ].map(([path, alias]) =>
-  `CASE WHEN json_valid(m.data) THEN json_extract(m.data,'$.${path}') END AS ${alias}`
+  alias === "time_created"
+    ? "m.time_created AS time_created"
+    : `CASE WHEN json_valid(m.data) THEN json_extract(m.data,'$.${path}') END AS ${alias}`
 ).join(",");
 
 function metadata(row: Record<string, unknown>): SessionMetadata {
@@ -167,6 +169,23 @@ export class DigestNativeDb {
         : { parentID: ids.encode(String(row.parent_id)) }),
     }));
   }
+  recent(
+    directories: readonly string[],
+    before: { updated: number; id: string } | undefined,
+    limit: number,
+  ): SessionMetadata[] {
+    const rows = this.db.prepare(
+      "SELECT id,parent_id,directory,project_id,title,time_created,time_updated,time_archived FROM session WHERE directory IN (SELECT value FROM json_each(?)) AND (? IS NULL OR (time_updated,id)<(?,?)) ORDER BY time_updated DESC,id DESC LIMIT ?",
+    ).all(
+      JSON.stringify(directories),
+      before?.updated ?? null,
+      before?.updated ?? null,
+      before?.id ?? null,
+      limit,
+    ).map(metadata);
+    this.observe?.("session-discovery", { limit, rows: rows.length });
+    return rows;
+  }
   lookup(sessions: readonly string[]): SessionMetadata[] {
     this.observe?.("identity");
     return this.db.prepare(
@@ -185,18 +204,42 @@ export class DigestNativeDb {
   /** Keyset scan across a batch; one query, zero part queries. */
   headers(
     sessions: readonly string[],
-    afterSession: string,
+    _afterSession: string,
     afterMessage: string,
     limit: number,
+    position?: import("@otk/harness").DigestBoundary,
+    boundary?: import("@otk/harness").DigestBoundary,
   ): DigestHeader[] {
+    const filters = [
+      sessions.length === 1
+        ? "m.session_id=?"
+        : "m.session_id IN (SELECT value FROM json_each(?))",
+    ];
+    const values: (string | number)[] = [
+      sessions.length === 1
+        ? ids.decode(sessions[0])
+        : JSON.stringify(sessions.map(ids.decode)),
+    ];
+    if (position) {
+      filters.push("(m.time_created,m.id)<(?,?)");
+      values.push(position.created, position.messageID);
+    } else if (afterMessage) {
+      // Public consumers may still supply only the last native identity. Resolve
+      // its collection clock in this same query, never one extra query per slice.
+      filters.push(
+        "(m.time_created,m.id)<((SELECT time_created FROM message WHERE session_id=? AND id=?),?)",
+      );
+      values.push(ids.decode(sessions[0]), afterMessage, afterMessage);
+    }
+    if (boundary) {
+      filters.push("(m.time_created,m.id)>=(?,?)");
+      values.push(boundary.created, boundary.messageID);
+    }
     const rows = this.db.prepare(
-      `SELECT m.session_id,m.id AS message_id,${projection} FROM message m JOIN json_each(?) wanted ON wanted.value=m.session_id WHERE (m.session_id,m.id)>(?,?) ORDER BY m.session_id,m.id LIMIT ?`,
-    ).all(
-      JSON.stringify(sessions.map(ids.decode)),
-      afterSession,
-      afterMessage,
-      limit,
-    ) as unknown as DigestHeader[];
+      `SELECT m.session_id,m.id AS message_id,${projection} FROM message m WHERE ${
+        filters.join(" AND ")
+      } ORDER BY m.time_created DESC,m.id DESC LIMIT ?`,
+    ).all(...values, limit) as unknown as DigestHeader[];
     this.observe?.("headers", { limit, rows: rows.length });
     return rows;
   }

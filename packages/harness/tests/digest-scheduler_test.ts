@@ -20,6 +20,60 @@ const policy: DigestPolicy = {
   retryms: 10,
   busyms: 100,
 };
+test("high membership upgrades normal work, yields one batch at a break and retires before source discovery", async () => {
+  let now = 0;
+  const seen: string[] = [];
+  const scheduler = new DigestScheduler({ ...policy, cpu: 1, parallel: 1 }, {
+    now: () => now,
+    freeMemory: () => 1000,
+    sleep: (_ms, signal) =>
+      new Promise((resolve) =>
+        signal.addEventListener("abort", () => resolve(), { once: true })
+      ),
+    discover: () => {
+      seen.push("source");
+      return Promise.resolve(false);
+    },
+  });
+  scheduler.register({
+    identity: "test-v1",
+    catalog: () => Promise.resolve({ entries: [], authoritative: true }),
+    detail: () => Promise.reject(new Error("unused")),
+    close() {},
+    step(job) {
+      seen.push(`${job.sessionID}:${job.cursor ?? "newest"}`);
+      if (job.sessionID === "high" && !job.cursor) {
+        scheduler.requested();
+        return Promise.resolve("older");
+      }
+      return Promise.resolve(undefined);
+    },
+  });
+  scheduler.enqueue(
+    { provider: "test-v1", sessionID: "normal", updated: 100 },
+    "attention",
+  );
+  scheduler.enqueue(
+    { provider: "test-v1", sessionID: "high", updated: 1 },
+    "background",
+  );
+  scheduler.promote({
+    provider: "test-v1",
+    sessionID: "high",
+    updated: 1,
+    backfill: "high",
+  }, "background");
+  while (await scheduler.tick()) { /* one batch, then a client break */ }
+  assertEquals(seen, ["high:newest"]);
+  assertEquals(scheduler.queued, 2);
+  now = 20;
+  while (
+    await scheduler.tick()
+  ) { /* drain memberships, then bounded discovery */ }
+  assertEquals(seen, ["high:newest", "high:older", "normal:newest", "source"]);
+  assertEquals(scheduler.queued, 0);
+  await scheduler.stop();
+});
 test("requests gate promoted idle batches, bound waiting admission and preempt at the next chunk", async () => {
   let now = 0;
   const sleeps: { at: number; signal: AbortSignal; resolve(): void }[] = [];
@@ -80,6 +134,71 @@ test("requests gate promoted idle batches, bound waiting admission and preempt a
   assertEquals(seen, ["3:first", "2:first", "requested"]);
   now += 20;
   while (await scheduler.tick()) { /* resume cursors */ }
+  assertEquals(scheduler.queued, 0);
+  await scheduler.stop();
+});
+test("an admitted idle discovery read drains settlement after ingress while its successor remains parked", async () => {
+  let now = 0, starts = 0, settled = false;
+  let changed = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const scheduler = new DigestScheduler({ ...policy, cpu: 1, parallel: 1 }, {
+    now: () => now,
+    freeMemory: () => 1000,
+    wake: () => changed.resolve(),
+    sleep: (_ms, signal) =>
+      new Promise((resolve) =>
+        signal.addEventListener("abort", () => resolve(), { once: true })
+      ),
+    discover: async (_signal, execution) => {
+      starts++;
+      await execution.wait(release.promise, "io");
+      settled = true;
+      return true;
+    },
+  });
+  while (await scheduler.tick()) { /* admit one source slice */ }
+  assertEquals(starts, 1);
+  scheduler.requested();
+  changed = Promise.withResolvers<void>();
+  release.resolve();
+  await changed.promise;
+  while (await scheduler.tick()) { /* admitted cleanup drains */ }
+  assertEquals(settled, true);
+  assertEquals(starts, 1);
+  now = 20;
+  await scheduler.stop();
+});
+test("upgrading active normal metadata to high does not invalidate its completing batch", async () => {
+  let starts = 0, changed = Promise.withResolvers<void>();
+  const release = Promise.withResolvers<void>();
+  const scheduler = new DigestScheduler({ ...policy, cpu: 1 }, {
+    freeMemory: () => 1000,
+    sleep: () => Promise.resolve(),
+    wake: () => changed.resolve(),
+  });
+  scheduler.register({
+    identity: "test-v1",
+    catalog: () => Promise.resolve({ entries: [], authoritative: true }),
+    detail: () => Promise.reject(new Error("unused")),
+    close() {},
+    async step(_job, _budget, _signal, execution) {
+      starts++;
+      await execution.wait(release.promise);
+      return undefined;
+    },
+  });
+  const identity = { provider: "test-v1", sessionID: "one", updated: 1 };
+  scheduler.enqueue(identity, "background");
+  while (await scheduler.tick()) { /* bounded read is waiting */ }
+  assertEquals(
+    scheduler.promote({ ...identity, backfill: "high" }, "attention"),
+    true,
+  );
+  changed = Promise.withResolvers<void>();
+  release.resolve();
+  await changed.promise;
+  while (await scheduler.tick()) { /* finish the promoted read */ }
+  assertEquals(starts, 1);
   assertEquals(scheduler.queued, 0);
   await scheduler.stop();
 });

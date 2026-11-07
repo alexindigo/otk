@@ -35,8 +35,19 @@ test("core records real status edges at the single index owner and clears persis
     finishes: new Finishes(db, () => now),
     templates: new ProjectTemplates(db),
   };
+  const discovery = new Map<string, boolean>();
   const index = new IndexStore(),
-    feature = new InboxFeature(stores, index, "alice");
+    feature = new InboxFeature(
+      stores,
+      index,
+      "alice",
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      (directory, active) => discovery.set(directory, active),
+    );
   const idle: IndexEntry = {
     digest: { state: "digesting", revision: 0, turns: {} },
     id: "s",
@@ -62,8 +73,10 @@ test("core records real status edges at the single index owner and clears persis
     stores.projects.add("bob", "/p");
     stores.projects.inactive("alice", "/p", true);
     stores.projects.inactive("bob", "/p", true);
+    assertEquals(discovery.get("/p"), false);
     now = 200;
     index.upsert({ ...idle, status: "busy" });
+    assertEquals(discovery.get("/p"), true);
     assertEquals(stores.projects.get("alice", "/p").inactive, false);
     assertEquals(stores.projects.get("bob", "/p").inactive, false);
     now = 300;

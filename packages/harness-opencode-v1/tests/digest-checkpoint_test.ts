@@ -10,6 +10,52 @@ import {
 import { tempDir, test } from "../../../tests/support/resources.ts";
 import { cfg } from "../../../tests/support/config.ts";
 
+test("migration 003 restarts existing ascending checkpoints and retains real baseline totals", () => {
+  const db = new DatabaseSync(":memory:");
+  try {
+    for (
+      const migration of opencodeV1DigestMigrations.migrations.filter((m) =>
+        m.version < 3
+      )
+    ) db.exec(Deno.readTextFileSync(migration.sql));
+    db.exec(
+      "INSERT INTO opcv1_scan VALUES('opcv1-ses_old','ses_old','msg_ascending',7,12,12,0)",
+    );
+    db.exec(
+      "INSERT INTO opcv1_messages(session_id,message_id,role,hash,scan_generation,time_created,cost,input,output,reasoning,cache_read,cache_write) VALUES('opcv1-ses_old','msg_old','assistant','retained',7,10,1.25,30,4,0,2,0)",
+    );
+    db.exec(
+      "INSERT INTO opcv1_aggregates VALUES('opcv1-ses_old','',1,1,1.25,30,4,0,2,0,0,0,0,0,0,0)",
+    );
+    const messages = db.prepare("SELECT * FROM opcv1_messages").all();
+    const totals = db.prepare("SELECT * FROM opcv1_aggregates").all();
+    db.exec(
+      Deno.readTextFileSync(
+        opencodeV1DigestMigrations.migrations.find((m) => m.version === 3)!.sql,
+      ),
+    );
+    assertEquals(
+      db.prepare(
+        "SELECT after_message,after_created,api_cursor,scan_generation,observed_revision,complete_revision,dirty,cursor_version FROM opcv1_scan",
+      ).get(),
+      {
+        after_message: null,
+        after_created: null,
+        api_cursor: null,
+        scan_generation: 8,
+        observed_revision: 12,
+        complete_revision: null,
+        dirty: 1,
+        cursor_version: 2,
+      },
+    );
+    assertEquals(db.prepare("SELECT * FROM opcv1_messages").all(), messages);
+    assertEquals(db.prepare("SELECT * FROM opcv1_aggregates").all(), totals);
+  } finally {
+    db.close();
+  }
+});
+
 test("a rejected first digest commit leaves scan generation and baseline together", async () => {
   const root = await tempDir("checkpoint-"), file = join(root, "native.db");
   const native = new DatabaseSync(file), derived = new DatabaseSync(":memory:");
@@ -17,8 +63,12 @@ test("a rejected first digest commit leaves scan generation and baseline togethe
     "CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,directory TEXT,project_id TEXT,title TEXT,time_created INTEGER,time_updated INTEGER,time_archived INTEGER); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,message_id TEXT,session_id TEXT,data TEXT)",
   );
   for (const migration of opencodeV1DigestMigrations.migrations) {
+    // Match the source collection clock used by descending checkpoints.
     derived.exec(Deno.readTextFileSync(migration.sql));
   }
+  native.exec(
+    "ALTER TABLE message ADD COLUMN time_created INTEGER GENERATED ALWAYS AS (json_extract(data,'$.time.created')) VIRTUAL; CREATE INDEX message_order ON message(session_id,time_created,id)",
+  );
   native.exec(
     "INSERT INTO session VALUES('ses_one',NULL,'/p','p','One',1,2,NULL)",
   );

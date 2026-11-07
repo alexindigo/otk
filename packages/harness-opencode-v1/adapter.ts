@@ -389,8 +389,8 @@ export class OpencodeV1Adapter implements Harness {
         };
       },
       metadata: digest
-        ? (id, turns, signal, cutoff) =>
-          digest.transcriptMetadata(id, turns, signal, cutoff)
+        ? (id, turns, signal, cutoff, boundary) =>
+          digest.transcriptMetadata(id, turns, signal, cutoff, boundary)
         : undefined,
       decorate: (message, raw, directory) => {
         const colors = this.#colors.peek(

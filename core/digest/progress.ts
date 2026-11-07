@@ -68,6 +68,9 @@ export class DigestProgress {
   complete(): void {
     this.#complete = true;
   }
+  enumerate(): void {
+    this.#complete = false;
+  }
   chunk(directory: string | undefined, activeMs: number): void {
     for (
       const key of directory === undefined
@@ -84,7 +87,7 @@ export class DigestProgress {
     return [...this.#scopes.values()].map((scope) => ({
       ...scope,
       eligible: this.#complete ? scope.eligible ?? 0 : null,
-      phase: !this.#complete
+      phase: !this.#complete && !scope.queued
         ? "enumerating"
         : scope.queued
         ? "summaries"

@@ -84,7 +84,14 @@ export type ToWorker =
     | { t: "interactive"; owner: string; active: boolean }
     | { t: "requested"; elapsed: number }
     | { t: "detail"; sessionID: string; turnID: string }
-    | { t: "transcript"; sessionID: string; turns: string[]; cutoff?: string }
+    | {
+      t: "transcript";
+      sessionID: string;
+      turns: string[];
+      cutoff?: string;
+      boundary?: import("@otk/harness").DigestBoundary;
+    }
+    | { t: "discovery.project"; directory: string; active: boolean }
     | {
       t: "deleteIntent";
       sessionID: string;

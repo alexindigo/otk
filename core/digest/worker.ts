@@ -403,7 +403,7 @@ async function admitCatalog(
     }
     const pending = chunk.filter((entry) => {
       const row = saved.get(entry.id);
-      return row && !row.deleted_at && row.state !== "ready";
+      return row && !row.deleted_at && sink!.pending(entry.id);
     });
     if (options.invalidate) {
       db!.transaction(() => {
@@ -416,7 +416,7 @@ async function admitCatalog(
         sessionID: entry.id,
         directory: entry.directory,
         updated: entry.timeUpdated,
-      }, entry.status === "idle" ? "background" : "attention");
+      }, "background");
     }
     for (const entry of chunk) {
       if (!entry.parentID || saved.get(entry.id)?.deleted_at) continue;
@@ -585,6 +585,21 @@ async function start(
               scheduler!.prefetchList(input, (signal, turn) =>
                 execution.run({ signal, turn }, () =>
                   read(signal))),
+            demanded: (entry) => {
+              const row = store!.summary([entry.id])[0];
+              if (row && sink!.pending(entry.id) && !row.deleted_at) {
+                const identity = {
+                  provider: "opencode-v1",
+                  sessionID: entry.id,
+                  directory: entry.directory,
+                  updated: entry.timeUpdated,
+                  backfill: "high" as const,
+                };
+                if (!scheduler!.promote(identity, "attention")) {
+                  scheduler!.enqueue(identity, "attention");
+                }
+              }
+            },
             ioWait: nativeWait,
             retryable: sqliteBusy,
             admission: (signal) =>
@@ -621,6 +636,20 @@ async function start(
       freeMemory: () => Deno.systemMemoryInfo().available,
       sleep,
       wake: kick,
+      discover: (signal, turn) =>
+        execution.run({ signal, turn }, async () => {
+          progress?.enumerate();
+          const { entries, complete } = await selectedSink.discover(signal);
+          await admitCatalog(entries, signal, {
+            invalidate: false,
+            helpers: true,
+          });
+          if (complete) progress?.complete();
+          if (!entries.length && !complete) {
+            await wait(sleep(policy.retryms, signal));
+          }
+          return !complete;
+        }),
     });
     scheduler.viewers(false);
     batches = new DigestBatch({
@@ -667,7 +696,14 @@ async function start(
                   const start = performance.now();
                   const work = turn.workms;
                   const cursor = await sink!.step(job, budget, signal);
-                  nativeUnavailable = false;
+                  nativeUnavailable = (job.projection === "helper"
+                    ? store!.helpers([job.sessionID])[0]?.state
+                    : store!.summary([job.sessionID])[0]?.state) ===
+                    "unavailable";
+                  if (!cursor && nativeUnavailable) {
+                    await wait(sleep(policy.retryms, signal));
+                    return "reconcile";
+                  }
                   progress?.chunk(job.directory, turn.workms - work);
                   if (message.diagnostics) {
                     post({
@@ -721,7 +757,8 @@ async function start(
                     sessionID: job.sessionID,
                     message: errorMessage(error),
                   });
-                  return;
+                  await wait(sleep(policy.retryms, signal));
+                  return "reconcile";
                 }
               },
               signal,
@@ -791,6 +828,11 @@ function handle(message: ToWorker): void {
     return;
   }
   if (!requests || !scheduler || !sink) return;
+  if (message.t === "discovery.project") {
+    sink.discoveryProject(message.directory, message.active);
+    scheduler.discoveryChanged();
+    return;
+  }
   if (message.t === "native.acquire") {
     const controller = new AbortController(),
       value = { controller } as {
@@ -1147,6 +1189,7 @@ function handle(message: ToWorker): void {
                   helpers: true,
                 });
                 progress?.complete();
+                scheduler!.discoveryComplete();
                 const controller = new AbortController();
                 const task = replayStored(
                   AbortSignal.any([controller.signal, lifetime.signal]),
@@ -1212,6 +1255,7 @@ function handle(message: ToWorker): void {
                 message.turns,
                 signal,
                 message.cutoff,
+                message.boundary,
               );
               post({
                 t: "transcript",

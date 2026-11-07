@@ -263,6 +263,7 @@ export class InboxFeature implements FrameSource {
       ids: readonly string[],
       signal?: AbortSignal,
     ) => Promise<void>,
+    readonly discoveryProject?: (directory: string, active: boolean) => void,
   ) {
     this.#identity();
     this.#tasks = new Map(stores.tasks.list().map((task) => [task.id, task]));
@@ -280,6 +281,7 @@ export class InboxFeature implements FrameSource {
         finish: this.#finishes.get(id) ?? 0,
       }),
       (summary) => {
+        this.#discoveryProject(summary.directory, summary);
         this.#capture("summaries", summary.directory);
         this.#summaryPending.set(summary.directory, summary);
         this.#schedule();
@@ -329,6 +331,7 @@ export class InboxFeature implements FrameSource {
             });}
           if (change.user === this.#user) {
             this.#projects.set(project.directory, project);
+            this.#discoveryProject(project.directory);
             this.#capture("projects", project.directory);
             this.#queue(`project:${project.directory}`, {
               op: "project.upsert",
@@ -342,6 +345,7 @@ export class InboxFeature implements FrameSource {
           );
           if (change.user === this.#user) {
             this.#projects.delete(directory);
+            this.#discoveryProject(directory);
             this.#capture("projects", directory);
             this.#queue(`project:${directory}`, {
               op: "project.remove",
@@ -402,6 +406,16 @@ export class InboxFeature implements FrameSource {
       }),
     );
     void this.#scan();
+  }
+  #discoveryProject(
+    directory: string,
+    summary = this.summaries?.values.get(directory),
+  ): void {
+    const active = !!summary?.hasSessions &&
+      (!this.#projects.get(directory)?.inactive ||
+        summary.status === "working" || summary.status === "blocked" ||
+        (summary.unseenCount ?? 0) > 0);
+    this.discoveryProject?.(directory, active);
   }
   get user(): string {
     return typeof this.identity === "string" ? this.identity : this.identity();

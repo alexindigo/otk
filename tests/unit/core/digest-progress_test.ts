@@ -28,4 +28,11 @@ Deno.test("worker progress counts bounded discoveries and updates only the affec
   progress.row("a", "/a", true, 20);
   assertEquals(progress.values()[0].advanced, 2000);
   assertEquals(new DigestProgress("two").values()[0].completed, 0);
+  progress.enumerate();
+  assertEquals(progress.values()[0].eligible, null);
+  progress.row("c", "/c", false);
+  assertEquals(progress.values()[0].phase, "summaries");
+  assertEquals(progress.values()[0].eligible, null);
+  progress.complete();
+  assertEquals(progress.values()[0].eligible, 3);
 });

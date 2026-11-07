@@ -19,7 +19,8 @@ test("@load @transport background=false view leases park unfinished backfill wit
       body: { title: "Unfinished backfill" },
     },
   );
-  for (let i = 0; i < 3; i++) {
+  // Keep older history beyond the requested ten-message boundary for idle work.
+  for (let i = 0; i < 8; i++) {
     fake.queue({ chunks: [`Reply ${i}`] });
     await oc.request(`/session/${session.id}/message`, {
       method: "POST",
@@ -27,12 +28,14 @@ test("@load @transport background=false view leases park unfinished backfill wit
     });
   }
   let hold = true, entered = 0, settled = 0, optionalReads = 0;
+  let pageAccepted = false;
   const requests: string[] = [];
   const proxy = Deno.serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {
       const url = new URL(request.url);
-      const optional = url.pathname.endsWith("/message") &&
+      // Batch size no longer distinguishes requested metadata from idle work.
+      const optional = pageAccepted && url.pathname.endsWith("/message") &&
         url.searchParams.get("limit") === "2";
       requests.push(optional ? "background" : url.pathname);
       if (optional) optionalReads++;
@@ -84,6 +87,7 @@ test("@load @transport background=false view leases park unfinished backfill wit
     const page = await client.rpc<{ items: unknown[] }>("session.messages", {
       sessionID: session.id,
     });
+    pageAccepted = true;
     assert(page.items.length > 0);
     await waitFor(() => entered, (n) => n > 0);
     const since = requests.slice(at);
@@ -147,6 +151,7 @@ test("@load @transport background=false view leases park unfinished backfill wit
     );
     assertEquals(optionalReads, pausedReads);
     hold = false;
+    pageAccepted = false;
     next = new WsClient(url);
     next.lease({
       directory: oc.directory,
@@ -156,6 +161,7 @@ test("@load @transport background=false view leases park unfinished backfill wit
     });
     await next.connect();
     await next.rpc("session.messages", { sessionID: session.id });
+    pageAccepted = true;
     await waitFor(
       () => app.index.get(session.id)?.digest.state,
       (state) => state === "ready",

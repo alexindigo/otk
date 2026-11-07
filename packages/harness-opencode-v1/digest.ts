@@ -77,6 +77,7 @@ export interface OpencodeV1DigestReadiness {
     input: import("@otk/protocol").SessionListInput,
     read: (signal: AbortSignal) => Promise<void>,
   ): void;
+  demanded?(metadata: SessionMetadata): void;
 }
 const categories = [
   "cost",
@@ -88,11 +89,26 @@ const categories = [
 ] as const;
 type Category = typeof categories[number];
 type Baseline = DigestHeader & { hash: string; scan_generation: number };
+/** Match SQLite's collection tuple order, not locale-sensitive text order. */
+function newest(
+  createdA: number,
+  idA: string,
+  createdB: number,
+  idB: string,
+): number {
+  return createdB - createdA || (idA < idB ? 1 : idA > idB ? -1 : 0);
+}
 interface Replacement {
   previous?: Baseline;
   value?: Baseline;
 }
 interface Scan {
+  source_generation?: string | null;
+  source_mode?: string | null;
+  after_created?: number | null;
+  api_cursor?: string | null;
+  covered_created?: number | null;
+  covered_message?: string | null;
   after_message: string | null;
   scan_generation: number;
   observed_revision: number;
@@ -201,6 +217,24 @@ export class OpencodeV1DigestSink implements DigestSink {
     >;
   };
   #lists: SessionLists;
+  #demanded?: (metadata: SessionMetadata) => void;
+  #activeDirectories = new Set<string>();
+  #excludedDirectories = new Set<string>();
+  #discoveryRevision = 0;
+  discoveryProject(directory: string, active: boolean): void {
+    this.#discoveryRevision++;
+    if (active) {
+      this.#excludedDirectories.delete(directory);
+      this.#activeDirectories.add(directory);
+    } else this.#excludedDirectories.add(directory);
+    this.#discoveryPosition = undefined;
+    this.#discoveryAPICursor = undefined;
+    this.#discoveryAPIComplete = false;
+  }
+  #discoveryPosition?: { updated: number; id: string };
+  #discoveryAPICursor?: string;
+  #discoveryAPIComplete = false;
+  #apiGeneration = crypto.randomUUID();
   readonly wait: <T>(readiness: Promise<T>, join?: boolean) => Promise<T>;
   readonly retryable: (error: unknown) => boolean;
   constructor(
@@ -214,6 +248,7 @@ export class OpencodeV1DigestSink implements DigestSink {
   ) {
     this.wait = readiness.wait ?? ((value) => value);
     this.retryable = readiness.retryable ?? (() => false);
+    this.#demanded = readiness.demanded;
     this.#client = new Client(
       cfg.harness,
       fetcher,
@@ -243,12 +278,28 @@ export class OpencodeV1DigestSink implements DigestSink {
           signal.throwIfAborted();
           const previous = this.storage.read(metadata.id);
           if (previous?.deleted) continue;
-          if (!previous) {
-            const delta = emptyDelta();
-            this.storage.transaction(() => this.storage.write(metadata, delta));
+          const changed = previous &&
+            previous.metadata.timeUpdated !== metadata.timeUpdated;
+          if (!previous || changed) {
+            const delta = previous
+              ? {
+                ...emptyDelta(previous.summary.revision + 1),
+                summary: {
+                  ...previous.summary,
+                  state: "digesting" as const,
+                  revision: previous.summary.revision + 1,
+                },
+              }
+              : emptyDelta();
+            this.storage.transaction(() => {
+              if (changed) {
+                this.#invalidateScan(metadata.id, delta.summary.revision);
+              }
+              this.storage.write(metadata, delta);
+            });
             await this.storage.publish({
               sessionID: metadata.id,
-              revision: 0,
+              revision: delta.summary.revision,
               delta,
               metadata,
             });
@@ -320,6 +371,10 @@ export class OpencodeV1DigestSink implements DigestSink {
     if (value < this.#connection) return;
     if (!this.#connected || value !== this.#connection) {
       this.#lists.reset();
+      this.#apiGeneration = crypto.randomUUID();
+      this.#discoveryPosition = undefined;
+      this.#discoveryAPICursor = undefined;
+      this.#discoveryAPIComplete = false;
       this.#nativeVerified = false;
       this.#projectVerified = false;
       this.#observed.clear();
@@ -337,10 +392,46 @@ export class OpencodeV1DigestSink implements DigestSink {
     turns: readonly string[],
     signal: AbortSignal,
     cutoff?: string,
+    boundary?: import("@otk/harness").DigestBoundary,
   ): Promise<import("@otk/harness").TranscriptMetadata> {
     signal.throwIfAborted();
     const native = await this.#metadataSource(signal);
-    if (native) {
+    if (boundary) {
+      if (!this.storage.read(sessionID)) {
+        await this.hydrate([sessionID], signal);
+      }
+      const saved = this.storage.read(sessionID);
+      if (saved && !saved.deleted) {
+        this.#invalidateMissingScan(sessionID, saved.summary.revision);
+        this.storage.sql.prepare(
+          "UPDATE opcv1_scan SET requested_created=?,requested_message=? WHERE session_id=? AND (requested_created IS NULL OR (requested_created,requested_message)>(?,?))",
+        ).run(
+          boundary.created,
+          boundary.messageID,
+          sessionID,
+          boundary.created,
+          boundary.messageID,
+        );
+        while (!this.covered(sessionID, boundary)) {
+          await this.step({
+            provider: this.identity,
+            sessionID,
+            updated: saved.metadata.timeUpdated,
+            revision: saved.summary.revision,
+            boundary,
+          }, {
+            rows: this.policy.batch,
+            until: performance.now() + this.policy.slicems,
+          }, signal);
+          if (this.storage.read(sessionID)?.summary.state === "unavailable") {
+            throw new Error("Session metadata is unavailable");
+          }
+          await this.wait(new Promise((resolve) => setTimeout(resolve, 0)));
+        }
+        this.#demanded?.(saved.metadata);
+      }
+    }
+    if (native && native === this.#native) {
       return native.transcriptMetadata(sessionID, turns, cutoff);
     }
     const boundaries = new Map<string, import("@otk/protocol").ReplyBoundary>();
@@ -348,49 +439,102 @@ export class OpencodeV1DigestSink implements DigestSink {
     let prompt: import("@otk/protocol").LatestPrompt | undefined,
       created = -Infinity,
       cutoffCreated: number | undefined;
-    for await (
-      const { info } of this.#messages.scan(sessionID, undefined, signal)
-    ) {
-      if (info.id === cutoff) cutoffCreated = info.time.created;
-      if (cutoff && info.id >= cutoff) continue;
-      if (
-        info.role === "user" &&
-        (info.time.created > created ||
-          (info.time.created === created && info.id > (prompt?.id ?? "")))
-      ) {
-        created = info.time.created;
-        prompt = {
-          id: info.id,
-          ...(typeof info.agent === "string" ? { agent: info.agent } : {}),
-          ...(info.model
-            ? {
-              model: {
-                provider: info.model.providerID,
-                model: info.model.modelID,
-              },
-              ...(typeof info.model.variant === "string"
-                ? { variant: info.model.variant }
-                : {}),
-            }
-            : {}),
-        };
+    let before: string | undefined;
+    let satisfied = false;
+    do {
+      const page = await this.#messages.page(
+        sessionID,
+        this.policy.batch,
+        before,
+        undefined,
+        signal,
+      );
+      const infos = page.items.map(({ info }) => info).sort((a, b) =>
+        newest(a.time.created, a.id, b.time.created, b.id)
+      );
+      for (const info of infos) {
+        if (info.id === cutoff) cutoffCreated = info.time.created;
+        if (cutoff && info.id >= cutoff) continue;
+        if (
+          info.role === "user" &&
+          (info.time.created > created ||
+            (info.time.created === created && info.id > (prompt?.id ?? "")))
+        ) {
+          created = info.time.created;
+          prompt = {
+            id: info.id,
+            ...(typeof info.agent === "string" ? { agent: info.agent } : {}),
+            ...(info.model
+              ? {
+                model: {
+                  provider: info.model.providerID,
+                  model: info.model.modelID,
+                },
+                ...(typeof info.model.variant === "string"
+                  ? { variant: info.model.variant }
+                  : {}),
+              }
+              : {}),
+          };
+        }
+        const turnID = info.parentID ?? info.id;
+        if (info.role === "user") wanted.delete(info.id);
+        if (
+          prompt && !wanted.size && (!cutoff || cutoffCreated !== undefined)
+        ) {
+          satisfied = true;
+          break;
+        }
+        if (info.role !== "assistant" || !wanted.has(turnID)) continue;
+        const previous = boundaries.get(turnID);
+        boundaries.set(turnID, {
+          turnID,
+          firstID: previous?.firstID && previous.firstID < info.id
+            ? previous.firstID
+            : info.id,
+          lastID: previous?.lastID && previous.lastID > info.id
+            ? previous.lastID
+            : info.id,
+          complete: info.time.completed !== undefined &&
+            previous?.complete !== false,
+        });
       }
-      const turnID = info.parentID ?? info.id;
-      if (info.role !== "assistant" || !wanted.has(turnID)) continue;
-      const previous = boundaries.get(turnID);
-      boundaries.set(turnID, {
-        turnID,
-        firstID: previous?.firstID && previous.firstID < info.id
-          ? previous.firstID
-          : info.id,
-        lastID: previous?.lastID && previous.lastID > info.id
-          ? previous.lastID
-          : info.id,
-        complete: info.time.completed !== undefined &&
-          previous?.complete !== false,
-      });
-    }
+      before = page.next;
+    } while (before && !satisfied);
     return { prompt, boundaries: [...boundaries.values()], cutoffCreated };
+  }
+  covered(
+    id: string,
+    boundary: import("@otk/harness").DigestBoundary,
+  ): boolean {
+    const scan = this.storage.sql.prepare(
+      "SELECT * FROM opcv1_scan WHERE session_id=?",
+    ).get(id) as unknown as Scan | undefined;
+    const source =
+      (this.#nativeVerified || this.#projectVerified) && this.#native
+        ? this.#native.identity
+        : this.#apiGeneration;
+    return !!scan && !scan.dirty && scan.source_generation === source &&
+      (scan.complete_revision !== null && !scan.dirty ||
+        scan.covered_created != null &&
+          (scan.covered_created < boundary.created ||
+            scan.covered_created === boundary.created &&
+              (scan.covered_message ?? "") <= boundary.messageID));
+  }
+  pending(id: string): boolean {
+    const saved = this.storage.read(id);
+    if (!saved || saved.deleted) return false;
+    const scan = this.storage.sql.prepare(
+      "SELECT dirty,complete_revision FROM opcv1_scan WHERE session_id=?",
+    ).get(id);
+    return saved.summary.state !== "ready" ||
+      !!scan && (!!scan.dirty || scan.complete_revision === null);
+  }
+  #invalidateMissingScan(id: string, revision: number): void {
+    if (
+      !this.storage.sql.prepare("SELECT 1 FROM opcv1_scan WHERE session_id=?")
+        .get(id)
+    ) this.#invalidateScan(id, revision);
   }
   /** Authority validation never borrows cached directory hints as evidence. */
   async #historyRead<T>(
@@ -563,7 +707,12 @@ export class OpencodeV1DigestSink implements DigestSink {
             deleted: null,
           }
           : emptyDelta();
-        this.storage.transaction(() => this.storage.write(metadata, delta));
+        this.storage.transaction(() => {
+          if (changed) {
+            this.#invalidateScan(metadata.id, delta.summary.revision);
+          }
+          this.storage.write(metadata, delta);
+        });
         if (!previous) {
           await this.storage.publish({
             sessionID: metadata.id,
@@ -611,6 +760,11 @@ export class OpencodeV1DigestSink implements DigestSink {
         );
         if (!page.length) break;
         projects.push(...page);
+        for (const project of page) {
+          if (project.hasSessions) {
+            this.#activeDirectories.add(project.directory);
+          } else this.#activeDirectories.delete(project.directory);
+        }
         await publish?.(page);
         after = page.at(-1)!.directory;
         await this.wait(new Promise((resolve) => setTimeout(resolve, 0)));
@@ -637,6 +791,72 @@ export class OpencodeV1DigestSink implements DigestSink {
       this.storage.diagnostic(undefined, error);
       return { projects: [] };
     }
+  }
+  /** Called only after requested high/normal work has drained. */
+  async discover(
+    signal: AbortSignal,
+  ): Promise<{ entries: SessionMetadata[]; complete: boolean }> {
+    signal.throwIfAborted();
+    if (!this.#activeDirectories.size) {
+      return { entries: [], complete: this.#projectVerified };
+    }
+    const revision = this.#discoveryRevision;
+    const directories = [...this.#activeDirectories].filter((directory) =>
+      !this.#excludedDirectories.has(directory)
+    );
+    if (!directories.length) return { entries: [], complete: true };
+    let rows: SessionMetadata[], complete: boolean;
+    if (this.#projectVerified && this.#native) {
+      if (this.#native.fileIdentity() !== this.#native.identity) {
+        throw new Error("Discovery source generation changed");
+      }
+      rows = this.#native.recent(
+        directories,
+        this.#discoveryPosition,
+        this.policy.batch,
+      );
+      complete = !rows.length;
+    } else {
+      if (this.#discoveryAPIComplete) return { entries: [], complete: true };
+      const response = await this.#client.request("/experimental/session", {
+        query: { limit: this.policy.batch, cursor: this.#discoveryAPICursor },
+        signal,
+      });
+      const page: Session[] = await this.wait(response.json());
+      const next = response.headers.get("x-next-cursor") ?? undefined;
+      if (next && (!page.length || next === this.#discoveryAPICursor)) {
+        throw new Error("Session discovery cursor did not advance");
+      }
+      rows = page.filter((row) => directories.includes(row.directory)).map(
+        mapIndex,
+      );
+      complete = !next;
+      if (revision === this.#discoveryRevision) {
+        this.#discoveryAPICursor = next;
+        this.#discoveryAPIComplete = complete;
+      }
+    }
+    for (const metadata of rows) {
+      const saved = this.storage.read(metadata.id);
+      if (!saved) {
+        const delta = emptyDelta();
+        this.storage.transaction(() => this.storage.write(metadata, delta));
+        await this.storage.publish({
+          sessionID: metadata.id,
+          revision: 0,
+          delta,
+          metadata,
+        });
+      }
+    }
+    const last = rows.at(-1);
+    if (last && revision === this.#discoveryRevision) {
+      this.#discoveryPosition = {
+        updated: last.timeUpdated,
+        id: ids.decode(last.id),
+      };
+    }
+    return { entries: rows, complete };
   }
   /** Scalar demand can prove this file with one bounded identity sample; it
    * neither waits for inventory exhaustion nor changes the scan cursor domain. */
@@ -665,8 +885,9 @@ export class OpencodeV1DigestSink implements DigestSink {
         )
       )
       : native.catalog("", 1).length === 0;
-    // Only the catalog owns #nativeVerified and SQL/API scan transitions. This
-    // read borrows a current proof without changing a background scan's mode.
+    // The versioned checkpoint fences SQL/API transitions independently of a
+    // population catalog; bounded point authority can establish this source.
+    if (matches) this.#nativeVerified = true;
     return matches ? native : undefined;
   }
   async #apiCatalog(signal: AbortSignal): Promise<SessionMetadata[]> {
@@ -1017,7 +1238,7 @@ export class OpencodeV1DigestSink implements DigestSink {
   #invalidateScan(id: string, revision: number): void {
     const native = ids.decode(id);
     this.storage.sql.prepare(
-      "INSERT INTO opcv1_scan VALUES(?,?,NULL,0,?,NULL,1) ON CONFLICT(session_id) DO UPDATE SET observed_revision=max(observed_revision,excluded.observed_revision),dirty=1",
+      "INSERT INTO opcv1_scan(session_id,native_id,after_message,scan_generation,observed_revision,complete_revision,dirty) VALUES(?,?,NULL,0,?,NULL,1) ON CONFLICT(session_id) DO UPDATE SET observed_revision=max(observed_revision,excluded.observed_revision),dirty=1,covered_created=NULL,covered_message=NULL",
     ).run(id, native, revision);
     this.#observed.set(id, ++this.#observation);
   }
@@ -1321,6 +1542,9 @@ export class OpencodeV1DigestSink implements DigestSink {
       generation: scan?.scan_generation ?? 0,
       after: scan?.after_message ?? null,
       complete: scan?.complete_revision ?? null,
+      source: scan?.source_generation ?? null,
+      api: scan?.api_cursor ?? null,
+      created: scan?.after_created ?? null,
     };
     const initialize = !scan;
     scan ??= {
@@ -1336,6 +1560,18 @@ export class OpencodeV1DigestSink implements DigestSink {
     const native = this.#nativeVerified || this.#projectVerified
       ? this.#native
       : undefined;
+    const mode = native ? "sql" : "api";
+    const source = native?.identity ?? this.#apiGeneration;
+    const sourceChanged = scan.source_generation !== source;
+    if (sourceChanged) {
+      scan = {
+        ...scan,
+        after_message: null,
+        after_created: null,
+        api_cursor: null,
+        complete_revision: null,
+      };
+    }
     const targeted = !!job.messages?.length &&
       (scan.complete_revision !== null || job.cursor?.startsWith("target:")) &&
       !!native;
@@ -1356,22 +1592,32 @@ export class OpencodeV1DigestSink implements DigestSink {
         (checkpoint?.scan_generation ?? 0) !== predecessor.generation ||
         (checkpoint?.after_message ?? null) !== predecessor.after ||
         (checkpoint?.complete_revision ?? null) !== predecessor.complete;
+      const cursorChanged = changed ||
+        (checkpoint?.source_generation ?? null) !== predecessor.source ||
+        (checkpoint?.api_cursor ?? null) !== predecessor.api ||
+        (checkpoint?.after_created ?? null) !== predecessor.created;
       return {
         saved,
-        changed,
+        changed: cursorChanged,
         cursor:
           checkpoint?.complete_revision !== null && checkpoint?.dirty === 0
             ? undefined
             : "reconcile",
       };
     };
-    const restart = (!job.cursor || job.cursor === "reconcile") && !targeted &&
-      (!scan.after_message || scan.complete_revision !== null);
+    const restart = !targeted &&
+      (sourceChanged || (!job.cursor || job.cursor === "reconcile") &&
+          (!(scan.after_message === "~sweep" ||
+            (mode === "api" ? scan.api_cursor : scan.after_message)) ||
+            scan.complete_revision !== null) ||
+        !!job.boundary && !!scan.dirty);
     if (restart) {
       scan = {
         ...scan,
         scan_generation: scan.scan_generation + 1,
         after_message: null,
+        after_created: null,
+        api_cursor: null,
         complete_revision: null,
         dirty: 0,
       };
@@ -1395,17 +1641,23 @@ export class OpencodeV1DigestSink implements DigestSink {
           ids.decode(id),
           scan.after_message ?? "",
           budget.rows,
+          scan.after_created == null
+            ? undefined
+            : { created: scan.after_created, messageID: scan.after_message! },
+          job.boundary,
         );
         next = raw.length === budget.rows ? raw.at(-1)!.message_id : undefined;
       } else {
         const page = await this.#messages.page(
           id,
           Math.min(200, budget.rows),
-          scan.after_message ?? undefined,
+          scan.api_cursor ?? undefined,
           snapshot.metadata.directory,
           signal,
         );
-        raw = page.items.map((message) => fromInfo(message.info));
+        raw = page.items.map((message) => fromInfo(message.info)).sort((a, b) =>
+          newest(a.time_created, a.message_id, b.time_created, b.message_id)
+        );
         next = page.next;
       }
     } catch (error) {
@@ -1424,7 +1676,7 @@ export class OpencodeV1DigestSink implements DigestSink {
         this.storage.transaction(() => {
           if (initialize) this.#invalidateScan(id, job.revision);
           this.storage.sql.prepare(
-            "UPDATE opcv1_scan SET after_message=NULL,scan_generation=scan_generation+1,complete_revision=NULL,dirty=1 WHERE session_id=?",
+            "UPDATE opcv1_scan SET after_message=NULL,after_created=NULL,api_cursor=NULL,source_mode='api',covered_created=NULL,covered_message=NULL,scan_generation=scan_generation+1,complete_revision=NULL,dirty=1 WHERE session_id=?",
           ).run(id);
         });
         return "retry-api";
@@ -1450,11 +1702,12 @@ export class OpencodeV1DigestSink implements DigestSink {
       return;
     }
     let rows: Baseline[];
+    let hitBoundary = false;
     try {
       const values: ReturnType<typeof header>[] = [];
       for (const row of raw) {
-        // SQL keysets can stop within a fetched page. API cursors are opaque:
-        // those pages instead retain their bounded row quota intact.
+        // SQL keysets subdivide the time budget; opaque API pages keep their
+        // quota. An explicit boundary borrows Messages' native cursor encoder.
         if (
           native && !targeted &&
           values.length >= Math.min(budget.rows, digestRowFloor(this.policy)) &&
@@ -1463,7 +1716,31 @@ export class OpencodeV1DigestSink implements DigestSink {
           next = raw[values.length - 1].message_id;
           break;
         }
+        if (
+          job.boundary && (row.time_created < job.boundary.created ||
+            row.time_created === job.boundary.created &&
+              row.message_id < job.boundary.messageID)
+        ) {
+          if (!native) {
+            next = this.#messages.cursor(
+              job.boundary.messageID,
+              job.boundary.created,
+            );
+          }
+          hitBoundary = true;
+          break;
+        }
         values.push(header(row));
+        if (
+          job.boundary && row.time_created === job.boundary.created &&
+          row.message_id === job.boundary.messageID
+        ) {
+          hitBoundary = true;
+          if (!native && values.length < raw.length) {
+            next = this.#messages.cursor(row.message_id, row.time_created);
+          }
+          break;
+        }
       }
       const hashes = await this.#compute.run(signal, () => {
         const started = performance.now();
@@ -1511,6 +1788,18 @@ export class OpencodeV1DigestSink implements DigestSink {
     if (!current) return;
     if (current.changed) return current.cursor;
     const currentSaved = current.saved;
+    const bounded = !!job.boundary && !targeted;
+    const oldest = rows.at(-1);
+    const reached = bounded &&
+      (hitBoundary ||
+        (native
+          ? raw.length < budget.rows && rows.length === raw.length
+          : !next) ||
+        !!oldest &&
+          (oldest.time_created < job.boundary!.created ||
+            oldest.time_created === job.boundary!.created &&
+              oldest.message_id <= job.boundary!.messageID));
+    if (bounded) next = next ?? (native ? "boundary" : "sweep");
     let delta!: DigestDelta;
     this.storage.transaction(() => {
       // Scan admission and its first baseline/checkpoint share the commit. A
@@ -1518,7 +1807,7 @@ export class OpencodeV1DigestSink implements DigestSink {
       if (initialize) this.#invalidateScan(id, job.revision);
       if (restart) {
         this.storage.sql.prepare(
-          "UPDATE opcv1_scan SET scan_generation=?,after_message=NULL,complete_revision=NULL,dirty=CASE WHEN observed_revision>? THEN 1 ELSE 0 END WHERE session_id=?",
+          "UPDATE opcv1_scan SET scan_generation=?,after_message=NULL,after_created=NULL,api_cursor=NULL,covered_created=NULL,covered_message=NULL,complete_revision=NULL,dirty=CASE WHEN observed_revision>? THEN 1 ELSE 0 END WHERE session_id=?",
         ).run(generation, observed, id);
       } else if (targeted && !job.cursor) {
         this.storage.sql.prepare(
@@ -1617,11 +1906,36 @@ export class OpencodeV1DigestSink implements DigestSink {
           ? "~sweep"
           : next === "reconcile" || targeted
           ? null
-          : next ?? null,
+          : mode === "sql"
+          ? next ?? null
+          : null,
         ready ? observed : null,
         ready ? 0 : Number(current.dirty),
         id,
       );
+      if (!targeted) {
+        const position = reached ? job.boundary : oldest &&
+          { created: oldest.time_created, messageID: oldest.message_id };
+        this.storage.sql.prepare(
+          "UPDATE opcv1_scan SET source_mode=?,source_generation=?,after_created=?,after_message=CASE WHEN ?='sql' AND ? IS NOT NULL THEN ? ELSE after_message END,api_cursor=?,covered_created=?,covered_message=? WHERE session_id=?",
+        ).run(
+          mode,
+          source,
+          mode === "sql"
+            ? position?.created ?? scan.after_created ?? null
+            : null,
+          next === "sweep" || next === "reconcile" ? "" : mode,
+          position?.messageID ?? null,
+          position?.messageID ?? null,
+          mode === "api" && next &&
+            !["boundary", "sweep", "reconcile"].includes(next)
+            ? next
+            : null,
+          position?.created ?? scan.covered_created ?? null,
+          position?.messageID ?? scan.covered_message ?? null,
+          id,
+        );
+      }
       this.storage.write(currentSaved.metadata, delta, {
         lastMessage: rows.at(-1)?.message_id ?? null,
         lastHash: rows.at(-1)?.hash ?? null,
@@ -1641,7 +1955,7 @@ export class OpencodeV1DigestSink implements DigestSink {
     ids.decode(id);
     this.#helperObserved.set(id, (this.#helperObserved.get(id) ?? 0) + 1);
     this.storage.sql.prepare(
-      "INSERT INTO opcv1_helper_scan VALUES(?,NULL,0,1) ON CONFLICT(session_id) DO UPDATE SET dirty=1",
+      "INSERT INTO opcv1_helper_scan(session_id,after_part,scan_generation,dirty) VALUES(?,NULL,0,1) ON CONFLICT(session_id) DO UPDATE SET dirty=1",
     ).run(id);
   }
   /** Provider-private admission. Repeated hints never restart an active sweep. */
@@ -1664,42 +1978,37 @@ export class OpencodeV1DigestSink implements DigestSink {
     if (!snapshot || snapshot.deleted) return;
     const admittedConnection = this.#connection;
     const observation = this.#helperObserved.get(id) ?? 0;
-    // Header metadata and helper labels share the worker connection and scheduler,
-    // but ordinary summary jobs never acquire parts.
-    const headers = this.storage.sql.prepare(
-      "SELECT dirty,complete_revision FROM opcv1_scan WHERE session_id=?",
-    ).get(id);
-    if (
-      !headers || headers.dirty || headers.complete_revision === null ||
-      job.cursor?.startsWith("headers:")
-    ) {
-      const cursor = await this.step(
-        {
-          ...job,
-          projection: undefined,
-          cursor: job.cursor?.startsWith("headers:")
-            ? job.cursor.slice(8) || undefined
-            : undefined,
-        },
-        budget,
-        signal,
-      );
-      return cursor ? `headers:${cursor}` : "tools";
-    }
+    // The helper owns its independent tool projection cursor.
     let scan = this.storage.sql.prepare(
       "SELECT * FROM opcv1_helper_scan WHERE session_id=?",
     ).get(id);
     const predecessor = {
       generation: Number(scan?.scan_generation ?? 0),
       after: scan?.after_part ?? null,
+      api: scan?.api_cursor ?? null,
+      source: scan?.source_generation ?? null,
     };
-    const restart = !scan?.after_part || !job.cursor ||
-      job.cursor === "tools" || job.cursor === "reconcile";
-    const generation = Number(scan?.scan_generation ?? 0) + (restart ? 1 : 0);
-    const after = restart ? undefined : scan?.after_part as string | undefined;
     const native = this.#nativeVerified || this.#projectVerified
       ? this.#native
       : undefined;
+    const mode = native ? "sql" : "api",
+      source = native?.identity ?? this.#apiGeneration;
+    const restart = !(scan?.after_part === "~sweep" ||
+      (mode === "api" ? scan?.api_cursor : scan?.after_part)) ||
+      !job.cursor ||
+      job.cursor === "tools" || job.cursor === "reconcile" ||
+      scan?.source_generation !== source;
+    const generation = Number(scan?.scan_generation ?? 0) + (restart ? 1 : 0);
+    const after = restart
+      ? undefined
+      : scan?.after_part === "~sweep"
+      ? "~sweep"
+      : (mode === "api" ? scan?.api_cursor : scan?.after_part) as
+        | string
+        | undefined;
+    let start = restart ? undefined : scan?.time_start as number | undefined;
+    let end = restart ? undefined : scan?.time_end as number | undefined;
+    let unfinished = restart ? false : !!scan?.unfinished;
     const targeted = !!native && !!job.messages?.length &&
       (job.cursor?.startsWith("target-tools:") ||
         ((!job.cursor || job.cursor === "tools") &&
@@ -1724,6 +2033,14 @@ export class OpencodeV1DigestSink implements DigestSink {
             snapshot.metadata.directory,
             signal,
           );
+          for (const { info } of page.items) {
+            if (info.role === "user") {
+              start = Math.min(start ?? Infinity, info.time.created);
+            } else {
+              if (info.time.completed === undefined) unfinished = true;
+              else end = Math.max(end ?? -Infinity, info.time.completed);
+            }
+          }
           rows = page.items.flatMap(({ info, parts }) =>
             parts.filter((part) => part.type === "tool").map((part) => ({
               session_id: info.sessionID,
@@ -1765,6 +2082,14 @@ export class OpencodeV1DigestSink implements DigestSink {
         this.#connection !== admittedConnection ||
         this.storage.read(id)?.deleted
       ) return;
+      if (native && !(error instanceof TypeError)) {
+        this.storage.diagnostic(id, error);
+        native.close();
+        this.#native = undefined;
+        this.#nativeVerified = false;
+        this.#projectVerified = false;
+        return "retry-api";
+      }
       this.storage.diagnostic(id, error);
       const saved = this.storage.read(id)!;
       const revision = saved.summary.revision + 1;
@@ -1783,17 +2108,19 @@ export class OpencodeV1DigestSink implements DigestSink {
       this.#connection !== admittedConnection || this.storage.read(id)?.deleted
     ) return;
     const checkpoint = this.storage.sql.prepare(
-      "SELECT scan_generation,after_part FROM opcv1_helper_scan WHERE session_id=?",
+      "SELECT scan_generation,after_part,api_cursor,source_generation FROM opcv1_helper_scan WHERE session_id=?",
     ).get(id);
     if (
       Number(checkpoint?.scan_generation ?? 0) !== predecessor.generation ||
-      (checkpoint?.after_part ?? null) !== predecessor.after
+      (checkpoint?.after_part ?? null) !== predecessor.after ||
+      (checkpoint?.api_cursor ?? null) !== predecessor.api ||
+      (checkpoint?.source_generation ?? null) !== predecessor.source
     ) return "reconcile";
     let delta!: DigestDelta;
     this.storage.transaction(() => {
       if (restart) {
         this.storage.sql.prepare(
-          "INSERT INTO opcv1_helper_scan VALUES(?,NULL,?,?) ON CONFLICT(session_id) DO UPDATE SET after_part=NULL,scan_generation=excluded.scan_generation,dirty=excluded.dirty",
+          "INSERT INTO opcv1_helper_scan(session_id,after_part,scan_generation,dirty) VALUES(?,NULL,?,?) ON CONFLICT(session_id) DO UPDATE SET after_part=NULL,scan_generation=excluded.scan_generation,dirty=excluded.dirty",
         ).run(
           id,
           generation,
@@ -1839,8 +2166,20 @@ export class OpencodeV1DigestSink implements DigestSink {
       const ready = !next && !scan.dirty;
       if (!next && !ready) next = "reconcile";
       this.storage.sql.prepare(
-        "UPDATE opcv1_helper_scan SET after_part=? WHERE session_id=?",
-      ).run(next === "reconcile" ? null : next ?? null, id);
+        "UPDATE opcv1_helper_scan SET after_part=?,api_cursor=?,source_mode=?,source_generation=? WHERE session_id=?",
+      ).run(
+        next === "~sweep"
+          ? "~sweep"
+          : next === "reconcile" || mode === "api"
+          ? null
+          : next ?? null,
+        mode === "api" && next !== "~sweep" && next !== "reconcile"
+          ? next ?? null
+          : null,
+        mode,
+        source,
+        id,
+      );
       const saved = this.storage.read(id)!;
       const revision = saved.summary.revision + 1;
       const count = Number(
@@ -1851,9 +2190,14 @@ export class OpencodeV1DigestSink implements DigestSink {
       const current = this.storage.sql.prepare(
         "SELECT name,title,time_start FROM opcv1_helper_tools WHERE session_id=? AND status<>'pending' ORDER BY coalesce(time_start,0) DESC,message_created DESC,message_id DESC,part_id DESC LIMIT 1",
       ).get(id);
-      const time = this.storage.sql.prepare(
-        "SELECT min(CASE WHEN role='user' THEN time_created END) AS start,max(time_completed) AS end,sum(role='assistant' AND time_completed IS NULL) AS unfinished FROM opcv1_messages WHERE session_id=?",
-      ).get(id)!;
+      const time = native && ready
+        ? native.db.prepare(
+          "SELECT min(CASE WHEN json_extract(data,'$.role')='user' THEN time_created END) AS start,max(json_extract(data,'$.time.completed')) AS end,sum(json_extract(data,'$.role')='assistant' AND json_extract(data,'$.time.completed') IS NULL) AS unfinished FROM message WHERE session_id=? AND json_valid(data)",
+        ).get(ids.decode(id))!
+        : { start: start ?? null, end: end ?? null, unfinished };
+      this.storage.sql.prepare(
+        "UPDATE opcv1_helper_scan SET time_start=?,time_end=?,unfinished=? WHERE session_id=?",
+      ).run(time.start, time.end, Number(!!time.unfinished), id);
       const helper: HelperSummary = {
         state: ready ? "ready" : "digesting",
         revision,

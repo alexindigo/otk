@@ -9,6 +9,8 @@ import { WsClient } from "../support/ws-client.ts";
 import { DatabaseSync } from "node:sqlite";
 import type { SessionListPage } from "@otk/protocol";
 import type { DigestPressure } from "../../core/digest/protocol.ts";
+import { DigestBridge } from "../../core/digest/bridge.ts";
+import { sessionListReadCodec } from "@otk/harness";
 
 async function nativeFixture(population = 6, sql = false) {
   const root = await tempDir("demand-idle-");
@@ -26,7 +28,11 @@ async function nativeFixture(population = 6, sql = false) {
       "CREATE TABLE project(id TEXT PRIMARY KEY,worktree TEXT); INSERT INTO project VALUES('idle','/idle'); CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,directory TEXT,project_id TEXT,title TEXT,time_created INTEGER,time_updated INTEGER,time_archived INTEGER); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,message_id TEXT,session_id TEXT,data TEXT); CREATE INDEX session_list ON session(directory,time_updated DESC,id DESC)",
     );
     const insert = db.prepare(
+      // Match native collection ordering without changing fixture insert shapes.
       "INSERT INTO session VALUES(?,NULL,?,?,?,?,?,NULL)",
+    );
+    db.exec(
+      "ALTER TABLE message ADD COLUMN time_created INTEGER GENERATED ALWAYS AS (json_extract(data,'$.time.created')) VIRTUAL; CREATE INDEX message_order ON message(session_id,time_created,id)",
     );
     db.exec("BEGIN");
     for (const session of sessions) {
@@ -169,6 +175,153 @@ async function nativeFixture(population = 6, sql = false) {
     },
   };
 }
+
+test("@load @sessions @messages metadata demand stops newest-first at its boundary, extends older, drains high then normal then source discovery", async () => {
+  const native = await nativeFixture(5, true);
+  const source = native.db!;
+  source.exec("UPDATE session SET directory='/other' WHERE id='ses_idle3'");
+  source.exec("UPDATE session SET directory='/inactive' WHERE id='ses_idle4'");
+  const insert = source.prepare("INSERT INTO message VALUES(?,?,?)");
+  for (let i = 0; i < 8; i++) {
+    insert.run(
+      `msg_${i}`,
+      "ses_idle0",
+      JSON.stringify({
+        role: "assistant",
+        parentID: "prompt",
+        providerID: "fake",
+        modelID: "scripted",
+        time: { created: i + 1, completed: i + 2 },
+        cost: .25,
+        tokens: {
+          input: 1,
+          output: 2,
+          reasoning: 0,
+          cache: { read: 0, write: 0 },
+        },
+      }),
+    );
+  }
+  for (let i = 1; i < 5; i++) {
+    insert.run(
+      `other_${i}`,
+      `ses_idle${i}`,
+      JSON.stringify({ role: "user", time: { created: 1 } }),
+    );
+  }
+  const statePath = join(native.root, "cursor-state");
+  const publications: { id: string; count?: number; ready: boolean }[] = [];
+  const samples: DigestPressure[] = [], errors: string[] = [];
+  const bridge = new DigestBridge({
+    statePath,
+    provider: "opencode-v1",
+    reads: { "sessions.list": sessionListReadCodec },
+    native: {
+      harness: native.settings.harness,
+      index: native.settings.index,
+      attachments: native.settings.attachments,
+    },
+    policy: {
+      ...native.settings.digest,
+      idlems: 1500,
+      parallel: 1,
+      batch: 2,
+      slicems: 1000,
+    },
+    publish: (value) =>
+      publications.push({
+        id: value.sessionID,
+        count: value.delta.summary.messageCount,
+        ready: value.delta.summary.state === "ready",
+      }),
+    pressure: (value) => samples.push(value),
+    diagnostic: (error) => errors.push(String(error)),
+  });
+  let derived: DatabaseSync | undefined;
+  try {
+    bridge.discoveryProject("/inactive", false);
+    bridge.scope("cursor-viewer", { sessions: [] });
+    bridge.requested();
+    await bridge.start();
+    await bridge.projects(1, new AbortController().signal);
+    const signal = new AbortController().signal;
+    await bridge.transcriptMetadata("opcv1-ses_idle0", [], signal, undefined, {
+      messageID: "msg_5",
+      created: 6,
+    });
+    derived = new DatabaseSync(join(statePath, "digest.db"), {
+      readOnly: true,
+    });
+    const messages = () =>
+      derived!.prepare(
+        "SELECT message_id FROM opcv1_messages WHERE session_id='opcv1-ses_idle0' ORDER BY time_created DESC,message_id DESC",
+      ).all().map((r) => r.message_id);
+    assertEquals(messages(), ["msg_7", "msg_6", "msg_5"]);
+    assertEquals(
+      derived.prepare(
+        "SELECT state FROM digest_sessions WHERE id='opcv1-ses_idle0'",
+      ).get()?.state,
+      "digesting",
+    );
+    bridge.requested();
+    await bridge.transcriptMetadata("opcv1-ses_idle0", [], signal, undefined, {
+      messageID: "msg_3",
+      created: 4,
+    });
+    assertEquals(messages(), ["msg_7", "msg_6", "msg_5", "msg_4", "msg_3"]);
+    assertEquals(
+      derived.prepare(
+        "SELECT complete_revision FROM opcv1_scan WHERE session_id='opcv1-ses_idle0'",
+      ).get()?.complete_revision,
+      null,
+    );
+    await bridge.read("sessions.list", {
+      directory: "/idle",
+      query: "Idle 1",
+      limit: 1,
+    }, { owner: "normal-list", priority: "user", signal });
+    await waitFor(
+      () =>
+        publications.filter((p) => p.id === "opcv1-ses_idle0").at(-1)?.count,
+      (value) => value === 5,
+    );
+    assertEquals(samples.at(-1)?.nativeReads?.["session-discovery"] ?? 0, 0);
+    const beforeIdle = publications.length;
+    await waitFor(
+      () => publications.filter((p) => p.ready).map((p) => p.id),
+      (ids) => new Set(ids).size === 4,
+    );
+    const ready = [
+      ...new Set(publications.filter((p) => p.ready).map((p) => p.id)),
+    ];
+    assertEquals(ready.slice(0, 2), ["opcv1-ses_idle0", "opcv1-ses_idle1"]);
+    const highChunks = publications.slice(beforeIdle).filter((p) =>
+      p.id === "opcv1-ses_idle0" && p.count !== undefined
+    );
+    assertEquals(highChunks.map((p) => p.count), [7, 8]);
+    await waitFor(() => samples.at(-1)?.queued, (value) => value === 0);
+    assertEquals(errors, []);
+    assertEquals(messages().length, 8);
+    assertEquals(
+      derived.prepare(
+        "SELECT 1 FROM digest_sessions WHERE id='opcv1-ses_idle4'",
+      ).get(),
+      undefined,
+    );
+    console.log(
+      JSON.stringify({
+        requested: 3,
+        extended: 5,
+        idleChunks: highChunks.map((p) => p.count),
+        readyOrder: ready,
+        sourceSlices: samples.at(-1)?.nativeReads?.["session-discovery"],
+      }),
+    );
+  } finally {
+    derived?.close();
+    await bridge.stop();
+  }
+});
 
 test("@load @sessions @attention project-only cold and warm startup seeds an untracked Active project and 130 lamp-free templates without population reads", async () => {
   const native = await nativeFixture(1, true);

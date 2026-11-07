@@ -489,6 +489,14 @@ The consumer maps neutral `DigestDelta`s to its own persistence/publication
 boundary; publication follows commit. The sink's `catalog`, `step`, `detail`,
 `invalidate`, `connection`, `deleteIntent` and `close` share that lifetime.
 
+Private checkpoint v2 records source mode/generation, descending native
+`(time_created,id)` position, a separate API cursor, observed revision and
+inclusive requested/covered boundaries. Migration 003 restarts old ascending
+checkpoints without deleting baselines or totals. Partial coverage never sweeps
+stale rows or declares global readiness. Source exhaustion does both atomically;
+raced dirty replacements require another authoritative sweep. Helpers own their
+independent, source-fenced projection cursor rather than finishing all headers.
+
 `DigestNativeDb` opens only an existing read-only native file. Its characterized
 session/header projections use bounded keysets and `json_each` batches, never
 full message/part JSON. Summary scans do not query parts. Opened usage detail

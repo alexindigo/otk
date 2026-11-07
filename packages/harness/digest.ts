@@ -6,6 +6,11 @@ import type {
 } from "@otk/protocol";
 import type { LatestPrompt, ReplyBoundary } from "@otk/protocol";
 import type { ProviderReadPort } from "./provider-reads.ts";
+/** Inclusive oldest message under the source's collection creation clock. */
+export interface DigestBoundary {
+  messageID: string;
+  created: number;
+}
 export interface TranscriptMetadata {
   prompt?: LatestPrompt;
   boundaries: ReplyBoundary[];
@@ -85,6 +90,7 @@ export interface DigestPort extends ProviderReadPort {
     turns: readonly string[],
     signal: AbortSignal,
     cutoff?: string,
+    boundary?: DigestBoundary,
   ): Promise<TranscriptMetadata>;
   deleteIntent(
     sessionID: string,
@@ -102,6 +108,7 @@ export type DigestPriority =
   | "visible"
   | "background";
 export interface DigestIdentity {
+  backfill?: "high";
   projection?: "helper";
   interruptible?: boolean;
   provider: string;
@@ -110,6 +117,7 @@ export interface DigestIdentity {
   directory?: string;
 }
 export interface DigestJob extends DigestIdentity {
+  boundary?: DigestBoundary;
   cursor?: string;
   revision: number;
   /** Undefined keys means full reconciliation, never no work. */
