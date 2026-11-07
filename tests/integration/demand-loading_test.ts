@@ -23,7 +23,7 @@ async function nativeFixture(population = 6, sql = false) {
   const db = sql ? new DatabaseSync(file) : undefined;
   if (db) {
     db.exec(
-      "CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,directory TEXT,project_id TEXT,title TEXT,time_created INTEGER,time_updated INTEGER,time_archived INTEGER); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,message_id TEXT,session_id TEXT,data TEXT); CREATE INDEX session_list ON session(directory,time_updated DESC,id DESC)",
+      "CREATE TABLE project(id TEXT PRIMARY KEY,worktree TEXT); INSERT INTO project VALUES('idle','/idle'); CREATE TABLE session(id TEXT PRIMARY KEY,parent_id TEXT,directory TEXT,project_id TEXT,title TEXT,time_created INTEGER,time_updated INTEGER,time_archived INTEGER); CREATE TABLE message(id TEXT PRIMARY KEY,session_id TEXT,data TEXT); CREATE TABLE part(id TEXT PRIMARY KEY,message_id TEXT,session_id TEXT,data TEXT); CREATE INDEX session_list ON session(directory,time_updated DESC,id DESC)",
     );
     const insert = db.prepare(
       "INSERT INTO session VALUES(?,NULL,?,?,?,?,?,NULL)",
@@ -44,6 +44,7 @@ async function nativeFixture(population = 6, sql = false) {
   }
   const streams = new Set<ReadableStreamDefaultController<Uint8Array>>();
   let reads = 0, hold = true;
+  const requests = new Map<string, number>();
   const release = Promise.withResolvers<void>();
   const emit = (type: string, properties: unknown) => {
     const data = new TextEncoder().encode(
@@ -57,6 +58,10 @@ async function nativeFixture(population = 6, sql = false) {
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {
       const url = new URL(request.url), path = url.pathname;
+      requests.set(path, (requests.get(path) ?? 0) + 1);
+      if (path === "/project") {
+        return Response.json([{ id: "idle", worktree: "/idle" }]);
+      }
       if (path === "/global/health") {
         return Response.json({
           healthy: true,
@@ -152,6 +157,8 @@ async function nativeFixture(population = 6, sql = false) {
     memoryreserve: 1,
   };
   return {
+    root,
+    requests,
     settings,
     db,
     reads: () => reads,
@@ -162,6 +169,159 @@ async function nativeFixture(population = 6, sql = false) {
     },
   };
 }
+
+test("@load @sessions @attention project-only cold and warm startup seeds an untracked Active project and 130 lamp-free templates without population reads", async () => {
+  const native = await nativeFixture(1, true);
+  native.settings.digest.idlems = 60000;
+  const templates = join(native.root, "templates");
+  await Deno.mkdir(templates);
+  for (let i = 0; i < 130; i++) await Deno.mkdir(join(templates, `empty-${i}`));
+  let samples: DigestPressure[] = [];
+  let app = await start(native.settings, {
+    section() {},
+    pressure: (value) => samples.push(value),
+  });
+  let client = new WsClient(`http://127.0.0.1:${app.server.addr.port}`);
+  const snapshot = async () =>
+    (await client.rpc<import("@otk/protocol").InboxBaseline>("inbox.get", {}))
+      .inbox;
+  const noPopulation = () => {
+    assertEquals(native.requests.get("/experimental/session") ?? 0, 0);
+    assertEquals(native.reads(), 0);
+    for (const key of ["catalog", "empty", "headers", "helpers", "tools"]) {
+      assertEquals(samples.at(-1)?.nativeReads?.[key] ?? 0, 0, key);
+    }
+  };
+  try {
+    await client.connect();
+    await waitFor(
+      () => app.connections.harnessState,
+      (value) => value === "connected",
+    );
+    await client.rpc("projects.templates", {
+      templates: [templates + "/{project}"],
+    });
+    await waitFor(snapshot, (value) => value.discovered?.length === 130);
+    const first = await snapshot();
+    assertEquals(first.summaries?.["/idle"], {
+      directory: "/idle",
+      hasSessions: true,
+      status: "idle",
+      sessionCount: 1,
+      unseenCount: 0,
+      lastActivity: Number(
+        native.db!.prepare("SELECT time_updated FROM session").get()!
+          .time_updated,
+      ),
+      authority: "current",
+    });
+    assertEquals(first.projects, []);
+    assertEquals(
+      [...app.index.values()].length,
+      0,
+      "ordinary sessions are not replayed",
+    );
+    for (const directory of first.discovered!) {
+      assertEquals(first.summaries?.[directory]?.hasSessions, false);
+    }
+    noPopulation();
+    await client.rpc("projects.inactive", {
+      directory: "/idle",
+      inactive: true,
+    });
+    assertEquals(
+      (await snapshot()).projects.find((p) => p.directory === "/idle")
+        ?.inactive,
+      true,
+    );
+    native.emit("session.status", {
+      sessionID: "ses_idle0",
+      status: { type: "busy" },
+    });
+    await waitFor(
+      snapshot,
+      (value) =>
+        value.summaries?.["/idle"]?.status === "working" &&
+        !value.projects.find((p) => p.directory === "/idle")?.inactive,
+    );
+    native.emit("session.status", {
+      sessionID: "ses_idle0",
+      status: { type: "idle" },
+    });
+    await waitFor(
+      snapshot,
+      (value) => value.summaries?.["/idle"]?.status === "finished",
+    );
+    await client.close();
+    await app.stop();
+    native.requests.clear();
+    samples = [];
+    app = await start(native.settings, {
+      section() {},
+      pressure: (value) => samples.push(value),
+    });
+    client = new WsClient(`http://127.0.0.1:${app.server.addr.port}`);
+    await client.connect();
+    await waitFor(
+      () => app.connections.harnessState,
+      (value) => value === "connected",
+    );
+    assertEquals(
+      (await snapshot()).summaries?.["/idle"]?.status,
+      "finished",
+      "never-demanded unseen work survives restart",
+    );
+    assertEquals(
+      [...app.index.values()].length,
+      1,
+      "only the persisted unseen identity is retained",
+    );
+    noPopulation();
+    await client.rpc("sessions.seen", { sessionID: "opcv1-ses_idle0" });
+    const page = await client.rpc<SessionListPage>("sessions.list", {
+      directory: "/idle",
+    });
+    assertEquals(page.items.length, 1);
+    assertEquals(
+      (await snapshot()).summaries?.["/idle"]?.sessionCount,
+      1,
+      "keyed hydration does not add population",
+    );
+    await client.close();
+    await app.stop();
+    native.requests.clear();
+    samples = [];
+    app = await start(native.settings, {
+      section() {},
+      pressure: (value) => samples.push(value),
+    });
+    client = new WsClient(`http://127.0.0.1:${app.server.addr.port}`);
+    await client.connect();
+    await waitFor(
+      () => app.connections.harnessState,
+      (value) => value === "connected",
+    );
+    assertEquals(
+      [...app.index.values()].length,
+      0,
+      "warm startup does not replay retained catalog",
+    );
+    assertEquals((await snapshot()).summaries?.["/idle"]?.hasSessions, true);
+    noPopulation();
+    console.info("Q1 PROOF", {
+      templates: 130,
+      activeProjects: 1,
+      coldCatalogReads: 0,
+      warmCatalogReads: 0,
+      headerReads: 0,
+      helperReads: 0,
+      populationReplay: 0,
+    });
+  } finally {
+    await client.close();
+    await app.stop();
+  }
+});
 
 test("@load @sessions @transport project demand returns 20 of 500, bounded SQL independent of unrelated growth, then exactly one idle high-priority successor", async () => {
   const native = await nativeFixture(500, true);
@@ -259,7 +419,9 @@ test("@load @transport @attention real client ingress postpones idle batches, pa
   const url = `http://127.0.0.1:${app.server.addr.port}`;
   const client = new WsClient(url);
   try {
-    await waitFor(() => [...app.index.values()].length, (n) => n === 6);
+    // Q1 removes startup admission; demand one unfinished entry to retain this proof's single-chunk fence.
+    await app.backend.core.listSessions({ directory: "/idle", limit: 1 });
+    await waitFor(() => [...app.index.values()].length, (n) => n === 1);
     assertEquals(
       native.reads(),
       0,
@@ -290,12 +452,15 @@ test("@load @transport @attention real client ingress postpones idle batches, pa
     ];
     for (let i = 0; i < 3; i++) {
       for (const action of actions) {
+        const started = performance.now();
         await action();
         await new Promise((resolve) => setTimeout(resolve, 40));
         assertEquals(
           native.reads(),
           0,
-          "requests more frequent than idlems must admit no idle batch",
+          `requests more frequent than idlems must admit no idle batch (round ${i}, action ${
+            actions.indexOf(action)
+          }, elapsed ${performance.now() - started}ms)`,
         );
       }
     }
@@ -357,6 +522,8 @@ for (const background of [false, true]) {
     native.settings.digest.background = background;
     const app = await start(native.settings);
     try {
+      // Q1 removes startup admission; seed this Q2 scheduling proof through explicit list demand.
+      await app.backend.core.listSessions({ directory: "/idle", limit: 6 });
       await waitFor(() => [...app.index.values()].length, (n) => n === 6);
       native.emit("session.status", {
         sessionID: "ses_idle0",

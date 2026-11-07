@@ -59,6 +59,8 @@ export type ToWorker =
       diagnostics?: boolean;
     }
     | { t: "catalog"; connection: number }
+    | { t: "projects"; connection: number; directory?: string }
+    | { t: "hydrate"; sessions: string[]; retained?: boolean }
     | ProviderReadCommand
     | { t: "read.cancel" }
     | { t: "dirty"; connection: number; sessions: DirtySession[] }
@@ -100,6 +102,13 @@ export type FromWorker =
   & { run: string; id: number }
   & (
     | { t: "accepted" }
+    | {
+      t: "projects";
+      projects: import("@otk/harness").ProjectSeed[];
+      hints?: string[];
+      part: number;
+      last: boolean;
+    }
     | { t: "native.granted" }
     | ProviderReadResult
     | {

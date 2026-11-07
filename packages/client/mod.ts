@@ -18,6 +18,7 @@ export * from "./state.ts";
 export * from "./reduce.ts";
 export * from "./index.ts";
 export * from "./session.ts";
+export { projectGroup } from "./inbox.ts";
 export {
   createTranscript,
   type TranscriptOwner,

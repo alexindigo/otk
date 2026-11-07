@@ -122,6 +122,82 @@ const policy = {
   concurrency: 4,
 };
 
+Deno.test("late source events cannot backfill unrequested transcript history or retire its paging action", async () => {
+  const f = fixture(policy);
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    await f.reply();
+    await f.reply();
+    const resource = f.owner.get(target("a"))!;
+    assertEquals(resource.state.messageIDs.length, 20);
+    const history = f.messages("a")[55];
+    const receive = (message: Message, seq: number) =>
+      f.owner.receive("server", {
+        t: "content",
+        sessionID: "a",
+        clock: { epoch: "fixture", seq },
+        event: { op: "message.upsert", message },
+      }, true);
+    receive(history, 1);
+    assertEquals(
+      resource.state.messageIDs.length,
+      20,
+      "late history must await its requested page",
+    );
+    const known = {
+      ...f.messages("a")[70],
+      parts: [{
+        kind: "text" as const,
+        id: "updated",
+        synthetic: false,
+        blocks: [],
+      }],
+    };
+    receive(known, 2);
+    assertEquals(resource.state.messagesByID[known.id].parts, known.parts);
+    const tail = { ...f.messages("a")[79], id: "a-080", time: { created: 80 } };
+    receive(tail, 3);
+    assertEquals(
+      resource.state.messageIDs.length,
+      21,
+      "new live tail still advances after ignored source clocks",
+    );
+    const older = resource.older();
+    const request = f.requests.shift()!;
+    const page = fixturePage(
+      "a",
+      f.messages("a"),
+      (request.params as { before?: string }).before,
+    );
+    replyRequest(f.connection.rpc, request, {
+      ...page,
+      from: { epoch: "fixture", seq: 3 },
+      clock: { epoch: "fixture", seq: 4 },
+      catchup: [{
+        clock: { epoch: "fixture", seq: 4 },
+        event: { op: "message.upsert", message: f.messages("a")[0] },
+      }],
+    });
+    await turns();
+    await older;
+    assert(
+      resource.state.messagesByID[history.id],
+      "explicit paging still acquires the old source identity",
+    );
+    assertEquals(
+      resource.state.messagesByID["a-000"],
+      undefined,
+      "older-page catchup must respect the same acquired-history boundary",
+    );
+  } finally {
+    f.stop();
+  }
+});
+
 Deno.test("warm transcripts reduce permission and question replacement before reselection without detail reads", async () => {
   const f = fixture(policy);
   f.connection.supports = (capability) =>

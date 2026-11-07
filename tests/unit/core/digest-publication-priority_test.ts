@@ -129,7 +129,7 @@ test("interactive reads cannot pause an ordered publication needed by a newer de
   }
 });
 
-test("fresh catalog replacement publishes tombstones left by a cancelled cached replay", async () => {
+test("fresh catalog replacement preserves tombstones during keyed retained hydration", async () => {
   const root = await tempDir("digest-replay-");
   const entries = Array.from({ length: 8 }, (_, i) => ({
     id: `ses_${i}`,
@@ -217,6 +217,12 @@ test("fresh catalog replacement publishes tombstones left by a cancelled cached 
   try {
     restarted.scope("viewer", { sessions: [] });
     await restarted.start();
+    // Q1 has no startup replay; acquire the exact retained keys before replacing their publication.
+    await restarted.hydrate(
+      entries.map((entry) => `opcv1-${entry.id}`),
+      controller.signal,
+      true,
+    );
     assertEquals(replacement !== undefined, true);
     await bounded("replacement catalog", replacement!);
     await waitFor(() => tombstones.size, (n) => n === entries.length, 2000);
@@ -231,7 +237,7 @@ test("fresh catalog replacement publishes tombstones left by a cancelled cached 
 });
 
 for (const background of [false, true]) {
-  test(`disconnected cached replay follows background=${background}; deletion donates only to its ordered predecessor`, async () => {
+  test(`explicit cached replay follows background=${background}; deletion donates only to its ordered predecessor`, async () => {
     const root = await tempDir("digest-donation-");
     const entries = ["a", "b"].map((id) => ({
       id: `ses_${id}`,
@@ -322,18 +328,20 @@ for (const background of [false, true]) {
     restarted.scope("viewer", { sessions: [] });
     try {
       await restarted.start();
+      // Q1 never launches population replay at startup; this explicit compatibility catalog owns it.
+      await restarted.catalog(1, new AbortController().signal);
       await waitFor(() => closed, Boolean);
       if (background) {
         await waitFor(() => seen.length, (n) => n === 200);
         assertEquals(seen.filter((id) => id === "opcv1-ses_a").length, 100);
         assertEquals(seen.filter((id) => id === "opcv1-ses_b").length, 100);
-        await restarted.deleted(0, "opcv1-ses_a", 1);
+        await restarted.deleted(1, "opcv1-ses_a", 1);
         assertEquals(seen.at(-1), "deleted:opcv1-ses_a");
         return;
       }
       // Fence receipt of the scope release, then observe a fresh drained state;
       // a pressure frame sent before the first publication is not pause evidence.
-      await restarted.deleteIntent("opcv1-ses_b", "fence", "begin", 0);
+      await restarted.deleteIntent("opcv1-ses_b", "fence", "begin", 1);
       pressure = undefined;
       await waitFor(
         () => pressure,
@@ -346,7 +354,7 @@ for (const background of [false, true]) {
       // chunk may settle after the callback closes the final viewer.
       assertEquals(paused.every((id) => id === "opcv1-ses_a"), true);
       assertEquals(paused.length >= 1 && paused.length <= 2, true);
-      await restarted.deleteIntent("opcv1-ses_b", "barrier", "begin", 0);
+      await restarted.deleteIntent("opcv1-ses_b", "barrier", "begin", 1);
       assertEquals(
         seen,
         paused,
@@ -354,14 +362,14 @@ for (const background of [false, true]) {
       );
       await bounded(
         "deletion priority donation",
-        restarted.deleted(0, "opcv1-ses_a", 1),
+        restarted.deleted(1, "opcv1-ses_a", 1),
         5000,
       );
       assertEquals(seen, [
         ...Array.from({ length: 100 }, () => "opcv1-ses_a"),
         "deleted:opcv1-ses_a",
       ]);
-      await restarted.deleteIntent("opcv1-ses_b", "barrier", "failed", 0);
+      await restarted.deleteIntent("opcv1-ses_b", "barrier", "failed", 1);
       assertEquals(seen.includes("opcv1-ses_b"), false);
       restarted.scope("reconnected", { sessions: [] });
       await waitFor(

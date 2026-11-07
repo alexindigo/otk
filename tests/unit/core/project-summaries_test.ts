@@ -54,3 +54,23 @@ Deno.test("project summaries own status priority, persisted marks, recency and u
   owner.entry(a);
   assertEquals(emitted.length, before);
 });
+
+Deno.test("@load project population seeds own counts independently of keyed hydration", () => {
+  const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
+  owner.seed([{
+    directory: "/other",
+    hasSessions: true,
+    sessionCount: 500,
+    lastActivity: 42,
+    authority: "current",
+  }]);
+  owner.authority("current");
+  assertEquals(owner.values.get("/other")?.sessionCount, 500);
+  owner.entry(entry());
+  owner.entry(entry("tstv1-b"));
+  assertEquals(owner.values.get("/other")?.sessionCount, 500);
+  assertEquals(owner.values.get("/other")?.hasSessions, true);
+  owner.authority("stale");
+  assertEquals(owner.values.get("/other")?.sessionCount, 500);
+  assertEquals(owner.values.get("/other")?.authority, "stale");
+});

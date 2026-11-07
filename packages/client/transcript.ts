@@ -181,7 +181,23 @@ export function createTranscript(
     });
     return content as ContentState;
   };
+  const firstRetained = () =>
+    projection.state.messagesByID[projection.state.messageIDs[0]];
+  // Source clocks may trail a page read. Updates can change the acquired range,
+  // but only the cursor admits older history, including page-captured events.
+  const outsideAcquiredRange = (
+    op: ContentOp,
+    first: Message | undefined,
+    bounded: boolean,
+  ) =>
+    op.op === "message.upsert" && bounded && first &&
+    !projection.state.messagesByID[op.message.id] &&
+    op.message.time.created < first.time.created;
   const apply = (content: ContentState, op: ContentOp): ContentState => {
+    if (
+      op.op === "message.upsert" && hasBaseline &&
+      outsideAcquiredRange(op, firstRetained(), cursor !== null || tailDirty)
+    ) return content;
     if (op.op === "part.remove") interaction.retireIdentity(op.partID);
     if (op.op === "message.remove") {
       interaction.retireIdentity(op.messageID);
@@ -1191,7 +1207,15 @@ export function createTranscript(
               return;
             }
             let loaded = { ...emptyContent(), messages: page.items };
+            const retained = firstRetained(), pageFirst = page.items[0];
+            const first = retained &&
+                (!pageFirst || retained.time.created < pageFirst.time.created)
+              ? retained
+              : pageFirst;
             for (const { event } of page.catchup) {
+              if (outsideAcquiredRange(event, first, page.older !== null)) {
+                continue;
+              }
               loaded = reduce(loaded, event);
             }
             const messages = loaded.messages;

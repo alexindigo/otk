@@ -490,6 +490,10 @@ async function start(
   policy = message.policy;
   diagnostics = !!message.diagnostics;
   progress = new DigestProgress(`${message.run}:0`);
+  // No session catalog is enrolled at startup. Progress describes acquired
+  // keyed work; explicit catalog compatibility requests establish their own
+  // enumeration generation below.
+  progress.complete();
   progressTimer = setInterval(() => {
     post({
       t: "progress",
@@ -645,12 +649,16 @@ async function start(
             sqliteRetry(
               async () => {
                 try {
-                  if (inventoryRevision > inventoryComplete) {
-                    // Every dependent step joins admission. Only the revision
-                    // captured by this refresh is satisfied when it completes.
+                  if (
+                    inventoryRevision > inventoryComplete ||
+                    !store!.summary([job.sessionID]).length
+                  ) {
                     const admitted = inventoryRevision;
-                    const catalog = await sink!.catalog(signal, false);
-                    await admitCatalog(catalog.entries, signal, {
+                    const entries = await sink!.hydrate(
+                      [job.sessionID],
+                      signal,
+                    );
+                    await admitCatalog(entries, signal, {
                       invalidate: false,
                       helpers: false,
                     });
@@ -724,71 +732,7 @@ async function start(
     });
     requests = new DigestRequests(run, scheduler);
     loop = pump();
-    // Cached rows are usable before the provider's health/catalog round-trip.
-    // Startup publishes its first seed before acknowledgement; remaining cached
-    // chunks are ordinary cooperative work, not a barrier to essential reads.
-    const seeded = Promise.withResolvers<void>();
-    const controller = new AbortController();
-    const cachedStore = store;
-    const task = scheduler.execute(
-      (signal, turn) =>
-        execution.run({ signal, turn }, async () => {
-          let cachedAfter = "";
-          while (true) {
-            const rows = cachedStore.catalog(
-              message.provider,
-              cachedAfter,
-              policy.publishrows,
-            );
-            if (!rows.length) break;
-            await send({
-              t: "catalog",
-              run: message.run,
-              id: 0,
-              connection: 0,
-              entries: rows.map((row) => snapshot(row).metadata),
-              part: 0,
-              last: true,
-              authoritative: false,
-            });
-            seeded.resolve();
-            // Retire cached identities independently of optional summary replay:
-            // otherwise a disconnected restart would revive a deleted lamp.
-            for (const row of rows) {
-              if (!row.deleted_at) continue;
-              const saved = snapshot(row);
-              await publish({
-                sessionID: row.id,
-                revision: saved.summary.revision,
-                delta: {
-                  summary: saved.summary,
-                  deleted: saved.deleted,
-                  turns: { upsert: {}, remove: [] },
-                },
-              });
-            }
-            cachedAfter = rows.at(-1)!.id;
-          }
-          seeded.resolve();
-          await wait(replayStored(signal, true));
-        }),
-      AbortSignal.any([controller.signal, lifetime.signal]),
-      "attention",
-    );
-    cachedReplay = { controller, task };
-    void task.catch((error) => {
-      seeded.reject(error);
-      if (!controller.signal.aborted && !lifetime.signal.aborted) {
-        post({
-          t: "error",
-          run: run!,
-          id: 0,
-          scope: "worker",
-          message: errorMessage(error),
-        });
-      }
-    });
-    await seeded.promise;
+    // Retained sessions are hydrated by key, never replayed as a startup catalog.
     post({ t: "accepted", run, id: message.id });
   } catch (error) {
     await scheduler?.stop();
@@ -915,7 +859,15 @@ function handle(message: ToWorker): void {
               }
               db!.transaction(() => {
                 for (const dirty of message.sessions) {
-                  const row = store!.summary([dirty.sessionID])[0];
+                  let row = store!.summary([dirty.sessionID])[0];
+                  if (!row && dirty.metadata?.id === dirty.sessionID) {
+                    write(store!, sink!.identity, dirty.metadata, {
+                      summary: { state: "digesting", revision: 0 },
+                      turns: { upsert: {}, remove: [] },
+                      deleted: null,
+                    });
+                    row = store!.summary([dirty.sessionID])[0];
+                  }
                   if (
                     dirty.reason === "helper" || dirty.reason === "helper-hint"
                   ) {
@@ -997,7 +949,108 @@ function handle(message: ToWorker): void {
       execution.run({ signal, turn }, () =>
         sqliteRetry(
           async () => {
-            if (message.t === "catalog") {
+            if (message.t === "hydrate") {
+              const publishKeys = async (
+                entries: readonly SessionMetadata[],
+              ) => {
+                for (
+                  let offset = 0;
+                  offset < message.sessions.length;
+                  offset += policy.publishrows
+                ) {
+                  const keys = message.sessions.slice(
+                    offset,
+                    offset + policy.publishrows,
+                  );
+                  const retained = store!.summary(keys).map(snapshot);
+                  await send({
+                    t: "catalog",
+                    run: run!,
+                    id: 0,
+                    connection,
+                    entries: keys.flatMap((id) =>
+                      entries.find((entry) => entry.id === id) ??
+                        retained.find((row) => row.metadata.id === id)
+                          ?.metadata ??
+                        []
+                    ),
+                    part: 0,
+                    last: true,
+                    authoritative: false,
+                  }, signal);
+                  for (const value of retained) {
+                    await publishStored(
+                      value.metadata.id,
+                      false,
+                      publicationOrder.reserve(
+                        value.metadata.id,
+                        turn.priority,
+                      ),
+                    );
+                  }
+                }
+              };
+              // A keyed last-good baseline is independent of native readiness.
+              await publishKeys([]);
+              if (!message.retained) {
+                let entries: SessionMetadata[];
+                try {
+                  entries = await sink!.hydrate(message.sessions, signal);
+                } catch (error) {
+                  signal.throwIfAborted();
+                  if (
+                    !(error instanceof OperationFailure) ||
+                    error.outcome !== "unavailable" ||
+                    store!.summary(message.sessions).length !==
+                      message.sessions.length
+                  ) throw error;
+                  nativeUnavailable = true;
+                  post({ t: "accepted", run: run!, id: message.id });
+                  return;
+                }
+                await publishKeys(entries);
+                await admitCatalog(entries, signal, {
+                  invalidate: false,
+                  helpers: true,
+                });
+              }
+              post({ t: "accepted", run: run!, id: message.id });
+            } else if (message.t === "projects") {
+              if (message.connection < connection) {
+                throw new Error("Stale native connection");
+              }
+              connection = message.connection;
+              sink!.connection(connection);
+              let part = 0;
+              const value = await sink!.projects(signal, async (projects) => {
+                for (
+                  let offset = 0;
+                  offset < projects.length;
+                  offset += policy.publishrows
+                ) {
+                  await send({
+                    t: "projects",
+                    run: run!,
+                    id: message.id,
+                    projects: projects.slice(
+                      offset,
+                      offset + policy.publishrows,
+                    ),
+                    part: part++,
+                    last: false,
+                  }, signal);
+                }
+              }, message.directory);
+              await send({
+                t: "projects",
+                run: run!,
+                id: message.id,
+                projects: [],
+                hints: value.hints,
+                part,
+                last: true,
+              }, signal);
+            } else if (message.t === "catalog") {
               if (message.connection < connection) {
                 throw new Error("Stale native connection");
               }

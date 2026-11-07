@@ -53,6 +53,8 @@ export const PROJECT_STATUS_PRIORITY = [
 export type ProjectStatus = typeof PROJECT_STATUS_PRIORITY[number];
 export interface ProjectSummary {
   directory: string;
+  /** Population authority, independent of acquired session membership. */
+  hasSessions?: boolean;
   status: ProjectStatus | null;
   sessionCount: number | null;
   unseenCount: number | null;

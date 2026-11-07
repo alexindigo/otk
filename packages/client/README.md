@@ -828,16 +828,18 @@ the shared pure projections for column, rail and badges. Supply the connection's
 index entries, its metadata and an explicit current time. Ageing defaults to
 2h/8h/24h and accepts the validated `projectAgeing` preference (milliseconds).
 Keep each server's inputs separate when merging the resulting project rows.
-`inboxProjects` is also the catalog projection: tracked membership wins over
-index-only directories, which win over template-only discovery. Its `source`
-distinguishes these rows; discovery sorts index-first by newest activity, then
-name, without backend queries. Template-only rows have no visit clock or light.
-`INBOX_STATUS_PRIORITY` owns aggregate light priority: needs you, finished but
-unseen, working, idle. Project and task lights both use `rollup`; presentation
-does not rank states. Finished subsessions do not raise unseen attention. Task
-tabs sort by this priority, then newest family `timeUpdated`, with identity as a
-stable tie-break. Stored task order remains available for future pinning; it
-does not drive the strip. Discovery retains its recency/name order.
+`inboxProjects` shares the Active/Discovered/Inactive classification with the
+keyed project owner. Active means known sessions, Discovered means
+template-only, and Inactive requires explicit user policy unless mandatory
+activity lifts it. `source` retains provenance separately. Scalar seeds own
+population counts, so hydrating an existing session cannot increment them.
+Discovered rows have no light. `INBOX_STATUS_PRIORITY` owns aggregate light
+priority: needs you, finished but unseen, working, idle. Project and task lights
+both use `rollup`; presentation does not rank states. Finished subsessions do
+not raise unseen attention. Task tabs sort by this priority, then newest family
+`timeUpdated`, with identity as a stable tie-break. Stored task order remains
+available for future pinning; it does not drive the strip. Discovery retains its
+recency/name order.
 
 `createTabs(inbox.promote, factory?)` takes
 `update({directory, entries, inbox})` and exposes task, mandatory phantom and

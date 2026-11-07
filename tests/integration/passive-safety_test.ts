@@ -99,12 +99,18 @@ test("passive sidecar reports the native version, leaves approvals manual and re
     const allowed = new Set([
       "/global/health",
       "/global/event",
+      // Q1 proves the project seed source with one read-only project-list read.
+      "/project",
       "/experimental/session",
       "/session/status",
       "/permission",
       "/question",
     ]);
     assert(requests.length > 0);
+    assertEquals(
+      requests.filter((request) => request.path === "/project").length,
+      1,
+    );
     for (const request of requests) {
       assertEquals(request.method, "GET", JSON.stringify(request));
       assert(allowed.has(request.path), JSON.stringify(request));

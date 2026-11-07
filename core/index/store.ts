@@ -37,6 +37,20 @@ export class IndexStore extends SessionIndex {
   projectAuthority(value: "current" | "stale" | "unknown"): void {
     for (const listener of this.#authority) listener(value);
   }
+  #seeds = new Set<
+    (values: readonly import("@otk/harness").ProjectSeed[]) => void
+  >();
+  observeSeeds(
+    listener: (values: readonly import("@otk/harness").ProjectSeed[]) => void,
+  ): () => void {
+    this.#seeds.add(listener);
+    return () => {
+      this.#seeds.delete(listener);
+    };
+  }
+  projectSeeds(values: readonly import("@otk/harness").ProjectSeed[]): void {
+    for (const listener of this.#seeds) listener(values);
+  }
   constructor(readonly diagnostics?: SectionObserver) {
     super();
   }

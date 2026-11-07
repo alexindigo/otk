@@ -46,10 +46,12 @@ function startBackend(
   backend: Harness,
   index: IndexStore,
   connections: Connections,
+  sources: readonly import("./ws/connections.ts").FrameSource[] = [],
 ): Promise<void> {
   let authoritySupplied = false;
   return backend.core.start({
     index,
+    retainedSessions: sources.flatMap((source) => source.retained?.() ?? []),
     connection: (state) => {
       if (state !== "connected") index.projectAuthority("stale");
       connections.connection(state);
@@ -58,6 +60,7 @@ function startBackend(
       authoritySupplied = true;
       index.projectAuthority(value);
     },
+    projectSeeds: (values) => index.projectSeeds(values),
     indexReset: (entries) => index.resetMetadata(entries),
     indexUpsert: (entry) => index.upsertMetadata(entry),
     indexRemove: (id) => index.remove(id),
@@ -142,7 +145,7 @@ export async function startCore(options: CoreOptions): Promise<CoreServer> {
       options.sources,
       options.diagnostics,
     );
-    await startBackend(backend, index, transport);
+    await startBackend(backend, index, transport, options.sources);
     check();
     await requests.start();
     check();

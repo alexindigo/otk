@@ -10,7 +10,7 @@ test.describe("project catalog", () => {
   test.use({ profile: "contract-sessions-catalog" });
   test("sessions.project-catalog-discovery-activity-creation-and-collapse", {
     tag: ["@sessions", "@contracts", "@isolated"],
-  }, async ({ isolatedState: state, page }) => {
+  }, async ({ isolatedState: state, page }, info) => {
     const { root, entries } = await state.observe<
       { root: string; entries: { id: string; directory: string }[] }
     >();
@@ -21,11 +21,17 @@ test.describe("project catalog", () => {
     const empty = root + "/projects/empty",
       finished = root + "/projects/finished-discovery";
     await page.goto(state.url);
-    await expect(page.locator(".otk-discovered-toggle")).toContainText("(4)");
+    // Session-bearing index-origin projects now belong to Active, not Discovered.
+    await expect(page.locator(".otk-discovered-toggle")).toContainText("(1)");
     await expect(row(root + "/projects/linked")).toHaveCount(0);
     await expect(row(empty).locator(".otk-status-light")).toHaveCount(0);
     await expect(row(entries[1].directory).locator(".otk-status-light"))
       .toHaveAttribute("data-state", "idle");
+    await expect(row(entries[1].directory)).toHaveAttribute(
+      "data-group",
+      "active",
+    );
+    await expect(row(empty)).toHaveAttribute("data-group", "discovered");
     expect(
       await page.locator(".otk-inbox-scroll > *").evaluateAll((es) =>
         es.map((e) => e.className).filter((s) => s.includes("toggle"))
@@ -39,6 +45,16 @@ test.describe("project catalog", () => {
         [empty, entries[1].directory].includes(p.directory)
       ),
     ).toBe(false);
+    await row(entries[1].directory).locator(".otk-project-menu > button")
+      .click();
+    await page.getByRole("menuitem", { name: "Mark inactive", exact: true })
+      .click();
+    await expect(row(entries[1].directory)).toHaveCount(0);
+    expect(
+      (await state.product("inbox.get", {})).inbox.projects.find((p) =>
+        p.directory === entries[1].directory
+      )?.inactive,
+    ).toBe(true);
     await page.locator(".otk-discovered-toggle").click();
     await expect(page.locator(".otk-discovered-toggle")).toHaveAttribute(
       "aria-expanded",
@@ -73,6 +89,53 @@ test.describe("project catalog", () => {
     await activity(state, "tstv1-atmosphera", "release");
     await page.locator(".otk-discovered-toggle").click();
     await expect(row(empty)).toBeVisible();
+    for (
+      const [theme, name] of [["otk-dark", "dark"], ["otk-light", "linen"], [
+        "otk-light-stone",
+        "stone",
+      ]]
+    ) {
+      await state.product("prefs.set", { key: "theme", value: theme });
+      await expect(page.locator("html")).toHaveAttribute(
+        "data-otk-theme",
+        theme,
+      );
+      await expect(page.locator("[data-group=discovered] .otk-status-light"))
+        .toHaveCount(0);
+      await page.screenshot({
+        path: info.outputPath(`q1-${name}-column.png`),
+        fullPage: true,
+      });
+      const centers = () =>
+        page.locator(
+          ".otk-project-row:not([data-inactive=true]) .otk-project-marker",
+        ).evaluateAll((elements) =>
+          elements.map((element) => {
+            const box = element.getBoundingClientRect();
+            return box.y + box.height / 2;
+          })
+        );
+      const column = await centers();
+      await page.getByRole("button", { name: "Collapse projects", exact: true })
+        .click();
+      await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
+        "data-collapsed",
+        "true",
+      );
+      expect(await centers()).toEqual(column);
+      await expect(page.locator("[data-group=discovered] .otk-status-light"))
+        .toHaveCount(0);
+      await page.screenshot({
+        path: info.outputPath(`q1-${name}-rail.png`),
+        fullPage: true,
+      });
+      await page.getByRole("button", { name: "Expand projects", exact: true })
+        .click();
+      await expect(page.locator(".otk-project-inbox")).toHaveAttribute(
+        "data-collapsed",
+        "false",
+      );
+    }
     const positions = () =>
       page.locator(".otk-project-row[data-inactive=false] .otk-status-light")
         .evaluateAll((es) =>

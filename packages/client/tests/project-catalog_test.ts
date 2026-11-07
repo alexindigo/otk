@@ -53,6 +53,13 @@ Deno.test("catalog merges tracked, indexed and template directories once, orderi
     ["/zebra", "template", "idle"],
   ]);
   assertEquals(rows.find((p) => p.directory === "/alpha")?.visitText, "");
+  assertEquals(rows.map((p) => [p.directory, p.group]), [
+    ["/tracked", "discovered"],
+    ["/indexed", "active"],
+    ["/old", "active"],
+    ["/alpha", "discovered"],
+    ["/zebra", "discovered"],
+  ]);
   inbox.projects.push({
     directory: "/indexed",
     order: 1,

@@ -104,8 +104,9 @@ export function createProjectProjection(o: {
       p.row = undefined;
       p.metadata = undefined;
       p.input = undefined;
-      const present =
-        !!(p.members.size || p.record || p.discovered || p.summary);
+      const present = !!(p.members.size || p.record?.inactive || p.discovered ||
+        p.summary?.hasSessions || (p.summary?.sessionCount ?? 0) > 0 ||
+        p.summary && p.summary.hasSessions === undefined);
       if (!present && !p.tasks.length) {
         projects.delete(directory);
       }
@@ -366,8 +367,11 @@ export function createProjectProjection(o: {
       const unreadKnown = !summary || summary.unseenCount !== null ||
         fallbackCurrent || hasUnseen;
       const record = p.record;
-      const inactive = !!record?.inactive && status === "idle" &&
-        activityKnown;
+      const inactive = !!record?.inactive && status === "idle";
+      const hasSessions = summary?.hasSessions ??
+        (summary?.sessionCount != null
+          ? summary.sessionCount > 0
+          : p.members.size > 0 || summaryReady);
       const time = inactive ? record?.inactiveAt ?? record!.lastVisit : now;
       const text = record ? visitTime(record.lastVisit, time) : "";
       const age = record ? ageing(record.lastVisit, time, thresholds) : 0;
@@ -387,12 +391,16 @@ export function createProjectProjection(o: {
               ? -Math.max(...[...p.members.values()].map((e) => e.timeUpdated))
               : 0,
           }),
-          source: record
-            ? "tracked"
-            : (p.summary?.sessionCount ?? p.members.size) > 0 ||
-                (p.summary?.sessionCount === null && summaryReady)
+          source: record ? "tracked" : p.summary?.hasSessions ||
+              (p.summary?.sessionCount ?? p.members.size) > 0 ||
+              (p.summary?.sessionCount === null && summaryReady)
             ? "index"
             : "template",
+          group: inactive
+            ? "inactive"
+            : hasSessions || status !== "idle"
+            ? "active"
+            : "discovered",
           inactive,
           status,
           unread: summary?.unseenCount != null

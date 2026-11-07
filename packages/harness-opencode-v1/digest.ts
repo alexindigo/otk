@@ -1,4 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
+import { runningDirectories } from "./db-hints.ts";
+import { projectFileMatches, projectSeeds } from "./project-seeds.ts";
 import { messageOutput, readMessageClock } from "./message-clock.ts";
 import { catalogReaders } from "./catalog-reads.ts";
 import { HistoryReader } from "./history.ts";
@@ -23,7 +25,7 @@ import type {
 import { digestRowFloor } from "@otk/harness";
 import type { OpencodeV1Config } from "./config.ts";
 import { harnessDb } from "./config.ts";
-import { Client, NativeRequestFailure } from "./client.ts";
+import { Client, HttpFailure, NativeRequestFailure } from "./client.ts";
 import { Messages } from "./messages.ts";
 import { mapIndex } from "./map.ts";
 import type { Info, Session } from "./types.ts";
@@ -184,6 +186,7 @@ export class OpencodeV1DigestSink implements DigestSink {
   #connection = 0;
   #connected = false;
   #nativeVerified = false;
+  #projectVerified = false;
   #observation = 0;
   #observed = new Map<string, number>();
   #deletions = new Map<string, number>();
@@ -306,6 +309,7 @@ export class OpencodeV1DigestSink implements DigestSink {
   }
   #open(): void {
     this.#nativeVerified = false;
+    this.#projectVerified = false;
     try {
       this.#native = this.openNative(harnessDb(this.cfg));
     } catch (error) {
@@ -317,6 +321,7 @@ export class OpencodeV1DigestSink implements DigestSink {
     if (!this.#connected || value !== this.#connection) {
       this.#lists.reset();
       this.#nativeVerified = false;
+      this.#projectVerified = false;
       this.#observed.clear();
       this.#observation = 0;
       this.storage.sql.prepare(
@@ -489,6 +494,149 @@ export class OpencodeV1DigestSink implements DigestSink {
       throw new Error("Native identity generation changed");
     }
     return result;
+  }
+  async hydrate(
+    wanted: readonly string[],
+    signal: AbortSignal,
+  ): Promise<SessionMetadata[]> {
+    const connection = this.#connection, admitted = this.#observation;
+    const native = await this.#metadataSource(signal);
+    const entries: SessionMetadata[] = [];
+    for (let offset = 0; offset < wanted.length; offset += this.policy.batch) {
+      signal.throwIfAborted();
+      const keys = wanted.slice(offset, offset + this.policy.batch);
+      const rows = native ? native.lookup(keys) : [];
+      if (!native) {
+        for (const id of keys) {
+          try {
+            const raw = await this.#client.json<Session>(
+              `/session/${encodeURIComponent(ids.decode(id))}`,
+              { signal },
+            );
+            rows.push(mapIndex(raw));
+          } catch (error) {
+            if (
+              !(error instanceof NativeRequestFailure) ||
+              !(error.original instanceof HttpFailure) ||
+              error.original.status !== 404
+            ) throw error;
+          }
+        }
+      }
+      signal.throwIfAborted();
+      if (connection !== this.#connection && !this.#closed) {
+        return await this.hydrate(wanted, signal);
+      }
+      if (
+        this.#closed ||
+        native && native.fileIdentity() !== native.identity
+      ) throw new Error("Metadata demand authority changed");
+      for (const id of keys) {
+        const previous = this.storage.read(id);
+        if (
+          previous && !rows.some((row) => row.id === id) &&
+          (this.#observed.get(id) ?? 0) <= admitted
+        ) {
+          await this.deleted(connection, id, 0);
+        }
+      }
+      for (const metadata of rows) {
+        const previous = this.storage.read(metadata.id);
+        if (
+          previous?.deleted && (this.#observed.get(metadata.id) ?? 0) > admitted
+        ) continue;
+        const changed = previous &&
+          (previous.deleted ||
+            previous.metadata.timeUpdated !== metadata.timeUpdated);
+        const delta = previous
+          ? {
+            summary: {
+              ...previous.summary,
+              ...(changed
+                ? {
+                  state: "digesting" as const,
+                  revision: previous.summary.revision + 1,
+                }
+                : {}),
+            },
+            turns: { upsert: {}, remove: [] },
+            deleted: null,
+          }
+          : emptyDelta();
+        this.storage.transaction(() => this.storage.write(metadata, delta));
+        if (!previous) {
+          await this.storage.publish({
+            sessionID: metadata.id,
+            revision: delta.summary.revision,
+            metadata,
+            delta,
+          });
+        }
+        entries.push(metadata);
+        this.#deletions.delete(metadata.id);
+      }
+      await this.wait(new Promise((resolve) => setTimeout(resolve, 0)));
+    }
+    return entries;
+  }
+  async projects(
+    signal: AbortSignal,
+    publish?: (projects: import("@otk/harness").ProjectSeed[]) => Promise<void>,
+    directory?: string,
+  ): Promise<
+    { projects: import("@otk/harness").ProjectSeed[]; hints?: string[] }
+  > {
+    const connection = this.#connection;
+    const native = this.#native;
+    const projects: import("@otk/harness").ProjectSeed[] = [];
+    if (!native) return { projects };
+    try {
+      const reported = await this.#client.json<
+        { id: string; worktree: string }[]
+      >("/project", { signal });
+      if (!projectFileMatches(native.db, reported)) return { projects };
+      this.#projectVerified = true;
+      let after = "";
+      for (;;) {
+        signal.throwIfAborted();
+        if (
+          connection !== this.#connection ||
+          native.fileIdentity() !== native.identity
+        ) throw new Error("Project authority changed");
+        const page = projectSeeds(
+          native.db,
+          after,
+          this.policy.batch,
+          directory,
+        );
+        if (!page.length) break;
+        projects.push(...page);
+        await publish?.(page);
+        after = page.at(-1)!.directory;
+        await this.wait(new Promise((resolve) => setTimeout(resolve, 0)));
+      }
+      if (directory !== undefined && !projects.length) {
+        const empty: import("@otk/harness").ProjectSeed = {
+          directory,
+          hasSessions: false,
+          sessionCount: 0,
+          lastActivity: null,
+          authority: "current",
+        };
+        projects.push(empty);
+        await publish?.([empty]);
+      }
+      return {
+        projects,
+        hints: directory === undefined
+          ? runningDirectories(native.db, 0)
+          : undefined,
+      };
+    } catch (error) {
+      signal.throwIfAborted();
+      this.storage.diagnostic(undefined, error);
+      return { projects: [] };
+    }
   }
   /** Scalar demand can prove this file with one bounded identity sample; it
    * neither waits for inventory exhaustion nor changes the scan cursor domain. */
@@ -864,6 +1012,9 @@ export class OpencodeV1DigestSink implements DigestSink {
   }
   invalidate(id: string, revision: number): void {
     this.#lists.invalidate();
+    this.#invalidateScan(id, revision);
+  }
+  #invalidateScan(id: string, revision: number): void {
     const native = ids.decode(id);
     this.storage.sql.prepare(
       "INSERT INTO opcv1_scan VALUES(?,?,NULL,0,?,NULL,1) ON CONFLICT(session_id) DO UPDATE SET observed_revision=max(observed_revision,excluded.observed_revision),dirty=1",
@@ -1182,7 +1333,9 @@ export class OpencodeV1DigestSink implements DigestSink {
     const targetOffset = job.cursor?.startsWith("target:")
       ? Number(job.cursor.slice(7))
       : 0;
-    const native = this.#nativeVerified ? this.#native : undefined;
+    const native = this.#nativeVerified || this.#projectVerified
+      ? this.#native
+      : undefined;
     const targeted = !!job.messages?.length &&
       (scan.complete_revision !== null || job.cursor?.startsWith("target:")) &&
       !!native;
@@ -1269,7 +1422,7 @@ export class OpencodeV1DigestSink implements DigestSink {
         // SQL IDs and opaque API cursors are different domains. Restart the
         // authoritative scan, retaining the last good neutral summary.
         this.storage.transaction(() => {
-          if (initialize) this.invalidate(id, job.revision);
+          if (initialize) this.#invalidateScan(id, job.revision);
           this.storage.sql.prepare(
             "UPDATE opcv1_scan SET after_message=NULL,scan_generation=scan_generation+1,complete_revision=NULL,dirty=1 WHERE session_id=?",
           ).run(id);
@@ -1362,7 +1515,7 @@ export class OpencodeV1DigestSink implements DigestSink {
     this.storage.transaction(() => {
       // Scan admission and its first baseline/checkpoint share the commit. A
       // native read or hash may yield; preserve any newer invalidation it raced.
-      if (initialize) this.invalidate(id, job.revision);
+      if (initialize) this.#invalidateScan(id, job.revision);
       if (restart) {
         this.storage.sql.prepare(
           "UPDATE opcv1_scan SET scan_generation=?,after_message=NULL,complete_revision=NULL,dirty=CASE WHEN observed_revision>? THEN 1 ELSE 0 END WHERE session_id=?",
@@ -1544,7 +1697,9 @@ export class OpencodeV1DigestSink implements DigestSink {
       job.cursor === "tools" || job.cursor === "reconcile";
     const generation = Number(scan?.scan_generation ?? 0) + (restart ? 1 : 0);
     const after = restart ? undefined : scan?.after_part as string | undefined;
-    const native = this.#nativeVerified ? this.#native : undefined;
+    const native = this.#nativeVerified || this.#projectVerified
+      ? this.#native
+      : undefined;
     const targeted = !!native && !!job.messages?.length &&
       (job.cursor?.startsWith("target-tools:") ||
         ((!job.cursor || job.cursor === "tools") &&

@@ -73,12 +73,24 @@ export function ageing(
   return thresholds.filter((threshold) => now - lastVisit >= threshold).length;
 }
 export interface InboxProject extends ProjectRecord {
+  group?: "active" | "discovered" | "inactive";
   /** Older injected projections without a source are tracked projects. */
   source?: "tracked" | "index" | "template";
   status: InboxStatus;
   unread: boolean;
   visitText: string;
   ageing: number;
+}
+/** Source provenance never decides presentation groups. */
+export function projectGroup(
+  project: Pick<InboxProject, "group" | "source" | "inactive">,
+): "active" | "discovered" | "inactive" {
+  return project.group ??
+    (project.inactive
+      ? "inactive"
+      : project.source === "template"
+      ? "discovered"
+      : "active");
 }
 /** One projection shared by the column, collapsed rail and tab badges. */
 export function inboxProjects(
@@ -87,17 +99,44 @@ export function inboxProjects(
   now: number,
   thresholds?: readonly number[],
 ): InboxProject[] {
-  const tracked = [...inbox.projects].sort((a, b) => a.order - b.order).map(
+  const hasSessions = (directory: string, sessions: readonly IndexMetadata[]) =>
+    inbox.summaries?.[directory]?.hasSessions ??
+      ((inbox.summaries?.[directory]?.sessionCount ?? 0) > 0 ||
+        sessions.some((entry) => !entry.deleted));
+  const statusFor = (
+    directory: string,
+    sessions: readonly (IndexMetadata & OperationAttention)[],
+  ) => {
+    const summary = inbox.summaries?.[directory];
+    return summary?.authority === "current" && summary.status !== null
+      ? attentionStatus(
+        summary.status,
+        ...sessions.map((entry) => entry.operationStatus),
+      )
+      : rollup(sessions, inbox);
+  };
+  const tracked = [...inbox.projects].filter((project) =>
+    project.inactive || inbox.discovered?.includes(project.directory) ||
+    hasSessions(
+      project.directory,
+      entries.filter((entry) => entry.directory === project.directory),
+    )
+  ).sort((a, b) => a.order - b.order).map(
     (project) => {
       const sessions = entries.filter((entry) =>
         entry.directory === project.directory
       );
-      const status = rollup(sessions, inbox);
+      const status = statusFor(project.directory, sessions);
       const inactive = project.inactive && status === "idle";
       const clock = inactive ? project.inactiveAt ?? project.lastVisit : now;
       return {
         ...project,
         source: "tracked" as const,
+        group: inactive
+          ? "inactive" as const
+          : hasSessions(project.directory, sessions)
+          ? "active" as const
+          : "discovered" as const,
         inactive,
         status,
         unread: sessions.some((s) => !s.parentID && unread(s.id, inbox)),
@@ -118,18 +157,29 @@ export function inboxProjects(
     sessions.push(entry);
     indexed.set(entry.directory, sessions);
   }
+  for (const summary of Object.values(inbox.summaries ?? {})) {
+    if (
+      !known.has(summary.directory) && summary.hasSessions &&
+      !indexed.has(summary.directory)
+    ) {
+      indexed.set(summary.directory, []);
+    }
+  }
+  const activity = (directory: string, sessions: readonly IndexMetadata[]) =>
+    inbox.summaries?.[directory]?.lastActivity ?? latest(sessions);
   const discovered = [...indexed].sort(([a, aa], [b, bb]) =>
-    latest(bb) - latest(aa) || byName(a, b)
+    activity(b, bb) - activity(a, aa) || byName(a, b)
   ).map(([directory, sessions]): InboxProject => {
     known.add(directory);
     return {
       directory,
       source: "index",
-      order: -latest(sessions),
+      group: "active",
+      order: -activity(directory, sessions),
       added: false,
       inactive: false,
       lastVisit: 0,
-      status: rollup(sessions, inbox),
+      status: statusFor(directory, sessions),
       unread: sessions.some((s) => !s.parentID && unread(s.id, inbox)),
       visitText: "",
       ageing: 0,
@@ -141,6 +191,7 @@ export function inboxProjects(
     .sort(byName).map((directory): InboxProject => ({
       directory,
       source: "template",
+      group: "discovered",
       order: 0,
       added: false,
       inactive: false,

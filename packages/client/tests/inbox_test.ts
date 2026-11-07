@@ -175,9 +175,9 @@ Deno.test("project projections keep stored order, freeze inactive visits and exp
     lastVisit: 0,
   });
   const idle = entry("s");
+  // Empty non-template directories retain policy metadata but no longer qualify as rows.
   assertEquals(inboxProjects([idle], inbox, 120_000).map((p) => p.directory), [
     "/p",
-    "/q",
   ]);
   assertEquals(inboxProjects([idle], inbox, 120_000)[0].visitText, "1m");
   for (

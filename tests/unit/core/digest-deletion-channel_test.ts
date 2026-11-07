@@ -126,6 +126,12 @@ test("accepted deletions survive a worker restart, coalesce in bounded batches a
     try {
       restarted.scope("viewer", { sessions: [] });
       await restarted.start();
+      // Q1 replaces population replay with explicit retained-key acquisition, even offline.
+      await restarted.hydrate(
+        ["opcv1-ses_0", "opcv1-ses_1", "opcv1-ses_2"],
+        new AbortController().signal,
+        true,
+      );
       await waitFor(() => deleted.size, (n) => n === 3);
       assertEquals(deleted.size, 3);
     } finally {

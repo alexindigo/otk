@@ -7,6 +7,35 @@ import { bounded, resources, tempDir, test } from "../../support/resources.ts";
 import { FakeLlm } from "../../support/fake-llm.ts";
 import { OpencodeTest, waitFor } from "../../support/opencode.ts";
 
+test("project-only worker startup has no phantom session enumeration or unrequested progress", async () => {
+  const statePath = await tempDir("project-only-progress-");
+  const settings = cfg();
+  settings.harness.db = statePath + "/absent.db";
+  const bridge = new DigestBridge({
+    statePath,
+    provider: "opencode-v1",
+    native: settings,
+    policy: settings.digest,
+    publish() {},
+    diagnostic() {},
+  });
+  try {
+    await bridge.start();
+    await waitFor(
+      () => bridge.progress().find((value) => value.directory === undefined),
+      (value) => value !== undefined,
+    );
+    const value = bridge.progress().find((value) =>
+      value.directory === undefined
+    )!;
+    assertEquals(value.phase, "ready");
+    assertEquals(value.eligible, 0);
+    assertEquals(value.queued, 0);
+  } finally {
+    await bridge.stop();
+  }
+});
+
 test("public worker port publishes real native totals and recovers committed metadata after restart", async () => {
   const fake = new FakeLlm();
   const oc = await OpencodeTest.start(fake);
@@ -183,7 +212,13 @@ test("public worker port publishes real native totals and recovers committed met
       closing ??= interrupted.stop();
     },
   });
-  await assertRejects(() => interrupted.start(), StoppedError, "stopped");
+  // Startup no longer replays retained sessions; cancellation belongs to keyed demand.
+  await interrupted.start();
+  await assertRejects(
+    () => interrupted.hydrate([session.id], new AbortController().signal),
+    StoppedError,
+    "stopped",
+  );
   await closing;
 });
 

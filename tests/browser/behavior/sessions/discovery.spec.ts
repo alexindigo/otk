@@ -3,14 +3,19 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 
 test.use({ profile: "sessions-discovery" });
-test("sessions.idle-discovered-catalog-zero-native-instance-wake", {
+test("sessions.idle-active-project-seeds-zero-native-instance-wake", {
   tag: ["@sessions", "@isolated"],
 }, async ({ isolatedState: state, page }) => {
   await page.goto(state.url);
-  await expect(page.locator(".otk-discovered-projects .otk-project-row"))
+  // Q1 classifies session-bearing native projects as Active, without waking their instances.
+  await expect(
+    page.locator('.otk-project-row[data-group="active"][data-source="index"]'),
+  )
     .toHaveCount(2);
   expect(
-    await page.locator(".otk-discovered-projects .otk-status-light")
+    await page.locator(
+      '.otk-project-row[data-group="active"] .otk-status-light',
+    )
       .evaluateAll((es) => es.map((e) => e.getAttribute("data-state"))),
   ).toEqual(["idle", "idle"]);
   expect(

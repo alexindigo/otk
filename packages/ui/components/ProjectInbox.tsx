@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { failureText } from "@otk/client";
+import { failureText, projectGroup } from "@otk/client";
 import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
 import { selection } from "./selection.ts";
@@ -109,16 +109,13 @@ export default function ProjectInbox(props: {
         props.projects.some((project) =>
           project.sidecarId === input.sidecarId &&
           project.directory === input.directory &&
-          (project.source ?? "tracked") === "tracked"
+          projectGroup(project) !== "discovered"
         ),
     },
   );
   const discovered = () =>
-    props.projects.filter((p) => (p.source ?? "tracked") !== "tracked");
-  const rows = () =>
-    props.projects.filter((p) =>
-      (p.source ?? "tracked") === "tracked" && !p.inactive
-    );
+    props.projects.filter((p) => projectGroup(p) === "discovered");
+  const rows = () => props.projects.filter((p) => projectGroup(p) === "active");
   const discoveredOpen = () => !layout().discoveredCollapsed;
   const toggleDiscovered = ownedAction("projects.discovered", async () => {
     await props.onLayout({ discoveredCollapsed: discoveredOpen() });
@@ -132,7 +129,7 @@ export default function ProjectInbox(props: {
       data: {
         sidecarId: project().sidecarId,
         directory: project().directory,
-        discovered: (project().source ?? "tracked") !== "tracked",
+        discovered: projectGroup(project()) === "discovered",
         value: !project().inactive,
       },
     });
@@ -153,6 +150,7 @@ export default function ProjectInbox(props: {
         data-project-sessions={project().sessionIDs}
         data-inactive={project().inactive ? "true" : "false"}
         data-source={project().source}
+        data-group={projectGroup(project())}
         data-rollup={project().activityKnown === false
           ? "unknown"
           : project().status}
@@ -166,7 +164,7 @@ export default function ProjectInbox(props: {
               duplicate() ? ` on ${project().label}` : ""
             }`}
             title={`${project().directory} · ${project().label}${
-              project().source === "template"
+              projectGroup(project()) === "discovered"
                 ? ""
                 : ` - ${
                   project().activityKnown === false
@@ -178,7 +176,7 @@ export default function ProjectInbox(props: {
           >
             <span class="otk-project-marker">
               <Show
-                when={project().source !== "template" &&
+                when={projectGroup(project()) !== "discovered" &&
                   project().activityKnown !== false}
                 fallback={collapsed() ? name().slice(0, 1) : undefined}
               >

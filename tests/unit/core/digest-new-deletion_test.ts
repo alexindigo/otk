@@ -81,6 +81,8 @@ test("accepted deletion before catalog seeds retained metadata and survives rest
   index = new SessionIndex();
   bridge = open();
   await bridge.start();
+  // Q1 restores retained tombstones only for explicitly demanded identities.
+  await bridge.hydrate([metadata.id], new AbortController().signal, true);
   await waitFor(
     () => index.get(metadata.id),
     (entry) => entry?.deleted?.how === "provider",

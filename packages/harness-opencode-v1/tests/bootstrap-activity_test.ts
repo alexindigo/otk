@@ -8,6 +8,116 @@ import type { SessionMetadata as IndexEntry } from "@otk/protocol";
 import { cfg, fixture } from "../../../tests/support/config.ts";
 import { waitFor } from "../../../tests/support/opencode.ts";
 import { OpencodeV1Adapter as Opencode1Adapter } from "../adapter.ts";
+import type { DigestPort } from "@otk/harness";
+
+test("seed-only reconciliation clears previously observed busy activity using detached metadata on restart", async () => {
+  const index = new SessionIndex();
+  const entry: IndexEntry = {
+    id: "opcv1-observed",
+    directory: "/observed",
+    projectID: "p",
+    title: "Observed",
+    timeCreated: 1,
+    timeUpdated: 2,
+    archived: false,
+    status: "busy",
+    attention: {
+      permissions: 0,
+      questions: 0,
+      childPermissions: 0,
+      childQuestions: 0,
+    },
+  };
+  index.upsertMetadata(entry);
+  const errors: unknown[] = [];
+  let stream!: ReadableStreamDefaultController<Uint8Array>, complete = 0;
+  const digest: DigestPort = {
+    start: () => Promise.resolve(),
+    projects: () =>
+      Promise.resolve({
+        projects: [{
+          directory: "/observed",
+          hasSessions: true,
+          sessionCount: 1,
+          lastActivity: 2,
+          authority: "current",
+        }],
+        hints: [],
+      }),
+    catalog: () => Promise.reject(new Error("No startup session catalog")),
+    read: () => Promise.reject(new Error("No native activity candidate")),
+    detail: () => Promise.reject(new Error("Not requested")),
+    transcriptMetadata: () => Promise.reject(new Error("Not requested")),
+    observe() {},
+    scope() {},
+    release() {},
+    deleted: () => Promise.resolve(),
+    deleteIntent: () => Promise.resolve(),
+    stop: () => Promise.resolve(),
+  };
+  const adapter = new Opencode1Adapter(
+    cfg(),
+    undefined,
+    (input, init) => {
+      if (new URL(String(input)).pathname === "/global/health") {
+        return Promise
+          .resolve(Response.json({ healthy: true, version: "1.18.34" }));
+      }
+      return Promise.resolve(
+        new Response(
+          new ReadableStream<Uint8Array>({
+            start(controller) {
+              stream = controller;
+              controller.enqueue(
+                new TextEncoder().encode(
+                  'data: {"payload":{"type":"server.connected","properties":{}}}\n\n',
+                ),
+              );
+              init?.signal?.addEventListener(
+                "abort",
+                () => controller.close(),
+                { once: true },
+              );
+            },
+          }),
+        ),
+      );
+    },
+    digest,
+    (_level, message, cause) => {
+      if (
+        message === "bootstrap" || message.startsWith("harness event")
+      ) errors.push({ message, cause });
+    },
+  );
+  try {
+    await adapter.core.start({
+      index,
+      connection() {},
+      indexReset: (values) => index.resetMetadata(values),
+      indexUpsert: (value) => index.upsertMetadata(value),
+      indexRemove: (id) => index.remove(id),
+      content() {},
+      invalidate() {},
+      bootstrapComplete() {
+        complete++;
+      },
+    });
+    await waitFor(() => complete, (n) => n === 1);
+    assertEquals(index.getMetadata(entry.id)?.status, "idle");
+    index.upsertMetadata(entry);
+    stream.enqueue(
+      new TextEncoder().encode(
+        'data: {"payload":{"type":"server.instance.disposed","properties":{}}}\n\n',
+      ),
+    );
+    await waitFor(() => complete, (n) => n === 2);
+    assertEquals(index.getMetadata(entry.id)?.status, "idle");
+    assertEquals(errors, []);
+  } finally {
+    await adapter.core.stop();
+  }
+});
 
 for (
   const database of [

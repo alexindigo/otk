@@ -113,6 +113,7 @@ export function startApplication(
       options.attention,
       cfg.digest.publishrows,
       cfg.digest.maxpending,
+      backend.core.hydrate,
     );
     sources.push(inbox);
     inbox.register(rpc);

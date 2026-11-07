@@ -155,16 +155,26 @@ export async function loadPopulationScenario(large: boolean) {
   const app = await start(config);
   resources().defer("load application", () => app.stop());
   await waitFor(
-    () => [...app.index.values()].length,
-    (n) => n === population + 1,
-    120000,
-  );
-  await waitFor(
     () => app.connections.harnessState,
     (s) => s === "connected",
     120000,
   );
   const rpc = app.requests.options.registry;
+  // Q1 replaces startup session membership with authoritative scalar project populations.
+  await waitFor(
+    async () => {
+      const baseline = await rpc.dispatch(
+        "inbox.get",
+        {},
+      ) as import("@otk/protocol").InboxBaseline;
+      return Object.values(baseline.inbox.summaries ?? {}).reduce(
+        (sum, row) => sum + (row.sessionCount ?? 0),
+        0,
+      );
+    },
+    (n) => n === population + 1,
+    120000,
+  );
   await rpc.dispatch("prefs.set", { key: "theme", value: "otk-dark" });
   await rpc.dispatch("layout.patch", { rightCollapsed: true });
   const info = {
@@ -193,7 +203,11 @@ export async function loadPopulationScenario(large: boolean) {
             directory: native.directory,
             baseline: {},
           };
-        case "observe":
+        case "observe": {
+          const baseline = await rpc.dispatch(
+            "inbox.get",
+            {},
+          ) as import("@otk/protocol").InboxBaseline;
           return {
             population,
             projects,
@@ -202,8 +216,13 @@ export async function loadPopulationScenario(large: boolean) {
             requests,
             unrelatedMessages: population * 2,
             directory: native.directory,
-            count: [...app.index.values()].length,
+            // Q1 supersedes startup catalog membership; scalar seeds prove the complete native population.
+            count: Object.values(baseline.inbox.summaries ?? {}).reduce(
+              (sum, row) => sum + (row.sessionCount ?? 0),
+              0,
+            ),
           };
+        }
         case "productRpc":
           return await rpc.dispatch(frame.params.method, frame.params.params);
         case "endTest":

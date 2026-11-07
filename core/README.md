@@ -595,10 +595,12 @@ publication reservations and revision-consistent temporary scalar snapshots keep
 interleaved chunks coherent; neither contains message bodies. Committed ordered
 publications run in independent essential turns and release their reservations
 before resuming producers, so interactive pressure cannot pause a predecessor
-needed by an essential read or deletion. Startup seeds its first cached metadata
-before acknowledgement and schedules the remaining replay. A fresh catalog
-replaces that replay with all retained digest snapshots, including unchanged
-tombstones. Stop retires caller gates immediately and joins queued/waiting
+needed by an essential read or deletion. Startup acknowledges without replaying
+retained sessions. Project seeds stream grouped population facts under
+publication credit, after project-table identity proof. View demand hydrates
+only selected, task and mandatory keys and ancestors, including retained
+tombstones. Persisted unseen routing keys survive restart independently of list
+acquisition. Stop retires caller gates immediately and joins queued/waiting
 cleanup before closing the worker's single SQLite owner.
 
 The shipped composition selects this worker and passes its optional port to the

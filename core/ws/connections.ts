@@ -45,6 +45,7 @@ interface Connection {
   close(): void;
 }
 export interface FrameSource {
+  retained?(): readonly string[];
   /** Refresh connection-owned demand before admitting work for a changed view. */
   viewChanged?(): void;
   /** Feature-owned connection projection, with its own local revisions. */

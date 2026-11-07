@@ -30,6 +30,16 @@ export class ProjectSummaries {
   #authority: ProjectSummary["authority"] = "unknown";
   #catalog = false;
   #known = new Set<string>();
+  #seeds = new Map<string, import("@otk/harness").ProjectSeed>();
+  #seeded = false;
+  seed(values: readonly import("@otk/harness").ProjectSeed[]): void {
+    this.#seeded = true;
+    for (const value of values) {
+      this.#seeds.set(value.directory, value);
+      this.ensure(value.directory);
+      this.#update(value.directory);
+    }
+  }
   constructor(
     readonly marks: (id: string) => { seen: number; finish: number },
     readonly publish: (summary: ProjectSummary) => void,
@@ -45,7 +55,9 @@ export class ProjectSummaries {
     this.#known = new Set(directories);
     for (const directory of this.#known) this.ensure(directory);
     for (const [directory, entries] of this.#projects) {
-      if (entries.size || this.#known.has(directory)) continue;
+      if (
+        entries.size || this.#known.has(directory) || this.#seeds.has(directory)
+      ) continue;
       this.#projects.delete(directory);
       this.#totals.delete(directory);
       this.values.delete(directory);
@@ -180,12 +192,22 @@ export class ProjectSummaries {
       PROJECT_STATUS_PRIORITY.find((s) => (totals?.statuses.get(s) ?? 0) > 0) ??
         "idle";
     const knownCount = this.#catalog;
+    const seed = this.#seeds.get(directory);
     const summary: ProjectSummary = {
       directory,
+      hasSessions: seed?.hasSessions || count > 0,
       status: authority === "unknown" && status === "idle" ? null : status,
-      sessionCount: knownCount ? count : null,
-      unseenCount: knownCount ? unseen : null,
-      lastActivity: knownCount ? last : null,
+      sessionCount: seed
+        ? seed.sessionCount
+        : knownCount && !this.#seeded
+        ? count
+        : null,
+      unseenCount: seed || knownCount ? unseen : null,
+      lastActivity: seed
+        ? Math.max(seed.lastActivity ?? 0, last)
+        : knownCount && !this.#seeded
+        ? last
+        : null,
       authority,
     };
     if (JSON.stringify(summary) === JSON.stringify(previous)) return;

@@ -1,12 +1,13 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { cfg } from "../../support/config.ts";
+import { SessionIndex } from "@otk/harness";
 import { assertEquals } from "@std/assert";
 import type { HelperSummary } from "@otk/protocol";
 import { DigestBridge } from "../../../core/digest/bridge.ts";
 import { resources, tempDir, test } from "../../support/resources.ts";
 import { waitFor } from "../../support/opencode.ts";
 
-test("live catalog discovery resumes helper demand admitted before its metadata existed", async () => {
+test("keyed helper discovery resolves demand without reacquiring a population catalog", async () => {
   const statePath = await tempDir("helper-discovery-");
   const raw = (id: string, parentID?: string) => ({
     id,
@@ -18,10 +19,10 @@ test("live catalog discovery resumes helper demand admitted before its metadata 
   });
   let catalogs = 0,
     discover = false,
-    hintFinished = false,
     beforeHint = Infinity;
   const summaries = new Map<string, string>();
   const helpers = new Map<string, HelperSummary>();
+  const index = new SessionIndex();
   const server = Deno.serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     (request) => {
@@ -112,12 +113,18 @@ test("live catalog discovery resumes helper demand admitted before its metadata 
       retryms: 10,
       busyms: 100,
     },
-    publish(value) {
-      summaries.set(value.sessionID, value.delta.summary.state);
-      if (value.delta.helper) helpers.set(value.sessionID, value.delta.helper);
+    metadata(entries) {
+      for (const entry of entries) index.upsertMetadata(entry);
     },
-    pressure(value) {
-      if (catalogs > beforeHint && value.queued === 1) hintFinished = true;
+    publish(value) {
+      index.applyDigest({
+        id: value.sessionID,
+        revision: value.revision,
+        ...value.delta,
+      });
+      summaries.set(value.sessionID, value.delta.summary.state);
+      const helper = index.helper(value.sessionID);
+      if (helper) helpers.set(value.sessionID, helper);
     },
   });
   try {
@@ -134,15 +141,19 @@ test("live catalog discovery resumes helper demand admitted before its metadata 
       revision: 1,
       reason: "helper-hint",
     }]);
-    // The first admitted helper turn has really completed without a catalog
-    // identity. No timer or second hint is allowed to repair that lost demand.
-    await waitFor(() => hintFinished, Boolean);
+    // Q1 replaces catalog-dependent discovery with the hinted identity's authoritative point read.
+    await waitFor(
+      () => helpers.get("opcv1-child"),
+      (value) => value?.state === "ready",
+      5000,
+    );
+    assertEquals(catalogs, beforeHint);
     await bridge.transcriptMetadata(
       "opcv1-root",
       [],
       new AbortController().signal,
     );
-    assertEquals(helpers.has("opcv1-child"), false);
+    assertEquals(helpers.get("opcv1-child")?.toolCount, 1);
     discover = true;
     bridge.observe(1, [{
       sessionID: "opcv1-child",
@@ -164,7 +175,6 @@ test("live catalog discovery resumes helper demand admitted before its metadata 
     console.info("Helper discovery receipt", {
       catalogs,
       beforeHint,
-      hintFinished,
       summaries: [...summaries],
       helpers: [...helpers],
     });

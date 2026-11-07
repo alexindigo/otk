@@ -31,6 +31,8 @@ export function digestRowFloor(policy: Pick<DigestPolicy, "batch">): number {
 }
 export interface DirtySession {
   sessionID: string;
+  /** Scalar routing seed for an observed identity outside the demand window. */
+  metadata?: SessionMetadata;
   revision: number;
   reason:
     | "metadata"
@@ -47,6 +49,19 @@ export interface DigestPort extends ProviderReadPort {
   /** Optional publication budget for a consumer's live metadata reconciliation. */
   readonly publishrows?: number;
   start(): Promise<void>;
+  hydrate?(
+    ids: readonly string[],
+    signal: AbortSignal,
+    retained?: boolean,
+  ): Promise<void>;
+  projects?(
+    connection: number,
+    signal: AbortSignal,
+    publish?: (projects: readonly import("./types.ts").ProjectSeed[]) => void,
+    directory?: string,
+  ): Promise<
+    { projects: import("./types.ts").ProjectSeed[]; hints?: string[] }
+  >;
   catalog(
     connection: number,
     signal: AbortSignal,

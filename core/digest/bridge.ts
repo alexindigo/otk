@@ -137,10 +137,11 @@ export class DigestBridge implements DigestPort {
     if (worker !== this.#worker) return;
     const identities = [...this.#sequences.keys()];
     this.#sequences.clear();
-    worker.terminate();
     this.#worker = undefined;
     this.#running = false;
     this.#start = undefined;
+    // Fence callbacks before disposal, including reentrant worker errors.
+    worker.terminate();
     this.#fail(error);
     this.options.unready?.(identities);
     for (const shared of this.#shared.values()) shared.controller.abort(error);
@@ -230,7 +231,7 @@ export class DigestBridge implements DigestPort {
       }
       if (
         data.t === "digest" || data.t === "digests" || data.t === "catalog" ||
-        data.t === "detail" || data.t === "read.result"
+        data.t === "detail" || data.t === "read.result" || data.t === "projects"
       ) {
         const workms = performance.now() - start;
         this.#task(() => {
@@ -407,29 +408,70 @@ export class DigestBridge implements DigestPort {
       }
     };
   }
+  async hydrate(
+    ids: readonly string[],
+    signal: AbortSignal,
+    retained = false,
+  ): Promise<void> {
+    await this.start();
+    await this.#lease(
+      `hydrate:${retained}:${JSON.stringify([...new Set(ids)].sort())}`,
+      signal,
+      (owned) =>
+        this.#request(
+          { t: "hydrate", sessions: [...new Set(ids)], retained },
+          owned,
+          (message) =>
+            message.t === "accepted" ? { value: undefined } : undefined,
+        ),
+    );
+  }
+  #catalogRequested = false;
+  async projects(
+    connection: number,
+    signal: AbortSignal,
+    publish?: (projects: readonly import("@otk/harness").ProjectSeed[]) => void,
+    directory?: string,
+  ): Promise<
+    { projects: import("@otk/harness").ProjectSeed[]; hints?: string[] }
+  > {
+    await this.start();
+    this.#connect(connection);
+    return await this.#lease(
+      `projects:${connection}:${directory ?? ""}`,
+      signal,
+      (owned) => {
+        const projects: import("@otk/harness").ProjectSeed[] = [];
+        let part = 0;
+        return this.#request(
+          { t: "projects", connection, directory },
+          owned,
+          (message) => {
+            if (message.t !== "projects") return;
+            if (message.part !== part++) {
+              throw new Error(
+                "Out-of-order project seeds",
+              );
+            }
+            projects.push(...message.projects);
+            publish?.(message.projects);
+            return message.last
+              ? { value: { projects, hints: message.hints } }
+              : undefined;
+          },
+        );
+      },
+    );
+  }
   async catalog(
     connection: number,
     signal: AbortSignal,
   ): Promise<
     { entries: SessionMetadata[]; authoritative: boolean; hints?: string[] }
   > {
+    this.#catalogRequested = true;
     await this.start();
-    if (connection > this.#connection) {
-      this.#dirty.clear();
-      this.#fineKeys = 0;
-    }
-    this.#connection = Math.max(this.#connection, connection);
-    this.#reconcile = false;
-    for (const [id, value] of this.#intents) {
-      if (value.connection !== this.#connection) this.#intents.delete(id);
-    }
-    for (const [id, value] of this.#deletions) {
-      if (value.connection !== this.#connection) {
-        this.#deletions.delete(id);
-        value.done.resolve();
-      }
-    }
-    this.#scheduleDirty();
+    this.#connect(connection);
     return await this.#lease(`catalog:${connection}`, signal, (owned) => {
       const entries: SessionMetadata[] = [], hints: string[] = [];
       let part = 0, hasHints = false;
@@ -455,6 +497,24 @@ export class DigestBridge implements DigestPort {
         }
       });
     });
+  }
+  #connect(connection: number): void {
+    if (connection > this.#connection) {
+      this.#dirty.clear();
+      this.#fineKeys = 0;
+    }
+    this.#connection = Math.max(this.#connection, connection);
+    this.#reconcile = false;
+    for (const [id, value] of this.#intents) {
+      if (value.connection !== this.#connection) this.#intents.delete(id);
+    }
+    for (const [id, value] of this.#deletions) {
+      if (value.connection !== this.#connection) {
+        this.#deletions.delete(id);
+        value.done.resolve();
+      }
+    }
+    this.#scheduleDirty();
   }
   async detail(
     sessionID: string,
@@ -700,16 +760,19 @@ export class DigestBridge implements DigestPort {
       ) return;
       this.#reconcile = false;
       const worker = this.#worker;
-      void this.catalog(this.#connection, new AbortController().signal).catch(
-        (error) => {
-          if (worker && worker === this.#worker && !this.#stop) {
-            this.#retire(
-              worker,
-              error instanceof Error ? error : new Error(String(error)),
-            );
-          }
-        },
-      );
+      const signal = new AbortController().signal;
+      void (this.#catalogRequested
+        ? this.catalog(this.#connection, signal)
+        : this.projects(this.#connection, signal)).catch(
+          (error) => {
+            if (worker && worker === this.#worker && !this.#stop) {
+              this.#retire(
+                worker,
+                error instanceof Error ? error : new Error(String(error)),
+              );
+            }
+          },
+        );
     });
   }
   observe(connection: number, dirty: readonly DirtySession[]): void {
@@ -730,6 +793,7 @@ export class DigestBridge implements DigestPort {
       this.#fineKeys += (retained?.length ?? 0) - (old?.messages?.length ?? 0);
       this.#dirty.set(item.sessionID, {
         ...item,
+        metadata: item.metadata ?? old?.metadata,
         revision: Math.max(old?.revision ?? 0, item.revision),
         messages: retained,
         reasons: new Set([...(old?.reasons ?? []), item.reason]),
@@ -772,6 +836,7 @@ export class DigestBridge implements DigestPort {
               revision: pending.revision,
               reason,
               messages: pending.messages,
+              metadata: pending.metadata,
             });
           }
         }

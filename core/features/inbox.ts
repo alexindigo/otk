@@ -86,6 +86,11 @@ export class InboxFeature implements FrameSource {
     return value;
   }
   #views = new Map<string, () => InboxBaseline>();
+  retained(): readonly string[] {
+    return [...this.#finishes].filter(([id, finish]) =>
+      finish > (this.#seen.get(this.user)?.get(id) ?? 0)
+    ).map(([id]) => id);
+  }
   #directory(view: ViewLease): string | undefined {
     return view.directory ??
       (view.selected
@@ -189,8 +194,21 @@ export class InboxFeature implements FrameSource {
       ) rowsChanged();
     });
     const stopRemoval = this.index.observeRemoval(rowsChanged);
+    const hydrate = async (signal?: AbortSignal) => {
+      const scope = view();
+      const keys = [
+        ...new Set([
+          ...this.keys(scope),
+          ...scope.crumbs,
+          ...scope.rows,
+          ...(scope.selected ? [scope.selected] : []),
+        ]),
+      ];
+      if (keys.length) await this.hydrate?.(keys, signal);
+    };
     return {
-      snapshot: () => {
+      snapshot: async (signal) => {
+        await hydrate(signal);
         const value = baseline();
         return { t: "inbox.snapshot", ...value };
       },
@@ -241,6 +259,10 @@ export class InboxFeature implements FrameSource {
     readonly promote?: (sessionID: string) => void,
     readonly snapshotRows?: number,
     readonly snapshotPending?: number,
+    readonly hydrate?: (
+      ids: readonly string[],
+      signal?: AbortSignal,
+    ) => Promise<void>,
   ) {
     this.#identity();
     this.#tasks = new Map(stores.tasks.list().map((task) => [task.id, task]));
@@ -290,6 +312,7 @@ export class InboxFeature implements FrameSource {
       }),
       index.observeRemoval((id) => this.summaries.remove(id)),
       index.observeAuthority((value) => this.summaries.authority(value)),
+      index.observeSeeds((values) => this.summaries.seed(values)),
       stores.projects.listen((change) => {
         this.#identity();
         for (const project of change.upsert) {
@@ -796,6 +819,10 @@ export class InboxFeature implements FrameSource {
       },
       handler: (ctx, p) =>
         localWrite(ctx, (tx) => {
+          if (!s.projects.find(user(), p.directory)) {
+            s.projects.discover(p.directory, tx);
+            s.projects.materialize(user(), tx);
+          }
           s.projects.inactive(user(), p.directory, p.inactive, tx);
           for (const entry of this.index.values()) {
             if (entry.directory === p.directory) {
