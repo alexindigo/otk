@@ -14,7 +14,7 @@ export interface NotificationContext {
 export function notificationPolicy(
   context: () => NotificationContext,
 ): NotificationPolicy {
-  return (note, available, fresh) => {
+  return (note, available, fresh, dismissed) => {
     const ctx = context(), prefs = ctx.prefs;
     if (!note.sessionRef) return { channels: ["toast"] };
     const viewing = ctx.focused && ctx.visible &&
@@ -22,11 +22,12 @@ export function notificationPolicy(
       ctx.open?.session === note.sessionRef.session;
     if (viewing) return { channels: [] };
     const channels: string[] = [];
-    const os = !(ctx.focused && ctx.visible) && prefs["notify.os"] &&
+    const os = !dismissed && !(ctx.focused && ctx.visible) &&
+      prefs["notify.os"] &&
       available("os");
     if (os) channels.push("os");
-    else if (prefs["notify.toast"]) channels.push("toast");
-    if (fresh && prefs["notify.sound"]) channels.push("sound");
+    else if (!dismissed && prefs["notify.toast"]) channels.push("toast");
+    if (!dismissed && fresh && prefs["notify.sound"]) channels.push("sound");
     if (prefs["notify.badge"]) channels.push("badge");
     return {
       channels,

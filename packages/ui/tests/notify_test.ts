@@ -33,12 +33,18 @@ Deno.test("toast consumer keeps keyed active/error replacements past old transie
       title: "Active input",
       actions: [],
     });
+    assertEquals(toast.model.state.items.map((item) => item.note.id), [
+      "input",
+      "transient",
+      "slot",
+    ]);
     await new Promise((resolve) => setTimeout(resolve, 6100));
     assertEquals(
       toast.model.state.items.map((item) => [item.note.id, item.note.title]),
-      [["slot", "Sticky replacement"], ["input", "Active input"]],
+      [["input", "Active input"], ["slot", "Sticky replacement"]],
     );
-    toast.model.state.items[0].delivery.dismiss();
+    toast.model.state.items.find((item) => item.note.id === "slot")!.delivery
+      .dismiss();
     hub.refresh();
     assertEquals(toast.model.state.items.map((item) => item.note.id), [
       "input",

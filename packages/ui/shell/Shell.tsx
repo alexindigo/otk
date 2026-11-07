@@ -804,6 +804,9 @@ export default function Shell(
           <Toasts
             model={notifications.toast}
             detail={permissionNotificationDetail}
+            onMore={() =>
+              void saveLayout({ rightCollapsed: false, rightView: "sessions" })
+                .catch(fail)}
           />
           <DialogHost onChange={setDialog} />
           <ContextMenu root={root} />

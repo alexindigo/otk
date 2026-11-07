@@ -9,6 +9,7 @@ import {
   NotificationTriggers,
   oldestPermission,
   permissionNoteDetail,
+  requestIdle,
   type Selection,
   type SidecarConnection,
 } from "@otk/client";
@@ -86,8 +87,45 @@ export function applicationNotifications(input: {
   };
   const triggers = new NotificationTriggers(
     (incoming) => {
+      if (incoming.kind === "permission" || incoming.kind === "question") {
+        const ref = incoming.sessionRef!;
+        incoming = {
+          ...incoming,
+          context: requestIdle(
+            input.entry(ref.sidecar, ref.session)?.timeUpdated,
+            Date.now(),
+          ).label,
+        };
+      }
       candidates.set(incoming.id, incoming);
       const ref = incoming.sessionRef!;
+      if (
+        incoming.kind === "question" &&
+        input.connection(ref.sidecar).supports("questions")
+      ) {
+        void input.connection(ref.sidecar).rpc.call("question.list", {
+          sessionID: ref.session,
+        }).then((requests) => {
+          if (candidates.get(incoming.id) !== incoming) return;
+          const request = requests[0];
+          if (!request) return retract(incoming.id);
+          const enriched = {
+            ...incoming,
+            dismissalKey: `question/${request.id}`,
+            context: requestIdle(
+              input.entry(ref.sidecar, request.sessionID)?.timeUpdated,
+              Date.now(),
+            ).label,
+          };
+          candidates.set(incoming.id, enriched);
+          publish(enriched);
+        }, (error) => {
+          if (candidates.get(incoming.id) !== incoming) return;
+          publish(incoming);
+          message("error", errorMessage(error));
+        });
+        return;
+      }
       if (
         incoming.kind !== "permission" ||
         !input.connection(ref.sidecar).supports("permissions")
@@ -114,9 +152,18 @@ export function applicationNotifications(input: {
         const enriched: Note = request
           ? {
             ...incoming,
+            dismissalKey: `permission/${request.id}`,
+            context: requestIdle(
+              input.entry(ref.sidecar, request.sessionID)?.timeUpdated,
+              Date.now(),
+            ).label,
             detail: permissionNoteDetail(request),
             actions: [...incoming.actions, {
               label: "Allow once",
+              description: requestIdle(
+                input.entry(ref.sidecar, request.sessionID)?.timeUpdated,
+                Date.now(),
+              ).resume,
               command: "permission.reply",
               args: {
                 sidecarId: ref.sidecar,

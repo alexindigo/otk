@@ -124,7 +124,7 @@ test(
     await expect(note).toContainText("Session done");
     expect(await notes(page, "notes.length")).toBe(0);
     await restore();
-    await note.locator(".otk-toast-message").click();
+    await note.getByRole("button", { name: "Dismiss", exact: true }).click();
     await expect(note).toHaveCount(0);
     await badge(page, 1);
     await openSession(state, page, b.id);

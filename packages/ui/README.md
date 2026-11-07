@@ -1080,9 +1080,16 @@ Consumers select `registerToastChannel`, `registerOsChannel`,
 client hub. Registrations own their presentation and teardown; they import no
 application, RPC implementation or native backend. `Toasts` renders the returned
 toast model: information/done chips expire after six seconds, keyed input chips
-are active and errors sticky. Message buttons dismiss presentation; action
-buttons use delivery-scoped public command IDs. Attention is cleared by actual
-viewing/resolution, not by dismissal or command promise completion.
+are active and errors sticky. Toast owns a non-scrolling Surface body. The
+viewport-fitted stack shows at most three cards, newest first, and delegates its
+overflow row to an injected Sessions-opening callback. Opening that view
+detaches the stack so it cannot cover the session lamps. Each card has a square
+top-right close slot and a trailing Dismiss action. Both dismiss presentation;
+action buttons use delivery-scoped public command IDs. Permission details use
+the shared summary's compact, single-line target with the full text in its
+title. Session activity labels and stale-resume descriptions come from the
+client formatter. Attention is cleared by actual viewing/resolution, not by
+dismissal or command promise completion.
 
 The OS channel uses secure-context browser `Notification`, tag replacement,
 silent OS presentation and a focus/default-command click handler. `request`

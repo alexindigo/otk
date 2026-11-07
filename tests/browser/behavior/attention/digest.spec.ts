@@ -18,14 +18,15 @@ test(
       await scenario(state, "hold", "tstv1-note");
       await expect(row).toHaveAttribute("data-status", "busy");
       await scenario(state, "release", "tstv1-note");
-      await expect(note.locator(".otk-toast-actions button")).toBeVisible();
+      await expect(note.getByRole("button", { name: "Open", exact: true }))
+        .toBeVisible();
       await badge(page, 1);
     };
     await finish();
     await scenario(state, "succeed");
     await expect(row.locator(".otk-session-cost")).toHaveText("$0.75");
     await badge(page, 1);
-    await note.locator(".otk-toast-actions button").click();
+    await note.getByRole("button", { name: "Open", exact: true }).click();
     await expect(page).toHaveURL(/tstv1-note$/);
     await expect(note).toHaveCount(0);
     await badge(page, 0);

@@ -6,6 +6,7 @@ import { type Element, Show } from "solid-js";
 /** Internal boundary and flow owner. Only overlay specialisations use this. */
 export default function Surface(props: {
   density?: "menu";
+  scrollable?: boolean;
   title?: Element;
   actions?: Element;
   children: Element;
@@ -17,7 +18,14 @@ export default function Surface(props: {
       <Show when={props.title}>
         <header class="otk-surface-title">{props.title}</header>
       </Show>
-      <div class={[scrollRegion(), "otk-surface-body"]}>{props.children}</div>
+      <div
+        class={[
+          props.scrollable !== false && scrollRegion(),
+          "otk-surface-body",
+        ]}
+      >
+        {props.children}
+      </div>
       <Show when={props.actions}>
         <footer class="otk-surface-actions">{props.actions}</footer>
       </Show>

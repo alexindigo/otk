@@ -92,7 +92,7 @@ test(
     await expect(note).toContainText("Allow once");
     await expect(note).toHaveCount(1);
     await collapsed(page);
-    await note.locator(".otk-toast-actions button").last().click();
+    await note.getByRole("button", { name: "Allow once", exact: true }).click();
     await expect.poll(async () => {
       const rows = await state.controller.call<
         {

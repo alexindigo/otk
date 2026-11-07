@@ -10,7 +10,7 @@ export default function Toast(props: {
 }): Element {
   return (
     <article class="otk-toast" data-note={props.id} data-kind={props.kind}>
-      <Surface>{props.children}</Surface>
+      <Surface scrollable={false}>{props.children}</Surface>
     </article>
   );
 }

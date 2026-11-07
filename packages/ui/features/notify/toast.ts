@@ -33,7 +33,7 @@ export function registerToastChannel(
     deliver(note, delivery) {
       retract(note.id);
       store.update((draft) => {
-        draft.items = [...draft.items, { note, delivery }];
+        draft.items = [{ note, delivery }, ...draft.items];
       });
       if (note.kind === "info" || note.kind === "done") {
         timers.set(note.id, setTimeout(() => delivery.dismiss(), 6000));

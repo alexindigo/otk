@@ -21,7 +21,6 @@ test(
       const summary = note.locator(".otk-permission-summary");
       await expect(summary).toContainText(kind);
       await expect(summary).toContainText(target);
-      const text = await summary.textContent();
       expect(
         await summary.evaluate((s) => {
           const r = s.getBoundingClientRect(),
@@ -33,7 +32,9 @@ test(
       await note.locator(".otk-toast-actions button").first().click();
       await expect(page).toHaveURL(new RegExp(`${b.id}$`));
       await expect(page.locator(".otk-permission-dock .otk-permission-summary"))
-        .toHaveText(text!);
+        .toContainText(target);
+      await expect(page.locator(".otk-permission-dock .otk-permission-summary"))
+        .toContainText(kind);
       await openSession(state, page, a.id);
       await expect(page.locator("textarea[name=prompt]")).toHaveValue(
         "Keep this unsent draft",

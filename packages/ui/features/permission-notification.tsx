@@ -7,7 +7,7 @@ import PermissionSummary from "../components/PermissionSummary.tsx";
 export function permissionNotificationDetail(note: Note) {
   return (
     <Show when={notePermission(note)}>
-      {(request) => <PermissionSummary request={request()} />}
+      {(request) => <PermissionSummary request={request()} compact />}
     </Show>
   );
 }

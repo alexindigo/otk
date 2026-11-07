@@ -11,8 +11,26 @@ const detailOf = <K extends PermissionDetail["kind"]>(
 
 /** The exact action and requested scope, shared by every approval surface. */
 export default function PermissionSummary(
-  props: { request: PermissionRequest },
+  props: { request: PermissionRequest; compact?: boolean },
 ) {
+  if (props.compact) {
+    const target = () => {
+      const detail = props.request.detail;
+      return detail.kind === "bash"
+        ? [detail.command, detail.cwd].filter(Boolean).join(" | ")
+        : detail.kind === "edit"
+        ? detail.files.map((file) => file.path).join(", ")
+        : detail.summary;
+    };
+    return (
+      <div class="otk-permission-summary otk-permission-compact">
+        <span class="otk-permission-kind">{props.request.kind}</span>
+        <span class="otk-control-label otk-path" title={target()}>
+          {target()}
+        </span>
+      </div>
+    );
+  }
   return (
     <div class="otk-permission-summary">
       <span class="otk-permission-kind">{props.request.kind}</span>

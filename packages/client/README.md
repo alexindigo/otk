@@ -1019,17 +1019,21 @@ rows, tabs, badges, toasts and takeovers consume this same projection. The pure
 `NotificationHub(policy, run, error)` is an empty framework-free registry.
 Owners register a `NotificationChannel` through `registerChannel`, returning an
 identity-bound release. A data-only `Note` has an ID, kind, optional
-sidecar/root reference and command-ID actions. `publish` replaces the ID;
-`replace(previous,
-input)` enriches only the current identity without replaying
-sound. Delivery ports scope `current`, `dismiss`, `invoke` and `unavailable` to
-the exact note and channel registration. `currentNote` and `invokeDefault`
-retain a live logical note's default action across focus-triggered presentation
-retraction, including a native click queued after focus. Viewing, replacement
-and channel release invalidate that port. Stale timers, clicks and async lookups
-cannot consume a newer note. Invocation never assumes that a resolved command
-actually selected the session. Consumers call `viewed` after real guarded
-selection and focus.
+sidecar/root reference and command-ID actions. Native input notes also carry a
+request-scoped dismissal key. The hub retains dismissed request identities
+across presentation replacement and connection resets; a new request ID can
+notify again. The shipped policy suppresses dismissed presentation and sound
+while the badge and canonical blocked attention remain. `publish` replaces the
+ID; `replace(previous,
+input)` enriches only the current identity without
+replaying sound. Delivery ports scope `current`, `dismiss`, `invoke` and
+`unavailable` to the exact note and channel registration. `currentNote` and
+`invokeDefault` retain a live logical note's default action across
+focus-triggered presentation retraction, including a native click queued after
+focus. Viewing, replacement and channel release invalidate that port. Stale
+timers, clicks and async lookups cannot consume a newer note. Invocation never
+assumes that a resolved command actually selected the session. Consumers call
+`viewed` after real guarded selection and focus.
 
 `NotificationTriggers.entriesChanged(server,changes)` consumes accepted shared
 projected deltas. It retains only per-root comparison facts and current note

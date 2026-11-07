@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 export interface NoteAction {
   readonly label: string;
+  readonly description?: string;
   readonly command: string;
   readonly args?: unknown;
   readonly default?: boolean;
@@ -11,6 +12,9 @@ export interface Note {
   readonly sessionRef?: { readonly sidecar: string; readonly session: string };
   readonly title: string;
   readonly body?: string;
+  readonly context?: string;
+  /** Native request identity, distinct from the replaceable root note ID. */
+  readonly dismissalKey?: string;
   /** Feature-owned, structured-cloneable detail; channels may ignore it. */
   readonly detail?: unknown;
   readonly actions: readonly NoteAction[];
@@ -38,6 +42,7 @@ export type NotificationPolicy = (
   note: Note,
   available: (channel: string) => boolean,
   fresh: boolean,
+  dismissed?: boolean,
 ) => NotificationRoute;
 interface ActiveNote {
   note: Note;
@@ -48,6 +53,7 @@ interface ActiveNote {
 export class NotificationHub {
   #channels = new Map<string, NotificationChannel>();
   #notes = new Map<string, ActiveNote>();
+  #dismissed = new Map<string, Map<string, Set<string>>>();
   constructor(
     readonly policy: NotificationPolicy,
     readonly run: (command: string, args?: unknown) => Promise<unknown>,
@@ -93,7 +99,11 @@ export class NotificationHub {
     const active: ActiveNote = {
       note,
       deliveries: new Map(),
-      dismissed: new Set(),
+      dismissed: new Set(
+        input.dismissalKey
+          ? this.#dismissed.get(input.id)?.get(input.dismissalKey)
+          : [],
+      ),
     };
     this.#notes.set(note.id, active);
     this.#route(active, fresh);
@@ -132,6 +142,7 @@ export class NotificationHub {
   }
   stop(): void {
     for (const id of [...this.#notes.keys()]) this.retract(id);
+    this.#dismissed.clear();
   }
   #dismiss(active: ActiveNote, id: string): void {
     if (!active.deliveries.delete(id)) return;
@@ -144,7 +155,12 @@ export class NotificationHub {
     }
   }
   #route(active: ActiveNote, fresh: boolean): void {
-    const route = this.policy(active.note, (id) => this.available(id), fresh);
+    const route = this.policy(
+      active.note,
+      (id) => this.available(id),
+      fresh,
+      active.dismissed.size > 0,
+    );
     for (const id of [...active.deliveries.keys()]) {
       if (!route.channels.includes(id)) this.#dismiss(active, id);
     }
@@ -183,6 +199,15 @@ export class NotificationHub {
       dismiss: () => {
         if (current()) {
           active.dismissed.add(id);
+          if (active.note.dismissalKey) {
+            const requests = this.#dismissed.get(active.note.id) ??
+              new Map<string, Set<string>>();
+            const channels = requests.get(active.note.dismissalKey) ??
+              new Set<string>();
+            channels.add(id);
+            requests.set(active.note.dismissalKey, channels);
+            this.#dismissed.set(active.note.id, requests);
+          }
           this.#dismiss(active, id);
         }
       },

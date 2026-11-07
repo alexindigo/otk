@@ -46,7 +46,7 @@ test(
         });
       }),
     ).toBe(true);
-    await note.locator(".otk-toast-actions button").click();
+    await note.getByRole("button", { name: "Open", exact: true }).click();
     await expect(page).toHaveURL(new RegExp(`${b.id}$`));
     await badge(page, 0);
     await openSession(state, page, a.id);

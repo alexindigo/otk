@@ -31,3 +31,6 @@
 .otk-permission-summary ul {
   list-style-type: disc;
 }
+.otk-permission-compact {
+  gap: 4px;
+}
