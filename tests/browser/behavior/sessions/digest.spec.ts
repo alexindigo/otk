@@ -2,7 +2,7 @@
 import { expect, test } from "../../fixtures/evidence.ts";
 import { isolatedTest } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
-import { prompt } from "../../pages/transcript.ts";
+import { hoverCompletedUsage, prompt } from "../../pages/transcript.ts";
 import { contextMenu, sessionContext } from "../../pages/sessions.ts";
 
 test(
@@ -37,7 +37,7 @@ test(
     );
     expect(frames.sent.filter(({ frame }) => frame.method === "usage.get"))
       .toHaveLength(0);
-    await page.locator(".otk-turn-usage-trigger").hover();
+    await hoverCompletedUsage(page);
     await expect(page.locator(".otk-usage-breakdown tbody tr").first())
       .toBeVisible();
     expect(frames.sent.filter(({ frame }) => frame.method === "usage.get"))

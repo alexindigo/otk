@@ -18,6 +18,22 @@ export async function nativeIdle(state: TestState, id: string) {
   ).toBe(true);
 }
 
+/** Native idle can precede the final transcript footer layout. */
+export async function hoverCompletedUsage(page: Page) {
+  await expect(page.locator(".otk-turn-time").last()).toHaveText(
+    /^\d+(?:\.\d+)?s$/,
+  );
+  await expect(page.locator(".otk-response-progress")).toHaveCount(0);
+  await page.evaluate(() =>
+    document.fonts.ready.then(() =>
+      new Promise<void>((resolve) =>
+        requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+      )
+    )
+  );
+  await page.locator(".otk-turn-usage > button").hover();
+}
+
 export async function prompt(page: Page, text: string) {
   const input = page.locator("textarea[name=prompt]");
   await input.fill(text);

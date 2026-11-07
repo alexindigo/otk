@@ -3,7 +3,7 @@ import type { AssistantMessage, Message } from "@otk/protocol";
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession } from "../../fixtures/wire.ts";
-import { prompt } from "../../pages/transcript.ts";
+import { hoverCompletedUsage, prompt } from "../../pages/transcript.ts";
 test.use({ profile: "messages-priced" });
 test("messages.priced-native-multistep-usage-display-persistence", {
   tag: ["@messages", "@contracts"],
@@ -74,7 +74,7 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   const catalog = await state.product("models.list", { sessionID: session.id }),
     price = catalog.providers.find((p) => p.id === "priced")!.models[0].cost!;
   expect(price).toEqual({ input: 2, output: 4, cache: { read: .5, write: 3 } });
-  await trigger.hover();
+  await hoverCompletedUsage(page);
   await expect(page.locator(".otk-turn-usage :popover-open")).toBeAttached();
   const rows = page.locator(".otk-usage-breakdown tbody tr");
   await expect(rows).toHaveCount(3);
@@ -172,7 +172,7 @@ test("messages.priced-native-multistep-usage-display-persistence", {
   await expect(page.locator(".otk-turn-usage :popover-open")).toHaveCount(0);
   await expect(page.locator("textarea[name=prompt]")).toBeFocused();
   await page.mouse.move(1, 1);
-  await trigger.hover();
+  await hoverCompletedUsage(page);
   await expect(page.locator(".otk-turn-usage :popover-open")).toBeAttached();
   await page.mouse.move(1, 1);
   await expect(page.locator(".otk-turn-usage :popover-open")).toHaveCount(0);
@@ -200,7 +200,7 @@ test("messages.priced-native-multistep-usage-display-persistence", {
     "aria-valuenow",
     "33",
   );
-  await trigger.hover();
+  await hoverCompletedUsage(page);
   await expect(page.locator(".otk-turn-usage :popover-open")).toBeAttached();
   expect(
     await trigger.evaluate((button) =>
