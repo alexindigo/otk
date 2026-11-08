@@ -1069,3 +1069,9 @@ messages use the in-page surface. The hub itself knows no concrete channel,
 application, backend, browser or UI framework. The standalone Deno notification
 consumer routes external job acceptance through the public command hub and
 proves stale-note isolation.
+
+Shipped completion notes borrow accepted inbox finish clocks through the same
+projected entry deltas. They do not require a busy frame that a newer view epoch
+may have superseded. A finish can precede its routing metadata; delivery waits
+for that root, deduplicates its clock across eviction and stays silent for
+historical baselines. Standalone index-only consumers retain status-edge input.

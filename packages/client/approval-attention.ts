@@ -13,6 +13,7 @@ export interface EntryChange {
   id: string;
   before?: IndexEntry;
   after?: IndexEntry;
+  completedAt?: number;
 }
 export interface EntryChanges {
   generation: string;
@@ -24,6 +25,7 @@ export interface AttentionProjection {
   get(id: string): IndexEntry | undefined;
   configure(enabled: readonly string[], linked: boolean): void;
   update(ids: readonly string[], baseline?: boolean): void;
+  finished(id: string, time: number, baseline?: boolean): void;
   subscribe(listener: (changes: EntryChanges) => void): () => void;
   reset(): void;
   stop(): void;
@@ -33,9 +35,12 @@ export function createAttentionProjection(o: {
   entry(id: string): IndexEntry | undefined;
   ids(): readonly string[];
   children(id: string): readonly string[];
+  completions?: boolean;
   factory?: StateFactory;
 }): AttentionProjection {
   const values = new Map<string, IndexEntry>();
+  const finishClocks = new Map<string, number>();
+  const completed = new Map<string, number>();
   const covered = new Set<string>();
   const boundaries = new Map<string, { count: number; ancestors: string[] }>();
   const subtracted = new Map<string, number>();
@@ -91,6 +96,7 @@ export function createAttentionProjection(o: {
     ids: readonly string[],
     baseline = false,
     forceSubtree = false,
+    completion = false,
   ) => {
     if (stopped) return;
     waitingCache = new Map();
@@ -159,8 +165,16 @@ export function createAttentionProjection(o: {
         : raw);
       if (after) values.set(id, after);
       else values.delete(id);
-      if (rebuild || facts(before) !== facts(after)) {
-        changes.push({ id, before, after });
+      if (
+        rebuild || completion && touched.has(id) ||
+        facts(before) !== facts(after)
+      ) {
+        changes.push({
+          id,
+          before,
+          after,
+          ...(o.completions ? { completedAt: completed.get(id) ?? 0 } : {}),
+        });
       }
     }
     initialized = true;
@@ -196,6 +210,14 @@ export function createAttentionProjection(o: {
       else update(dirty, false, true);
     },
     update,
+    finished(id, time, baseline = false) {
+      const previous = finishClocks.get(id);
+      if (stopped || previous !== undefined && time <= previous) return;
+      finishClocks.set(id, time);
+      if (baseline && previous === undefined) return;
+      completed.set(id, time);
+      update([id], false, false, true);
+    },
     subscribe(listener) {
       if (stopped) return () => {};
       listeners.add(listener);
@@ -205,12 +227,16 @@ export function createAttentionProjection(o: {
     },
     reset() {
       initialized = false;
+      finishClocks.clear();
+      completed.clear();
       generation = crypto.randomUUID();
       revision = 0;
     },
     stop() {
       stopped = true;
       values.clear();
+      finishClocks.clear();
+      completed.clear();
       covered.clear();
       boundaries.clear();
       subtracted.clear();

@@ -90,7 +90,7 @@ test(
 test(
   "attention.notification-denied-permission-persists-blocked-and-hidden-toast-fallback",
   { tag: ["@attention", "@isolated"] },
-  async ({ isolatedState: state, page }) => {
+  async ({ isolatedState: state, page }, info) => {
     const a = await seed(state, "Open A"),
       b = await seed(state, "Denied background");
     await instrumentNotifications(page);
@@ -122,6 +122,10 @@ test(
     await finish(state, b.id);
     const note = page.locator(toast(b.id));
     await expect(note).toContainText("Session done");
+    await info.attach("notification-completion", {
+      body: await page.screenshot({ fullPage: true }),
+      contentType: "image/png",
+    });
     expect(await notes(page, "notes.length")).toBe(0);
     await restore();
     await note.getByRole("button", { name: "Dismiss", exact: true }).click();

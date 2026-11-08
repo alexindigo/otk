@@ -34,7 +34,12 @@ const facts = (entry?: IndexEntry): Facts | undefined =>
 export class NotificationTriggers {
   #connections = new Map<
     string,
-    { rev: number; generation?: string; roots: Map<string, Facts> }
+    {
+      rev: number;
+      generation?: string;
+      roots: Map<string, Facts>;
+      finishes: Map<string, number>;
+    }
   >();
   #kinds = new Map<string, Note["kind"]>();
   #index?: ClientIndex;
@@ -66,12 +71,23 @@ export class NotificationTriggers {
         rev: change.revision,
         generation: change.generation,
         roots: new Map(),
+        finishes: new Map(),
       };
       this.#connections.set(sidecar, state);
     } else if (change.revision <= state.rev) return;
     state.rev = change.revision;
     for (const entry of change.changes) {
-      this.#compare(sidecar, entry.id, facts(entry.after), baseline);
+      const current = facts(entry.after);
+      if (entry.after && !current && entry.completedAt) {
+        state.finishes.set(entry.id, entry.completedAt);
+      }
+      this.#compare(
+        sidecar,
+        entry.id,
+        current,
+        baseline,
+        entry.completedAt,
+      );
     }
   }
   // Standalone frame consumers borrow the ordinary canonical reducer as before.
@@ -99,7 +115,13 @@ export class NotificationTriggers {
   }
   #refresh(sidecar: string, rev: number): void {
     const previous = this.#connections.get(sidecar);
-    if (!previous) this.#connections.set(sidecar, { rev, roots: new Map() });
+    if (!previous) {
+      this.#connections.set(sidecar, {
+        rev,
+        roots: new Map(),
+        finishes: new Map(),
+      });
+    }
     const rows = this.project(sidecar, [
       ...(this.read?.(sidecar) ?? this.#index?.partition(sidecar) ?? []),
     ]);
@@ -116,6 +138,7 @@ export class NotificationTriggers {
     session: string,
     entry: Facts | undefined,
     baseline: boolean,
+    completedAt?: number,
   ): void {
     const state = this.#connections.get(sidecar)!;
     const previous = state.roots.get(session),
@@ -134,7 +157,15 @@ export class NotificationTriggers {
       if (this.#kinds.delete(id)) this.retract(id);
       return;
     }
-    if (baseline || !previous && !entry.permissions && !entry.questions) return;
+    const finished = completedAt !== undefined &&
+      completedAt > (state.finishes.get(session) ?? 0);
+    if (completedAt && (baseline || entry.status === "idle")) {
+      state.finishes.set(session, completedAt);
+    }
+    if (
+      baseline ||
+      !previous && !finished && !entry.permissions && !entry.questions
+    ) return;
     const pending = this.#kinds.get(id);
     const resolved = (pending === "permission" && !entry.permissions) ||
       (pending === "question" && !entry.questions) ||
@@ -156,7 +187,8 @@ export class NotificationTriggers {
         ? "permission"
         : entry.questions > old.questions
         ? "question"
-        : old.status !== "idle" && entry.status === "idle" && !entry.error &&
+        : (completedAt === undefined ? old.status !== "idle" : finished) &&
+            entry.status === "idle" && !entry.error &&
             !entry.permissions && !entry.questions
         ? "done"
         : remaining;

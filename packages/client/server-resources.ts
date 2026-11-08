@@ -394,9 +394,15 @@ export function createServerResources(o: {
         entry: (sessionID) => entry(id, sessionID),
         ids: () => o.index.ids(id),
         children: (sessionID) => o.index.children(id, sessionID),
+        completions: true,
         factory,
       });
       projections.set(id, owner);
+      for (
+        const [session, time] of Object.entries(inbox(id).state.inbox.finishes)
+      ) {
+        owner.finished(session, time, true);
+      }
     }
     const model = approvals(id);
     owner.configure(
@@ -518,6 +524,21 @@ export function createServerResources(o: {
         () => sidecars.connection(id).viewEpoch,
       );
       inboxes.set(id, model);
+      const current = model;
+      current.observeChanges((changes) => {
+        const owner = projections.get(id);
+        if (!owner) return;
+        const finishes = current.state.inbox.finishes;
+        for (
+          const session of changes.baseline
+            ? new Set([...Object.keys(finishes), ...o.index.ids(id)])
+            : changes.sessions
+        ) {
+          if (changes.baseline || finishes[session] !== undefined) {
+            owner.finished(session, finishes[session] ?? 0, changes.baseline);
+          }
+        }
+      });
     }
     return model;
   };
