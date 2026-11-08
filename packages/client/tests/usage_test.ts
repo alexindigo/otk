@@ -241,7 +241,6 @@ Deno.test("complete call metadata orders rows by start, owns one turn span and p
       command: "ls -la",
       output: "secret-output",
       status: "completed",
-      awaitingPermission: false,
       time: { start: 1500, end: 2000 },
     },
   }];

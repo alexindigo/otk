@@ -36,7 +36,7 @@ export function mapTodos(value: unknown): Todo[] {
     })
     : [];
 }
-export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
+export function mapTool(part: RawPart): ToolCall {
   const state = part.state!;
   const base: ToolBase = {
     callID: part.callID!,
@@ -49,7 +49,6 @@ export function mapTool(part: RawPart, awaitingPermission = false): ToolCall {
     title: state.title,
     error: state.error,
     time: { start: state.time?.start, end: state.time?.end },
-    awaitingPermission,
     output: state.output,
     outputContent: toolResult(part),
   };

@@ -84,7 +84,6 @@ export async function themeContent(directory: string) {
   };
   const base = {
     status: "completed" as const,
-    awaitingPermission: false,
     time: { start: 1000, end: 2000 },
   };
   const forms = (answered: boolean): Message[] => [

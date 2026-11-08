@@ -93,7 +93,6 @@ export interface ToolBase {
   title?: string;
   error?: string;
   time: { start?: number; end?: number };
-  awaitingPermission: boolean;
   childSessionID?: string;
   /** Native result text, when supplied; structural tools also retain their typed result. */
   output?: string;

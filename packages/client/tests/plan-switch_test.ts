@@ -46,7 +46,6 @@ const tool = (
     callID: id,
     status,
     time: {},
-    awaitingPermission: false,
     selectionIntent: name === "plan_exit"
       ? { agent: "build" }
       : name === "plan_enter"

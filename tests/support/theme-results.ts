@@ -7,7 +7,6 @@ export function themeResults(directory: string, sessionID: string) {
   const base = {
     callID: "result",
     status: "completed" as const,
-    awaitingPermission: false,
     time: { start: 1000, end: 2000 },
   };
   const reply = (id: string, parts: Part[]): AssistantMessage => ({

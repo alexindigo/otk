@@ -38,7 +38,11 @@ Deno.test("message part position cannot masquerade as permission state", () => {
   const mapped = mapMessage(info, parts);
   const tool = mapped.parts[1];
   assert(tool.kind === "tool");
-  assertEquals(tool.call.awaitingPermission, false);
+  assertEquals(
+    Object.hasOwn(tool.call, "awaitingPermission"),
+    false,
+    "Transcript parts must never retain a snapshot of live permission state",
+  );
   const arities: number[] = [];
   mapMessage(info, parts, undefined, (...args: [RawPart]) => {
     arities.push(args.length);

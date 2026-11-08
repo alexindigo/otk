@@ -44,7 +44,6 @@ export async function messageReadingScenario() {
   const base = {
     callID: "call",
     status: "completed" as const,
-    awaitingPermission: false,
     time: { start: 2000, end: 6000 },
   };
   const messages: Message[] = [{

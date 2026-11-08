@@ -217,7 +217,6 @@ function Consumer(): Element {
     name: "external-probe",
     status: "completed",
     time: {},
-    awaitingPermission: false,
     summary: summary(),
     output: "Reusable output",
     childSessionID: "child-probe",

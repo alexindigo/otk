@@ -42,7 +42,6 @@ Deno.test("tool resolution honors external names, typed tools, fallback and cons
     callID: "call",
     status: "completed",
     time: {},
-    awaitingPermission: false,
   };
   assertStrictEquals(tools.resolve(call), external);
   assertStrictEquals(tools.resolve({ ...call, name: "uninstalled" }), fallback);
@@ -59,7 +58,6 @@ Deno.test("tool resolution honors external names, typed tools, fallback and cons
       callID: "bash",
       status: "completed",
       time: {},
-      awaitingPermission: false,
     }),
     typed,
   );
@@ -126,7 +124,6 @@ Deno.test("feature-owned tool and part contracts extend protocol and renderer di
     callID: "c",
     status: "completed",
     time: {},
-    awaitingPermission: false,
   };
   const value: Part = { kind: "feature.probe", id: "p", result: 43 };
   assertStrictEquals(tools.resolve(call), tool);

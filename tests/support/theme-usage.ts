@@ -26,7 +26,6 @@ export function themeUsage(sessionID: string) {
         tool: "bash",
         callID: `usage-tool-${i}`,
         status: "completed",
-        awaitingPermission: false,
         time: { start: i * 1000 + 2, end: i * 1000 + 802 },
         title:
           "Inspect every affected consumer and the complete dependency graph "

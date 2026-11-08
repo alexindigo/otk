@@ -2089,12 +2089,9 @@ export class OpencodeV1Adapter implements Harness {
         break;
       case "message.part.updated": {
         if (!raw) break;
-        const waiting = [...this.#permissions.values()].some(({ request }) =>
-          request.toolCall === raw.callID && request.sessionID === sessionID
-        );
         const part = finishedPart ||
           this.buffers.snapshot(raw.id, sessionID, raw.messageID)?.part ||
-          mapPart(raw, waiting);
+          mapPart(raw);
         const intent = this.#selectionIntents.part(raw);
         if (part.kind === "tool" && intent) part.call.selectionIntent = intent;
         if (part.kind === "tool" && raw.tool === "task") {

@@ -120,7 +120,7 @@ export function mapMessage(
       : undefined,
   };
 }
-export function mapPart(part: RawPart, awaitingPermission = false): Part {
+export function mapPart(part: RawPart): Part {
   const id = part.id;
   switch (part.type) {
     case "text":
@@ -130,7 +130,7 @@ export function mapPart(part: RawPart, awaitingPermission = false): Part {
         blocks: markdown(part.text || ""),
       };
     case "tool":
-      return { kind: "tool", id, call: mapTool(part, awaitingPermission) };
+      return { kind: "tool", id, call: mapTool(part) };
     case "file":
       return {
         kind: "file",

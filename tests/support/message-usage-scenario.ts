@@ -91,7 +91,6 @@ export async function messageUsageScenario(profile: Profile) {
             tool: "bash" as const,
             callID: "priced-tool-" + n,
             status: "completed" as const,
-            awaitingPermission: false,
             time: { start: n * 1000, end: n * 1000 + 800 },
             command: n === 1 ? "pwd" : "ls -la",
             output: n === 1 ? "/project" : "fixture.txt",

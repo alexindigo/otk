@@ -12,7 +12,7 @@ export default function ToolLine(props: ToolProps): import("solid-js").Element {
   return (
     <ToolFrame
       call={props.call}
-      waiting={props.waiting || props.call.awaitingPermission}
+      waiting={props.waiting}
       presentation={tools.presentation(props.call, {
         directory: props.directory,
         paths: paths(),

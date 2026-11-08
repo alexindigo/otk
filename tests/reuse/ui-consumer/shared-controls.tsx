@@ -585,7 +585,6 @@ export function InteractionFailures(
                       callID: "tool",
                       status: "completed",
                       time: {},
-                      awaitingPermission: false,
                       output:
                         "Common output survives an unregistered extension.",
                       outputTruncated: "collision",
@@ -1050,7 +1049,6 @@ export default function SharedControls(
                 callID: tool,
                 status: "completed",
                 time: {},
-                awaitingPermission: false,
                 ...(tool === "edit"
                   ? {
                     tool: "edit" as const,

@@ -20,7 +20,6 @@ const task = (id: string) => ({
   call: {
     tool: "task" as const,
     callID: id,
-    awaitingPermission: false,
     title: "Inspect",
     status: "completed" as const,
     description: "Inspect",
@@ -215,7 +214,6 @@ Deno.test("borrowed helper digests patch keyed parts, deduplicate content delive
       call: {
         tool: "task",
         callID: "call",
-        awaitingPermission: false,
         title: "Inspect",
         status: "completed",
         description: "Inspect",

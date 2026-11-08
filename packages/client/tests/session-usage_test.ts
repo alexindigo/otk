@@ -58,7 +58,6 @@ Deno.test("usage resource merges buffered tool labels, header-only updates and r
       callID: "c",
       title: "Find files",
       status: "completed",
-      awaitingPermission: false,
       time: {},
       mode: "glob",
       pattern: "**/*",
