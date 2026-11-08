@@ -41,19 +41,16 @@ test("public transcript consumer pages native source, resnapshots a lost baselin
     },
   });
   resources().defer("public transcript consumer", () => consumer.stop());
-  await waitFor(
-    () =>
-      consumer.connection.messages &&
-      consumer.index.get("consumer", session.id),
-    Boolean,
-  );
+  await waitFor(() => consumer.connection.messages, Boolean);
   const target = { sidecarId: "consumer", sessionID: session.id };
   const demand = {
     scope: { sidecarId: "consumer", directory: native.directory },
     sessions: [target],
     selected: target,
   };
+  // Demand-loading acquires session metadata only after an explicit scoped request.
   consumer.owner.setDemand(demand);
+  await waitFor(() => consumer.index.get("consumer", session.id), Boolean);
   const transcript = consumer.owner.get(target)!;
   await waitFor(() => transcript.state.messageIDs.length, (n) => n >= 20);
   await transcript.ensure(earliest);

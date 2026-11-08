@@ -37,12 +37,15 @@ export async function transcriptConsumer(base: string, clock: TranscriptClock) {
   });
   const setDemand = owner.setDemand.bind(owner);
   owner.setDemand = (value) => {
-    connection.view({
-      directory: value.scope?.directory,
-      selected: value.selected?.sessionID,
-      crumbs: [],
-      rows: value.sessions.map((target) => target.sessionID),
-    });
+    // Cooling bodies does not retire the independent metadata view.
+    if (value.scope) {
+      connection.view({
+        directory: value.scope.directory,
+        selected: value.selected?.sessionID,
+        crumbs: [],
+        rows: value.sessions.map((target) => target.sessionID),
+      });
+    }
     setDemand(value);
   };
   await connection.connect();
