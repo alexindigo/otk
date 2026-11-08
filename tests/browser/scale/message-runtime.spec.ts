@@ -125,10 +125,20 @@ test.describe("scroll", () => {
           expect(stalled).toBeLessThan(15);
           previous = next;
         }
-        const { reads } = await state.observe<
-          { reads: { before: boolean }[] }
+        const { reads, pages } = await state.observe<
+          {
+            reads: { before: boolean; cursor: string | null }[];
+            pages: { before: boolean }[];
+          }
         >();
-        expect(reads).toHaveLength(153);
+        // Rule 8 adds cancellable idle speculation: demand still reads exactly
+        // 153 pages, while a raced prefetch may be replaced for the same cursor.
+        expect(pages).toHaveLength(153);
+        expect(new Set(reads.map((read) => read.cursor)).size).toBe(153);
+        for (const cursor of new Set(reads.map((read) => read.cursor))) {
+          expect(reads.filter((read) => read.cursor === cursor).length)
+            .toBeLessThanOrEqual(2);
+        }
         expect(reads.filter((r) => !r.before)).toHaveLength(1);
         const loaded = reads.length;
         stalled = 0;

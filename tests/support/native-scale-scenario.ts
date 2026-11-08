@@ -29,7 +29,12 @@ export async function nativeScaleScenario(profile: Profile) {
   fake.strict();
   const a = native.manifest.sessions[0],
     b = native.manifest.sessions[MESSAGE_CASES.code];
-  const reads: { at: number; before: boolean; ended?: number }[] = [];
+  const reads: {
+    at: number;
+    before: boolean;
+    cursor: string | null;
+    ended?: number;
+  }[] = [];
   const proxy = Deno.serve(
     { hostname: "127.0.0.1", port: 0, onListen() {} },
     async (request) => {
@@ -38,6 +43,7 @@ export async function nativeScaleScenario(profile: Profile) {
         const row = {
           at: performance.now(),
           before: uri.searchParams.has("before"),
+          cursor: uri.searchParams.get("before"),
           ended: undefined as number | undefined,
         };
         reads.push(row);
