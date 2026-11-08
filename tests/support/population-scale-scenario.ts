@@ -178,6 +178,20 @@ export async function populationScaleScenario(profile: Profile) {
   );
   await client.rpc("prefs.set", { key: "theme", value: "otk-dark" });
   if (profile === "contract-scale-paint") {
+    // Bounded discovery restores the newest root, not catalog iteration order.
+    // Give the cold-paint target an explicit remembered location before demand.
+    for (
+      const selected of [
+        native.manifest.sessions[0],
+        native.manifest.sessions[251],
+      ]
+    ) {
+      await client.rpc("layout.location", {
+        sidecarId: "local",
+        directory: selected.directory,
+        sessionID: selected.id,
+      });
+    }
     await client.rpc("prefs.set", { key: "animationsOff", value: true });
     await client.rpc("layout.patch", {
       leftCollapsed: true,

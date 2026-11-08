@@ -16,7 +16,8 @@ for (let repetition = 0; repetition < 5; repetition++) {
       const initial = await state.observe<
         {
           counts: unknown;
-          expectedCounts: unknown;
+          expectedCounts: { sessions: number };
+          ready: string[];
           manifest: { sessions: { id: string; directory: string }[] };
         }
       >();
@@ -74,7 +75,11 @@ for (let repetition = 0; repetition < 5; repetition++) {
           ),
         );
         expect(cold.paints).toHaveLength(1);
-        expect(cold.snapshots.some((s) => !s.ready)).toBe(true);
+        // Rule 1 makes the initial scoped snapshot empty. Measure incomplete
+        // population coverage at its owner instead of treating [] as all-ready.
+        expect(initial.ready.length).toBeLessThan(
+          initial.expectedCounts.sessions,
+        );
         await expect.poll(() =>
           page.locator(".otk-message-flow").getAttribute("data-message-count")
             .then(Number)
