@@ -32,6 +32,8 @@ export interface ProjectProjectionRow extends InboxProject {
 /** One sidecar's keyed metadata contributions. Digests never enter this owner. */
 export function createProjectProjection(o: {
   entry(id: string): MergedMetadata | undefined;
+  inbox?(): InboxSnapshot;
+  taskActivity?(): Readonly<Record<string, InboxStatus>>;
   factory?: StateFactory;
   membership?(directory: string, present: boolean): void;
 }) {
@@ -178,43 +180,51 @@ export function createProjectProjection(o: {
       });
     }
   };
+  const activity = (directory: string) => {
+    const p = ensure(directory), source = o.taskActivity?.() ?? {};
+    if (p.activitySource !== source) {
+      p.activitySource = source;
+      const next: Record<string, InboxStatus> = {};
+      for (const task of p.tasks) {
+        if (source[task.id]) next[task.id] = source[task.id];
+      }
+      if (
+        Object.keys({ ...p.activity, ...next }).some((id) =>
+          p.activity[id] !== next[id]
+        )
+      ) {
+        p.activity = next;
+        p.input = undefined;
+      }
+    }
+    return p.activity;
+  };
   return {
     update,
     entry(id: string) {
       void entryClock.state.keys[id];
       return sessions.get(id)?.entry;
     },
-    input(
-      directory: string,
-      taskActivity: Readonly<Record<string, InboxStatus>>,
-    ): TabInput {
+    input(directory: string): TabInput {
       void clock.state.keys[directory];
       const p = ensure(directory);
-      const entries = p.metadata ??= [...p.members.values()];
-      if (p.activitySource !== taskActivity) {
-        p.activitySource = taskActivity;
-        const activity: Record<string, InboxStatus> = {};
-        for (const task of p.tasks) {
-          if (taskActivity[task.id]) {
-            activity[task.id] = taskActivity[task.id];
-          }
-        }
-        if (
-          Object.keys({ ...p.activity, ...activity }).some((id) =>
-            p.activity[id] !== activity[id]
-          )
-        ) {
-          p.activity = activity;
-          p.input = undefined;
-        }
-      }
+      activity(directory);
       if (!p.input) {
         p.input = {
           version: clock.state.keys[directory] ?? 0,
           directory,
-          entries,
-          taskActivity: p.activity,
-          inbox: { ...inbox, tasks: p.tasks },
+          get entries() {
+            void clock.state.keys[directory];
+            const current = ensure(directory);
+            return current.metadata ??= [...current.members.values()];
+          },
+          get taskActivity() {
+            void clock.state.keys[directory];
+            return activity(directory);
+          },
+          get inbox() {
+            return o.inbox?.() ?? inbox;
+          },
         };
       }
       return p.input;

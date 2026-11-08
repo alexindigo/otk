@@ -2,6 +2,30 @@
 import { assertEquals, assertStrictEquals } from "@std/assert";
 import { createDirectoryCatalogs } from "@otk/client";
 import { createCatalogCodecs, type DirectoryCatalog } from "@otk/protocol";
+import { remainingTabs } from "./remaining-consumer.ts";
+
+Deno.test("retained project handles borrow current metadata after one thousand visits", () => {
+  const owner = remainingTabs();
+  try {
+    assertEquals(
+      owner.facts.map((fact, n) => ({
+        ...fact,
+        entries: fact.entries < 50,
+        currentTitle: fact.currentTitle === `After ${n}`,
+        selected: fact.selected === `tstv1-${n}`,
+      })),
+      Array.from({ length: 100 }, () => ({
+        currentTitle: true,
+        currentInbox: true,
+        sourceFree: true,
+        entries: true,
+        selected: true,
+      })),
+    );
+  } finally {
+    owner.stop();
+  }
+});
 
 Deno.test("plain consumer shares 251 session borrows and retires one hundred partial directory lifetimes", async () => {
   let watches = 0, releases = 0, refreshes = 0;

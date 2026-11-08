@@ -24,7 +24,7 @@ export interface InboxTab {
   status: InboxStatus;
 }
 export interface TabInput {
-  /** Present for immutable snapshots from the shared project projection. */
+  /** Invalidation identity for source-free handles from the project projection. */
   version?: number;
   directory: string;
   entries: readonly (IndexMetadata & OperationAttention)[];

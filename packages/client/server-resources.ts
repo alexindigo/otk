@@ -465,6 +465,8 @@ export function createServerResources(o: {
     owner = createProjectProjection({
       factory,
       membership: nameMembership,
+      inbox: () => inbox(id).state.inbox,
+      taskActivity: () => operationAttention(id).tasks,
       entry: (sessionID) => {
         const raw = o.index.getMetadata(id, sessionID);
         if (!raw) return undefined;
@@ -520,10 +522,7 @@ export function createServerResources(o: {
     return model;
   };
   const tabInput = (p: ProjectSelection): TabInput =>
-    projectOwner(p.sidecarId).input(
-      p.directory,
-      operationAttention(p.sidecarId).tasks,
-    );
+    projectOwner(p.sidecarId).input(p.directory);
   const tabs = (p: ProjectSelection): ClientTabs => {
     live();
     const key = `${p.sidecarId}/${p.directory}`;
