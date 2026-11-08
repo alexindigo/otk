@@ -63,7 +63,5 @@ Deno.test("request age uses session activity, labels it honestly and describes s
     resume: "Resumes work paused 12 days ago",
   });
   assertEquals(requestIdle(1, 86400_000 + 1), { label: "Session idle 1 day" });
-  assertEquals(requestIdle(undefined, Date.now()), {
-    label: "Session activity unavailable",
-  });
+  assertEquals(requestIdle(undefined, Date.now()), {});
 });

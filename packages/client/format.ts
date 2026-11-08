@@ -17,12 +17,15 @@ export function humanDuration(ms: number): string {
   if (elapsed >= 60_000) return `${Math.floor(elapsed / 60_000)} min`;
   return `${Math.floor(elapsed / 1000)} s`;
 }
-/** Session activity is authoritative; request observation time is not ask age. */
+/** Missing/invalid session activity has no age; observation time is not ask age. */
 export function requestIdle(time: number | undefined, now: number): {
-  label: string;
+  label?: string;
   resume?: string;
 } {
-  if (time === undefined) return { label: "Session activity unavailable" };
+  if (
+    time === undefined || !Number.isFinite(time) || time <= 0 ||
+    !Number.isFinite(now)
+  ) return {};
   const elapsed = Math.max(0, now - time);
   const age = humanDuration(elapsed);
   return {

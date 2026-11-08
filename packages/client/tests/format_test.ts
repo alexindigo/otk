@@ -50,6 +50,16 @@ Deno.test("human status durations share nonnegative second, minute, hour and day
     ] as const
   ) {
     assertEquals(humanDuration(ms), expected);
-    assertEquals(requestIdle(0, ms).label, `Session idle ${expected}`);
+    assertEquals(requestIdle(1, ms + 1).label, `Session idle ${expected}`);
   }
+});
+Deno.test("request idle age stays unknown without a valid session activity clock", () => {
+  const now = 1794172800_000;
+  for (const time of [undefined, 0, -1, NaN, Infinity, -Infinity]) {
+    assertEquals(requestIdle(time, now), {});
+  }
+  for (const clock of [NaN, Infinity, -Infinity]) {
+    assertEquals(requestIdle(1, clock), {});
+  }
+  assertEquals(requestIdle(now + 1, now), { label: "Session idle 0 s" });
 });
