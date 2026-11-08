@@ -33,6 +33,10 @@ export interface ContentClock {
   seq: number;
 }
 export interface StreamStamp {
+  /** UTF-16 source coverage, independent of Markdown presentation length. */
+  sourceLength?: number;
+  /** Retained event source whose transport continuity awaits reconciliation. */
+  recovering?: boolean;
   epoch: string;
   generation: number;
   version: number;

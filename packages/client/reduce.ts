@@ -4,6 +4,7 @@ import {
   type SessionErrorState,
   withHelperProgress,
 } from "@otk/protocol";
+import { retainStreamMessage, retainStreamPart } from "./stream-last-good.ts";
 import type {
   ContentOp,
   FileDiff,
@@ -90,7 +91,7 @@ export function reduceMessage(
           ),
       };
     }
-    return message;
+    return retainStreamMessage(previous, message);
   }
   if (!previous) return;
   if (op.op === "message.clock") {
@@ -135,13 +136,23 @@ export function reduceMessage(
               target.stream.version > op.part.stream.version))))
     ) return previous;
     const parts = [...previous.parts];
-    if (index < 0) parts.push(op.part);
-    else parts[index] = op.part;
+    const part = previous.role === "assistant" &&
+        previous.time.completed === undefined &&
+        (op.part.kind === "text" || op.part.kind === "reasoning") &&
+        (op.part.stream?.mode === "replace" || op.part.stream?.recovering)
+      ? retainStreamPart(target, op.part)
+      : op.part;
+    if (index < 0) parts.push(part);
+    else parts[index] = part;
     return output({ ...previous, parts }, op.lastOutput);
   }
   if (previous.role === "assistant" && previous.time.completed !== undefined) {
     return previous;
   }
+  if (
+    (target?.kind === "text" || target?.kind === "reasoning") &&
+    target.stream?.mode === "replace" && op.stream.recovering
+  ) return previous;
   if (
     (target?.kind === "text" || target?.kind === "reasoning") &&
     target.stream?.epoch === op.stream.epoch &&
@@ -199,7 +210,7 @@ export function reduceRecovery<T extends Omit<ContentState, "messages">>(
         p.partID !== op.part.id
       ) return true;
       return (op.part.kind === "text" || op.part.kind === "reasoning") &&
-        op.part.stream?.mode === "replace";
+        (op.part.stream?.mode === "replace" || op.part.stream?.recovering);
     });
     if (recovering.length !== state.recovering.length) {
       return { ...state, recovering };

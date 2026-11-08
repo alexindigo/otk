@@ -473,6 +473,7 @@ test("recovery coalesces parts within one message and cancels scheduled reads be
   const recovery = new MessageRecovery({
     concurrency: 2,
     pending: 128,
+    wanted: () => true,
     read: async () => {
       reads++;
       await held;
@@ -695,6 +696,115 @@ test("reconnect takes one replacement checkpoint despite more deltas and authori
     }]);
   } finally {
     release();
+    await record.adapter.core.stop();
+  }
+});
+
+test("retained reconnect source reconciles missed bytes at terminal authority", async () => {
+  let terminal = false;
+  const complete = "Known prefix, bytes missed during the outage, then suffix.";
+  const record = await recording((url) => {
+    if (!url.pathname.includes("/message/")) return;
+    return Promise.resolve(Response.json({
+      info: terminal
+        ? { ...info(), time: { created: 2, completed: 5 } }
+        : info(),
+      parts: [{
+        id: "part",
+        messageID: "msg_live",
+        sessionID: "root",
+        type: "text",
+        text: terminal ? complete : "",
+        time: terminal ? { start: 2, end: 5 } : { start: 2 },
+      }],
+    }));
+  });
+  try {
+    record.send("message.updated", { info: info() });
+    record.send("message.part.updated", {
+      part: {
+        id: "part",
+        messageID: "msg_live",
+        sessionID: "root",
+        type: "text",
+        text: "Known prefix",
+        time: { start: 2 },
+      },
+    });
+    await record.drain();
+    record.disconnect();
+    await wait(() => record.streams() === 2);
+    record.send("server.connected");
+    await wait(() => record.resets() === 2);
+    record.send("message.part.delta", {
+      sessionID: "root",
+      messageID: "msg_live",
+      partID: "part",
+      field: "text",
+      delta: " then suffix.",
+    });
+    await record.drain();
+    assert(
+      record.ops.some(({ op }) =>
+        op.op === "stream.recovery" && op.state === "recovering"
+      ),
+    );
+    terminal = true;
+    record.send("message.updated", {
+      info: { ...info(), time: { created: 2, completed: 5 } },
+    });
+    await wait(() =>
+      record.ops.some(({ op }) =>
+        op.op === "part.upsert" &&
+        JSON.stringify(op.part).includes(complete)
+      )
+    );
+    assertEquals(record.buffers.size, 0);
+  } finally {
+    await record.adapter.core.stop();
+  }
+});
+
+test("retained reconnect source acquires recovery only while watched", async () => {
+  let reads = 0;
+  const raw = {
+    id: "part",
+    messageID: "msg_live",
+    sessionID: "root",
+    type: "text",
+    text: "Retained unwatched source",
+    time: { start: 2 },
+  };
+  const record = await recording((url) => {
+    if (!url.pathname.includes("/message/")) return;
+    reads++;
+    return Promise.resolve(Response.json({ info: info(), parts: [raw] }));
+  });
+  try {
+    record.send("message.updated", { info: info() });
+    record.send("message.part.updated", { part: raw });
+    await record.drain();
+    record.adapter.core.subscriptions("opcv1-root", 0);
+    record.disconnect();
+    await wait(() => record.streams() === 2);
+    record.send("server.connected");
+    await wait(() => record.resets() === 2);
+    await record.drain();
+    assertEquals(
+      reads,
+      0,
+      "An unwatched retained source cannot acquire bodies",
+    );
+    const before = record.ops.length;
+    record.adapter.core.subscriptions("opcv1-root", 1);
+    await wait(() => reads === 1);
+    assert(
+      record.ops.slice(before).some(({ op }) =>
+        op.op === "stream.recovery" && op.state === "recovering"
+      ),
+      "Reacquiring the source must retain its reconciliation lifetime",
+    );
+  } finally {
     await record.adapter.core.stop();
   }
 });

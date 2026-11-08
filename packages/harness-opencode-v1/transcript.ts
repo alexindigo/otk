@@ -105,6 +105,7 @@ export class Transcript {
       recovering?(id: string): MessagePage["recovering"];
       scopedRecovery?(id: string): boolean;
       retryRecovery?(id: string): void;
+      reconciled?(id: string, messageID: string, partID?: string): void;
       buffers: StreamBuffers;
       reader: Messages;
       requested?(): void;
@@ -410,19 +411,48 @@ export class Transcript {
       );
       signal.throwIfAborted();
       let items = await Promise.all(
-        page.items.filter(({ info }) => !cutoff || info.id < cutoff).map((
-          raw,
-        ) =>
-          this.options.decorate(
-            mapMessage(raw.info, raw.parts, undefined, (part) =>
+        page.items.filter(({ info }) => !cutoff || info.id < cutoff).map(
+          (raw) => {
+            if (
               raw.info.role === "assistant" &&
-                raw.info.time.completed === undefined
-                ? buffers.snapshot(part.id, id, raw.info.id)?.part ??
-                  mapPart(part)
-                : mapPart(part)),
-            raw,
-            owner.raw.directory,
-          )
+              raw.info.time.completed !== undefined
+            ) {
+              buffers.removeMessage(raw.info.id, id);
+              this.options.reconciled?.(id, raw.info.id);
+            }
+            return this.options.decorate(
+              mapMessage(raw.info, raw.parts, undefined, (part) => {
+                if (
+                  raw.info.role !== "assistant" ||
+                  raw.info.time.completed !== undefined
+                ) {
+                  return mapPart(part);
+                }
+                if (part.time?.end !== undefined) {
+                  buffers.remove(part.id);
+                  this.options.reconciled?.(id, raw.info.id, part.id);
+                  return mapPart(part);
+                }
+                const retained = buffers.snapshot(part.id, id, raw.info.id)
+                  ?.part;
+                if (retained && !retained.stream?.recovering) return retained;
+                if (
+                  retained && (part.text?.length ?? 0) <=
+                    (retained.stream?.sourceLength ?? 0)
+                ) return retained;
+                const mapped = mapPart(part);
+                if (mapped.kind === "text" || mapped.kind === "reasoning") {
+                  mapped.stream = buffers.replacement(
+                    id,
+                    part.text?.length ?? 0,
+                  );
+                }
+                return mapped;
+              }),
+              raw,
+              owner.raw.directory,
+            );
+          },
         ),
       );
       const turns = [

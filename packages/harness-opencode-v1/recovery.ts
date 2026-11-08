@@ -15,6 +15,7 @@ interface Recovery {
 export interface RecoveryOptions {
   concurrency: number;
   pending: number;
+  wanted(session: string): boolean;
   read(
     session: string,
     message: string,
@@ -53,6 +54,7 @@ export class MessageRecovery {
     return this.#sessions.get(owner.session)?.get(owner.message) === owner;
   }
   touch(session: string, message: string, part: string): void {
+    if (!this.options.wanted(session)) return;
     if (this.#scopes.has(session) || this.#ended.get(session)?.has(message)) {
       return;
     }
@@ -100,6 +102,10 @@ export class MessageRecovery {
   }
   #drain(): void {
     for (const owner of this.#queue) {
+      if (!this.options.wanted(owner.session)) {
+        this.message(owner.message, owner.session);
+        continue;
+      }
       if (this.#pending.size >= this.options.concurrency) return;
       // An aborted request still owns its slot until its reader settles. Join
       // it before admitting this message's replacement generation.

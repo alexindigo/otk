@@ -267,6 +267,7 @@ export class OpencodeV1Adapter implements Harness {
     this.#recovery = new MessageRecovery({
       concurrency: cfg.messages.recoveryconcurrency,
       pending: cfg.messages.recoverypending,
+      wanted: (id) => this.buffers.subscribed(id),
       read: (session, message, signal) =>
         this.#messages.get(session, message, signal),
       emit: (session, snapshot, parts, _generation, terminal) => {
@@ -283,6 +284,9 @@ export class OpencodeV1Adapter implements Harness {
           [],
           messageOutput(snapshot.parts).lastOutput ?? undefined,
         );
+        if (snapshot.info.time.completed !== undefined) {
+          this.buffers.removeMessage(snapshot.info.id, session);
+        }
         this.#sink.content(session, {
           op: "message.upsert",
           message: { ...message, parts: [] },
@@ -290,18 +294,35 @@ export class OpencodeV1Adapter implements Harness {
         this.buffers.epoch(session, this.#replay.clock(session).epoch);
         for (const raw of snapshot.parts) {
           if (!parts.has(raw.id)) continue;
+          const known = this.buffers.snapshot(raw.id, session, snapshot.info.id)
+            ?.part;
+          if (
+            !terminal && known && raw.time?.end === undefined &&
+            (raw.text?.length ?? 0) <= (known.stream?.sourceLength ?? 0)
+          ) continue;
+          if (raw.time?.end !== undefined) this.buffers.remove(raw.id);
           const part = mapPart(raw);
           if (
             (part.kind === "text" || part.kind === "reasoning") && !terminal &&
-            snapshot.info.time.completed === undefined
+            snapshot.info.time.completed === undefined &&
+            raw.time?.end === undefined
           ) {
-            part.stream = this.buffers.replacement(session);
+            part.stream = this.buffers.replacement(
+              session,
+              raw.text?.length ?? 0,
+            );
           }
           this.#sink.content(session, {
             op: "part.upsert",
             messageID: snapshot.info.id,
             part,
           });
+          if (!terminal && raw.time?.end !== undefined) {
+            this.#recovery.part(snapshot.info.id, raw.id, session);
+          }
+        }
+        if (!terminal && snapshot.info.time.completed !== undefined) {
+          this.#recovery.message(snapshot.info.id, session);
         }
       },
       state: (session, messageID, partID, generation, state) => {
@@ -375,6 +396,10 @@ export class OpencodeV1Adapter implements Harness {
       recovering: (id) => this.#recovery.snapshot(id),
       scopedRecovery: (id) => this.#recovery.scoped(id),
       retryRecovery: (id) => this.#recovery.retry(id),
+      reconciled: (id, messageID, partID) => {
+        if (partID === undefined) this.#recovery.message(messageID, id);
+        else this.#recovery.part(messageID, partID, id);
+      },
       buffers: this.buffers,
       reader: this.#messages,
       policy: cfg.messages,
@@ -795,7 +820,14 @@ export class OpencodeV1Adapter implements Harness {
     if (count && !this.#stopped) {
       this.buffers.replay(
         id,
-        (sessionID, op) => this.#sink.content(sessionID, op),
+        (sessionID, op) => {
+          if (
+            op.op === "part.upsert" &&
+            (op.part.kind === "text" || op.part.kind === "reasoning") &&
+            op.part.stream?.recovering
+          ) this.#recovery.touch(sessionID, op.messageID, op.part.id);
+          this.#sink.content(sessionID, op);
+        },
       );
     }
     if (!count) this.#errors.release(id);
@@ -1021,7 +1053,7 @@ export class OpencodeV1Adapter implements Harness {
         this.#selectionIntents.clear();
         this.#releaseRevert();
         this.#tasks.release();
-        this.buffers.reset();
+        this.buffers.suspend();
       }, { once: true });
       const watchdog = new Watchdog(
         this.cfg.harness.heartbeattimeout * 1000,
@@ -1130,7 +1162,6 @@ export class OpencodeV1Adapter implements Harness {
         this.#controller = undefined;
       }
       if (signal.aborted) break;
-      this.buffers.reset();
       this.#target.connection("reconnecting");
       await new Promise<void>((resolve) => {
         const wake = () => {
@@ -1152,9 +1183,12 @@ export class OpencodeV1Adapter implements Harness {
     this.#reverts.clear();
     this.#selectionIntents.clear();
     this.#tasks.release();
-    // Every authoritative resync starts a new content generation. Keep viewers,
-    // but never carry raw streaming seeds or timers across a disposed instance.
-    this.buffers.reset();
+    this.buffers.rebind(
+      (id) => this.#replay.clock(id).epoch,
+      (id, messageID, partID) => this.#recovery.touch(id, messageID, partID),
+    );
+    // Transport replacement retains last-good event source. Actual instance
+    // disposal retires that source at its explicit event boundary instead.
     const since = Date.now() - this.cfg.index.days * 86_400_000;
     const entries = new Map<string, IndexEntry>();
     // Catalog preparation and live publication share one cooperative budget.
@@ -1634,6 +1668,7 @@ export class OpencodeV1Adapter implements Harness {
       }
     }
     if (type === "server.instance.disposed") {
+      this.buffers.reset();
       this.#transcript.invalidate();
       this.#abortCommands();
       this.#errors.reset();
@@ -1957,6 +1992,12 @@ export class OpencodeV1Adapter implements Harness {
           mapStreamingShell(raw),
           raw.text || "",
         );
+        if (
+          this.buffers.snapshot(raw.id, sessionID, raw.messageID)?.part.stream
+            ?.recovering
+        ) {
+          this.#recovery.touch(sessionID, raw.messageID, raw.id);
+        }
       } else if (
         (raw.type === "text" || raw.type === "reasoning") &&
         raw.time?.end !== undefined

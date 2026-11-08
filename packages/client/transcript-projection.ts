@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ContentOp, Message, Part, ReplyBoundary } from "@otk/protocol";
 import { reduceMessage } from "./reduce.ts";
+import { retainStreamMessage } from "./stream-last-good.ts";
 
 export interface TranscriptReply {
   key: string;
@@ -406,8 +407,11 @@ export function createTranscriptProjection(): TranscriptProjection {
       detached = undefined;
     },
     replace(messages: readonly Message[]) {
+      const previous = state.messagesByID;
       owner.clear();
-      for (const message of messages) put(message);
+      for (const message of messages) {
+        put(retainStreamMessage(previous[message.id], message));
+      }
       queues();
     },
     merge(messages: readonly Message[]) {

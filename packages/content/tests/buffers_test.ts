@@ -11,6 +11,39 @@ const part = {
 };
 const sleep = () => new Promise((resolve) => setTimeout(resolve, 75));
 
+Deno.test("transport suspension retains trusted source, retires timers and rebinds append authority", async () => {
+  const buffers = new StreamBuffers(), events: ContentOp[] = [];
+  const emit = (_id: string, event: ContentOp) => events.push(event);
+  try {
+    buffers.subscriptions("session", 1);
+    buffers.epoch("session", "before");
+    buffers.upsert("session", "message", part, "Known source");
+    buffers.append(part.id, " pending", emit);
+    buffers.suspend();
+    await sleep();
+    assertEquals(events, []);
+    buffers.rebind(() => "after");
+    buffers.upsert("session", "message", part, "");
+    buffers.checkpoint("session", emit);
+    const retained = buffers.snapshot(part.id)!.part;
+    assertEquals(retained.blocks, markdown("Known source pending"));
+    assertEquals(retained.stream?.epoch, "after");
+    assertEquals(retained.stream?.recovering, true);
+    assert(buffers.append(part.id, " appended", emit));
+    await sleep();
+    assertEquals(
+      buffers.snapshot(part.id)!.part.blocks,
+      markdown("Known source pending appended"),
+    );
+    buffers.removeMessage("message", "another-session");
+    assertEquals(buffers.size, 1);
+    buffers.removeMessage("message", "session");
+    assertEquals(buffers.size, 0);
+  } finally {
+    buffers.stop();
+  }
+});
+
 Deno.test("buffers own one subscribed stream and coalesce its deltas", async () => {
   const buffers = new StreamBuffers(), events: ContentOp[] = [];
   try {

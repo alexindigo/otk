@@ -26,6 +26,7 @@ function fixture(concurrency = 2, pending = 128) {
   const recovery = new MessageRecovery({
     concurrency,
     pending,
+    wanted: () => true,
     read(session, message, signal) {
       const result = Promise.withResolvers<NativeMessage>();
       reads.push({ session, message, signal, result });

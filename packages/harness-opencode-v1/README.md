@@ -352,6 +352,20 @@ but deltas cannot. Unsubscribe, cutoff, epoch retirement, removal, disposal,
 disconnect and stop cancel readers and fence late results. A full part event
 restores event-owned streaming with a strictly newer generation.
 
+Transport retirement suspends parser publication timers while retaining its
+last-good native event source. Reconnect rebinds those retained parsers to the
+new content epoch, allowing subsequent live chunks to append without replacing
+the prefix with a shorter unfinished HTTP value. Known instance disposal,
+deletion, cutoff, terminal authority and stop still retire raw source. HTTP
+checkpoints remain replacement-only and carry scalar source coverage. Retained
+parsers remain explicitly recovering until full native part authority or a
+terminal checkpoint reconciles continuity. A terminal header alone cannot
+certify retained bytes; the existing bounded recovery owner joins the complete
+native checkpoint before publishing final source.
+
+Recovery admission follows active body leases. Unwatched retained parsers remain
+source-only until reacquisition restores their reconciliation lifetime.
+
 Message collections have one bounded reader (1–200 messages per page); zero or
 missing limits cannot invoke stock's whole-history mode. Revert counts use a
 read-only SQL scalar. Helper progress uses the worker-owned digest described

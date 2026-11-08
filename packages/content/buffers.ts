@@ -13,6 +13,7 @@ interface ActivePart {
   published: number;
   generation: number;
   lastChunk: number;
+  recovering: boolean;
   timer?: ReturnType<typeof setTimeout>;
 }
 
@@ -24,7 +25,10 @@ export class StreamBuffers {
   #generation = 0;
   #epochs = new Map<string, string>();
   /** Replacement-only HTTP authority shares the event owner's generation clock. */
-  replacement(sessionID: string): import("@otk/protocol").StreamStamp {
+  replacement(
+    sessionID: string,
+    sourceLength?: number,
+  ): import("@otk/protocol").StreamStamp {
     let epoch = this.#epochs.get(sessionID);
     if (!epoch) this.#epochs.set(sessionID, epoch = crypto.randomUUID());
     return {
@@ -32,6 +36,7 @@ export class StreamBuffers {
       generation: ++this.#generation,
       version: ++this.#version,
       mode: "replace",
+      ...(sourceLength === undefined ? {} : { sourceLength }),
     };
   }
   epoch(sessionID: string, epoch: string): void {
@@ -51,6 +56,8 @@ export class StreamBuffers {
       generation: active.generation,
       version: active.version,
       mode: "appendable",
+      sourceLength: active.stream.text.length,
+      ...(active.recovering ? { recovering: true } : {}),
     };
   }
   #replies = new Map<
@@ -127,7 +134,10 @@ export class StreamBuffers {
     }
     const shell = { ...part, blocks: [] };
     if (active) {
-      active.stream.replace(text);
+      if (!active.recovering || text.length >= active.stream.text.length) {
+        active.stream.replace(text);
+        active.recovering = false;
+      }
       active.shell = shell;
       active.version = ++this.#version;
       active.generation = ++this.#generation;
@@ -143,6 +153,7 @@ export class StreamBuffers {
         published: this.#version,
         generation: ++this.#generation,
         lastChunk: now,
+        recovering: false,
       });
     }
   }
@@ -193,6 +204,12 @@ export class StreamBuffers {
   complete(messageID: string, emit: Emit): void {
     for (const active of this.#parts.values()) {
       if (active.messageID !== messageID) continue;
+      if (active.recovering) {
+        // A terminal header cannot certify bytes missed during the outage.
+        // The recovery owner joins the complete native point checkpoint.
+        this.remove(active.shell.id);
+        continue;
+      }
       if (!this.subscribed(active.sessionID)) {
         this.remove(active.shell.id);
         continue;
@@ -255,7 +272,9 @@ export class StreamBuffers {
     }
   }
   overlay(message: Message): Message {
-    if (message.role !== "assistant" || message.time.completed !== undefined) {
+    if (message.role !== "assistant") return message;
+    if (message.time.completed !== undefined) {
+      this.removeMessage(message.id, message.sessionID);
       return message;
     }
     const parts = [...message.parts];
@@ -266,6 +285,12 @@ export class StreamBuffers {
       ) continue;
       const index = parts.findIndex((part) => part.id === id);
       const part = this.snapshot(id)!.part;
+      const current = parts[index];
+      if (
+        (current?.kind === "text" || current?.kind === "reasoning") &&
+        current.stream?.sourceLength !== undefined &&
+        current.stream.sourceLength > active.stream.text.length
+      ) continue;
       if (index < 0) parts.push(part);
       else parts[index] = part;
     }
@@ -282,10 +307,15 @@ export class StreamBuffers {
       },
     };
   }
-  removeMessage(messageID: string): void {
-    this.#replies.delete(messageID);
+  removeMessage(messageID: string, sessionID?: string): void {
+    if (!sessionID || this.#replies.get(messageID)?.sessionID === sessionID) {
+      this.#replies.delete(messageID);
+    }
     for (const [id, active] of this.#parts) {
-      if (active.messageID === messageID) this.remove(id);
+      if (
+        active.messageID === messageID &&
+        (!sessionID || active.sessionID === sessionID)
+      ) this.remove(id);
     }
   }
   remove(partID: string): void {
@@ -300,6 +330,29 @@ export class StreamBuffers {
     }
     for (const [id, part] of this.#parts) {
       if (part.sessionID === sessionID) this.remove(id);
+    }
+  }
+  /** Transport retirement stops publication, not the last-good native source. */
+  suspend(): void {
+    for (const active of this.#parts.values()) {
+      clearTimeout(active.timer);
+      active.timer = undefined;
+    }
+  }
+  rebind(
+    epoch: (sessionID: string) => string,
+    retained?: (sessionID: string, messageID: string, partID: string) => void,
+  ): void {
+    for (
+      const sessionID of new Set(
+        [...this.#parts.values()].map((part) => part.sessionID),
+      )
+    ) {
+      this.epoch(sessionID, epoch(sessionID));
+    }
+    for (const active of this.#parts.values()) {
+      active.recovering = true;
+      retained?.(active.sessionID, active.messageID, active.shell.id);
     }
   }
   reset(): void {

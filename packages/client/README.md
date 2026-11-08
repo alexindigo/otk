@@ -297,6 +297,15 @@ recoverable `missing` baselines. Superseding a generation retires its paging
 flag. Late `agent.colors` operations decorate the existing transcript without
 retaining another collection.
 
+Replacement pages and recovery parts preserve last-good unfinished text when
+native source coverage is shorter or empty. The existing stream stamp carries
+optional UTF-16 `sourceLength`, so Markdown presentation changes do not
+masquerade as source regression. Incoming epoch/replacement fences still apply;
+explicit removals and terminal snapshots remain authoritative. Retained event
+source stays refreshing across a transport gap; unaligned deltas cannot
+overwrite a newer replacement-only HTTP checkpoint. Terminal recovery reconciles
+the complete native source, including bytes missed during the outage.
+
 `MessagePage.version` and `transcript.state.version` identify the producer
 generation/session-boundary revision, separately from demand-epoch sequencing.
 `bootstrap.complete` refreshes bootstrap-owned metadata/attention, never bodies.
