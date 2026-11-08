@@ -262,8 +262,7 @@ function RequestDock(
                     hidden={pending()}
                     onClick={() => void once()}
                     class="otk-primary otk-pill"
-                    title={props.activity?.resume ??
-                      `Allow once (${shortcuts.once.key} when focused)`}
+                    title={`Allow once (${shortcuts.once.key} when focused)`}
                     aria-description={props.activity?.resume}
                   >
                     Allow once

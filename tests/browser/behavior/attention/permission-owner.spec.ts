@@ -129,6 +129,9 @@ for (
         .toHaveText("Session idle 12 days");
       await expect(
         page.getByRole("button", { name: "Allow once", exact: true }),
+      ).toHaveAttribute("title", "Allow once (1 when focused)");
+      await expect(
+        page.getByRole("button", { name: "Allow once", exact: true }),
       )
         .toHaveAccessibleDescription("Resumes work paused 12 days ago");
       for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
