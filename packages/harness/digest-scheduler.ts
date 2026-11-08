@@ -40,7 +40,7 @@ interface Lifetime {
   priority(): number;
   running(): boolean;
   optional: boolean;
-  preempt?: AbortController;
+  preempt?: Pick<AbortController, "abort">;
 }
 /** One cooperative executor. Waiting lifetimes have no executing turn. */
 export class DigestScheduler {
@@ -392,7 +392,7 @@ export class DigestScheduler {
     }
     return interruptible && typeof priority === "string" &&
         priority !== "interactive"
-      ? this.#read(run, signal, priority, optional)
+      ? this.#read(run, signal, priority, optional, finishing)
       : this.#job(
         run,
         signal,
@@ -408,7 +408,10 @@ export class DigestScheduler {
     signal: AbortSignal,
     priority: DigestPriority,
     optional: boolean,
+    finishing: boolean | (() => boolean),
   ): Promise<T> {
+    const publishing = () =>
+      typeof finishing === "function" ? finishing() : finishing;
     while (true) {
       signal.throwIfAborted();
       this.#controller.signal.throwIfAborted();
@@ -438,8 +441,14 @@ export class DigestScheduler {
           },
           AbortSignal.any([signal, slice.signal]),
           () => rank[priority],
-          slice,
-          () => optional && admitted,
+          {
+            abort: (reason) => {
+              // Acquisition may restart; an acquired result already entering
+              // publication must finish under the same caller lifetime.
+              if (!publishing()) slice.abort(reason);
+            },
+          },
+          () => publishing() || optional && admitted,
           optional,
         );
       } catch (error) {
@@ -467,7 +476,7 @@ export class DigestScheduler {
     run: (signal: AbortSignal, execution: DigestExecution) => Promise<T>,
     signal: AbortSignal,
     priority: () => number,
-    preempt?: AbortController,
+    preempt?: Pick<AbortController, "abort">,
     finishing: boolean | (() => boolean) = false,
     optional = false,
   ): Promise<T> {

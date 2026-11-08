@@ -64,6 +64,7 @@ const execution = new AsyncLocalStorage<{
   catalogPublications?: Map<string, DigestPublicationReservation>;
   nativeReads?: Record<string, number>;
   headerRows?: { limit: number; rows: number }[];
+  publishing?(): void;
 }>();
 function wait<T>(readiness: Promise<T>): Promise<T> {
   return execution.getStore()?.turn.wait(readiness) ?? readiness;
@@ -188,6 +189,8 @@ async function publishRead<K extends keyof ProviderReadKinds>(
   const reader = sink!.readers[message.kind], codec = readCodecs[message.kind];
   if (!reader || !codec) throw new Error("Provider read not selected");
   const value = await reader(message.input, signal);
+  signal.throwIfAborted();
+  execution.getStore()?.publishing?.();
   const chunks = codec.chunks(value, policy.publishrows)[Symbol.iterator]();
   let current = chunks.next(), part = 0;
   while (!current.done) {
@@ -984,329 +987,336 @@ function handle(message: ToWorker): void {
     kick();
     return;
   }
+  let publishing = false;
   const task = requests.run(
     run!,
     message.id,
     (signal, turn) =>
-      execution.run({ signal, turn }, () =>
-        sqliteRetry(
-          async () => {
-            if (message.t === "hydrate") {
-              const publishKeys = async (
-                entries: readonly SessionMetadata[],
-              ) => {
-                for (
-                  let offset = 0;
-                  offset < message.sessions.length;
-                  offset += policy.publishrows
-                ) {
-                  const keys = message.sessions.slice(
-                    offset,
-                    offset + policy.publishrows,
-                  );
-                  const retained = store!.summary(keys).map(snapshot);
-                  await send({
-                    t: "catalog",
-                    run: run!,
-                    id: 0,
-                    connection,
-                    entries: keys.flatMap((id) =>
-                      entries.find((entry) => entry.id === id) ??
-                        retained.find((row) => row.metadata.id === id)
-                          ?.metadata ??
-                        []
-                    ),
-                    part: 0,
-                    last: true,
-                    authoritative: false,
-                  }, signal);
-                  for (const value of retained) {
-                    await publishStored(
-                      value.metadata.id,
-                      false,
-                      publicationOrder.reserve(
-                        value.metadata.id,
-                        turn.priority,
-                      ),
-                    );
-                  }
-                }
-              };
-              // A keyed last-good baseline is independent of native readiness.
-              await publishKeys([]);
-              if (!message.retained) {
-                let entries: SessionMetadata[];
-                try {
-                  entries = await sink!.hydrate(message.sessions, signal);
-                } catch (error) {
-                  signal.throwIfAborted();
-                  if (
-                    !(error instanceof OperationFailure) ||
-                    error.outcome !== "unavailable" ||
-                    store!.summary(message.sessions).length !==
-                      message.sessions.length
-                  ) throw error;
-                  nativeUnavailable = true;
-                  post({ t: "accepted", run: run!, id: message.id });
-                  return;
-                }
-                await publishKeys(entries);
-                await admitCatalog(entries, signal, {
-                  invalidate: false,
-                  helpers: true,
-                });
-              }
-              post({ t: "accepted", run: run!, id: message.id });
-            } else if (message.t === "projects") {
-              if (message.connection < connection) {
-                throw new Error("Stale native connection");
-              }
-              connection = message.connection;
-              sink!.connection(connection);
-              let part = 0;
-              const value = await sink!.projects(signal, async (projects) => {
-                for (
-                  let offset = 0;
-                  offset < projects.length;
-                  offset += policy.publishrows
-                ) {
-                  await send({
-                    t: "projects",
-                    run: run!,
-                    id: message.id,
-                    projects: projects.slice(
+      execution.run(
+        { signal, turn, publishing: () => publishing = true },
+        () =>
+          sqliteRetry(
+            async () => {
+              if (message.t === "hydrate") {
+                const publishKeys = async (
+                  entries: readonly SessionMetadata[],
+                ) => {
+                  for (
+                    let offset = 0;
+                    offset < message.sessions.length;
+                    offset += policy.publishrows
+                  ) {
+                    const keys = message.sessions.slice(
                       offset,
                       offset + policy.publishrows,
-                    ),
-                    part: part++,
-                    last: false,
-                  }, signal);
-                }
-              }, message.directory);
-              await send({
-                t: "projects",
-                run: run!,
-                id: message.id,
-                projects: [],
-                hints: value.hints,
-                part,
-                last: true,
-              }, signal);
-            } else if (message.t === "catalog") {
-              if (message.connection < connection) {
-                throw new Error("Stale native connection");
-              }
-              if (cachedReplay) {
-                const cached = cachedReplay;
-                cachedReplay = undefined;
-                cached.controller.abort(
-                  new DOMException(
-                    "Fresh catalog supersedes cached publication",
-                    "AbortError",
-                  ),
-                );
-                await wait(cached.task.catch((error) => {
-                  if (
-                    !isCancellation(error)
-                  ) throw error;
-                }));
-              }
-              connection = message.connection;
-              progress = new DigestProgress(
-                `${run}:${connection}:${message.id}`,
-              );
-              sink!.connection(connection);
-              const current = () => {
-                signal.throwIfAborted();
-                if (connection !== message.connection) {
-                  throw new Error("Digest catalog generation was replaced");
-                }
-              };
-              const context = execution.getStore()!;
-              const changed = context.catalogPublications = new Map<
-                string,
-                DigestPublicationReservation
-              >();
-              try {
-                let result: Awaited<
-                  ReturnType<OpencodeV1DigestSink["catalog"]>
-                >;
-                try {
-                  result = await sink!.catalog(signal);
-                } finally {
-                  context.catalogPublications = undefined;
-                }
-                const entries = [];
-                let catalogAfter = "";
-                while (true) {
-                  current();
-                  const rows = store!.catalog(
-                    sink!.identity,
-                    catalogAfter,
-                    policy.batch,
-                  );
-                  if (!rows.length) break;
-                  for (const row of rows) {
-                    progress?.row(
-                      row.id,
-                      row.directory,
-                      row.state === "ready",
-                      row.message_count ?? 0,
                     );
-                  }
-                  entries.push(...rows.map((row) => snapshot(row).metadata));
-                  // This catalog supersedes cached replay, including unchanged
-                  // tombstones whose digest chunks may not have arrived yet.
-                  for (const row of rows) {
-                    if (!changed.has(row.id)) {
-                      changed.set(row.id, publicationOrder.reserve(row.id));
+                    const retained = store!.summary(keys).map(snapshot);
+                    await send({
+                      t: "catalog",
+                      run: run!,
+                      id: 0,
+                      connection,
+                      entries: keys.flatMap((id) =>
+                        entries.find((entry) => entry.id === id) ??
+                          retained.find((row) => row.metadata.id === id)
+                            ?.metadata ??
+                          []
+                      ),
+                      part: 0,
+                      last: true,
+                      authoritative: false,
+                    }, signal);
+                    for (const value of retained) {
+                      await publishStored(
+                        value.metadata.id,
+                        false,
+                        publicationOrder.reserve(
+                          value.metadata.id,
+                          turn.priority,
+                        ),
+                      );
                     }
                   }
-                  catalogAfter = rows.at(-1)!.id;
-                  await yieldChunk(signal);
-                }
-                for (
-                  let offset = 0, part = 0;
-                  offset < entries.length || part === 0;
-                  offset += policy.publishrows, part++
-                ) {
-                  current();
-                  await send({
-                    t: "catalog",
-                    run: run!,
-                    id: message.id,
-                    connection,
-                    entries: entries.slice(offset, offset + policy.publishrows),
-                    part,
-                    last: offset + policy.publishrows >= entries.length,
-                    authoritative: result.authoritative,
-                    ...(offset === 0 ? { hints: result.hints } : {}),
-                  }, signal);
-                }
-                current();
-                await admitCatalog(result.entries, signal, {
-                  invalidate: true,
-                  helpers: true,
-                });
-                progress?.complete();
-                scheduler!.discoveryComplete();
-                const controller = new AbortController();
-                const task = replayStored(
-                  AbortSignal.any([controller.signal, lifetime.signal]),
-                  false,
-                );
-                cachedReplay = { controller, task };
-                observeTask(task, message);
-              } finally {
-                for (const reserved of changed.values()) reserved.release();
-              }
-            } else if (message.t === "read") {
-              // The selected contribution owns its reader/codec; dispatch has no kind switch.
-              try {
-                await publishRead(message, signal);
-              } catch (error) {
-                signal.throwIfAborted();
-                post({
-                  t: "read.failure",
-                  run: run!,
-                  id: message.id,
-                  outcome: error instanceof OperationFailure &&
-                      error.outcome === "rejected"
-                    ? "rejected"
-                    : "unavailable",
-                  failure: {
-                    code: error instanceof OperationFailure &&
-                        error.outcome !== "unknown"
-                      ? error.code
-                      : "native.unavailable",
-                    retry: error instanceof OperationFailure &&
-                        error.outcome === "rejected"
-                      ? "new-intent"
-                      : "same-intent",
-                    diagnosticID: crypto.randomUUID(),
-                  },
-                });
-                if (!isCancellation(error)) {
-                  post({
-                    t: "error",
-                    run: run!,
-                    id: 0,
-                    scope: "worker",
-                    message: `Provider read: ${errorMessage(error)}`,
+                };
+                // A keyed last-good baseline is independent of native readiness.
+                await publishKeys([]);
+                if (!message.retained) {
+                  let entries: SessionMetadata[];
+                  try {
+                    entries = await sink!.hydrate(message.sessions, signal);
+                  } catch (error) {
+                    signal.throwIfAborted();
+                    if (
+                      !(error instanceof OperationFailure) ||
+                      error.outcome !== "unavailable" ||
+                      store!.summary(message.sessions).length !==
+                        message.sessions.length
+                    ) throw error;
+                    nativeUnavailable = true;
+                    post({ t: "accepted", run: run!, id: message.id });
+                    return;
+                  }
+                  await publishKeys(entries);
+                  await admitCatalog(entries, signal, {
+                    invalidate: false,
+                    helpers: true,
                   });
                 }
-              }
-            } else if (message.t === "deleted") {
-              if (message.connection === connection) {
-                for (const item of message.sessions) {
-                  await sink!.deleted(
-                    connection,
-                    item.sessionID,
-                    item.revision,
-                    item.metadata,
-                  );
+                post({ t: "accepted", run: run!, id: message.id });
+              } else if (message.t === "projects") {
+                if (message.connection < connection) {
+                  throw new Error("Stale native connection");
                 }
-                await batches!.settle(signal);
-              }
-              post({ t: "accepted", run: run!, id: message.id });
-            } else if (message.t === "transcript") {
-              const metadata = await sink!.transcriptMetadata(
-                message.sessionID,
-                message.turns,
-                signal,
-                message.cutoff,
-                message.boundary,
-              );
-              post({
-                t: "transcript",
-                run: run!,
-                id: message.id,
-                sessionID: message.sessionID,
-                metadata,
-              });
-            } else if (message.t === "detail") {
-              const detail = await sink!.detail(
-                message.sessionID,
-                message.turnID,
-                signal,
-              );
-              const count = Math.max(
-                1,
-                Math.ceil(
-                  detail.calls.length / policy.publishrows,
-                ),
-              );
-              for (let part = 0; part < count; part++) {
+                connection = message.connection;
+                sink!.connection(connection);
+                let part = 0;
+                const value = await sink!.projects(signal, async (projects) => {
+                  for (
+                    let offset = 0;
+                    offset < projects.length;
+                    offset += policy.publishrows
+                  ) {
+                    await send({
+                      t: "projects",
+                      run: run!,
+                      id: message.id,
+                      projects: projects.slice(
+                        offset,
+                        offset + policy.publishrows,
+                      ),
+                      part: part++,
+                      last: false,
+                    }, signal);
+                  }
+                }, message.directory);
                 await send({
-                  t: "detail",
+                  t: "projects",
+                  run: run!,
+                  id: message.id,
+                  projects: [],
+                  hints: value.hints,
+                  part,
+                  last: true,
+                }, signal);
+              } else if (message.t === "catalog") {
+                if (message.connection < connection) {
+                  throw new Error("Stale native connection");
+                }
+                if (cachedReplay) {
+                  const cached = cachedReplay;
+                  cachedReplay = undefined;
+                  cached.controller.abort(
+                    new DOMException(
+                      "Fresh catalog supersedes cached publication",
+                      "AbortError",
+                    ),
+                  );
+                  await wait(cached.task.catch((error) => {
+                    if (
+                      !isCancellation(error)
+                    ) throw error;
+                  }));
+                }
+                connection = message.connection;
+                progress = new DigestProgress(
+                  `${run}:${connection}:${message.id}`,
+                );
+                sink!.connection(connection);
+                const current = () => {
+                  signal.throwIfAborted();
+                  if (connection !== message.connection) {
+                    throw new Error("Digest catalog generation was replaced");
+                  }
+                };
+                const context = execution.getStore()!;
+                const changed = context.catalogPublications = new Map<
+                  string,
+                  DigestPublicationReservation
+                >();
+                try {
+                  let result: Awaited<
+                    ReturnType<OpencodeV1DigestSink["catalog"]>
+                  >;
+                  try {
+                    result = await sink!.catalog(signal);
+                  } finally {
+                    context.catalogPublications = undefined;
+                  }
+                  const entries = [];
+                  let catalogAfter = "";
+                  while (true) {
+                    current();
+                    const rows = store!.catalog(
+                      sink!.identity,
+                      catalogAfter,
+                      policy.batch,
+                    );
+                    if (!rows.length) break;
+                    for (const row of rows) {
+                      progress?.row(
+                        row.id,
+                        row.directory,
+                        row.state === "ready",
+                        row.message_count ?? 0,
+                      );
+                    }
+                    entries.push(...rows.map((row) => snapshot(row).metadata));
+                    // This catalog supersedes cached replay, including unchanged
+                    // tombstones whose digest chunks may not have arrived yet.
+                    for (const row of rows) {
+                      if (!changed.has(row.id)) {
+                        changed.set(row.id, publicationOrder.reserve(row.id));
+                      }
+                    }
+                    catalogAfter = rows.at(-1)!.id;
+                    await yieldChunk(signal);
+                  }
+                  for (
+                    let offset = 0, part = 0;
+                    offset < entries.length || part === 0;
+                    offset += policy.publishrows, part++
+                  ) {
+                    current();
+                    await send({
+                      t: "catalog",
+                      run: run!,
+                      id: message.id,
+                      connection,
+                      entries: entries.slice(
+                        offset,
+                        offset + policy.publishrows,
+                      ),
+                      part,
+                      last: offset + policy.publishrows >= entries.length,
+                      authoritative: result.authoritative,
+                      ...(offset === 0 ? { hints: result.hints } : {}),
+                    }, signal);
+                  }
+                  current();
+                  await admitCatalog(result.entries, signal, {
+                    invalidate: true,
+                    helpers: true,
+                  });
+                  progress?.complete();
+                  scheduler!.discoveryComplete();
+                  const controller = new AbortController();
+                  const task = replayStored(
+                    AbortSignal.any([controller.signal, lifetime.signal]),
+                    false,
+                  );
+                  cachedReplay = { controller, task };
+                  observeTask(task, message);
+                } finally {
+                  for (const reserved of changed.values()) reserved.release();
+                }
+              } else if (message.t === "read") {
+                // The selected contribution owns its reader/codec; dispatch has no kind switch.
+                try {
+                  await publishRead(message, signal);
+                } catch (error) {
+                  signal.throwIfAborted();
+                  post({
+                    t: "read.failure",
+                    run: run!,
+                    id: message.id,
+                    outcome: error instanceof OperationFailure &&
+                        error.outcome === "rejected"
+                      ? "rejected"
+                      : "unavailable",
+                    failure: {
+                      code: error instanceof OperationFailure &&
+                          error.outcome !== "unknown"
+                        ? error.code
+                        : "native.unavailable",
+                      retry: error instanceof OperationFailure &&
+                          error.outcome === "rejected"
+                        ? "new-intent"
+                        : "same-intent",
+                      diagnosticID: crypto.randomUUID(),
+                    },
+                  });
+                  if (!isCancellation(error)) {
+                    post({
+                      t: "error",
+                      run: run!,
+                      id: 0,
+                      scope: "worker",
+                      message: `Provider read: ${errorMessage(error)}`,
+                    });
+                  }
+                }
+              } else if (message.t === "deleted") {
+                if (message.connection === connection) {
+                  for (const item of message.sessions) {
+                    await sink!.deleted(
+                      connection,
+                      item.sessionID,
+                      item.revision,
+                      item.metadata,
+                    );
+                  }
+                  await batches!.settle(signal);
+                }
+                post({ t: "accepted", run: run!, id: message.id });
+              } else if (message.t === "transcript") {
+                const metadata = await sink!.transcriptMetadata(
+                  message.sessionID,
+                  message.turns,
+                  signal,
+                  message.cutoff,
+                  message.boundary,
+                );
+                post({
+                  t: "transcript",
                   run: run!,
                   id: message.id,
                   sessionID: message.sessionID,
-                  part,
-                  last: part === count - 1,
-                  turnID: detail.turnID,
-                  revision: detail.revision,
-                  ...(part === 0 ? { summary: detail.summary } : {}),
-                  calls: detail.calls.slice(
-                    part * policy.publishrows,
-                    (part + 1) * policy.publishrows,
+                  metadata,
+                });
+              } else if (message.t === "detail") {
+                const detail = await sink!.detail(
+                  message.sessionID,
+                  message.turnID,
+                  signal,
+                );
+                const count = Math.max(
+                  1,
+                  Math.ceil(
+                    detail.calls.length / policy.publishrows,
                   ),
-                }, signal);
+                );
+                for (let part = 0; part < count; part++) {
+                  await send({
+                    t: "detail",
+                    run: run!,
+                    id: message.id,
+                    sessionID: message.sessionID,
+                    part,
+                    last: part === count - 1,
+                    turnID: detail.turnID,
+                    revision: detail.revision,
+                    ...(part === 0 ? { summary: detail.summary } : {}),
+                    calls: detail.calls.slice(
+                      part * policy.publishrows,
+                      (part + 1) * policy.publishrows,
+                    ),
+                  }, signal);
+                }
+              } else if (message.t === "deleteIntent") {
+                await sink!.deleteIntent(
+                  message.sessionID,
+                  message.intent,
+                  message.phase,
+                  message.connection,
+                );
+                post({ t: "accepted", run: run!, id: message.id });
               }
-            } else if (message.t === "deleteIntent") {
-              await sink!.deleteIntent(
-                message.sessionID,
-                message.intent,
-                message.phase,
-                message.connection,
-              );
-              post({ t: "accepted", run: run!, id: message.id });
-            }
-          },
-          signal,
-          policy,
-          wait,
-        )),
+            },
+            signal,
+            policy,
+            wait,
+          ),
+      ),
     message.t === "catalog"
       ? "attention"
       : message.t === "read" && message.priority !== "user"
@@ -1314,6 +1324,7 @@ function handle(message: ToWorker): void {
       : "interactive",
     message.t === "read",
     message.t === "read" && message.optional === true,
+    () => publishing,
   );
   observeTask(task, message);
   kick();

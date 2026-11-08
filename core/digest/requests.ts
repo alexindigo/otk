@@ -23,6 +23,7 @@ export class DigestRequests {
     priority: DigestPriority = "interactive",
     interruptible = false,
     optional = false,
+    finishing: boolean | (() => boolean) = false,
   ): Promise<T> {
     if (
       this.#closed || generation !== this.generation ||
@@ -35,7 +36,7 @@ export class DigestRequests {
       controller.signal,
       priority,
       interruptible,
-      false,
+      finishing,
       optional,
     )
       .finally(() => {

@@ -4,6 +4,59 @@ import { DigestScheduler, ReadAdmission } from "@otk/harness";
 import { cfg } from "../../../tests/support/config.ts";
 import { test } from "../../../tests/support/resources.ts";
 
+test("acquired transient publication finishes once under pressure and late I/O preemption", async () => {
+  const scheduler = new DigestScheduler({
+    ...cfg().digest,
+    cpu: 1,
+    memoryreserve: 1,
+  }, {
+    freeMemory: () => 100,
+    sleep: () => Promise.resolve(),
+  });
+  const owner = new AbortController(), credit = Promise.withResolvers<void>();
+  const delivered: string[] = [];
+  let publishing = false, attempts = 0, completed = false;
+  let acquiredSignal: AbortSignal | undefined;
+  const read = scheduler.execute(
+    async (signal, turn) => {
+      attempts++;
+      acquiredSignal = signal;
+      publishing = true;
+      delivered.push("header");
+      await turn.wait(credit.promise);
+      delivered.push("complete");
+      completed = true;
+    },
+    owner.signal,
+    "visible",
+    true,
+    () => publishing,
+  );
+  const joined = Promise.allSettled([read]);
+  try {
+    while (!publishing) await scheduler.tick();
+    scheduler.interactive("foreground", true);
+    // Admission can deliver a late preemption notice after acquisition. A
+    // published prefix cannot be replayed or parked behind its consumer.
+    scheduler.interruptIO(acquiredSignal);
+    credit.resolve();
+    const deadline = Date.now() + 300;
+    while (!completed && Date.now() < deadline) {
+      await scheduler.tick();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    }
+    assertEquals(completed, true);
+    assertEquals(attempts, 1);
+    assertEquals(delivered, ["header", "complete"]);
+    await read;
+  } finally {
+    credit.resolve();
+    owner.abort();
+    await scheduler.stop();
+    await joined;
+  }
+});
+
 test("spare native I/O capacity admits an urgent read without retiring its peer", async () => {
   let preempted = false;
   const admission = new ReadAdmission(() => {
