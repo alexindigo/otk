@@ -210,9 +210,16 @@ export default function ProjectTabs(props: {
       ?.scrollIntoView({ inline: "nearest", block: "nearest" });
     updateEdges();
   };
+  const activeTabKey = createMemo(() =>
+    JSON.stringify([
+      props.project.sidecarId,
+      props.project.directory,
+      props.model.state.selected?.kind,
+      props.model.state.selected?.id,
+    ])
+  );
   createEffect(
-    () =>
-      `${props.model.state.selected?.kind}/${props.model.state.selected?.id}`,
+    activeTabKey,
     () =>
       onSettled(() => {
         if (lane?.isConnected) revealActive();
