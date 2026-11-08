@@ -4,7 +4,7 @@ import { join } from "@std/path";
 import { start } from "../../main.ts";
 import { cfg } from "./config.ts";
 import { FakeLlm } from "./fake-llm.ts";
-import { freePort, waitFor } from "./opencode.ts";
+import { freePort } from "./opencode.ts";
 import { resources, tempDir } from "./resources.ts";
 import { SCALE, SessionScale } from "./session-scale.ts";
 import { servingProbe } from "./serving-probe.ts";
@@ -27,11 +27,13 @@ export async function requestScaleFixture() {
     section: probe.section,
   });
   resources().defer("request scale application", () => app.stop());
-  await waitFor(
-    () => Array.from(app.index.values()).length,
-    (count) => count === SCALE.sessions,
-    120000,
-  );
+  // Rule 1 no longer catalogs the population at startup. Validate the actual
+  // requested identity; the fixture manifest still proves the full population.
+  const selected = native.manifest.sessions[0];
+  assertEquals(await app.backend.core.identities([selected.id]), [{
+    id: selected.id,
+    directory: selected.directory,
+  }]);
   resources().evidence(
     "request serving samples",
     () =>
