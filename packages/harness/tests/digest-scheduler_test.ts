@@ -20,6 +20,101 @@ const policy: DigestPolicy = {
   retryms: 10,
   busyms: 100,
 };
+test("requested visible reads precede optional attention batches after idle opens", async () => {
+  const seen: string[] = [];
+  const scheduler = new DigestScheduler({ ...policy, cpu: 1 }, {
+    now: () => 100,
+    freeMemory: () => 1000,
+    sleep: () => Promise.resolve(),
+  });
+  scheduler.register({
+    identity: "test-v1",
+    catalog: () => Promise.resolve({ entries: [], authoritative: true }),
+    detail: () => Promise.reject(new Error("unused")),
+    close() {},
+    step(job) {
+      seen.push(`backfill:${job.sessionID}`);
+      return Promise.resolve(undefined);
+    },
+  });
+  for (let n = 0; n < 2; n++) {
+    scheduler.enqueue(
+      { provider: "test-v1", sessionID: String(n), updated: n },
+      "attention",
+    );
+  }
+  const requested = scheduler.execute(
+    () => {
+      seen.push("requested");
+      return Promise.resolve();
+    },
+    new AbortController().signal,
+    "visible",
+  );
+  try {
+    while (await scheduler.tick()) { /* drain this finite workload */ }
+    await requested;
+    assertEquals(seen[0], "requested");
+    assertEquals(
+      seen.filter((value) => value.startsWith("backfill:")).length,
+      2,
+    );
+  } finally {
+    await scheduler.stop();
+    await Promise.allSettled([requested]);
+  }
+});
+test("requested visible continuations resume before optional attention continuations", async () => {
+  const seen: string[] = [],
+    ready = Promise.withResolvers<void>(),
+    idle = Promise.withResolvers<void>();
+  const scheduler = new DigestScheduler({ ...policy, cpu: 1 }, {
+    now: () => 100,
+    freeMemory: () => 1000,
+    sleep: () => Promise.resolve(),
+  });
+  const requested = scheduler.execute(
+    async (_signal, execution) => {
+      seen.push("requested:start");
+      await execution.wait(ready.promise, "io");
+      seen.push("requested:resume");
+    },
+    new AbortController().signal,
+    "visible",
+  );
+  await scheduler.tick();
+  const optional = scheduler.execute(
+    async (_signal, execution) => {
+      seen.push("backfill:start");
+      await execution.wait(idle.promise, "io");
+      seen.push("backfill:resume");
+    },
+    new AbortController().signal,
+    "attention",
+    false,
+    false,
+    true,
+  );
+  await scheduler.tick();
+  try {
+    ready.resolve();
+    idle.resolve();
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    while (await scheduler.tick()) { /* readiness has entered both queues */ }
+    await Promise.all([requested, optional]);
+    assertEquals(seen, [
+      "requested:start",
+      "backfill:start",
+      "requested:resume",
+      "backfill:resume",
+    ]);
+  } finally {
+    ready.resolve();
+    idle.resolve();
+    await scheduler.stop();
+    await Promise.allSettled([requested, optional]);
+  }
+});
 test("optional transient reads share the idle and parallel entry-batch budget", async () => {
   let now = 0, starts = 0;
   const release = Promise.withResolvers<void>();

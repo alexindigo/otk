@@ -675,7 +675,7 @@ export class DigestScheduler {
     }
     const idleTurn = this.#idleTurns.peek();
     if (
-      idleTurn && (!turn || idleTurn.priority() < turn.priority()) &&
+      idleTurn && !turn &&
       this.#eligible(idleTurn.priority(), idleTurn.signal, true)
     ) turn = idleTurn;
     const finishing = this.#finishing.peek();
@@ -691,7 +691,10 @@ export class DigestScheduler {
       next &&
       (!next.optional || this.#batches < this.policy.parallel) &&
       (!turn ||
-        this.#priority(next) < (turn.signal.aborted ? -1 : turn.priority())) &&
+        !turn.signal.aborted &&
+          (next.optional !== turn.optional && !turn.finishing()
+            ? !next.optional
+            : this.#priority(next) < turn.priority())) &&
       this.#eligible(this.#priority(next), undefined, next.optional)
     ) {
       const pending = next;

@@ -190,6 +190,11 @@ permission. No SQLite transaction crosses a wait. Duty accounting excludes
 waiting time; its timer is outside the executing slot. Producers must use these
 ports for asynchronous readiness.
 
+Ready requested turns precede idle batches and continuations even when an idle
+entry has an attention hint and the requested read has visible priority. The
+existing finishing queue still drains bounded committed publication and cleanup
+at its inherited rank; cancellation retains its cleanup precedence.
+
 Explicit transient read callbacks can opt into `interruptible: true`. Urgent
 native I/O then cancels their lower-priority acquisition, joins settlement and
 requeues the same caller lifetime at its original priority. The callback may run
