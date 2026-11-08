@@ -91,7 +91,7 @@ export class SessionIndex {
     for (const entry of this.#entries.values()) {
       this.#edge(entry.id, entry.parentID);
     }
-    this.resetPublished([...this.values()], previous);
+    this.resetPublished([...this.#entries.values()], previous);
   }
   protected resetPublished(
     _entries: IndexEntry[],
@@ -123,17 +123,17 @@ export class SessionIndex {
     this.upsert(entry);
   }
   upsert(entry: SessionMetadata): void {
-    const previous = this.get(entry.id);
+    const previous = this.#entries.get(entry.id);
     const copy = this.#materialize(entry);
     this.#edge(entry.id, this.#entries.get(entry.id)?.parentID, true);
     this.#entries.set(entry.id, copy);
     this.#edge(entry.id, entry.parentID);
-    this.published(this.get(entry.id)!, previous);
+    this.published(copy, previous);
   }
   applyDigest(delta: DigestIndexDelta): boolean {
     const entry = this.#entries.get(delta.id);
     if (!entry || delta.revision < entry.digest.revision) return false;
-    const previous = this.get(delta.id);
+    const previous = entry;
     const turns =
       !Object.keys(delta.turns.upsert).length && !delta.turns.remove.length
         ? entry.digest.turns
@@ -156,7 +156,11 @@ export class SessionIndex {
     if (delta.deleted) next.deleted = structuredClone(delta.deleted);
     else delete next.deleted;
     this.#entries.set(delta.id, immutable(next));
-    this.published(this.get(delta.id)!, previous, structuredClone(delta));
+    this.published(
+      this.#entries.get(delta.id)!,
+      previous,
+      immutable(structuredClone(delta)),
+    );
     for (const listener of this.#digestListeners) listener(delta.id);
     return true;
   }

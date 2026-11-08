@@ -383,8 +383,8 @@ API auth middleware; there is no handwritten route table.
 
 `InboxFeature` composes project/task/seen/finish/template stores and owns inbox
 RPC validation and metadata frames. `IndexStore.observe` supplies synchronous,
-detached before/after entries, so a busy-to-idle edge cannot disappear inside a
-wire batch. Initial idle snapshots do not invent finish times. Activity clears
+immutable before/after snapshots, so a busy-to-idle edge cannot disappear inside
+a wire batch. Initial idle snapshots do not invent finish times. Activity clears
 persisted inactive marks for affected users without tracking index-only
 directories. Template discovery scans on startup and template edits, fencing
 retired/closed results; snapshots carry these directory names independently of

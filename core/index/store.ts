@@ -65,7 +65,7 @@ export class IndexStore extends SessionIndex {
       this.#removals.delete(listener);
     };
   }
-  /** Synchronous observations preserve transitions even within one wire batch. */
+  /** Synchronous immutable snapshots preserve transitions without copying history. */
   observe(
     listener: (
       entry: IndexEntry,
@@ -109,7 +109,7 @@ export class IndexStore extends SessionIndex {
     }));
     for (const { entry, previous } of changes) {
       for (const listener of this.#observers) {
-        listener(structuredClone(entry), previous && structuredClone(previous));
+        listener(entry, previous);
       }
     }
     this.rev++;
@@ -131,16 +131,11 @@ export class IndexStore extends SessionIndex {
       this.#catalogs.delete(entry.directory);
       if (previous) this.#catalogs.delete(previous.directory);
     }
-    const copy = structuredClone(entry);
     for (const listener of this.#observers) {
-      listener(
-        structuredClone(copy),
-        previous && structuredClone(previous),
-        delta,
-      );
+      listener(entry, previous, delta);
     }
     this.#queue(
-      delta ? { op: "digest", ...delta } : { op: "upsert", entry: copy },
+      delta ? { op: "digest", ...delta } : { op: "upsert", entry },
     );
     this.diagnostics?.("index:observers", performance.now() - start);
   }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { test } from "../../support/resources.ts";
-import { assertEquals } from "@std/assert";
+import { assertEquals, assertThrows } from "@std/assert";
 import {
   Finishes,
   finishesMigrations,
@@ -111,7 +111,7 @@ test("core records real status edges at the single index owner and clears persis
   }
 });
 
-test("synchronous index observers see committed detached metadata on reset and every same-batch transition", () => {
+test("synchronous index observers see committed immutable metadata on reset and every same-batch transition", () => {
   const index = new IndexStore(), transitions: string[] = [];
   const entry: IndexEntry = {
     digest: { state: "digesting", revision: 0, turns: {} },
@@ -133,7 +133,9 @@ test("synchronous index observers see committed detached metadata on reset and e
   const stop = index.observe((next, previous) => {
     assertEquals(index.get(next.id)!.status, next.status);
     transitions.push(`${previous?.status ?? "none"}>${next.status}`);
-    next.title = "must not leak";
+    assertThrows(() => {
+      next.title = "must not leak";
+    }, TypeError);
   });
   index.reset([entry]);
   index.upsert({ ...entry, status: "busy" });
