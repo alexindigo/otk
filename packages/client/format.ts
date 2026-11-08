@@ -5,6 +5,18 @@ const exact = new Intl.NumberFormat("en-US");
 export const exactCount = (value: number): string => exact.format(value);
 export const duration = (ms: number): string =>
   `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
+/** Human status durations share units; clocks and ETA rounding belong to callers. */
+export function humanDuration(ms: number): string {
+  const elapsed = Math.max(0, ms);
+  if (elapsed >= 86400_000) {
+    return countLabel(Math.floor(elapsed / 86400_000), "day");
+  }
+  if (elapsed >= 3600_000) {
+    return countLabel(Math.floor(elapsed / 3600_000), "hour");
+  }
+  if (elapsed >= 60_000) return `${Math.floor(elapsed / 60_000)} min`;
+  return `${Math.floor(elapsed / 1000)} s`;
+}
 /** Session activity is authoritative; request observation time is not ask age. */
 export function requestIdle(time: number | undefined, now: number): {
   label: string;
@@ -12,16 +24,7 @@ export function requestIdle(time: number | undefined, now: number): {
 } {
   if (time === undefined) return { label: "Session activity unavailable" };
   const elapsed = Math.max(0, now - time);
-  const unit = elapsed >= 86400_000
-    ? "day"
-    : elapsed >= 3600_000
-    ? "hour"
-    : "minute";
-  const count = Math.floor(
-    elapsed /
-      (unit === "day" ? 86400_000 : unit === "hour" ? 3600_000 : 60_000),
-  );
-  const age = countLabel(count, unit);
+  const age = humanDuration(elapsed);
   return {
     label: `Session idle ${age}`,
     ...(elapsed > 86400_000

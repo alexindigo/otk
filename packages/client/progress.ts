@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { ProgressFacts } from "@otk/protocol";
 import { createState, type StateFactory } from "./state.ts";
+import { humanDuration } from "./format.ts";
 
 export interface ProgressDisplay {
   busy: boolean;
@@ -8,9 +9,8 @@ export interface ProgressDisplay {
   rate?: number;
   eta?: [number, number];
 }
-const seconds = (ms: number) => `${Math.floor(Math.max(0, ms) / 1000)} s`;
 const remaining = (seconds: number) =>
-  `${Math.max(1, Math.ceil(seconds / 60))} min`;
+  humanDuration(Math.max(1, Math.ceil(seconds / 60)) * 60_000);
 function waiting(reason: string | undefined, page: boolean): string {
   if (reason === "queued behind current work") {
     return page
@@ -75,7 +75,7 @@ export class ProgressEstimate {
     const busy = facts.phase !== "ready";
     if (!busy) return { busy: false, text: `${label}: ready` };
     const elapsedMs = Math.max(0, now - facts.started),
-      elapsed = seconds(elapsedMs);
+      elapsed = humanDuration(elapsedMs);
     const page = facts.phase === "reading" || facts.phase === "queued";
     const stalled = now - facts.advanced >= 45000;
     const count = facts.eligible === null
@@ -94,7 +94,7 @@ export class ProgressEstimate {
             )
           }`
           : `${label}: ${count}. No progress for ${
-            seconds(now - facts.advanced)
+            humanDuration(now - facts.advanced)
           }, ${waiting(facts.wait, false)}`,
       };
     }

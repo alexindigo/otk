@@ -27,7 +27,7 @@ Deno.test("progress estimates steady work from active time, never from waiting",
   assertEquals(stalled.eta, undefined);
   for (
     const copy of [
-      "No progress for 60 s",
+      "No progress for 1 min",
       "opencode isn't responding",
       "10 of 100",
     ]
@@ -48,11 +48,30 @@ Deno.test("progress estimates steady work from active time, never from waiting",
   );
   assertEquals(
     page.display("Loading messages", 61000).text,
-    "Still loading messages (61 s): waiting for opencode to respond",
+    "Still loading messages (1 min): waiting for opencode to respond",
   );
   assertEquals(
     page.display("Loading sessions", 61000).text,
-    "Still loading sessions (61 s): waiting for opencode to respond",
+    "Still loading sessions (1 min): waiting for opencode to respond",
+  );
+});
+Deno.test("progress shares human durations for long stalls, page elapsed time and ETA", () => {
+  const owner = new ProgressEstimate();
+  owner.update(facts());
+  assertEquals(
+    owner.display("Indexing sessions", 1036863_000).text,
+    "Indexing sessions: 0 of 100. No progress for 12 days, waiting for more information",
+  );
+  owner.update({ ...facts(), phase: "reading" });
+  assertEquals(
+    owner.display("Loading messages", 1036863_000).text,
+    "Still loading messages (12 days): waiting for more information",
+  );
+  owner.update({ ...facts(), generation: "eta" });
+  owner.update({ ...facts(1, 86400_000), generation: "eta" });
+  assertEquals(
+    owner.display("Indexing sessions", 1000).text,
+    "Indexing sessions: 1 of 100, about 99 days left",
   );
 });
 Deno.test("progress gives bursty rates a range and resets on generation replacement", () => {

@@ -508,12 +508,15 @@ initial loading, using the existing transcript rather than a second part store.
 readiness precedes the intent, missing agents do nothing, and disposal cancels
 pending switches. Historical completion never seeds a draft.
 
-`exactCount`, `duration` and `relativeTime` own exact audit counts, nonnegative
-one-decimal elapsed seconds, and relative minute/hour/day clocks. Callers supply
-time; formatters install no timers. Usage retains its distinct compact-token and
-money formatters. `canonicalPath` and `relativePath` use the supplied server
-`PathSemantics`, including POSIX, drive and UNC roots, independently of browser
-OS. File URIs stay opaque until native attachment preparation.
+`humanDuration` owns human second/minute/hour/day status copy for both request
+idle age and progress elapsed, no-progress and ETA labels. `exactCount`,
+`duration` and `relativeTime` own exact audit counts, nonnegative one-decimal
+elapsed seconds, and relative minute/hour/day clocks. Callers supply time and
+ETA rounding; formatters install no timers. Usage retains its distinct
+compact-token and money formatters. `canonicalPath` and `relativePath` use the
+supplied server `PathSemantics`, including POSIX, drive and UNC roots,
+independently of browser OS. File URIs stay opaque until native attachment
+preparation.
 
 Sidecar state exposes `connectionVersion`, incremented for every welcome,
 including reconnects, so consumers can identify the current connection even if

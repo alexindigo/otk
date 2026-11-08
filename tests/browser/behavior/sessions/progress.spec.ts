@@ -80,12 +80,13 @@ test("progress.count-rate-eta-and-stalled-wait", {
   ) {
     await expect(status).toContainText(copy);
   }
-  await expect(status).toContainText(/No progress for \d+ s/);
+  // The shared human-duration owner promotes elapsed waits to minutes at 60 seconds.
+  await expect(status).toContainText(/No progress for 1 min/);
   await expect(pageStatus).toHaveText(
-    /Still loading messages \(\d+ s\): waiting for opencode to respond/,
+    /Still loading messages \(1 min\): waiting for opencode to respond/,
   );
   await expect(listStatus).toHaveText(
-    /Still loading sessions \(\d+ s\): waiting for opencode to respond/,
+    /Still loading sessions \(1 min\): waiting for opencode to respond/,
   );
   const rowHeld = await page.locator(".otk-session-row").first().boundingBox();
   expect(rowHeld?.y).toBe(rowBefore?.y);
@@ -184,7 +185,7 @@ test(
     );
     await page.clock.runFor(1100);
     await expect(status).toHaveText(
-      /Still loading messages \(\d+ s\): waiting for opencode to respond/,
+      /Still loading messages \(1 min\): waiting for opencode to respond/,
     );
     await expect(page.locator(".otk-session-loading-row")).toContainText(
       /Still loading sessions/,
