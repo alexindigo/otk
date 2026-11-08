@@ -27,9 +27,11 @@ export async function measureMessagePaint(
           if(f.t==='index.snapshot')probe.snapshots.push({at,count:f.entries.length,ready:f.entries.every(e=>e.digest.state==='ready')});
           if(f.t==='bootstrap.complete')probe.bootstraps.push({at});
           if(f.t==='transcript.invalidated')probe.invalidations.push({at,version:f.version,sessionID:f.sessionID});
-          if(f.t==='request.result'){
-            const request=probe.requests.find(r=>r.id===f.ref.key);
-            if(request){const page={at,request,ok:f.outcome.ok,ids:f.outcome.result?.items?.map(m=>m.id),older:f.outcome.result?.older,error:f.outcome.error};probe.pages.push(page);performance.mark('otk-page-received');setTimeout(()=>{page.turnSettled=performance.now();performance.mark('otk-page-turn-settled')},0)}
+          const body=f.t==='load.chunk'&&f.data.kind==='message-page'?f.data.page:null;
+          if(body||f.t==='request.result'){
+            const request=probe.requests.find(r=>r.id===(body?f.request.key:f.ref.key));
+            const result=body??f.outcome?.result;
+            if(request){const page={at,request,delivery:body?'body':'complete',ok:body?true:f.outcome.ok,ids:result?.items?.map(m=>m.id),older:result?.older,error:f.outcome?.error};probe.pages.push(page);performance.mark('otk-page-received');setTimeout(()=>{page.turnSettled=performance.now();performance.mark('otk-page-turn-settled')},0)}
           }
         })}
         send(data){const f=JSON.parse(data);if(f.t==='request'&&f.method==='session.messages'&&f.params.sessionID===target){probe.requests.push({id:f.ref.key,at:performance.now(),before:f.params.before});performance.mark('otk-page-request')}return super.send(data)}
@@ -60,6 +62,7 @@ export interface MessagePaintEvidence {
   pages: {
     at: number;
     request: { id: string; at: number; before?: string };
+    delivery: "body" | "complete";
     ok: boolean;
     ids?: string[];
     older?: string | null;
