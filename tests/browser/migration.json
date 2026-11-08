@@ -4524,15 +4524,15 @@
             {
               "runner": "playwright",
               "file": "tests/browser/behavior/composer/history.spec.ts",
-              "testID": "composer.multi-sidecar-time-ordered-recall-shell-dirty-guard-and-return"
+              "testID": "composer.project-scoped-time-ordered-recall-shell-dirty-guard-and-return"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "Project-scoped successor to the original multi-sidecar scenario"
             ],
             "states": [
-              "P6 history merges connected sidecars by time, recalls shell mode and protects edited recalled drafts"
+              "Project-scoped history recalls prompts and shell commands in time order, protects edited recalled drafts and returns to empty without merging connected siblings"
             ]
           },
           "lowerTierWitness": {
@@ -4542,7 +4542,7 @@
           "activeOwner": {
             "runner": "playwright",
             "file": "tests/browser/behavior/composer/history.spec.ts",
-            "testID": "composer.multi-sidecar-time-ordered-recall-shell-dirty-guard-and-return"
+            "testID": "composer.project-scoped-time-ordered-recall-shell-dirty-guard-and-return"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -4589,22 +4589,22 @@
             {
               "runner": "playwright",
               "file": "tests/browser/behavior/composer/history.spec.ts",
-              "testID": "composer.valid-local-recall-survives-definitive-connected-sibling-rejection"
+              "testID": "composer.local-recall-never-reads-an-unleased-connected-sibling"
             }
           ],
           "retainedCoverage": {
             "themes": [
-              "original scenario (unchanged)"
+              "Project-scoped successor to the original sibling-rejection scenario"
             ],
             "states": [
-              "history keeps valid local prompts when a connected sibling read is definitively rejected"
+              "Project-scoped history recalls valid local prompts without issuing history reads to an unleased connected sibling"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
             "runner": "playwright",
             "file": "tests/browser/behavior/composer/history.spec.ts",
-            "testID": "composer.valid-local-recall-survives-definitive-connected-sibling-rejection"
+            "testID": "composer.local-recall-never-reads-an-unleased-connected-sibling"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -6983,7 +6983,7 @@
             {
               "runner": "playwright",
               "file": "tests/browser/behavior/messages/temperature.spec.ts",
-              "testID": "messages.warm-cold-attention-preload-drafts"
+              "testID": "messages.warm-cold-selected-demand-drafts"
             }
           ],
           "retainedCoverage": {
@@ -6991,14 +6991,14 @@
               "otk-dark"
             ],
             "states": [
-              "native scope temperature retains drafts, releases cold subscriptions and preloads attention before navigation (otk-dark)"
+              "Selected-demand scope temperature retains drafts and warm source, cancels cold subscriptions and keeps background lamps current without preloading bodies (otk-dark)"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
             "runner": "playwright",
             "file": "tests/browser/behavior/messages/temperature.spec.ts",
-            "testID": "messages.warm-cold-attention-preload-drafts"
+            "testID": "messages.warm-cold-selected-demand-drafts"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -7014,7 +7014,7 @@
             {
               "runner": "playwright",
               "file": "tests/browser/behavior/messages/temperature.spec.ts",
-              "testID": "messages.warm-cold-attention-preload-drafts"
+              "testID": "messages.warm-cold-selected-demand-drafts"
             }
           ],
           "retainedCoverage": {
@@ -7022,14 +7022,14 @@
               "otk-light"
             ],
             "states": [
-              "native scope temperature retains drafts, releases cold subscriptions and preloads attention before navigation (otk-light)"
+              "Selected-demand scope temperature retains drafts and warm source, cancels cold subscriptions and keeps background lamps current without preloading bodies (otk-light)"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
             "runner": "playwright",
             "file": "tests/browser/behavior/messages/temperature.spec.ts",
-            "testID": "messages.warm-cold-attention-preload-drafts"
+            "testID": "messages.warm-cold-selected-demand-drafts"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -8766,7 +8766,7 @@
             {
               "runner": "playwright",
               "file": "tests/browser/behavior/sessions/discovery.spec.ts",
-              "testID": "sessions.idle-discovered-catalog-zero-native-instance-wake"
+              "testID": "sessions.idle-active-project-seeds-zero-native-instance-wake"
             }
           ],
           "retainedCoverage": {
@@ -8774,15 +8774,15 @@
               "otk-dark"
             ],
             "states": [
-              "idle discovered catalog renders without creating a native opencode instance",
-              "Dark browser outcome; complete source scenario retained"
+              "Session-bearing native project seeds render as Active with idle lights without creating a native opencode instance",
+              "Dark browser outcome; startup seed-only acquisition replaces discovered-catalog classification"
             ]
           },
           "lowerTierWitness": null,
           "activeOwner": {
             "runner": "playwright",
             "file": "tests/browser/behavior/sessions/discovery.spec.ts",
-            "testID": "sessions.idle-discovered-catalog-zero-native-instance-wake"
+            "testID": "sessions.idle-active-project-seeds-zero-native-instance-wake"
           },
           "verificationReceipt": {
             "kind": "old-new-batch",
@@ -12429,7 +12429,7 @@
             {
               "runner": "playwright",
               "file": "tests/browser/scale/task-overflow.spec.ts",
-              "testID": "scale.required-tasks-wrap-and-more"
+              "testID": "scale.300-task-tabs-scroll-in-one-row"
             }
           ],
           "retainedCoverage": {
@@ -12438,8 +12438,8 @@
               "otk-light"
             ],
             "states": [
-              "251 idle tasks occupy one measured row; selected and attention tasks stay visible and only pins wrap",
-              "C14 scale behavior transferred; fixed idle and required-wrap V scenes remain for T3."
+              "300 task tabs stay in one measured scrolling row, reveal the selected task across navigation and resizing, and expose both edge controls",
+              "One-row task-strip successor covers Dark, Linen and Stone states; fixed pane and row scenes remain in the theme sweep"
             ]
           },
           "lowerTierWitness": null,
