@@ -1151,7 +1151,13 @@ export function createTranscript(
             selected.sessionID,
             (id) => entry(sidecarId, id),
           )
-        ) return;
+        ) {
+          // Scoped index credit can deliver the request before its asking
+          // session's ancestry. Reacquire from the pending owner, rather than
+          // discard the only event or guess that the request is unrelated.
+          if (!entry(sidecarId, frame.sessionID)) refreshAttention(false);
+          return;
+        }
       } else if (frame.sessionID !== selected.sessionID) return;
       if (frame.event.op === "part.upsert") notePart(frame.event.part, true);
       if (frame.event.op === "message.upsert") baseline([frame.event.message]);

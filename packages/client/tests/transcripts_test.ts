@@ -268,6 +268,56 @@ Deno.test("warm transcripts reduce permission and question replacement before re
   }
 });
 
+Deno.test("screen attention arriving before scoped ancestry reacquires the authoritative family list", async () => {
+  const f = fixture(policy);
+  f.connection.supports = (capability) => capability === "permissions";
+  try {
+    f.owner.setDemand({
+      scope: scope(),
+      sessions: [target("a")],
+      selected: target("a"),
+    });
+    const initial = f.requests.shift()!;
+    assertEquals(initial.method, "permission.list");
+    replyRequest(f.connection.rpc, initial, []);
+    await turns();
+    await f.reply(0, 1);
+    assertEquals(f.requests, []);
+    const request: PermissionRequest = {
+      id: "pending-helper",
+      sessionID: "not-yet-indexed",
+      kind: "bash",
+      title: "Helper action",
+      detail: { kind: "bash", command: "printf probe" },
+      patterns: ["printf probe"],
+      alwaysPatterns: [],
+      time: 1,
+    };
+    f.owner.receive("server", {
+      t: "content",
+      sessionID: request.sessionID,
+      event: { op: "permission.upsert", request },
+    }, true);
+    await turns();
+    assertEquals(f.requests.map((r) => [r.method, r.params]), [[
+      "permission.list",
+      { sessionID: "a" },
+    ]]);
+    replyRequest(f.connection.rpc, f.requests.shift()!, [request]);
+    await turns();
+    assertEquals(f.owner.get(target("a"))!.state.content.permissions, [
+      request,
+    ]);
+    assertEquals(
+      f.requests,
+      [],
+      "metadata ordering must not admit body reads or repeated inventories",
+    );
+  } finally {
+    f.stop();
+  }
+});
+
 Deno.test("transcript state publication never returns replacement state to a framework binding", () => {
   const f = fixture(policy), returned: unknown[] = [];
   const factory: StateFactory = <T extends object>(initial: T) => {

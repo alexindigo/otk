@@ -55,6 +55,13 @@ unseen session population. Request settlement releases that metadata. Project
 lamp authority is independent of whether population counts have finished
 becoming known.
 
+An attention event can precede its asking session's scoped metadata while index
+credit is outstanding. The screen transcript then reacquires the existing family
+attention list from the pending owner, retaining it until routing metadata
+arrives, rather than treating missing ancestry as unrelated work. This uses the
+ordinary cancellable attention snapshot and live-replay fence; warm unrelated
+transcripts do not acquire another inventory.
+
 ## Directory and keyed metadata resources (protocol17)
 
 `createDirectoryCatalogs({watch,refresh,codecs,factory?})` owns one demanded
