@@ -221,9 +221,12 @@ sum transcript pages; unavailable metadata stays unknown while content remains
 usable.
 
 `TurnUsage` receives a cheap nullable turn summary and injected
-detail/open/close ports. Only an open preview mounts `UsageDetail` and retains
-its coalesced ledger read; closing the last preview cancels that worker read.
-Unready state is plain Digesting text and unknown categories never become zero.
+detail/open/close ports. Its preview keeps one Model calls scroll/focus region
+mounted through loading, errors and complete detail, so native Tab order and
+focus identity never depend on ledger arrival. Only an open preview mounts the
+ledger content and retains its coalesced read; closing the last preview cancels
+that worker read. Unready state is plain Digesting text and unknown categories
+never become zero.
 
 Deleted rows use shared semantic classes with a struck title, neutral text and
 intact focus/selection paint. `DeletedSession` receives formatted metadata facts

@@ -226,8 +226,7 @@ for (const count of [3, 120] as const) {
           await page.mouse.move(1, 1);
           await page.locator(trigger).focus();
           await expect(page.locator(panel)).toBeVisible();
-          // Native showing precedes the lazy usage-detail mount. Tab must be sent
-          // only once its real scrollport exists (the legacy case joins this too).
+          // The preview owns its scroll/focus region even before detail arrives.
           await expect(page.locator(scroll)).toBeAttached();
           await page.keyboard.press("Tab");
           await expect(page.locator(scroll)).toBeFocused();

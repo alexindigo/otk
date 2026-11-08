@@ -83,23 +83,11 @@ export default function TurnUsage(props: {
             }}
             onClose={close}
           >
-            <Show when={opened()}>
-              <Show
-                when={!props.error?.()}
-                fallback={<p role="status">{props.error?.()}</p>}
-              >
-                <Show
-                  when={props.detail()}
-                  fallback={
-                    <p>{props.error?.() ?? "Loading usage breakdown…"}</p>
-                  }
-                >
-                  {(detail) => (
-                    <UsageDetail usage={detail()} showCost={props.showCost} />
-                  )}
-                </Show>
-              </Show>
-            </Show>
+            <UsageDetail
+              usage={opened() && !props.error?.() ? props.detail() : undefined}
+              error={opened() ? props.error?.() : undefined}
+              showCost={props.showCost}
+            />
           </Popover>
         );
       }}

@@ -137,6 +137,12 @@ test("messages.native-final-clock-hover-ax-preference-restart", {
   await page.keyboard.press("Tab");
   await expect(page.locator(".otk-turn-usage > button")).toBeFocused();
   await expect(page.locator(".otk-turn-usage :popover-open")).toBeAttached();
+  await page.keyboard.press("Tab");
+  await expect(page.getByRole("region", { name: "Model calls", exact: true }))
+    .toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(page.locator(".otk-turn-usage :popover-open")).toHaveCount(0);
+  await expect(page.locator(".otk-turn-usage > button")).toBeFocused();
   for (
     const selector of [
       '[data-message-command="reply.fork"]',
