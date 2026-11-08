@@ -118,6 +118,7 @@ export default function VirtualList(props: {
     props.position &&
     ({ scrollTop: props.position.scrollTop, anchor: props.position.anchor })
   );
+  let restoring = !!initialPosition;
   const borrowed = !!props.viewport || !!parent;
   const materializers = parent?.materializers ?? new Set<() => boolean>();
   const windows = new Map<string, Map<string, number>>();
@@ -248,7 +249,7 @@ export default function VirtualList(props: {
   };
   createEffect(() => props.revision, () => changing());
   const remember = () => {
-    if (!currentKeys) return;
+    if (!currentKeys || restoring || disposed || !container.isConnected) return;
     props.onPosition?.({
       scrollTop: position(),
       anchor: logicalAnchor(),
@@ -341,6 +342,9 @@ export default function VirtualList(props: {
           return { start: top, end: top, measured: true };
         }, "start").catch((error) => {
           if (!isCancellation(error)) throw error;
+        }).finally(() => {
+          restoring = false;
+          remember();
         });
       }
     },
