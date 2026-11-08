@@ -36,6 +36,10 @@ export interface RequestLifetime {
 export interface RpcDefinition<P, R> {
   // Validation owns P. Policy factories consume it without widening handlers.
   execution?: RpcExecutionPolicy<NoInfer<P>, R>;
+  cancelled?(
+    params: NoInfer<P>,
+    request?: RequestLifetime,
+  ): (() => void) | undefined;
   params(value: Record<string, unknown>): P;
   handler(ctx: RpcContext, params: P): R | Promise<R>;
 }
@@ -92,6 +96,7 @@ export class RpcRegistry {
         return {
           execution: definition.execution,
           scope: definition.execution?.scope(params) ?? {},
+          cancelled: (request) => definition.cancelled?.(params, request),
           run: async (execution, request) => {
             const owner = crypto.randomUUID();
             let finished = false, active = false, waiting = 0;

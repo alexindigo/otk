@@ -39,6 +39,8 @@ export interface RpcExecutionPolicy<P, R> {
 export interface PreparedRequest {
   readonly execution?: RpcExecutionPolicy<never, unknown>;
   readonly scope: { sessionID?: string; directory?: string; resource?: string };
+  /** Capture feature-owned cancellation before queued execution can be released. */
+  cancelled?(request?: RpcContext["request"]): (() => void) | undefined;
   run(
     execution?: RequestExecution,
     request?: RpcContext["request"],

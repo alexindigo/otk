@@ -14,10 +14,12 @@ for (
     "failed",
     "superseded",
     "cancelled",
+    "cancelled-before-dispatch",
   ] as const
 ) {
   test(`@load @transport first page ${outcome} fences optional admission without holding essential work`, async () => {
     const seen: string[] = [];
+    let messageReads = 0;
     const scheduler = new DigestScheduler({ ...cfg().digest, cpu: 1 }, {
       freeMemory: () => Number.MAX_SAFE_INTEGER,
       sleep: () => Promise.resolve(),
@@ -90,13 +92,32 @@ for (
           );
         } else if (outcome === "superseded") {
           client.lease({ crumbs: [], rows: [] });
-        } else if (outcome === "cancelled") {
-          app.app.backend.core.listMessages = (_id, _options, signal) =>
-            new Promise((_resolve, reject) => {
+        } else if (
+          outcome === "cancelled" || outcome === "cancelled-before-dispatch"
+        ) {
+          if (outcome === "cancelled-before-dispatch") {
+            const coordinator = app.app.requests;
+            const accept = coordinator.accept.bind(coordinator);
+            coordinator.accept = async (principal, control, recipient) => {
+              await accept(principal, control, recipient);
+              if (
+                control.t === "request" && control.method === "session.messages"
+              ) {
+                await accept(principal, {
+                  t: "request.release",
+                  refs: [control.ref],
+                }, recipient);
+              }
+            };
+          }
+          app.app.backend.core.listMessages = (_id, _options, signal) => {
+            messageReads++;
+            return new Promise((_resolve, reject) => {
               signal!.addEventListener("abort", () => reject(signal!.reason), {
                 once: true,
               });
             });
+          };
           // The request owner's cancellation path releases the captured barrier.
           const window = (client.frames.find((f) =>
             f.t === "welcome"
@@ -131,6 +152,9 @@ for (
         while (await scheduler.tick()) { /* release after settlement */ }
       }
       assertEquals(seen.at(-1), "background");
+      if (outcome === "cancelled-before-dispatch") {
+        assertEquals(messageReads, 0);
+      }
     } finally {
       await client.close();
       await app.app.stop();

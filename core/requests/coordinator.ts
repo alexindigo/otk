@@ -640,6 +640,13 @@ export class RequestCoordinator {
     // Reserve ready work in admission order, but never reserve a turn while
     // waiting for another effect's semantic ordering permission.
     const admitted = predecessor ? undefined : this.#acquire(entry, queue);
+    const cancelled = entry.prepared?.cancelled?.(this.#lifetime(entry));
+    if (cancelled) {
+      if (entry.controller.signal.aborted) cancelled();
+      else {entry.controller.signal.addEventListener("abort", cancelled, {
+          once: true,
+        });}
+    }
     const work = new Promise<void>((resolve) => setTimeout(resolve, 0)).then(
       async () => {
         await predecessor;
@@ -772,6 +779,9 @@ export class RequestCoordinator {
       this.#effects.set(order, work);
     }
     const finish = () => {
+      if (cancelled) {
+        entry.controller.signal.removeEventListener("abort", cancelled);
+      }
       this.#jobs.delete(work);
       entry.work = undefined;
       if (order && this.#effects.get(order) === work) {

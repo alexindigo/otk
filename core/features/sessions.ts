@@ -245,6 +245,8 @@ export function register(
         before,
       };
     },
+    cancelled: (p, request) =>
+      p.before === undefined ? request?.firstPage?.(p.sessionID) : undefined,
     async handler(ctx, p) {
       const settle = p.before === undefined
         ? ctx.request?.firstPage?.(p.sessionID)
