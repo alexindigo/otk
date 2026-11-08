@@ -4,6 +4,39 @@ import { FreezeProxy } from "../support/freeze-proxy.ts";
 import { test, withResources } from "../support/resources.ts";
 import { serve } from "../support/http.ts";
 
+test("a controlled disconnect retires current pairs and admits the next connection", async () => {
+  const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
+  const proxy = new FreezeProxy(listener.addr.port);
+  try {
+    for (let i = 0; i < 2; i++) {
+      const accepted = listener.accept();
+      const client = await Deno.connect({
+        hostname: "127.0.0.1",
+        port: proxy.port,
+      });
+      const server = await accepted;
+      try {
+        await server.write(new Uint8Array([i + 1]));
+        const bytes = new Uint8Array(1);
+        assertEquals(await client.read(bytes), 1);
+        assertEquals(bytes[0], i + 1);
+        if (i === 0) {
+          proxy.disconnect();
+          assertEquals(await client.read(bytes), null);
+        }
+      } finally {
+        client.close();
+        server.close();
+      }
+    }
+    await proxy.stop();
+    assertEquals(proxy.connections, 0);
+  } finally {
+    listener.close();
+    await proxy.stop();
+  }
+});
+
 test("downstream disconnect during an upstream write retires the TCP pair without a fixture failure", async () => {
   const listener = Deno.listen({ hostname: "127.0.0.1", port: 0 });
   const proxy = new FreezeProxy(listener.addr.port);

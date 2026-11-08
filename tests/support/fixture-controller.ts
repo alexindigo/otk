@@ -1040,6 +1040,15 @@ try {
             return null;
           }
           if (!transport) throw new Error("No native transport scenario");
+          if (frame.params.action === "disconnect") {
+            if (
+              profile !== "transport-reconnect" || !("disconnect" in transport)
+            ) {
+              throw new Error("Controlled disconnect requires its own profile");
+            }
+            transport.disconnect();
+            return null;
+          }
           if (
             profile === "transport-cooling" && frame.params.action === "hold"
           ) {

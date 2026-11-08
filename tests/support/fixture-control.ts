@@ -94,6 +94,7 @@ export type Profile =
   | "transport-deleted-seen"
   | "transport-shell"
   | "transport-freeze"
+  | "transport-reconnect"
   | "transport-bootstrap"
   | "transport-errors-http"
   | "transport-errors-late"
@@ -180,6 +181,7 @@ export interface Commands {
       | "release"
       | "freeze"
       | "thaw"
+      | "disconnect"
       | "fail"
       | "succeed"
       | "stop";
@@ -366,6 +368,7 @@ export function request(value: unknown): ControlRequest {
           "transport-deleted-seen",
           "transport-shell",
           "transport-freeze",
+          "transport-reconnect",
           "transport-bootstrap",
           "transport-errors-http",
           "transport-errors-late",
@@ -516,7 +519,16 @@ export function request(value: unknown): ControlRequest {
           )
       ) throw new Error("Unknown scenario target");
       if (
-        !["hold", "release", "freeze", "thaw", "fail", "succeed", "stop"]
+        ![
+          "hold",
+          "release",
+          "freeze",
+          "thaw",
+          "disconnect",
+          "fail",
+          "succeed",
+          "stop",
+        ]
           .includes(String(p.action))
       ) throw new Error("Unknown scenario action");
       if (p.sessionID !== undefined) {

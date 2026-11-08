@@ -7,7 +7,7 @@ import type { Profile } from "./fixture-control.ts";
 
 /** Native-side faults belong to the Deno fixture, never browser routing. */
 export function transportScenario(oc: OpencodeTest, profile: Profile) {
-  const freeze = profile === "transport-freeze"
+  const freeze = ["transport-freeze", "transport-reconnect"].includes(profile)
     ? new FreezeProxy(oc.port)
     : undefined;
   let sessionID: string | undefined;
@@ -192,5 +192,11 @@ export function transportScenario(oc: OpencodeTest, profile: Profile) {
       }
     },
     release,
+    disconnect() {
+      if (profile !== "transport-reconnect" || !freeze) {
+        throw new Error("Scenario does not own a controlled disconnect");
+      }
+      freeze.disconnect();
+    },
   };
 }

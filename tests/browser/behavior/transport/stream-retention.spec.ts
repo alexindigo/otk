@@ -3,7 +3,7 @@ import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
 import { openSession, wire } from "../../fixtures/wire.ts";
 
-test.use({ profile: "transport-freeze" });
+test.use({ profile: "transport-reconnect" });
 test("transport.unsolicited-reconnect-retains-unfinished-text-and-next-chunk", {
   tag: ["@transport", "@messages", "@contracts"],
 }, async ({ isolatedState: state, page }, info) => {
@@ -43,6 +43,10 @@ test("transport.unsolicited-reconnect-retains-unfinished-text-and-next-chunk", {
   });
   const since = frames.received.length;
   const observations: string[] = [];
+  await state.controller.call("scenario", {
+    lease: state.lease.lease,
+    action: "disconnect",
+  });
   await expect.poll(async () => {
     observations.push(await text.textContent() ?? "");
     const recent = frames.received.slice(since);
@@ -88,4 +92,9 @@ test("transport.unsolicited-reconnect-retains-unfinished-text-and-next-chunk", {
   await expect(text).toContainText("Finished.");
   await expect(page.locator(`[data-session="${session.id}"]`))
     .toHaveAttribute("data-status", "idle");
+  expect(
+    frames.received.slice(since).filter((frame) =>
+      frame.t === "harness" && frame.state === "reconnecting"
+    ),
+  ).toHaveLength(1);
 });

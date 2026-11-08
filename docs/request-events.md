@@ -73,6 +73,9 @@ input is retained until reliable admission/settlement evidence; a newer edited
 draft is never cleared by the older result. Successful sends are not made to
 look unsent by later visit/location bookkeeping.
 
+Text missed during a native stream gap appears when the part finishes;
+unfinished native HTTP parts do not expose that missing source.
+
 ## Storage, retention and upgrades
 
 `otk.db` contains durable request windows and metadata receipts alongside tasks,

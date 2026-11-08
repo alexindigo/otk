@@ -4,6 +4,7 @@ import { resources } from "./resources.ts";
 export class FreezeProxy {
   #listener: Deno.TcpListener;
   #connections = new Set<Deno.TcpConn>();
+  #disconnectors = new Set<() => void>();
   #jobs = new Set<Promise<void>>();
   #accept: Promise<void>;
   #frozen = false;
@@ -46,6 +47,10 @@ export class FreezeProxy {
     this.#frozen = false;
     for (const wake of this.#waiters.splice(0)) wake();
   }
+  /** Retire current TCP pairs while keeping the listener ready for reconnect. */
+  disconnect(): void {
+    for (const close of this.#disconnectors) close();
+  }
   async #run(): Promise<void> {
     try {
       for await (const incoming of this.#listener) {
@@ -64,18 +69,27 @@ export class FreezeProxy {
   async #pair(incoming: Deno.TcpConn): Promise<void> {
     this.#connections.add(incoming);
     let outgoing: Deno.TcpConn | undefined;
+    let closing = false;
+    const disconnect = () => {
+      closing = true;
+      for (const socket of [incoming, outgoing]) {
+        try {
+          socket?.close();
+        } catch { /* peer already closed */ }
+      }
+    };
+    this.#disconnectors.add(disconnect);
     try {
       // A managed native generation may bind TCP before it can serve HTTP.
       // Keep incoming bytes owned here until its readiness settles.
       await this.#admission;
-      if (this.#stopping) return;
+      if (this.#stopping || closing) return;
       outgoing = await Deno.connect({
         hostname: "127.0.0.1",
         port: this.target,
       });
       this.#connections.add(outgoing);
-      if (this.#stopping) return;
-      let closing = false;
+      if (this.#stopping || closing) return;
       const forward = async (
         source: Deno.TcpConn,
         target: Deno.TcpConn,
@@ -120,6 +134,7 @@ export class FreezeProxy {
         if (result.status === "rejected") this.#failures.push(result.reason);
       }
     } finally {
+      this.#disconnectors.delete(disconnect);
       for (const socket of [incoming, outgoing]) {
         if (socket) {
           this.#connections.delete(socket);
