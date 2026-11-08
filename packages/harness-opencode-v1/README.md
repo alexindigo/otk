@@ -220,10 +220,14 @@ the affected live parent only, continue independent links and suppress
 retired-parent errors; they do not cause a connection-wide resnapshot.
 
 The connector's pending-permission owner retains normalized requests from
-bootstrap and global permission events. Family list readers, attention counts
-and tool waiting state use that same owner, including with no content
-subscriber; replies remove entries through the native event. Readers receive
-detached values rather than making another live HTTP inventory request.
+bootstrap and global permission events. Family list readers and attention counts
+derive from that owner, including with no content subscriber; replies remove
+entries through the native event. Transcript tools carry no stamped permission
+state: their waiting labels borrow the live request list used by the dock.
+Activity bootstrap and live pending input acquire their routing identities and
+ancestry through the existing keyed hydration port before deriving family
+counts. A placeholder cannot establish that a helper has no parent. Readers
+receive detached values rather than making another live HTTP inventory request.
 Bootstrap replaces its pending metadata atomically only after the snapshot
 succeeds. This avoids losing an otherwise valid event request when
 stock1.18.34's live inventory encoder rejects optional tool metadata (observed

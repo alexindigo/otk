@@ -1320,6 +1320,7 @@ export class OpencodeV1Adapter implements Harness {
       local.push(entry);
       byDirectory.set(entry.directory, local);
     });
+    const routing = new Set<string>();
     const inventory = async (directory: string) => {
       const local = new AbortController();
       const signal = AbortSignal.any([controller.signal, local.signal]);
@@ -1348,6 +1349,7 @@ export class OpencodeV1Adapter implements Harness {
           entry.retry = undefined;
         });
         await each(statuses, (status) => {
+          routing.add(status.id);
           const entry = entries.get(status.id) ??
             this.#activityEntry(status.id, directory);
           entries.set(status.id, entry);
@@ -1355,6 +1357,7 @@ export class OpencodeV1Adapter implements Harness {
           entry.retry = status.retry;
         });
         await each(permissions, (request) => {
+          routing.add(request.sessionID);
           if (!entries.has(request.sessionID)) {
             entries.set(
               request.sessionID,
@@ -1374,6 +1377,7 @@ export class OpencodeV1Adapter implements Harness {
           );
         });
         await each(questions, (request) => {
+          routing.add(request.sessionID);
           if (!entries.has(request.sessionID)) {
             entries.set(
               request.sessionID,
@@ -1426,6 +1430,31 @@ export class OpencodeV1Adapter implements Harness {
       }),
     );
     if (!this.#current(controller)) return;
+    if (seeds) {
+      // Activity inventories identify real blocked/running work independently
+      // of view demand. Acquire its routing ancestry before deriving family
+      // counts; placeholder entries cannot establish family membership.
+      const active = [...routing];
+      await this.core.hydrate!(active, controller.signal);
+      if (!this.#current(controller)) return;
+      const family = function* (index: SessionIndex) {
+        for (const id of active) {
+          yield id;
+          yield* index.ancestors(id);
+        }
+      };
+      await each(family(this.#index), (id) => {
+        const metadata = this.#index.getMetadata(id);
+        if (!metadata) return;
+        const activity = entries.get(id);
+        entries.set(id, {
+          ...metadata,
+          status: activity?.status ?? "idle",
+          retry: activity?.retry,
+          activityAuthority: activity?.activityAuthority ?? "current",
+        });
+      });
+    }
     this.#errors.reconcile(new Set(entries.keys()));
     await each(entries.values(), (entry) => {
       this.#errors.register(entry.id);
@@ -1689,6 +1718,22 @@ export class OpencodeV1Adapter implements Harness {
     const raw = p.part as RawPart | undefined;
     const identity = p.sessionID ?? info?.sessionID ?? raw?.sessionID;
     const sessionID = typeof identity === "string" ? ids.encode(identity) : "";
+    if (
+      sessionID && this.digest?.projects &&
+      (type === "permission.asked" || type === "question.asked")
+    ) {
+      // Pending input is mandatory demand even when no view has acquired the
+      // asking session. Use the same keyed routing owner as cold inventory.
+      try {
+        await this.core.hydrate!([sessionID], controller.signal);
+      } catch (error) {
+        if (!this.#current(controller)) return;
+        // Unavailable routing cannot discard an authoritative received request.
+        // Retain its direct attention/actions while native metadata recovers.
+        this.diagnostic("warn", "pending input routing", error);
+      }
+      if (!this.#current(controller)) return;
+    }
     let entry = this.#index.getMetadata(sessionID);
     if (
       !entry && sessionID && event.directory &&
