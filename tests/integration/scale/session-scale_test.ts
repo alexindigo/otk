@@ -78,6 +78,26 @@ test("real-version scale summaries match independent totals with bounded serving
   });
   await client.connect();
   await client.rpc("session.messages", { sessionID: requested[0].id });
+  // Demand-loading rules 1/5 replace eager startup cataloging. This totals
+  // qualification explicitly acquires every project page before all-ready work.
+  for (
+    const directory of new Set(
+      fixture.manifest.sessions.map((row) => row.directory),
+    )
+  ) {
+    let before: string | undefined;
+    do {
+      const page = await client.rpc<import("@otk/protocol").SessionListPage>(
+        "sessions.list",
+        {
+          directory,
+          before,
+          limit: 200,
+        },
+      );
+      before = page.older ?? undefined;
+    } while (before);
+  }
   const present = new Set<string>(), ready = new Set<string>();
   const observe = (entry: import("@otk/protocol").IndexEntry) => {
     present.add(entry.id);
@@ -197,7 +217,7 @@ test("real-version scale summaries match independent totals with bounded serving
   );
   console.info(
     "Scale timer maximum",
-    Math.max(...probe.samples.map((s) => s.ms)),
+    probe.samples.reduce((maximum, sample) => Math.max(maximum, sample.ms), 0),
   );
   probe.assert();
   for (
