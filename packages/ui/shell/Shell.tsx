@@ -693,10 +693,12 @@ export default function Shell(
                             rollback={revert}
                             strip={revert.strip(session.state.content)}
                             busy={!!session.state.selection &&
-                              entry(
+                              ["busy", "retry"].includes(
+                                entry(
                                   session.state.selection.sidecarId,
                                   session.state.selection.sessionID,
-                                )?.status !== "idle"}
+                                )?.status ?? "",
+                              )}
                             retryState={session.state.selection
                               ? entry(
                                 session.state.selection.sidecarId,
