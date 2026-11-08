@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import { expect } from "../../fixtures/evidence.ts";
 import { isolatedTest as test } from "../../fixtures/isolated.ts";
-import { openSession, wire } from "../../fixtures/wire.ts";
+import { wire } from "../../fixtures/wire.ts";
 import type { MessagePolicy } from "@otk/protocol";
 test.use({ profile: "messages-temperature" });
 test(
@@ -32,7 +32,35 @@ test(
       if (failure) throw failure;
       return result!;
     };
-    const open = (id: string) => tick(() => openSession(state, page, id));
+    // Demand-loading plan 1.2/1.8: opening needs the newest demanded body,
+    // independently of the viewport's speculative older-page reserve.
+    const open = (id: string) =>
+      tick(async () => {
+        await state.product("layout.patch", {
+          rightCollapsed: false,
+          rightView: "sessions",
+        });
+        if (!page.url().startsWith(state.url)) {
+          await page.goto(`${state.url}/#/local/${id}`);
+        } else {
+          if (!await page.locator(`[data-session="${id}"]`).count()) {
+            const session = await state.product("session.get", {
+              sessionID: id,
+            });
+            await page.locator(
+              `[data-project=${
+                JSON.stringify(session.directory)
+              }] .otk-project-open`,
+            ).click();
+          }
+          await page.locator(`[data-session="${id}"]`).click();
+        }
+        await expect(page).toHaveURL(new RegExp(`${id}$`));
+        await expect(page.locator("textarea[name=prompt]")).toBeAttached();
+        await expect(page.locator(".otk-message-flow")).toContainText(
+          id === b.id ? "Beta prompt 24" : "Alpha prompt 24",
+        );
+      });
     const held = await state.queue(
       ["The cold scope is current again."],
       "held",
@@ -97,7 +125,23 @@ test(
     await page.setViewportSize({ width: 1280, height: 900 });
     // Warm both real scope owners before measuring a warm return. A first-ever
     // B acquisition is independent work and must not consume A's cooling window.
+    // A selected viewport may reserve older bodies after its newest page paints.
+    // Keep that speculative reserve pending while proving the open boundary.
+    capture.hold((frame, request) =>
+      request?.method === "session.messages" &&
+        request.params?.sessionID === b.id && !!request.params?.before ||
+      frame.t === "load.chunk" &&
+        (frame.load as {
+            scope?: { sessionID?: string };
+            boundary?: { before?: string };
+          })
+            ?.scope?.sessionID === b.id &&
+        !!(frame.load as { boundary?: { before?: string } })?.boundary?.before
+    );
     await open(b.id);
+    await tick(() => expect.poll(() => capture.held.length).toBeGreaterThan(0));
+    await paint("Beta prompt 24");
+    capture.release();
     await open(a.id);
     await tick(() =>
       expect.poll(() => settled(a.id).length).toBeGreaterThanOrEqual(2)
