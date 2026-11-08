@@ -3,6 +3,7 @@ import "./TakeoverHeader.css" with { type: "text" };
 import { Show } from "solid-js";
 import StatusLight from "./StatusLight.tsx";
 import { ChevronDownIcon } from "./ChromeIcons.tsx";
+import { useComposer } from "../registries/composer.tsx";
 export default function TakeoverHeader(
   props: {
     title: string;
@@ -13,6 +14,7 @@ export default function TakeoverHeader(
     onCollapse?(collapsed: boolean): void;
   },
 ) {
+  const hasComposer = useComposer();
   return (
     <header class="otk-takeover-header">
       <StatusLight state="blocked" />
@@ -23,7 +25,9 @@ export default function TakeoverHeader(
       <Show when={props.childTitle}>
         <span class="otk-permission-child">From {props.childTitle}</span>
       </Show>
-      <span class="otk-draft-kept">Your draft is kept</span>
+      <Show when={hasComposer()}>
+        <span class="otk-draft-kept">Your draft is kept</span>
+      </Show>
       <Show when={props.onCollapse}>
         <button
           type="button"

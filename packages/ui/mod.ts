@@ -132,6 +132,7 @@ export * from "./registries/renderers.ts";
 export * from "./registries/prompt.ts";
 export * from "./registries/context.tsx";
 export * from "./registries/session.tsx";
+export * from "./registries/composer.tsx";
 export * from "./registries/shell.ts";
 export { default as DialogHost } from "./components/DialogHost.tsx";
 export { default as ComposerTakeovers } from "./components/ComposerTakeovers.tsx";

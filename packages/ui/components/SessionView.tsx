@@ -561,36 +561,35 @@ export default function SessionView(props: {
                 </Show>
               </div>
             </div>
-            <Show when={!props.child}>
-              <ComposerTakeovers
-                focusNotice={() => noticeControl?.focus()}
-                notice={noticed() ? notice : undefined}
-              >
-                {(active) => (
+            <ComposerTakeovers
+              focusNotice={() => noticeControl?.focus()}
+              notice={noticed() ? notice : undefined}
+              readOnly={props.child}
+            >
+              {(active) => (
+                <div
+                  class={["otk-composer-stack", {}]}
+                  hidden={active()}
+                  inert={active()}
+                >
                   <div
-                    class={["otk-composer-stack", {}]}
-                    hidden={active()}
-                    inert={active()}
+                    class={["otk-composer-input", {}]}
                   >
-                    <div
-                      class={["otk-composer-input", {}]}
-                    >
-                      <Prompt
-                        suspended={active()}
-                        context={props.latestPrompt}
-                        busy={props.busy}
-                        value={props.draft}
-                        connected={props.connected}
-                        onChange={writeDraft}
-                        onSubmit={(parts, mode, selection) =>
-                          props.onPrompt(parts, mode, selection)}
-                        onAbort={() => props.onAbort()}
-                      />
-                    </div>
+                    <Prompt
+                      suspended={active()}
+                      context={props.latestPrompt}
+                      busy={props.busy}
+                      value={props.draft}
+                      connected={props.connected}
+                      onChange={writeDraft}
+                      onSubmit={(parts, mode, selection) =>
+                        props.onPrompt(parts, mode, selection)}
+                      onAbort={() => props.onAbort()}
+                    />
                   </div>
-                )}
-              </ComposerTakeovers>
-            </Show>
+                </div>
+              )}
+            </ComposerTakeovers>
           </section>
         </PathProvider>
       </TranscriptContext>
