@@ -14,6 +14,7 @@ import type {
   RequestProgress,
   RequestRef,
   RequestWindow,
+  ViewLease,
 } from "@otk/protocol";
 import type { ReceiptKey, RequestRecord, Requests } from "@otk/store";
 import type { RequestLifetime, RpcRegistry } from "../ws/registry.ts";
@@ -52,6 +53,7 @@ interface Entry {
   timer?: ReturnType<typeof setTimeout>;
   turn?: { ready: Promise<void>; release(): void };
   waiting: number;
+  view?: ViewLease;
 }
 export interface CoordinatorOptions {
   registry: RpcRegistry;
@@ -275,6 +277,9 @@ export class RequestCoordinator {
     if (!this.#started || this.#stopped) {
       throw new Error("Request coordinator is not admitting");
     }
+    // Acquisition belongs to the view at ingress, before fingerprinting or
+    // queued execution can yield to a newer socket view.
+    const view = structuredClone(recipient.lease.view?.());
     if (control.t !== "request") {
       const refs = control.t === "request.resume"
         ? control.items
@@ -336,6 +341,7 @@ export class RequestCoordinator {
               entry.record.state === "succeeded" && !entry.result &&
                 entry.recipients.has(recipient))
           ) {
+            entry.view = view;
             this.#schedule(
               entry,
               entry.record.dispatched_at !== null || terminal(entry.record),
@@ -445,6 +451,7 @@ export class RequestCoordinator {
           entry.record.state === "succeeded" && !entry.result &&
             entry.recipients.has(recipient))
       ) {
+        entry.view = view;
         this.#schedule(
           entry,
           !admitted.inserted &&
@@ -809,6 +816,10 @@ export class RequestCoordinator {
   #lifetime(entry: Entry): RequestLifetime | undefined {
     const recipient = entry.recipients.keys().next().value;
     if (!recipient || entry.policy.lifetime !== "request") {
+      if (recipient && entry.policy.kind === "read" && entry.view) {
+        const view = entry.view;
+        return { ...recipient.lease, view: () => view };
+      }
       return recipient?.lease;
     }
     const key = identity(entry.record),

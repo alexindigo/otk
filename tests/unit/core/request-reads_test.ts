@@ -2,7 +2,8 @@
 import { assert, assertEquals } from "@std/assert";
 import type { Harness } from "@otk/harness";
 import { OtkDb, Requests, requestsMigrations } from "@otk/store";
-import type { RequestEvent } from "@otk/protocol";
+import type { RequestEvent, ServerFrame, ViewLease } from "@otk/protocol";
+import { requestFingerprint } from "@otk/protocol";
 import {
   registerAgents,
   registerCommands,
@@ -19,6 +20,108 @@ import {
 } from "../../../core/mod.ts";
 import { test } from "../../support/resources.ts";
 import { cfg, fixture } from "./support.ts";
+import { fixturePage } from "../../support/message-pages.ts";
+
+test("bounded read chunks retain their ingress view across asynchronous admission", async () => {
+  const db = new OtkDb(await fixture(), [requestsMigrations], { busyms: 5000 });
+  const session = {
+    id: "tstv1-one",
+    directory: "/p",
+    projectID: "p",
+    title: "One",
+    time: { created: 1, updated: 1 },
+    archived: false,
+  };
+  const harness = {
+    core: {
+      getSession: () => Promise.resolve(session),
+      listSessions: () =>
+        Promise.resolve({
+          items: [session],
+          older: null,
+          generation: "source",
+        }),
+      listMessages: (_id: string, input: { publish?(page: unknown): void }) => {
+        const page = fixturePage(session.id, [], undefined, session);
+        input.publish?.(page);
+        return Promise.resolve(page);
+      },
+    },
+  } as unknown as Harness;
+  const registry = new RpcRegistry(harness, db);
+  registerSessions(registry, harness);
+  let release = Promise.withResolvers<string>();
+  const coordinator = new RequestCoordinator({
+    registry,
+    receipts: new Requests(db),
+    policy: cfg().requests,
+    fingerprint: async (canonical) => {
+      await release.promise;
+      return await requestFingerprint(canonical);
+    },
+    diagnostic: (_id, cause) => console.warn(cause),
+  });
+  await coordinator.start();
+  const chunks: ServerFrame[] = [];
+  const events: RequestEvent[] = [];
+  let view: ViewLease = {
+    epoch: 1,
+    directory: "/p",
+    selected: session.id,
+    crumbs: [],
+    rows: [],
+  };
+  const recipient = {
+    send(event: RequestEvent) {
+      events.push(event);
+    },
+    lease: {
+      id: "socket",
+      signal: new AbortController().signal,
+      defer() {},
+      view: () => view,
+      publish: (frame: ServerFrame) => chunks.push(frame),
+    },
+  };
+  try {
+    for (
+      const [method, params] of [
+        ["session.get", { sessionID: session.id }],
+        ["sessions.list", { directory: "/p" }],
+        ["session.messages", { sessionID: session.id }],
+      ] as const
+    ) {
+      release = Promise.withResolvers<string>();
+      const epoch = view.epoch;
+      chunks.length = 0;
+      const admission = coordinator.accept("local", {
+        t: "request",
+        method,
+        params,
+        ref: {
+          id: crypto.randomUUID(),
+          key: crypto.randomUUID(),
+          clientID: crypto.randomUUID(),
+          window: coordinator.window().id,
+        },
+      }, recipient);
+      view = { ...view, epoch: epoch + 1, rows: [session.id] };
+      release.resolve("fingerprint");
+      await admission;
+      await coordinator.idle();
+      assert(chunks.length > 0, JSON.stringify({ method, events }));
+      assertEquals(
+        chunks.map((chunk) => chunk.epoch),
+        chunks.map(() => epoch),
+        method,
+      );
+    }
+  } finally {
+    release.resolve("fingerprint");
+    await coordinator.stop();
+    db.close();
+  }
+});
 
 test("every body/catalog read has volatile recovery, target scope and caller cancellation", async () => {
   const cases = [
