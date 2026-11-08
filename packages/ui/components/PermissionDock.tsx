@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import FeedbackStatus from "./FeedbackStatus.tsx";
 import { bindFeedback } from "../state/feedback.ts";
-import { failureText } from "@otk/client";
+import { failureText, requestIdle } from "@otk/client";
 import "./PermissionDock.css" with { type: "text" };
 import { scrollRegion } from "./ScrollRegion.tsx";
 import Takeover from "./surface/Takeover.tsx";
@@ -29,6 +29,7 @@ import { type SessionPorts, useSessionPorts } from "../registries/session.tsx";
 import { oldestPermission } from "@otk/client";
 import TakeoverHeader from "./TakeoverHeader.tsx";
 import PermissionSummary from "./PermissionSummary.tsx";
+import RequestAge from "./RequestAge.tsx";
 import type {
   SurfaceRegistry,
   TakeoverDefinition,
@@ -77,6 +78,10 @@ function PermissionTakeover(
         notice={props.notice}
         focusNotice={props.focusNotice}
         request={request()}
+        activity={requestIdle(
+          session.entry(request()?.sessionID ?? "")?.timeUpdated,
+          Date.now(),
+        )}
         where={request()
           ? `${request()!.kind} in ${
             session.location?.(request()!.sessionID) ??
@@ -96,6 +101,7 @@ function PermissionTakeover(
 function RequestDock(
   props: {
     request: PermissionRequest;
+    activity?: ReturnType<typeof requestIdle>;
     notice?: () => import("solid-js").Element;
     focusNotice?(): void;
     childTitle?: string;
@@ -256,7 +262,9 @@ function RequestDock(
                     hidden={pending()}
                     onClick={() => void once()}
                     class="otk-primary otk-pill"
-                    title={`Allow once (${shortcuts.once.key} when focused)`}
+                    title={props.activity?.resume ??
+                      `Allow once (${shortcuts.once.key} when focused)`}
+                    aria-description={props.activity?.resume}
                   >
                     Allow once
                   </button>
@@ -338,6 +346,9 @@ function RequestDock(
           </>
         }
       >
+        <Show when={props.activity}>
+          {(activity) => <RequestAge label={activity().label} />}
+        </Show>
         <PermissionSummary request={props.request} />
         <Show when={error()}>
           <FeedbackStatus feedback={{ kind: "error", text: error() }} />
@@ -382,6 +393,7 @@ function RequestDock(
 export default function PermissionDock(
   props: {
     request?: PermissionRequest;
+    activity?: ReturnType<typeof requestIdle>;
     notice?: () => import("solid-js").Element;
     focusNotice?(): void;
     childTitle?: string;
@@ -400,6 +412,7 @@ export default function PermissionDock(
           notice={props.notice}
           focusNotice={props.focusNotice}
           request={request()}
+          activity={props.activity}
           childTitle={props.childTitle}
           where={props.where}
           onReply={(input) => props.onReply(input)}

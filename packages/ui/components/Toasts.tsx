@@ -13,6 +13,7 @@ import { CloseIcon } from "./ChromeIcons.tsx";
 import type { Note } from "@otk/client";
 import type { ToastsModel } from "../features/notify/toast.ts";
 import Toast from "./surface/Toast.tsx";
+import RequestAge from "./RequestAge.tsx";
 export default function Toasts(
   props: { model: ToastsModel; detail?(note: Note): Element; onMore(): void },
 ): import("solid-js").Element {
@@ -76,12 +77,7 @@ export default function Toasts(
               </button>
             </header>
             <Show when={item().note.context}>
-              <span
-                class="otk-toast-age otk-control-label"
-                title={item().note.context}
-              >
-                {item().note.context}
-              </span>
+              <RequestAge class="otk-toast-age" label={item().note.context!} />
             </Show>
             {props.detail?.(item().note)}
             <div class="otk-toast-actions">

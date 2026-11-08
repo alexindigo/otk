@@ -44,10 +44,6 @@
 .otk-toast-actions button {
   font-size: var(--text-meta);
 }
-.otk-toast-age {
-  color: var(--otk-fg-faint);
-  font-size: var(--text-meta);
-}
 .otk-toast-dismiss {
   margin-inline-start: auto;
 }

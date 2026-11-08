@@ -1,0 +1,5 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-request-age {
+  color: var(--otk-fg-faint);
+  font-size: var(--text-meta);
+}

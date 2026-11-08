@@ -122,6 +122,12 @@ for (
       hasComposer ? 1 : 0,
     );
     if (view === "direct") {
+      await expect(page.locator(".otk-permission-dock .otk-request-age"))
+        .toHaveText("Session idle 12 days");
+      await expect(
+        page.getByRole("button", { name: "Allow once", exact: true }),
+      )
+        .toHaveAccessibleDescription("Resumes work paused 12 days ago");
       for (const theme of ["otk-dark", "otk-light", "otk-light-stone"]) {
         await state.product("prefs.set", { key: "theme", value: theme });
         await expect(page.locator("html")).toHaveAttribute(
