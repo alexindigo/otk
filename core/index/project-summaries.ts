@@ -98,7 +98,11 @@ export class ProjectSummaries {
       dirty.add(directory);
     }
     for (const value of values) {
-      this.#seeds.set(value.directory, value);
+      this.#seeds.set(value.directory, {
+        ...value,
+        hasSessions: value.hasSessions ??
+          this.#seeds.get(value.directory)?.hasSessions,
+      });
     }
     this.#topology.clear();
     for (const value of this.#seeds.values()) {
@@ -321,19 +325,23 @@ export class ProjectSummaries {
     const seeds = [...this.#leafSeeds.get(directory)?.values() ?? []];
     const seed = seeds.length
       ? {
-        hasSessions: seeds.some((s) => s.hasSessions),
+        hasSessions: seeds.some((s) => s.hasSessions === true)
+          ? true
+          : seeds.every((s) => s.hasSessions === false)
+          ? false
+          : undefined,
         sessionCount: seeds.every((s) => s.sessionCount !== null)
           ? seeds.reduce((n, s) => n + s.sessionCount!, 0)
           : null,
         lastActivity:
-          seeds.every((s) => s.lastActivity !== null || !s.hasSessions)
+          seeds.every((s) => s.lastActivity !== null || s.hasSessions === false)
             ? Math.max(0, ...seeds.map((s) => s.lastActivity ?? 0))
             : null,
       }
       : undefined;
     const summary: ProjectSummary = {
       directory,
-      hasSessions: seed?.hasSessions || count > 0,
+      hasSessions: count > 0 ? true : seed ? seed.hasSessions : false,
       status: authority === "unknown" && status === "idle" ? null : status,
       sessionCount: seed
         ? seed.sessionCount
@@ -342,7 +350,9 @@ export class ProjectSummaries {
         : null,
       unseenCount: seed || knownCount ? unseen : null,
       lastActivity: seed
-        ? Math.max(seed.lastActivity ?? 0, last)
+        ? seed.lastActivity === null && !last
+          ? null
+          : Math.max(seed.lastActivity ?? 0, last)
         : knownCount && !this.#seeded
         ? last
         : null,
@@ -377,7 +387,11 @@ export class ProjectSummaries {
       ? {
         ...direct,
         direct,
-        hasSessions: summaries.some((s) => s.hasSessions),
+        hasSessions: summaries.some((s) => s.hasSessions === true)
+          ? true
+          : summaries.every((s) => s.hasSessions === false)
+          ? false
+          : undefined,
         sessionCount: summaries.every((s) => s.sessionCount !== null)
           ? summaries.reduce((n, s) => n + s.sessionCount!, 0)
           : null,
@@ -400,7 +414,8 @@ export class ProjectSummaries {
     // Inventory topology is retained independently of row materialization.
     // Empty untracked checkouts are not fabricated projects on the wire.
     if (
-      this.#seeded && !summary.hasSessions && !this.#known.has(directory) &&
+      this.#seeded && summary.hasSessions === false &&
+      !this.#known.has(directory) &&
       !summary.scopes?.some((scope) => this.#known.has(scope)) &&
       !this.#projects.get(directory)?.size
     ) {

@@ -14,10 +14,17 @@ import {
   type OpencodeV1DigestStorage,
   opencodeV1ReadCodecs,
 } from "@otk/harness-opencode-v1";
+import {
+  opencodeV2DigestMigrations,
+  OpencodeV2DigestSink,
+  opencodeV2ReadCodecs,
+  type V2NativeConfig,
+} from "@otk/harness-opencode-v2-server";
 
 /** Open selected contribution map; future providers add their config here. */
 export interface DigestProviderConfigs {
   "opencode-v1": OpencodeV1Config;
+  "opencode-v2-server": V2NativeConfig;
 }
 export type DigestNativeConfig =
   DigestProviderConfigs[keyof DigestProviderConfigs];
@@ -43,7 +50,16 @@ export function selectDigestProvider(
   provider: string,
   native: DigestNativeConfig,
 ) {
-  const contributions = new Map([["opencode-v1", {
+  const contributions = new Map<string, {
+    migrations: typeof opencodeV1DigestMigrations;
+    reads: ProviderReadCodecs;
+    create(
+      policy: DigestPolicy,
+      storage: OpencodeV1DigestStorage,
+      readiness: OpencodeV1DigestReadiness,
+      observe?: ConstructorParameters<typeof DigestNativeDb>[1],
+    ): WorkerDigestSink;
+  }>([["opencode-v1", {
     migrations: opencodeV1DigestMigrations,
     reads: opencodeV1ReadCodecs as ProviderReadCodecs,
     create: (
@@ -53,12 +69,23 @@ export function selectDigestProvider(
       observe?: ConstructorParameters<typeof DigestNativeDb>[1],
     ): WorkerDigestSink =>
       new OpencodeV1DigestSink(
-        native,
+        native as OpencodeV1Config,
         policy,
         storage,
         fetch,
         (file) => new DigestNativeDb(file, observe),
         readiness,
+      ),
+  }], ["opencode-v2-server", {
+    migrations: opencodeV2DigestMigrations,
+    reads: opencodeV2ReadCodecs,
+    create: (policy, storage, readiness, observe) =>
+      new OpencodeV2DigestSink(
+        native as V2NativeConfig,
+        policy,
+        storage,
+        readiness,
+        observe,
       ),
   }]]);
   const selected = contributions.get(provider);

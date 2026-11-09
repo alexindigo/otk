@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: LGPL-3.0-only
-import { assertEquals, assertThrows } from "@std/assert";
+import { assertEquals, assertRejects, assertThrows } from "@std/assert";
 import type { Harness } from "@otk/harness";
 import { startApplication } from "../../../application.ts";
 import { ConfigError, loadServiceConfig } from "../../../core/mod.ts";
@@ -14,7 +14,8 @@ test("storage busy policy layers leaf overrides and reaches the user-data connec
   assertEquals(config.storage.busyms, 7);
   assertEquals(config.digest.busyms, 100);
   const inspected = new Error("connection inspected");
-  assertThrows(
+  // Source-proven provider upgrades are awaited before feature hydration.
+  await assertRejects(
     () =>
       startApplication(config, {} as Harness, "unused", {
         upgrade(db) {

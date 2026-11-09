@@ -19,6 +19,32 @@ const entry = (id = "tstv1-a"): IndexMetadata => ({
     childQuestions: 0,
   },
 });
+Deno.test("unknown population retains last-known discovery without inventing empty-session projects", () => {
+  const owner = new ProjectSummaries(() => ({ seen: 0, finish: 0 }), () => {});
+  owner.seed([{
+    directory: "/known",
+    hasSessions: true,
+    sessionCount: 12,
+    lastActivity: 42,
+    authority: "current",
+  }]);
+  owner.seed([{
+    directory: "/known",
+    sessionCount: null,
+    lastActivity: null,
+    authority: "unknown",
+  }, {
+    directory: "/unknown",
+    sessionCount: null,
+    lastActivity: null,
+    authority: "unknown",
+  }]);
+  assertEquals(owner.values.get("/known")?.hasSessions, true);
+  assertEquals(owner.values.get("/known")?.sessionCount, null);
+  assertEquals(owner.values.get("/unknown")?.hasSessions, undefined);
+  assertEquals(owner.values.get("/unknown")?.sessionCount, null);
+  assertEquals(owner.values.get("/unknown")?.lastActivity, null);
+});
 Deno.test("project summaries own status priority, persisted marks, recency and unavailable authority without digest", () => {
   let seen = 0, finish = 0;
   const emitted: ProjectSummary[] = [];

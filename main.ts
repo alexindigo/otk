@@ -15,13 +15,18 @@ import {
   opencodeV1SessionID,
 } from "@otk/harness-opencode-v1";
 import { createSessionReferenceUpgrade } from "./core/features/session-ids.ts";
+import { createOpencodeV2Upgrade } from "./core/features/opencode-v2-upgrade.ts";
 import { StreamBuffers } from "@otk/content";
 import { IndexStore } from "./core/index/store.ts";
 import { DigestBridge } from "./core/digest/bridge.ts";
 import { digestProgressSource } from "./core/features/digest-progress.ts";
 import type { ServingDiagnostics } from "./core/diagnostics.ts";
 import { diagnosticsLog } from "./core/diagnostics-log.ts";
-import { OpencodeV2ServerAdapter } from "@otk/harness-opencode-v2-server";
+import {
+  opencodeV2ReadCodecs,
+  OpencodeV2ServerAdapter,
+  opencodeV2SessionID,
+} from "@otk/harness-opencode-v2-server";
 import { selectHarness } from "./harness-selection.ts";
 let memo: ServiceConfig | undefined;
 export function config(): ServiceConfig {
@@ -43,6 +48,44 @@ export async function start(
     signal,
   );
   if (selected.kind === "opencode-v2-server") {
+    const index = new IndexStore(diagnostics?.section);
+    const digest = new DigestBridge({
+      reads: opencodeV2ReadCodecs,
+      statePath: cfg.state.path,
+      provider: "opencode-v2-server",
+      native: {
+        serviceFile: selected.file,
+        db: harnessDb(cfg),
+        requestms: cfg.harness.requestms,
+      },
+      policy: cfg.digest,
+      section: diagnostics?.section,
+      pressure: diagnostics?.pressure,
+      admission: diagnostics?.admission,
+      metadata: (entries) => {
+        for (const entry of entries) {
+          const current = index.getMetadata(entry.id);
+          index.upsertMetadata(
+            current && current.timeUpdated > entry.timeUpdated
+              ? current
+              : current
+              ? {
+                ...entry,
+                status: current.status,
+                retry: current.retry,
+                attention: current.attention,
+                activityAuthority: current.activityAuthority,
+              }
+              : entry,
+          );
+        }
+      },
+      publish: ({ sessionID, revision, delta }) => {
+        index.applyDigest({ id: sessionID, revision, ...delta });
+      },
+      unready: () => {},
+      diagnostic: (error) => diagnostic("warn", "session digest", error),
+    });
     const backend = new OpencodeV2ServerAdapter(
       {
         serviceFile: selected.file,
@@ -51,6 +94,8 @@ export async function start(
       },
       selected.service,
       (error) => diagnostic("warn", "opencode V2", error),
+      fetch,
+      digest,
     );
     return await startApplication(
       cfg,
@@ -59,6 +104,30 @@ export async function start(
       {
         diagnostic,
         signal,
+        index,
+        interactive: (owner, active) => digest.interactive(owner, active),
+        requested: () => digest.requested(),
+        attention: (id) => digest.attention(id),
+        discoveryProject: (directory, active) =>
+          digest.discoveryProject(directory, active),
+        sources: [digestProgressSource(digest)],
+        upgrade: async (store) => {
+          try {
+            await createOpencodeV2Upgrade(digest, {
+              source: (value) => {
+                try {
+                  return opencodeV1SessionID.decode(value);
+                } catch {
+                  return undefined;
+                }
+              },
+              target: opencodeV2SessionID.encode,
+            }, signal)(store);
+          } catch (error) {
+            await digest.stop();
+            throw error;
+          }
+        },
       },
     );
   }

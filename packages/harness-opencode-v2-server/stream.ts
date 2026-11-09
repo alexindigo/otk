@@ -42,6 +42,7 @@ export function decodeEvent(value: unknown): V2Event | undefined {
   return value as unknown as V2Event;
 }
 export interface StreamPorts {
+  admission?(signal: AbortSignal): Promise<() => void>;
   discover(signal: AbortSignal): Promise<DiscoveredService>;
   /** Acquire snapshot without publishing. The returned commit is abort-fenced. */
   resync(
@@ -125,6 +126,7 @@ export class V2Stream {
           this.policy.requestms,
           current,
           this.fetcher,
+          this.ports.admission,
         );
         await this.#consume(client, owner, current, generation, () => {
           this.#client = client;
@@ -197,6 +199,11 @@ export class V2Stream {
         await this.ports.event(event, client, signal, generation);
       } catch (error) {
         signal.throwIfAborted();
+        // A live fact whose required scalar read failed needs the existing
+        // reconnect/resync owner, not a diagnostic-only dropped event.
+        if (
+          error instanceof OperationFailure && error.outcome === "unavailable"
+        ) throw error;
         this.ports.diagnostic(error);
         return;
       }

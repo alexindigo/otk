@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  type DigestPort,
   type Harness,
   type HarnessCore,
   HarnessError,
@@ -14,11 +15,9 @@ import type {
 import { type DiscoveredService, discoverV2 } from "./discovery.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { type V2Event, V2Stream } from "./stream.ts";
-import {
-  type OpenCodeClient,
-  type V2Client,
-  V2MissingSession,
-} from "./client.ts";
+import { type V2Client, V2MissingSession } from "./client.ts";
+import { metadata, millis, session, type SessionFacts } from "./metadata.ts";
+import { V2SessionLists } from "./session-lists.ts";
 
 export interface OpencodeV2ServerConfig {
   serviceFile: string;
@@ -29,34 +28,13 @@ export interface OpencodeV2ServerConfig {
   };
   messages: { replayops: number; replaybytes: number };
 }
-type NativeSession = Awaited<ReturnType<OpenCodeClient["session"]["get"]>>;
 type Pending = {
   id: string;
   sessionID: string;
   kind: "permission" | "form";
   directory: string;
+  stale?: boolean;
 };
-function millis(value: unknown): number {
-  return typeof value === "number"
-    ? value
-    : typeof value === "string"
-    ? Date.parse(value)
-    : 0;
-}
-function session(raw: NativeSession): ContentSession {
-  return {
-    id: ids.encode(raw.id),
-    directory: raw.location.directory,
-    projectID: raw.projectID,
-    title: raw.title ?? "Untitled session",
-    ...(raw.parentID ? { parentID: ids.encode(raw.parentID) } : {}),
-    time: {
-      created: millis(raw.time.created),
-      updated: millis(raw.time.updated),
-    },
-    archived: !!raw.time.archived,
-  };
-}
 /** V0 supplies the connection owner. Capabilities are added only with their proofs. */
 export class OpencodeV2ServerAdapter implements Harness {
   readonly core: HarnessCore;
@@ -65,18 +43,30 @@ export class OpencodeV2ServerAdapter implements Harness {
   #sink?: HarnessSink;
   #index = new SessionIndex();
   #pending = new Map<string, Pending>();
+  #pendingCounts = new Map<
+    string,
+    { permissions: number; questions: number; stale: number }
+  >();
+  #settledPending = new Set<string>();
   #running = new Map<string, number>();
+  #finished = new Map<string, number>();
   #version = "";
   #generation = 0;
+  #lists = new V2SessionLists();
+  #activityCurrent = false;
+  #observation = 0;
   constructor(
     readonly config: OpencodeV2ServerConfig,
     initial?: DiscoveredService,
     readonly diagnostic: (error: unknown) => void = () => {},
     fetcher: typeof fetch = fetch,
+    readonly digest?: DigestPort,
   ) {
     this.#version = initial?.version ?? "";
     this.stream = new V2Stream(
       {
+        admission: (signal) =>
+          digest?.admission?.(signal) ?? Promise.resolve(() => {}),
         discover: async (signal) => {
           const service = await discoverV2(config.serviceFile, signal);
           if (service.version !== "2.2.6") {
@@ -93,13 +83,17 @@ export class OpencodeV2ServerAdapter implements Harness {
         event: (event, client, signal, generation) =>
           this.#event(event, client, signal, generation),
         connected: (client, generation) => {
+          this.#activityCurrent = true;
           this.#version = client.service.version;
           this.#generation = generation;
+          this.#lists.reset();
           this.#sink?.connection("connected");
           this.#sink?.bootstrapComplete();
         },
         disconnected: (generation) => {
+          this.#activityCurrent = false;
           this.#generation = generation;
+          this.#lists.reset();
           for (const entry of this.#index.snapshotEntries()) {
             const { digest: _digest, ...metadata } = entry;
             this.#upsert({
@@ -135,9 +129,11 @@ export class OpencodeV2ServerAdapter implements Harness {
         this.#sink = sink;
         sink.connection("connecting");
         try {
+          await digest?.start();
           await this.stream.start();
         } catch (error) {
           await this.stream.stop();
+          await digest?.stop();
           this.#sink = undefined;
           throw error;
         }
@@ -146,11 +142,25 @@ export class OpencodeV2ServerAdapter implements Harness {
         // Retire the publication port synchronously before joining any read.
         this.#sink = undefined;
         await this.stream.stop();
+        await digest?.stop();
         this.#pending.clear();
+        this.#pendingCounts.clear();
+        this.#settledPending.clear();
         this.#running.clear();
+        this.#finished.clear();
       },
       subscriptions: () => {},
+      hydrate: (keys, signal = new AbortController().signal) =>
+        this.#hydrate(keys, signal),
       identities: async (keys, signal) => {
+        keys.forEach(ids.decode);
+        if (digest) {
+          return await digest.read("identity.batch", { ids: [...keys] }, {
+            owner: `identity:${crypto.randomUUID()}`,
+            priority: "user",
+            signal,
+          });
+        }
         const result = [];
         const batch = [...new Set(keys)].map((key) => ({
           key,
@@ -184,8 +194,57 @@ export class OpencodeV2ServerAdapter implements Harness {
             }, { signal }), signal),
         );
       },
-      listSessions: unavailable,
-      listChildren: unavailable,
+      listSessions: async (input, signal = new AbortController().signal) => {
+        if (input.parentID) ids.decode(input.parentID);
+        const result = digest
+          ? await digest.read("sessions.list", input, {
+            owner: `sessions:${crypto.randomUUID()}`,
+            priority: "user",
+            signal,
+          })
+          : await this.#lists.read(
+            input,
+            this.stream.client,
+            undefined,
+            signal,
+          );
+        for (const row of result.items) this.#merge(row);
+        return {
+          ...result,
+          items: result.items.map((row) =>
+            this.#index.getMetadata(row.id) ?? row
+          ),
+        };
+      },
+      listChildren: async (id, signal) => {
+        const native = ids.decode(id),
+          result: ContentSession[] = [],
+          seen = new Set<string>();
+        let cursor: string | undefined;
+        do {
+          const page = await this.stream.client.read(
+            (api) =>
+              api.session.list(
+                cursor
+                  ? { cursor, limit: 200 }
+                  : { parentID: native, limit: 200, order: "desc" },
+                { signal },
+              ),
+            signal,
+          );
+          for (const raw of page.data) {
+            result.push(session(raw));
+            this.#merge(metadata(raw));
+          }
+          const next = page.cursor.next;
+          if (next && (seen.has(next) || !page.data.length)) {
+            throw new Error("Child cursor did not advance");
+          }
+          if (next) seen.add(next);
+          cursor = next ?? undefined;
+        } while (cursor);
+        return result;
+      },
       listMessages: unavailable,
       createSession: unavailable,
     };
@@ -195,11 +254,99 @@ export class OpencodeV2ServerAdapter implements Harness {
     if (!this.#sink.index) this.#index.upsertMetadata(entry);
     this.#sink.indexUpsert(entry);
   }
-  #metadata(raw: NativeSession, busy: boolean): SessionMetadata {
+  #merge(row: SessionMetadata): void {
+    const current = this.#index.getMetadata(row.id);
+    if (current && current.timeUpdated > row.timeUpdated) row = { ...current };
+    const native = ids.decode(row.id),
+      pending = this.#pendingCounts.get(native);
+    this.#upsert({
+      ...row,
+      status: this.#running.has(native)
+        ? "busy"
+        : this.#activityCurrent
+        ? "idle"
+        : current?.status ?? row.status,
+      retry: current?.retry,
+      attention: {
+        ...(current?.attention ?? row.attention),
+        permissions: pending?.permissions ?? 0,
+        questions: pending?.questions ?? 0,
+      },
+      activityAuthority: pending?.stale
+        ? "unknown"
+        : this.#activityCurrent
+        ? "current"
+        : current?.activityAuthority ?? "unknown",
+    });
+  }
+  #execution(
+    entry: SessionMetadata,
+    ended?: number,
+    alreadyObserved = false,
+  ): void {
+    if (!ended || ended <= (this.#finished.get(entry.id) ?? 0)) {
+      this.#upsert(entry);
+      return;
+    }
+    this.#finished.set(entry.id, ended);
+    // A native execution edge is not canceled by a newer metadata snapshot.
+    // Replay its one finish transition through the existing synchronous index
+    // observer, then retain the snapshot's truthful current activity.
+    if (!alreadyObserved) {
+      if (this.#index.getMetadata(entry.id)?.status !== "busy") {
+        this.#upsert({
+          ...entry,
+          status: "busy",
+          retry: undefined,
+          attention: { ...entry.attention, error: undefined },
+        });
+      }
+      this.#upsert({ ...entry, status: "idle", retry: undefined });
+    }
+    if (alreadyObserved || entry.status !== "idle") this.#upsert(entry);
+  }
+  async #hydrate(
+    wanted: readonly string[],
+    signal: AbortSignal,
+  ): Promise<void> {
+    // Retained references from an unproven provider transition remain user data,
+    // not native V2 identities. Optional hydration must not block valid keys.
+    wanted = wanted.filter(ids.is);
+    if (!wanted.length) return;
+    if (this.digest?.hydrate) {
+      await this.digest.hydrate(wanted, signal);
+      signal.throwIfAborted();
+      const keys = new Set(wanted);
+      for (const key of keys) {
+        const row = this.#index.getMetadata(key);
+        if (row) {
+          this.#merge(row);
+          if (row.parentID) keys.add(row.parentID);
+        }
+      }
+      return;
+    }
+    const remaining = [...new Set(wanted)], seen = new Set<string>();
+    while (remaining.length) {
+      signal.throwIfAborted();
+      const key = remaining.shift()!;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      try {
+        const raw = await this.stream.client.read(
+          (api) => api.session.get({ sessionID: ids.decode(key) }, { signal }),
+          signal,
+        );
+        this.#merge(metadata(raw));
+        if (raw.parentID) remaining.push(ids.encode(raw.parentID));
+      } catch (error) {
+        if (!(error instanceof V2MissingSession)) throw error;
+      }
+    }
+  }
+  #metadata(raw: SessionFacts, busy: boolean): SessionMetadata {
     const mapped = session(raw);
-    const pending = [...this.#pending.values()].filter((p) =>
-      p.sessionID === raw.id
-    );
+    const pending = this.#pendingCounts.get(raw.id);
     return {
       id: mapped.id,
       parentID: mapped.parentID,
@@ -210,14 +357,88 @@ export class OpencodeV2ServerAdapter implements Harness {
       timeUpdated: mapped.time.updated,
       archived: mapped.archived,
       status: busy ? "busy" : "idle",
-      activityAuthority: "current",
+      activityAuthority: pending?.stale ? "unknown" : "current",
+      ...(busy && this.#index.getMetadata(mapped.id)?.retry
+        ? { retry: this.#index.getMetadata(mapped.id)!.retry }
+        : {}),
       attention: {
-        permissions: pending.filter((p) => p.kind === "permission").length,
-        questions: pending.filter((p) => p.kind === "form").length,
+        permissions: pending?.permissions ?? 0,
+        questions: pending?.questions ?? 0,
         childPermissions: 0,
         childQuestions: 0,
+        ...(!busy && raw.outcome === "failed"
+          ? { error: "Execution failed." }
+          : {}),
       },
     };
+  }
+  #countPending(row: Pending, delta: 1 | -1): void {
+    const count = this.#pendingCounts.get(row.sessionID) ??
+      { permissions: 0, questions: 0, stale: 0 };
+    count[row.kind === "permission" ? "permissions" : "questions"] += delta;
+    if (row.stale) count.stale += delta;
+    if (count.permissions || count.questions) {
+      this.#pendingCounts.set(row.sessionID, count);
+    } else this.#pendingCounts.delete(row.sessionID);
+  }
+  #setPending(key: string, row?: Pending): void {
+    const previous = this.#pending.get(key);
+    if (previous) this.#countPending(previous, -1);
+    if (row) {
+      this.#pending.set(key, row);
+      this.#countPending(row, 1);
+    } else this.#pending.delete(key);
+  }
+  #pendingEvent(event: V2Event, sid: unknown, form: unknown): void {
+    const kind = event.type.startsWith("permission.") ? "permission" : "form";
+    const created = event.type === "permission.asked" ||
+      event.type === "form.created";
+    const settled = event.type === "permission.replied" ||
+      event.type === "form.replied" || event.type === "form.cancelled";
+    if (!created && !settled) return;
+    const id = kind === "permission"
+      ? event.data[created ? "id" : "requestID"]
+      : created && form && typeof form === "object"
+      ? Reflect.get(form, "id")
+      : event.data.id;
+    if (typeof id !== "string") return;
+    const key = `${kind}:${id}`,
+      owner = typeof sid === "string" ? sid : this.#pending.get(key)?.sessionID;
+    if (settled) {
+      this.#settledPending.add(key);
+      if (this.#settledPending.size > 4096) {
+        this.#settledPending.delete(
+          this.#settledPending.values().next().value!,
+        );
+      }
+      this.#setPending(key);
+    } else if (owner && !this.#settledPending.has(key)) {
+      const directory = event.location?.directory ??
+        (owner !== "global"
+          ? this.#index.getMetadata(ids.encode(owner))?.directory
+          : undefined);
+      if (directory) {
+        this.#setPending(key, { id, kind, sessionID: owner, directory });
+      }
+    }
+    if (!owner || owner === "global") return;
+    const current = this.#index.getMetadata(ids.encode(owner));
+    if (current) {
+      const counts = this.#pendingCounts.get(owner);
+      this.#upsert({
+        ...current,
+        activityAuthority: counts?.stale
+          ? "unknown"
+          : this.#activityCurrent
+          ? "current"
+          : current.activityAuthority,
+        attention: {
+          ...current.attention,
+          permissions: counts?.permissions ?? 0,
+          questions: counts?.questions ?? 0,
+        },
+      });
+    }
   }
   async #resync(
     client: V2Client,
@@ -233,7 +454,12 @@ export class OpencodeV2ServerAdapter implements Harness {
       (api) => api.debug.location.list({ signal }),
       signal,
     );
-    const pending = new Map(this.#pending);
+    const pending = new Map<string, Pending>(
+      [...this.#pending].map(([key, row]) =>
+        [key, { ...row, stale: true }] as const
+      ),
+    );
+    const projects = await this.digest?.projects?.(generation, signal);
     const owners = new Set([
       ...Object.keys(active),
       ...this.#running.keys(),
@@ -245,30 +471,36 @@ export class OpencodeV2ServerAdapter implements Harness {
       ) => ids.decode(id)),
     ]);
     for (const location of locations) {
-      try {
-        const permissions = await client.read(
-          (api) =>
-            api.permission.request.list({
-              location,
-            }, { signal }),
-          signal,
-        );
-        const forms = await client.read(
-          (api) => api.form.list({ location }, { signal }),
-          signal,
-        );
-        signal.throwIfAborted();
-        // Replace only after both complete owner/location inventories succeed.
-        for (const [key, value] of pending) {
-          if (value.directory === location.directory) pending.delete(key);
-        }
-        for (
-          const [kind, rows] of [["permission", permissions.data], [
-            "form",
-            forms.data,
-          ]] as const
-        ) {
+      const inventories = [
+        [
+          "permission",
+          () =>
+            client.read(
+              (api) => api.permission.request.list({ location }, { signal }),
+              signal,
+            ),
+        ],
+        [
+          "form",
+          () =>
+            client.read(
+              (api) => api.form.list({ location }, { signal }),
+              signal,
+            ),
+        ],
+      ] as const;
+      for (const [kind, read] of inventories) {
+        try {
+          const { data: rows } = await read();
+          signal.throwIfAborted();
+          // Each complete kind/location inventory owns only its own absence facts.
+          for (const [key, value] of pending) {
+            if (value.kind === kind && value.directory === location.directory) {
+              pending.delete(key);
+            }
+          }
           for (const row of rows) {
+            if (this.#settledPending.has(`${kind}:${row.id}`)) continue;
             pending.set(`${kind}:${row.id}`, {
               id: row.id,
               sessionID: row.sessionID,
@@ -277,21 +509,44 @@ export class OpencodeV2ServerAdapter implements Harness {
             });
             if (row.sessionID !== "global") owners.add(row.sessionID);
           }
+        } catch (error) {
+          signal.throwIfAborted();
+          this.diagnostic(error);
         }
-      } catch (error) {
-        signal.throwIfAborted();
-        this.diagnostic(error);
       }
     }
-    const sessions: NativeSession[] = [];
+    const sessions: SessionFacts[] = [];
+    const hydrated = new Set<string>();
+    if (this.digest) {
+      let keys = [...owners].map(ids.encode);
+      while (keys.length) {
+        const rows = await this.digest.read("opcv2.sessions", { ids: keys }, {
+          owner: `resync:${generation}`,
+          priority: "attention",
+          signal,
+        });
+        keys.forEach((key) => hydrated.add(ids.decode(key)));
+        keys = [];
+        for (const row of rows) {
+          sessions.push(row);
+          if (row.parentID && !hydrated.has(row.parentID)) {
+            keys.push(ids.encode(row.parentID));
+          }
+        }
+      }
+    }
     for (const id of owners) {
+      if (hydrated.has(id)) continue;
+      hydrated.add(id);
       try {
-        sessions.push(
-          await client.read(
-            (api) => api.session.get({ sessionID: id }, { signal }),
-            signal,
-          ),
+        const raw = await client.read(
+          (api) => api.session.get({ sessionID: id }, { signal }),
+          signal,
         );
+        sessions.push(raw);
+        if (raw.parentID && !hydrated.has(raw.parentID)) {
+          owners.add(raw.parentID);
+        }
       } catch (error) {
         signal.throwIfAborted();
         this.diagnostic(error);
@@ -301,27 +556,78 @@ export class OpencodeV2ServerAdapter implements Harness {
     return () => {
       signal.throwIfAborted();
       this.#generation = generation;
+      this.#activityCurrent = true;
       this.#pending = pending;
+      this.#pendingCounts.clear();
+      for (const [key, row] of this.#pending) {
+        if (this.#settledPending.has(key)) this.#pending.delete(key);
+        else this.#countPending(row, 1);
+      }
       if (reconnect) {
         this.#sink?.invalidate({ version: { generation, revision: 0 } });
       }
-      this.#sink?.projectAuthority?.("unknown");
+      this.#sink?.projectSeeds?.(projects?.projects ?? []);
+      this.#sink?.projectAuthority?.("current");
       for (const raw of sessions) {
         const previous = this.#running.get(raw.id);
-        if (active[raw.id]) this.#running.set(raw.id, millis(raw.time.busy));
-        else this.#running.delete(raw.id);
+        if (active[raw.id]) {
+          this.#running.set(
+            raw.id,
+            millis(raw.time.busy) || previous || Date.now(),
+          );
+        } else this.#running.delete(raw.id);
         const entry = this.#metadata(raw, !!active[raw.id]);
+        const ended = previous !== undefined && !active[raw.id] &&
+            millis(raw.time.idle) > previous
+          ? millis(raw.time.idle)
+          : undefined;
         // An old outcome cannot certify a lost newer execution's success.
         if (
           previous !== undefined && !active[raw.id] &&
-          millis(raw.time.idle) < previous
+          millis(raw.time.idle) <= previous
         ) {
           entry.attention.error =
             "Execution continuity was interrupted; its outcome is unknown.";
         }
-        this.#upsert(entry);
+        this.#execution(entry, ended);
+      }
+      for (const sid of [...this.#running.keys()]) {
+        if (active[sid]) continue;
+        this.#running.delete(sid);
+        if (sessions.some((raw) => raw.id === sid)) continue;
+        const previous = this.#index.getMetadata(ids.encode(sid));
+        if (previous) {
+          this.#upsert({
+            ...previous,
+            status: "idle",
+            activityAuthority: "current",
+            attention: {
+              ...previous.attention,
+              error:
+                "Execution continuity was interrupted; its outcome is unknown.",
+            },
+          });
+        }
       }
     };
+  }
+  async #refreshProjects(
+    directories: readonly string[],
+    signal: AbortSignal,
+    generation: number,
+  ): Promise<void> {
+    if (!this.digest?.projects) return;
+    for (const directory of new Set(directories)) {
+      const result = await this.digest.projects(
+        generation,
+        signal,
+        undefined,
+        directory,
+      );
+      signal.throwIfAborted();
+      if (generation !== this.#generation) return;
+      this.#sink?.projectSeeds?.(result.projects);
+    }
   }
   async #event(
     event: V2Event,
@@ -329,46 +635,140 @@ export class OpencodeV2ServerAdapter implements Harness {
     signal: AbortSignal,
     generation: number,
   ): Promise<void> {
-    const form = event.data.form;
-    const sid = event.data.sessionID ??
-      (form && typeof form === "object"
-        ? Reflect.get(form, "sessionID")
-        : undefined);
-    if (typeof sid !== "string" || sid === "global") return;
     if (
-      !/^session\.execution\./.test(event.type) &&
-      !/^(permission\.|form\.)/.test(event.type)
-    ) return;
-    if (event.type === "session.execution.started") {
-      this.#running.set(sid, event.created ?? Date.now());
-    } else if (
-      /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type)
-    ) this.#running.delete(sid);
-    if (/^(permission\.|form\.)/.test(event.type)) {
-      // Inventory is the authoritative reconciliation for racing ephemeral requests.
+      /^(project\.updated|worktree\.(updated|resolved)|location\.shutdown)$/
+        .test(event.type)
+    ) {
       const commit = await this.#resync(client, signal, generation, false);
       signal.throwIfAborted();
       commit();
       return;
     }
+    const form = event.data.form;
+    const sid = event.data.sessionID ??
+      (form && typeof form === "object"
+        ? Reflect.get(form, "sessionID")
+        : undefined);
+    if (/^(permission\.|form\.)/.test(event.type)) {
+      this.#pendingEvent(event, sid, form);
+      const commit = await this.#resync(client, signal, generation, false);
+      signal.throwIfAborted();
+      commit();
+      return;
+    }
+    if (typeof sid !== "string" || sid === "global") return;
+    if (
+      !/^session\.execution\./.test(event.type) &&
+      !/^session\.(created|forked|renamed|moved|metadata\.updated|archived|unarchived|deleted|retry\.scheduled|step\.started)$/
+        .test(event.type)
+    ) return;
+    this.#lists.invalidate();
+    this.digest?.observe(generation, [{
+      sessionID: ids.encode(sid),
+      revision: ++this.#observation,
+      reason: "metadata",
+    }]);
+    if (event.type === "session.deleted") {
+      const previous = this.#index.getMetadata(ids.encode(sid));
+      this.#running.delete(sid);
+      this.#finished.delete(ids.encode(sid));
+      for (const [key, row] of this.#pending) {
+        if (row.sessionID === sid) this.#setPending(key);
+      }
+      this.#sink?.indexRemove(ids.encode(sid));
+      if (previous) {
+        await this.#refreshProjects([previous.directory], signal, generation);
+      }
+      return;
+    }
+    const previousRun = this.#running.get(sid);
+    if (event.type === "session.execution.started") {
+      this.#running.set(sid, event.created ?? Date.now());
+    }
+    const previous = this.#index.getMetadata(ids.encode(sid));
     const raw = await client.read(
       (api) => api.session.get({ sessionID: sid }, { signal }),
       signal,
     );
     signal.throwIfAborted();
     if (generation !== this.#generation) return;
+    // Retain the prior run as a mandatory resync key until metadata I/O settles.
+    if (
+      /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type)
+    ) this.#running.delete(sid);
     // An API snapshot may already cover a buffered execution edge. Native busy
     // and idle clocks prevent an older frame from reopening a completed run or
     // settling a newer one. Session.outcome alone is never continuity proof.
     const busy = millis(raw.time.busy), idle = millis(raw.time.idle);
+    let ended: number | undefined;
     if (
       event.type === "session.execution.started" &&
-      idle >= (event.created ?? busy)
-    ) this.#running.delete(sid);
+      idle > (event.created ?? busy)
+    ) {
+      if (idle > 0) ended = idle;
+      if (busy > idle) this.#running.set(sid, busy);
+      else this.#running.delete(sid);
+    }
+    if (
+      /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type)
+    ) {
+      ended = event.created ??
+        (previousRun !== undefined && idle > previousRun ? idle : undefined);
+    }
     if (
       event.type !== "session.execution.started" &&
       busy > (event.created ?? 0) && busy > idle
     ) this.#running.set(sid, busy);
-    this.#upsert(this.#metadata(raw, this.#running.has(sid)));
+    const entry = this.#metadata(raw, this.#running.has(sid));
+    if (
+      event.type === "session.execution.started" ||
+      event.type === "session.step.started" ||
+      /^session\.execution\.(succeeded|failed|interrupted)$/.test(event.type)
+    ) delete entry.retry;
+    if (
+      event.type === "session.retry.scheduled" &&
+      Number.isSafeInteger(event.data.attempt) &&
+      typeof event.data.at === "number"
+    ) {
+      entry.retry = {
+        attempt: Number(event.data.attempt),
+        message: "Retrying execution.",
+        next: event.data.at,
+      };
+    }
+    if (event.type === "session.execution.failed" && !this.#running.has(sid)) {
+      entry.attention.error = "Execution failed.";
+    }
+    this.#execution(
+      entry,
+      ended,
+      previousRun !== undefined && event.type !== "session.execution.started" &&
+        this.#index.getMetadata(entry.id)?.status === "idle",
+    );
+    if (/^session\.(created|forked|moved)$/.test(event.type)) {
+      await this.#refreshProjects(
+        [raw.location.directory, ...(previous ? [previous.directory] : [])],
+        signal,
+        generation,
+      );
+    }
+    if (raw.parentID) {
+      const pending = [raw.parentID], seen = new Set([sid]);
+      for (const parent of pending) {
+        if (seen.has(parent)) continue;
+        seen.add(parent);
+        try {
+          const raw = await client.read(
+            (api) => api.session.get({ sessionID: parent }, { signal }),
+            signal,
+          );
+          signal.throwIfAborted();
+          this.#upsert(this.#metadata(raw, this.#running.has(parent)));
+          if (raw.parentID) pending.push(raw.parentID);
+        } catch (error) {
+          if (!(error instanceof V2MissingSession)) throw error;
+        }
+      }
+    }
   }
 }

@@ -3,6 +3,8 @@ import type { OtkDb } from "@otk/store";
 import { isSessionID } from "@otk/protocol";
 
 interface UpgradeOptions {
+  /** Provider transitions cannot infer browser-side server ownership from native IDs. */
+  location?(location: Record<string, unknown>): boolean;
   /** Independent native upgrades do not reuse the beta.1 marker. */
   name?: string;
   /** A proven provider transition must reject aliases, not merge identities. */
@@ -220,6 +222,7 @@ export function createSessionReferenceUpgrade(
                 diagnose(field);
                 continue;
               }
+              if (options.location && !options.location(location)) continue;
               const next = convert(location.sessionID, field);
               if (next !== location.sessionID) {
                 location.sessionID = next;
