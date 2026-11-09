@@ -277,6 +277,13 @@ test("revert.undo-redo-aliases-draft-guard-and-busy-interruption", {
     "data-status",
     "busy",
   );
+  // Native busy admission precedes the provider request. Exercise interruption
+  // of the scripted reply, rather than cancellation before that reply is owned.
+  await expect.poll(async () =>
+    (await state.observe<{ requests: unknown[] }>()).requests.some((request) =>
+      JSON.stringify(request).includes("Interrupt this prompt")
+    )
+  ).toBe(true);
   const before =
     (await state.observe<{ transport: { mutations: string[] } }>()).transport
       .mutations.length;
