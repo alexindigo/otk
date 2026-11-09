@@ -82,6 +82,36 @@ Deno.test("markdown preserves Marked setext grammar and long plain paragraphs", 
     ]
   ) assertEquals(markdown(source), blocks(Lexer.lex(source, { gfm: true })));
 });
+Deno.test("GFM task state is metadata rather than duplicate prose in complete and streamed lists", () => {
+  const source = "- [ ] Unchecked task\n- [x] Checked task\n";
+  const expected: Block[] = [{
+    b: "list",
+    ordered: false,
+    start: undefined,
+    items: [false, true].map((checked) => ({
+      task: true,
+      checked,
+      blocks: [{
+        b: "paragraph",
+        inline: [{
+          i: "text",
+          text: checked ? "Checked task" : "Unchecked task",
+        }],
+      }],
+    })),
+  }];
+  assertEquals(markdown(source), expected);
+  for (const size of [1, 3, 7]) {
+    const stream = new StreamingMarkdown();
+    for (let from = 0; from < source.length; from += size) {
+      stream.append(source.slice(from, from + size));
+      stream.flush();
+    }
+    assertEquals(stream.snapshot().blocks, expected);
+  }
+  assert(JSON.stringify(markdown("`[ ]` and `[x]`")).includes("[ ]"));
+  assert(JSON.stringify(markdown("`[ ]` and `[x]`")).includes("[x]"));
+});
 Deno.test("stream tail equals one-shot parse for 20 random chunkings and late references", () => {
   const texts = [
     "# Heading\n\nWords\n\n- first\n- second\n\n```ts\nconst a = 1;\nconst b = 2;\n```\n\nDone.",

@@ -395,8 +395,8 @@ test(
           br: !!el.querySelector("br"),
           quote: el.querySelector("blockquote")?.textContent?.trim(),
           start: el.querySelector("ol")?.start,
-          task: el.querySelector<HTMLInputElement>("input[type=checkbox]")
-            ?.checked,
+          task: el.querySelector('.otk-task-marker[role="img"]')
+            ?.getAttribute("aria-label") === "Done",
           rule: !!el.querySelector("hr"),
           cells: Array.from(el.querySelectorAll("td")).map((cell) =>
             cell.textContent

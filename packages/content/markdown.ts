@@ -45,6 +45,8 @@ export function blocks(tokens: Token[]): Block[] {
     switch (token.type) {
       case "space":
       case "def":
+      // GFM task state is already owned by ListItem.task/checked, not prose.
+      case "checkbox":
         return [];
       case "heading": {
         const t = token as Tokens.Heading;

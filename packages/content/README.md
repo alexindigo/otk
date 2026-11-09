@@ -80,6 +80,11 @@ checkout `mod.ts` files in your Deno imports, and preserve the parser dependency
 mappings above. Packages are prepared for publication but have not been
 published to JSR.
 
+GFM task state is represented once by each list item's task/checked metadata.
+Marked's checkbox token is not converted into an extra prose paragraph; literal
+bracket text and code remain ordinary content. Complete and streaming conversion
+share that mapping.
+
 Run `deno task check` and `deno task test` in this directory. Workspace
 `deno task test:unit` includes these package tests; `deno task test:reuse` also
 exercises a standalone markdown/patch consumer through the public entry.

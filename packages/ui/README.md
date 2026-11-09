@@ -29,6 +29,10 @@ SelectionContent accepts that leading content; icon-only selections share the
 whole control cell with their in-flow selection mark instead of shrinking the
 icon's centring area. Each slot resolves its size at the owning control, so
 compact searches and project-height rails inherit their own height role.
+Markdown tasks use the shared non-interactive TaskMarker, not disabled native
+checkboxes. Its Done/Not done image name and glyph share one input, and its
+square slot derives from the prose line height. The list owns a two-column
+marker/content grid, keeping the marker centred on the first content line.
 `Select` retains one native value/focus target under a noninteractive decorative
 slot. FormSelect, preferences and ListPicker borrow these owners, including the
 composer's injected trigger content. Callers supply content/classes, never arrow

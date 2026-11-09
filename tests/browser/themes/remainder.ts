@@ -2,7 +2,11 @@
 import type { Page } from "@playwright/test";
 import { expect, test } from "@playwright/test";
 import type { TestState } from "../fixtures/test-state.ts";
-import { labelTextBounds } from "../../support/control-geometry.ts";
+import {
+  labelTextBounds,
+  type TaskMarkerGeometry,
+  taskMarkerGeometry,
+} from "../../support/control-geometry.ts";
 import { labels } from "./labels.ts";
 import { fixedContent } from "./content.ts";
 import { readyMenuBox } from "../pages/menus.ts";
@@ -37,12 +41,7 @@ interface Checkboxes {
     centers: number;
     value: string;
   }[];
-  tasks: {
-    checked: boolean;
-    disabled: boolean;
-    text: string;
-    margin: number;
-  }[];
+  tasks: TaskMarkerGeometry[];
 }
 async function frames(page: Page) {
   await page.evaluate(() =>
@@ -879,9 +878,9 @@ export async function remainder(
       await paint(theme);
       await page.locator(".otk-display-menu > button").click();
       const g = await page.evaluate<Checkboxes>(
-        `(()=>{const bounds=${labelTextBounds};return {controls:[...document.querySelectorAll('.otk-display-menu input,.otk-text li > input')].map(el=>{const r=el.getBoundingClientRect(),p=el.parentElement.getBoundingClientRect();return {width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right};}),labels:[...document.querySelectorAll('.otk-display-menu input')].map(el=>{const r=el.getBoundingClientRect(),t=bounds(el),p=el.parentElement.getBoundingClientRect();return {gap:t.left-r.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),right:t.right,parentRight:p.right};}),selects:[...document.querySelectorAll('.otk-display-menu select')].map(el=>{const r=el.getBoundingClientRect(),t=bounds(el),p=el.parentElement.getBoundingClientRect();return {padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right,gap:r.left-t.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),value:el.value};}),tasks:[...document.querySelectorAll('.otk-text li > input')].map(el=>({checked:el.checked,disabled:el.disabled,text:el.parentElement.textContent,margin:parseFloat(getComputedStyle(el).marginRight)}))};})()`,
+        `(()=>{const bounds=${labelTextBounds};return {controls:[...document.querySelectorAll('.otk-display-menu input')].map(el=>{const r=el.getBoundingClientRect(),p=el.parentElement.getBoundingClientRect();return {width:r.width,height:r.height,padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right};}),labels:[...document.querySelectorAll('.otk-display-menu input')].map(el=>{const r=el.getBoundingClientRect(),t=bounds(el),p=el.parentElement.getBoundingClientRect();return {gap:t.left-r.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),right:t.right,parentRight:p.right};}),selects:[...document.querySelectorAll('.otk-display-menu select')].map(el=>{const r=el.getBoundingClientRect(),t=bounds(el),p=el.parentElement.getBoundingClientRect();return {padding:parseFloat(getComputedStyle(el).paddingLeft),right:r.right,parentRight:p.right,gap:r.left-t.right,centers:Math.abs(r.y+r.height/2-t.y-t.height/2),value:el.value};}),tasks:(${taskMarkerGeometry})()};})()`,
       );
-      expect(g.controls.length).toBe(g.labels.length + 2);
+      expect(g.controls.length).toBe(g.labels.length);
       expect(g.labels.length).toBeGreaterThan(0);
       for (const c of g.controls) {
         expect(c.width).toBeGreaterThan(0);
@@ -907,14 +906,22 @@ export async function remainder(
         "hide",
         "auto",
       ]);
-      expect(
-        g.tasks.map((
-          t: { checked: boolean; disabled: boolean; margin: number },
-        ) => [t.checked, t.disabled, t.margin]),
-      ).toEqual([[false, true, 8], [true, true, 8]]);
+      // Rule 3 supersedes disabled Markdown checkbox controls with named status images.
+      expect(g.tasks.map((t) => t.label)).toEqual(["Not done", "Done"]);
+      await expect(page.locator(".otk-text li > input")).toHaveCount(0);
+      for (const task of g.tasks) {
+        expect([task.tag, task.role, task.controls, task.tabIndex]).toEqual([
+          "SPAN",
+          "img",
+          0,
+          null,
+        ]);
+        expect([task.width, task.height]).toEqual([task.line, task.line]);
+        for (const delta of task.centres) expect(delta).toBeLessThanOrEqual(.5);
+      }
       expect(g.tasks.map((t) => t.text)).toEqual([
-        expect.stringContaining("Unchecked task"),
-        expect.stringContaining("Checked task"),
+        "Unchecked task",
+        "Checked task",
       ]);
       await shot(`native-checkboxes-${theme.id}`);
       await page.keyboard.press("Escape");

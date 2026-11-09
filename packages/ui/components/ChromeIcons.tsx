@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { Element } from "solid-js";
+import { Show } from "solid-js";
 import SvgIcon from "./Icon.tsx";
 function Icon(props: { children: Element; class?: string }): Element {
   return (
@@ -87,6 +88,14 @@ export const ShieldCheckIcon = () => (
   <Icon>
     <path d="m12 3 8 3v6c0 4-4 7-8 9-4-2-8-5-8-9V6l8-3Z" />
     <path d="m8 12 3 3 5-6" />
+  </Icon>
+);
+export const TaskStatusIcon = (props: { checked: boolean; class?: string }) => (
+  <Icon class={props.class}>
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <Show when={props.checked}>
+      <path d="m8 12 3 3 5-6" />
+    </Show>
   </Icon>
 );
 export const CopyIcon = () => (

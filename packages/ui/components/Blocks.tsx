@@ -5,6 +5,7 @@ import { For, Match, Show, Switch } from "solid-js";
 import { dynamic } from "@solidjs/web";
 import type { Block, Inline } from "@otk/protocol";
 import HighlightedCode from "./Code.tsx";
+import TaskMarker from "./TaskMarker.tsx";
 import { ContentWindow } from "./VirtualList.tsx";
 const blockOf = <K extends Block["b"]>(block: Block, kind: K) =>
   block.b === kind ? block as Block & { b: K } : undefined;
@@ -152,14 +153,11 @@ function List(props: { block: Block & { b: "list" }; conceal?: boolean }) {
     <Tag start={props.block.ordered ? props.block.start : undefined}>
       <For each={props.block.items} keyed={false}>
         {(item) => (
-          <li>
+          <li class={item().task ? "otk-prose-task-item" : undefined}>
             <Show when={item().task}>
-              <input
-                class="otk-prose-task"
-                type="checkbox"
-                checked={item().checked}
-                disabled
-                aria-label="Task"
+              <TaskMarker
+                class="otk-prose-task-marker"
+                done={!!item().checked}
               />
             </Show>
             <BlockList blocks={item().blocks} conceal={props.conceal} />

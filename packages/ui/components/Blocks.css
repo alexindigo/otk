@@ -23,8 +23,20 @@
   padding-left: 12px;
   color: var(--secondary);
 }
-.otk-prose-task {
-  margin-right: 8px;
+.otk-prose-task-item {
+  display: grid;
+  grid-template-columns: 1lh minmax(0, 1fr);
+  column-gap: 8px;
+  align-items: start;
+}
+.otk-prose-task-marker {
+  grid-area: 1 / 1;
+}
+.otk-prose-task-item > :not(.otk-prose-task-marker) {
+  grid-column: 2;
+}
+.otk-prose-task-item > :nth-child(2) {
+  margin-block-start: 0;
 }
 .otk-prose-image {
   max-width: 100%;

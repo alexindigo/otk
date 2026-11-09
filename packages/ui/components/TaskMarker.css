@@ -1,0 +1,13 @@
+/* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-task-marker {
+  display: inline-grid;
+  place-items: center;
+  inline-size: 1lh;
+  block-size: 1lh;
+  vertical-align: top;
+  flex: none;
+}
+.otk-task-marker .otk-task-marker-glyph {
+  inline-size: calc(1lh * 2 / 3);
+  block-size: calc(1lh * 2 / 3);
+}
