@@ -51,6 +51,14 @@ export const PROJECT_STATUS_PRIORITY = [
   "idle",
 ] as const;
 export type ProjectStatus = typeof PROJECT_STATUS_PRIORITY[number];
+/** Connection-local repository identity; checkout roots are explicit native facts. */
+export interface ProjectTopology {
+  repoID: string;
+  canonicalRoot: string;
+  leafDirectory: string;
+  /** Absent for the canonical checkout's direct leaf. */
+  parentDirectory?: string;
+}
 export interface ProjectSummary {
   directory: string;
   /** Population authority, independent of acquired session membership. */

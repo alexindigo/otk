@@ -22,6 +22,199 @@ import type { InboxBaseline, SessionListPage } from "@otk/protocol";
 
 Deno.test({
   name:
+    "OC2I7 saved native worktrees publish exact-scope topology without population acquisition",
+  ignore: nativeKind !== "opencode-v2-server",
+  fn: () =>
+    withResources("V2 saved topology", async () => {
+      const native = await OpencodeV2Test.start(new FakeLlm(), {
+        prepare: async (fixture) => {
+          const result = await new Deno.Command("git", {
+            cwd: fixture.directory,
+            args: [
+              "-c",
+              "user.name=Fixture",
+              "-c",
+              "user.email=fixture@example.test",
+              "commit",
+              "--allow-empty",
+              "-m",
+              "Fixture root",
+            ],
+          }).output();
+          assert(result.success, new TextDecoder().decode(result.stderr));
+        },
+      });
+      const root = await native.createSession();
+      const raw = await native.api.session.get({ sessionID: root.nativeID });
+      const tree = await native.api.worktree.create({
+        projectID: raw.projectID,
+        directory: native.root + "/trees",
+        name: "leaf",
+      });
+      const nested = tree.directory + "/src";
+      await Deno.mkdir(nested);
+      const child = await native.api.session.create({
+        location: { directory: nested },
+        title: "Exact nested scope",
+      });
+      assertEquals(child.projectID, raw.projectID);
+      const settings = cfg(),
+        requests: string[] = [],
+        seeds: ProjectSeed[] = [];
+      const bridge = new DigestBridge({
+        reads: opencodeV2ReadCodecs,
+        provider: "opencode-v2-server",
+        statePath: native.root + "/topology-state",
+        native: {
+          serviceFile: native.serviceFile,
+          db: native.db,
+          requestms: settings.harness.requestms,
+        },
+        policy: settings.digest,
+        publish: () => {},
+        diagnostic: () => {},
+      });
+      const adapter = new OpencodeV2ServerAdapter(
+        {
+          serviceFile: native.serviceFile,
+          harness: settings.harness,
+          messages: settings.messages,
+        },
+        undefined,
+        () => {},
+        (input, init) => {
+          requests.push(
+            new URL(input instanceof Request ? input.url : String(input))
+              .pathname,
+          );
+          return fetch(input, init);
+        },
+        bridge,
+      );
+      resources().defer("V2 topology adapter", () => adapter.core.stop());
+      await adapter.core.start({
+        connection: () => {},
+        indexReset: () => {},
+        indexUpsert: () => {},
+        indexRemove: () => {},
+        content: () => {},
+        invalidate: () => {},
+        bootstrapComplete: () => {},
+        projectSeeds: (rows) => seeds.push(...rows),
+      });
+      assertEquals(seeds.find((row) => row.directory === nested), {
+        directory: nested,
+        hasSessions: true,
+        sessionCount: 1,
+        lastActivity: child.time.updated,
+        authority: "current",
+        topology: {
+          repoID: raw.projectID,
+          canonicalRoot: native.directory,
+          leafDirectory: tree.directory,
+          parentDirectory: native.directory,
+        },
+      });
+      const empty = seeds.find((row) => row.directory === tree.directory)!;
+      assertEquals(
+        [empty.hasSessions, empty.sessionCount, empty.lastActivity],
+        [false, 0, null],
+      );
+      assertEquals(empty.topology?.leafDirectory, tree.directory);
+      assertEquals(
+        seeds.find((row) => row.directory === native.directory)?.topology,
+        {
+          repoID: raw.projectID,
+          canonicalRoot: native.directory,
+          leafDirectory: native.directory,
+        },
+      );
+      assertEquals(
+        requests.some((path) =>
+          path === "/api/session" || path.includes("/message")
+        ),
+        false,
+      );
+      const identities = await adapter.core.identities([ids.encode(child.id)]);
+      assertEquals(identities[0].directory, nested);
+      // The worker itself owns API inventory I/O; verify only its read-only inventory
+      // changed no native state after startup and a second inventory read.
+      const before = await native.api.worktree.list({
+        projectID: raw.projectID,
+      });
+      const again = await bridge.projects(1, new AbortController().signal);
+      assertEquals(
+        again.projects.find((row) => row.directory === nested)?.topology,
+        empty.topology,
+      );
+      assertEquals(
+        await native.api.worktree.list({ projectID: raw.projectID }),
+        before,
+      );
+      const fallback = new DigestBridge({
+        reads: opencodeV2ReadCodecs,
+        provider: "opencode-v2-server",
+        statePath: native.root + "/topology-fallback",
+        native: {
+          serviceFile: native.serviceFile,
+          db: native.root + "/missing-topology.sqlite",
+          requestms: settings.harness.requestms,
+        },
+        policy: settings.digest,
+        publish: () => {},
+        diagnostic: () => {},
+      });
+      resources().defer("V2 topology fallback", () => fallback.stop());
+      await fallback.start();
+      const unknown = (await fallback.projects(1, new AbortController().signal))
+        .projects.find((row) => row.directory === tree.directory)!;
+      assertEquals(unknown.topology, empty.topology);
+      assertEquals([
+        unknown.hasSessions,
+        unknown.sessionCount,
+        unknown.lastActivity,
+        unknown.authority,
+      ], [undefined, null, null, "unknown"]);
+      const unknownScope = (await fallback.projects(
+        1,
+        new AbortController().signal,
+        undefined,
+        nested,
+      )).projects[0];
+      assertEquals(
+        unknownScope.topology,
+        undefined,
+        "unknown native ownership cannot retire a previously known nested relationship",
+      );
+      // A native topology event changes only the relationship, never the exact
+      // directory used by identity, list and task scopes.
+      await native.api.project.update({
+        projectID: raw.projectID,
+        canonical: tree.directory,
+      });
+      await waitFor(() =>
+        seeds.findLast((row) => row.directory === nested)?.topology
+          ?.canonicalRoot, (root) =>
+        root === tree.directory);
+      assertEquals(
+        seeds.findLast((row) =>
+          row.directory === nested
+        )?.topology,
+        {
+          repoID: raw.projectID,
+          canonicalRoot: tree.directory,
+          leafDirectory: tree.directory,
+        },
+      );
+      assertEquals(
+        (await adapter.core.identities([ids.encode(child.id)]))[0].directory,
+        nested,
+      );
+    }),
+});
+
+Deno.test({
+  name:
     "OC2I1 grouped seeds, worker keyed hydrate and bounded SQL/API lists preserve demand loading",
   ignore: nativeKind !== "opencode-v2-server",
   fn: () =>

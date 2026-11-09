@@ -28,6 +28,10 @@ import { metadata } from "./metadata.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { upgradeReadCodec } from "./upgrade-read.ts";
 import { scalarSessionReadCodec } from "./index-reads.ts";
+import {
+  type NativeProjectTopology,
+  V2ProjectTopology,
+} from "./project-topology.ts";
 
 export interface V2NativeConfig {
   serviceFile: string;
@@ -78,6 +82,7 @@ export class OpencodeV2DigestSink implements DigestSink {
   #closed = false;
   #lifetime = new AbortController();
   #source?: string;
+  #projectDirectories = new Set<string>();
   #wait: <T>(value: Promise<T>) => Promise<T>;
   constructor(
     readonly config: V2NativeConfig,
@@ -384,48 +389,88 @@ export class OpencodeV2DigestSink implements DigestSink {
     directory?: string,
   ): Promise<{ projects: ProjectSeed[]; hints?: string[] }> {
     const connection = this.#connection,
-      { projects: reported } = await this.#prepare(signal);
+      { client, projects: reported } = await this.#prepare(signal);
+    const inventory: NativeProjectTopology[] = [];
+    for (const project of reported) {
+      this.#check(signal, connection);
+      try {
+        const worktrees = await this.#io(signal, () =>
+          client.read(
+            (api) => api.worktree.list({ projectID: project.id }, { signal }),
+            signal,
+          ));
+        inventory.push({ ...project, worktrees });
+      } catch (error) {
+        this.#check(signal, connection);
+        this.storage.diagnostic(undefined, error);
+        inventory.push({ ...project });
+      }
+      await this.#yield(signal);
+    }
+    const topology = new V2ProjectTopology(inventory);
+    const roots = new Set(topology.roots());
     const projects: ProjectSeed[] = [];
+    const append = async (rows: ProjectSeed[]) => {
+      this.#check(signal, connection);
+      for (const row of rows) this.#projectDirectories.add(row.directory);
+      projects.push(...rows);
+      await publish?.(rows);
+      await this.#yield(signal);
+    };
     if (!this.#native) {
       // Unknown population is not an empty catalog and must not trigger enumeration.
       const rows = (directory === undefined
-        ? reported.map((p) =>
-          p.canonical
-        )
+        ? [...new Set([...roots, ...this.#projectDirectories])]
         : [directory]).map((directory) => ({
           directory,
+          // Without SQL, only exact inventory roots establish native ownership.
+          // A retained nested scope is unknown, not a retired relationship.
+          topology: roots.has(directory) && inventory.every((row) =>
+              row.worktrees !== undefined
+            )
+            ? topology.root(directory)
+            : undefined,
           sessionCount: null,
           lastActivity: null,
           authority: "unknown" as const,
         }));
       for (let at = 0; at < rows.length; at += this.policy.batch) {
-        const page = rows.slice(at, at + this.policy.batch);
-        projects.push(...page);
-        await publish?.(page);
-        await this.#yield(signal);
+        await append(rows.slice(at, at + this.policy.batch));
       }
       return { projects };
     }
     let after = "";
     for (;;) {
       this.#check(signal, connection);
-      const rows = this.#native.projects(after, this.policy.batch, directory);
+      const rows = this.#native.projects(after, this.policy.batch, directory)
+        .map(
+          ({ projectID, ...row }) => ({
+            ...row,
+            topology: topology.resolve(row.directory, projectID),
+          }),
+        );
       if (!rows.length) break;
-      projects.push(...rows);
-      await publish?.(rows);
+      await append(rows);
       after = rows.at(-1)!.directory;
-      await this.#yield(signal);
     }
-    if (directory !== undefined && !projects.length) {
-      const row: ProjectSeed = {
-        directory,
-        hasSessions: false,
-        sessionCount: 0,
-        lastActivity: null,
-        authority: "current",
-      };
-      projects.push(row);
-      await publish?.([row]);
+    const populated = new Set(projects.map((row) => row.directory));
+    const empty =
+      (directory === undefined
+        ? [...new Set([...roots, ...this.#projectDirectories])]
+        : [directory]).filter((root) => !populated.has(root)).map((
+          directory,
+        ): ProjectSeed => ({
+          directory,
+          topology: inventory.every((row) => row.worktrees !== undefined)
+            ? topology.root(directory)
+            : undefined,
+          hasSessions: false,
+          sessionCount: 0,
+          lastActivity: null,
+          authority: "current",
+        }));
+    for (let at = 0; at < empty.length; at += this.policy.batch) {
+      await append(empty.slice(at, at + this.policy.batch));
     }
     return { projects };
   }

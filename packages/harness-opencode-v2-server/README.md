@@ -36,6 +36,14 @@ catalog. Keyed hydration follows helper ancestry, independently of transcript
 subscriptions. Active executions and loaded-location pending inventories keep
 lamps live.
 
+Project seeds join the saved `/api/project` and `/api/worktree` inventories in
+that worker. Native project identity bounds longest-checkout-root matching;
+exact session directories stay list/task scopes. Empty inventory roots are not
+invented populated projects. Failed inventory omits topology (retaining known
+facts); complete retirement sends null. With unavailable SQL, topology remains
+usable while population/count/recency stay unknown. This producer uses V6a's
+neutral `ProjectTopology` shape; hierarchy/policy consumers belong to that item.
+
 Session lists retain the neutral 20/default, 200/maximum page contract. SQL
 keysets use `(time_updated,id)`; native API cursors are opaque. Continuations
 bind scope, generation and source mode. Consumed pages join worker demand; only

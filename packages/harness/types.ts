@@ -49,6 +49,8 @@ export interface HarnessSink {
 }
 export interface ProjectSeed {
   directory: string;
+  /** Omission retains known facts; null explicitly retires the relationship. */
+  topology?: import("@otk/protocol").ProjectTopology | null;
   /** Omitted when native population authority is unavailable. */
   hasSessions?: boolean;
   sessionCount: number | null;
