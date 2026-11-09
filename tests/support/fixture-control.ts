@@ -80,6 +80,8 @@ export const profiles = {
   "contract-composer-pending-choice": "neutral",
   "contract-composer-failed-variant": "neutral",
   "contract-composer-native-null": "v1",
+  "contract-composer-resource-attachments": "neutral",
+  "contract-composer-no-resource-attachments": "neutral",
   "messages-native": "v1",
   "messages-tools": "v1",
   "messages-cooling": "v1",
