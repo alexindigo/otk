@@ -26,6 +26,7 @@
 .otk-panel-view-icon {
   display: flex;
 }
+.otk-panel-body,
 .otk-panel-content {
   flex: 1;
   min-width: 0;
@@ -33,8 +34,12 @@
   display: flex;
   flex-direction: column;
 }
+.otk-panel-body {
+  padding-inline: var(--panel-inset);
+  --empty-inline-inset: 0px;
+}
 .otk-panel-content > h2 {
-  margin: 0 var(--panel-inset) 8px;
+  margin: 0 0 8px;
   font-size: var(--text-ui);
   line-height: var(--line-ui);
   font-weight: 600;

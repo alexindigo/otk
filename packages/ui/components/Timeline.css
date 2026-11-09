@@ -5,7 +5,7 @@
   flex-direction: column;
   flex: 1;
   overflow: hidden;
-  padding: 0 8px 8px;
+  padding-block-end: 8px;
 }
 .otk-timeline-list {
   list-style: none;

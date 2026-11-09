@@ -491,6 +491,12 @@ preference. `registerSessionsPanel` contributes the project-local, task-grouped
 searchable parent/child tree. Its feature adapter reads common `ShellPorts`
 resources; the panel knows no views.
 
+RightPanel's body owns one content column for headings, feature content and
+empty/loading/error feedback, including adapter fallbacks and host failures.
+Panel features own block spacing only. EmptyState borrows the body's inline
+inset input instead of adding a second inset. Loading feedback uses that column
+directly rather than a selectable list-row track.
+
 Only the selected available panel component mounts while expanded. Switching or
 collapsing releases its component, commands and observers. The Sessions feature
 mounts only its active project, borrowing project entries, keyed current facts

@@ -22,6 +22,6 @@
   overflow-wrap: anywhere;
 }
 .otk-empty {
-  padding: 12px;
+  padding: 12px var(--empty-inline-inset, 12px);
   font-size: var(--text-meta);
 }

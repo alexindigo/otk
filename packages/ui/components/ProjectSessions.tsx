@@ -423,11 +423,10 @@ export default function ProjectSessions(props: {
         </div>
         <div class="otk-session-loading-slot">
           <Show when={props.ready === false || props.loading}>
-            <ListRow as="div" selected={false} class="otk-session-loading-row">
-              <ProgressStatus
-                text={props.loadingText || "Loading sessions..."}
-              />
-            </ListRow>
+            <ProgressStatus
+              class="otk-session-loading-row"
+              text={props.loadingText || "Loading sessions..."}
+            />
           </Show>
         </div>
       </Show>

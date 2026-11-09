@@ -5,7 +5,7 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  padding: 12px var(--panel-inset);
+  padding-block: 12px;
   min-width: 0;
 }
 .otk-activity-list {

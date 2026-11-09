@@ -125,26 +125,28 @@ export default function RightPanel(props: {
         style={{ width: `${width()}px` }}
       >
         <Views rail={false} />
-        <Show when={error()}>
-          <p role="alert" class="otk-error">{error()}</p>
-        </Show>
-        <Show
-          when={!props.layout.rightCollapsed && active()}
-          keyed
-          fallback={<p class="otk-muted">No available views.</p>}
-        >
-          {(view) => (
-            <section
-              id="otk-panel-content"
-              class="otk-panel-content"
-              role="tabpanel"
-              aria-label={view.title}
-            >
-              <h2>{view.title}</h2>
-              <view.component />
-            </section>
-          )}
-        </Show>
+        <div class="otk-panel-body">
+          <Show when={error()}>
+            <p role="alert" class="otk-error">{error()}</p>
+          </Show>
+          <Show
+            when={!props.layout.rightCollapsed && active()}
+            keyed
+            fallback={<p class="otk-muted">No available views.</p>}
+          >
+            {(view) => (
+              <section
+                id="otk-panel-content"
+                class="otk-panel-content"
+                role="tabpanel"
+                aria-label={view.title}
+              >
+                <h2>{view.title}</h2>
+                <view.component />
+              </section>
+            )}
+          </Show>
+        </div>
         <div
           class="otk-panel-resizer"
           ref={native.ref}

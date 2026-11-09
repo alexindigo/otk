@@ -74,7 +74,8 @@ test("demand.session-pages-loading-search-and-window-anchor", {
       fullPage: true,
     });
   }
-  const geometry = await loading.evaluate((row) => {
+  const loadingSlot = page.locator(".otk-session-loading-slot");
+  const geometry = await loadingSlot.evaluate((row) => {
     const label = row.querySelector(".otk-progress-status")!;
     const bounds = row.getBoundingClientRect(),
       text = label.getBoundingClientRect();
@@ -102,7 +103,7 @@ test("demand.session-pages-loading-search-and-window-anchor", {
       };
     };
     return {
-      row: style(".otk-session-loading-row .otk-progress-status"),
+      row: style(".otk-session-loading-row"),
       shell: style(".otk-shell-progress"),
     };
   });

@@ -5,7 +5,7 @@
   display: flex;
   flex-direction: column;
   gap: 4px;
-  padding: 0 8px 8px;
+  padding-block-end: 8px;
 }
 .otk-project-session-heading {
   display: flex;
@@ -115,9 +115,6 @@
   height: 1px;
   overflow: hidden;
   clip-path: inset(50%);
-}
-.otk-session-loading-row {
-  flex: none;
 }
 .otk-project-session-content {
   display: flex;
