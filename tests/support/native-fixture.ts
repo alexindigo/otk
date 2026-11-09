@@ -45,10 +45,14 @@ export async function nativeFixture(
       stop(): Promise<void> {
         return stopping ??= (async () => {
           await scope.capture();
-          for (const server of servers.toReversed()) {
-            await scope.observe("sidecar stop", () => server.stop());
-          }
-          await scope.observe("native stop", () => oc.stop());
+          // Admission has ended. Give every independent service its TERM grace
+          // together, and join them all before retiring providers or directories.
+          await Promise.all([
+            ...servers.toReversed().map((server) =>
+              scope.observe("sidecar stop", () => server.stop())
+            ),
+            scope.observe("native stop", () => oc.stop()),
+          ]);
           await scope.observe("provider stop", () => fake.stop());
           for (const provider of Object.values(options?.providers ?? {})) {
             await scope.observe(

@@ -1217,10 +1217,10 @@ try {
       transport?.release();
       remote?.fake.releaseAll();
       lifecycle?.stop();
-      await remote?.stop();
       fixture?.fake.releaseAll();
-      await client?.close();
-      await fixture?.stop();
+      // Independent peer lifetimes must not spend their shutdown grace serially.
+      // Their scopes remain owned until every join completes below.
+      await Promise.all([client?.close(), remote?.stop(), fixture?.stop()]);
     }
     if (profile === "fail-teardown") {
       throw new Error("Forced controller teardown failure");
