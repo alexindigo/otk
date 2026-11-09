@@ -17,6 +17,11 @@ import { createProgress, type ProgressDisplay } from "./progress.ts";
 import { failureText } from "./failure-features.ts";
 import type { ContentOp, ContentSession, Message, Part } from "@otk/protocol";
 import { isAttentionOp } from "@otk/protocol";
+import {
+  compareMessages,
+  isRealPrompt,
+  mergePromptSelection,
+} from "@otk/protocol";
 import { belongsToSession } from "@otk/protocol";
 import type { IndexEntry } from "@otk/protocol";
 import type { ServerFrame } from "@otk/protocol";
@@ -50,11 +55,11 @@ function promptAfter(
   message: Message,
   read: (id: string) => Message | undefined,
 ): LatestPrompt | undefined {
-  if (message.role !== "user") return previous;
+  if (!isRealPrompt(message)) return previous;
   const known = previous && read(previous.id);
   if (
     known && known.id !== message.id &&
-    known.time.created > message.time.created
+    compareMessages(known, message) > 0
   ) return previous;
   return {
     id: message.id,
@@ -680,10 +685,14 @@ export function createTranscript(
           error: info.error,
           errorState: info.errorState,
           recovering: page.recovering,
+          selection: info.selection,
         });
         let latestPrompt = page.prompt;
         for (const { event } of page.catchup) {
           content = apply(content, event);
+          if (event.op === "session.selection" && latestPrompt) {
+            latestPrompt = mergePromptSelection(latestPrompt, event.selection);
+          }
           if (event.op === "message.upsert") {
             latestPrompt = promptAfter(
               latestPrompt,
@@ -694,6 +703,9 @@ export function createTranscript(
         }
         for (const { event } of replay) {
           content = apply(content, event);
+          if (event.op === "session.selection" && latestPrompt) {
+            latestPrompt = mergePromptSelection(latestPrompt, event.selection);
+          }
           if (event.op === "message.upsert" && event.message.role === "user") {
             latestPrompt = promptAfter(
               latestPrompt,
@@ -1250,6 +1262,23 @@ export function createTranscript(
           setState((draft) => {
             draft.content = apply(draft.content, frame.event);
             draft.clock = clock;
+            if (frame.event.op === "session.selection") {
+              if (draft.latestPrompt) {
+                draft.latestPrompt = mergePromptSelection(
+                  draft.latestPrompt,
+                  frame.event.selection,
+                );
+              }
+              if (draft.info) {
+                draft.info = {
+                  ...draft.info,
+                  selection: mergePromptSelection(
+                    draft.info.selection ?? {},
+                    frame.event.selection,
+                  ),
+                };
+              }
+            }
             if (
               frame.event.op === "message.upsert" &&
               frame.event.message.role === "user"

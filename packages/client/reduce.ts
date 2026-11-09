@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import {
+  compareMessages,
+  mergePromptSelection,
   sessionErrorMessage,
   type SessionErrorState,
   withHelperProgress,
@@ -15,6 +17,7 @@ import type {
   Todo,
 } from "@otk/protocol";
 export interface ContentState {
+  selection?: import("@otk/protocol").PromptSelection;
   messages: Message[];
   permissions: PermissionRequest[];
   questions: QuestionRequest[];
@@ -74,12 +77,18 @@ export function reduceMessage(
   if (op.op === "message.upsert") {
     if (
       previous?.role === "assistant" && previous.time.completed !== undefined &&
-      op.message.role === "assistant" && op.message.time.completed === undefined
+      op.message.role === "assistant" &&
+      op.message.time.completed === undefined && !op.restart
     ) return previous;
     const message: Message = {
       ...op.message,
       parts: op.message.parts.length ? op.message.parts : previous?.parts ?? [],
     };
+    if (op.restart) {
+      message.parts = message.parts.filter((part) =>
+        part.kind !== "step" || part.phase !== "finish"
+      );
+    }
     if (message.role === "assistant" && op.message.role === "assistant") {
       message.time = {
         ...op.message.time,
@@ -221,6 +230,12 @@ export function reduceRecovery<T extends Omit<ContentState, "messages">>(
 export function reduce(state: ContentState, op: ContentOp): ContentState {
   state = reduceRecovery(state, op);
   if (op.op === "stream.reconcile" || op.op === "stream.recovery") return state;
+  if (op.op === "session.selection") {
+    return {
+      ...state,
+      selection: mergePromptSelection(state.selection ?? {}, op.selection),
+    };
+  }
   if (op.op === "agent.colors") {
     return {
       ...state,
@@ -307,9 +322,7 @@ export function reduce(state: ContentState, op: ContentOp): ContentState {
     return {
       ...state,
       messages: [...state.messages.filter((m) => m.id !== message.id), message]
-        .sort((a, b) =>
-          a.time.created - b.time.created || a.id.localeCompare(b.id)
-        ),
+        .sort((a, b) => compareMessages(a, b)),
     };
   }
   const messages = state.messages.map((message) =>

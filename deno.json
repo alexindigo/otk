@@ -39,6 +39,7 @@
       "dependencies": ["prepare:test"]
     },
     "test:v2-foundation": "deno task test:integration --areas tests/integration/harness-probe_test.ts,tests/integration/v2-foundation_test.ts",
+    "test:v2-transcripts": "deno task test:integration --areas tests/integration/v2-transcripts_test.ts",
     "test:arch": "deno test --allow-read tests/arch/",
     "test:reuse": "deno task test tests/reuse/",
     "lint": "deno lint",

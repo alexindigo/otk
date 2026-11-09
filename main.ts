@@ -21,7 +21,10 @@ import { DigestBridge } from "./core/digest/bridge.ts";
 import { digestProgressSource } from "./core/features/digest-progress.ts";
 import type { ServingDiagnostics } from "./core/diagnostics.ts";
 import { diagnosticsLog } from "./core/diagnostics-log.ts";
-import { OpencodeV2ServerAdapter } from "@otk/harness-opencode-v2-server";
+import {
+  OpencodeV2ServerAdapter,
+  transcriptReadCodecs,
+} from "@otk/harness-opencode-v2-server";
 import { selectHarness } from "./harness-selection.ts";
 let memo: ServiceConfig | undefined;
 export function config(): ServiceConfig {
@@ -43,6 +46,51 @@ export async function start(
     signal,
   );
   if (selected.kind === "opencode-v2-server") {
+    const index = new IndexStore(diagnostics?.section);
+    const digest = new DigestBridge({
+      reads: transcriptReadCodecs,
+      statePath: cfg.state.path,
+      provider: "opencode-v2-server",
+      native: {
+        serviceFile: selected.file,
+        harness: { db: harnessDb(cfg), requestms: cfg.harness.requestms },
+      },
+      policy: cfg.digest,
+      metadata: (entries) => {
+        for (const entry of entries) {
+          const current = index.getMetadata(entry.id);
+          index.upsertMetadata(
+            current
+              ? {
+                ...entry,
+                status: current.status,
+                attention: current.attention,
+                retry: current.retry,
+              }
+              : entry,
+          );
+        }
+      },
+      publish: ({ sessionID, revision, delta }) => {
+        index.applyDigest({ id: sessionID, revision, ...delta });
+      },
+      unready: (keys) => {
+        for (const id of keys) {
+          const entry = index.get(id);
+          if (entry) {
+            const { turns: _turns, ...summary } = entry.digest;
+            index.applyDigest({
+              id,
+              revision: summary.revision,
+              summary: { ...summary, state: "digesting" },
+              turns: { upsert: {}, remove: [] },
+              deleted: entry.deleted ?? null,
+            });
+          }
+        }
+      },
+      diagnostic: (error) => diagnostic("warn", "V2 transcript digest", error),
+    });
     const backend = new OpencodeV2ServerAdapter(
       {
         serviceFile: selected.file,
@@ -51,6 +99,8 @@ export async function start(
       },
       selected.service,
       (error) => diagnostic("warn", "opencode V2", error),
+      fetch,
+      digest,
     );
     return await startApplication(
       cfg,
@@ -59,6 +109,11 @@ export async function start(
       {
         diagnostic,
         signal,
+        index,
+        requested: () => digest.requested(),
+        interactive: (owner, active) => digest.interactive(owner, active),
+        attention: (id) => digest.attention(id),
+        sources: [digestProgressSource(digest)],
       },
     );
   }

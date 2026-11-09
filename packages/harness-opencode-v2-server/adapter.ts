@@ -6,11 +6,7 @@ import {
   type HarnessSink,
   SessionIndex,
 } from "@otk/harness";
-import type {
-  Capabilities,
-  ContentSession,
-  SessionMetadata,
-} from "@otk/protocol";
+import type { Capabilities, SessionMetadata } from "@otk/protocol";
 import { type DiscoveredService, discoverV2 } from "./discovery.ts";
 import { opencodeV2SessionID as ids } from "./ids.ts";
 import { type V2Event, V2Stream } from "./stream.ts";
@@ -19,6 +15,9 @@ import {
   type V2Client,
   V2MissingSession,
 } from "./client.ts";
+import { Transcript } from "./transcript.ts";
+import type { DigestPort } from "@otk/harness";
+import { mapSession as session, millis } from "./map.ts";
 
 export interface OpencodeV2ServerConfig {
   serviceFile: string;
@@ -27,7 +26,7 @@ export interface OpencodeV2ServerConfig {
     reconnectmax: number;
     heartbeattimeout: number;
   };
-  messages: { replayops: number; replaybytes: number };
+  messages: import("@otk/protocol").MessagePolicy;
 }
 type NativeSession = Awaited<ReturnType<OpenCodeClient["session"]["get"]>>;
 type Pending = {
@@ -36,43 +35,25 @@ type Pending = {
   kind: "permission" | "form";
   directory: string;
 };
-function millis(value: unknown): number {
-  return typeof value === "number"
-    ? value
-    : typeof value === "string"
-    ? Date.parse(value)
-    : 0;
-}
-function session(raw: NativeSession): ContentSession {
-  return {
-    id: ids.encode(raw.id),
-    directory: raw.location.directory,
-    projectID: raw.projectID,
-    title: raw.title ?? "Untitled session",
-    ...(raw.parentID ? { parentID: ids.encode(raw.parentID) } : {}),
-    time: {
-      created: millis(raw.time.created),
-      updated: millis(raw.time.updated),
-    },
-    archived: !!raw.time.archived,
-  };
-}
 /** V0 supplies the connection owner. Capabilities are added only with their proofs. */
 export class OpencodeV2ServerAdapter implements Harness {
   readonly core: HarnessCore;
-  readonly capabilities: Readonly<Capabilities> = Object.freeze({});
+  readonly capabilities: Readonly<Capabilities>;
   readonly stream: V2Stream;
+  readonly transcript: Transcript;
   #sink?: HarnessSink;
   #index = new SessionIndex();
   #pending = new Map<string, Pending>();
   #running = new Map<string, number>();
   #version = "";
   #generation = 0;
+  #helperListener?: () => void;
   constructor(
     readonly config: OpencodeV2ServerConfig,
     initial?: DiscoveredService,
     readonly diagnostic: (error: unknown) => void = () => {},
     fetcher: typeof fetch = fetch,
+    readonly digest?: DigestPort,
   ) {
     this.#version = initial?.version ?? "";
     this.stream = new V2Stream(
@@ -99,6 +80,7 @@ export class OpencodeV2ServerAdapter implements Harness {
           this.#sink?.bootstrapComplete();
         },
         disconnected: (generation) => {
+          this.transcript.disconnect();
           this.#generation = generation;
           for (const entry of this.#index.snapshotEntries()) {
             const { digest: _digest, ...metadata } = entry;
@@ -113,6 +95,62 @@ export class OpencodeV2ServerAdapter implements Harness {
       },
       { ...config.harness, ...config.messages, heartbeattimeout: 45 },
       fetcher,
+      digest?.admission?.bind(digest),
+    );
+    this.transcript = new Transcript({
+      client: () => this.stream.client,
+      policy: config.messages,
+      digest,
+      content: (id, event, clock) => this.#sink?.content(id, event, clock),
+      invalidated: (value) => this.#sink?.invalidate(value),
+      diagnostic,
+      summaries: (id, turns) => {
+        const entry = this.#index.snapshotEntry(id);
+        return Object.fromEntries(
+          turns.flatMap((turn) =>
+            entry?.digest.turns[turn] ? [[turn, entry.digest.turns[turn]]] : []
+          ),
+        );
+      },
+      helper: (id) => this.#index.helper(id),
+      requestHelper: digest
+        ? (id) =>
+          digest.observe(this.#generation, [{
+            sessionID: id,
+            revision: 0,
+            reason: "helper-hint",
+          }])
+        : undefined,
+    });
+    this.capabilities = Object.freeze(
+      digest
+        ? {
+          usage: {
+            getUsage: async (
+              id: string,
+              turnID: string,
+              signal?: AbortSignal,
+            ) => {
+              ids.decode(id);
+              const clock = this.transcript.replay.clock(id),
+                version = this.transcript.replay.version(id);
+              const value = await digest.detail(
+                id,
+                turnID,
+                signal ?? new AbortController().signal,
+              );
+              return { ...value, clock, version };
+            },
+          },
+          digests: {
+            scope: (
+              owner: string,
+              value: { directory?: string; sessions: string[] },
+            ) => digest.scope(owner, value),
+            release: (owner: string) => digest.release(owner),
+          },
+        }
+        : {},
     );
     const version = () => this.#version;
     const unavailable = () =>
@@ -132,9 +170,15 @@ export class OpencodeV2ServerAdapter implements Harness {
           throw new HarnessError("started", "Harness is already started");
         }
         this.#index = sink.index ?? new SessionIndex();
+        this.#helperListener = this.#index.observeDigest((id) => {
+          const summary = this.#index.helper(id);
+          if (summary) this.transcript.helper(id, summary);
+        });
         this.#sink = sink;
+        this.transcript.start();
         sink.connection("connecting");
         try {
+          await digest?.start();
           await this.stream.start();
         } catch (error) {
           await this.stream.stop();
@@ -145,11 +189,18 @@ export class OpencodeV2ServerAdapter implements Harness {
       stop: async () => {
         // Retire the publication port synchronously before joining any read.
         this.#sink = undefined;
+        this.#helperListener?.();
+        this.#helperListener = undefined;
         await this.stream.stop();
+        await this.transcript.stop();
+        await digest?.stop();
         this.#pending.clear();
         this.#running.clear();
       },
-      subscriptions: () => {},
+      subscriptions: (id, count) => this.transcript.subscriptions(id, count),
+      hydrate: async (keys, signal) => {
+        await digest?.hydrate?.(keys, signal ?? new AbortController().signal);
+      },
       identities: async (keys, signal) => {
         const result = [];
         const batch = [...new Set(keys)].map((key) => ({
@@ -177,16 +228,17 @@ export class OpencodeV2ServerAdapter implements Harness {
       },
       getSession: async (id, signal) => {
         const native = ids.decode(id);
-        return session(
-          await this.stream.client.read((api) =>
-            api.session.get({
-              sessionID: native,
-            }, { signal }), signal),
-        );
+        const raw = await this.stream.client.read((api) =>
+          api.session.get({
+            sessionID: native,
+          }, { signal }), signal);
+        this.transcript.observe(raw);
+        return session(raw);
       },
       listSessions: unavailable,
       listChildren: unavailable,
-      listMessages: unavailable,
+      listMessages: (id, input, signal) =>
+        this.transcript.page(id, input?.before, signal, input?.publish),
       createSession: unavailable,
     };
   }
@@ -224,11 +276,12 @@ export class OpencodeV2ServerAdapter implements Harness {
     signal: AbortSignal,
     generation: number,
     reconnect = true,
-  ): Promise<() => void> {
+  ): Promise<() => Promise<void>> {
     const active = await client.read(
       (api) => api.session.active({ signal }),
       signal,
     );
+    await this.digest?.projects?.(generation, signal);
     const locations = await client.read(
       (api) => api.debug.location.list({ signal }),
       signal,
@@ -298,12 +351,15 @@ export class OpencodeV2ServerAdapter implements Harness {
       }
     }
     signal.throwIfAborted();
-    return () => {
+    const transcriptCommit = reconnect
+      ? await this.transcript.resync(client, signal)
+      : undefined;
+    return async () => {
       signal.throwIfAborted();
       this.#generation = generation;
       this.#pending = pending;
       if (reconnect) {
-        this.#sink?.invalidate({ version: { generation, revision: 0 } });
+        await transcriptCommit?.();
       }
       this.#sink?.projectAuthority?.("unknown");
       for (const raw of sessions) {
@@ -329,6 +385,37 @@ export class OpencodeV2ServerAdapter implements Harness {
     signal: AbortSignal,
     generation: number,
   ): Promise<void> {
+    const changedID = typeof event.data.sessionID === "string"
+      ? ids.encode(event.data.sessionID)
+      : undefined;
+    if (
+      changedID &&
+      /^session\.tool\.(called|progress|success|failed)$/.test(event.type)
+    ) {
+      this.digest?.observe(generation, [{
+        sessionID: changedID,
+        revision: event.durable?.seq ?? event.created ?? Date.now(),
+        reason: "helper",
+        messages: typeof event.data.assistantMessageID === "string"
+          ? [event.data.assistantMessageID]
+          : undefined,
+      }]);
+    }
+    if (
+      changedID && event.data.sessionID !== "global" &&
+      /^session\.(step\.|usage\.updated|compaction\.|inbox\.delivered|revert\.)/
+        .test(event.type)
+    ) {
+      this.digest?.observe(generation, [{
+        sessionID: changedID,
+        revision: event.durable?.seq ?? event.created ?? Date.now(),
+        reason: "messages",
+        messages: typeof event.data.assistantMessageID === "string"
+          ? [event.data.assistantMessageID]
+          : undefined,
+      }]);
+    }
+    await this.transcript.event(event);
     const form = event.data.form;
     const sid = event.data.sessionID ??
       (form && typeof form === "object"
@@ -348,7 +435,7 @@ export class OpencodeV2ServerAdapter implements Harness {
       // Inventory is the authoritative reconciliation for racing ephemeral requests.
       const commit = await this.#resync(client, signal, generation, false);
       signal.throwIfAborted();
-      commit();
+      await commit();
       return;
     }
     const raw = await client.read(

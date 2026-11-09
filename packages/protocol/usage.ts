@@ -21,6 +21,7 @@ export interface UsageTime {
 /** Usage headers only. Exact baselines make snapshot/live replacement idempotent. */
 export interface UsageMessage {
   id: string;
+  sourceOrder?: number;
   turnID: string;
   model: ModelRef;
   tokens: ReportedTokens;
@@ -71,6 +72,9 @@ export interface UsageChange {
 export function usageHeader(message: AssistantMessage): UsageMessage {
   return {
     id: message.id,
+    ...(message.sourceOrder === undefined
+      ? {}
+      : { sourceOrder: message.sourceOrder }),
     turnID: message.replyTo ?? message.id,
     model: message.model,
     tokens: message.tokens,
@@ -201,12 +205,15 @@ export class UsageLedger {
   ) {
     for (const message of messages) this.upsert(message);
   }
-  upsert(message: UsageMessage): UsageChange {
+  upsert(message: UsageMessage, restart: boolean = false): UsageChange {
     const previous = this.#messages.get(message.id);
-    if (previous?.completed && !message.completed) return this.#change();
+    if (previous?.completed && !message.completed && !restart) {
+      return this.#change();
+    }
     const nextValues = values(message);
     if (
       previous && previous.turnID === message.turnID &&
+      previous.sourceOrder === message.sourceOrder &&
       previous.completed === message.completed &&
       previous.model.provider === message.model.provider &&
       previous.model.model === message.model.model &&
@@ -224,6 +231,9 @@ export class UsageLedger {
     ) return this.#change();
     const next = {
       id: message.id,
+      ...(message.sourceOrder === undefined
+        ? {}
+        : { sourceOrder: message.sourceOrder }),
       turnID: message.turnID,
       model: { provider: message.model.provider, model: message.model.model },
       cost: message.cost,
@@ -361,7 +371,10 @@ export class UsageLedger {
       calls: [...this.#messages.values()].filter((call) =>
         call.turnID === turnID
       ).sort((a, b) =>
-        (a.time?.start ?? 0) - (b.time?.start ?? 0) || a.id.localeCompare(b.id)
+        a.sourceOrder !== undefined && b.sourceOrder !== undefined
+          ? a.sourceOrder - b.sourceOrder
+          : (a.time?.start ?? 0) - (b.time?.start ?? 0) ||
+            a.id.localeCompare(b.id)
       ).map((call) => structuredClone(call)),
     };
   }
@@ -379,7 +392,10 @@ export class UsageLedger {
         [...this.#turns.keys()].sort().map((id) => [id, this.turn(id)!]),
       ),
       messages: [...this.#messages.values()].sort((a, b) =>
-        (a.time?.start ?? 0) - (b.time?.start ?? 0) || a.id.localeCompare(b.id)
+        a.sourceOrder !== undefined && b.sourceOrder !== undefined
+          ? a.sourceOrder - b.sourceOrder
+          : (a.time?.start ?? 0) - (b.time?.start ?? 0) ||
+            a.id.localeCompare(b.id)
       ).map((message) => structuredClone(message)),
     };
   }

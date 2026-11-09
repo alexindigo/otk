@@ -8,6 +8,22 @@ export interface ModelRef {
   provider: string;
   model: string;
 }
+export interface PromptSelection {
+  agent?: string;
+  model?: ModelRef;
+  variant?: string;
+}
+/** A model selection replaces its variant, including the default (absent) one. */
+export function mergePromptSelection<T extends PromptSelection>(
+  current: T,
+  patch: PromptSelection,
+): Omit<T, keyof PromptSelection> & PromptSelection {
+  return {
+    ...current,
+    ...patch,
+    ...(patch.model ? { variant: patch.variant } : {}),
+  };
+}
 export interface Tokens {
   input: number;
   output: number;
@@ -106,6 +122,8 @@ export interface BashCall extends ToolBase {
   cwd?: string;
   output: string;
   exitCode?: number;
+  outputBytes?: number;
+  outputTruncated?: boolean;
 }
 /** Harness/plugin names occupy a separate namespace from typed OTK tools. */
 export interface ExternalCall extends ToolBase {
@@ -259,6 +277,16 @@ export interface UserMessage {
   id: string;
   sessionID: string;
   role: "user";
+  /** Provider chronology; IDs and copied timestamps need not be ordered. */
+  sourceOrder?: number;
+  /** Context is visible, but never a user prompt or composer-selection anchor. */
+  origin?:
+    | "synthetic"
+    | "system"
+    | "skill"
+    | "shell"
+    | "compaction"
+    | "external";
   time: { created: number };
   agent?: string;
   agentColor?: AgentColor;
@@ -270,6 +298,7 @@ export interface AssistantMessage {
   id: string;
   sessionID: string;
   role: "assistant";
+  sourceOrder?: number;
   time: { created: number; completed?: number; lastOutput?: number };
   agent: string;
   agentColor?: AgentColor;
@@ -282,6 +311,14 @@ export interface AssistantMessage {
   parts: Part[];
 }
 export type Message = UserMessage | AssistantMessage;
+export function isRealPrompt(message: Message): message is UserMessage {
+  return message.role === "user" && message.origin === undefined;
+}
+export function compareMessages(a: Message, b: Message): number {
+  return a.sourceOrder !== undefined && b.sourceOrder !== undefined
+    ? a.sourceOrder - b.sourceOrder || a.id.localeCompare(b.id)
+    : a.time.created - b.time.created || a.id.localeCompare(b.id);
+}
 export interface ContentSession {
   id: string;
   directory: string;
@@ -290,6 +327,7 @@ export interface ContentSession {
   projectID: string;
   time: { created: number; updated: number };
   archived: boolean;
+  selection?: PromptSelection;
   revert?: RevertInfo;
   error?: string;
   errorState?: SessionErrorState;
@@ -329,6 +367,7 @@ export interface Todo {
   priority?: string;
 }
 export type ContentOp =
+  | { op: "session.selection"; selection: PromptSelection }
   | { op: "stream.reconcile" }
   | {
     op: "stream.recovery";
@@ -356,7 +395,12 @@ export type ContentOp =
     prompts?: RevertedPrompt[];
     prompt?: HistoryEntry;
   }
-  | { op: "message.upsert"; message: Message }
+  | {
+    op: "message.upsert";
+    message:
+      Message; /** A producer-observed new attempt of this same message. */
+    restart?: boolean;
+  }
   | { op: "message.remove"; messageID: string }
   | { op: "message.clock"; messageID: string; lastOutput: number }
   | { op: "part.upsert"; messageID: string; part: Part; lastOutput?: number }
