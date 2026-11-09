@@ -24,6 +24,11 @@ region; standalone component galleries retain their hosting page's flow.
 
 `ControlValue` owns the flexible label and square trailing accessory slot. Its
 size follows the control's height/border role; icons have equal inner-edge gaps.
+`ControlIcon` shares that height-derived square for leading icons and lamps.
+SelectionContent accepts that leading content; icon-only selections share the
+whole control cell with their in-flow selection mark instead of shrinking the
+icon's centring area. Each slot resolves its size at the owning control, so
+compact searches and project-height rails inherit their own height role.
 `Select` retains one native value/focus target under a noninteractive decorative
 slot. FormSelect, preferences and ListPicker borrow these owners, including the
 composer's injected trigger content. Callers supply content/classes, never arrow

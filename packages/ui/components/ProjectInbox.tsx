@@ -4,6 +4,7 @@ import { EmptyState } from "./View.tsx";
 import "./ProjectInbox.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
+import { ControlIcon } from "./ControlValue.tsx";
 import { createSignal, createUniqueId, For, Show } from "solid-js";
 import {
   projectName,
@@ -270,7 +271,9 @@ export default function ProjectInbox(props: {
             title={hints.title("palette.open", "Search commands")}
             onClick={() => void commands.run("palette.open")}
           >
-            <SearchIcon class="otk-inbox-search-icon" />
+            <ControlIcon>
+              <SearchIcon class="otk-inbox-search-icon" />
+            </ControlIcon>
             <Show when={!collapsed()}>Search</Show>
           </button>
         </nav>
@@ -307,7 +310,9 @@ export default function ProjectInbox(props: {
                     title={connectionLabel(s())}
                     onClick={() => void commands.run("settings.open")}
                   >
-                    <ConnectionLight small connection={s()} />
+                    <ControlIcon>
+                      <ConnectionLight small connection={s()} />
+                    </ControlIcon>
                     <span class="otk-server-label">{s().label}</span>
                   </button>
                   <Show when={s().error}>
@@ -359,7 +364,9 @@ export default function ProjectInbox(props: {
               setError(failureText(error))
             )}
         >
-          <ChevronIcon class="otk-discovered-chevron" />
+          <ControlIcon>
+            <ChevronIcon class="otk-discovered-chevron" />
+          </ControlIcon>
           <Show when={!collapsed()}>
             <span class="otk-control-label" title="Discovered">Discovered</span>
             <span class="otk-inbox-rule" />
@@ -388,7 +395,9 @@ export default function ProjectInbox(props: {
           onClick={() =>
             void inactive().catch((error) => setError(failureText(error)))}
         >
-          <ChevronIcon class="otk-inactive-chevron" />
+          <ControlIcon>
+            <ChevronIcon class="otk-inactive-chevron" />
+          </ControlIcon>
           <span class="otk-control-label" title="Inactive">Inactive</span>
           <span class="otk-inbox-rule" />
           <span>({props.projects.filter((p) => p.inactive).length})</span>

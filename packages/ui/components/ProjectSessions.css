@@ -14,12 +14,12 @@
   gap: 8px;
 }
 .otk-session-search {
+  --control-height: var(--row-compact);
   display: flex;
   align-items: center;
   gap: 8px;
   min-width: 0;
   flex: 1;
-  padding-left: var(--chrome-inset);
   border-radius: var(--radius-control);
   color: var(--otk-fg-3);
 }
@@ -125,4 +125,6 @@
 .otk-session-loading-slot {
   flex: none;
   block-size: var(--row-compact);
+  display: flex;
+  align-items: center;
 }

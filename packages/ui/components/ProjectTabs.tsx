@@ -373,8 +373,10 @@ export default function ProjectTabs(props: {
                       ?.status}
                     {...native.attributes}
                   >
-                    <SelectionContent>
-                      <StatusLight small state={tab().status} />
+                    <SelectionContent
+                      class="otk-session-selection"
+                      leading={<StatusLight small state={tab().status} />}
+                    >
                       <span class="otk-control-label">
                         <Show
                           when={editing()}
@@ -426,10 +428,12 @@ export default function ProjectTabs(props: {
                 <Show when={!item.first}>
                   <ChevronIcon class="otk-crumb-chevron" />
                 </Show>
-                <span class="otk-crumb-measure-content">
-                  <StatusLight small state="idle" />
+                <SelectionContent
+                  class="otk-session-selection otk-crumb-measure-content"
+                  leading={<StatusLight small state="idle" />}
+                >
                   {title(item.id)}
-                </span>
+                </SelectionContent>
               </span>
             )}
             more={(ids) => (
@@ -515,13 +519,17 @@ export default function ProjectTabs(props: {
                           }`}
                           {...native.attributes}
                         >
-                          <SelectionContent>
-                            <StatusLight
-                              small
-                              state={entry(crumb().id)
-                                ? inboxStatus(entry(crumb().id)!, props.inbox)
-                                : "idle"}
-                            />
+                          <SelectionContent
+                            class="otk-session-selection"
+                            leading={
+                              <StatusLight
+                                small
+                                state={entry(crumb().id)
+                                  ? inboxStatus(entry(crumb().id)!, props.inbox)
+                                  : "idle"}
+                              />
+                            }
+                          >
                             <span class="otk-crumb-title">
                               <Show
                                 when={editing()}

@@ -3,6 +3,7 @@ import { failureText } from "@otk/client";
 import "./RightPanel.css" with { type: "text" };
 import { selection } from "./selection.ts";
 import SelectionContent from "./SelectionContent.tsx";
+import { ControlIcon } from "./ControlValue.tsx";
 import { createMemo, createSignal, For, Show } from "solid-js";
 import {
   type CapabilityName,
@@ -77,15 +78,15 @@ export default function RightPanel(props: {
               onClick={() =>
                 void save({ rightView: view().id, rightCollapsed: false })}
             >
-              <SelectionContent
-                class={input.rail ? "otk-panel-rail-selection" : undefined}
-              >
-                <span class="otk-panel-view-icon" aria-hidden="true">
-                  {(() => {
-                    const icon = view().icon;
-                    return typeof icon === "function" ? icon() : icon;
-                  })()}
-                </span>
+              <SelectionContent class="otk-control-icon-selection">
+                <ControlIcon>
+                  <span class="otk-panel-view-icon" aria-hidden="true">
+                    {(() => {
+                      const icon = view().icon;
+                      return typeof icon === "function" ? icon() : icon;
+                    })()}
+                  </span>
+                </ControlIcon>
               </SelectionContent>
             </button>
           )}

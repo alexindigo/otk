@@ -1,4 +1,9 @@
 /* SPDX-License-Identifier: LGPL-3.0-only */
+.otk-control-value,
+.otk-control-accessory,
+.otk-control-icon {
+  --control-inner-size: calc(var(--control-height) - 2 * var(--control-border));
+}
 .otk-control-value {
   display: grid;
   grid-template-columns: minmax(0, 1fr) var(--control-inner-size);
@@ -15,11 +20,13 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
-.otk-control-accessory {
+.otk-control-accessory,
+.otk-control-icon {
   display: grid;
   place-items: center;
   inline-size: var(--control-inner-size);
   block-size: var(--control-inner-size);
+  flex: none;
 }
 .otk-control-trigger {
   display: inline-flex;

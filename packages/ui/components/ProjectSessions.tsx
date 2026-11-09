@@ -2,6 +2,7 @@
 import { failureText } from "@otk/client";
 import "./ProjectSessions.css" with { type: "text" };
 import ListRow from "./ListRow.tsx";
+import { ControlIcon } from "./ControlValue.tsx";
 import ProgressStatus from "./ProgressStatus.tsx";
 import { createMemo, createSignal, onCleanup, Show } from "solid-js";
 import VirtualList from "./VirtualList.tsx";
@@ -163,7 +164,9 @@ export default function ProjectSessions(props: {
       >
         <div class="otk-project-session-heading">
           <label class="otk-session-search">
-            <SearchIcon class="otk-session-search-icon" />
+            <ControlIcon>
+              <SearchIcon class="otk-session-search-icon" />
+            </ControlIcon>
             <input
               ref={(element) => {
                 search = element;

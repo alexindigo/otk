@@ -58,15 +58,14 @@
 .otk-panel-rail-icons {
   display: flex;
   flex-direction: column;
+  align-items: center;
   gap: var(--chrome-gap);
   padding: 0 4px;
 }
 .otk-panel-rail-icons .otk-icon-button {
-  width: 100%;
-  height: 32px;
+  --control-height: var(--row-project);
+  width: var(--control-height);
+  height: var(--control-height);
   --selection-padding: 0;
-  padding-inline-end: var(--item-inset);
-}
-.otk-panel-rail-selection {
-  justify-content: center;
+  padding: 0;
 }

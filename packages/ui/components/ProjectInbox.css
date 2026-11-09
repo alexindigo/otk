@@ -17,12 +17,13 @@
   padding: 0 8px var(--chrome-inset);
 }
 .otk-inbox-search {
+  --control-height: var(--row-compact);
   width: 100%;
   height: var(--row-compact);
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 var(--chrome-inset);
+  padding: 0;
   color: var(--otk-fg-3);
   text-align: left;
 }
@@ -128,6 +129,7 @@
 }
 .otk-inactive-toggle,
 .otk-discovered-toggle {
+  --control-height: var(--row-project);
   width: 100%;
   height: var(--row-project);
   display: flex;
@@ -135,7 +137,7 @@
   gap: 8px;
   text-align: left;
   margin-top: var(--chrome-inset);
-  padding: 0 var(--project-inset);
+  padding: 0;
   color: var(--otk-fg-3);
   font-size: var(--text-meta);
 }
@@ -182,7 +184,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  padding: 0 8px;
+  padding: 0 8px 0 0;
   color: var(--otk-fg-3);
 }
 .otk-inbox-resizer {
@@ -235,10 +237,17 @@
   padding-inline: 4px;
 }
 .otk-project-inbox[data-collapsed=true] .otk-inbox-search {
+  width: var(--control-height);
+  margin-inline: auto;
   justify-content: center;
   padding: 0;
 }
 .otk-project-inbox[data-collapsed=true] .otk-discovered-toggle {
+  width: var(--control-height);
+  margin-inline: auto;
   justify-content: center;
   padding-inline: 0;
+}
+.otk-project-inbox[data-collapsed=true] .otk-server-status {
+  padding: 0;
 }
