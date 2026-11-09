@@ -198,6 +198,59 @@ export async function sessionsScenario(profile: Profile) {
       f.add({ ...base, id: `tstv1-chain-${i}`, title: `tstv1-chain-${i}` });
     }
   }
+  if (profile === "contract-sessions-worktrees") {
+    const one = join(root, "worktrees", "feature-one");
+    const two = join(root, "worktrees", "feature-two");
+    const archived = join(root, "worktrees", "archived-tree");
+    for (const [i, directory] of [one, two, archived].entries()) {
+      const scope = i === 0 ? join(directory, "src") : directory;
+      await Deno.mkdir(scope, { recursive: true });
+      f.add({
+        ...base,
+        id: `tstv1-worktree-${i}`,
+        directory: scope,
+        title: `Worktree ${i}`,
+      });
+    }
+    const nested = join(one, "src");
+    f.add({
+      ...base,
+      id: "tstv1-worktree-task",
+      directory: nested,
+      title: "Nested task member",
+    });
+    f.app.index.projectSeeds(
+      [base.directory, one, two, archived, nested].map((directory) => ({
+        directory,
+        hasSessions: directory !== one,
+        sessionCount: directory === one ? 0 : directory === nested ? 2 : 1,
+        lastActivity: 1,
+        authority: "current" as const,
+        topology: {
+          repoID: base.projectID,
+          canonicalRoot: base.directory,
+          leafDirectory: directory === nested ? one : directory,
+          ...(directory !== base.directory
+            ? { parentDirectory: base.directory }
+            : {}),
+        },
+      })),
+    );
+    f.app.index.projectAuthority("current");
+    for (const directory of [base.directory, one, two, archived]) {
+      await c.rpc("projects.visit", { directory, active: true });
+    }
+    const task = await c.rpc<TaskRecord>("tasks.create", {
+      directory: nested,
+      name: "Nested task",
+    });
+    await c.rpc("tasks.addSession", {
+      id: task.id,
+      sessionID: "tstv1-worktree-task",
+    });
+    await c.rpc("projects.inactive", { directory: archived, inactive: true });
+    f.update("tstv1-worktree-0", { status: "busy" });
+  }
   if (profile === "contract-sessions-catalog") {
     const projects = join(root, "projects"),
       worktree = join(projects, "linked"),
