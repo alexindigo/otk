@@ -1,6 +1,11 @@
 // SPDX-License-Identifier: LGPL-3.0-only
 import type { PublicFailure } from "./requests.ts";
 import type { PathSemantics } from "./paths.ts";
+import type {
+  ConfigCatalogKinds,
+  ConfigChunkKinds,
+} from "./catalogs/config.ts";
+export type { CatalogConfig, CatalogProvenance } from "./catalogs/config.ts";
 import type { RequestMetadata } from "./request-metadata.ts";
 import type { AgentCatalogKinds, AgentChunkKinds } from "./catalogs/agents.ts";
 import type {
@@ -45,6 +50,7 @@ export type {
 export type {
   ResourceCatalogKinds,
   ResourceChunkKinds,
+  ResourceTemplateOption,
 } from "./catalogs/resources.ts";
 export type {
   QuestionCatalogKinds,
@@ -59,7 +65,8 @@ export interface DirectoryCatalogKinds
     ModelCatalogKinds,
     ResourceCatalogKinds,
     FileCatalogKinds,
-    QuestionCatalogKinds {}
+    QuestionCatalogKinds,
+    ConfigCatalogKinds {}
 export interface CatalogValue<T> {
   state: "digesting" | "ready" | "unavailable";
   revision: number;
@@ -105,7 +112,8 @@ export interface CatalogChunkKinds
     ModelChunkKinds,
     ResourceChunkKinds,
     FileChunkKinds,
-    QuestionChunkKinds {}
+    QuestionChunkKinds,
+    ConfigChunkKinds {}
 export type CatalogChunk = {
   [K in keyof CatalogChunkKinds]: {
     t: "catalog.chunk";

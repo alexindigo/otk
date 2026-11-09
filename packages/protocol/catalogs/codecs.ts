@@ -3,7 +3,11 @@ import type { CatalogCodecs } from "../catalogs.ts";
 import { agentsCatalogCodec } from "./agents.ts";
 import { commandsCatalogCodec } from "./commands.ts";
 import { skillsCatalogCodec } from "./skills.ts";
-import { resourcesCatalogCodec } from "./resources.ts";
+import {
+  resourcesCatalogCodec,
+  resourceTemplatesCatalogCodec,
+} from "./resources.ts";
+import { configCatalogCodec } from "./config.ts";
 import { questionsCatalogCodec } from "./questions.ts";
 import { filesCatalogCodec } from "./files.ts";
 import { modelCatalogCodec } from "./models.ts";
@@ -14,6 +18,8 @@ export function createCatalogCodecs(): CatalogCodecs {
     commands: commandsCatalogCodec,
     skills: skillsCatalogCodec,
     resources: resourcesCatalogCodec,
+    resourceTemplates: resourceTemplatesCatalogCodec,
+    config: configCatalogCodec,
     questions: questionsCatalogCodec,
     files: filesCatalogCodec,
     models: modelCatalogCodec,

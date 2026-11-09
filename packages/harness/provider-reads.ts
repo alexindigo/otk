@@ -6,6 +6,7 @@ import type { SessionListReadKinds } from "./session-lists.ts";
 import type {
   AgentReadKinds,
   CommandReadKinds,
+  ConfigReadKinds,
   FileReadKinds,
   ModelReadKinds,
   QuestionReadKinds,
@@ -32,7 +33,8 @@ export interface ProviderReadKinds
     ModelReadKinds,
     ResourceReadKinds,
     FileReadKinds,
-    QuestionReadKinds {}
+    QuestionReadKinds,
+    ConfigReadKinds {}
 export interface ProviderReadOptions {
   optional?: boolean;
   owner: string;
